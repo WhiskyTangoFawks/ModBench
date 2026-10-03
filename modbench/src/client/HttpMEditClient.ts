@@ -19,9 +19,8 @@ import {
 import { errorMessage } from '../ports/errorMessage';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 
-// No convention in ADR-0019 or plugins.md anchors this: 30s is an ordinary
-// HTTP-client default. A slow call and a hung one look the same to the tree, so nothing tries to
-// tell them apart.
+// 30s is an ordinary HTTP-client default. A slow call and a hung one look the same to the tree,
+// so nothing tries to tell them apart.
 export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
 export interface HttpMEditClientDeps {
@@ -35,8 +34,8 @@ export interface HttpMEditClientDeps {
   reconnectDelayMs?: number;
 }
 
-/** ADR-0002/ADR-0014: the HTTP adapter, whole — the generated client, `openapi-fetch`, `undici`
- *  and the notification stream live only here, composed behind {@link MEditClient}. */
+/** The HTTP adapter the mEdit client hides (target-architecture.d2): the generated client,
+ *  `openapi-fetch`, `undici` and the notification stream live only here. */
 export class HttpMEditClient implements MEditClient {
   private api?: { port: number; client: ApiClient };
   private readonly fetchImpl: (input: Request) => Promise<Response>;
@@ -54,8 +53,8 @@ export class HttpMEditClient implements MEditClient {
       reconnectDelayMs: deps.reconnectDelayMs,
     });
     this.lifecycle = new BackendLifecycle(deps.backend);
-    // ADR-0014: the stream is open exactly while the backend is attached, so no
-    // module outside this one starts or stops it.
+    // The stream is open exactly while the backend is attached, so no module outside this one
+    // starts or stops it.
     this.lifecycle.onStatusChanged((status) => {
       if (status === 'running') this.notifications.start();
       else this.notifications.stop();
@@ -88,8 +87,7 @@ export class HttpMEditClient implements MEditClient {
     return this.notifications.subscribe(kind, listener);
   }
 
-  // ADR-0014: `track` rides its own notification kind. `extract` picks that kind's
-  // payload out of the flat wire envelope; undefined skips the event.
+  // `extract` picks a kind's payload out of the flat wire envelope; undefined skips the event.
   private subscribeStatus<T>(
     kind: NotificationKind,
     extract: (event: NotificationEvent) => T | undefined,
@@ -137,9 +135,8 @@ export class HttpMEditClient implements MEditClient {
     return answer;
   }
 
-  /** ADR-0014: Refresh's first step; mEdit refills the index against the load order it holds.
-   *  ADR-0009: a 423 is `heldElsewhere`, apart from every other failure — never a
-   *  rejection. */
+  /** Refresh's first step (commands.md, Instance), which refills the index against the load order
+   *  mEdit holds. A 423 is `heldElsewhere` (ADR-0009), never a rejection. */
   async rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome> {
     try {
       const { error, response } = await this.apiClient.POST('/index/rebuild', { body: { instanceRoot, gameRelease } });
@@ -157,8 +154,7 @@ export class HttpMEditClient implements MEditClient {
     }
   }
 
-  /** The backend keys its persistent index on `instanceRoot` (ADR-0009) because `origin` is a
-   *  folder *name*, unique only within one instance. */
+  /** `instanceRoot` scopes the backend's index (ADR-0009). */
   async putLoadOrder(
     plugins: LoadOrderPluginInput[],
     active: PluginAddress[],
@@ -282,8 +278,7 @@ export class HttpMEditClient implements MEditClient {
     return true;
   }
 
-  /** The Track gesture (ADR-0007) over a selection: each plugin lands or is refused on its own. A
-   *  cause no plugin escapes, git missing, refuses the whole selection. */
+  /** ADR-0007; commands.md, A selection is one gesture, and each item lands on its own. */
   async track(
     plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything',
     upstreamVersionByOrigin: UpstreamVersionByOrigin,
@@ -386,8 +381,8 @@ export class HttpMEditClient implements MEditClient {
     };
   }
 
-  /** ADR-0007: the single write path. A refusal (untracked plugin, a link that would dangle) is
-   *  an expected answer and comes back typed; only a transport failure rejects. */
+  /** A refusal (untracked plugin, a link that would dangle) comes back typed (ADR-0014);
+   *  only a transport failure rejects. */
   async editRecord(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): Promise<RecordEditOutcome> {
     const spelled = JSON.stringify(envelope.path);
     const { data, error, response } = await this.apiClient.POST('/records/{formKey}/edit', {
@@ -411,9 +406,8 @@ export class HttpMEditClient implements MEditClient {
 
   // ── reads ────────────────────────────────────────────────────────────────
 
-  // Never swallow a read failure into an empty list: it would be indistinguishable from
-  // genuinely empty data, so the tree could not render an ErrorNode (ADR-0019). A 200 with an
-  // absent body is a legitimate empty result.
+  // A read failure throws, never an empty list, so the tree renders its error row (common.md,
+  // States, story 2). A 200 with an absent body is a legitimate empty result.
   private ensureOk(what: string, response: Response, error?: unknown): void {
     if (response.ok) return;
     const text = errorText(error);

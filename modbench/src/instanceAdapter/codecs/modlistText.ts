@@ -8,8 +8,8 @@ import { detectEol, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBo
 /** The per-profile mod list, one line per mod in Mod override order. */
 export const MODLIST_FILE_NAME = 'modlist.txt';
 
-/** The reserved origin (ADR-0012): MO2's own overwrite folder, the one name under `mods/`'s
- *  sibling set a modlist line may never take. The Instance adapter joins it to the instance root. */
+/** MO2's overwrite folder, a reserved origin (ADR-0012) that no modlist line takes.
+ *  The Instance adapter joins it to the instance root. */
 export const OVERWRITE_DIR_NAME = 'overwrite';
 
 const SEPARATOR_SUFFIX = '_separator';

@@ -7,7 +7,7 @@ import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLines
 /** The plugin order, one line per plugin file. */
 export const PLUGINS_FILE_NAME = 'plugins.txt';
 
-/** A plugin's filename as the game compares it, ignoring case (ADR-0012). */
+/** A plugin's filename as ADR-0012 compares it. */
 export const pluginKey = (name: string): string => name.toLowerCase();
 
 /** A single plugins.txt line (a plugin file), in plugin order. The `*` prefix, the enabled

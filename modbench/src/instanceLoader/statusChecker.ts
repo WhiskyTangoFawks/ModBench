@@ -1,6 +1,6 @@
 // Turns a FileConflictIndex into per-mod status badges: conflict and override counts. Pure over
 // ModlistEntry[] + a precomputed FileConflictIndex; no vscode import, and no plugin file is
-// opened — master facts are the backend's (ADR-0016).
+// opened (ADR-0016).
 
 import type { ModlistEntry } from '../instanceAdapter/instanceAdapter';
 import type { FileConflictIndex } from './fileConflictIndex';

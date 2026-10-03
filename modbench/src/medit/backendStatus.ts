@@ -32,12 +32,11 @@ export interface BackendStatusViews {
   /** The Plugins tree re-reads its own facts. Its rows stay, and expand into the error node. */
   refreshTree: () => void;
   /** plugins.md, States 3: the Plugins tree names this on a row not yet held, until a later
-   *  tick or reconcile clears it. Never called for Connecting. */
+   *  tick or reconcile clears it. Called only for `disconnected` and `stopped`. */
   setUnreachable: (reason: string) => void;
 }
 
-/** mEdit runs for the extension's whole lifetime, so a status change is news the views report,
- *  never a mode they switch into (ADR-0002). Returns the unsubscribe. */
+/** ADR-0002. Returns the unsubscribe. */
 export function wireBackendStatus(client: StatusSource, views: BackendStatusViews): () => void {
   return client.onStatusChanged((status) => {
     views.setStatusText(backendStatusText(status));

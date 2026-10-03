@@ -1,7 +1,6 @@
 import type { LoadOrderOutcome, LoadOrderPluginInput, MEditClient, PluginAddress } from './MEditClient';
 
-/** One generation of ADR-0013's hand-off, whole: every plugin, the active ones in load order, those
- *  loaded with no line, and the PUT's keys. One Instance value, so never two generations. */
+/** ADR-0013's snapshot, with the PUT's keys. */
 export interface LoadOrderSnapshot {
   readonly plugins: LoadOrderPluginInput[];
   readonly active: PluginAddress[];
@@ -11,11 +10,10 @@ export interface LoadOrderSnapshot {
   readonly gameRelease: string;
 }
 
-/** The port members the sender itself calls — narrowed off `MEditClient` (ADR-0014). */
 export type LoadOrderSendClient = Pick<MEditClient, 'putLoadOrder' | 'status' | 'onStatusChanged'>;
 
-/** ADR-0013: the one implementation of the Instance-to-mEdit arrow. The sequencing — connect
- *  before the first PUT, one PUT at a time, the newest snapshot the one that lands — is here. */
+/** The one sender of ADR-0013's snapshot. It connects before the first PUT, sends one PUT at a
+ *  time, and lands the newest snapshot. */
 export interface LoadOrderSender {
   /** Hand mEdit this snapshot. Resolves with this snapshot's own outcome: `abandoned` when a
    *  newer snapshot superseded it before it was sent, or when it was abandoned outright. */

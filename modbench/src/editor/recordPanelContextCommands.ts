@@ -83,8 +83,8 @@ async function promptedSet(address: object): Promise<RecordEditEnvelope | undefi
   return value === undefined ? undefined : { op: 'set', path: address.path, value };
 }
 
-// ADR-0018: the tab's save is the same leaf commit an inline edit posts — one `set` at the row's
-// own path, as many times as the user saves.
+// The tab's save posts the `set` an inline edit does, at the row's own path, once per save
+// (editor.md, Menus and keys, story 2).
 function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringValueContext): Promise<void> {
   const gate = deps.editGateOf(ctx);
   return openExtendedFieldEditor(
@@ -121,7 +121,7 @@ const CONTEXT_COMMANDS: ContextCommand[] = [
 ];
 
 /** The record panel's native right-click menus. Each command writes from the extension host with
- *  the envelope its own `data-vscode-context` spells (ADR-0007), posting nothing into the panel. */
+ *  the envelope its own `data-vscode-context` spells, posting nothing into the panel. */
 export function registerRecordPanelContextCommands(deps: RecordPanelContextCommandDeps): vscode.Disposable[] {
   return CONTEXT_COMMANDS.map(({ command, run }) =>
     vscode.commands.registerCommand(command, (clicked?: unknown, option?: unknown) => {

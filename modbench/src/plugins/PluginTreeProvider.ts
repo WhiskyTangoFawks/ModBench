@@ -67,7 +67,7 @@ export class RecordTypeNode extends vscode.TreeItem {
   constructor(
     public readonly plugin: string,
     group: PluginRecordTypeCount,
-    /** ADR-0012: which plugin named `plugin` this node browses. */
+    /** Which plugin named `plugin` this node browses (ADR-0012). */
     public readonly origin: string,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
@@ -84,7 +84,7 @@ export class RecordTypeNode extends vscode.TreeItem {
 export class RecordNode extends vscode.TreeItem {
   readonly kind = 'record' as const;
   // A record-scoped command acts on the clicked row's own copy of the record, so the row carries
-  // which copy it is (plugin via record, origin — ADR-0012).
+  // which copy it is: its plugin, via the record, and its origin (ADR-0012).
   constructor(
     public readonly record: RecordSummary,
     public readonly origin: string,
@@ -116,7 +116,7 @@ export class RecordNode extends vscode.TreeItem {
 
 // ── Worldspace / cell / child-record nodes ─────────────────────────
 
-// ADR-0012: every node in the spatial chain carries its plugin's `origin` and conditions down to
+// Every node in the spatial chain carries its plugin's `origin` (ADR-0012) and conditions down to
 // its leaves: each hop's repository call needs the one, each record row beneath the other.
 export class WorldspacesNode extends vscode.TreeItem {
   readonly kind = 'worldspaces' as const;
@@ -271,7 +271,8 @@ export class InteriorCellsNode extends vscode.TreeItem {
 }
 
 /** Shown under a row the backend has not indexed yet. Distinct from `ErrorNode`: this state
- *  clears on its own as indexing catches up, an error does not (ADR-0013). */
+ *  clears on its own as indexing catches up, an error does not (plugins.md, States, stories
+ *  2 and 6). */
 export class IndexingNode extends vscode.TreeItem {
   readonly kind = 'indexing' as const;
   constructor() {
@@ -409,7 +410,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return errorMessage(e);
   }
 
-  // A failed fetch renders as an ErrorNode in place of the children, never an empty list (ADR-0019).
+  // A failed fetch renders as the error row in place of the children (plugins.md, Rows that stand
+  // in for records).
   private async orErrorNode(op: string, build: () => Promise<PluginTreeNode[]>): Promise<PluginTreeNode[]> {
     try {
       return await build();
@@ -432,7 +434,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   /** Keyed by the plugin rather than by a node this provider built: `PluginsTreeProvider` expands
-   *  its own rows, whose whole knowledge of this side is the plugin (ADR-0002), and the
+   *  its own rows, whose whole knowledge of this side is the plugin and the
    *  conditions that row states. */
   async getPluginChildren(pluginName: string, origin: string, conditions: PluginConditions = NOT_EDITABLE): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`getPluginChildren(${pluginName})`, async () => {

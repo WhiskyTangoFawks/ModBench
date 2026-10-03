@@ -53,20 +53,18 @@ export interface EditorCommandDeps {
   // object, narrowed to a callback like focusedViewSelection.
   refreshSourceControlFor: (plugin: string, origin: string) => void;
   outputChannel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
-  // The two ports (ADR-0019), built over the window API by the composition root: this box
-  // surfaces a failure and asks a question, and implements neither.
+  // Kernel ports the composition root implements (target-architecture.d2, Ports).
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
   // Where an extended-editor tab is written, answered at the composition root.
   fieldFile: ExtendedFieldEditorDeps['fieldFile'];
 }
-// ADR-0007: the single write path. A panel showing this record re-reads only on rows-changed from
-// the notification stream (ADR-0015).
+// ADR-0015; editor.md, States, story 5.
 function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
   return {
     meditClient: deps.meditClient,
     refreshSourceControlFor: (plugin, origin) => { deps.refreshSourceControlFor(plugin, origin); },
-    // ADR-0019 surfacing for a refused edit.
+    // Surfaces a refused edit (ADR-0019).
     reporter: deps.reporterFor('recordPanel'),
     tellPanels: (message) => { for (const panel of deps.recordPanels) void panel.webview.postMessage(message); },
   };

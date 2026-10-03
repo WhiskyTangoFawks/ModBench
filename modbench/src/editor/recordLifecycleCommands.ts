@@ -33,8 +33,7 @@ function recordName(formKey: string, editorId: string | undefined): string {
   return editorId ? `${editorId} [${formKey}]` : formKey;
 }
 
-// The plugin and its origin as well as the record: the same FormKey can sit in two plugins that
-// share a filename (ADR-0012), and the question must say which.
+// The question names the origin too, so it says which plugin of the filename it means (ADR-0012).
 function recordLabel({ formKey, editorId, plugin, origin }: RecordArgument): string {
   return `${recordName(formKey, editorId)} in ${origin === undefined ? plugin : `${plugin} (${origin})`}`;
 }
@@ -51,8 +50,7 @@ function askToDelete(labels: readonly string[], ask: AskQuestion): PromiseLike<s
   );
 }
 
-// ADR-0012: a filename alone names no one plugin, so an argument that states no
-// origin is refused rather than resolved.
+// An argument that states no origin is refused rather than resolved (ADR-0012).
 const NO_ORIGIN = 'it states no origin';
 
 interface Selection {
@@ -96,7 +94,6 @@ function tell<Answer>(marks: WriteAnswer<Answer>, answer: unknown, landed: Answe
   else marks.answered(landed);
 }
 
-/** ADR-0018: xEdit hosts its Remove in its tree's context menu, not the grid. */
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, reporter: Reporter, ask: AskQuestion,
   // The palette hands no row, so it takes the selection of the view last selected in.

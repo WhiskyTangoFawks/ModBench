@@ -29,7 +29,7 @@ export interface RouteRecordPanelMessageDeps {
   reply: (msg: ExtensionToWebview) => void;
   // Titles the panel from the record its read answered (editor.md, Opening, story 5).
   setTitle: (title: string) => void;
-  // The load-order sweep's latest known answer, read rather than fetched (ADR-0013).
+  // The latest load-order status, read rather than fetched.
   conflictsComputed: () => boolean;
   loadFailures: () => readonly PluginLoadFailure[];
 }
@@ -127,7 +127,7 @@ async function editField(
   );
 }
 
-// A failed comparison fails the whole load; a failed plugin list degrades to null (ADR-0002 — the webview asks the mEdit client through the host, never the port itself).
+// A failed comparison fails the whole load; a failed plugin list degrades to null.
 async function answerRecordLoad(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD }>,

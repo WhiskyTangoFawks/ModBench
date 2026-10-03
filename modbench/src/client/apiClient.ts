@@ -9,8 +9,8 @@ type Schemas = components['schemas'];
 // honestly, so a hand-written mirror is only a staler copy. A frontend declaration earns its place
 // only as a genuine transform (LoadOrderStatus).
 
-/** `GET /plugins`. Two held plugins can share a filename, so name-keyed hand-offs read
- *  `inLoadOrder` rather than matching on the name (ADR-0013). */
+/** `GET /plugins`. A name-keyed hand-off reads `inLoadOrder` rather than matching on the name,
+ *  which two held plugins can share (ADR-0012). */
 export type PluginMetadata = Schemas['PluginResponse'];
 export type PluginDiagnosisReport = Schemas['PluginDiagnosisReport'];
 
@@ -28,8 +28,7 @@ export type TrackStatus = Schemas['TrackProgress'];
 export type CompiledPlugin = Schemas['CompiledPlugin'];
 export type CompileDiagnostic = Schemas['CompileDiagnostic'];
 
-/** ADR-0013: names the plugin that failed — two plugins that share a filename are two
- *  registrations. */
+/** ADR-0012. */
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 
 /** Deliberately not a boolean pair (which carries an "Added implies dirty" invariant every
@@ -53,13 +52,12 @@ export type WorldspaceSubBlock = Schemas['WorldspaceSubBlockDto'];
 export type WorldspaceBlock = Schemas['WorldspaceBlockDto'];
 export type WorldspaceBlocks = Schemas['WorldspaceBlocks'];
 
-/** `GET /notifications/stream`'s one wire shape for every kind (ADR-0014). `kind` is
+/** `GET /notifications/stream`'s one wire shape for every kind. `kind` is
  *  a plain `string` on the schema — it is a discriminator, not a C# enum. */
 export type NotificationEvent = Schemas['NotificationEvent'];
 
-/** The two refusal states carry different scope (ADR-0009): `heldElsewhere` overrides
- *  even an already-held row, `failed` only a row not yet held. Internal to the client, not a
- *  wire type. */
+/** `heldElsewhere` overrides even an already-held row, `failed` only a row not yet held
+ *  (plugins.md, States, stories 4 and 6). Internal to the client, not a wire type. */
 export type LoadOrderRefusal = { kind: 'heldElsewhere' | 'failed'; message: string };
 
 /** The `load-order-status` notification's payload, subscribed alongside the in-flight
@@ -68,7 +66,7 @@ export interface LoadOrderStatus {
   /** How many plugins the snapshot resolved to — the denominator for progress. Plugins that
    *  fail to open still count toward it. */
   totalPlugins: number;
-  /** How many plugins the game loads: the only ones a read of a record sees (ADR-0009). */
+  /** How many plugins the game loads: the active plugins (ADR-0012). */
   activePlugins: number;
   /** The plugins whose indexing has completed, in the order they landed. A plugin appears here
    *  only once it is wholly queryable — strictly later than "opened", which is what
@@ -77,10 +75,10 @@ export interface LoadOrderStatus {
   /** Whether the winner sweep has run. False means *nothing has looked yet*, which is not the
    *  same as "no conflicts" — the distinction this whole endpoint exists to make. */
   conflictsComputed: boolean;
-  /** Plugins that could not be opened or indexed, as they are discovered — not held back until
-   *  the reconcile finishes (ADR-0019). */
+  /** Plugins that could not be opened or indexed (ADR-0019), as they are discovered
+   *  rather than once the reconcile finishes. */
   failures: PluginLoadFailure[];
-  /** Set for the wire's `HeldElsewhere` or `Failed` state (ADR-0019) — the one place either
+  /** Set for the wire's `HeldElsewhere` or `Failed` state, the one place either
    *  reaches the extension, since the put's own outcome reports applied regardless. */
   refusal?: LoadOrderRefusal;
   /** The Apply this status answers for. A client waits for this to reach its own Apply's

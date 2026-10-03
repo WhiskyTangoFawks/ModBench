@@ -13,7 +13,7 @@ import {
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 
-/** ADR-0007: tracked *is* the presence of `.git` in the mod's folder — no registry, no backend. */
+/** ADR-0007, answered without the backend. */
 export function isTracked(modFolder: string): Promise<boolean> {
   return exists(modGitDir(modFolder));
 }

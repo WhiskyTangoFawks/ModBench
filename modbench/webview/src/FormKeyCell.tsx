@@ -15,13 +15,12 @@ interface FormKeyCellProps {
   // `editable` before `onCommit` is ever reached.
   onCommit?: (fk: string) => void;
   checkError?: string | null;
-  // ADR-0005: the leaf's own resolution signal gates the link affordance and label, independent of
-  // checkError — a resolved-but-wrong-type reference carries a checkError yet is still followable.
+  // The leaf's own resolution signal (ADR-0005) gates the link affordance and label, independent of
+  // checkError: a resolved-but-wrong-type reference carries a checkError yet is still followable.
   resolution?: FormKeyResolution;
 }
 
-/** ADR-0018's divergence #1: a native QuickPick rather than an in-webview control, because the
- *  webview cannot host a searchable record list as well as VS Code already does. */
+/** A native QuickPick rather than an in-webview control (xedit.md, divergence 1). */
 export function FormKeyCell({ value, meta, editable, onCommit, checkError, resolution }: FormKeyCellProps) {
   const fk = typeof value === 'string' && value ? value : null;
   const picking = useRef(false);

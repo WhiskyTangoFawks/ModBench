@@ -1,6 +1,3 @@
-// ADR-0015: a command writes a system of record and returns, and the watcher brings
-// the change back. A function that makes a write re-reads no view.
-
 /** @import { Rule, SourceCode } from 'eslint' */
 /** @import { CallExpression, Identifier, Node, Program } from 'estree' */
 

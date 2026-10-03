@@ -1,6 +1,5 @@
-// ADR-0013: the system commands that hand mEdit the load order. The Instance loader's value
-// arrives as an argument; what comes back is the caller's to report and apply, never pushed to a
-// view from here.
+// Put load order (ADR-0013) and refresh. What comes back is the caller's to report and apply,
+// never pushed to a view from here.
 
 import type {
   LoadOrderOutcome, LoadOrderSender, LoadOrderSnapshot, MEditClient,
@@ -52,9 +51,8 @@ export async function putLoadOrder(
   return { sent: true, snapshot, outcome: await sender.send(snapshot) };
 }
 
-/** commands.md, `refresh`: mEdit rebuilds the index and reads every plugin again against the
- *  load order it holds; nothing is sent. ADR-0009: held-elsewhere is a refusal apart
- *  from every other failure. */
+/** The rebuild of commands.md's `refresh`: mEdit reads every plugin again against the load order
+ *  it holds, and nothing is sent. Held-elsewhere is its own refusal (ADR-0009). */
 export type RefreshResult =
   | { applied: true }
   | { applied: false; heldElsewhere: true }

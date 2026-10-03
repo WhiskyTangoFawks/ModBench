@@ -21,7 +21,7 @@ export interface Mo2InstanceOptions {
 }
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
- *  reads `true` here, and surfaces that error elsewhere (ADR-0019). Synchronous: the composition
+ *  reads `true` here (common.md, States, story 4). Synchronous: the composition
  *  root asks before an Instance exists. */
 export function isMo2Instance(root: string): boolean {
   return existsSync(settingsFile(root)) && existsSync(modsDir(root)) && existsSync(profilesDir(root));

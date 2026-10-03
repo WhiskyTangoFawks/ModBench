@@ -11,18 +11,17 @@ export type LoadResult =
       // Null is a record held by no active plugin.
       ok: true; result: CompareResult | null; immutableSet: Set<ColumnKey> | null;
       // Null exactly when immutableSet is, but degrading the opposite way: to "nothing is
-      // editable", because wrongly offering an edit that cannot land is worse than wrongly
-      // withholding one (ADR-0019). Read fail-closed.
+      // editable" (commands.md, No dead entries). Read fail-closed.
       trackedSet: Set<ColumnKey> | null;
-      // ADR-0013: whether the winner sweep has run. Must fail *closed* — an absent answer has to
-      // read as "not computed", never as "settled", or a status-fetch blip would render a
+      // Whether the winner sweep has run (editor.md, States, story 3). Fails *closed*: an absent
+      // answer reads as "not computed", never as "settled", or a status-fetch blip would render a
       // settled-looking grid over a comparison nothing checked.
       conflictsComputed: boolean;
       loadFailures: PluginLoadFailure[];
     }
   | { ok: false; error: string };
 
-// The host's mEdit client answers this read (ADR-0002). Reads only — a refusal has to
+// The host's mEdit client answers this read. Reads only — a refusal has to
 // become a native notification, and only the extension host can show one.
 export interface RecordPanelClient {
   // An arrow-typed property, not a method: `load` never needs its own `this`, and this shape
@@ -36,8 +35,8 @@ export function createRecordPanelClient(): RecordPanelClient {
     async load(formKey) {
       const answer = await requestRecordLoad(formKey);
       if (!answer.ok) return { ok: false, error: answer.error };
-      // ADR-0012: keyed by compound identity — two entries sharing a filename but differing
-      // in origin must stay distinct Set members, or one origin's mutability wins for both.
+      // Keyed by compound identity (ADR-0012), so one origin's mutability never wins for another
+      // origin's plugin of the same filename.
       const pluginList = answer.plugins;
       return {
         ok: true,

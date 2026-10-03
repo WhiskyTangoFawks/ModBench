@@ -4,7 +4,7 @@
 import type { InstanceValue } from './instanceLoader/instance';
 
 /** Each plugin origin whose mod has a repository, and each whose mod has none, spelled as the
- *  plugin rows spell them. An origin names its mod whatever the case (ADR-0012). */
+ *  plugin rows spell them. An origin names its mod's folder (ADR-0012), whatever the case. */
 export function modRepositoryContext(
   value: Pick<InstanceValue, 'mods' | 'plugins' | 'trackedMods'>,
 ): { tracked: string[]; untracked: string[] } {
