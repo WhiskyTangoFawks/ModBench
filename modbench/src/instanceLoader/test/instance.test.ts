@@ -304,8 +304,8 @@ describe('Instance — the value', () => {
 
     const entry = instance.value.files.get('textures/shared.dds');
     expect(entry?.winner).toBe(winner);
-    expect(entry?.winnerMod).toBe(NONO);
-    expect(entry?.providers).toEqual([NONO, 'Unofficial Fallout 4 Patch']);
+    expect(entry?.winnerOrigin).toEqual({ kind: 'mod', name: NONO });
+    expect(entry?.providers).toEqual([{ kind: 'mod', name: NONO }, { kind: 'mod', name: 'Unofficial Fallout 4 Patch' }]);
     expect(instance.value.filesByMod.get('Harder VATS')).toBeUndefined();
     expect(instance.value.filesByMod.get('Tracked Patch Mod')?.map((f) => f.relativePath)).toEqual(['Tracked Patch Mod.esp']);
   });
@@ -718,7 +718,7 @@ describe('Instance — a value that survives a bad read', () => {
     await instance.refresh();
 
     expect(instance.value.mods).toEqual([]);
-    expect(instance.value.files.size).toBe(0);
+    expect(instance.value.filesByMod.size).toBe(0);
     expect(instance.sequence).toBe(before + 1);
   });
 

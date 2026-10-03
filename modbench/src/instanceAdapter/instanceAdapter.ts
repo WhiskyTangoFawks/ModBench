@@ -258,6 +258,9 @@ export async function newModNameRefusal(adapter: Pick<InstanceAdapter, 'entryFol
   return (await adapter.entryFolder({ kind: 'mod', name: trimmed })) === undefined ? undefined : modNameTakenRefusal(trimmed);
 }
 
+/** Whether the game gets a file of a mod or of Overwrite. */
+export type OriginFileMark = 'Excluded' | 'Included';
+
 /** The refusal of a mark on a downloaded file that is gone. */
 export const goneFromDisk = (name: string): string => `"${name}" is gone from disk.`;
 
@@ -342,6 +345,10 @@ export interface InstanceAdapter {
   // Put and rename in mods/.
   /** Refuses a folder already there, whatever it holds, matched as the manager matches names. */
   createModFolder(mod: string): Promise<void>;
+  /** Marks a file or folder by its path in the origin's tree; a mark already true changes nothing.
+   *  Refuses a path outside the origin, an include its folder overrides, and a mark that would
+   *  replace a file. */
+  markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<Marked>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** Makes the folder of a mod that is new. Refuses a folder already there, whatever it holds,
