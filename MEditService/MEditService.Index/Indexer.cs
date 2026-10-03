@@ -339,8 +339,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    // ADR-0009.
-    // Published before any plugin is opened, which is what makes the reconcile progressive.
+    // One index file per instance, inside the instance root (ADR-0009). Published before any plugin is opened, which is what makes the reconcile progressive.
     private (HeldPlugins Held, IRecordIndex Index) EnsureScope(LoadOrderSnapshot snapshot)
     {
         lock (_lock)

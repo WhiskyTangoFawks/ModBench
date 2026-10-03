@@ -21,7 +21,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     public string DataFolderPath { get; }
 
-    /// <summary>ADR-0009.</summary>
+    /// <summary>One index file per instance, inside the instance root (ADR-0009).</summary>
     public string? InstanceRoot { get; }
 
     public GameRelease GameRelease { get; }

@@ -260,8 +260,6 @@ public sealed class RecordQueryServiceTests
             () => _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0));
     }
 
-    // The other half of the same invariant: an origin names half an identity just as much as a
-    // bare plugin filename does.
     [Fact]
     public void GetRecords_OriginGivenWithoutPlugin_ThrowsArgumentException()
     {
@@ -1070,7 +1068,6 @@ public sealed class RecordQueryServiceTests
 
         Assert.Throws<NoLoadOrderException>(() => svc.GetFilter());
     }
-
 
     [Fact]
     public void GetStatus_IsTheIndexsStatus()

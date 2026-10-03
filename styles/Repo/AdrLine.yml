@@ -7,4 +7,6 @@ scope:
   - comment
   - text
 raw:
-  - 'ADR-\d{4}\.\d|ADR-\d{4}(?:\]\([^)\s]*\))?(?:''s)?,?\s+(?:invariants?|inv\.|strategic invariants|derived tactical observations|consequences|(?:decisions?|points?|rules?)\s+\d)'
+  - 'ADR-\d{4}(?:\.\d|\s*§)'
+  - '|ADR-\d{4}(?:\]\([^)\s]*\))?(?:[''’]s)?[,;:]?\s*\(?(?:(?:invariants?|inv\.?|consequences?|decisions?|points?|rules?)\s+\d|strategic invariants|derived tactical observations)'
+  - '|\b(?:invariants?|inv\.?|consequences?|decisions?|points?|rules?)\s+\d+\s+(?:of|in)\s+\[?ADR-\d{4}'

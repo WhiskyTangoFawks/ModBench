@@ -34,7 +34,7 @@ internal sealed class HeldPlugins
 
     public string DataFolderPath { get; }
 
-    /// <summary>ADR-0009. Null asks for an in-memory index.</summary>
+    /// <summary>One index file per instance, inside the instance root (ADR-0009). Null asks for an in-memory index.</summary>
     public string? InstanceRoot { get; }
 
     public GameRelease GameRelease { get; }

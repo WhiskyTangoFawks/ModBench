@@ -7,7 +7,7 @@ import { noGestureResultUse } from './eslint-rules/noGestureResultUse.mjs';
 import { noLeadingMEdit } from './eslint-rules/noLeadingMEdit.mjs';
 import { noRereadAfterWrite } from './eslint-rules/noRereadAfterWrite.mjs';
 
-// A lint message is the only place a developer meets ADR-0019.
+// The message states ADR-0019's rule in full, because a developer who breaks it meets the rule only there.
 const SURFACING_GOES_THROUGH_THE_REPORTER =
     'Surfacing goes through an injected reporter, never raw window calls in business logic (ADR-0019).';
 

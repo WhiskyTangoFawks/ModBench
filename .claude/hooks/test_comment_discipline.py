@@ -105,14 +105,19 @@ class ValeRules(unittest.TestCase):
         self.assertIn("Repo.AdrLine", vale(f"As [{ADR}](0012-x.md), invariant 4 says.\n", ".md"))
 
     def test_every_part_under_the_decision_is_a_line(self):
-        for cite in (", invariants 2 and 6", " inv. 6", ".5", " decision 3", ", point 5", " rule 2",
-                     ", Derived tactical observations", ", Strategic invariants", ", Consequences"):
+        for cite in (", invariants 2 and 6", " inv. 6", " inv 6", ".5", " §5", " decision 3", ", point 5",
+                     " rule 2", ", consequence 3", " (invariant 1", ": invariant 1", "; invariant 2",
+                     "’s invariant 2", ", Derived tactical observations", ", Strategic invariants"):
             with self.subTest(cite=cite):
                 self.assertIn("Repo.AdrLine", vale(f"The grid renders it ({ADR}{cite}).\n", ".md"))
 
+    def test_a_line_named_before_its_adr(self):
+        self.assertIn("Repo.AdrLine", vale(f"The grid renders it (invariant 1 of {ADR}).\n", ".md"))
+
     def test_an_adr_cited_by_its_decision_is_allowed(self):
         for text in (f"The grid renders it ({ADR}).", f"The {ADR} decision holds.",
-                     f"{ADR}'s rule, applied the same way."):
+                     f"{ADR}'s rule, applied the same way.",
+                     f"As {ADR}'s consequences show, it holds."):
             with self.subTest(text=text):
                 self.assertNotIn("Repo.AdrLine", vale(text + "\n", ".md"))
 

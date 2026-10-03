@@ -154,7 +154,6 @@ public sealed class EditRecordHandlerTests : IDisposable
         Assert.Empty(_mod.GitStatus());
     }
 
-
     [Fact]
     public void EditField_OfADocumentTheCodecCannotRead_RefusesWithTheCodecsOwnMessage()
     {
