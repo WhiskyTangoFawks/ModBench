@@ -6,7 +6,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 import { present } from '../ports/present';
 import { tsFiles } from './tsFiles';
-import { CORE_BOXES, KERNEL_BOXES, REFERENCING_BOXES, VIEW_BOXES } from './boxes';
+import { CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, REFERENCING_BOXES } from './boxes';
 
 const SRC = join(__dirname, '..');
 
@@ -69,7 +69,7 @@ const ADAPTER_INTERFACE = join(boxRoot('instanceAdapter'), 'instanceAdapter');
 
 function isAllowedDrivenSpecifier(spec: string, fromFile: string, box: string): boolean {
   if (spec.startsWith('node:')) return true;
-  if (spec === 'vscode') return box in VIEW_BOXES || fromFile === ADAPTER_WATCH;
+  if (spec === 'vscode') return box in DRIVING_BOXES || fromFile === ADAPTER_WATCH;
   if (!spec.startsWith('.')) return PACKAGE_IMPORTERS.has(box);
   const resolved = resolve(dirname(fromFile), spec);
   if (box !== 'instanceAdapter' && isIn(boxRoot('instanceAdapter'), resolved)) return resolved === ADAPTER_INTERFACE;
@@ -201,21 +201,21 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
     expect(isAllowedDrivenSpecifier('openapi-fetch', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
   });
 
-  it('refuses a codec and a table in every view', () => {
-    for (const box of Object.keys(VIEW_BOXES)) {
+  it('refuses a codec and a table in every driving box', () => {
+    for (const box of Object.keys(DRIVING_BOXES)) {
       expect(isAllowedDrivenSpecifier('../loadOrderFileCodec/pluginsText', join(boxRoot(box), 'p.ts'), box)).toBe(false);
       expect(isAllowedDrivenSpecifier('../tables/gamePaths', join(boxRoot(box), 'p.ts'), box)).toBe(false);
     }
   });
 
-  it('allows vscode in every view', () => {
-    for (const box of Object.keys(VIEW_BOXES)) {
+  it('allows vscode in every driving box', () => {
+    for (const box of Object.keys(DRIVING_BOXES)) {
       expect(isAllowedDrivenSpecifier('vscode', join(boxRoot(box), 'p.ts'), box)).toBe(true);
     }
   });
 
   it('refuses one view reaching into another', () => {
-    expect(isAllowedDrivenSpecifier('../downloads/errorNode', join(boxRoot('mods'), 'p.ts'), 'mods')).toBe(false);
+    expect(isAllowedDrivenSpecifier('../downloads/DownloadsProvider', join(boxRoot('mods'), 'p.ts'), 'mods')).toBe(false);
     expect(isAllowedDrivenSpecifier('../plugins/PluginTreeProvider', join(boxRoot('editor'), 'p.ts'), 'editor')).toBe(false);
     expect(isAllowedDrivenSpecifier('../mods/ModListProvider', join(boxRoot('plugins'), 'p.ts'), 'plugins')).toBe(false);
   });

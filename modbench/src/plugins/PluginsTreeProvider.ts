@@ -4,7 +4,7 @@ import type {
   NotificationEvent,
 } from '../client';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView, type PluginEntry } from '../instanceLoader/instance';
-import { firstReadOf, type FirstRead } from './instanceFirstRead';
+import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
 import { headerFormKeyFor } from './formKeyIdentity';
 import type { PluginsDrop } from '../pluginsCommands/plugins';
@@ -12,7 +12,7 @@ import { moveOrderRefusal, type PluginOrderFacts, type PluginOrderFactsOf } from
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginConditions, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
-import { ErrorNode } from './errorNode';
+import { ErrorNode } from '../drivingLib/errorNode';
 import { pluginAddressKey } from './trackedRepositories';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup } from './createdRecordSelection';

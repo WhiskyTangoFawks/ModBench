@@ -9,6 +9,7 @@
   },
   "references": [
     { "path": "../downloadsCommands" },
+    { "path": "../drivingLib" },
     { "path": "../install" },
     { "path": "../instanceLoader" },
     { "path": "../ports" }

@@ -31,7 +31,7 @@ import {
   PluginTreeProvider, RecordTypeNode, RecordNode, WorldspacesNode, WorldspaceNode, BlockNode,
   SubBlockNode, CellNode, InteriorCellsNode, InteriorBlockNode, InteriorSubBlockNode, IndexingNode,
 } from '../PluginTreeProvider';
-import { ErrorNode } from '../errorNode';
+import { ErrorNode } from '../../drivingLib/errorNode';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';

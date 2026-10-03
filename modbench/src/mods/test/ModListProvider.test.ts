@@ -27,7 +27,7 @@ vi.mock('../../modlist/modlist', () => ({
 }));
 
 import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, modOfRow, type ModlistNode } from '../ModListProvider';
-import { ErrorNode } from '../errorNode';
+import { ErrorNode } from '../../drivingLib/errorNode';
 import { onModCheckboxChanged } from '../modCheckboxHandler';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
