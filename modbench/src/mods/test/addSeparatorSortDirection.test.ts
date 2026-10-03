@@ -1,6 +1,3 @@
-// Placement is defined in mod order, never the view's sort direction (mods.md, Sort
-// direction). The same anchor, clicked from a tree sorted either way, writes identical bytes.
-
 import { describe, it, expect, vi } from 'vitest';
 import { readFile, rm } from 'node:fs/promises';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -29,17 +26,15 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { accessTo, readModlistEntries } from '../../test/mo2/adapterOver';
+import { present } from '../../ports/present';
 
-// The row a real tree over the corpus's own modlist, sorted the given way, hands a right click —
-// not a hand-built fixture. Nothing but the tree is under test here, so no Instance reads a clone.
-async function anchorRow(direction: SortDirection, isRow: (node: ModlistNode) => boolean): Promise<ModlistNode> {
+async function anchorRowOfARealTreeOverTheCorpusModlist(direction: SortDirection, isRow: (node: ModlistNode) => boolean): Promise<ModlistNode> {
   const instance = new FakeInstance(instanceValueFixture({ mods: await readModlistEntries(CORPUS_FIXTURE) }));
   const provider = new ModListProvider({ instance, access: accessTo(CORPUS_FIXTURE), log: () => undefined });
   provider.setViewDirection(direction);
   const row = (await provider.getChildren()).find(isRow);
   provider.dispose();
-  if (!row) throw new Error('anchor row not found');
-  return row;
+  return present(row, 'the anchor row');
 }
 
 const separatorMarks = {
@@ -54,19 +49,18 @@ async function writeWithAnchor(anchor: ModlistNode): Promise<string> {
   const reporter = recordingReporter();
   registerSeparatorCommands(accessTo(root), instance, reporter, scriptedDialog(), vi.fn(), () => [], separatorMarks);
   const call = registerCommand.mock.calls.find((c) => c[0] === 'modbench.separator.add');
-  if (!call) throw new Error('modbench.separator.add not registered');
-  await call[1](anchor);
+  await present(call, 'the modbench.separator.add registration')[1](anchor);
   expect(reporter.reports).toEqual([]);
   const text = await readFile(`${root}/${DEFAULT_MODLIST}`, 'utf8');
   await rm(root, { recursive: true, force: true });
   return text;
 }
 
-describe('add separator writes the same bytes whichever way the view is sorted', () => {
+describe('add separator writes the same bytes whichever way the view is sorted, placement being defined in mod order and not the view\'s sort direction', () => {
   it('on a mod', async () => {
     const isTheMod = (n: ModlistNode): boolean => n.kind === 'mod' && n.mod.name === 'Cracked and Smudged Pip-Boy Screen';
-    const losing = await anchorRow('losingAtTop', isTheMod);
-    const winning = await anchorRow('winningAtTop', isTheMod);
+    const losing = await anchorRowOfARealTreeOverTheCorpusModlist('losingAtTop', isTheMod);
+    const winning = await anchorRowOfARealTreeOverTheCorpusModlist('winningAtTop', isTheMod);
 
     const fromLosing = await writeWithAnchor(losing);
     const fromWinning = await writeWithAnchor(winning);
@@ -77,8 +71,8 @@ describe('add separator writes the same bytes whichever way the view is sorted',
   it('on a separator', async () => {
     const isTheSeparator = (n: ModlistNode): boolean =>
       n.kind === 'separator' && n.separator.name === 'Radfall - All-In-One Survival Overhaul';
-    const losing = await anchorRow('losingAtTop', isTheSeparator);
-    const winning = await anchorRow('winningAtTop', isTheSeparator);
+    const losing = await anchorRowOfARealTreeOverTheCorpusModlist('losingAtTop', isTheSeparator);
+    const winning = await anchorRowOfARealTreeOverTheCorpusModlist('winningAtTop', isTheSeparator);
 
     const fromLosing = await writeWithAnchor(losing);
     const fromWinning = await writeWithAnchor(winning);

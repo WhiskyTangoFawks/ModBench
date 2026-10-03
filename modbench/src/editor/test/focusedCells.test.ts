@@ -4,9 +4,7 @@ import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText } from '../
 const element = { webviewSection: 'arrayElement', canMoveUp: false, canMoveDown: true };
 const text = { webviewSection: 'stringValue' };
 
-// commands.md, Record: a field gesture from the palette acts on the focused cell of the record tab
-// in focus, and is in the palette only while one has focus.
-describe('the focused cell of the record tab in focus', () => {
+describe('the focused cell of the record tab in focus, which the palette\'s field gestures act on', () => {
   function tracked() {
     const shown: (object | undefined)[] = [];
     const entries: string[] = [];
@@ -75,8 +73,7 @@ describe('the focused cell of the record tab in focus', () => {
   });
 });
 
-// Copy value and the name filter act on the focused view, which the grid takes only by a user's focus.
-describe('the record grid entering the focused view', () => {
+describe('the record grid entering the focused view, which copy value and the name filter act on', () => {
   function tracked() {
     const entries: string[] = [];
     const cells = new FocusedCells<string>(() => undefined, () => entries.push('entered'));
@@ -107,8 +104,7 @@ describe('the record grid entering the focused view', () => {
   });
 });
 
-// commands.md, Every view: copy value copies the grid's focused cell as its column reads it.
-describe('the grid\'s copy value text', () => {
+describe('the grid\'s copy value text, the focused cell as its column reads it', () => {
   it('is the text the webview\'s Ctrl+C names', () => {
     expect(gridCopyValueText(() => ({ copyText: 'focused' }))({ copyText: 'named' })).toBe('named');
   });

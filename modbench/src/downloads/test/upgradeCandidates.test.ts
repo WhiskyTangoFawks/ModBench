@@ -25,7 +25,7 @@ describe('selectUpgradeCandidates', () => {
   });
 
   it('is empty when no mod id is present, even for a mod with no nexus id of its own', () => {
-    const value = valueOf([mod({ name: 'A Local Mod' })]); // nexusId undefined
+    const value = valueOf([mod({ name: 'A Local Mod' })]);
     expect(selectUpgradeCandidates(value, download({}))).toEqual([]);
   });
 
@@ -74,18 +74,14 @@ describe('selectUpgradeCandidates', () => {
     ]);
   });
 
-  // Tier 2 needs no shared Nexus mod id: a hand-installed mod with none of its own still wins it
-  // on its meta.ini's own installationFile record alone.
-  it('flags an installationFile match from a mod with no Nexus mod id of its own', () => {
-    const value = valueOf([mod({ name: 'Hand Installed', archiveFilename: 'foo.7z' })]); // nexusId undefined
+  it('flags an installationFile match from a hand-installed mod with no Nexus mod id of its own, on its meta.ini record alone', () => {
+    const value = valueOf([mod({ name: 'Hand Installed', archiveFilename: 'foo.7z' })]);
     expect(selectUpgradeCandidates(value, download({ modID: '111', name: 'foo.7z' }))).toEqual([
       { modName: 'Hand Installed', version: undefined, tier: 'installationFile' },
     ]);
   });
 
-  // Tier 2 hidden: an installationFile match sits beside a fileId match elsewhere in the pool, so
-  // it never earns the "Installed from this file" label — it lists, but tierless.
-  it('drops the installationFile tier when a fileId match exists elsewhere in the pool', () => {
+  it('drops the installationFile tier, listing the mod tierless, when a fileId match exists elsewhere in the pool', () => {
     const value = valueOf([
       mod({ name: 'By Name', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
       mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
@@ -96,13 +92,10 @@ describe('selectUpgradeCandidates', () => {
     ]);
   });
 
-  it('never consults the download\'s filename for a fileId match — only meta.ini\'s own pairs', () => {
+  it('takes no fileId tier from an archiveFilename that matches the download name when its fileID is absent from installedFiles, and still flags installationFile', () => {
     const value = valueOf([
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'harder-vats-v1.7z' }),
     ]);
-    // The archiveFilename coincidentally matches the download's own name, but the download
-    // carries a fileID absent from the mod's installedFiles — no fileId tier from that alone;
-    // the installationFile tier still applies on the name match itself.
     expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999', name: 'harder-vats-v1.7z' }))).toEqual([
       { modName: 'Harder VATS', version: '1.0', tier: 'installationFile' },
     ]);

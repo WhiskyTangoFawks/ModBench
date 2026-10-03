@@ -12,8 +12,6 @@ const modRow = (name: string) => new ModNode(mod(name));
 const separatorRow = (name: string, ...modNames: string[]) =>
   new SeparatorNode({ kind: 'separator', name, enabled: true }, modNames.map(mod));
 
-// modlist.txt, winning first: Alpha, Group A, Beta, Gamma, Group B, Delta. Group A holds Alpha,
-// Group B holds Beta and Gamma, and Delta is ungrouped.
 const alpha = modRow('Alpha');
 const beta = modRow('Beta');
 const gamma = modRow('Gamma');
@@ -22,48 +20,46 @@ const groupA = separatorRow('Group A', 'Alpha');
 const groupB = separatorRow('Group B', 'Beta', 'Gamma');
 
 const BOTH: readonly SortDirection[] = ['losingAtTop', 'winningAtTop'];
-// "Directly above" and "first", as shown, lie toward the end the view shows at the top; the
-// bottom of the view is the other end.
-const atTop = { losingAtTop: 'losing', winningAtTop: 'winning' } as const;
-const atBottom = { losingAtTop: 'winning', winningAtTop: 'losing' } as const;
+const endTheViewShowsAtTheTop = { losingAtTop: 'losing', winningAtTop: 'winning' } as const;
+const endTheViewShowsAtTheBottom = {losingAtTop: 'winning', winningAtTop: 'losing' } as const;
 
 describe.each(BOTH)('a drop is a move, as shown, with %s', (direction) => {
   it('mods dropped on a mod land directly above it', () => {
     expect(dropMove({ rows: [alpha, delta], focused: delta }, gamma, direction)).toEqual({
-      argument: [alpha, delta], target: { place: { kind: 'mod', name: 'Gamma' }, end: atTop[direction] },
+      argument: [alpha, delta], target: { place: { kind: 'mod', name: 'Gamma' }, end: endTheViewShowsAtTheTop[direction] },
     });
   });
 
   it('mods dropped on a separator become its first mods', () => {
     expect(dropMove({ rows: [delta], focused: delta }, groupA, direction)).toEqual({
-      argument: [delta], target: { place: { kind: 'separator', name: 'Group A' }, end: atTop[direction] },
+      argument: [delta], target: { place: { kind: 'separator', name: 'Group A' }, end: endTheViewShowsAtTheTop[direction] },
     });
   });
 
   it('a separator dropped on a separator lands directly above it', () => {
     expect(dropMove({ rows: [groupB], focused: groupB }, groupA, direction)).toEqual({
-      argument: [groupB], target: { place: { kind: 'separator', name: 'Group A' }, end: atTop[direction] },
+      argument: [groupB], target: { place: { kind: 'separator', name: 'Group A' }, end: endTheViewShowsAtTheTop[direction] },
     });
   });
 
   it('mods dropped below the last row land at the bottom of the view', () => {
     expect(dropMove({ rows: [beta], focused: beta }, undefined, direction)).toEqual({
-      argument: [beta], target: { place: { kind: 'modOrder' }, end: atBottom[direction] },
+      argument: [beta], target: { place: { kind: 'modOrder' }, end: endTheViewShowsAtTheBottom[direction] },
     });
   });
 
   it('a separator dropped below the last row lands at the bottom of the view', () => {
     expect(dropMove({ rows: [groupA], focused: groupA }, undefined, direction)).toEqual({
-      argument: [groupA], target: { place: { kind: 'modOrder' }, end: atBottom[direction] },
+      argument: [groupA], target: { place: { kind: 'modOrder' }, end: endTheViewShowsAtTheBottom[direction] },
     });
   });
 
   it('a mixed drag moves only the rows of the focused row\'s kind', () => {
     expect(dropMove({ rows: [groupB, delta, alpha], focused: delta }, groupA, direction)).toEqual({
-      argument: [delta, alpha], target: { place: { kind: 'separator', name: 'Group A' }, end: atTop[direction] },
+      argument: [delta, alpha], target: { place: { kind: 'separator', name: 'Group A' }, end: endTheViewShowsAtTheTop[direction] },
     });
     expect(dropMove({ rows: [groupB, delta], focused: groupB }, groupA, direction)).toEqual({
-      argument: [groupB], target: { place: { kind: 'separator', name: 'Group A' }, end: atTop[direction] },
+      argument: [groupB], target: { place: { kind: 'separator', name: 'Group A' }, end: endTheViewShowsAtTheTop[direction] },
     });
   });
 

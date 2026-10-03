@@ -27,9 +27,7 @@ describe('sortDownloadRows', () => {
     ]);
   });
 
-  // downloads.md, Order and view state, story 2: sort by name means the label. The file names
-  // here sort opposite the labels, so keying on `name` instead of `displayName` fails this.
-  it('sorts by name using the label, not the raw filename', () => {
+  it('sorts by name using the label, not the raw filename, which sorts the opposite way', () => {
     const rows: DownloadRow[] = [
       { ...row('z-file.zip', 1), displayName: 'Alpha' },
       { ...row('a-file.zip', 2), displayName: 'Zeta' },
@@ -38,8 +36,6 @@ describe('sortDownloadRows', () => {
     expect(sortDownloadRows(rows, 'name', true).map((r) => r.displayName)).toEqual(['Zeta', 'Alpha']);
   });
 
-  // Ties in the label keep their relative order in both directions, same guarantee the
-  // status-column stability tests below cover.
   it('is a stable sort by name (label) in both directions: ties keep their relative order', () => {
     const rows: DownloadRow[] = [
       { ...row('a.zip', 1), displayName: 'Same' },
@@ -50,9 +46,6 @@ describe('sortDownloadRows', () => {
     expect(sortDownloadRows(rows, 'name', true).map((r) => r.name)).toEqual(['a.zip', 'b.zip', 'c.zip']);
   });
 
-  // Stable sort: rows tied on the sorted column (e.g. two Downloaded entries) keep
-  // their relative order rather than being reshuffled against each other, while a
-  // genuinely different value (Installed) still sorts to its correct place.
   it('is a stable sort: ties in the sorted column keep their relative order', () => {
     const rows: DownloadRow[] = [
       { ...row('a', 1), status: 'Downloaded' },
@@ -62,9 +55,6 @@ describe('sortDownloadRows', () => {
     expect(sortDownloadRows(rows, 'status', false).map((r) => r.name)).toEqual(['a', 'b', 'c']);
   });
 
-  // Descending must also be stable: negating the comparator, not reversing the
-  // sorted array, so ties (the Downloaded pair) keep their relative order while
-  // the genuinely different value (Installed) still sorts to its correct place.
   it('is a stable sort descending too: ties in the sorted column keep their relative order', () => {
     const rows: DownloadRow[] = [
       { ...row('a', 1), status: 'Downloaded' },
@@ -108,10 +98,7 @@ describe('filterArchiveRows', () => {
   });
 });
 
-// The row's right-click menu is a native `view/item/context` contribution,
-// gated by this space-separated `contextValue` flag string and `viewItem =~ /\bflag\b/` `when`
-// clauses.
-describe('downloadContextValue', () => {
+describe('downloadContextValue, the space-separated flag string the view/item/context when clauses match', () => {
   const plain: DownloadRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, excluded: false };
 
   it('is the base "download" token alone when no optional flag applies', () => {

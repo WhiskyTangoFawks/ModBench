@@ -36,16 +36,14 @@ describe('reportPutOutcome', () => {
   });
 });
 
-// ADR-0013: a reconcile that reached Ready, whoever started it, is reported and then applied.
-describe('settleReconciled', () => {
+describe('settleReconciled, a reconcile that reached Ready being reported and then applied whoever started it', () => {
   const settleDeps = () => ({
     log: vi.fn(), warn: vi.fn(), setStatusText: vi.fn(), refreshTree: vi.fn(), notifyConflictsComputed: vi.fn(),
     syncFilterState: vi.fn().mockResolvedValue(undefined),
     applyReconciled: vi.fn().mockResolvedValue(undefined),
   });
 
-  // common.md, The status bar, story 1: N counts the active plugins, not every plugin indexed.
-  it('writes the ready status text counting the active plugins', async () => {
+  it('writes the ready status text counting the active plugins, not every plugin indexed', async () => {
     const deps = settleDeps();
 
     await settleReconciled(readyStatus, deps);
@@ -53,8 +51,7 @@ describe('settleReconciled', () => {
     expect(deps.setStatusText).toHaveBeenCalledWith('$(check) mEdit: Ready (2 plugins)');
   });
 
-  // The record browser's page/interior/reference caches must re-read, or rows show stale records.
-  it('refreshes the record browser and announces that conflicts are computed', async () => {
+  it('refreshes the record browser, whose page, interior and reference caches would otherwise show stale records, and announces that conflicts are computed', async () => {
     const deps = settleDeps();
 
     await settleReconciled(readyStatus, deps);
@@ -63,7 +60,7 @@ describe('settleReconciled', () => {
     expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
   });
 
-  it('warns and logs a skipped plugin, never silently (ADR-0019)', async () => {
+  it('warns and logs a skipped plugin by name', async () => {
     const deps = settleDeps();
     const failures: PluginLoadFailure[] = [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }];
 
@@ -118,9 +115,7 @@ describe('syncActiveFilter', () => {
     expect(deps.warn).not.toHaveBeenCalled();
   });
 
-  // plugins.md, Order and view state, story 3: the filter clears only on purpose, so a read that
-  // failed says nothing about whether mEdit still filters.
-  it('logs and warns a read failure, and keeps showing the last known filter', async () => {
+  it('logs and warns a read failure, and keeps showing the last known filter, since a failed read says nothing about whether mEdit still filters', async () => {
     const deps = makeSyncDeps();
 
     await syncActiveFilter(() => Promise.reject(new Error('boom')), deps);
