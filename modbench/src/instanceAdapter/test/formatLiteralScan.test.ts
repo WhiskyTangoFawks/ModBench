@@ -95,7 +95,7 @@ function findLeaks(roots: readonly string[]): Record<string, string[]> {
   return leaks;
 }
 
-describe('format literals, each instance file\'s format living in its codec and nowhere else', () => {
+describe('format literals, scanned over the extension and webview trees against each format\'s codec allowlist', () => {
   it('covers the whole extension source tree', () => {
     expect(allFiles(SRC_ROOTS).length).toBeGreaterThan(100);
   });
@@ -200,7 +200,7 @@ describe('format literals, each instance file\'s format living in its codec and 
     }
   });
 
-  it('lineScan.ts is not (and cannot honestly be) a codec file, holding no format token of its own, only the shared EOL/splice machinery every codec module calls', () => {
+  it('lineScan.ts is not (and cannot honestly be) a codec file, holding no format token of its own', () => {
     expect(CODECS.map(({ file }) => file)).not.toContain(LINE_SCAN);
     const path = join(EXTENSION_SRC, LINE_SCAN);
     expect(tokenLeaks(readFileSync(path, 'utf8'), path)).toEqual([]);

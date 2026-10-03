@@ -88,7 +88,7 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
   });
 });
 
-describe('HttpMEditClient — the notification stream follows the status, and only this module drives it', () => {
+describe('HttpMEditClient — the notification stream follows the status', () => {
   beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => { vi.restoreAllMocks(); });
 
@@ -785,7 +785,7 @@ describe('HttpMEditClient — whether the game has light plugins', () => {
   });
 });
 
-describe('HttpMEditClient — read timeout, checked through getRecordTypes as the race is shared by every spatial/record read verb', () => {
+describe('HttpMEditClient — read timeout, checked through getRecordTypes, standing in for the read verbs that share the race', () => {
   it('rejects a hung read after the configured timeout, aborting the request', async () => {
     let sawSignal: AbortSignal | undefined;
     const fetch = vi.fn((req: Request) => {

@@ -36,9 +36,9 @@ describe('errorText, the sentence written for the user rather than the RFC 7807 
 });
 
 describe('toLoadOrderStatus', () => {
-  it('keeps each indexed plugin as (origin, filename), so two of one filename stay two, and carries conflictsComputed rather than the wire\'s state, as the whole-set conflict sweep leaves a Ready load order with stale winners', () => {
+  it('keeps each indexed plugin as (origin, filename), so two of one filename stay two, and carries conflictsComputed false through a Ready wire state, as the whole-set conflict sweep leaves a Ready load order with stale winners', () => {
     const status = toLoadOrderStatus({
-      state: 'Reconciling',
+      state: 'Ready',
       totalPlugins: 3, activePlugins: 2, version: 1,
       indexedPlugins: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'Shared.esp', origin: 'ModB' }],
       conflictsComputed: false,

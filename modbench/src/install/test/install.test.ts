@@ -310,7 +310,7 @@ describe('install commands', () => {
     expect(await readFile(join(modDir, '.gitignore'), 'utf8')).toBe('*\n!plugin-source/\n');
   });
 
-  it('an upgrade over a tracked mod keeps its repository rebasable: the edit branch rebases onto main cleanly, plugin source intact', async () => {
+  it('an upgrade over a tracked mod keeps its repository rebasable, run with the real git that must be on PATH: the edit branch rebases onto main cleanly, plugin source intact', async () => {
     const name = 'Tracked Target';
     const modDir = await makeExistingMod(root, name, false);
     const sourceFile = join(modDir, 'plugin-source', 'Tracked.esp', 'RecordData.json');
@@ -498,7 +498,7 @@ describe('install commands', () => {
 });
 
 describe('ARCHIVE_EXTENSIONS', () => {
-  it('is the archive extensions install can extract, lower-cased, the one list every picker and the Downloads view read rather than naming an extension of their own', () => {
+  it('is the archive extensions install can extract, lower-cased', () => {
     expect([...ARCHIVE_EXTENSIONS].sort()).toEqual(['7z', 'rar', 'zip']);
   });
 });

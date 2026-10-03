@@ -6,7 +6,7 @@ vi.mock('node:fs/promises');
 import { detectGamePaths, detectWindowsGamePaths, detectWinePrefix, parseRegQuerySteamPath, type GameAutodetect } from '../gamePathDetector';
 
 const FO4_APP_ID = '377160';
-const FO4: GameAutodetect = { steamAppId: FO4_APP_ID, steamFolderName: 'Fallout 4' };
+const FO4_FIXTURE_CHOICE_NEVER_A_PLATFORM_LOCK: GameAutodetect = { steamAppId: FO4_APP_ID, steamFolderName: 'Fallout 4' };
 
 const VDF_WITH_FO4 = `
 "libraryfolders"
@@ -46,7 +46,7 @@ describe('detectGamePaths (Linux)', () => {
     vi.mocked(fs.readFile).mockResolvedValue(VDF_WITH_FO4);
     vi.mocked(fs.access).mockResolvedValue(undefined);
 
-    const result = await detectGamePaths('linux', FO4);
+    const result = await detectGamePaths('linux', FO4_FIXTURE_CHOICE_NEVER_A_PLATFORM_LOCK);
 
     expect(result).toEqual({ dataFolder: '/mnt/games/steam/steamapps/common/Fallout 4/Data' });
   });
@@ -54,7 +54,7 @@ describe('detectGamePaths (Linux)', () => {
   it('returns null when the VDF cannot be read', async () => {
     vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
 
-    const result = await detectGamePaths('linux', FO4);
+    const result = await detectGamePaths('linux', FO4_FIXTURE_CHOICE_NEVER_A_PLATFORM_LOCK);
     expect(result).toBeNull();
   });
 });
@@ -147,7 +147,7 @@ describe('detectWindowsGamePaths', () => {
           '    SteamPath    REG_SZ    C:/Program Files (x86)/Steam\r\n',
       );
 
-    const result = await detectWindowsGamePaths(runRegQuery, FO4);
+    const result = await detectWindowsGamePaths(runRegQuery, FO4_FIXTURE_CHOICE_NEVER_A_PLATFORM_LOCK);
 
     expect(result).toEqual({ dataFolder: 'C:/Program Files (x86)/Steam/steamapps/common/Fallout 4/Data' });
   });
@@ -156,7 +156,7 @@ describe('detectWindowsGamePaths', () => {
     const runRegQuery = () =>
       Promise.resolve('ERROR: The system was unable to find the specified registry key or value.\r\n');
 
-    const result = await detectWindowsGamePaths(runRegQuery, FO4);
+    const result = await detectWindowsGamePaths(runRegQuery, FO4_FIXTURE_CHOICE_NEVER_A_PLATFORM_LOCK);
 
     expect(result).toBeNull();
   });
@@ -164,7 +164,7 @@ describe('detectWindowsGamePaths', () => {
   it('returns null when the registry query itself fails (no reg.exe, no Steam)', async () => {
     const runRegQuery = () => Promise.reject(new Error('ENOENT: reg'));
 
-    const result = await detectWindowsGamePaths(runRegQuery, FO4);
+    const result = await detectWindowsGamePaths(runRegQuery, FO4_FIXTURE_CHOICE_NEVER_A_PLATFORM_LOCK);
 
     expect(result).toBeNull();
   });
