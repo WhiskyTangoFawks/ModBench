@@ -137,7 +137,8 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void Reconcile_OfAPluginWhoseGroupCannotBeEnumerated_KeepsItsOtherRecordTypes()
     {
-        using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(), CorruptGroupFixture.PluginName);
+        using var sources = new ScratchDirectory("medit-parsefail-source-");
+        using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(sources), CorruptGroupFixture.PluginName);
 
         var counts = scratch.Reads.GetRecordTypeCounts(scratch.Plugin);
 
@@ -148,7 +149,8 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void Reconcile_OfAPluginWhoseGroupCannotBeEnumerated_MarksThatRecordTypeAndItsPlugin()
     {
-        using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(), CorruptGroupFixture.PluginName);
+        using var sources = new ScratchDirectory("medit-parsefail-source-");
+        using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(sources), CorruptGroupFixture.PluginName);
 
         var counts = scratch.Reads.GetRecordTypeCounts(scratch.Plugin);
 
@@ -161,7 +163,8 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void Reconcile_IndexesADeletedRecordWhoseFieldsAreAbsent_AsDeleted_NotParseFailed()
     {
-        using var scratch = new Scratch(Scratch.DeletedNpcPlugin((path, npc) => DeletedNpcPlugin.WriteEmpty(path, npc)), DeletedNpcPluginName);
+        using var sources = new ScratchDirectory("medit-parsefail-source-");
+        using var scratch = new Scratch(Scratch.DeletedNpcPlugin(sources, (path, npc) => DeletedNpcPlugin.WriteEmpty(path, npc)), DeletedNpcPluginName);
 
         var document = Assert.Single(scratch.Reads.GetOverrideStack(DeletedNpc).Require().Entries).Effective;
 
@@ -172,7 +175,8 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void Reconcile_KeepsADeletedRecordThatStillHoldsFieldsItCannotRead_WithItsDiagnosis()
     {
-        using var scratch = new Scratch(Scratch.DeletedNpcPlugin((path, npc) => DeletedNpcPlugin.WriteHoldingFields(path, npc)), DeletedNpcPluginName);
+        using var sources = new ScratchDirectory("medit-parsefail-source-");
+        using var scratch = new Scratch(Scratch.DeletedNpcPlugin(sources, (path, npc) => DeletedNpcPlugin.WriteHoldingFields(path, npc)), DeletedNpcPluginName);
 
         var document = Assert.Single(scratch.Reads.GetOverrideStack(DeletedNpc).Require().Entries).Effective;
 
@@ -196,9 +200,9 @@ public sealed class ParseFailedRecordTests
     {
         internal const string PluginName = "CorruptGroup.esp";
 
-        internal static string BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc()
+        internal static string BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(ScratchDirectory directory)
         {
-            var path = Path.Combine(Directory.CreateTempSubdirectory("medit-corruptgroup-").FullName, PluginName);
+            var path = Path.Combine(directory.Path, PluginName);
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
             mod.Npcs.AddNew("TheNpc");
             mod.Weapons.AddNew("TheWeapon");
@@ -219,9 +223,9 @@ public sealed class ParseFailedRecordTests
 
     private sealed class Scratch : IDisposable
     {
-        internal static string DeletedNpcPlugin(Action<string, FormKey> write)
+        internal static string DeletedNpcPlugin(ScratchDirectory directory, Action<string, FormKey> write)
         {
-            var path = Path.Combine(Directory.CreateTempSubdirectory("medit-deletednpc-").FullName, DeletedNpcPluginName);
+            var path = Path.Combine(directory.Path, DeletedNpcPluginName);
             write(path, FormKey.Factory(DeletedNpc));
             return path;
         }

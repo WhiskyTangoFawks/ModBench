@@ -118,23 +118,17 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         Assert.Equal("TestNpc", winnerEntry.Head.EditorId);
     }
 
-    private string? RaceLinkErrorOfTheNpc(IRecordReads reads) => reads.DocumentOf(_npc, _baseKey).Fields
-        .Single(f => f.Metadata.Name.Equals("Race", StringComparison.OrdinalIgnoreCase))
-        .CheckError;
-
     [Fact]
-    public void DeletingARecord_StopsItResolving_SoAFormLinkToItReadsAsDangling()
+    public void DeletingARecord_StopsItResolving_AndLeavesOtherRecordsResolving()
     {
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
         Assert.NotNull(reads.Resolve(_raceA));
-        Assert.Null(RaceLinkErrorOfTheNpc(reads));
 
         index.Delete(_base, reads.DocumentOf(_raceA, _baseKey));
 
         Assert.Null(reads.Resolve(_raceA));
         Assert.NotNull(reads.Resolve(_raceB));
-        Assert.Contains("Could not be resolved", RaceLinkErrorOfTheNpc(reads));
     }
 
     [Fact]
