@@ -11,9 +11,6 @@ public readonly record struct ElementKey(IReadOnlyList<(double? Number, string T
 {
     public string Text => string.Join(" / ", Segments.Select(s => s.Text));
 
-    /// <summary>Every member absent with no default to read: a key not yet given.</summary>
-    public bool IsUnset => Segments.All(s => s.Number == null && s.Text.Length == 0);
-
     /// <summary><paramref name="elementMeta"/> lets a flags member order by its bits, as xEdit's
     /// wbStructSK does, rather than by the names the document spells it with.</summary>
     public static ElementKey Of(JsonElement element, IReadOnlyList<string> keyMembers, FieldMetadata? elementMeta = null) =>

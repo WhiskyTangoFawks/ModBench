@@ -187,8 +187,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     private static List<ElementRow> KeyedRows(
         IReadOnlyList<string> keyMembers, FieldMetadata element, List<(string Column, List<JsonElement> Elements)> columns)
     {
-        // The write path refuses two elements sharing a key, but another tool's plugin can hold
-        // them: each takes a row, the nth at a key aligning with the nth in every other column.
+        // Elements sharing a key each take a row, the nth at a key aligning with the nth in every
+        // other column, as xEdit's TfrmMain.InitChildren counts them.
         var rows = new Dictionary<(string Key, int Turn), (ElementKey Key, int Turn, Dictionary<string, (JsonElement, int)> Held)>();
         foreach (var (column, elements) in columns)
         {

@@ -97,10 +97,6 @@ public enum RecordEditRefusal
     /// then supplies the replace Option; the way out is confirming the replacement.</summary>
     DestinationHoldsRecord,
 
-    /// <summary>Entries in a keyed array are identified by key, not position, so a second one is a
-    /// collision; the message names the key.</summary>
-    DuplicateKeyInKeyedArray,
-
     /// <summary>Deleting the header would remove the root <c>RecordData.json</c> the whole-mod door needs;
     /// its FormKey is synthetic. Refused before <c>HoldingUnit.IsDirectoryPerRecord</c>, whose filename-only
     /// test would delete the whole source root.</summary>

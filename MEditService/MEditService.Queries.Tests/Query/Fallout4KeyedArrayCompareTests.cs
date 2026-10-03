@@ -5,6 +5,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using NpcProperty = Mutagen.Bethesda.Fallout4.Npc.Property;
 
 namespace MEditService.Queries.Tests.Query;
 
@@ -29,21 +30,35 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static readonly FormKey NavmeshKey = new(Base, 0x80B);
     private static readonly FormKey InfoMapKey = new(Base, 0x80C);
     private static readonly FormKey LandscapeKey = new(Base, 0x80D);
+    private static readonly FormKey LeveledNpcKey = new(Base, 0x80E);
+    private static readonly FormKey ObjectModKey = new(Base, 0x80F);
+    private static readonly FormKey ContainerKey = new(Base, 0x810);
+    private static readonly FormKey FurnitureKey = new(Base, 0x811);
+    private static readonly FormKey LensFlareKey = new(Base, 0x812);
+    private static readonly FormKey MaterialSwapKey = new(Base, 0x813);
+    private static readonly FormKey RegionKey = new(Base, 0x814);
     private static readonly FormKey A = new(Base, 0x900);
     private static readonly FormKey B = new(Base, 0x901);
     private static readonly FormKey Cell = new(Base, 0x902);
 
     private static readonly (FormKey Key, string RecordType, string[] Fields, Func<bool, IMajorRecordGetter> Build)[] Records =
     [
-        (NpcKey, "npc_", ["Factions", "Perks", "Attacks", "Sounds", "FaceMorphs", "FaceTintingLayers", "Properties"], Npc),
+        (NpcKey, "npc_", ["Factions", "Perks", "Items", "Attacks", "Sounds", "FaceMorphs", "FaceTintingLayers", "Properties", "ObjectTemplates"], Npc),
         (FactionKey, "fact", ["Relations", "Ranks"], Faction),
-        (LeveledItemKey, "lvli", ["FilterKeywordChances"], LeveledItem),
+        (LeveledItemKey, "lvli", ["Entries", "FilterKeywordChances"], LeveledItem),
+        (LeveledNpcKey, "lvln", ["Entries"], LeveledNpc),
+        (ObjectModKey, "omod", ["Properties"], WeaponModification),
+        (ContainerKey, "cont", ["Items"], Container),
+        (FurnitureKey, "furn", ["Items"], Furniture),
+        (LensFlareKey, "lens", ["Sprites"], LensFlare),
+        (MaterialSwapKey, "mswp", ["Substitutions"], MaterialSwap),
+        (RegionKey, "regn", ["Sounds"], Region),
         (MiscItemKey, "misc", ["Components"], MiscItem),
         (PerkKey, "perk", ["Effects"], Perk),
-        (QuestKey, "qust", ["Stages"], Quest),
+        (QuestKey, "qust", ["Stages", "Aliases"], Quest),
         (LocationKey, "lctn", [
             "PersistentActorReferencesAdded", "PersistentActorReferencesStatic", "UniqueActorReferencesAdded",
-            "UniqueActorReferencesStatic", "WorldspaceCellsAdded", "WorldspaceCellsStatic", "WorldspaceCellsRemoved"], Location),
+            "UniqueActorReferencesStatic", "LocationRefTypeReferencesAdded", "LocationRefTypeReferencesStatic", "WorldspaceCellsAdded", "WorldspaceCellsStatic", "WorldspaceCellsRemoved"], Location),
         (TerminalKey, "term", ["VirtualMachineAdapter", "Properties"], Terminal),
         (MagicEffectKey, "mgef", ["Sounds"], MagicEffect),
         (PlacedNpcKey, "achr", ["LinkedReferences", "ActivateParents"], PlacedNpc),
@@ -94,6 +109,7 @@ public sealed class Fallout4KeyedArrayCompareTests
         Perks = [.. InOrder(reversed,
             new PerkPlacement { Perk = new FormLink<IPerkGetter>(A), Rank = 1 },
             new PerkPlacement { Perk = new FormLink<IPerkGetter>(B), Rank = 2 })],
+        Items = [.. ContainerEntriesHoldingAnItemTwice(reversed)],
         Attacks = [.. InOrder(reversed,
             new Attack { AttackEvent = "attackStart", AttackData = new AttackData { DamageMult = 1 } },
             new Attack { AttackEvent = "bashStart", AttackData = new AttackData { DamageMult = 2 } })],
@@ -107,7 +123,22 @@ public sealed class Fallout4KeyedArrayCompareTests
             new NpcFaceTintingLayer { Index = 1, Value = 1 },
             new NpcFaceTintingLayer { Index = 2, Value = 2 })],
         Properties = [.. ObjectProperties(reversed)],
+        ObjectTemplates =
+        [
+            new ObjectTemplate<NpcProperty>
+            {
+                Properties = [.. InOrder<AObjectModProperty<NpcProperty>>(reversed,
+                    new ObjectModFormLinkIntProperty<NpcProperty> { Property = NpcProperty.Keywords, Record = new FormLink<IFallout4MajorRecordGetter>(A) },
+                    new ObjectModFormLinkIntProperty<NpcProperty> { Property = NpcProperty.Keywords, Record = new FormLink<IFallout4MajorRecordGetter>(A) },
+                    new ObjectModFloatProperty<NpcProperty> { Property = NpcProperty.XpOffset, Value = 2 })],
+            },
+        ],
     };
+
+    private static IEnumerable<ContainerEntry> ContainerEntriesHoldingAnItemTwice(bool reversed) => InOrder(reversed,
+        new ContainerEntry { Item = new ContainerItem { Item = new FormLink<IItemGetter>(A), Count = 1 } },
+        new ContainerEntry { Item = new ContainerItem { Item = new FormLink<IItemGetter>(A), Count = 1 } },
+        new ContainerEntry { Item = new ContainerItem { Item = new FormLink<IItemGetter>(B), Count = 2 } });
 
     private static Faction Faction(bool reversed) => new(FactionKey, Fallout4Release.Fallout4)
     {
@@ -119,9 +150,66 @@ public sealed class Fallout4KeyedArrayCompareTests
 
     private static LeveledItem LeveledItem(bool reversed) => new(LeveledItemKey, Fallout4Release.Fallout4)
     {
+        Entries = [.. InOrder(reversed,
+            new LeveledItemEntry { Data = new LeveledItemEntryData { Level = 1, Reference = new FormLink<IItemGetter>(A), Count = 1 } },
+            new LeveledItemEntry { Data = new LeveledItemEntryData { Level = 1, Reference = new FormLink<IItemGetter>(A), Count = 1 } },
+            new LeveledItemEntry { Data = new LeveledItemEntryData { Level = 1, Reference = new FormLink<IItemGetter>(B), Count = 2 } })],
         FilterKeywordChances = [.. InOrder(reversed,
             new FilterKeywordChance { FilterKeyword = new FormLink<IKeywordGetter>(A) },
             new FilterKeywordChance { FilterKeyword = new FormLink<IKeywordGetter>(B) })],
+    };
+
+    private static LeveledNpc LeveledNpc(bool reversed) => new(LeveledNpcKey, Fallout4Release.Fallout4)
+    {
+        Entries = [.. InOrder(reversed,
+            new LeveledNpcEntry { Data = new LeveledNpcEntryData { Level = 1, Reference = new FormLink<INpcSpawnGetter>(A), Count = 1 } },
+            new LeveledNpcEntry { Data = new LeveledNpcEntryData { Level = 1, Reference = new FormLink<INpcSpawnGetter>(A), Count = 1 } },
+            new LeveledNpcEntry { Data = new LeveledNpcEntryData { Level = 2, Reference = new FormLink<INpcSpawnGetter>(A), Count = 2 } })],
+    };
+
+    private static WeaponModification WeaponModification(bool reversed) => new(ObjectModKey, Fallout4Release.Fallout4)
+    {
+        Properties = [.. InOrder<AObjectModProperty<Weapon.Property>>(reversed,
+            new ObjectModIntProperty<Weapon.Property> { Property = Weapon.Property.AmmoCapacity, Value = 1 },
+            new ObjectModIntProperty<Weapon.Property> { Property = Weapon.Property.AmmoCapacity, Value = 1 },
+            new ObjectModFloatProperty<Weapon.Property> { Property = Weapon.Property.Speed, Value = 2 })],
+    };
+
+    private static Container Container(bool reversed) => new(ContainerKey, Fallout4Release.Fallout4)
+    {
+        Items = [.. ContainerEntriesHoldingAnItemTwice(reversed)],
+    };
+
+    private static Furniture Furniture(bool reversed) => new(FurnitureKey, Fallout4Release.Fallout4)
+    {
+        Items = [.. ContainerEntriesHoldingAnItemTwice(reversed)],
+    };
+
+    private static LensFlare LensFlare(bool reversed) => new(LensFlareKey, Fallout4Release.Fallout4)
+    {
+        Sprites = [.. InOrder(reversed,
+            new LensFlareSprite { LensFlareSpriteId = "a", Texture = "a.dds" },
+            new LensFlareSprite { LensFlareSpriteId = "a", Texture = "a.dds" },
+            new LensFlareSprite { LensFlareSpriteId = "b", Texture = "b.dds" })],
+    };
+
+    private static MaterialSwap MaterialSwap(bool reversed) => new(MaterialSwapKey, Fallout4Release.Fallout4)
+    {
+        Substitutions = [.. InOrder(reversed,
+            new MaterialSubstitution { OriginalMaterial = "a.bgsm", ReplacementMaterial = "c.bgsm" },
+            new MaterialSubstitution { OriginalMaterial = "a.bgsm", ReplacementMaterial = "c.bgsm" },
+            new MaterialSubstitution { OriginalMaterial = "b.bgsm", ReplacementMaterial = "d.bgsm" })],
+    };
+
+    private static Region Region(bool reversed) => new(RegionKey, Fallout4Release.Fallout4)
+    {
+        Sounds = new RegionSounds
+        {
+            Sounds = [.. InOrder(reversed,
+                new RegionSound { Sound = new FormLink<ISoundDescriptorGetter>(A), Chance = 1 },
+                new RegionSound { Sound = new FormLink<ISoundDescriptorGetter>(A), Chance = 1 },
+                new RegionSound { Sound = new FormLink<ISoundDescriptorGetter>(B), Chance = 2 })],
+        },
     };
 
     private static MiscItem MiscItem(bool reversed) => new(MiscItemKey, Fallout4Release.Fallout4)
@@ -149,6 +237,7 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static Quest Quest(bool reversed) => new(QuestKey, Fallout4Release.Fallout4)
     {
         Stages = [.. InOrder(reversed, new QuestStage { Index = 10 }, new QuestStage { Index = 20 })],
+        Aliases = [new QuestReferenceAlias { Items = [.. ContainerEntriesHoldingAnItemTwice(reversed)] }],
     };
 
     private static Location Location(bool reversed) => new(LocationKey, Fallout4Release.Fallout4)
@@ -157,6 +246,8 @@ public sealed class Fallout4KeyedArrayCompareTests
         PersistentActorReferencesStatic = [.. PersistentActors(reversed)],
         UniqueActorReferencesAdded = [.. UniqueActorsPlacedTwice(reversed)],
         UniqueActorReferencesStatic = [.. UniqueActorsPlacedTwice(reversed)],
+        LocationRefTypeReferencesAdded = [.. LocationRefTypes(reversed)],
+        LocationRefTypeReferencesStatic = [.. LocationRefTypes(reversed)],
         WorldspaceCellsAdded = [.. WorldspaceCells(reversed)],
         WorldspaceCellsStatic = [.. WorldspaceCells(reversed)],
         WorldspaceCellsRemoved = [.. WorldspaceCells(reversed)],
@@ -169,6 +260,11 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static IEnumerable<UniqueActorReference> UniqueActorsPlacedTwice(bool reversed) => InOrder(reversed,
         new UniqueActorReference { Actor = new FormLink<INpcGetter>(A), Ref = new FormLink<IPlacedNpcGetter>(A) },
         new UniqueActorReference { Actor = new FormLink<INpcGetter>(A), Ref = new FormLink<IPlacedNpcGetter>(B) });
+
+    private static IEnumerable<LocationRefTypeReference> LocationRefTypes(bool reversed) => InOrder(reversed,
+        new LocationRefTypeReference { LocationRefType = new FormLink<ILocationReferenceTypeGetter>(A), Ref = new FormLink<IPlacedGetter>(A) },
+        new LocationRefTypeReference { LocationRefType = new FormLink<ILocationReferenceTypeGetter>(A), Ref = new FormLink<IPlacedGetter>(A) },
+        new LocationRefTypeReference { LocationRefType = new FormLink<ILocationReferenceTypeGetter>(B), Ref = new FormLink<IPlacedGetter>(B) });
 
     private static IEnumerable<LocationCoordinate> WorldspaceCells(bool reversed) => InOrder(reversed,
         new LocationCoordinate { Location = new FormLink<IComplexLocationGetter>(A) },
@@ -286,8 +382,36 @@ public sealed class Fallout4KeyedArrayCompareTests
         AssertTopCopyIsIdenticalToMaster(FactionKey);
 
     [Fact]
-    public void ALeveledItemCopyHoldingItsFilterKeywordChancesInAnotherOrder_IsIdenticalToMaster() =>
+    public void ALeveledItemCopyHoldingItsEntriesAndFilterKeywordChancesInAnotherOrder_IsIdenticalToMaster() =>
         AssertTopCopyIsIdenticalToMaster(LeveledItemKey);
+
+    [Fact]
+    public void ALeveledNpcCopyHoldingItsEntriesInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(LeveledNpcKey);
+
+    [Fact]
+    public void AnObjectModCopyHoldingItsPropertiesInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(ObjectModKey);
+
+    [Fact]
+    public void AContainerCopyHoldingItsItemsInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(ContainerKey);
+
+    [Fact]
+    public void AFurnitureCopyHoldingItsItemsInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(FurnitureKey);
+
+    [Fact]
+    public void ALensFlareCopyHoldingItsSpritesInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(LensFlareKey);
+
+    [Fact]
+    public void AMaterialSwapCopyHoldingItsSubstitutionsInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(MaterialSwapKey);
+
+    [Fact]
+    public void ARegionCopyHoldingItsSoundsInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(RegionKey);
 
     [Fact]
     public void AMiscItemCopyHoldingItsComponentsInAnotherOrder_OverridesTheMaster_AsTheirDisplayIndicesPairByPosition() =>
@@ -298,7 +422,7 @@ public sealed class Fallout4KeyedArrayCompareTests
         AssertTopCopyIsIdenticalToMaster(PerkKey);
 
     [Fact]
-    public void AQuestCopyHoldingItsStagesInAnotherOrder_IsIdenticalToMaster() =>
+    public void AQuestCopyHoldingItsStagesAndAnAliasItemsInAnotherOrder_IsIdenticalToMaster() =>
         AssertTopCopyIsIdenticalToMaster(QuestKey);
 
     [Fact]

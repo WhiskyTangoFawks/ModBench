@@ -369,66 +369,48 @@ public sealed class VmadEditTests : IDisposable
             d => Assert.StartsWith("VirtualMachineAdapter.Script", d, StringComparison.Ordinal));
     }
 
-    // ── the duplicate key ────────────────────────────────────────────────────
-
     [Fact]
-    public void TwoScriptsSharingAName_AreRefusedNamingTheKey_AndNothingIsWritten()
+    public void TwoScriptsSharingAName_AreWritten()
     {
-        var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
         Scripts(adapter).Add(new JsonObject { ["Name"] = "Alpha", ["Flags"] = "Local", ["Properties"] = new JsonArray() });
 
         var result = Edit(_fixture.Npc, adapter);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.DuplicateKeyInKeyedArray, result.Refusal);
-        Assert.Contains("Alpha", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, _fixture.Body(_fixture.Npc));
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(["Beta", "Alpha", "Alpha"], WrittenScriptNames(_fixture.Body(_fixture.Npc)));
     }
 
     [Fact]
-    public void TwoQuestFragmentsOnOneStage_AreRefusedNamingTheCompositeKey()
+    public void RenamingAScriptToTheNameAnotherHolds_IsWritten()
     {
-        var adapter = _fixture.Adapter(_fixture.Quest);
-        adapter["Fragments"].Require().AsArray().Add(new JsonObject
-        {
-            ["Stage"] = 10,
-            ["StageIndex"] = 0,
-            ["Unknown"] = 0,
-            ["Unknown2"] = 0,
-            ["ScriptName"] = "Other",
-            ["FragmentName"] = "Other",
-        });
+        var result = Edit(_fixture.Twins, SetAt(JsonSerializer.SerializeToElement("Holder"), Under(Member("Scripts"), At(0), Member("Name"))));
 
-        var result = Edit(_fixture.Quest, adapter);
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.DuplicateKeyInKeyedArray, result.Refusal);
-        Assert.Contains("10 / 0", result.Message, StringComparison.Ordinal);
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(["Holder", "Holder", "Tail"], WrittenScriptNames(_fixture.Body(_fixture.Twins)));
     }
 
     [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    public void AnEditBesideAPairAnotherToolWrote_Applies(int script)
+    [InlineData(0, new[] { 5, 2 })]
+    [InlineData(1, new[] { 1, 5 })]
+    public void AnEditToOneOfAPairAnotherToolWrote_ChangesThatOneAlone(int property, int[] written)
     {
-        var path = script == 0
-            ? Under(Member("Scripts"), At(0), Member("Name"))
-            : Under(Member("Scripts"), At(1), Member("Properties"), At(0), Member("Data"));
-        var value = script == 0 ? JsonSerializer.SerializeToElement("Renamed") : JsonSerializer.SerializeToElement(5);
-
-        var result = Edit(_fixture.Twins, SetAt(value, path));
+        var result = Edit(_fixture.Twins, SetAt(
+            JsonSerializer.SerializeToElement(5), Under(Member("Scripts"), At(1), Member("Properties"), At(property), Member("Data"))));
 
         Assert.True(result.Applied, result.Message);
+        Assert.Equal(written, HolderCounts(_fixture.Body(_fixture.Twins)));
     }
 
-    [Fact]
-    public void RemovingOneOfAPairAnotherToolWrote_Applies()
+    [Theory]
+    [InlineData(0, 2)]
+    [InlineData(1, 1)]
+    public void RemovingOneOfAPairAnotherToolWrote_RemovesThatOne(int property, int kept)
     {
-        var result = Edit(_fixture.Twins, RemoveAt(Under(Member("Scripts"), At(1), Member("Properties"), At(1))));
+        var result = Edit(_fixture.Twins, RemoveAt(Under(Member("Scripts"), At(1), Member("Properties"), At(property))));
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(["Count"], WrittenPropertyNames(_fixture.Body(_fixture.Twins), "Holder"));
+        Assert.Equal([kept], HolderCounts(_fixture.Body(_fixture.Twins)));
     }
 
     [Fact]
@@ -440,60 +422,10 @@ public sealed class VmadEditTests : IDisposable
         Assert.Equal(["Holder", "Tail"], WrittenScriptNames(_fixture.Body(_fixture.Twins)));
     }
 
-    [Fact]
-    public void ANewPairBesideAPairAnotherToolWrote_IsRefusedNamingItsKey()
-    {
-        var before = _fixture.Body(_fixture.Twins);
-
-        var result = Edit(_fixture.Twins, AddAt(Json(new JsonObject { ["Name"] = "Lead" }), Under(Member("Scripts"))));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.DuplicateKeyInKeyedArray, result.Refusal);
-        Assert.Contains("keyed 'Lead'", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, _fixture.Body(_fixture.Twins));
-    }
-
-    [Fact]
-    public void ANewPairAtTheKeyOfAnotherScriptsPair_IsRefusedNamingItsOwnArray()
-    {
-        var result = Edit(_fixture.Twins, AddAt(
-            Json(new JsonObject { ["MutagenObjectType"] = "ScriptIntProperty", ["Name"] = "Count" }),
-            Under(Member("Scripts"), At(2), Member("Properties"))));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.DuplicateKeyInKeyedArray, result.Refusal);
-        Assert.Equal("VirtualMachineAdapter.Scripts[2].Properties", result.Path);
-    }
-
-    [Fact]
-    public void AThirdElementAtAPairsKey_IsRefusedNamingIt()
-    {
-        var result = Edit(_fixture.Twins, AddAt(
-            Json(new JsonObject { ["MutagenObjectType"] = "ScriptIntProperty", ["Name"] = "Count" }),
-            Under(Member("Scripts"), At(1), Member("Properties"))));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.DuplicateKeyInKeyedArray, result.Refusal);
-        Assert.Contains("keyed 'Count'", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ASecondNewScript_IsRefusedNamingTheEmptyKey_UntilTheFirstIsNamed()
-    {
-        Assert.True(Edit(_fixture.Npc, AddAt(Under(Member("Scripts")))).Applied);
-        var before = _fixture.Body(_fixture.Npc);
-
-        var second = Edit(_fixture.Npc, AddAt(Under(Member("Scripts"))));
-
-        Assert.False(second.Applied);
-        Assert.Equal(RecordEditRefusal.DuplicateKeyInKeyedArray, second.Refusal);
-        Assert.Contains("keyed ''", second.Message, StringComparison.Ordinal);
-        Assert.Equal(before, _fixture.Body(_fixture.Npc));
-
-        Assert.True(Edit(_fixture.Npc, SetAt(JsonSerializer.SerializeToElement("Gamma"), Under(Member("Scripts"), At(2), Member("Name")))).Applied);
-        Assert.True(Edit(_fixture.Npc, AddAt(Under(Member("Scripts")))).Applied);
-        Assert.Equal(["Beta", "Alpha", "Gamma", ""], WrittenScriptNames(_fixture.Body(_fixture.Npc)));
-    }
+    private static List<int> HolderCounts(string body) =>
+        [.. JsonNode.Parse(body).Require()["VirtualMachineAdapter"].Require()["Scripts"].Require().AsArray()
+            .First(s => s.Require()["Name"].Require().GetValue<string>() == "Holder").Require()["Properties"].Require().AsArray()
+            .Select(p => p.Require()["Data"].Require().GetValue<int>())];
 
     private static Dictionary<string, string> WrittenScripts(string body) =>
         JsonNode.Parse(body).Require()["VirtualMachineAdapter"].Require()["Scripts"].Require().AsArray()
