@@ -10,3 +10,4 @@ A record is one JSON document, reflected from Mutagen's own record types ([princ
 ## Alternatives rejected
 
 - **A hand-written codec for conditions, or for the next concern that looks as divergent.** It is a second model. Mutagen's condition graphs reflect like any other shape.
+- **One table per record type.** About 130 tables of DDL, every query across the load order a union over all of them, and a schema coupled to Mutagen's. It is a second model.
