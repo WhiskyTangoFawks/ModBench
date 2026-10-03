@@ -12,7 +12,9 @@ import sys
 from hook_caller import is_subagent
 
 DETACHED = "bash .claude/skills/validate/detached.sh"
-GATE = r"\bdotnet\s+(test|build)\b|\bnpm\s+run\s+(test|build)|(?:(?:^|[;&|(])\s*|\bbash\s+)\S*run-gates\.sh\b(?!.*--detach)|\bdetached\.sh\s+wait\b"
+RUN = r"(?:(?:^|[;&|(\n])\s*|\b(?:ba)?sh\s+(?:-\S+\s+)*)"
+GATE = (r"\bdotnet\s+(test|build)\b|\bnpm\s+run\s+(test|build)|" + RUN + r"\S*run-gates\.sh\b(?!.*--detach)"
+        r"|\bdetached\.sh\s+wait\b")
 
 data = json.load(sys.stdin)
 tool = data.get("tool_name")

@@ -17,18 +17,14 @@ def gates(path):
     return []
 
 
-ORDER = ['--backend', '--api-drift', '--frontend', '--docs']
-
-
 def main(stdin=None):
     stdin = sys.stdin if stdin is None else stdin
     reasons = {}
-    for path in (line.strip() for line in stdin):
-        for gate in gates(path) if path else []:
+    for path in [line.strip() for line in stdin if line.strip()]:
+        for gate in gates(path):
             reasons.setdefault(gate, path)
-    for gate in ORDER:
-        if gate in reasons:
-            print(gate, reasons[gate])
+    for gate, path in reasons.items():
+        print(gate, path)
     return 0
 
 

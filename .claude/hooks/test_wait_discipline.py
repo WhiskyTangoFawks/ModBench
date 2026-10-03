@@ -43,6 +43,13 @@ class GateTimeout(unittest.TestCase):
     def test_run_gates_by_path_without_timeout_is_blocked(self):
         self.assertEqual(hook("Bash", TOP, command="./.claude/skills/validate/run-gates.sh --comments").returncode, 2)
 
+    def test_run_gates_on_a_later_line_or_under_a_shell_option_without_timeout_is_blocked(self):
+        for command in ("cd /x\n./.claude/skills/validate/run-gates.sh --backend",
+                        "bash -x .claude/skills/validate/run-gates.sh",
+                        "sh .claude/skills/validate/run-gates.sh"):
+            with self.subTest(command=command):
+                self.assertEqual(hook("Bash", TOP, command=command).returncode, 2)
+
     def test_reading_run_gates_needs_no_timeout(self):
         for command in ("cat .claude/skills/validate/run-gates.sh",
                         "git diff main...x -- .claude/skills/validate/run-gates.sh",

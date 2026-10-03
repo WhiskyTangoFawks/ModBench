@@ -4,7 +4,6 @@ BACKEND=false
 FRONTEND=false
 API_DRIFT=false
 DOCS=false
-COMMENTS=false
 DETACH=false
 WAIT=false
 FAILED=false
@@ -16,7 +15,7 @@ while [[ $# -gt 0 ]]; do
     --frontend)  FRONTEND=true;  GATE_ARGS+=("$1"); shift ;;
     --api-drift) API_DRIFT=true; GATE_ARGS+=("$1"); shift ;;
     --docs)      DOCS=true;      GATE_ARGS+=("$1"); shift ;;
-    --comments)  COMMENTS=true;  GATE_ARGS+=("$1"); shift ;;
+    --comments)                  GATE_ARGS+=("$1"); shift ;;
     --detach)    DETACH=true;    shift ;;
     --wait)      WAIT=true;      shift ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
@@ -35,13 +34,14 @@ changed_since_main() {
   git -C "$ROOT" diff --name-only --no-renames "$base" && git -C "$ROOT" ls-files --others --exclude-standard
 }
 
-if ! $COMMENTS && ! git -C "$ROOT" merge-base --is-ancestor main HEAD; then
+if [[ ${GATE_ARGS[*]} != --comments ]] && ! git -C "$ROOT" merge-base --is-ancestor main HEAD; then
   echo "Refused: HEAD is behind main. Merge main first, so the gates test the tree that will land."
   exit 1
 fi
 
 if [[ ${#GATE_ARGS[@]} -eq 0 ]]; then
-  selection=$(changed_since_main | python3 "$ROOT/.claude/skills/validate/select_gates.py") || exit 1
+  changed=$(changed_since_main) || exit 1
+  selection=$(python3 "$ROOT/.claude/skills/validate/select_gates.py" <<< "$changed") || exit 1
   echo "=== Gates the change since main can break ==="
   echo "${selection:-none beyond Gate 1}"
   flags=$(cut -d' ' -f1 <<< "$selection")

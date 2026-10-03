@@ -11,7 +11,8 @@ REFUSAL = "behind main"
 
 
 def git(repo, *args):
-    subprocess.run(["git", "-C", repo, *args], check=True, capture_output=True)
+    subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", *args],
+                   check=True, capture_output=True)
 
 
 class BehindMain(unittest.TestCase):
@@ -22,9 +23,9 @@ class BehindMain(unittest.TestCase):
         validate.mkdir(parents=True)
         shutil.copy(SCRIPT, validate)
         git(self.repo, "init", "-q", "-b", "main")
-        git(self.repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "base")
+        git(self.repo, "commit", "-q", "--allow-empty", "-m", "base")
         git(self.repo, "branch", "behind")
-        git(self.repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "ahead")
+        git(self.repo, "commit", "-q", "--allow-empty", "-m", "ahead")
         git(self.repo, "checkout", "-q", "behind")
 
     def gates(self, *flags):
@@ -35,7 +36,12 @@ class BehindMain(unittest.TestCase):
         run = self.gates()
         self.assertEqual(run.returncode, 1)
         self.assertIn(REFUSAL, run.stdout)
-        self.assertNotIn("Gate 1", run.stdout)
+        self.assertNotIn("=== Gate 1", run.stdout)
+
+    def test_a_gate_beside_the_comment_gate_is_refused_behind_main(self):
+        run = self.gates("--comments", "--docs")
+        self.assertEqual(run.returncode, 1)
+        self.assertIn(REFUSAL, run.stdout)
 
     def test_the_comment_gate_alone_runs_behind_main(self):
         run = self.gates("--comments")

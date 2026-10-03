@@ -37,9 +37,9 @@ class SelectGates(unittest.TestCase):
 
     def test_mixed_change_adds_every_gate_once_with_its_first_path(self):
         self.assertEqual(selected('modbench/src/a.ts', 'MEditService/X/A.cs', 'modbench/src/b.ts', 'docs/x.md'), [
+            '--frontend modbench/src/a.ts',
             '--backend MEditService/X/A.cs',
             '--api-drift MEditService/X/A.cs',
-            '--frontend modbench/src/a.ts',
             '--docs docs/x.md',
         ])
 
