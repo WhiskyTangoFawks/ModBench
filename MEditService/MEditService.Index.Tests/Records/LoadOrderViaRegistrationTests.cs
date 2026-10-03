@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-// ADR-0009: load order lives only on the registrations. Reordering the load order re-reads no
-// plugin and re-derives no document; override stacks follow the new order from that alone.
 public class LoadOrderViaRegistrationTests
 {
     [Fact]
@@ -40,23 +38,19 @@ public class LoadOrderViaRegistrationTests
         Assert.True(stackBeforeReorder.Entries
             .Single(e => e.Plugin.Name == bKey.Name).IsWinner, "B, later in load order, should win before reorder.");
 
-        // Reorder: B now sorts before A.
-        var swapped = fixture.Plugins.Select(p => p with { Slot = p.Name == "PluginA.esm" ? 1 : 0 }).ToList();
-        index.Reconcile(holder, fixture.DataFolder, swapped, GameRelease.Fallout4);
+        var swappedSoBSortsBeforeA = fixture.Plugins.Select(p => p with { Slot = p.Name == "PluginA.esm" ? 1 : 0 }).ToList();
+        index.Reconcile(holder, fixture.DataFolder, swappedSoBSortsBeforeA, GameRelease.Fallout4);
 
         var stack = (reads.GetOverrideStack(npcKey.ToString())
             ?? throw new InvalidOperationException($"Expected an override stack for '{npcKey}'.")).Entries;
         Assert.True(stack.Single(e => e.Plugin.Name == aKey.Name).IsWinner, "A, now later, should win after reorder.");
         Assert.False(stack.Single(e => e.Plugin.Name == bKey.Name).IsWinner);
 
-        // The reorder re-read no plugin and re-derived no document.
         Assert.Equal(openedBefore, opens.OpenedTotal);
-        Assert.Equal(ByFormKey(beforeA), ByFormKey(reads.GetDocuments(aKey)));
-        Assert.Equal(ByFormKey(beforeB), ByFormKey(reads.GetDocuments(bKey)));
+        Assert.Equal(ByFormKeyBecauseGetDocumentsHasNoOrderOfItsOwn(beforeA), ByFormKeyBecauseGetDocumentsHasNoOrderOfItsOwn(reads.GetDocuments(aKey)));
+        Assert.Equal(ByFormKeyBecauseGetDocumentsHasNoOrderOfItsOwn(beforeB), ByFormKeyBecauseGetDocumentsHasNoOrderOfItsOwn(reads.GetDocuments(bKey)));
     }
 
-    // GetDocuments is a set of rows with no order of its own, so the comparison imposes one:
-    // a row order that varies under load is not a re-derived document.
-    private static IReadOnlyList<(string FormKey, string? Body)> ByFormKey(IReadOnlyList<RecordDocument> documents) =>
+    private static IReadOnlyList<(string FormKey, string? Body)> ByFormKeyBecauseGetDocumentsHasNoOrderOfItsOwn(IReadOnlyList<RecordDocument> documents) =>
         [.. documents.Select(d => (d.FormKey, d.Body)).OrderBy(d => d.FormKey, StringComparer.Ordinal)];
 }

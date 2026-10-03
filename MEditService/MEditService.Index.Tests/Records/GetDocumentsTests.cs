@@ -8,15 +8,11 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-// Point-reading one document per record costs two DuckDB round trips each, so the seam carries a
-// bulk read: every document one plugin holds, in one query.
 public class GetDocumentsTests
 {
     [Fact]
     public void GetDocuments_ReturnsEveryDocumentThePluginIndexed_IdenticalToPointReads()
     {
-        // One resolvable FormLink and one dangling one, so the parity check below covers CheckError
-        // both ways through the same shared-resolution path the bulk read uses.
         using var fixture = new PluginFixtureBuilder("bulk-read")
             .WithPlugin("Bulk.esp", mod =>
             {
@@ -35,13 +31,9 @@ public class GetDocumentsTests
 
         var documents = reads.GetDocuments(key);
 
-        // Every major record, plus the plugin header's document, which EnumerateMajorRecords structurally
-        // cannot count. Asserted as its own presence rather than folded into a "+1", so this still fails
-        // if the extra row is something else entirely.
-        Assert.Equal(onDisk.EnumerateMajorRecords().Count() + 1, documents.Count);
+        var majorRecordCountExcludingTheHeaderBecauseEnumerateMajorRecordsCannotCountIt = onDisk.EnumerateMajorRecords().Count();
+        Assert.Equal(majorRecordCountExcludingTheHeaderBecauseEnumerateMajorRecordsCannotCountIt + 1, documents.Count);
         Assert.Single(documents, d => d.RecordType == PluginHeader.RecordType);
-        // ...and the point-read parity below covers the header on the same terms as every record,
-        // which is the whole claim of the change: one read path, no special case.
         Assert.All(documents, doc =>
         {
             var pointRead = reads.GetDocument(doc.FormKey, key);
@@ -53,14 +45,12 @@ public class GetDocumentsTests
                 pointRead.Fields.Select(f => (f.Metadata.Name, f.CheckError)),
                 doc.Fields.Select(f => (f.Metadata.Name, f.CheckError)));
         });
-        // The fixture's premise, asserted so a fixture edit cannot hollow out the CheckError half of the
-        // parity above. Scoped to the race field: a bare AddNew NPC carries other unset links that flag.
-        string? RaceError(string editorId) => documents
+        string? RaceFieldErrorAloneBecauseABareNpcFlagsOtherUnsetLinks(string editorId) => documents
             .Single(d => d.EditorId == editorId).Fields
             .Single(f => f.Metadata.Name.Equals("Race", StringComparison.OrdinalIgnoreCase))
             .CheckError;
-        Assert.Null(RaceError("BulkNpc"));
-        Assert.Contains("Could not be resolved", RaceError("BrokenNpc"));
+        Assert.Null(RaceFieldErrorAloneBecauseABareNpcFlagsOtherUnsetLinks("BulkNpc"));
+        Assert.Contains("Could not be resolved", RaceFieldErrorAloneBecauseABareNpcFlagsOtherUnsetLinks("BrokenNpc"));
     }
 
     [Fact]
@@ -80,9 +70,6 @@ public class GetDocumentsTests
             index.ReadsWithWinner(holder, fixture.GameDirectory, fixture.Plugins, origin)
                 .GetDocuments(new PluginAddress("Shared.esp", origin));
 
-        // Records only: each plugin also carries its own header document, which is scoped
-        // by origin exactly like the records are (asserted separately below) but says nothing about
-        // the per-origin *record* scoping this test is about.
         var fromA = DocumentsWhileWinning("ModA");
         Assert.Empty(index.RequireReads().GetDocuments(new PluginAddress("Shared.esp", "ModB")));
         var fromB = DocumentsWhileWinning("ModB");
@@ -95,8 +82,6 @@ public class GetDocumentsTests
         Assert.Equal(2, recordsFromB.Count);
         Assert.All(recordsFromB, d => Assert.Equal("ModB", d.Plugin.Origin));
 
-        // ADR-0012: the header is per-plugin too — one each, each carrying its own origin, never one
-        // shared row keyed on the filename the two plugins have in common.
         Assert.Equal("ModA", Assert.Single(fromA, d => d.RecordType == PluginHeader.RecordType).Plugin.Origin);
         Assert.Equal("ModB", Assert.Single(fromB, d => d.RecordType == PluginHeader.RecordType).Plugin.Origin);
     }

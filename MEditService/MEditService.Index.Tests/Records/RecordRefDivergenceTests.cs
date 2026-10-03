@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>An override stack entry carries a record's committed state beside its effective one,
-/// so identical answers on unchanged records are a property to prove, not a given.</summary>
 public sealed class RecordRefDivergenceTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
@@ -17,7 +15,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
     private readonly PluginAddress _baseKey;
     private readonly PluginAddress _winnerKey;
     private readonly string _keptNpc;
-    private readonly string _droppedNpc;
+    private readonly string _soleSourcedNpcWhoseOneEntryIsItsOwnWinner;
 
     public RecordRefDivergenceTests()
     {
@@ -31,9 +29,6 @@ public sealed class RecordRefDivergenceTests : IDisposable
             .WithPlugin("Winner.esp", (mod, built) =>
             {
                 mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") });
-                // Only "KeepMe" is overridden — "DropMe" stays sole-sourced from Base.esm, so its
-                // one override is its own winner (a distinct case from KeepMe's non-winning base
-                // entry, catching a would-be committed read that miscomputes IsWinner).
                 var basePlugin = built.Single(m => m.ModKey.FileName == "Base.esm");
                 mod.Npcs.Set(basePlugin.Npcs.First(n => n.FormKey == keptFk).DeepCopy());
             }, origin: "WinnerMod")
@@ -43,7 +38,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
         _baseKey = _base.KeyOf();
         _winnerKey = _fixture.Plugins.Single(p => p.Name == "Winner.esp").KeyOf();
         _keptNpc = keptFk.ToString();
-        _droppedNpc = droppedFk.ToString();
+        _soleSourcedNpcWhoseOneEntryIsItsOwnWinner = droppedFk.ToString();
     }
 
     public void Dispose() => _fixture.Dispose();
@@ -53,8 +48,8 @@ public sealed class RecordRefDivergenceTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
-        // Narrows the listing to KeepMe's two override rows out of the fixture's three.
-        index.SetFilter($"SELECT '{_keptNpc}' AS form_key", "filter.sql");
+        var filterNarrowingToKeepMesTwoOverrideRowsOfTheFixturesThree = $"SELECT '{_keptNpc}' AS form_key";
+        index.SetFilter(filterNarrowingToKeepMesTwoOverrideRowsOfTheFixturesThree, "filter.sql");
 
         var listing = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(2, listing.Total);
@@ -75,8 +70,6 @@ public sealed class RecordRefDivergenceTests : IDisposable
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
 
-        // KeepMe has two overrides (Base.esm loses, Winner.esp wins): the committed document of each
-        // entry carries the same winner status as its effective one, without changing the entry count.
         var stack = reads.GetOverrideStack(_keptNpc);
         Assert.NotNull(stack);
         Assert.Equal(2, stack.Entries.Count);
@@ -84,9 +77,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
             stack.Entries.Select(e => (e.Plugin, e.IsWinner)),
             stack.Entries.Select(e => (e.Head.Plugin, e.Head.IsWinner)));
 
-        // DropMe's sole override is its own winner — the distinct case from KeepMe's losing base
-        // entry above.
-        var dropped = reads.StackEntry(_droppedNpc, _baseKey);
+        var dropped = reads.StackEntry(_soleSourcedNpcWhoseOneEntryIsItsOwnWinner, _baseKey);
         Assert.NotNull(dropped);
         Assert.True(dropped.IsWinner);
         Assert.True(dropped.Head.IsWinner);
@@ -101,20 +92,17 @@ public sealed class RecordRefDivergenceTests : IDisposable
         var before = reads.DocumentOf(_keptNpc, _baseKey);
         index.Edit(_base, before, before.BodyOf().Replace("KeepMe", "RenamedInWorkingTree", StringComparison.Ordinal));
 
-        // The edited record's own Base.esm entry diverges...
         var stack = reads.GetOverrideStack(_keptNpc);
         Assert.NotNull(stack);
         var baseEntry = stack.Entries.Single(e => e.Plugin.Equals(_baseKey));
         Assert.True(baseEntry.HasWorkingTreeChange);
         Assert.NotEqual(baseEntry.Effective.Body, baseEntry.Head.Body);
 
-        // ...while Winner.esp's entry for that same FormKey, which nothing edited, does not.
         var winnerEntry = stack.Entries.Single(e => e.Plugin.Equals(_winnerKey));
         Assert.False(winnerEntry.HasWorkingTreeChange);
         Assert.Equal(winnerEntry.Effective.Body, winnerEntry.Head.Body);
 
-        // ...and neither does an entirely different record in the same plugin.
-        var untouched = reads.StackEntry(_droppedNpc, _baseKey);
+        var untouched = reads.StackEntry(_soleSourcedNpcWhoseOneEntryIsItsOwnWinner, _baseKey);
         Assert.NotNull(untouched);
         Assert.False(untouched.HasWorkingTreeChange);
         Assert.Equal(untouched.Effective.Body, untouched.Head.Body);

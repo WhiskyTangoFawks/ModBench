@@ -6,9 +6,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>Bodies are real codec documents edited as text, not hand-written JSON: the invariant is
-/// "Body bytes = the source file's bytes at that ref", so a fabricated body would test a shape the
-/// codec never emits.</summary>
 public sealed class WorkingTreeChangeTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
@@ -30,9 +27,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    // EditorID is an identity column, not a reflected field, so this reads the projection of the
-    // body every listing, resolve and tree row is built from.
-    private static string EditorIdOf(RecordDocument document) =>
+    private static string EditorIdColumnOf(RecordDocument document) =>
         document.EditorId ?? throw new InvalidOperationException("The fixture record has no EditorID.");
 
     [Fact]
@@ -43,18 +38,18 @@ public sealed class WorkingTreeChangeTests : IDisposable
         var committed = reads.DocumentOf(_formKey, _baseKey);
         var committedBody = committed.BodyOf();
         var editedBody = committedBody.Replace("OriginalName", "EditedName", StringComparison.Ordinal);
-        Assert.NotEqual(committedBody, editedBody); // the fixture really does carry the text being replaced
+        Assert.NotEqual(committedBody, editedBody);
 
         index.Edit(_base, committed, editedBody);
 
         var effective = reads.DocumentOf(_formKey, _baseKey);
         Assert.Equal(editedBody, effective.Body);
-        Assert.Equal("EditedName", EditorIdOf(effective));
+        Assert.Equal("EditedName", EditorIdColumnOf(effective));
 
         var head = reads.HeadDocument(_formKey, _baseKey);
         Assert.NotNull(head);
         Assert.Equal(committedBody, head.Body);
-        Assert.Equal("OriginalName", EditorIdOf(head));
+        Assert.Equal("OriginalName", EditorIdColumnOf(head));
     }
 
     [Fact]
@@ -74,8 +69,8 @@ public sealed class WorkingTreeChangeTests : IDisposable
         var dirty = reads.StackEntry(_formKey, _baseKey);
         Assert.NotNull(dirty);
         Assert.True(dirty.HasWorkingTreeChange);
-        Assert.Equal("EditedName", EditorIdOf(dirty.Effective));
-        Assert.Equal("OriginalName", EditorIdOf(dirty.Head));
+        Assert.Equal("EditedName", EditorIdColumnOf(dirty.Effective));
+        Assert.Equal("OriginalName", EditorIdColumnOf(dirty.Head));
     }
 
     [Fact]
@@ -91,8 +86,6 @@ public sealed class WorkingTreeChangeTests : IDisposable
         Assert.NotNull(dirty);
         Assert.True(dirty.HasWorkingTreeChange);
 
-        // Byte compare *is* the revert-convergence detection — an edit back to the
-        // committed bytes is not "a change that happens to match", it is no change at all.
         index.Edit(_base, reads.DocumentOf(_formKey, _baseKey), committedBody);
 
         var reverted = reads.StackEntry(_formKey, _baseKey);

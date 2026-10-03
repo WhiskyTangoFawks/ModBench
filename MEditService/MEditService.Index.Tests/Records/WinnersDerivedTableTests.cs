@@ -9,8 +9,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>ADR-0009: winning is a function of the registered load order, never a column on a
-/// data row, so every move of the load order moves the winner with no document re-read.</summary>
 public sealed class WinnersDerivedTableTests : IDisposable
 {
     private static readonly PluginAddress BaseKey = new("Base.esm", "BaseMod");
@@ -52,24 +50,20 @@ public sealed class WinnersDerivedTableTests : IDisposable
     private PluginAddress? WinnerOf(string formKey) => Reads.GetDocument(formKey)?.Plugin;
 
     [Fact]
-    public void TheSweep_NamesTheLatestParticipatingPlugin_OncePerFormKey()
+    public void TheSweep_NamesTheLatestParticipatingPlugin_OncePerFormKey_AndAgainAfterAReconcileOfTheSameSnapshot()
     {
         Assert.Equal(OverKey, WinnerOf(_npc));
 
-        // A winner is a function of the FormKey: exactly one entry of the stack carries it.
         var stack = Reads.GetOverrideStack(_npc);
         Assert.NotNull(stack);
         Assert.Single(stack.Entries, e => e.IsWinner);
 
-        // Every plugin header wins its own FormKey, swept as an ordinary record. Still asserted,
-        // because "no winner" reads as "no header exists" through Open Header's winner-only lookup.
-        foreach (var plugin in new[] { BaseKey, OverKey })
-        {
-            var headerFk = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
-            Assert.Equal(plugin, WinnerOf(headerFk));
-        }
+        static string HeaderFormKeyOf(PluginAddress plugin) => PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
+        PluginAddress?[] headerWinnersAssertedBecauseNoWinnerReadsAsNoHeaderThroughOpenHeadersWinnerOnlyLookup =
+            [WinnerOf(HeaderFormKeyOf(BaseKey)), WinnerOf(HeaderFormKeyOf(OverKey))];
+        Assert.Equal<PluginAddress?>(
+            [BaseKey, OverKey], headerWinnersAssertedBecauseNoWinnerReadsAsNoHeaderThroughOpenHeadersWinnerOnlyLookup);
 
-        // Re-running the sweep is idempotent: a second reconcile of the same snapshot moves nothing.
         Reconcile(_fixture.Plugins);
         Assert.Equal(OverKey, WinnerOf(_npc));
         Assert.Single((Reads.GetOverrideStack(_npc) ?? throw new InvalidOperationException()).Entries, e => e.IsWinner);
@@ -80,8 +74,6 @@ public sealed class WinnersDerivedTableTests : IDisposable
     {
         Reconcile([.. _fixture.Plugins.Select(p => p.Name == OverKey.Name ? p with { Enabled = false } : p)]);
 
-        // Disabled in plugins.txt: Over.esp is registered but not active, so no read sees it and the
-        // plugin below it holds the field.
         Assert.Equal(BaseKey, WinnerOf(_npc));
         Assert.Null(Reads.GetDocument(_npc, OverKey));
 

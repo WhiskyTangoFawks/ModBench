@@ -5,8 +5,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Records;
 
-// Tracked-ness is a read: a plugin whose rows were derived from its source tree is tracked, a
-// plugin derived from its bytes is not, and the answer is scoped by registration like every row.
 public sealed class TrackedPluginReadTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("tracked-read")
@@ -45,10 +43,8 @@ public sealed class TrackedPluginReadTests : IDisposable
         Assert.DoesNotContain(Plain, _index.RequireReads().GetTrackedPlugins());
     }
 
-    // The rival this pins: a set keyed by the default equality, which would lose a plugin whose
-    // name differs in case from the key a caller asks with.
     [Fact]
-    public void TheTrackedSet_ComparesKeysAsEveryOtherLookupDoes()
+    public void TheTrackedSet_FindsAPluginWhoseNameAndOriginDifferInCaseFromTheAskedKey()
     {
         Assert.Contains(new PluginAddress("TRACKED.ESP", "trackedmod"), _index.RequireReads().GetTrackedPlugins());
     }

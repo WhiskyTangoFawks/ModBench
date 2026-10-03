@@ -7,8 +7,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>Computed inside <see cref="IRecordReads.Search"/> as a correlated EXISTS, never a
-/// per-row follow-up call; the Plugins tree's collapsible state reads this flag directly.</summary>
 public sealed class RecordSummaryContainerChildrenTests
 {
     private static readonly PluginAddress Key = new("Dialogue.esp", "Data");
@@ -16,9 +14,6 @@ public sealed class RecordSummaryContainerChildrenTests
     private static RecordSummary SummaryFor(PagedResult<RecordSummary> page, string formKey) =>
         page.Items.Single(i => i.FormKey == formKey);
 
-    // One Quest with a DialogTopic child, one Quest with none — the exact AC1 fixture: the
-    // listing must mark them true/false respectively, read from container_child rather than
-    // guessed from the record's type signature alone.
     [Fact]
     public void Search_QuestWithChildren_ReportsHasContainerChildrenTrue_QuestWithoutReportsFalse()
     {
