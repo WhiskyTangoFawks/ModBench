@@ -9,9 +9,12 @@ import type { ModlistNode } from './ModListProvider';
 // from the URI's last segment.
 const FILE_ROW_SCHEME = 'modbench-mod-file';
 
-// The Explorer's default order: case aside, and a run of digits by its value.
+// The Explorer's default order: case aside, and a run of digits by its value. Names equal but for
+// case, which a case-sensitive file system holds, then go by code unit, as the Explorer's do.
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-const byName = ([a]: readonly [string, unknown], [b]: readonly [string, unknown]): number => collator.compare(a, b);
+const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+const byName = ([a]: readonly [string, unknown], [b]: readonly [string, unknown]): number =>
+  collator.compare(a, b) || byCodeUnit(a, b);
 
 function fileRow(row: vscode.TreeItem, parent: ModlistNode, name: string, path: string): void {
   row.id = `${parent.id}/${name}`;
@@ -25,13 +28,12 @@ export class FolderNode extends vscode.TreeItem {
   constructor(
     public readonly parent: ModlistNode,
     public readonly origin: FileOrigin,
-    /** The path in its mod. */
-    public readonly path: string,
+    public readonly pathInMod: string,
     public readonly files: readonly ModFile[],
     name: string,
   ) {
     super(name, vscode.TreeItemCollapsibleState.Collapsed);
-    fileRow(this, parent, name, path);
+    fileRow(this, parent, name, pathInMod);
     this.contextValue = 'folder';
   }
 }
@@ -47,6 +49,7 @@ export class FileNode extends vscode.TreeItem {
     super(name, vscode.TreeItemCollapsibleState.None);
     fileRow(this, parent, name, file.relativePath);
     this.contextValue = 'file';
+    this.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file.absolutePath), { preview: true }] };
   }
 }
 

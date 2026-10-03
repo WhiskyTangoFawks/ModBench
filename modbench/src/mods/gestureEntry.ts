@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { OVERWRITE_NODE_KIND, type ModlistNode, type ModNode, type SeparatorNode } from './ModListProvider';
+import type { FileNode, FolderNode } from './modFiles';
 
 /** The rows a Mods gesture's Argument is taken from. */
 export interface GestureEntry {
@@ -44,7 +45,7 @@ export function registerModsGesture(
     run(modsGestureEntry(clicked, selected, viewSelection), option));
 }
 
-type ArgumentRow = ModNode | SeparatorNode;
+type ArgumentRow = ModNode | SeparatorNode | FolderNode | FileNode;
 type ArgumentKind = ArgumentRow['kind'];
 type RowOf<K extends ArgumentKind> = Extract<ArgumentRow, { kind: K }>;
 
@@ -79,8 +80,8 @@ export interface ModsKeyContext {
   readonly selectionToggle?: 'enable' | 'disable';
   readonly selectionKind?: ArgumentKind;
   readonly singleRow: boolean;
-  /** One row, and it has a folder: a mod, or Overwrite. */
-  readonly singleFolder: boolean;
+  /** One row, and open folder takes it. */
+  readonly singleOpenFolderRow: boolean;
   readonly holdsEnabledMod: boolean;
   readonly holdsDisabledMod: boolean;
   readonly holdsUntrackedModWithPlugin: boolean;
@@ -88,15 +89,18 @@ export interface ModsKeyContext {
 
 export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (row: ModNode) => boolean): ModsKeyContext {
   const mods = selection.filter(isOf(['mod']));
-  const [firstMod] = mods;
-  const kinds = new Set(selection.filter(isOf(['mod', 'separator'])).map((row) => row.kind));
+  // No API names the focused row, and a file or folder in the selection may be it: the keys do
+  // nothing on one (mods.md, Menus and keys, story 8).
+  const keyed = selection.some(isOf(['folder', 'file'])) ? [] : selection;
+  const [firstMod] = keyed.filter(isOf(['mod']));
+  const kinds = new Set(keyed.filter(isOf(['mod', 'separator'])).map((row) => row.kind));
   const [onlyKind] = kinds;
   const [onlyRow] = selection.length === 1 ? selection : [];
   return {
     selectionToggle: firstMod && toggleOf(isEnabled(firstMod)),
     selectionKind: kinds.size === 1 ? onlyKind : undefined,
     singleRow: onlyRow !== undefined,
-    singleFolder: onlyRow?.kind === 'mod' || onlyRow?.kind === OVERWRITE_NODE_KIND,
+    singleOpenFolderRow: onlyRow?.kind === 'mod' || onlyRow?.kind === OVERWRITE_NODE_KIND || onlyRow?.kind === 'file',
     holdsEnabledMod: mods.some(isEnabled),
     holdsDisabledMod: mods.some((row) => !isEnabled(row)),
     holdsUntrackedModWithPlugin: mods.some((row) => row.facts?.holdsPlugin === true && !row.facts.tracked),

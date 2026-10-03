@@ -552,7 +552,7 @@ export class ModListProvider
     if (element instanceof SeparatorNode) return this.separatorChildren(element);
     if (element instanceof ModNode) return filesIn(element, modOrigin(element.mod.name), element.files);
     if (element instanceof OverwriteNode) return filesIn(element, RUNTIME_OUTPUT, element.files);
-    if (element instanceof FolderNode) return filesIn(element, element.origin, element.files, element.path);
+    if (element instanceof FolderNode) return filesIn(element, element.origin, element.files, element.pathInMod);
     if (element) return [];
     await this.firstRead.settled; // never render before the Instance has actually read once
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];

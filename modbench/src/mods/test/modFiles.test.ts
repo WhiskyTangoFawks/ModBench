@@ -70,6 +70,17 @@ describe('a mod opens into its files as a folder tree (mods.md, The tree, story 
       .toEqual(['file A.txt', 'file b.txt', 'file item9.txt', 'file item10.txt']);
   });
 
+  it('names that differ only in case keep one order whatever order the listing gives', async () => {
+    const listed = [file('textures/a.dds'), file('Textures/b.dds'), file('a.txt'), file('A.txt')];
+    const rowsFor = async (files: ModFile[]) => {
+      const provider = providerOver([mod('Armour')], { Armour: files });
+      return shown(await provider.getChildren(await rootOf(provider, ModNode, 'Armour')));
+    };
+
+    expect(await rowsFor(listed)).toEqual(['folder Textures', 'folder textures', 'file A.txt', 'file a.txt']);
+    expect(await rowsFor([...listed].reverse())).toEqual(['folder Textures', 'folder textures', 'file A.txt', 'file a.txt']);
+  });
+
   it('a mod and each folder start collapsed, so the view opens clean, and a file has no expander', async () => {
     const provider = providerOver([mod('Armour')], { Armour: armour });
     const row = await rootOf(provider, ModNode, 'Armour');
@@ -151,10 +162,19 @@ describe('a file or folder row\'s parts (mods.md, A row, File and folder)', () =
   it('names its row by no file: URI, so no diagnostic or file decoration published on the file reaches the row', async () => {
     const { folder, leaf } = await rowsOf();
 
-    for (const row of [folder, leaf]) {
-      expect(row.resourceUri?.scheme).toEqual(expect.any(String));
-      expect(row.resourceUri?.scheme).not.toBe('file');
-    }
+    for (const row of [folder, leaf]) expect(row.resourceUri?.scheme).toMatch(/^(?!file$)\w/);
+  });
+
+  it('opens a clicked file as a preview editor at the path the value names, and a clicked folder or mod only selects', async () => {
+    const provider = providerOver([mod('Armour')], { Armour: [file('textures/a.dds', '/instance/mods/Armour/textures/a.dds')] });
+    const modRow = await rootOf(provider, ModNode, 'Armour');
+    const folder = await childNamed(provider, modRow, 'textures');
+    const leaf = await childNamed(provider, folder, 'a.dds');
+
+    expect(leaf.command).toMatchObject({ command: 'vscode.open', arguments: [{ fsPath: '/instance/mods/Armour/textures/a.dds' }, { preview: true }] });
+    expect(folder.command).toBeUndefined();
+    expect(modRow.command).toBeUndefined();
+    expect((await rootOf(provider, OverwriteNode, 'Overwrite')).command).toBeUndefined();
   });
 
   it('shows the path in its mod as the tooltip', async () => {
@@ -173,7 +193,7 @@ describe('a file or folder row\'s parts (mods.md, A row, File and folder)', () =
     }
   });
 
-  it('carries a contextValue that names its own kind and none of a mod\'s, a separator\'s or Overwrite\'s, so no menu of theirs reaches it', async () => {
+  it('names its own kind as its contextValue, which the File and Folder menus match on', async () => {
     const { folder, leaf } = await rowsOf();
 
     expect(folder.contextValue).toBe('folder');
