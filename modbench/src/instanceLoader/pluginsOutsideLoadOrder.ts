@@ -32,13 +32,11 @@ export function findPluginsOutsideLoadOrder(
   const loaded = new Set(loadOrder.map((p) => addressOf(p.origin, p.name)));
 
   const outside: PluginOutsideLoadOrder[] = [];
-  for (const byMod of [index.filesByMod, index.disabledModFiles]) {
-    for (const [mod, files] of byMod) {
-      for (const file of files) {
-        if (!isRootLevelPlugin(file.relativePath)) continue;
-        if (loaded.has(addressOf(mod, file.relativePath))) continue;
-        outside.push({ name: file.relativePath, path: file.absolutePath, origin: mod });
-      }
+  for (const [mod, files] of index.filesByMod) {
+    for (const file of files) {
+      if (!isRootLevelPlugin(file.relativePath)) continue;
+      if (loaded.has(addressOf(mod, file.relativePath))) continue;
+      outside.push({ name: file.relativePath, path: file.absolutePath, origin: mod });
     }
   }
   return outside;

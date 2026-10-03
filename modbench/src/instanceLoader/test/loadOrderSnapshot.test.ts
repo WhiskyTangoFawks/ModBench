@@ -16,7 +16,6 @@ type Provider = { winner: string; winnerMod: string; providers?: string[] };
 function index(
   files: Record<string, Provider>,
   filesByMod: Record<string, { relativePath: string; absolutePath: string }[]> = {},
-  disabledModFiles: Record<string, { relativePath: string; absolutePath: string }[]> = {},
 ): FileConflictIndex {
   const lookup = new FileConflictLookup();
   for (const [relativePath, { winner, winnerMod, providers }] of Object.entries(files)) {
@@ -24,7 +23,7 @@ function index(
       relativePath, winner, winnerOrigin: modOrigin(winnerMod), providers: (providers ?? [winnerMod]).map(modOrigin),
     });
   }
-  return { files: lookup, filesByMod: new Map(Object.entries(filesByMod)), disabledModFiles: new Map(Object.entries(disabledModFiles)) };
+  return { files: lookup, filesByMod: new Map(Object.entries(filesByMod)) };
 }
 
 const DATA_FOLDER = join('/game', 'Data');
@@ -141,7 +140,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   });
 
   it('a disabled mod\'s own plugin is sent with no slot, not enabled, not winning', () => {
-    const fakeIndex = index({}, {}, { Disabled: [{ relativePath: 'Off.esp', absolutePath: '/mods/Disabled/Off.esp' }] });
+    const fakeIndex = index({}, { Disabled: [{ relativePath: 'Off.esp', absolutePath: '/mods/Disabled/Off.esp' }] });
 
     const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER);
 

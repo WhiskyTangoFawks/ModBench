@@ -1,6 +1,6 @@
 // The instance value (ADR-0015).
 
-import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
+import { buildFileConflictIndex, FileConflictLookup, modFileOf, type FileWinners, type ModFile } from './fileConflictIndex';
 import {
   buildLoadOrderRows, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine,
   type PluginAddress,
@@ -16,8 +16,9 @@ import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
-export type { InstalledFileId, Mod, ModlistEntry, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
+export type { FileOrigin, InstalledFileId, Mod, ModlistEntry, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow } from './downloadRows';
+export type { ModFile } from './fileConflictIndex';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, GameFolderLook } from '../instanceAdapter/instanceAdapter';
 
@@ -58,8 +59,8 @@ export interface InstanceValue {
   readonly profiles: readonly string[];
   /** The winning enabled provider of every relative path, and its contenders. */
   readonly files: FileWinners;
-  /** Each enabled mod's own files. */
-  readonly filesByMod: ReadonlyMap<string, readonly { relativePath: string; absolutePath: string }[]>;
+  /** Each listed mod's own files, a disabled mod's too. */
+  readonly filesByMod: ReadonlyMap<string, readonly ModFile[]>;
   /** Every plugin file, with origin, slot, enabled and winning. A listed
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
    *  undefined — when the game folder is not found. */
@@ -89,8 +90,8 @@ export interface InstanceValue {
   readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
   /** Each mod's conflict/override status, keyed by mod name: the Mods tree's badges. */
   readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
-  /** File count under overwrite/, recursive; 0 when the folder is absent or empty. */
-  readonly overwriteFileCount: number;
+  /** Overwrite's own files, recursive; none when the folder is absent or empty. */
+  readonly overwriteFiles: readonly ModFile[];
   /** The paths this generation's rows name. */
   readonly paths: InstancePaths;
 }
@@ -159,7 +160,7 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   dataFolderPlugins: { kind: 'unresolved' },
   pluginsLoadedWithNoLine: undefined,
   modStatuses: new Map(),
-  overwriteFileCount: 0,
+  overwriteFiles: [],
   paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() },
 });
 
@@ -360,7 +361,7 @@ export class Instance implements Subscription {
     const entries = await this.readMods(profile);
     const runtimeOutputRead = adapter.originFiles({ kind: 'runtimeOutput' });
     const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game, trackedMods] = await Promise.all([
-      runtimeOutputRead.then((output) => buildFileConflictIndex(entries, adapter, log, output.files)),
+      runtimeOutputRead.then((output) => buildFileConflictIndex(entries, output.files, adapter, log)),
       adapter.pluginOrder(profile),
       // Both answers come from the settings read above, so a rewrite cannot land two generations
       // in one value.
@@ -404,7 +405,7 @@ export class Instance implements Subscription {
       dataFolderPlugins,
       pluginsLoadedWithNoLine: pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins),
       modStatuses: computeModStatuses(entries, index),
-      overwriteFileCount: runtimeOutput.files.length,
+      overwriteFiles: runtimeOutput.files.map(modFileOf),
       paths: pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders),
     };
   }

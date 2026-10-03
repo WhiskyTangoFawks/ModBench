@@ -1078,7 +1078,7 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
     const unread = { value: instanceValueFixture({ paths: { ...instance.value.paths, overwriteDir: undefined } }) };
 
     registerOpenFolderCommand(unread, reporter, () => []);
-    await invoke('modbench.mod.openFolder', new OverwriteNode(3, 'MO2'));
+    await invoke('modbench.mod.openFolder', new OverwriteNode([], 'MO2'));
 
     expect(revealed()).toEqual([]);
     expect(reporter.reports).toEqual([
@@ -1088,14 +1088,14 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
 
   it('reveals the overwrite folder from the Overwrite row', async () => {
     registerOpenFolderCommand(instance, recordingReporter(), () => []);
-    await invoke('modbench.mod.openFolder', new OverwriteNode(3, 'MO2'));
+    await invoke('modbench.mod.openFolder', new OverwriteNode([], 'MO2'));
 
     expect(revealed()).toEqual(['/instance/overwrite']);
   });
 
   it.each<[string, ModlistNode, string]>([
     ['mod', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), '/instance/mods/My Mod'],
-    ['Overwrite', new OverwriteNode(3, 'MO2'), '/instance/overwrite'],
+    ['Overwrite', new OverwriteNode([], 'MO2'), '/instance/overwrite'],
   ])('reveals the one selected %s row\'s folder from the palette, which hands the gesture no row', async (_kind, selected, folder) => {
     registerOpenFolderCommand(instance, recordingReporter(), () => [selected]);
     await invoke('modbench.mod.openFolder');
@@ -1104,7 +1104,7 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
   });
 
   it.each<[string, ModlistNode[]]>([
-    ['several rows', [new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), new OverwriteNode(3, 'MO2')]],
+    ['several rows', [new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), new OverwriteNode([], 'MO2')]],
     ['a separator', [new SeparatorNode({ kind: 'separator', name: 'Group', enabled: true }, [])]],
   ])('reveals nothing from the palette over a selection of %s', async (_what, selection) => {
     registerOpenFolderCommand(instance, recordingReporter(), () => selection);
@@ -1208,12 +1208,12 @@ describe('modsCopyValueText, copying each selected mod\'s or separator\'s name, 
   });
 
   it('excludes the Overwrite row from a selection that includes it', () => {
-    const withOverwrite = [alpha, new OverwriteNode(3, 'MO2')];
+    const withOverwrite = [alpha, new OverwriteNode([], 'MO2')];
     expect(modsCopyValueText(noSelection)(alpha, withOverwrite)).toBe('Alpha');
   });
 
   it('is undefined for a row that is not a Mods row, so another surface\'s copy takes over', () => {
-    expect(modsCopyValueText(noSelection)(new OverwriteNode(0, 'MO2'), undefined)).toBeUndefined();
+    expect(modsCopyValueText(noSelection)(new OverwriteNode([], 'MO2'), undefined)).toBeUndefined();
     expect(modsCopyValueText(noSelection)({ formKey: 'Fallout4.esm:000001' }, undefined)).toBeUndefined();
   });
 
@@ -1223,7 +1223,7 @@ describe('modsCopyValueText, copying each selected mod\'s or separator\'s name, 
   });
 
   it('copies the view\'s selection for the Mods key\'s own args', () => {
-    const viewSelection = (): ModlistNode[] => [alpha, groupA, new OverwriteNode(1, 'MO2')];
+    const viewSelection = (): ModlistNode[] => [alpha, groupA, new OverwriteNode([], 'MO2')];
     expect(modsCopyValueText(viewSelection)(MODS_KEY_ARGS, undefined)).toBe('Alpha\nGroup A');
   });
 

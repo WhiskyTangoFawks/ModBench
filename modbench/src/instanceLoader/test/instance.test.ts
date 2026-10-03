@@ -294,7 +294,7 @@ describe('Instance — the value', () => {
     expect(instance.value.modFolders?.map((f) => f.name)).not.toContain('Thumbs.db');
   });
 
-  it('carries the winner of a path two enabled mods provide, and each enabled mod\'s own files', async () => {
+  it('carries the winner of a path two enabled mods provide, and each listed mod\'s own files, a disabled mod\'s too', async () => {
     const { root, instance } = realInstance();
     const winner = await writeModFile(root, NONO, 'textures/shared.dds', 'winning');
     await writeModFile(root, 'Unofficial Fallout 4 Patch', 'textures/shared.dds', 'losing');
@@ -306,7 +306,7 @@ describe('Instance — the value', () => {
     expect(entry?.winner).toBe(winner);
     expect(entry?.winnerOrigin).toEqual({ kind: 'mod', name: NONO });
     expect(entry?.providers).toEqual([{ kind: 'mod', name: NONO }, { kind: 'mod', name: 'Unofficial Fallout 4 Patch' }]);
-    expect(instance.value.filesByMod.get('Harder VATS')).toBeUndefined();
+    expect(instance.value.filesByMod.get('Harder VATS')?.map((f) => f.relativePath)).toEqual(['textures/shared.dds']);
     expect(instance.value.filesByMod.get('Tracked Patch Mod')?.map((f) => f.relativePath)).toEqual(['Tracked Patch Mod.esp']);
   });
 
@@ -718,6 +718,7 @@ describe('Instance — a value that survives a bad read', () => {
     await instance.refresh();
 
     expect(instance.value.mods).toEqual([]);
+    expect([...instance.value.files].map((entry) => entry.relativePath)).toEqual(['F4SE/Plugins/SomePlugin.log']);
     expect(instance.value.filesByMod.size).toBe(0);
     expect(instance.sequence).toBe(before + 1);
   });
@@ -1020,17 +1021,19 @@ async function minimalInstanceWithoutCorpusMasters(): Promise<{
   return { root, instance, logs, readFailureLines, setResolver: (next) => { resolve = next; } };
 }
 
-describe('Instance — per-mod status and the overwrite count', () => {
-  it('carries the overwrite/ folder\'s file count, recursive', async () => {
+describe('Instance — Overwrite\'s files', () => {
+  it('carries each file under the overwrite/ folder, recursive, by the path in it and where it is read from', async () => {
     const { root, instance } = await minimalInstanceWithoutCorpusMasters();
     await instance.refresh();
-    expect(instance.value.overwriteFileCount).toBe(0);
+    expect(instance.value.overwriteFiles).toEqual([]);
 
     await mkdir(join(root, 'overwrite', 'F4SE'), { recursive: true });
     await writeFile(join(root, 'overwrite', 'F4SE', 'plugin.log'), 'x');
     await instance.refresh();
 
-    expect(instance.value.overwriteFileCount).toBe(1);
+    expect(instance.value.overwriteFiles).toEqual([
+      { relativePath: 'F4SE/plugin.log', absolutePath: join(root, 'overwrite', 'F4SE', 'plugin.log') },
+    ]);
   });
 });
 
