@@ -96,6 +96,34 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
+    public void ClearingDeleted_KeepsEachOtherBitTheWriteChanges_AndTakesTheRestFromTheCopyToItsLeft()
+    {
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(Bit9 | InitiallyDisabled, "Guy")), false),
+            (Plugin("Override.esp", NpcCopy(Deleted | Bit9)), true));
+
+        var undeleted = Written(TheNpc, OffLimits);
+
+        Assert.Equal(OffLimits | InitiallyDisabled, undeleted["MajorRecordFlagsRaw"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public void ClearingDeleted_AndSettingPersistent_OnAPlacedRecord_MovesItIntoItsCellsPersistentGroup()
+    {
+        var rock = new PlacedObject(TheRef, Fallout4Release.Fallout4) { EditorID = "Rock" };
+        var deleted = new PlacedObject(TheRef, Fallout4Release.Fallout4) { MajorRecordFlagsRaw = Deleted };
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside", also: Placing(rock))), false),
+            (Plugin("Override.esp", CellCopy(0, "Inside", also: Placing(deleted))), true));
+
+        var undeleted = Written(TheRef, Persistent);
+
+        var cell = JsonNode.Parse(_plugins.Text(Edited, TheCell)).Require().AsObject();
+        Assert.Equal(Persistent, undeleted["MajorRecordFlagsRaw"]?.GetValue<int>());
+        Assert.Equal(["Rock"], cell["Persistent"].Require().AsArray().Select(r => r?["EditorID"]?.GetValue<string>()));
+    }
+
+    [Fact]
     public void ClearingDeleted_DropsItsFormVersion_WhenTheCopyToItsLeftSpellsNone()
     {
         var middle = Plugin("Middle.esp", NpcCopy(0, "Guy", formVersion: 120));
@@ -288,6 +316,18 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
 
         Assert.Equal(OffLimits | PartialForm, partial["MajorRecordFlagsRaw"]?.GetValue<int>());
         Assert.Equal(120, partial["FormVersion"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public void SettingDeletedAndPartialFormTogether_WithACopyToItsLeft_EndsAPartialFormThatIsNotDeleted()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
+            (Plugin("Override.esp", CellCopy(0, "Mine")), true));
+
+        var partial = Written(TheCell, Deleted | PartialForm);
+
+        Assert.Equal(PartialForm, partial["MajorRecordFlagsRaw"]?.GetValue<int>());
     }
 
     [Fact]

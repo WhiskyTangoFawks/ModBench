@@ -10,7 +10,7 @@ namespace MEditService.Commands.Edits;
 /// <summary>xEdit's Delete, MakePartialForm and their undoing, which refills the copy from the nearest
 /// copy to its left that is neither. TwbRecordHeaderStruct.ElementChanged applies Partial Form last, so
 /// making one of a deleted copy refills it first.</summary>
-internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartialForm, bool Refills, bool HeldPersistent)
+internal sealed record RecordEmptying(RecordFlagsWrite Write, long Flags, bool Deletes, bool MakesPartialForm, bool Refills)
 {
     /// <summary>The emptying a write of <paramref name="value"/> makes, or null when it newly sets and
     /// clears neither flag.</summary>
@@ -27,8 +27,7 @@ internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartia
         var deletesBeforeMakingPartialForm = makesPartialForm && write.Sets(DeletedFlag.Bit);
         var refills = clears || deletesBeforeMakingPartialForm;
         if (!deletes && !makesPartialForm && !refills) return null;
-        var heldPersistent = (write.Held & PersistentFlag.Bit) != 0;
-        return new(flags, deletes, makesPartialForm, refills, heldPersistent);
+        return new(write, flags, deletes, makesPartialForm, refills);
     }
 
     /// <summary>Whether a write of <paramref name="envelope"/> refills the record at
@@ -74,7 +73,7 @@ internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartia
     {
         if (!MakesPartialForm || !RecordTypeDispatch.For(release).IsCell(schema.TableName)) return null;
         var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
-        if (!HeldPersistent && prefix is not [.., { Name: PlacedCell.WorldspacePersistentCellMember }])
+        if ((Write.Held & PersistentFlag.Bit) == 0 && prefix is not [.., { Name: PlacedCell.WorldspacePersistentCellMember }])
         {
             if (PlacedCell.SaidBy(record, cellCopyOnTheLeft?.FoundText) is not { } said)
             {
@@ -93,12 +92,13 @@ internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartia
     private static RecordEditResult Cannot(string spelled, string why) =>
         RecordEditResult.RefusedAt(RecordEditRefusal.CannotBePartialForm, spelled, $"'{spelled}': {why}. Nothing was written.");
 
-    /// <summary>xEdit's AssignInternal copies the left copy's flags; Delete and MakePartialForm clear Compressed.</summary>
+    /// <summary>xEdit's AssignInternal copies the left copy's flags, but a write ends as it asks (xedit.md,
+    /// divergence 25): only the bits it leaves alone take the left copy's. Delete and MakePartialForm clear
+    /// Compressed.</summary>
     internal JsonElement FlagsWith(JsonObject? left)
     {
-        var flags = Flags;
-        if (left != null) flags = RecordFlagsWrite.HeldBy(left);
-        if (left != null && MakesPartialForm) flags |= PartialFormFlag.Bit;
+        var changed = Write.Held ^ Write.Next;
+        var flags = left == null ? Flags : (RecordFlagsWrite.HeldBy(left) & ~changed) | (Flags & changed);
         if (Deletes || MakesPartialForm) flags &= ~CompressedFlag.Bit;
         return JsonSerializer.SerializeToElement(flags);
     }
