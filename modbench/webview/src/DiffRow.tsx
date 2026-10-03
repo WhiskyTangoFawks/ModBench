@@ -158,6 +158,7 @@ interface DiffRowProps {
   // Per column, whether this row is the last element its array holds there. Absent for a row that
   // is no array's element.
   isLastElement?: (column: ColumnKey) => boolean;
+  keyMembers?: readonly string[] | null;
   // Whether this column holds the object this row is a member of. A member of nothing reads as
   // nothing; a member its owner omits reads as its default (ADR-0005). Absent means every owner is
   // present.
@@ -172,7 +173,7 @@ export function DiffRow({
   collapsedColumns,
   recordLabel, context, isExpanded, onToggle,
   rowKey, parentRowKey, focusedCell, onFocusCell, editableColumns, onEditCell, writeAt,
-  onAddElement, isLastElement, ownerPresent, cellMetas,
+  onAddElement, isLastElement, keyMembers, ownerPresent, cellMetas,
 }: Readonly<DiffRowProps>) {
   // The children the diff node itself carries — the row and the panel can never disagree about
   // whether this node has any.
@@ -308,7 +309,7 @@ export function DiffRow({
             : undefined,
         ];
         if (hasChildren) {
-          const reading = isExpanded ? undefined : collapsedReading(diff, cellMeta, key, isLastElement?.(key));
+          const reading = isExpanded ? undefined : collapsedReading(diff, cellMeta, key, isLastElement?.(key), keyMembers);
           return (
             <DiskCell
               key={key}

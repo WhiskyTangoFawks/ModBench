@@ -226,6 +226,8 @@ function diffAt(diff: FieldDiff, path: readonly string[]): FieldDiff | undefined
   return cur;
 }
 
+const NO_REFERENCE = '—';
+
 /** What a collapsed row reads in one column. A placeholder says only that something is there. */
 export interface Reading {
   text: string;
@@ -242,16 +244,19 @@ export const elementsIn = (array: FieldDiff | undefined, column: string): FieldD
 /** editor-fields.md § Collapsed readings: the first row that applies. */
 export function collapsedReading(
   diff: FieldDiff, meta: FieldMetadata | undefined, column: string, isLast = true,
+  keyMembers?: readonly string[] | null,
 ): Reading {
   const value = diff.values[column];
   const named = value == null ? undefined : namedReading(diff, meta, column, isLast);
   if (named != null) return content(named);
+  const keyed = value == null ? undefined : keyReading(diff, meta, column, keyMembers);
+  if (keyed != null) return content(keyed);
   if (meta?.type === 'array') {
     const list = value ?? defaultOf(meta);
     const length = Array.isArray(list) ? list.length : 0;
     const [only] = elementsIn(diff, column);
     return length === 1 && only
-      ? collapsedReading(only, meta.elementType ?? undefined, column)
+      ? collapsedReading(only, meta.elementType ?? undefined, column, true, meta.keyMembers)
       : placeholder(`[${length}]`);
   }
   // A one-element array's element can be a plain value, which reads as its own cell does.
@@ -259,6 +264,22 @@ export function collapsedReading(
     return content(displayValue(value, meta, diff.resolutions?.[column]));
   }
   return placeholder('{…}');
+}
+
+function keyReading(
+  diff: FieldDiff, meta: FieldMetadata | undefined, column: string, keyMembers: readonly string[] | null | undefined,
+): string | undefined {
+  if (!keyMembers?.length) return undefined;
+  const value = diff.values[column];
+  const readings = keyMembers.map(name => {
+    const path = name.split('.');
+    const memberMeta = metaAtPath(meta, memberPath(path), value);
+    if (!memberMeta) return undefined;
+    const held = getAtPath(value, memberPath(path)) ?? defaultOf(memberMeta);
+    const reading = displayValue(held, memberMeta, diffAt(diff, path)?.resolutions?.[column]);
+    return reading === '' && memberMeta.type === 'formKey' ? NO_REFERENCE : reading;
+  });
+  return readings.every(r => r != null) ? readings.join(', ') : undefined;
 }
 
 function namedReading(
@@ -287,9 +308,10 @@ function namedReading(
     leaf: found.leaf,
     kind: discriminator == null ? undefined : member(discriminator).label,
     elements: (...path) => {
-      const elementMeta = metaAtPath(meta, memberPath(path), value)?.elementType ?? undefined;
+      const arrayMeta = metaAtPath(meta, memberPath(path), value);
+      const elementMeta = arrayMeta?.elementType ?? undefined;
       const present = elementsIn(diffAt(diff, path), column);
-      return present.map((child, i) => collapsedReading(child, elementMeta, column, i === present.length - 1).text);
+      return present.map((child, i) => collapsedReading(child, elementMeta, column, i === present.length - 1, arrayMeta?.keyMembers).text);
     },
   });
 }
