@@ -13,7 +13,6 @@ const freePort = () => new Promise((resolve, reject) => {
   });
 });
 
-// Each run has its own port, workspaces and profile, so runs in parallel worktrees share nothing.
 const port = await freePort();
 const runDir = mkdtempSync(path.join(tmpdir(), 'modbench-it-'));
 process.on('exit', () => rmSync(runDir, { recursive: true, force: true, maxRetries: 5 }));
@@ -36,7 +35,8 @@ const shared = {
   // vscode.git, ships with VS Code.
   skipExtensionDependencies: true,
   launchArgs: ['--user-data-dir', path.join(runDir, 'user-data'), '--extensions-dir', path.join(runDir, 'extensions')],
-  env: { MODBENCH_TEST_PORT: String(port) },
+  // Linux's OS trash lives under XDG_DATA_HOME, and every run trashes folders of the same names.
+  env: { MODBENCH_TEST_PORT: String(port), XDG_DATA_HOME: path.join(runDir, 'data') },
   mocha: { timeout: 20000, ui: 'bdd' },
 };
 

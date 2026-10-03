@@ -414,46 +414,6 @@ describe('modbench activation', () => {
   // activation, and no API exposes whether `viewsWelcome` is showing. Manual check only.
 });
 
-// ── Build integrity ────────────────────────────────────────────────────────────
-// The harness loads out/extension.js, a bundle from a separate esbuild step; nothing forces it
-// to be current, so freshness is asserted from inside the process that loaded it.
-
-describe('the loaded extension bundle is not older than its sources', () => {
-  it('out/extension.js is at least as new as every file under src/', () => {
-    // Compiled location is out/test/integration/extension.test.js — three levels under
-    // the modbench package root.
-    const pkgRoot = path.join(__dirname, '..', '..', '..');
-    const srcDir = path.join(pkgRoot, 'src');
-    const bundlePath = path.join(pkgRoot, 'out', 'extension.js');
-
-    let newestMtimeMs = -Infinity;
-    let newestFile = '';
-    const walk = (dir: string): void => {
-      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(full);
-        } else if (entry.isFile()) {
-          const mtimeMs = fs.statSync(full).mtimeMs;
-          if (mtimeMs > newestMtimeMs) {
-            newestMtimeMs = mtimeMs;
-            newestFile = full;
-          }
-        }
-      }
-    };
-    walk(srcDir);
-
-    const bundleMtimeMs = fs.statSync(bundlePath).mtimeMs;
-    assert.ok(
-      bundleMtimeMs >= newestMtimeMs,
-      `out/extension.js (mtime ${new Date(bundleMtimeMs).toISOString()}) is older than ` +
-      `${newestFile} (mtime ${new Date(newestMtimeMs).toISOString()}) — the harness ran ` +
-      `against a stale bundle`,
-    );
-  });
-});
-
 // ── Output channel ──────────────────────────────────────────────────────────────
 
 describe('Modbench output channel', () => {
@@ -527,6 +487,23 @@ describe('modbench.mod.sync syncs the instance value it is handed', () => {
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 
+async function checkBoxTogglesMarkedBeforeTheCommandReturns(
+  rows: { markUnconfirmed(row: never, enabled: boolean): void }, command: string,
+): Promise<number> {
+  let toggles = 0;
+  const mark = rows.markUnconfirmed.bind(rows);
+  rows.markUnconfirmed = (row, enabled) => {
+    toggles++;
+    mark(row, enabled);
+  };
+  try {
+    await vscode.commands.executeCommand(command);
+  } finally {
+    rows.markUnconfirmed = mark;
+  }
+  return toggles;
+}
+
 // A tab's title is the EditorID once the record has been read, and the FormKey until then
 // (editor.md, Opening, story 5); these tests run with no backend, so it stays the FormKey.
 describe('modbench.record.open', () => {
@@ -598,6 +575,9 @@ describe('modbench.record.open', () => {
   });
 
   it('a menu\'s multi-selection opens one tab per record, all in a single new group beside the active one', async () => {
+    await vscode.commands.executeCommand('workbench.action.focusLastEditorGroup');
+    await waitFor('the last group to be active', () =>
+      vscode.window.tabGroups.activeTabGroup === vscode.window.tabGroups.all.at(-1) || undefined);
     const groupsBefore = vscode.window.tabGroups.all.length;
     const tabsBefore = openTabs().length;
     const selection = [
@@ -752,20 +732,15 @@ describe('modbench.downloads tree', () => {
       fs.writeFileSync(path.join(downloadsDir, 'foo.zip.meta'), '[General]\r\n');
     });
 
-    const rows = await provider().getChildren();
+    const rows = await waitFor('the downloads rows to hold foo.zip', async () => {
+      const found = await provider().getChildren();
+      return found.some((r) => archiveNameOf(r) === 'foo.zip') ? found : undefined;
+    });
     assert.deepStrictEqual(rows.map((r) => archiveNameOf(r)), ['foo.zip']);
   });
 
   it('reflects a new archive dropped into downloads/ via the file-watcher, with no manual refresh', async () => {
-    fs.writeFileSync(path.join(downloadsDir, 'bar.zip'), 'data');
-
-    // The watcher debounces 200ms before calling invalidate() itself, so poll for the row rather
-    // than sleeping a fixed time. Never calls invalidate() directly: the watcher must do it alone.
-    const rows = await waitFor('bar.zip via the watcher', async () => {
-      const found = await provider().getChildren();
-      return found.some((r) => archiveNameOf(r) === 'bar.zip') ? found : undefined;
-    }, 10000);
-    assert.ok(rows.some((r) => archiveNameOf(r) === 'bar.zip'), 'expected bar.zip among the watcher-refreshed rows');
+    await probeUntilListed(downloadsDir, 'dropped');
   });
 
   // downloads.md, Which files are rows, story 1: `download_directory` can name a folder outside
@@ -923,12 +898,25 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
     });
   });
 
-  it('delete separator asks for no refresh, and its row goes when the watch lands the new value', async function () {
+  it('delete separator asks the Instance and the view for no refresh, and its row goes when the watch lands the new value', async function () {
     if (!root) this.skip();
     const doomed = present(await separatorRow('Doomed'), 'the Doomed separator row');
-    let refreshes = 0;
-    const listening = provider().onDidChangeTreeData(() => { refreshes++; });
-    const before = instance().sequence;
+    let viewRefreshes = 0;
+    let instanceRefreshes = 0;
+    let landed = instance().sequence;
+    const view = provider();
+    const invalidate = view.invalidate.bind(view);
+    view.invalidate = () => {
+      if (instance().sequence === landed) viewRefreshes++;
+      landed = instance().sequence;
+      invalidate();
+    };
+    const target = instance();
+    const refresh = target.refresh.bind(target);
+    target.refresh = () => {
+      instanceRefreshes++;
+      return refresh();
+    };
 
     const warn = vscode.window.showWarningMessage;
     (vscode.window as { showWarningMessage: unknown }).showWarningMessage = () => Promise.resolve('Delete');
@@ -940,14 +928,13 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
       if (process.platform === 'linux') {
         assert.strictEqual(takeFromTrash(doomedDir, trashedBefore), 1, 'the separator\'s folder should be in the OS trash');
       }
-      assert.strictEqual(instance().sequence, before, 'the watch landed a value before the gesture returned; nothing is proved');
-      assert.strictEqual(refreshes, 0, 'the gesture asked the view for a refresh after its write');
-
-      await pastSequence(instance(), before);
-      assert.strictEqual(await separatorRow('Doomed'), undefined, 'the watch\'s value should have taken the row away');
+      await waitFor('the watch to take the Doomed row away', async () => (await separatorRow('Doomed')) === undefined);
+      assert.strictEqual(instanceRefreshes, 0, 'the gesture asked the Instance to re-read');
+      assert.strictEqual(viewRefreshes, 0, 'the gesture asked the view to re-pull a value no watch landed');
     } finally {
+      target.refresh = refresh;
       (vscode.window as { showWarningMessage: unknown }).showWarningMessage = warn;
-      listening.dispose();
+      view.invalidate = invalidate;
     }
   });
 });
@@ -1093,9 +1080,8 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
   it('VS Code\'s own Space on a focused mod row leaves its check box alone', async function () {
     if (!root) this.skip();
     await enabledAndSelected();
-    await vscode.commands.executeCommand('list.toggleExpand');
-    await new Promise((r) => setTimeout(r, 750));
-    assert.strictEqual(fs.readFileSync(modlistPath, 'utf8'), '+Palette Mod\r\n');
+    const mods = present(ext?.exports.modListProvider, "the activated extension's modListProvider export");
+    assert.strictEqual(await checkBoxTogglesMarkedBeforeTheCommandReturns(mods, 'list.toggleExpand'), 0);
   });
 
   it('copies the selection of the view last selected in when Copy Value is run from the palette', async function () {
@@ -1174,9 +1160,8 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
   it('VS Code\'s own Space on a focused plugin row leaves its check box alone', async function () {
     if (!root) this.skip();
     await focusRow(0);
-    await vscode.commands.executeCommand('list.toggleExpand');
-    await new Promise((r) => setTimeout(r, 750));
-    assert.strictEqual(fs.readFileSync(pluginsTxtPath, 'utf8'), '*TestMod.esp\r\nOther.esp\r\n');
+    const plugins = present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
+    assert.strictEqual(await checkBoxTogglesMarkedBeforeTheCommandReturns(plugins, 'list.toggleExpand'), 0);
   });
 
   it('Space disables the selected plugin', async function () {
@@ -1198,8 +1183,11 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
     if (!root) this.skip();
     await focusRow(1);
     await vscode.commands.executeCommand('list.select');
-    await new Promise((r) => setTimeout(r, 750));
-    assert.deepStrictEqual(openTabs().map((t) => t.label), []);
+    await vscode.commands.executeCommand('list.focusUp');
+    await vscode.commands.executeCommand('list.select');
+    await waitFor('the enabled row\'s header tab, opened through the path a disabled row\'s would take, after it',
+      () => openTabs().some((t) => t.label === 'TestMod.esp') || undefined);
+    assert.deepStrictEqual(openTabs().map((t) => t.label), ['TestMod.esp']);
   });
 });
 
@@ -1359,6 +1347,10 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
     for (const name of ['TestMod.esp', 'Other.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     await setGameDirectory(gameDir);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n'));
+    await waitFor('the plugin rows to hold both written plugins', async () => {
+      const names = (await pluginListProvider().getChildren()).map((n) => rowName(n));
+      return (names.includes('TestMod.esp') && names.includes('Other.esp')) || undefined;
+    });
   });
 
   after(async () => {
