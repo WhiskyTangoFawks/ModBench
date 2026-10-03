@@ -8,8 +8,8 @@ import {
 import {
   lastGoodReadMessage, type DownloadFile, type DownloadRow, type DownloadStatus, type InstanceValue, type InstanceView,
 } from '../instanceLoader/instance';
-import { firstReadOf, type FirstRead } from './instanceFirstRead';
-import { ErrorNode } from './errorNode';
+import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
+import { ErrorNode } from '../drivingLib/errorNode';
 
 function whatTheDiskShows(shown: boolean | undefined, on: string, off: string): string {
   if (shown === undefined) return 'it is gone from the disk';

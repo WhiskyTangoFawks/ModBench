@@ -14,7 +14,7 @@ import {
   WorldspacesNode, WorldspaceNode, SubBlockNode, ChildRecordGroupNode, ChildRecordNode,
 } from '../PluginTreeProvider';
 import { headerFormKeyFor } from '../formKeyIdentity';
-import { ErrorNode } from '../errorNode';
+import { ErrorNode } from '../../drivingLib/errorNode';
 import type { PluginConditions, PluginTreeNode } from '../PluginTreeProvider';
 import { recordResourceUri } from '../recordResourceUri';
 import { expectInstanceOf, expectInstanceOfOrUndefined, expectInstancesOf } from '../../test/expectInstanceOf';

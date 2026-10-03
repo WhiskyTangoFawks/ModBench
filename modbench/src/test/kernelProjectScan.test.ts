@@ -3,11 +3,13 @@ import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 import { tsFiles } from './tsFiles';
-import { CORE_BOXES, DRIVEN_BOXES, KERNEL_BOXES, REFERENCING_BOXES, VIEW_BOXES } from './boxes';
+import { CORE_BOXES, DRIVEN_BOXES, DRIVING_BOXES, KERNEL_BOXES, REFERENCING_BOXES } from './boxes';
 
 const MODBENCH = join(__dirname, '..', '..');
 
 const BOXES = [...KERNEL_BOXES, ...Object.keys(REFERENCING_BOXES)];
+
+const DRIVING_LIB = 'drivingLib';
 
 const ROOT_SOLUTION = 'tsconfig.json';
 const ROOT_PROJECT = join('src', 'tsconfig.json');
@@ -72,14 +74,21 @@ describe('one composite project per box', () => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 
-  it.each(Object.keys(VIEW_BOXES))('%s sees the Node and VS Code types', (box) => {
+  it.each(Object.keys(DRIVING_BOXES))('%s sees the Node and VS Code types', (box) => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node', 'vscode']);
   });
 
-  it.each(Object.keys(VIEW_BOXES))('%s references neither the codecs nor the tables', (box) => {
+  it.each(Object.keys(DRIVING_BOXES))('%s references neither the codecs nor the tables', (box) => {
     const references = referencePaths(boxProject(box));
     expect(references).not.toContain(join('src', 'loadOrderFileCodec'));
     expect(references).not.toContain(join('src', 'tables'));
+  });
+
+  it('the driving lib references no view, and only a view references the lib', () => {
+    const lib = join('src', DRIVING_LIB);
+    const views = Object.keys(DRIVING_BOXES).filter((box) => box !== DRIVING_LIB).map((box) => join('src', box));
+    expect(referencePaths(boxProject(DRIVING_LIB)).filter((r) => views.includes(r))).toEqual([]);
+    expect(BOXES.filter((box) => !(box in DRIVING_BOXES) && referencePaths(boxProject(box)).includes(lib))).toEqual([]);
   });
 
   it.each(Object.entries(REFERENCING_BOXES))('%s references exactly the boxes the diagram draws', (box, references) => {

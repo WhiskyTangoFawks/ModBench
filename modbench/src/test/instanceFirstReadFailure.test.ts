@@ -22,11 +22,9 @@ vi.mock('vscode', () => ({
 
 import { Instance } from '../instanceLoader/instance';
 import { ModListProvider } from '../mods/ModListProvider';
-import { ErrorNode as ModsErrorNode } from '../mods/errorNode';
 import { PluginsTreeProvider } from '../plugins/PluginsTreeProvider';
-import { ErrorNode as PluginsErrorNode } from '../plugins/errorNode';
 import { DownloadsProvider } from '../downloads/DownloadsProvider';
-import { ErrorNode as DownloadsErrorNode } from '../downloads/errorNode';
+import { ErrorNode } from '../drivingLib/errorNode';
 import { ToolboxProvider } from '../toolbox/ToolboxProvider';
 import { makeReporter } from '../reporter';
 import { FakeLogOutputChannel } from './fakeOutputChannel';
@@ -89,9 +87,9 @@ describe('a failed first read across the Toolbox, Mods, Plugins and Downloads vi
     const [modsRows, pluginsRows, downloadsRows] = rendered;
     const toolboxRows = toolbox.getChildren();
     const errors = [
-      expectInstanceOf(modsRows[0], ModsErrorNode),
-      expectInstanceOf(pluginsRows[0], PluginsErrorNode),
-      expectInstanceOf(downloadsRows[0], DownloadsErrorNode),
+      expectInstanceOf(modsRows[0], ErrorNode),
+      expectInstanceOf(pluginsRows[0], ErrorNode),
+      expectInstanceOf(downloadsRows[0], ErrorNode),
       present(toolboxRows[0], 'the Toolbox\'s error row'),
     ];
     expect([...rendered, toolboxRows].map((rows) => rows.length)).toEqual([1, 1, 1, 1]);
@@ -113,7 +111,7 @@ describe('a failed first read across the Toolbox, Mods, Plugins and Downloads vi
     expect(toolbox.getChildren().map((row) => row.label)).toEqual(['Game', 'Profile']);
     for (const rows of await render()) {
       expect(rows.length).toBeGreaterThan(0);
-      expect(rows.some((row) => row instanceof ModsErrorNode || row instanceof PluginsErrorNode || row instanceof DownloadsErrorNode)).toBe(false);
+      expect(rows.some((row) => row instanceof ErrorNode)).toBe(false);
     }
   });
 });

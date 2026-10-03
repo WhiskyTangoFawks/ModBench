@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ErrorNode } from './errorNode';
+import { ErrorNode } from '../drivingLib/errorNode';
 import type {
   RecordSummary,
   WorldspaceSummary, CellSummary, ChildRecordSummary, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords,

@@ -20,6 +20,7 @@
     { "path": "./src/downloadsCommands" },
     { "path": "./src/install" },
     { "path": "./src/client" },
+    { "path": "./src/drivingLib" },
     { "path": "./src/toolbox" },
     { "path": "./src/mods" },
     { "path": "./src/downloads" },

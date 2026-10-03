@@ -4,8 +4,8 @@ import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistTree } from './modlistTree';
 import type { ModStatus, ModStatusResult } from '../instanceLoader/statusChecker';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
-import { firstReadOf, type FirstRead } from './instanceFirstRead';
-import { ErrorNode } from './errorNode';
+import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
+import { ErrorNode } from '../drivingLib/errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
 import { setModsEnabled as setModsEnabledCommand, type ModlistAccess } from '../modlist/modlist';
 

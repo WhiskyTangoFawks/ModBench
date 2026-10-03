@@ -9,7 +9,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { DownloadNode } from '../DownloadsProvider';
-import { ErrorNode } from '../errorNode';
+import { ErrorNode } from '../../drivingLib/errorNode';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText, downloadsKeyContext } from '../keyContext';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 
