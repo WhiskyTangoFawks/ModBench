@@ -30,18 +30,13 @@ describe('parseDownloadMeta', () => {
     expect(parseDownloadMeta('[General]\r\nremoved=false\r\n').excluded).toBe(false);
   });
 
-  // The load-bearing guard for the acceptance criterion: the Uninstalled Status
-  // (uninstalled=true) and hidden (removed=true) are never conflated — they are
-  // orthogonal axes derived from different keys.
-  it('never conflates the Uninstalled Status with excluded: both flags coexist', () => {
+  it('never conflates the Uninstalled Status with excluded: both flags coexist, orthogonal axes derived from different keys (uninstalled=true, removed=true)', () => {
     const meta = parseDownloadMeta('[General]\r\nuninstalled=true\r\nremoved=true\r\n');
     expect(meta.status).toBe('Uninstalled');
     expect(meta.excluded).toBe(true);
   });
 
-  // A .meta hand-edited after open .meta (downloads.md, Menus and keys) can pad key=value spacing a writer never
-  // would.
-  it('parses a hand-edited .meta with padded key=value spacing the same as the tight form', () => {
+  it('parses a hand-edited .meta with padded key=value spacing, which a writer never would, the same as the tight form', () => {
     const tight = parseDownloadMeta('[General]\r\nmodID=12345\r\n');
     const padded = parseDownloadMeta('[General]\r\nmodID = 12345\r\n');
     expect(padded.modID).toBe('12345');
@@ -73,8 +68,7 @@ describe('setHiddenInText', () => {
     expect(setHiddenInText(text, true)).toBe(text);
   });
 
-  // Unhide: MO2 writes removed=false (setValue), it does not delete the key.
-  it('flips removed=true to false in place when unhiding, byte-faithful', () => {
+  it('flips removed=true to false in place when unhiding as MO2 does, writing removed=false rather than deleting the key, byte-faithful', () => {
     const text = '[General]\r\ngameName=Fallout4\r\nremoved=true\r\nmodid=12345\r\n';
     expect(setHiddenInText(text, false)).toBe(
       '[General]\r\ngameName=Fallout4\r\nremoved=false\r\nmodid=12345\r\n',
@@ -106,18 +100,13 @@ describe('setInstalledInText', () => {
     expect(setInstalledInText(text)).toBe(text);
   });
 
-  // MO2's markInstalled writes `uninstalled=false` beside `installed=true`, and a reader takes
-  // `uninstalled` first — so a reinstall that left it true would read Uninstalled in MO2 itself.
-  it('clears an earlier uninstall, so a reinstalled download reads Installed again', () => {
+  it('clears an earlier uninstall, so a reinstalled download reads Installed again, MO2\'s markInstalled writing uninstalled=false beside installed=true and a reader taking uninstalled first', () => {
     const uninstalled = setUninstalledInText('[General]\r\ninstalled=true\r\n');
     expect(parseDownloadMeta(uninstalled).status).toBe('Uninstalled');
     expect(parseDownloadMeta(setInstalledInText(uninstalled)).status).toBe('Installed');
   });
 
-  // MO2 (via Qt's QSettings) always writes CRLF on Windows, but mEdit is not
-  // Windows-only — a .meta produced on a platform that writes bare LF must keep
-  // its own convention rather than have CRLF forced onto it.
-  it('preserves LF-only line endings when inserting after an existing [General] header', () => {
+  it('preserves LF-only line endings when inserting after an existing [General] header, a .meta from a platform that writes bare LF keeping its own convention though MO2 writes CRLF on Windows', () => {
     const text = '[General]\ngameName=Fallout4\n';
     expect(setInstalledInText(text)).toBe('[General]\ninstalled=true\nuninstalled=false\ngameName=Fallout4\n');
   });
@@ -147,9 +136,7 @@ describe('setUninstalledInText', () => {
     expect(setUninstalledInText(text)).toBe(text);
   });
 
-  // MO2 writes installed=true, uninstalled=false on install and uninstalled=true
-  // on uninstall WITHOUT clearing installed — both keys carry history.
-  it('leaves installed=true in place — it is a separate key, never cleared', () => {
+  it('leaves installed=true in place — it is a separate key, never cleared, as MO2 writes uninstalled=true on uninstall without clearing installed', () => {
     const text = '[General]\r\ninstalled=true\r\nmodid=12345\r\n';
     expect(setUninstalledInText(text)).toBe(
       '[General]\r\nuninstalled=true\r\ninstalled=true\r\nmodid=12345\r\n',

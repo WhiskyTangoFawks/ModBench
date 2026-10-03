@@ -8,7 +8,6 @@ const file = (name: string, mtimeMs: number, meta?: DownloadMeta): DownloadedFil
   name, path: `/downloads/${name}`, metaPath: `/downloads/${name}.meta`, size: 123, mtimeMs, meta,
 });
 
-// The one row a single file builds: any other count fails here, never as a read of undefined.
 function soleRow(rows: readonly DownloadFile[]): DownloadFile {
   expect(rows).toHaveLength(1);
   const [row] = rows;
@@ -17,11 +16,10 @@ function soleRow(rows: readonly DownloadFile[]): DownloadFile {
 }
 
 describe('buildDownloadRows', () => {
-  // Every row here is about the metadata alone, so no mod claims any of them.
-  const rowsFrom = (files: DownloadedFile[]) => buildDownloadRows(files, new Map());
+  const rowsClaimedByNoMod = (files: DownloadedFile[]) => buildDownloadRows(files, new Map());
 
   it('maps a file with no metadata to a Downloaded row carrying its two paths', () => {
-    expect(rowsFrom([file('foo.zip', 100)])).toEqual([{
+    expect(rowsClaimedByNoMod([file('foo.zip', 100)])).toEqual([{
       name: 'foo.zip',
       displayName: 'foo.zip',
       status: 'Downloaded',
@@ -35,7 +33,7 @@ describe('buildDownloadRows', () => {
   });
 
   it('flags hasMeta and carries the metadata\'s fields', () => {
-    const row = soleRow(rowsFrom([file('foo.zip', 100, metaOf({
+    const row = soleRow(rowsClaimedByNoMod([file('foo.zip', 100, metaOf({
       modID: '12345', fileID: '456', version: '1.2.3', modName: 'Sleep', gameName: 'Fallout4', author: 'Someone',
     }))]));
 
@@ -44,38 +42,33 @@ describe('buildDownloadRows', () => {
     });
   });
 
-  // Entries are out of mtimeMs order on purpose: a two-element ascending fixture
-  // would pass by coincidence even if nothing were re-sorted.
-  it('defaults to Filetime (mtimeMs) descending', () => {
-    const rows = rowsFrom([file('b.zip', 2), file('a.zip', 1), file('c.zip', 3)]);
+  it('defaults to Filetime (mtimeMs) descending, re-sorting entries that arrive out of order', () => {
+    const rows = rowsClaimedByNoMod([file('b.zip', 2), file('a.zip', 1), file('c.zip', 3)]);
     expect(rows.map((r) => r.name)).toEqual(['c.zip', 'b.zip', 'a.zip']);
   });
 
   it('carries the excluded flag through without filtering (filtering is a view concern)', () => {
-    const rows = rowsFrom([file('foo.zip', 100, metaOf({ excluded: true }))]);
+    const rows = rowsClaimedByNoMod([file('foo.zip', 100, metaOf({ excluded: true }))]);
     expect(soleRow(rows)).toMatchObject({ name: 'foo.zip', excluded: true });
   });
 
   it('uses the metadata\'s name as displayName when present', () => {
-    expect(soleRow(rowsFrom([file('foo_1_2_3.zip', 100, metaOf({ name: 'Sleep or Save' }))])).displayName).toBe('Sleep or Save');
+    expect(soleRow(rowsClaimedByNoMod([file('foo_1_2_3.zip', 100, metaOf({ name: 'Sleep or Save' }))])).displayName).toBe('Sleep or Save');
   });
 
   it('falls back to the filename for displayName when the metadata\'s name is absent or empty', () => {
-    expect(soleRow(rowsFrom([file('foo.zip', 100, metaOf())])).displayName).toBe('foo.zip');
-    expect(soleRow(rowsFrom([file('foo.zip', 100, metaOf({ name: '' }))])).displayName).toBe('foo.zip');
+    expect(soleRow(rowsClaimedByNoMod([file('foo.zip', 100, metaOf())])).displayName).toBe('foo.zip');
+    expect(soleRow(rowsClaimedByNoMod([file('foo.zip', 100, metaOf({ name: '' }))])).displayName).toBe('foo.zip');
   });
 });
 
-// A download is installed when a mod says so, never when its metadata says so: uninstall a mod
-// outside Modbench and its metadata still claims installed.
 describe('modsByInstallationFile — which mods each download was installed into', () => {
   it('keys a mod under the download its meta names, case-folded', () => {
     expect(modsByInstallationFile([{ name: 'UFO4P', archiveFilename: 'UFO4P-4598.7z' }]))
       .toEqual(new Map([['ufo4p-4598.7z', ['UFO4P']]]));
   });
 
-  // Many to many: one download installed into several mods, never forced to one.
-  it('keys every mod naming the same download under it, in mod order', () => {
+  it('keys every mod naming the same download under it, in mod order, a download installed into several mods never being forced to one', () => {
     expect(modsByInstallationFile([
       { name: 'Textures', archiveFilename: 'Pack.7z' },
       { name: 'Meshes', archiveFilename: 'pack.7z' },
@@ -100,8 +93,7 @@ describe('buildDownloadRows — Installed follows the mods, not the metadata', (
     expect(soleRow(rows).status).toBe('Uninstalled');
   });
 
-  // MO2's own Uninstalled is a user statement about the archive, not a claim about a mod.
-  it('keeps the metadata’s Uninstalled when no mod names it', () => {
+  it('keeps the metadata’s Uninstalled when no mod names it, MO2\'s own Uninstalled being a user statement about the archive, not a claim about a mod', () => {
     const rows = buildDownloadRows([file('Pack.7z', 1, metaOf({ status: 'Uninstalled' }))], new Map());
 
     expect(soleRow(rows).status).toBe('Uninstalled');

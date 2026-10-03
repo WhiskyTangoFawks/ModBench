@@ -1,13 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Captures every registerCommand(id, handler) so a Toolbox gesture can be invoked directly.
 const { handlers, registerCommand, executeCommand, showQuickPick, withProgress, progressSteps } = vi.hoisted(() => {
   const handlers = new Map<string, () => Promise<void> | void>();
   const progressSteps: string[] = [];
   return {
     handlers,
     progressSteps,
-    // Records where the progress shows, and when it opens and closes around the task.
     withProgress: vi.fn(async (options: { location: { viewId: string } }, task: () => Promise<unknown>) => {
       progressSteps.push(`progress opens on ${options.location.viewId}`);
       try { return await task(); } finally { progressSteps.push('progress closes'); }
@@ -66,8 +64,7 @@ beforeEach(() => {
 });
 
 describe('the Toolbox gestures', () => {
-  // The alpha leaves deploy, purge and run with the mod manager.
-  it('registers switch profile and open settings, and no deploy, purge or run', () => {
+  it('registers switch profile and open settings, and no deploy, purge or run, which the alpha leaves with the mod manager', () => {
     register();
 
     expect([...handlers.keys()]).toEqual(['modbench.profile.switch', 'modbench.settings.open']);
@@ -167,8 +164,6 @@ describe('Switch profile', () => {
     ]);
   });
 
-  // Every other way out of the gesture throws here: the `vscode` mock holds only the members it
-  // lists, and the instance it is handed is a bare `{ value }`.
   it('writes and forgets: the profile write is its only effect', async () => {
     showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
 
@@ -201,7 +196,6 @@ describe('Switch profile', () => {
 });
 
 describe('Refresh', () => {
-  // `rereadFailure` is what the Instance loader's re-read answers: its own failure, or none.
   function registerRefresh(
     result: RefreshResult, rereadFailure?: string, instanceRoot = '/instance',
     refill: Promise<void> = Promise.resolve(),
@@ -237,9 +231,7 @@ describe('Refresh', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  // toolbox.md, Refresh: the view's progress while it runs. The rebuild answers once the index is
-  // empty, before mEdit has read anything again.
-  it('keeps the Toolbox\'s progress open until mEdit\'s refill ends, not only until the rebuild answers', async () => {
+  it('keeps the Toolbox\'s progress open until mEdit\'s refill ends, not only until the rebuild answers with the index still empty', async () => {
     let refillEnds!: () => void;
     const { run } = registerRefresh({ applied: true }, undefined, '/instance', new Promise<void>((resolve) => { refillEnds = resolve; }));
 
@@ -252,9 +244,7 @@ describe('Refresh', () => {
     expect(progressSteps.at(-1)).toBe('progress closes');
   });
 
-  // toolbox.md, Reporting story 1: the spec's own words, naming this instance — Modbench cannot
-  // name the other window. The rival reports it the same way every other refusal is reported.
-  it('reports the second-window refusal in toolbox.md\'s words, naming this instance, and reads nothing again', async () => {
+  it('reports the second-window refusal in toolbox.md\'s words, naming this instance since Modbench cannot name the other window, and reads nothing again', async () => {
     const { reporter, run } = registerRefresh({ applied: false, heldElsewhere: true }, undefined, '/instance/FO4');
 
     await run();
@@ -267,8 +257,7 @@ describe('Refresh', () => {
     ]);
   });
 
-  // Every other failed rebuild keeps its own generic report, the backend's detail as the reason.
-  it('reports any other refused refresh at error with the refusal as its reason, and reads nothing again', async () => {
+  it('reports any other refused refresh with its own generic message at error, the backend\'s refusal as its reason, and reads nothing again', async () => {
     const refusal = 'Failed to rebuild the store.';
     const { reporter, run } = registerRefresh({ applied: false, heldElsewhere: false, refusal });
 
@@ -291,9 +280,7 @@ describe('Refresh', () => {
     expect(released).toEqual([true]);
   });
 
-  // The views keep the last value through a failed read, so this is the only word the user gets
-  // that the refresh did not read the disk.
-  it('reports a re-read that failed at error, with its reason', async () => {
+  it('reports a re-read that failed at error, with its reason, the only word the user gets that the views kept their last value', async () => {
     const { reporter, run } = registerRefresh(
       { applied: true }, 'ModOrganizer.ini: no selected_profile');
 
