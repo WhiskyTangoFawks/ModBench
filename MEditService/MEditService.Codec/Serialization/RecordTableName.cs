@@ -29,6 +29,9 @@ public static class RecordTableName
         return GrupSignatureOf(concrete) ?? concrete.Name.ToLowerInvariant();
     }
 
+    /// <summary>The record signature a table is named after: the table is its lowercase.</summary>
+    public static string SignatureOf(string table) => table.ToUpperInvariant();
+
     private static string? GrupSignatureOf(Type type) =>
         type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
             is RecordType grup

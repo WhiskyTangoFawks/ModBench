@@ -12,9 +12,15 @@ internal static class LeafClassification
     internal static string[] GetFormLinkValidTypes(
         Type core, GameReflection game)
     {
-        var linked = core.IsGenericType ? core.GetGenericArguments()[0] : null;
-        return linked != null && game.GetterTypeToTable.TryGetValue(linked, out var tn)
-            ? [tn] : LeafSpec.NoFormKeyTypes;
+        if (!core.IsGenericType) return LeafSpec.NoFormKeyTypes;
+        var linked = core.GetGenericArguments()[0];
+        var tables = game.GetterTypeToTable
+            .Where(entry => linked.IsAssignableFrom(entry.Key))
+            .Select(entry => entry.Value)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        return tables.Length == game.TableCount ? LeafSpec.NoFormKeyTypes : tables;
     }
 
     // A 64-bit width presents as "int" like every other integer: the wire vocabulary has no wider

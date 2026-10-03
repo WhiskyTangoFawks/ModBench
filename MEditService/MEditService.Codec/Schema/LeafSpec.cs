@@ -12,7 +12,7 @@ public sealed record LeafSpec(
     // See FieldMetadata.Default.
     object? Default = null)
 {
-    /// <summary>A leaf that names no record type — every leaf but a form link.</summary>
+    /// <summary>A leaf that names no record type — every leaf but a form link; on a form link, any record type.</summary>
     public static readonly string[] NoFormKeyTypes = [];
 
     /// <summary>A leaf with no closed domain — every leaf but an enum.</summary>

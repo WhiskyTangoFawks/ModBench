@@ -18,7 +18,7 @@ public interface IRecordQueryService
     // plugin/origin (ADR-0012): both null browses every plugin; naming one names the
     // other too.
     PagedResult<RecordSummary> GetRecords(
-        string? type, string? plugin, string? search, int limit, int offset, string? origin = null, bool unfiltered = false);
+        IReadOnlyList<string>? types, string? plugin, string? search, int limit, int offset, string? origin = null, bool unfiltered = false);
     RecordDetail? GetRecord(string formKey);
 
     CompareResult? GetCompare(string formKey);
