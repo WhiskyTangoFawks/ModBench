@@ -1,12 +1,7 @@
-// commands.md, put load order: put at every recompute and when mEdit started. Wired as the root
-// wires it, through the real sender, so a put is a put the client actually receives.
 import { describe, it, expect, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon } from './vscodeMock';
-
-// `../toolbox` wires every MO2-side view, so its own vscode surface is wide: `fakeVscodeModule()`
-// covers it, as copyValueCommand.test.ts does for the same module.
 vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon }));
 import {
   createLoadOrderSender, InMemoryMEditClient, type LoadOrderOutcome, type LoadOrderPluginInput,
@@ -40,7 +35,6 @@ function isPluginInputs(value: unknown): value is LoadOrderPluginInput[] {
   return Array.isArray(value) && value.every((v) => typeof v === 'object' && v !== null && 'name' in v);
 }
 
-// The Instance as the trigger reads it: each landed value handed to every subscriber.
 function wired(status: 'running' | 'starting', first: InstanceValue) {
   const client = new InMemoryMEditClient();
   client.setCommandResult('putLoadOrder', APPLIED);
@@ -67,8 +61,7 @@ function wired(status: 'running' | 'starting', first: InstanceValue) {
     sequence += 1;
     for (const subscriber of [...subscribers]) subscriber(value, sequence);
   };
-  // Every put the client received, by its sole plugin's name.
-  const sent = (): string[] => client.calls
+  const putPluginNames = (): string[] => client.calls
     .filter((c) => c.method === 'putLoadOrder')
     .map((c) => {
       const plugins = c.args[0];
@@ -76,14 +69,14 @@ function wired(status: 'running' | 'starting', first: InstanceValue) {
       return plugins.map((p) => p.name).join(',');
     });
   const dispose = (): void => { for (const d of owned) d.dispose(); };
-  return { client, puts, land, sent, channel, dispose };
+  return { client, puts, land, putPluginNames, channel, dispose };
 }
 
 const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('the load order is put at every recompute', () => {
   it('puts a load order equal to the last one put', async () => {
-    const { puts, land, sent } = wired('running', valueWith('A.esp'));
+    const { puts, land, putPluginNames } = wired('running', valueWith('A.esp'));
     await puts.putOnMEditStarted();
 
     for (const value of [valueWith('A.esp'), valueWith('B.esp'), valueWith('B.esp', { overwriteFileCount: 3 })]) {
@@ -91,17 +84,17 @@ describe('the load order is put at every recompute', () => {
       await settled();
     }
 
-    expect(sent()).toEqual(['A.esp', 'A.esp', 'B.esp', 'B.esp']);
+    expect(putPluginNames()).toEqual(['A.esp', 'A.esp', 'B.esp', 'B.esp']);
   });
 
   it('puts nothing without a game folder, and keeps what mEdit holds', async () => {
-    const { puts, land, sent } = wired('running', valueWith('A.esp'));
+    const { puts, land, putPluginNames } = wired('running', valueWith('A.esp'));
     await puts.putOnMEditStarted();
 
     land(instanceValueFixture());
     await settled();
 
-    expect(sent()).toEqual(['A.esp']);
+    expect(putPluginNames()).toEqual(['A.esp']);
   });
 
   it('logs a put that throws, since no caller is left to hear it', async () => {
@@ -121,7 +114,7 @@ describe('the load order is put at every recompute', () => {
 
 describe('the load order is put when mEdit started', () => {
   it('puts a value that arrived while mEdit was detached when mEdit started, once', async () => {
-    const { client, puts, land, sent } = wired('starting', valueWith('A.esp'));
+    const { client, puts, land, putPluginNames } = wired('starting', valueWith('A.esp'));
 
     land(valueWith('B.esp'));
     await settled();
@@ -129,22 +122,22 @@ describe('the load order is put when mEdit started', () => {
     await puts.putOnMEditStarted();
     await settled();
 
-    expect(sent()).toEqual(['B.esp']);
+    expect(putPluginNames()).toEqual(['B.esp']);
   });
 
   it('puts when mEdit started the load order the backend before it already had', async () => {
-    const { client, puts, sent } = wired('running', valueWith('A.esp'));
+    const { client, puts, putPluginNames } = wired('running', valueWith('A.esp'));
     await puts.putOnMEditStarted();
 
     client.setStatus('disconnected');
     client.setStatus('running');
     await puts.putOnMEditStarted();
 
-    expect(sent()).toEqual(['A.esp', 'A.esp']);
+    expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
   });
 
   it('puts no change between the backend going and mEdit next starting', async () => {
-    const { client, puts, land, sent } = wired('running', valueWith('A.esp'));
+    const { client, puts, land, putPluginNames } = wired('running', valueWith('A.esp'));
     await puts.putOnMEditStarted();
 
     client.setStatus('stopped');
@@ -153,31 +146,30 @@ describe('the load order is put when mEdit started', () => {
     land(valueWith('C.esp'));
     await settled();
 
-    expect(sent()).toEqual(['A.esp']);
+    expect(putPluginNames()).toEqual(['A.esp']);
   });
 
-  // A backend the client attached to without owning it can restart under a live status.
   it('puts on a stream reopen, with no value landing after it', async () => {
-    const { client, puts, sent } = wired('running', valueWith('A.esp'));
+    const { client, puts, putPluginNames } = wired('running', valueWith('A.esp'));
     await puts.putOnMEditStarted();
 
     client.reconnected();
     await settled();
 
-    expect(sent()).toEqual(['A.esp', 'A.esp']);
+    expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
   });
 
   it('puts nothing on a stream reopen before mEdit started', async () => {
-    const { client, sent } = wired('running', valueWith('A.esp'));
+    const { client, putPluginNames } = wired('running', valueWith('A.esp'));
 
     client.reconnected();
     await settled();
 
-    expect(sent()).toEqual([]);
+    expect(putPluginNames()).toEqual([]);
   });
 
   it('puts nothing once disposed', async () => {
-    const { client, puts, land, sent, dispose } = wired('running', valueWith('A.esp'));
+    const { client, puts, land, putPluginNames, dispose } = wired('running', valueWith('A.esp'));
     await puts.putOnMEditStarted();
 
     dispose();
@@ -185,6 +177,6 @@ describe('the load order is put when mEdit started', () => {
     client.reconnected();
     await settled();
 
-    expect(sent()).toEqual(['A.esp']);
+    expect(putPluginNames()).toEqual(['A.esp']);
   });
 });

@@ -10,15 +10,12 @@ import {
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
 const orderOf = (entry: MenuEntry): number => Number((entry.group ?? '').split('@')[1] ?? Number.NaN);
-// VS Code draws the navigation group first, then the other groups by name, each by its order.
-const rank = (group: string): string => (group === 'navigation' ? '' : group);
+const drawOrderKey = (group: string): string => (group === 'navigation' ? '' : group);
 const placed = (entries: readonly MenuEntry[]): [string, string][] =>
   [...entries]
-    .sort((a, b) => rank(groupOf(a)).localeCompare(rank(groupOf(b))) || orderOf(a) - orderOf(b))
+    .sort((a, b) => drawOrderKey(groupOf(a)).localeCompare(drawOrderKey(groupOf(b))) || orderOf(a) - orderOf(b))
     .map((e) => [e.command, groupOf(e)]);
 
-// Only the Mods and Downloads row menus' own contextValue-vs-when tests below need a live
-// ModNode, SeparatorNode, OverwriteNode or DownloadNode.
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString,
   Uri: { file: uriFile },
@@ -32,8 +29,6 @@ import { DECOMPILE_PLUGIN_TITLE } from '../plugins/externalChangeNotice';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 
-// This file's one parse point for package.json: checks the fields every read below assumes and
-// throws rather than handing back an unproven shape.
 interface ViewsWelcomeEntry { view: string; contents: string; when?: string; }
 interface ViewEntry { id: string; name: string; when?: string; }
 interface MenuEntry { command: string; when: string; group?: string; icon?: string; }
@@ -171,7 +166,6 @@ describe('package.json outside an instance', () => {
     expect(requires(empty.when, '!modbench.downloadedFile.allExcluded')).toBe(true);
   });
 
-  // downloads.md, States, story 2: distinct from "no downloads yet", never both at once.
   it('says files are excluded only inside an instance, and only while the all-excluded key is set', () => {
     const allExcluded = present(
       pkg.contributes.viewsWelcome.find((w) => w.view === 'modbench.downloads' && w.contents.toLowerCase().includes('excluded')),
@@ -183,8 +177,6 @@ describe('package.json outside an instance', () => {
     expect(requires(allExcluded.when, 'modbench.downloadedFile.allExcluded')).toBe(true);
   });
 
-  // Which commands exist only inside an instance is the running extension's answer, checked by
-  // the not-an-instance integration suite; this holds the keys to the palette's word.
   it('binds no key to a command the palette offers only inside an instance, unless the key waits for one too', () => {
     const insideOnly = new Set(
       present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
@@ -202,7 +194,6 @@ describe('package.json outside an instance', () => {
     expect(requires('view == modbench.modList', IN_AN_INSTANCE)).toBe(false);
   });
 
-  // `&&` binds tighter than `||` in a when clause, so a term in every alternative gates them all.
   it('recognizes the gate as a conjunct of every alternative', () => {
     expect(requires(`view == a && ${IN_AN_INSTANCE} || view == b && ${IN_AN_INSTANCE}`, IN_AN_INSTANCE)).toBe(true);
     expect(requires(`view == a && ${IN_AN_INSTANCE} || view == b`, IN_AN_INSTANCE)).toBe(false);
@@ -260,7 +251,6 @@ describe('package.json Toolbox view', () => {
     expect(present(sidebarViews()[0], 'the first view of the Modbench container').id).toBe('modbench.toolbox');
   });
 
-  // toolbox.md, Menus and keys: "Title bar | 1: refresh. Overflow: open settings."
   it('has refresh as its one title icon and open settings in its title bar\'s overflow', () => {
     const toolboxTitle = present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']")
       .filter((e) => requires(e.when, 'view == modbench.toolbox'));
@@ -272,7 +262,6 @@ describe('package.json Toolbox view', () => {
       ]);
   });
 
-  // toolbox.md, Menus and keys: "Profile menu | switch".
   it('offers switch, and only switch, on the Profile row\'s menu', () => {
     const profileMenu = present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
       .filter((e) => requires(e.when, 'view == modbench.toolbox') && requires(e.when, 'viewItem == profile'));
@@ -327,12 +316,10 @@ describe('package.json New Plugin / record filter reachable from the merged tree
       `a view/title entry for ${command} on modbench.pluginListTree`,
     );
 
-  // commands.md, Chrome: the order.
-  it('keeps modbench.plugin.filter at slot 1 (unchanged by this slice)', () => {
+  it('keeps the Plugins name filter at slot 1', () => {
     expect(entryFor('modbench.pluginListTree.filterHere').group).toBe('navigation@1');
   });
 
-  // plugins.md, Menus and keys: "3: filter records, or clear the record filter while active".
   it('shows filter records at slot 3, and the clear in its place while the record filter is active', () => {
     const filter = entryFor('modbench.record.filter');
     const clear = entryFor('modbench.record.clearFilter');
@@ -346,9 +333,7 @@ describe('package.json New Plugin / record filter reachable from the merged tree
     expect(entryFor('modbench.plugin.create').group).toBe('navigation@4');
   });
 
-  // commands.md, the catalog's `filter` under Record: a Plugins title icon and a code lens, the
-  // palette aside.
-  it('offers the record filter pair in no other menu', () => {
+  it('offers the record filter pair in no menu but the view title and the palette', () => {
     const menus: Record<string, MenuEntry[]> = pkg.contributes.menus;
     const elsewhere = Object.entries(menus)
       .filter(([menu]) => menu !== 'view/title' && menu !== 'commandPalette')
@@ -366,9 +351,7 @@ describe('package.json New Plugin / record filter reachable from the merged tree
     }
   });
 
-  // No dead entries (commands.md): outside an instance the title-bar icon is already absent
-  // (gated by IN_AN_INSTANCE above), so the palette entry names the same gate.
-  it('gates the palette entry the same way as the title-bar icon', () => {
+  it('gates create plugin\'s palette entry to an instance, as its title-bar icon is', () => {
     const palette = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']");
     const entry = present(
       palette.find((e) => e.command === 'modbench.plugin.create'),
@@ -384,7 +367,6 @@ describe('package.json filtering is one UX', () => {
   const commandTitle = (id: string) =>
     present(commandOf().find((c) => c.command === id), `a command entry for ${id}`);
 
-  // commands.md, Chrome: the icons.
   const FILTERED_VIEWS = [
     ['modbench.modList', 'modbench.modList.filterHere'],
     ['modbench.pluginListTree', 'modbench.pluginListTree.filterHere'],
@@ -412,8 +394,6 @@ describe('package.json filtering is one UX', () => {
     expect(commandTitle('modbench.record.clearFilter').icon).toBe('$(clear-all)');
   });
 
-  // The filter is durable, so it needs a way out: the two-command + context-key toggle template,
-  // so slot 1 shows exactly one of the pair at a time. The key is per view.
   const DURABLE_FILTERS = [
     ['modbench.modList', 'modbench.modList.filterHere', 'modbench.modList.clearFilterHere', 'modbench.mod.filterActive'],
     ['modbench.pluginListTree', 'modbench.pluginListTree.filterHere', 'modbench.pluginListTree.clearFilterHere', 'modbench.plugin.filterActive'],
@@ -463,7 +443,6 @@ describe('package.json title-bar rubric', () => {
   const viewsOf = (entries: MenuEntry[]) =>
     new Set(entries.map((e) => /view == ([\w.]+)/.exec(e.when)?.[1]).filter((v): v is string => v !== undefined));
 
-  // commands.md, Chrome: an action that is not about a tree's own object.
   const WORKSPACE_ACTIONS = ['modbench.profile.switch'];
 
   it.each(WORKSPACE_ACTIONS)('%s is absent from every domain tree title bar', (command) => {
@@ -471,7 +450,6 @@ describe('package.json title-bar rubric', () => {
     expect([...views].filter((v) => v !== 'modbench.toolbox')).toEqual([]);
   });
 
-  // commands.md, Chrome: at most four icons.
   it('never exposes more than four navigation icons on any view, in any state', () => {
     const navEntries = titleMenus().filter((e) => (e.group ?? '').startsWith('navigation'));
     for (const view of viewsOf(navEntries)) {
@@ -483,7 +461,6 @@ describe('package.json title-bar rubric', () => {
     }
   });
 
-  // commands.md, Chrome: Collapse All is on trees only.
   it('the Mods tree and the merged Plugins tree are the hierarchical ones', () => {
     const sidebarIds = present(pkg.contributes.views.modbench, "contributes.views['modbench']");
     const sidebar = sidebarIds.map((v) => v.id);
@@ -501,9 +478,6 @@ describe('package.json offers no deploy', () => {
   });
 });
 
-// A hardcoded "Modbench: " in `title` leaks into every context menu the command appears in.
-// `category: "Modbench"` with a bare `title` lets VS Code compose the palette label while
-// context menus render the bare title, so every command carries a category.
 describe('package.json command titles and categories', () => {
   const commands = pkg.contributes.commands;
   const palette = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']");
@@ -534,8 +508,6 @@ describe('package.json command titles and categories', () => {
     ).toEqual([]);
   });
 
-  // System commands (commands.md): Modbench runs each on its own trigger — no gesture, no entry
-  // point, and no argument a picker could ever ask for.
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
     'modbench.mod.sync',
@@ -558,18 +530,14 @@ describe('package.json command titles and categories', () => {
   });
 });
 
-// plugins.md, Menus and keys: the placement table, in VS Code's groups (open, change, create,
-// source control, copy, then destroy), each item where its row's conditions hold.
 describe('package.json Plugins menus, keys and palette follow plugins.md', () => {
   const PLUGINS_VIEW = 'view == modbench.pluginListTree';
   const inPluginsView = (menu: string): MenuEntry[] =>
     present(pkg.contributes.menus[menu], `contributes.menus['${menu}']`).filter((e) => requires(e.when, PLUGINS_VIEW));
-  // The menu VS Code draws for a row: every entry whose `when` holds for the row's contextValue.
   const menuOf = (contextValue: string): [string, string][] => placed(
     inPluginsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.pluginListTree', viewItem: contextValue })));
 
-  // VS Code adds Collapse All itself, as a navigation icon at order Number.MAX_SAFE_INTEGER.
-  it('title bar: filter or clear, sort direction, filter records or clear, then create plugin, as icons', () => {
+  it('title bar: filter or clear, sort direction, filter records or clear, then create plugin, as icons, with Collapse All left to VS Code', () => {
     expect(inPluginsView('view/title').map((e) => [e.command, e.group])).toEqual(expect.arrayContaining([
       ['modbench.plugin.sortWinningAtTop', 'navigation@2'],
       ['modbench.plugin.sortLosingAtTop', 'navigation@2'],
@@ -592,8 +560,6 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(when('modbench.plugin.sortLosingAtTop')).toBe(`${PLUGINS_VIEW} && modbench.plugin.winningAtTop && ${IN_AN_INSTANCE}`);
   });
 
-  // plugins.md, Reporting, stories 3 and 5: the untracked-plugin warning points at decompile by the
-  // title the menus and the palette show.
   it('the untracked-plugin warning names decompile by its title', () => {
     const decompile = present(pkg.contributes.commands.find((c) => c.command === 'modbench.plugin.decompile'), 'decompile');
     expect(DECOMPILE_PLUGIN_TITLE).toBe(decompile.title);
@@ -622,8 +588,6 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ]);
   });
 
-  // plugins.md, Menus and keys: compile (tracked). A disabled plugin is not active, so read-only
-  // (story 4), and still compiles.
   it('plugin menu on a disabled tracked plugin: decompile and compile, and no record edit', () => {
     expect(menuOf('plugin disabled inTrackedMod tracked')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
@@ -634,7 +598,6 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ]);
   });
 
-  // plugins.md, Reporting, story 5: an untracked plugin in a tracked mod is decompiled, not tracked.
   it('plugin menu on an untracked plugin in a tracked mod: decompile, and neither track nor compile', () => {
     expect(menuOf('plugin enabled inTrackedMod untracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
@@ -644,8 +607,6 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ]);
   });
 
-  // plugins.md, Menus and keys: track is on the row of a plugin in a mod with no repository before
-  // mEdit has described the plugin, since only the mod's folder decides it.
   it('plugin menu on a plugin in a mod with no repository that mEdit has not described: track', () => {
     expect(menuOf('plugin enabled inUntrackedMod')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
@@ -661,8 +622,6 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(slotOf('modbench.plugin.enable')).toBe(slotOf('modbench.plugin.disable'));
   });
 
-  // plugins.md, Menus and keys: track in a mod with no repository, decompile in a tracked mod,
-  // compile on a tracked plugin.
   it.each([
     ['in Overwrite', 'plugin enabled inOverwrite untracked editable'],
     ['in the game folder', 'plugin enabled untracked editable'],
@@ -681,7 +640,6 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ]);
   });
 
-  // plugins.md, Menus and keys, story 4: no record edit on an untracked plugin.
   it('record-type group menu: create record, only where its plugin is tracked, editable and the type is creatable', () => {
     expect(menuOf('recordType tracked editable creatable')).toEqual([['modbench.record.create', '3_create']]);
     expect(menuOf('recordType untracked editable creatable')).toEqual([]);
@@ -689,8 +647,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf('recordType tracked editable')).toEqual([]);
   });
 
-  // plugins.md, Create record, story 4: the Worldspace and Cell groups hold container records.
-  it.each(['worldspaces', 'interiorCells'])('offers no create record on the %s group', (contextValue) => {
+  it.each(['worldspaces', 'interiorCells'])('offers no create record on the %s group, which holds container records', (contextValue) => {
     expect(menuOf(contextValue).map(([command]) => command)).not.toContain('modbench.record.create');
   });
 
@@ -718,10 +675,8 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       expect(recordGestures).toEqual([]);
     });
 
-  // Only while the tree itself has focus: not in its filter box, a prompt, or the view's title bar.
   const ON_THE_TREE = `focusedView == modbench.pluginListTree && listFocus && !inputFocus && ${IN_AN_INSTANCE}`;
 
-  // Enter is left to VS Code's own `list.select`, which opens the focused row as a click does.
   it('binds each key to its command while the Plugins tree has focus, and leaves Enter to VS Code', () => {
     const pluginsKeys = pkg.contributes.keybindings
       .filter((k) => k.when.startsWith('focusedView == modbench.pluginListTree'))
@@ -734,8 +689,6 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ]);
   });
 
-  // No icon: Track is a one-time, deliberately weighty gesture (ADR-0007: "deliberate friction"),
-  // not a quick inline action.
   it('never offers track as an inline or title icon', () => {
     const icons = [...inPluginsView('view/item/context'), ...inPluginsView('view/title')]
       .filter((e) => e.command === 'modbench.mod.track' && (e.group === 'inline' || e.group?.startsWith('navigation')));
@@ -743,8 +696,6 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   });
 });
 
-// downloads.md, Menus and keys: "Row menu | install · view on Nexus · open · open `.meta` ·
-// exclude or include · delete".
 describe('package.json Downloads row menu order', () => {
   const downloadRowMenu = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
@@ -766,9 +717,7 @@ describe('package.json Downloads row menu order', () => {
     expect(entry.when).toContain(String.raw`viewItem =~ /\bhasMeta\b/`);
   });
 
-  // Exclude and include are two commands for one slot — mutually exclusive by their own `when` —
-  // so the group each carries is the one place their shared position is checked.
-  it('orders the row: install, view on Nexus, open, open .meta, exclude/include, delete', () => {
+  it('orders the row in strictly increasing slots: install, view on Nexus, open, open .meta, exclude/include sharing one, copy value, delete', () => {
     const entries = downloadRowMenu();
     const slotOf = (command: string): number => {
       const group = present(entries.find((e) => e.command === command), `a ${command} row-menu entry`).group ?? '';
@@ -776,7 +725,7 @@ describe('package.json Downloads row menu order', () => {
     };
     const exclude = slotOf('modbench.downloadedFile.exclude');
     const include = slotOf('modbench.downloadedFile.include');
-    expect(include).toBe(exclude); // one slot, two mutually-exclusive commands
+    expect(include).toBe(exclude);
 
     const slots = [
       'modbench.mod.install', 'modbench.mod.viewOnNexus', 'modbench.downloadedFile.open',
@@ -784,13 +733,10 @@ describe('package.json Downloads row menu order', () => {
       'modbench.downloadedFile.delete',
     ].map(slotOf);
     expect(slots).toEqual([...slots].sort((a, b) => a - b));
-    expect(new Set(slots).size).toBe(slots.length); // strictly increasing, no ties outside exclude/include
+    expect(new Set(slots).size).toBe(slots.length);
   });
 
-  // Ties the two halves together, as Mods' own enable/disable test does. Exclude's own clause
-  // negates (`!(...excluded...)`), unlike enable/disable, so satisfies() reads the sign, not just
-  // the flag name.
-  it('an excluded row satisfies include\'s when-clause, and not exclude\'s — and vice versa', () => {
+  it('an excluded row satisfies include\'s when-clause, and not exclude\'s negated one — and vice versa', () => {
     const excludedRow = new DownloadNode(downloadRowFixture('foo.7z', { excluded: true }));
     const includedRow = new DownloadNode(downloadRowFixture('bar.7z', { excluded: false }));
     const exclude = present(
@@ -820,7 +766,6 @@ describe('package.json Downloads row menu order', () => {
   });
 });
 
-// common.md, A view, story 5: a view's keys wait for the tree itself, as the Explorer's do.
 describe('package.json view keys', () => {
   const ON_THE_TREE = ['listFocus', '!inputFocus'];
 
@@ -847,7 +792,6 @@ describe('package.json view keys', () => {
   });
 });
 
-// downloads.md, Menus and keys: "Keys | Delete: delete."
 describe('package.json Downloads delete key', () => {
   it('binds Delete to modbench.downloadedFile.delete, scoped to the focused Downloads view', () => {
     const keybindings: { command: string; key: string; mac?: string; when: string }[] = pkg.contributes.keybindings;
@@ -861,8 +805,6 @@ describe('package.json Downloads delete key', () => {
   });
 });
 
-// downloads.md, Menus and keys: "Ctrl+C: copy value." and referenced-by.md, Menus and keys; each key
-// hands the command its own view, which is how one command knows whose selection to copy.
 describe('package.json Ctrl+C keys', () => {
   const COPY_KEYS = [
     'modbench.modList', 'modbench.pluginListTree', 'modbench.downloads', 'modbench.referencedByTree',
@@ -882,11 +824,7 @@ describe('package.json Ctrl+C keys', () => {
   });
 });
 
-// commands.md, Record: a field gesture from the palette acts on the focused cell of the record tab
-// in focus, and is in the palette only while one has focus, on the cell its menu is offered on.
 describe('package.json field gestures\' palette entries', () => {
-  // The active editor is a record tab and no sidebar or panel holds the focus: VS Code documents no
-  // key for a webview's own focus (when-clause-contexts.md).
   const ON_A_RECORD_TAB = "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus";
   const FIELD_PALETTE = [
     ['modbench.record.addElement', String.raw`modbench.record.focusedCellSection =~ /\barrayParent\b/`],
@@ -961,8 +899,6 @@ describe('package.json record grid keys, as editor.md\'s Menus and keys and its 
   });
 });
 
-// commands.md, compile: Editor, context menu (plugin tracked and editable); editor.md, Menus and
-// keys: the column header. The header's context hands the command its own plugin.
 describe('package.json compile on the record tab', () => {
   it('is on the column header\'s menu of a compilable plugin, and nowhere else on the tab', () => {
     const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
@@ -973,9 +909,6 @@ describe('package.json compile on the record tab', () => {
   });
 });
 
-// commands.md, Principles: a palette entry takes the focused view's selection. Track is offered from
-// Mods and from Plugins, each only while it is the view last selected in, whose selection the
-// command takes.
 describe('package.json track\'s palette entry', () => {
   it('is in the palette while Mods or Plugins has focus, was last selected in, and holds what track acts on', () => {
     const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
@@ -989,8 +922,6 @@ describe('package.json track\'s palette entry', () => {
   });
 });
 
-// editor.md, Menus and keys: the row menus follow VS Code's groups, open, change, source control,
-// copy, then destroy, and hold only the spec's items in its order.
 describe('package.json record tab menus', () => {
   const menu = (): MenuEntry[] => present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
   const tab = { webviewId: 'modbench.record', 'modbench.mod.tracked': ['Tracked'], 'modbench.mod.untracked': ['Untracked'] };
@@ -1045,7 +976,6 @@ describe('package.json record tab menus', () => {
   });
 });
 
-// editor.md, Menus and keys: the column header offers copy…, which picks the mode itself.
 describe('package.json copy on the record tab', () => {
   it('is one entry on the column header\'s menu, and the only copy entry on the tab', () => {
     const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
@@ -1055,7 +985,6 @@ describe('package.json copy on the record tab', () => {
   });
 });
 
-// plugins.md, Compile: from the palette, the one selected compilable plugin, or a pick of them.
 describe('package.json compile\'s palette entry', () => {
   it('is in the palette while any plugin compiles', () => {
     const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
@@ -1064,8 +993,6 @@ describe('package.json compile\'s palette entry', () => {
   });
 });
 
-// commands.md, No dead entries: each is listed only while the Plugins selection holds what it acts
-// on, as its row menu does.
 describe('package.json Plugins palette entries', () => {
   const PLUGINS_PALETTE = [
     ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
@@ -1078,17 +1005,14 @@ describe('package.json Plugins palette entries', () => {
   it.each(PLUGINS_PALETTE)('%s is in the palette only while the Plugins view has focus and its selection holds: %s', (command, holds) => {
     const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
       .filter((e) => e.command === command);
-    // Record gestures take the selection of the view last selected in, so the entry waits for it to be this one.
-    const lastSelected = command.startsWith('modbench.record.') && command !== 'modbench.record.create'
+    const recordGestureWaitsForThisView = command.startsWith('modbench.record.') && command !== 'modbench.record.create'
       ? ' && modbench.record.selectionIn == modbench.pluginListTree' : '';
     expect(entries.map((e) => e.when)).toEqual([
-      `focusedView == modbench.pluginListTree${lastSelected} && ${IN_AN_INSTANCE} && ${holds}`,
+      `focusedView == modbench.pluginListTree${recordGestureWaitsForThisView} && ${IN_AN_INSTANCE} && ${holds}`,
     ]);
   });
 });
 
-// commands.md, No dead entries: each is listed only while the Downloads selection holds what it
-// acts on.
 describe('package.json Downloads palette entries', () => {
   const DOWNLOADS_PALETTE = [
     ['modbench.downloadedFile.open', 'modbench.downloadedFile.singleFile'],
@@ -1105,8 +1029,6 @@ describe('package.json Downloads palette entries', () => {
   });
 });
 
-// mods.md, Menus and keys, story 2: enable on a disabled row, disable on an enabled one — the
-// row's own contextValue flag is what the menu reads to choose between the two commands.
 describe('package.json Mods row menu — enable/disable by row state', () => {
   const modRowMenu = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
@@ -1128,8 +1050,6 @@ describe('package.json Mods row menu — enable/disable by row state', () => {
     }
   });
 
-  // Ties the two halves together: a real row's own contextValue is what the `when` string above
-  // actually matches against, so this fails if either side drifts from the other.
   it('a disabled row\'s own contextValue matches enable\'s when-clause flags, and not disable\'s', () => {
     const disabledRow = new ModNode({ kind: 'mod', name: 'X', enabled: false });
     const enabledRow = new ModNode({ kind: 'mod', name: 'X', enabled: true });
@@ -1149,7 +1069,6 @@ describe('package.json Mods row menu — enable/disable by row state', () => {
   });
 });
 
-// mods.md, Menus and keys: "Mod menu: … move… …" and "Separator menu: move… · add separator · …".
 describe('package.json Move on the mod menu and the separator menu', () => {
   const modsViewMenu = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
@@ -1173,8 +1092,6 @@ describe('package.json Move on the mod menu and the separator menu', () => {
   });
 });
 
-// mods.md, Menus and keys, story 5: copy value on the mod menu and the separator menu, under the
-// catalog's one copy value id (commands.md, Record: copy value) — no second command for Mods.
 describe('package.json Mods row menu — copy value', () => {
   const modsViewMenu = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
@@ -1213,7 +1130,6 @@ describe('package.json Mods row menu — copy value', () => {
   });
 });
 
-// mods.md, Menus and keys: the placement table.
 describe('package.json Mods title bar, menus, keys and palette follow mods.md', () => {
   const MODS_VIEW = 'view == modbench.modList';
   const inModsView = (menu: string): MenuEntry[] =>
@@ -1221,8 +1137,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   const rowMenu = (row: string): MenuEntry[] => inModsView('view/item/context').filter((e) => e.when.includes(row));
   const MOD_ROW = String.raw`viewItem =~ /\bmod\b/`;
 
-  // VS Code adds Collapse All itself, as a navigation icon at order Number.MAX_SAFE_INTEGER.
-  it('title bar: filter or clear, then sort direction, as icons; install then create empty mod in the overflow', () => {
+  it('title bar: filter or clear, then sort direction, as icons, with Collapse All left to VS Code; install then create empty mod in the overflow', () => {
     expect(placed(inModsView('view/title'))).toEqual([
       ['modbench.modList.filterHere', 'navigation'],
       ['modbench.modList.clearFilterHere', 'navigation'],
@@ -1276,7 +1191,6 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   });
 
   const ONE_SEPARATOR = 'modbench.mod.selectionKind == separator && modbench.mod.singleRow';
-  // Only while the tree itself has focus: not in its filter box, a prompt, or the view's title bar.
   const ON_THE_TREE = `focusedView == modbench.modList && listFocus && !inputFocus && ${IN_AN_INSTANCE}`;
 
   it('binds each key to its command while the Mods tree has focus', () => {
@@ -1293,7 +1207,6 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ]);
   });
 
-  // commands.md, No dead entries: each is listed only while the selection holds what it acts on.
   const MODS_PALETTE = [
     ['modbench.mod.enable', 'modbench.mod.holdsDisabledMod'],
     ['modbench.mod.disable', 'modbench.mod.holdsEnabledMod'],
@@ -1314,7 +1227,6 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     expect(entries.map((e) => e.when)).toEqual([holds === undefined ? focused : `${focused} && ${holds}`]);
   });
 
-  // commands.md, view on Nexus: Mods (mod has a Nexus id); Downloads (file has a Nexus id).
   it('offers view on Nexus in the palette only on the focused view whose row the command opens', () => {
     const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
       .filter((e) => e.command === 'modbench.mod.viewOnNexus');
@@ -1333,7 +1245,6 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   });
 });
 
-// editor.md, Opening, story 2: open to the side is on a referrer's menu as well.
 describe('package.json open to the side', () => {
   it('reads Open to the Side', () => {
     expect(pkg.contributes.commands.find((c) => c.command === OPEN_TO_THE_SIDE)?.title).toBe('Open to the Side');
@@ -1357,7 +1268,6 @@ describe('package.json open on Referenced By', () => {
   });
 });
 
-// A row's Command ID cell holds its IDs in backticks; `-` and `?` hold none.
 function catalogCommandIds(markdown: string): Set<string> {
   const ids = new Set<string>();
   let idColumn: number | undefined;
@@ -1385,8 +1295,6 @@ const commandsMarkdown = fs.readFileSync(
 
 const catalog = catalogCommandIds(commandsMarkdown);
 
-// commands.md, Entry points are not gestures: a title icon or a menu cannot name its view or pass
-// an Option, so an internal command fires the gesture with them.
 const OPEN_TO_THE_SIDE = 'modbench.record.openToSide';
 const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads', 'modbench.referencedByTree']
@@ -1440,7 +1348,6 @@ describe('package.json palette titles are the verb and the object', () => {
   });
 });
 
-// editor-referenced-by.md, Menus and keys: the row menus follow open, change, copy, then destroy.
 describe('package.json Referenced By menus and keys', () => {
   const menuOf = (viewItem: string) =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")

@@ -5,10 +5,6 @@ import { join, relative, sep } from 'node:path';
 import { present } from '../ports/present';
 import { tsFiles } from './tsFiles';
 
-// CONTEXT.md/ADR-0012: Mods, Downloads, Toolbox and the Instance key a plugin by filename and
-// origin, never by FormKey, and never reach the backend; instance commands reach it to put the
-// load order and rebuild the index.
-
 const SRC = join(__dirname, '..');
 
 const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'utf8');
@@ -25,51 +21,32 @@ const EDITOR_DIR = 'editor';
 const GENERATED_DIR = 'generated';
 const WIRE_DIR = 'wire';
 
-// Wires every context together: the activation file and the wiring it calls.
-// `toolboxClientCalls.ts` is toolbox.ts's own port calls, pulled out for testability — same rule.
 const WIRES_EVERY_CONTEXT = ['toolbox.ts', 'toolboxClientCalls.ts', 'extension.ts'];
-
-// Activation-scoped shared state: holds type-only handles into both contexts so other
-// composition-root code can read them, but does not itself wire anything together.
 const SHARED_ACTIVATION_STATE = ['session.ts'];
-
-// Imports a non-FormKey utility (game-path autodetection) that happens to live under medit/,
-// tripping the blunt medit-path check as a false positive.
 const MEDIT_PATH_FALSE_POSITIVE = ['workspaceConfig.ts'];
-
-// Wires a TreeView checkbox event to plugins commands' `setPluginsEnabled` core — composition-
-// root glue carrying no record vocabulary.
 const CHECKBOX_HANDLER_WIRING = ['pluginCheckboxHandler.ts'];
-
-// target-architecture-references.d2 draws instance commands -> mEdit client: put load order and
-// refresh. The client import alone is exempt; the FormKey vocabulary and every other context stay
-// refused.
 const CLIENT_CALLERS = ['instanceCommands'];
 
 const COMPOSITION_ROOT =
   [...WIRES_EVERY_CONTEXT, ...SHARED_ACTIVATION_STATE, ...MEDIT_PATH_FALSE_POSITIVE, ...CHECKBOX_HANDLER_WIRING];
 
-// Test names, descriptions and fixtures are prose and corpus data, never a decision.
 function isTestSupport(relativePath: string): boolean {
   return relativePath.split(sep).some((seg) => seg === 'test' || seg === 'integration') || relativePath.includes('.test.');
 }
 
-// Every exclusion this scan makes, stated with its own reason.
 function isExcluded(relativePath: string): boolean {
   const segments = relativePath.split(sep);
-  if (segments.includes(GENERATED_DIR)) return true; // mirrors the backend's schema, not a decision
-  if (segments[0] === WIRE_DIR) return true; // the kernel's wire protocol, generated or transcribed, not a decision
-  if (segments[0] === PLUGINS_VIEW_DIR) return true; // a record browser by design
-  if (segments[0] === EDITING_DIR) return true; // Editing's own context, not the MO2 side this rule binds
-  if (segments[0] === CLIENT_DIR) return true; // the seam Editing speaks through — the backend's own vocabulary
-  if (segments[0] === EDITOR_DIR) return true; // Editor's own context — record vocabulary by design, same as Plugins
-  if (COMPOSITION_ROOT.includes(relativePath)) return true; // each entry's own reason is stated above
-  if (isTestSupport(relativePath)) return true; // prose and corpus, not a decision
+  if (segments.includes(GENERATED_DIR)) return true;
+  if (segments[0] === WIRE_DIR) return true;
+  if (segments[0] === PLUGINS_VIEW_DIR) return true;
+  if (segments[0] === EDITING_DIR) return true;
+  if (segments[0] === CLIENT_DIR) return true;
+  if (segments[0] === EDITOR_DIR) return true;
+  if (COMPOSITION_ROOT.includes(relativePath)) return true;
+  if (isTestSupport(relativePath)) return true;
   return false;
 }
 
-// TypeScript's own `Record<K, V>` utility type is excluded by the only syntax that can validly
-// follow it: a generic argument list.
 function domainVocabIn(text: string): string[] {
   const code = text.split('\n').filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).join('\n');
   return [...code.matchAll(/\b(records?|formkeys?|recordtypes?|editorids?)\b(?!\s*<)/gi)].map((m) => m[0]);
@@ -77,14 +54,10 @@ function domainVocabIn(text: string): string[] {
 
 interface Offense { path: string; crossContext: string[]; vocab: string[] }
 
-// A path segment, never a substring: `mo2/pluginsText` must not match `plugins` the way a blunt
-// `.includes()` would.
 function importsFromDir(imports: string[], dir: string): string[] {
   return imports.filter((s) => s.split('/').includes(dir));
 }
 
-// Shared by the production assertion and the self-tests below, so a broken traversal — the wrong
-// root, a directory silently skipped — fails both the same way, not just the regexes.
 function findOffenders(root: string): Offense[] {
   const offenses: Offense[] = [];
   for (const path of tsFiles(root)) {
@@ -92,8 +65,6 @@ function findOffenders(root: string): Offense[] {
     if (isExcluded(relPath)) continue;
     const text = readFileSync(path, 'utf8');
     const imports = importsOf(text);
-    // Every context a MO2-side file must never reach into: Editing's client, the Plugins view's
-    // record browser, and Editor — all carry record types and FormKeys just as directly.
     const clientImports = CLIENT_CALLERS.includes(relPath.split(sep)[0] ?? '') ? [] : importsFromDir(imports, CLIENT_DIR);
     const crossContext = [
       ...importsFromDir(imports, EDITING_DIR), ...clientImports,
@@ -114,14 +85,11 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(findOffenders(SRC)).toEqual([]);
   });
 
-  // The exclusion must be deliberate, not a gap in the walk's reach: first prove the raw walk
-  // lists a Plugins-view file at all.
   it('the raw walk reaches the Plugins view', () => {
     const reached = tsFiles(SRC).map((p) => relative(SRC, p));
     expect(reached).toEqual(expect.arrayContaining([join('plugins', 'PluginsTreeProvider.ts'), join('plugins', 'PluginTreeProvider.ts')]));
   });
 
-  // Then prove the exclusion is a named rule, not the walk missing the directory.
   it('the Plugins view is skipped by a stated exclusion', () => {
     expect(isExcluded(join('plugins', 'PluginsTreeProvider.ts'))).toBe(true);
     expect(isExcluded(join('plugins', 'PluginTreeProvider.ts'))).toBe(true);
@@ -135,8 +103,6 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(isExcluded(join(WIRE_DIR, GENERATED_DIR, 'api.ts'))).toBe(true);
   });
 
-  // The webview message protocol names a record and a FormKey because that is what crosses the
-  // wire; it decides nothing, the same as the schema beside it.
   it('the wire box is excluded, protocol and schema alike', () => {
     expect(isExcluded(join(WIRE_DIR, 'messages.ts'))).toBe(true);
   });
@@ -146,8 +112,6 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       ['extension.ts', 'pluginCheckboxHandler.ts', 'session.ts', 'toolbox.ts', 'toolboxClientCalls.ts', 'workspaceConfig.ts']);
   });
 
-  // Each plant runs through the one shared findOffenders(), over a real temporary tree rather
-  // than a hand-built string, so the walk itself is what's on test, not just the regex.
   describe('a plant in each MO2-side directory is caught, and the same plant inside an excluded one is not', () => {
     function withPlantedTree(run: (root: string) => void): void {
       const root = mkdtempSync(join(tmpdir(), 'medit-context-boundary-'));
@@ -174,8 +138,6 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       });
     });
 
-    // The hole this closes: a Plugins-view import drags record types and the record browser into
-    // the MO2 side exactly as a medit/ import would, and `.includes('medit')` alone never sees it.
     it('a Plugins-view import planted in a MO2-shaped file is caught', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'mods'), { recursive: true });
@@ -184,8 +146,6 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       });
     });
 
-    // The rival this guards: matching `plugins` as a substring rather than a path segment would
-    // also flag a genuinely MO2-side module whose name merely contains the word.
     it('an MO2-side module named pluginsText is not caught by the Plugins-view check', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'mods', 'mo2'), { recursive: true });
@@ -211,8 +171,6 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       });
     });
 
-    // The rival: the exemption keyed on the import rather than the importer, which would let any
-    // MO2-side file reach the client.
     it('the mEdit-client import is exempt in instance commands alone', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'instanceCommands'), { recursive: true });
@@ -256,8 +214,6 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       });
     });
 
-    // Editor carries the same FormKey vocabulary and the same client the medit/ check already
-    // guards against — a MO2-shaped file reaching it is exactly the violation this rule exists for.
     it('an Editor-folder import planted in a Mods-shaped file is caught', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'mods'), { recursive: true });
@@ -292,27 +248,19 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
   });
 });
 
-// A decoration primitive reaching for a client or a record type would carry the record browser
-// into every row it touches.
 describe('the Plugins view\'s failure prefix stays a decoration', () => {
   it('imports nothing but vscode', () => {
     expect(importsOf(read(join('plugins', 'failurePrefixIcon.ts')))).toEqual(['vscode']);
   });
 });
 
-// Held to the stricter "imports from neither context" bar: unlike Mods, Downloads, Toolbox and
-// the Instance, these have no reason to import either side's vocabulary at all.
 describe('composition-root modules import from neither context', () => {
-  // The name filter serves views from both contexts, so it belongs to neither folder and lives
-  // at the composition root; the same structural-deps check keeps that honest.
   it('the name filter imports from neither context', () => {
     const imports = importsOf(read('nameFilter.ts'));
     expect(imports.filter((s) => s.includes('medit') || s.includes('mods') || s.includes('downloads'))).toEqual([]);
     expect(imports).toEqual(['vscode']);
   });
 
-  // The teardown/refresh writers left extension.ts for a unit seam and claim the same
-  // structural-deps property, so they are guarded the same way: nothing imported but `vscode`.
   it('the editing teardown module imports from neither context', () => {
     const imports = importsOf(read('editingTeardown.ts'));
     expect(imports.filter((s) => s.includes('medit') || s.includes('mods') || s.includes('downloads'))).toEqual([]);
@@ -321,9 +269,6 @@ describe('composition-root modules import from neither context', () => {
 
 });
 
-// ADR-0013: the client's sender is the one path by which Mod Management's snapshot reaches
-// Editing. It restates the snapshot's shape rather than importing it, so the arrow carries a
-// value and not a dependency.
 describe('the load-order sender belongs to Editing alone', () => {
   const SENDER = 'client/loadOrderSender.ts';
 
@@ -331,8 +276,6 @@ describe('the load-order sender belongs to Editing alone', () => {
     expect(importsOf(read(SENDER))).toEqual(['./MEditClient']);
   });
 
-  // It may speak of a snapshot and its plugins, but never of what a snapshot holds on Mod
-  // Management's side — importing `LoadOrderPlugin` would be that one-word change. Prose is exempt.
   it('carries none of Mod Management\'s vocabulary', () => {
     const code = read(SENDER)
       .split('\n')
@@ -342,15 +285,13 @@ describe('the load-order sender belongs to Editing alone', () => {
   });
 });
 
-// A path segment against every file under `sourceDir`, never a substring — the same rule
-// `importsFromDir` states for the MO2-side scan above.
 function crossFolderOffenders(root: string, sourceDir: string, forbiddenDirs: string[]): { path: string; imports: string[] }[] {
   const base = join(root, sourceDir);
   let files: string[];
   try {
     files = tsFiles(base);
   } catch {
-    return []; // sourceDir absent from this planted tree
+    return [];
   }
   const offenses: { path: string; imports: string[] }[] = [];
   for (const path of files) {
@@ -363,12 +304,7 @@ function crossFolderOffenders(root: string, sourceDir: string, forbiddenDirs: st
   return offenses;
 }
 
-// Editor, Plugins, Mods, Downloads and the Instance are boxes whose reference lists never reach
-// each other, so `tsc -b` refuses those imports. Editing's wiring compiles in the composition
-// root, which references everything, so this scan holds it.
 describe('Editing imports nothing from Editor', () => {
-  // Editing sits below Editor in the dependency direction (Editor imports the client, never the
-  // reverse): a medit/ file reaching into editor/ would cycle the two.
   it('nothing under Editing imports from Editor', () => {
     expect(crossFolderOffenders(SRC, EDITING_DIR, [EDITOR_DIR])).toEqual([]);
   });
@@ -392,8 +328,6 @@ describe('Editing imports nothing from Editor', () => {
       });
     });
 
-    // The "own side" negative control: an Editing-shaped file whose import merely stays inside
-    // its own folder must not be caught alongside the one that crosses over.
     it('an Editing file importing its own sibling is not caught alongside one that crosses to Editor', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'medit'), { recursive: true });
