@@ -108,7 +108,7 @@ const script = (name: string, properties: Obj[] = []): Obj => ({ Name: name, Fla
 
 const PLUGIN = 'MyMod.esp';
 
-const backendJoinedKeyTextOf = (keyMembers: string[], element: unknown): string =>
+const backendJoinedKeyTextOfStringOrNumberKeyMembers = (keyMembers: string[], element: unknown): string =>
   keyMembers
     .map(m => m.split('.').reduce<unknown>((v, name) => reflectedPropertyOf(v, name), element))
     .map(v => (typeof v === 'string' || typeof v === 'number' ? String(v) : ''))
@@ -120,7 +120,7 @@ function elementRows(meta: FieldMetadata, values: Record<string, unknown>): { la
   for (const [column, list] of Object.entries(values)) {
     const turns = new Map<string, number>();
     (isUnknownArray(list) ? list : []).forEach((element, index) => {
-      const label = keyMembers ? backendJoinedKeyTextOf(keyMembers, element) : `[${index}]`;
+      const label = keyMembers ? backendJoinedKeyTextOfStringOrNumberKeyMembers(keyMembers, element) : `[${index}]`;
       const turn = (turns.get(label) ?? 0) + 1;
       turns.set(label, turn);
       const row = rows.get(`${label}#${turn}`) ?? { label, turn, indexes: {} };

@@ -435,7 +435,7 @@ describe('DiffRow — formKey cell wiring', () => {
 
 describe('DiffRow — string cell right-click menu, the extended editor\'s only trigger, driven by the `data-vscode-context` attribute DiskCell carries; no left-click gesture reaches it',() => {
   function stringContext(text: string, index = 0): Record<string, unknown> {
-    const textEl = required(screen.getAllByText(text)[index], `the '' match at index `);
+    const textEl = required(screen.getAllByText(text)[index], `the '${text}' match at index ${index}`);
     const td = textEl.closest('td');
     const attr = td?.getAttribute('data-vscode-context');
     expect(attr).toBeTruthy();
@@ -491,7 +491,7 @@ describe('DiffRow — string cell right-click menu, the extended editor\'s only 
 
 describe('DiffRow — array parent/element right-click context, a nested array\'s element being more than one hop from its subtree root, which the subtree root plus a bare scalar index could never express',() => {
   function vscodeContextFor(text: string, index = 0): Record<string, unknown> {
-    const textEl = required(screen.getAllByText(text)[index], `the '' match at index `);
+    const textEl = required(screen.getAllByText(text)[index], `the '${text}' match at index ${index}`);
     const td = textEl.closest('td');
     const attr = td?.getAttribute('data-vscode-context');
     expect(attr).toBeTruthy();

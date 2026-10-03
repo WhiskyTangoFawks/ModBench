@@ -32,7 +32,7 @@ const arrayMeta = fieldMeta({
 const resolved: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'NPC_', editorId: 'Dogmeat' };
 const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-describe('modelValue — scalar types', () => {
+describe('modelValue, the single definition of the string a cell\'s editor shows for every field type — scalar types', () => {
   it('string: the string itself', () => {
     expect(modelValue('Dogmeat', strMeta)).toBe('Dogmeat');
   });

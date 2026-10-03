@@ -88,7 +88,7 @@ describe('getAtPath, one recursive reader for a value at any depth along an enve
     expect(getAtPath(['a', 'b', 'c'], path)).toBe('b');
   });
 
-  it('reads through a member → index → member chain (struct-in-array-in-struct depth)', () => {
+  it('reads through a member → index → member chain (struct-in-array-in-struct depth, which a fixed-level union could never express)', () => {
     const path: PathHop[] = [
       { kind: 'member', name: 'Outer' },
       { kind: 'index', index: 1 },

@@ -366,7 +366,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     ['an untracked', { isTracked: false, isImmutable: false }, false],
     ['a read-only', { isTracked: true, isImmutable: true }, false],
     ['an untracked read-only', { isTracked: false, isImmutable: true }, false],
-  ])('the header of %s plugin says whether compile applies to it: on a tracked column, not on an untracked or a read-only one',async (_what, facts, editable) => {
+  ])('the header of %s plugin says whether compile applies to it: on a tracked column, not on an untracked or a read-only one, as track and decompile read the column\'s origin against the mods\' repositories, in the manifest',async (_what, facts, editable) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',

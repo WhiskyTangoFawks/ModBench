@@ -9,7 +9,7 @@ import { fieldMeta } from './test/fixtures';
 const meta = (over: Partial<FieldMetadata> = {}): FieldMetadata =>
   fieldMeta({ name: 'value', type: 'string', ...over });
 
-describe('ScalarCell — the xEdit open gesture', () => {
+describe('ScalarCell — the xEdit open gesture: a click focuses, it does not edit', () => {
   it('the open trigger opens the editor', () => {
     render(<ScalarCell value="before" meta={meta()} editable onCommit={vi.fn()} />);
 
