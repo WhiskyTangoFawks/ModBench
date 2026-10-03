@@ -34,8 +34,6 @@ describe('pluginPlaces', () => {
     expect(pluginPlaces(value, 'New.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod', 'overwrite']);
   });
 
-  // Rival: checking the name across the whole load order, which would leave out every place once
-  // any of them held it.
   it('leaves out only a place that already holds a plugin of that name, whatever its case', () => {
     expect(pluginPlaces(value, 'held.ESP').map((p) => p.origin)).toEqual(['Winning Mod', 'overwrite']);
     expect(pluginPlaces(value, 'Other.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod']);
@@ -48,7 +46,6 @@ describe('placeFolder', () => {
     expect(placeFolder(value, 'Winning Mod')).toEqual({ folder: join('/instance', 'mods', 'Winning Mod') });
   });
 
-  // Rival: joining mods/<name> here, which answers a folder for a mod the value does not list.
   it('answers a mod the value does not list as gone', () => {
     expect(placeFolder(value, 'Uninstalled')).toEqual({ lost: 'gone' });
   });
@@ -57,7 +54,6 @@ describe('placeFolder', () => {
     expect(placeFolder(value, 'Disabled Mod')).toEqual({ lost: 'disabled' });
   });
 
-  // Rival: answering an empty path for Overwrite before the first read lands.
   it('answers Overwrite as unread while the value names no folder for it', () => {
     const unread = instanceValueFixture({ paths: { ...value.paths, overwriteDir: undefined } });
     expect(placeFolder(unread, 'overwrite')).toEqual({ lost: 'unread' });
