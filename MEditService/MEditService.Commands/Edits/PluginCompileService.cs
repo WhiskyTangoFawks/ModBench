@@ -266,9 +266,9 @@ public sealed class PluginCompileService(
         return (null, $"{pluginName} could not be read from its source: {diagnosis.Describe()} Re-Track to regenerate the source.");
     }
 
-    // ADR-0006 invariant 6. The generated deserializer skips an unrecognized property or file without throwing,
-    // so a successful parse proves nothing. The check is self-consistency in both directions: a
-    // document the regeneration does not produce is content the parse dropped.
+    // ADR-0006 invariant 6. The generated deserializer skips an unrecognized property or file without
+    // throwing, so a successful parse proves nothing. The check runs both ways: a document the
+    // regeneration does not produce is content the parse dropped.
 
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
     // parses an external binary, never from Compile.

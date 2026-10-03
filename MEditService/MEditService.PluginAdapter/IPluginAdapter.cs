@@ -37,8 +37,8 @@ public interface IPluginAdapter
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null);
 
     /// <summary>What each of <paramref name="formKeys"/> names in the files at
-    /// <paramref name="loadOrder"/>, as the game resolves it, beside the files that could not be
-    /// read. The link cache is built and dropped here (ADR-0005 invariant 2).</summary>
+    /// <paramref name="loadOrder"/>, as the game resolves it, beside the unreadable files. The link
+    /// cache is built and dropped here (ADR-0005 invariant 2).</summary>
     LinkAnswers LinkTargets(
         IReadOnlyList<ModPath> loadOrder,
         GameRelease gameRelease,

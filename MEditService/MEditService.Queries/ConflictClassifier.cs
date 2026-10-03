@@ -11,8 +11,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 {
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
-    // resolveFormKey (ADR-0005 invariant 6): the O(1) lookup, batched once per Classify so every formKey leaf's
-    // Resolutions is populated in this pass; null leaves Resolutions empty. loadOrderFormIds orders
+    // resolveFormKey (ADR-0005 invariant 6), batched once per Classify so every formKey leaf's
+    // Resolutions fills in this pass; null leaves Resolutions empty. loadOrderFormIds orders
     // a keyed array's FormKeys; null orders them by their text.
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,

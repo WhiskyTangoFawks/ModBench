@@ -106,8 +106,8 @@ public sealed partial class SourceRepository
             if (repository.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
 
             // Refused before the tree is touched: a container's removal takes its whole directory, block
-            // subtree and all, and one document's bytes cannot put that back. A batch that cannot restore
-            // an act must not perform it (commands.md, A failed gesture writes nothing).
+            // subtree and all, and one document's bytes cannot put that back (commands.md, A failed
+            // gesture writes nothing).
             if (unit.IsDirectoryPerRecord) throw NotRestorable(unit, identity);
 
             var before = Snapshot(unit.FullPath);
@@ -166,8 +166,8 @@ public sealed partial class SourceRepository
         }
 
         /// <summary>Puts every recorded act back, most recent first, so a name this action took is vacated
-        /// before an earlier act moves back into it. A restore failure never stops the pass; it is
-        /// collected (ADR-0019 invariant 4), not thrown.</summary>
+        /// before an earlier act moves back into it. A restore failure is collected, never thrown
+        /// (ADR-0019 invariant 4).</summary>
         public IReadOnlyList<UnrestoredPath> Rollback()
         {
             var unrestored = new List<UnrestoredPath>();

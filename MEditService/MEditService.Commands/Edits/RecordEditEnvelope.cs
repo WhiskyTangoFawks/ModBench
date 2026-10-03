@@ -23,7 +23,7 @@ public sealed record PathHop(string Kind, string? Name = null, int? Index = null
 
 /// <summary>The one write shape (ADR-0005 invariant 1): set puts the value at the path (null clears); add
 /// appends the value, or the element's default; remove drops the element; move places it at the
-/// index the value names.</summary>
+/// value's index.</summary>
 public sealed record RecordEditEnvelope(string Op, IReadOnlyList<PathHop> Path, JsonElement? Value = null)
 {
     public const string Set = "set";

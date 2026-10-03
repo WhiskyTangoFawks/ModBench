@@ -177,8 +177,8 @@ public sealed class EditRecordHandler
     }
 
     // Reflection makes child slots, Cell.Grid and placed Position ordinary writable columns; writing
-    // one would desynchronize the side tables, which nothing here re-derives. Refusing is why no
-    // SetPlacement-style write-back exists; containment is the path (ADR-0006 invariant 4).
+    // one would desynchronize the side tables, which nothing here re-derives. No SetPlacement-style
+    // write-back exists: containment is the path (ADR-0006 invariant 4).
     private static RecordEditResult? RefuseIfContainmentField(
         string recordType, IReadOnlyList<PathHop> path, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
