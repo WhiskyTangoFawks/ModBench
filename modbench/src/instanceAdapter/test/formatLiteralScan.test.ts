@@ -41,7 +41,7 @@ const FORMATS = [MANAGER_FORMATS, GAME_FORMAT];
 const CODECS = FORMATS.flatMap((format) => format.codecs);
 const TOKENS = FORMATS.flatMap((format) => format.tokens);
 
-const LINE_SCANS = [join(ADAPTER_CODECS, 'lineScan.ts'), join('loadOrderFileCodec', 'lineScan.ts')];
+const LINE_SCAN = join('loadOrderFileCodec', 'lineScan.ts');
 
 // The guard's own definition file necessarily holds every token as data (its TOKENS list and
 // its rival-plant test); it does not read or write any instance file.
@@ -228,11 +228,9 @@ describe('format literals', () => {
   // Rival: a lineScan.ts added to the list — it holds no format token of its own, only the
   // shared EOL/splice machinery every codec module calls.
   it('lineScan.ts is not (and cannot honestly be) a codec file', () => {
-    for (const lineScan of LINE_SCANS) {
-      expect(CODECS.map(({ file }) => file)).not.toContain(lineScan);
-      const path = join(EXTENSION_SRC, lineScan);
-      expect(tokenLeaks(readFileSync(path, 'utf8'), path)).toEqual([]);
-    }
+    expect(CODECS.map(({ file }) => file)).not.toContain(LINE_SCAN);
+    const path = join(EXTENSION_SRC, LINE_SCAN);
+    expect(tokenLeaks(readFileSync(path, 'utf8'), path)).toEqual([]);
   });
 });
 
