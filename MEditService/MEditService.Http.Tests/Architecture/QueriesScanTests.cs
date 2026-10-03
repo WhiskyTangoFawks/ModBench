@@ -7,7 +7,7 @@ public sealed class QueriesScanTests
 {
     private const string QueriesRoot = "MEditService.Queries";
 
-    private static readonly (string Label, string Pattern)[] FileSystemNeedles =
+    private static readonly (string Label, string Pattern)[] FileSystemNeedlesWhoseStaticsAreAnchoredAgainstAMemberAccessOfTheSameName =
     [
         ("File.", @"(?<![\w.])File\."),
         ("Directory.", @"(?<![\w.])Directory\."),
@@ -19,12 +19,12 @@ public sealed class QueriesScanTests
     ];
 
     [Fact]
-    public void Queries_NameNoFileSystem()
+    public void Queries_NameNoFileSystem_BecauseAQueryHidesTheIndexAndAnswersFromARow()
     {
         var root = ArchitectureTests.SolutionDirectory();
 
         var walked = ScannedFiles(root, QueriesRoot);
-        var named = Sites(root, walked, FileSystemNeedles);
+        var named = Sites(root, walked, FileSystemNeedlesWhoseStaticsAreAnchoredAgainstAMemberAccessOfTheSameName);
 
         Assert.True(walked.Count > 10, $"The Queries scan walked only {walked.Count} files.");
         Assert.True(
@@ -50,7 +50,7 @@ public sealed class QueriesScanTests
 
             Assert.Equal(
                 ["Q/Reads.cs: Directory.: 1", "Q/Reads.cs: File.: 2"],
-                Sites(root, ScannedFiles(root, "Q"), FileSystemNeedles));
+                Sites(root, ScannedFiles(root, "Q"), FileSystemNeedlesWhoseStaticsAreAnchoredAgainstAMemberAccessOfTheSameName));
         }
         finally
         {

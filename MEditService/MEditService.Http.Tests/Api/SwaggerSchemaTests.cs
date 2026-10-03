@@ -16,7 +16,7 @@ public sealed class SwaggerSchemaTests
 
     [Theory]
     [InlineData("FieldMetadata", "elementType", "FieldMetadata")]
-    public async Task NullableRefProperty_IsNullableViaAllOfWrapper(string schemaName, string propertyName, string refTarget)
+    public async Task NullableRefProperty_IsNullableViaAllOfWrapper_BecauseOpenApi30ForbidsKeywordsBesideARef(string schemaName, string propertyName, string refTarget)
     {
         var root = await GetSchemaAsync();
         var prop = root.GetProperty("components").GetProperty("schemas")
@@ -35,7 +35,7 @@ public sealed class SwaggerSchemaTests
     }
 
     [Fact]
-    public async Task CreatePluginRoute_DeclaresEveryStatusItsHandlerCanReturn()
+    public async Task CreatePluginRoute_DeclaresEveryStatusItsHandlerCanReturn_ElseSwashbuckleEmitsContentNever()
     {
         var root = await GetSchemaAsync();
         var responses = root.GetProperty("paths").GetProperty("/plugins/create").GetProperty("post").GetProperty("responses");
@@ -55,7 +55,7 @@ public sealed class SwaggerSchemaTests
     }
 
     [Fact]
-    public async Task CopyRoute_DeclaresOnlyTheCallLevelStatuses()
+    public async Task CopyRoute_DeclaresOnlyTheCallLevelStatuses_ElseSwashbuckleEmitsContentNeverForAnUndeclaredOne()
     {
         var root = await GetSchemaAsync();
         var responses = root.GetProperty("paths").GetProperty("/records/copy").GetProperty("post").GetProperty("responses");
@@ -65,7 +65,7 @@ public sealed class SwaggerSchemaTests
     }
 
     [Fact]
-    public async Task EveryOperation_DeclaresASuccessResponse()
+    public async Task EveryOperation_DeclaresASuccessResponse_ElseSwashbuckleEmitsContentNever()
     {
         var root = await GetSchemaAsync();
         var undeclared = Operations(root)
@@ -157,7 +157,7 @@ public sealed class SwaggerSchemaTests
             "hasMatchingRecords", "isTracked", "hasParseFailure",
         })]
     [InlineData("CellSummary", new[] { "formKey", "isPersistentWorldspaceCell", "hasParseFailure", "hasChildren" })]
-    public async Task NonNullableProperties_AreRequired_AndNullableOnesAreNot(
+    public async Task NonNullableProperties_AreRequired_AndNullableOnesAreNot_BecauseSwashbuckleIgnoresNullableReferenceTypeAnnotations(
         string schemaName, string[] expectedRequired)
     {
         var root = await GetSchemaAsync();
@@ -204,7 +204,7 @@ public sealed class SwaggerSchemaTests
     [InlineData("WorkingTreeState", new[] { "None", "Modified", "Added" })]
     [InlineData("TrackPhase", new[] { "Idle", "Parsing", "Serializing", "Committing" })]
     [InlineData("LoadOrderState", new[] { "None", "Reconciling", "Ready", "HeldElsewhere", "Failed" })]
-    public async Task WireEnum_SerializesAsStringUnion(string schemaName, string[] expectedMembers)
+    public async Task WireEnum_SerializesAsStringUnion_BecauseSwashbuckleHonoursOnlyAPerEnumConverter(string schemaName, string[] expectedMembers)
     {
         var root = await GetSchemaAsync();
         var schema = root.GetProperty("components").GetProperty("schemas").GetProperty(schemaName);

@@ -53,8 +53,8 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
             .BuildScattered();
         return (
             fx,
-            worldspaceFk ?? throw new InvalidOperationException("Expected ConfigurePlugin to have set the worldspace FormKey."),
-            cellFk ?? throw new InvalidOperationException("Expected ConfigurePlugin to have set the cell FormKey."));
+            worldspaceFk ?? throw new InvalidOperationException("Expected ConfigurePluginWithFormKeysIdenticalAcrossPlugins to have set the worldspace FormKey."),
+            cellFk ?? throw new InvalidOperationException("Expected ConfigurePluginWithFormKeysIdenticalAcrossPlugins to have set the cell FormKey."));
     }
 
     private async Task PutBothPlugins(ScatteredFixtureData fx, string winner = "ModA")

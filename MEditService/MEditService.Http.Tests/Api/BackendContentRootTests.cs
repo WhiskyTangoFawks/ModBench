@@ -6,17 +6,17 @@ namespace MEditService.Http.Tests.Api;
 
 public sealed class BackendContentRootTests
 {
-    private const string EphemeralLoopbackUrl = "http://127.0.0.1:0";
+    private const string EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost = "http://127.0.0.1:0";
 
     private static readonly string ApiDirectory = Path.GetDirectoryName(typeof(Program).Assembly.Location)
         ?? throw new InvalidOperationException($"Expected '{typeof(Program).Assembly.Location}' to have a parent directory.");
 
     [Fact]
-    public async Task SpawnedFromArbitraryCwd_AnchorsContentRootToItsOwnDirectory()
+    public async Task SpawnedFromArbitraryCwd_AnchorsContentRootToItsOwnDirectory_ARealProcessSinceWebApplicationFactoryNeverReproducesTheCwd()
     {
         var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
         var lines = new List<string>();
-        using var process = SpawnThroughTheDotnetMuxer(["--urls", EphemeralLoopbackUrl], workingDirectory, lines);
+        using var process = SpawnThroughTheDotnetMuxer(["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost], workingDirectory, lines);
         try
         {
             var expectedContentRoot = Path.TrimEndingDirectorySeparator(ApiDirectory);
@@ -120,7 +120,7 @@ public sealed class BackendContentRootTests
     {
         var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
         var lines = new List<string>();
-        using var process = SpawnThroughTheDotnetMuxer(["--urls", EphemeralLoopbackUrl], workingDirectory, lines);
+        using var process = SpawnThroughTheDotnetMuxer(["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost], workingDirectory, lines);
         try
         {
             var started = await WaitForLineAsync(lines,
@@ -202,15 +202,24 @@ public sealed class BackendContentRootTests
     {
         try
         {
+            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
+        }
+        finally
+        {
+            Directory.Delete(workingDirectory, recursive: true);
+        }
+    }
+
+    private static void KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(Process process)
+    {
+        try
+        {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
             process.WaitForExit();
         }
         catch (InvalidOperationException)
         {
-        }
-        finally
-        {
-            Directory.Delete(workingDirectory, recursive: true);
+            return;
         }
     }
 }

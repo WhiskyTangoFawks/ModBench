@@ -6,7 +6,7 @@ public class RecordTextCodecGeneratorSeedTests
 {
     private const string CompileTimeSeedDoor = "RecordTextCodecGeneratorSeed.cs";
     private const string PluginBinaryAndTreeDoor = "PluginTrees.cs";
-    private const string PluginHeaderDocumentDoor = "HeaderDocument.cs";
+    private const string HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter = "HeaderDocument.cs";
 
     [Fact]
     public void CoreSources_NameTheWholeModMixinOnlyInTheDesignatedDoorFiles()
@@ -31,14 +31,14 @@ public class RecordTextCodecGeneratorSeedTests
     }
 
     [Fact]
-    public void CoreSources_CallSerializeWholeModOnlyFromDesignatedDoorFiles()
+    public void CoreSources_CallSerializeWholeModOnlyFromDesignatedDoorFiles_ScannedByMethodNameSinceExtensionSyntaxDoesNotSpellTheStaticClass()
     {
         const string gatewayMethodName = "SerializeWholeMod";
         const string gatewayFile = CompileTimeSeedDoor;
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
             PluginBinaryAndTreeDoor,
-            PluginHeaderDocumentDoor,
+            HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter,
         };
 
         var sourceFiles = ProductionSources();
@@ -54,14 +54,14 @@ public class RecordTextCodecGeneratorSeedTests
     }
 
     [Fact]
-    public void CoreSources_CallDeserializeWholeModOnlyFromDesignatedDoorFiles()
+    public void CoreSources_CallDeserializeWholeModOnlyFromDesignatedDoorFiles_ASeparateScanBecauseTheCaseSensitiveSerializeSearchMissesIt()
     {
         const string gatewayMethodName = "DeserializeWholeMod";
         const string gatewayFile = CompileTimeSeedDoor;
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
             PluginBinaryAndTreeDoor,
-            PluginHeaderDocumentDoor,
+            HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter,
         };
 
         var sourceFiles = ProductionSources();
@@ -98,7 +98,7 @@ public class RecordTextCodecGeneratorSeedTests
     public void DoorFiles_NeverNameTheParallelWorkDropoffThatRacesInMajorRecordListParallelHelper()
     {
         const string parallelDropoffName = "ParallelWorkDropoff";
-        var doorFiles = new[] { "TrackService.cs", PluginBinaryAndTreeDoor, PluginHeaderDocumentDoor };
+        var doorFiles = new[] { "TrackService.cs", PluginBinaryAndTreeDoor, HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter };
 
         var sourceFiles = ProductionSources()
             .Where(f => doorFiles.Contains(Path.GetFileName(f)))

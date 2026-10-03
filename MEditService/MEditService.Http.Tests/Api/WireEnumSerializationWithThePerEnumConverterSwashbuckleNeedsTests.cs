@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class WireEnumSerializationTests
+public sealed class WireEnumSerializationWithThePerEnumConverterSwashbuckleNeedsTests
 {
     private static async Task<JsonSerializerOptions> SerializerOptionsFromTheRunningAppsDiAsync()
     {

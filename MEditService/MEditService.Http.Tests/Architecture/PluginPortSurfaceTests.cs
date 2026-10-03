@@ -57,7 +57,7 @@ public sealed class PluginPortSurfaceTests
     }
 
     private static IEnumerable<string> LiveObjectsBehindThisSolutionsOwnTypes(Type type) =>
-        UnwrapToTypeArguments(type)
+        TheTypeAndEveryTypeArgumentInsideIt(type)
             .Where(t => t.Assembly == typeof(IPluginAdapter).Assembly
                 || t.Assembly == typeof(PluginPortSurfaceTests).Assembly)
             .SelectMany(t => t.GetProperties().Select(p => (Member: $"{t.Name}.{p.Name}", Type: p.PropertyType))
@@ -67,11 +67,11 @@ public sealed class PluginPortSurfaceTests
             .Select(member => $"{member.Member}: {member.Type.FullName}")
             .Distinct(StringComparer.Ordinal);
 
-    private static IEnumerable<Type> UnwrapToTypeArguments(Type type) =>
-        type.IsGenericType ? type.GetGenericArguments().SelectMany(UnwrapToTypeArguments).Append(type) : [type];
+    private static IEnumerable<Type> TheTypeAndEveryTypeArgumentInsideIt(Type type) =>
+        type.IsGenericType ? type.GetGenericArguments().SelectMany(TheTypeAndEveryTypeArgumentInsideIt).Append(type) : [type];
 
     private static bool IsLiveObject(Type type) =>
-        UnwrapToTypeArguments(type).Any(t => LiveObjectNamespaces.Contains(t.Namespace, StringComparer.Ordinal));
+        TheTypeAndEveryTypeArgumentInsideIt(type).Any(t => LiveObjectNamespaces.Contains(t.Namespace, StringComparer.Ordinal));
 
     private interface IPlantedHandle
     {

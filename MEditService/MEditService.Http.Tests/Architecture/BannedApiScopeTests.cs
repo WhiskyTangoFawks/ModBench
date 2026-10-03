@@ -6,7 +6,7 @@ namespace MEditService.Http.Tests.Architecture;
 
 public sealed class BannedApiScopeTests
 {
-    private static readonly string[] MutagenBanProductionProjects =
+    private static readonly string[] MutagenBanProjectsExcludingCodecAndPluginAdapterWhoseGameAssemblyHoldsTheRule =
     [
         "MEditService.Commands",
         "MEditService.Http",
@@ -72,7 +72,7 @@ public sealed class BannedApiScopeTests
             .Select(e => ProjectNamedBy((string?)e.Attribute("Condition") ?? ""))
             .Order(StringComparer.Ordinal)
             .ToList();
-        Assert.Equal(MutagenBanProductionProjects, namedProjects);
+        Assert.Equal(MutagenBanProjectsExcludingCodecAndPluginAdapterWhoseGameAssemblyHoldsTheRule, namedProjects);
 
         var mutagenFile = Assert.Single(
             props.Descendants("AdditionalFiles"),
@@ -136,7 +136,7 @@ public sealed class BannedApiScopeTests
         var holders = projects.Where(HoldsAGameAssembly).ToList();
 
         Assert.Equal(["MEditService.Codec", "MEditService.PluginAdapter"], holders);
-        Assert.All(holders, project => Assert.DoesNotContain(project, MutagenBanProductionProjects));
+        Assert.All(holders, project => Assert.DoesNotContain(project, MutagenBanProjectsExcludingCodecAndPluginAdapterWhoseGameAssemblyHoldsTheRule));
     }
 
     private sealed record ConfiguredSeverity(AnalyzerConfigSet Set, string SolutionDirectory)

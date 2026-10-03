@@ -9,7 +9,7 @@ namespace MEditService.Http.Tests.Api;
 
 public sealed class CompareColumnKeyIntegrityApiTests : HostedTests
 {
-    private static readonly HashSet<string> ColumnKeyedPropertiesNoSchemaNames = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> ColumnKeyedDictionaryPropertiesOnAFieldDiffNodeTheSchemaDoesNotName = new(StringComparer.Ordinal)
     {
         "values", "cellStates", "resolutions", "checkErrors", "indexes",
     };
@@ -132,7 +132,7 @@ public sealed class CompareColumnKeyIntegrityApiTests : HostedTests
 
     private static void AssertProperty(JsonProperty prop, HashSet<string> validKeys)
     {
-        if (prop.Value.ValueKind == JsonValueKind.Object && ColumnKeyedPropertiesNoSchemaNames.Contains(prop.Name))
+        if (prop.Value.ValueKind == JsonValueKind.Object && ColumnKeyedDictionaryPropertiesOnAFieldDiffNodeTheSchemaDoesNotName.Contains(prop.Name))
         {
             foreach (var entry in prop.Value.EnumerateObject())
                 Assert.Contains(entry.Name, validKeys);

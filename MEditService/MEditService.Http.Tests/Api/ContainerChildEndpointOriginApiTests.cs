@@ -34,7 +34,7 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
             .WithPlugin("Shared.esp", mod => ConfigurePluginWithFormKeysIdenticalAcrossPlugins(mod, "ModB"), origin: "ModB")
             .WithPlugin("Shared.esp", mod => questFk = ConfigurePluginWithFormKeysIdenticalAcrossPlugins(mod, "ModA"), origin: "ModA")
             .BuildScattered();
-        return (fx, questFk ?? throw new InvalidOperationException("Expected ConfigurePlugin to have captured the quest's FormKey."));
+        return (fx, questFk ?? throw new InvalidOperationException("Expected ConfigurePluginWithFormKeysIdenticalAcrossPlugins to have captured the quest's FormKey."));
     }
 
     private async Task PutBothPlugins(ScatteredFixtureData fx, string winner = "ModA")

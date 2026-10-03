@@ -75,7 +75,7 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void DiskDerivedState_NeverReadsModificationTimeAlone()
+    public void DiskDerivedState_NeverReadsLastWriteTime_BecauseDotNetHasNoChangeTimeSoItIsModificationTimeAlone()
     {
         var offenders = Offenders(SolutionDirectory(), Projects, "LastWriteTime", allowedFiles: []);
         Assert.True(offenders.Count == 0,
@@ -177,7 +177,7 @@ public sealed class ArchitectureTests
     private static readonly Regex DeclaredOrAssignedHolderReceiver = new(
         @"LoadOrderHolder\??\s+(\w+)|(\w+)\s*=(?!>)[^;]*\bLoadOrderHolder\b", RegexOptions.Compiled);
 
-    internal static bool CallsVerbOnAReceiverTypedAsHolder(string text, string verb) =>
+    private static bool CallsVerbOnAReceiverTypedAsHolder(string text, string verb) =>
         DeclaredOrAssignedHolderReceiver.Matches(text)
             .SelectMany(m => new[] { m.Groups[1].Value, m.Groups[2].Value })
             .Where(name => name.Length > 0)
@@ -370,7 +370,7 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void TestDataPlugins_AreExactlyTheAllowlist()
+    public void TestDataPlugins_AreExactlyTheAllowlist_BecauseTheRepoIsPublic()
     {
         var testData = Path.Combine(SolutionDirectory(), "MEditService.TestSupport", "TestData");
         var allowed = SourceTree.ReadAllowlist(Path.Combine(testData, "allowed-plugins.txt"))

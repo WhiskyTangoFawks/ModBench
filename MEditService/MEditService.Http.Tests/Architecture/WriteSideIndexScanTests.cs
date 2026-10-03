@@ -17,20 +17,20 @@ public sealed class WriteSideIndexScanTests
         "FormKeyResolutionCache", "PlacementWalker",
     ];
 
-    private static readonly string[] ProductionRoots =
+    private static readonly string[] WholeProductionProjectsExceptTheCompositionRoot =
     [
         "MEditService.Codec", "MEditService.Commands", "MEditService.Index", "MEditService.LoadOrder",
         "MEditService.PluginAdapter", "MEditService.Ports", "MEditService.Queries",
         "MEditService.SourceAdapter",
     ];
 
-    private static readonly string[] NotWriteSide =
+    private static readonly string[] IndexItselfAndTheReadSideWhichNameTheseTypesByDefinition =
         ["MEditService.Index", "MEditService.Queries"];
 
     [Fact]
-    public void TheWriteSide_NamesNoIndexType()
+    public void TheWriteSide_NamesNoIndexType_BecauseItWritesSourceTextAndReadsNothingBack()
     {
-        var counts = Counts(ArchitectureTests.SolutionDirectory(), ProductionRoots, NotWriteSide, Symbols);
+        var counts = Counts(ArchitectureTests.SolutionDirectory(), WholeProductionProjectsExceptTheCompositionRoot, IndexItselfAndTheReadSideWhichNameTheseTypesByDefinition, Symbols);
 
         Assert.True(
             counts.Count == 0,
@@ -44,9 +44,9 @@ public sealed class WriteSideIndexScanTests
     {
         var root = ArchitectureTests.SolutionDirectory();
 
-        var walked = ScannedFiles(root, ProductionRoots, NotWriteSide).Count;
+        var walked = ScannedFiles(root, WholeProductionProjectsExceptTheCompositionRoot, IndexItselfAndTheReadSideWhichNameTheseTypesByDefinition).Count;
 
-        Assert.True(walked > 50, $"The write side scan walked only {walked} files under {string.Join(", ", ProductionRoots)}.");
+        Assert.True(walked > 50, $"The write side scan walked only {walked} files under {string.Join(", ", WholeProductionProjectsExceptTheCompositionRoot)}.");
     }
 
     [Fact]
