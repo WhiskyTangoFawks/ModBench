@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
-import { ARCHIVE_EXTENSIONS } from './install';
+import { ARCHIVE_EXTENSIONS } from './archiveExtensions';
 
 /** Rejects with the spawn error (ENOENT when the binary is absent) or a
  *  non-zero-exit error; `extractArchive` distinguishes the two. */

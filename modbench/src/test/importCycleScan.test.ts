@@ -6,7 +6,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
 import { tsFiles } from './tsFiles';
 
-const MODS = join(__dirname, '..', 'mods');
+const SRC = join(__dirname, '..');
 
 const isTestSupport = (relPath: string): boolean =>
   relPath.split(/[\\/]/).some((segment) => segment === 'test' || segment === 'integration') || relPath.includes('.test.');
@@ -73,9 +73,9 @@ async function plantedTree(files: Record<string, string>): Promise<string> {
   return dir;
 }
 
-describe('no module of the Mods view imports itself through others, so none reads an export before the module defining it has run', () => {
+describe('no module of modbench imports itself through others, so none reads an export before the module defining it has run', () => {
   it('scans clean', () => {
-    expect(importCycles(MODS)).toEqual([]);
+    expect(importCycles(SRC)).toEqual([]);
   });
 
   it('catches a planted cycle, and passes one that only a type-only import closes, which compiles away', async () => {
