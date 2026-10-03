@@ -155,8 +155,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // deletes and appender flushes roll back together on Dispose-without-Commit.
         using var tx = Connection.BeginTransaction();
 
-        // One `registrations` row per indexed plugin, in the same transaction as its rows: ADR-0009
-        // makes registration visibility, so rows arriving without it would answer nothing.
+        // The `registrations` row lands in the same transaction as the rows, which answer nothing
+        // without it.
         UpsertRegistration(plugin, origin, registration);
         // And the facts about these rows — the disk claim, the derivation, the diagnosis — replaced
         // with them rather than beside them.
@@ -226,9 +226,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         cmd.ExecuteNonQuery();
     }
 
-    // ADR-0009: registration is visibility. Every public relation is a view over its `mirror.` table
-    // joined to this row, so writing or deleting the row makes a plugin's rows answer or fall
-    // silent; neither verb touches a data row.
+    // Neither verb touches a data row: which rows answer is TableDdlBuilder.RegistrationsRelation's.
     public void Register(PluginAddress key, Registration registration)
     {
         using var tx = Connection.BeginTransaction();
