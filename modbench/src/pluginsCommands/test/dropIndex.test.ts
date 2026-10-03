@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { dropIndexIn } from '../dropIndex';
 
-// A drop names its target before the block leaves the order; the index a splice writes at counts
-// among the entries that remain. Which side of the target a tree means is its view direction's.
-describe('dropIndexIn — a drop in a tree\'s terms → the index a splice writes at', () => {
+describe('dropIndexIn — a drop in a tree\'s terms → the index a splice writes at, counted among the entries that remain once the block leaves the order', () => {
   const order = ['A', 'B', 'C', 'D', 'E'];
 
   it('the losing end is index 0, whatever else the list holds', () => {
@@ -35,20 +33,16 @@ describe('dropIndexIn — a drop in a tree\'s terms → the index a splice write
     expect(dropIndexIn(order, ['B', 'C', 'D'], { kind: 'before', name: 'C' })).toBe(1);
   });
 
-  // The two sides must differ by exactly one, or a tree running losing-at-top lands every drop
-  // one row off from where the user let go.
-  it('after a row is one past before it', () => {
+  it('after a row is one past before it, so a tree running losing-at-top lands no drop a row off from where the user let go', () => {
     expect(dropIndexIn(order, ['A'], { kind: 'after', name: 'D' })).toBe(3);
     expect(dropIndexIn(order, ['E'], { kind: 'after', name: 'B' })).toBe(2);
   });
 
-  // ADR-0012: a plugin's filename compares as the game compares it.
-  it('matches the target and the moved rows to the order ignoring case', () => {
+  it('matches the target and the moved rows to the order ignoring case, as the game compares a plugin\'s filename', () => {
     expect(dropIndexIn(order, ['a'], { kind: 'before', name: 'd' })).toBe(2);
   });
 
-  // Never silently wrong: a block has no place beside a row that has gone.
-  it('refuses a target that is not in the order, on either side, naming it', () => {
+  it('refuses a target that is not in the order, on either side, naming it, since a block has no place beside a row that has gone', () => {
     expect(() => dropIndexIn(order, ['A'], { kind: 'before', name: 'Nope' })).toThrow('Plugin not found in plugins.txt: Nope');
     expect(() => dropIndexIn(order, ['A'], { kind: 'after', name: 'Nope' })).toThrow('Plugin not found in plugins.txt: Nope');
   });
