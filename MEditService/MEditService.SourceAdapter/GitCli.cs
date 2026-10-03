@@ -3,7 +3,7 @@ using Serilog;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>Thin process wrapper over the real git CLI, the source's one execution boundary (ADR-0007).
+/// <summary>The git CLI behind the Source adapter (target-architecture.d2 medit_driven.sourceadapter).
 /// No interface, no fake: every call states its own gitdir/worktree, the seam tests need —
 /// scratch directories, never a mocked git.</summary>
 internal static class GitCli
@@ -158,8 +158,7 @@ internal static class GitCli
     }
 }
 
-/// <summary>Thrown when git cannot be run at all — named and actionable, since git on PATH is a
-/// stated product requirement (ADR-0007).</summary>
+/// <summary>Thrown when git cannot be run at all (ADR-0007).</summary>
 public sealed class GitUnavailableException : Exception
 {
     private const string DefaultMessage = "git was not found on PATH. Modbench's tracking features require git to be installed and on PATH.";

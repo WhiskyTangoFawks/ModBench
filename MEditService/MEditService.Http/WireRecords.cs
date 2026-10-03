@@ -11,21 +11,20 @@ public record FilterResponse(string? Sql, string? Source);
 /// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, so this names
 /// none.</summary>
 public record LoadOrderResponse(bool Applied, long Version = 0);
-// ADR-0013: Mod Management's snapshot: every plugin, the active ones in load order and those loaded
-// with no line. InstanceRoot: one index file per instance, inside the instance root (ADR-0009).
+// Mod Management's snapshot (ADR-0013). InstanceRoot: one index file per instance, inside the instance root (ADR-0009).
 public record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, string GameDirectory, string InstanceRoot,
     string GameRelease = "Fallout4");
 public record LoadOrderPlugin(string Name, string Path, string Origin);
 
-// ADR-0009: the Refresh rebuild's own request, keyed on the instance as
+// The Refresh rebuild's own request (ADR-0009), keyed on the instance as
 // LoadOrderRequest is.
 public record RebuildIndexRequest(string InstanceRoot, string GameRelease = "Fallout4");
 
 public record HealthResponse(string Status);
 
-// ADR-0007: one edit on one plugin's copy, as the one envelope (ADR-0005). Value is a raw
+// One edit on one plugin's copy, as the one envelope (ADR-0005). Value is a raw
 // JsonElement: a value is whatever its schema says, so typing it here would re-declare the
 // schema on the wire.
 public record RecordEditRequest(
@@ -49,8 +48,7 @@ public record RecordCreateRequest(string Origin, string RecordType, string? Edit
 
 public record RecordCreateResponse(bool Applied, string FormKey, string RecordType);
 
-/// <summary>A record and the plugin holding it, named by filename and origin (ADR-0012):
-/// one filename can be in two mods, each holding the record.</summary>
+/// <summary>A record and the plugin holding it (ADR-0012).</summary>
 public record RecordAddress(string FormKey, string Plugin, string Origin);
 
 /// <summary>A record of the selection that wrote nothing: the typed refusal, and the message naming

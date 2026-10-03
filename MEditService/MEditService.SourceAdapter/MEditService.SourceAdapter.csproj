@@ -26,11 +26,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The kernel, by the band's rule (ADR-0014): every Core box and driven adapter reads all three. -->
+    <!-- The kernel, by the band's rule (target-architecture.d2 medit_kernel). -->
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
-    <!-- The kernel, by the band's rule (ADR-0014): every Core box and driven adapter reads all three. -->
+    <!-- The kernel, by the band's rule (target-architecture.d2 medit_kernel). -->
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
-    <!-- The kernel, by the band's rule (ADR-0014): every Core box and driven adapter reads all three. -->
+    <!-- The kernel, by the band's rule (target-architecture.d2 medit_kernel). -->
     <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
   </ItemGroup>
 

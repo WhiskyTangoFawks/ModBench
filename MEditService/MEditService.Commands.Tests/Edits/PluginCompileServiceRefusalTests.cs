@@ -79,20 +79,21 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_WithUnparsableSourceFile_RefusesPointingAtReTrack()
+    public async Task Compile_WithUnparsableSourceFile_RefusesPointingAtDecompile()
     {
         File.WriteAllText(_mod.NpcSourceFile, "{ not valid json");
 
         var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
-        Assert.Contains("Re-Track", result.RefusalReason);
+        Assert.Contains("Run \"Modbench: Decompile Plugin\" to regenerate the source.", result.RefusalReason);
+        Assert.DoesNotContain("Track", result.RefusalReason);
         Assert.Empty(result.Diagnostics);
         Assert.Empty(result.Masters);
     }
 
     [Fact]
-    public async Task Compile_WithSourceFieldRenamedToOneTheCodecDoesNotRead_RefusesNamingTheFile()
+    public async Task Compile_WithSourceFieldRenamedToOneTheCodecDoesNotRead_RefusesNamingTheFileAndDecompile()
     {
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         Assert.Contains("\"Race\"", npcSourceText);
@@ -101,7 +102,8 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
-        Assert.Contains("Re-Track", result.RefusalReason);
+        Assert.Contains("Run \"Modbench: Decompile Plugin\" to regenerate the source.", result.RefusalReason);
+        Assert.DoesNotContain("Track", result.RefusalReason);
         Assert.Contains(CompileFixture.NpcEditorId, result.RefusalReason);
         Assert.Empty(result.Diagnostics);
         Assert.Empty(result.Masters);

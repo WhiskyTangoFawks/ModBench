@@ -7,9 +7,8 @@ public static class NotificationEndpoints
 {
     public static IEndpointRouteBuilder MapNotificationEndpoints(this IEndpointRouteBuilder app)
     {
-        // ADR-0014: the notification port's first transport. Named SSE events ("rows-changed",
-        // "plugin-changed"), each a NotificationEvent payload; stays open until the caller
-        // disconnects.
+        // The notification port's transport adapter (ADR-0014): named SSE events, each a
+        // NotificationEvent payload; stays open until the caller disconnects.
         app.MapGet("/notifications/stream", (HttpContext ctx, SseNotificationPublisher stream) =>
             stream.StreamAsync(ctx.Response, ctx.RequestAborted))
         .WithName("StreamNotifications")

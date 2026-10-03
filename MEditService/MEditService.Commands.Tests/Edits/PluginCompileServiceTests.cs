@@ -150,7 +150,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_OfATreeHoldingADocumentTheCodecDoesNotProduce_RefusesNamingItAndReTrack()
+    public async Task Compile_OfATreeHoldingADocumentTheCodecDoesNotProduce_RefusesNamingItAndDecompile()
     {
         var stray = Path.Combine(
             _mod.ModFolder, SourceRepository.RootFor(CompileFixture.PluginName), "Npcs", "GroupRecordData.json");
@@ -161,6 +161,7 @@ public sealed class PluginCompileServiceTests : IDisposable
 
         Assert.False(result.Succeeded);
         Assert.Contains(Path.Combine("Npcs", "GroupRecordData.json"), result.RefusalReason, StringComparison.Ordinal);
-        Assert.Contains("Re-Track", result.RefusalReason, StringComparison.Ordinal);
+        Assert.Contains("Run \"Modbench: Decompile Plugin\" to regenerate the source.", result.RefusalReason, StringComparison.Ordinal);
+        Assert.DoesNotContain("Track", result.RefusalReason, StringComparison.Ordinal);
     }
 }

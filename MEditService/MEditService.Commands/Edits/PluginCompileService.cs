@@ -10,9 +10,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>ADR-0007's compile, for one plugin: its working tree's source to binary. Reads the source's
-/// own bytes, never the index; refuses only what it cannot emit, and the rest becomes
-/// diagnostics.</summary>
+/// <summary>ADR-0007's compile, for one plugin.</summary>
 public sealed class PluginCompileService(
     LoadOrderHolder loadOrderHolder,
     SchemaReflector schemaReflector,
@@ -20,6 +18,10 @@ public sealed class PluginCompileService(
     IPluginAdapter adapter,
     ILogger<PluginCompileService> logger)
 {
+    // The palette entry verbatim; a tracked mod refuses Track, so decompile is the way back
+    // (ADR-0007).
+    private const string RegenerateTheSource = "Run \"Modbench: Decompile Plugin\" to regenerate the source.";
+
     public async Task<CompileResult> CompileAsync(PluginAddress plugin)
     {
         var loadOrder = loadOrderHolder.Current;
@@ -35,7 +37,8 @@ public sealed class PluginCompileService(
         var sourceFiles = repository.FilesOf(plugin);
 
         // A document the read could not open is content this compile does not have, and compiling the
-        // rest would write a binary missing that record with nothing left to notice it (ADR-0003).
+        // rest would write a binary missing that record with nothing left to notice it
+        // (ADR-0019).
         if (sourceFiles.Unreadable is { } unreadable)
         {
             return CompileResult.Refused(
@@ -146,8 +149,8 @@ public sealed class PluginCompileService(
     private sealed record Content(
         IReadOnlyList<SourceRecord> Records, IReadOnlyList<string> Masters, IReadOnlyCollection<string> Links);
 
-    // ADR-0015: the write side never reads the Index, so the masters content requires
-    // (ADR-0008) come from the records here, through the collector and the schema.
+    // The masters come from the records here, through the collector and the schema
+    // (ADR-0008; ADR-0015).
     private Content ContentFacts(CompiledTree tree, PluginAddress plugin, LoadOrderSnapshot loadOrder)
     {
         // One walk, and the record type is the one RecordTableName gives, so what compile files a
@@ -166,8 +169,8 @@ public sealed class PluginCompileService(
         return new Content(records, InLoadOrderOrder(required.Masters, loadOrder), required.Links);
     }
 
-    // ADR-0007: a dangling link is emittable, so compile writes the plugin and reports
-    // it afterwards, answered by the files the game loads with the one just written among them.
+    // A dangling link is a diagnostic, not a refusal (ADR-0007), answered after the write by the
+    // files the game loads, the one just written among them.
     private List<CompileDiagnostic> LinkDiagnostics(
         Content content, PluginAddress plugin, RegisteredPlugin registered, LoadOrderSnapshot loadOrder,
         SourceRepository repository)
@@ -253,8 +256,6 @@ public sealed class PluginCompileService(
             .ThenBy(m => m, StringComparer.OrdinalIgnoreCase)];
     }
 
-    // Whatever is wrong with the source, the remedy is re-Track (ADR-0006), so the catch is
-    // deliberately unfiltered and the message uniform.
     private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(
         IReadOnlyList<TreeFile> files, string pluginName, GameRelease release)
     {
@@ -264,12 +265,12 @@ public sealed class PluginCompileService(
         logger.LogWarning(read.Error, "{Plugin} could not be read from its source", pluginName);
         var diagnosis = read.Diagnosis
             ?? throw new InvalidOperationException("Expected a failed read to carry a diagnosis.");
-        return (null, $"{pluginName} could not be read from its source: {diagnosis.Describe()} Re-Track to regenerate the source.");
+        return (null, $"{pluginName} could not be read from its source: {diagnosis.Describe()} {RegenerateTheSource}");
     }
 
-    // ADR-0006: the generated deserializer skips an unrecognized property or file without throwing,
-    // so a successful parse proves nothing. The check is self-consistency in both directions: a
-    // document the regeneration does not produce is content the parse dropped.
+    // ADR-0006. The generated deserializer skips an unrecognized property or file without
+    // throwing, so a successful parse proves nothing. The check runs both ways: a document the
+    // regeneration does not produce is content the parse dropped.
 
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
     // parses an external binary, never from Compile.
@@ -290,7 +291,7 @@ public sealed class PluginCompileService(
 
             var offender = file.RelativePath == headerDocument ? "the plugin header" : file.RelativePath;
             return $"{pluginName} does not round-trip through its own source: {offender} does not match " +
-                "what the current codec would produce from it. Re-Track to regenerate the source.";
+                $"what the current codec would produce from it. {RegenerateTheSource}";
         }
 
         var regeneratedPaths = regeneratedFiles.Select(f => f.RelativePath).ToHashSet(StringComparer.Ordinal);
@@ -302,7 +303,7 @@ public sealed class PluginCompileService(
         {
             return $"{pluginName} does not round-trip through its own source: {unproduced} is in the source, " +
                 "but the current codec produces no such file from it, so nothing it holds reaches the plugin " +
-                "(a document left over from an earlier source layout, or a stray file). Re-Track to regenerate the source.";
+                $"(a document left over from an earlier source layout, or a stray file). {RegenerateTheSource}";
         }
 
         return null;

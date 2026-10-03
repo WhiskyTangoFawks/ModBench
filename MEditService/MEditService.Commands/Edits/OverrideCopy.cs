@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands.Edits;
 
 /// <summary>Copy's override mode, one record into one destination: xEdit's "Copy as Override
-/// Into…" — the source's own bytes land verbatim under the same FormKey (ADR-0007).</summary>
+/// Into…": the source's own bytes land verbatim under the same FormKey.</summary>
 internal sealed class OverrideCopy
 {
     private readonly WriteTargets _targets;

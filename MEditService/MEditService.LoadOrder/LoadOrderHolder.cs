@@ -1,8 +1,6 @@
 namespace MEditService.LoadOrder;
 
-/// <summary>Where the shared kernel keeps the current load order. The put-load-order handler is
-/// the only caller of <see cref="Apply"/> (ADR-0013: one arrival); everything else
-/// reads Current.</summary>
+/// <summary>Where the shared kernel keeps the current load order (ADR-0013).</summary>
 public sealed class LoadOrderHolder
 {
     // Replaced wholesale, never mutated, so a reader mid-Apply sees the previous arrival whole: its
@@ -21,8 +19,8 @@ public sealed class LoadOrderHolder
     public (LoadOrderSnapshot Snapshot, long Version)? Held =>
         Volatile.Read(ref _held) is { Snapshot.DataFolderPath.Length: > 0 } held ? (held.Snapshot, held.Version) : null;
 
-    /// <summary>Raised by every Apply, changed or not: an arrival is also the signal that a file may
-    /// have changed (ADR-0013). Carries the version Apply answers.</summary>
+    /// <summary>Raised by every Apply, changed or not (ADR-0013). Carries the version
+    /// Apply answers.</summary>
     public event Action<LoadOrderSnapshot, long>? Arrived;
 
     /// <summary>One higher per Apply that changes the load order, for a caller asking whether the

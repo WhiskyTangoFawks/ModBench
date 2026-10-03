@@ -4,8 +4,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
 
-/// <summary>ADR-0012: naming a plugin without its origin names half an identity.
-/// Shared so no caller's own copy of this check can drift from another's.</summary>
+/// <summary>ADR-0012's guard, shared so no caller's own copy of this check can drift
+/// from another's.</summary>
 public static class RecordFilterGuard
 {
     public static bool NamesOnlyPluginOrOnlyOrigin(string? plugin, string? origin) =>
@@ -16,7 +16,7 @@ public interface IRecordQueryService
 {
     IReadOnlyList<PluginRow> GetPlugins();
     // plugin/origin (ADR-0012): both null browses every plugin; naming one names the
-    // other too — a plugin filter with no origin would match every plugin sharing that filename.
+    // other too.
     PagedResult<RecordSummary> GetRecords(
         string? type, string? plugin, string? search, int limit, int offset, string? origin = null, bool unfiltered = false);
     RecordDetail? GetRecord(string formKey);
@@ -28,7 +28,7 @@ public interface IRecordQueryService
     bool GetLightPluginsSupported();
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 
-    // ADR-0013: answered in every state, "no load order yet" included.
+    // Answered in every state, "no load order yet" included (ADR-0013).
     LoadOrderStatus GetStatus();
     long GetSequence();
     Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout);

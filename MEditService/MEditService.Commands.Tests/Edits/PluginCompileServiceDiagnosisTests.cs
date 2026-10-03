@@ -21,7 +21,7 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
         Assert.Contains("FixtureNpc", result.RefusalReason);
         Assert.Contains("Malformed FormKey string: NOT-A-FORMKEY", result.RefusalReason);
         Assert.Contains(PluginDiagnosis.UnknownClass, result.RefusalReason);
-        Assert.Contains("Re-Track to regenerate the source.", result.RefusalReason);
+        Assert.Contains("Run \"Modbench: Decompile Plugin\" to regenerate the source.", result.RefusalReason);
     }
 
     [Fact]

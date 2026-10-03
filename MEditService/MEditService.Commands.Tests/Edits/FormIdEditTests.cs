@@ -196,6 +196,6 @@ public sealed class FormIdEditTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        Assert.Contains("Modbench: Track…", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Run \"Modbench: Track Mod…\"", result.Message, StringComparison.Ordinal);
     }
 }

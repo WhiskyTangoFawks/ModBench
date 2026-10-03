@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>One record per Color shape: Light (<c>wbByteColors</c>, an alpha on disk that must
-/// survive a 3-leaf edit), the four <c>wbByteRGBA</c> allowlist records, and MaterialObject
+/// survive a 3-leaf edit), the four <c>wbByteRGBA</c> records, and MaterialObject
 /// (float storage).</summary>
 public sealed class ColorCompileFixture : IDisposable
 {

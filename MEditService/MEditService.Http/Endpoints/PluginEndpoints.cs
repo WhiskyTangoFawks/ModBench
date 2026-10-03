@@ -197,8 +197,8 @@ public static class PluginEndpoints
                 $"Invalid plugin extension '{extension}'. Must be .esp, .esm, or .esl.", statusCode: 400);
     }
 
-    // ADR-0007: the Track gesture over a selection of plugins, each named by file name and origin
-    // (ADR-0012); the load order resolves which physical folder each lives in.
+    // Track (ADR-0007) over a selection (commands.md, A selection is one gesture); the
+    // load order resolves each plugin's folder.
     internal static async Task<IResult> Track(
         TrackRequest req, TrackHandler trackHandler, ILoggerFactory loggerFactory)
     {
@@ -237,7 +237,7 @@ public static class PluginEndpoints
         }
     }
 
-    // decompile-plugin: the selection, each plugin named by file name and origin (ADR-0012).
+    // decompile-plugin: the selection (commands.md, A selection is one gesture).
     internal static async Task<IResult> Decompile(
         DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory)
     {
@@ -266,7 +266,7 @@ public static class PluginEndpoints
         }
     }
 
-    // compile-plugin: the selection, each plugin named by file name and origin (ADR-0012).
+    // compile-plugin: the selection (commands.md, A selection is one gesture).
     internal static async Task<IResult> Compile(CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));

@@ -27,7 +27,7 @@ internal static class WriteEndpointMapping
         result.NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey.");
 
     /// <summary>The status code says what kind of problem; the refusal and path extensions say
-    /// exactly which, so nobody matches on prose (ADR-0019).</summary>
+    /// exactly which (ADR-0019).</summary>
     internal static IResult Refusal(RecordEditResult result) => Results.Problem(
         detail: result.Message,
         statusCode: result.Refusal switch
@@ -117,9 +117,8 @@ internal static class WriteEndpointMapping
     /// <see cref="Refusal(RecordEditResult)"/>'s 422.</summary>
     internal static IResult MalformedFormKey(ArgumentException ex) => Results.Problem(ex.Message, statusCode: 400);
 
-    /// <summary>ADR-0015: no Index gate here. A record gesture writes its system of
-    /// record and returns, and the Index serializes its own projections afterwards, so a source
-    /// write never queues behind one and never answers "busy".</summary>
+    /// <summary>No Index gate here (ADR-0015): the Index serializes its own projections
+    /// afterwards, so a source write never queues behind one and never answers "busy".</summary>
     internal static IResult Execute(
         Action? logReceived,
         Func<IResult?> validate,

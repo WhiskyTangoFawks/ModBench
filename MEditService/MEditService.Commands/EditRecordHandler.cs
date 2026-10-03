@@ -37,9 +37,8 @@ public sealed class EditRecordHandler
         _cellLanding = new CellLanding(targets, codec, schemaReflector, logger);
     }
 
-    /// <summary>The single write path (ADR-0007): one envelope, patched onto the record's document
-    /// by <see cref="DocumentEdit"/>, landed here as a working-tree change. This method owns only
-    /// the IO around that.</summary>
+    /// <summary>The single write path (ADR-0007): <see cref="DocumentEdit"/> patches the
+    /// document, and this method owns only the IO around it.</summary>
     public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var editTarget) is { } blocked) return blocked;
@@ -178,8 +177,8 @@ public sealed class EditRecordHandler
     }
 
     // Reflection makes child slots, Cell.Grid and placed Position ordinary writable columns; writing
-    // one would desynchronize the side tables, which nothing here re-derives. Refusing is why no
-    // SetPlacement-style write-back exists; containment is the path (ADR-0007).
+    // one would desynchronize the side tables, which nothing here re-derives. No SetPlacement-style
+    // write-back exists: containment is the path (ADR-0006).
     private static RecordEditResult? RefuseIfContainmentField(
         string recordType, IReadOnlyList<PathHop> path, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
@@ -195,7 +194,7 @@ public sealed class EditRecordHandler
             return RecordEditResult.Refused(
                 RecordEditRefusal.FieldReadOnly,
                 $"'{fieldPath}' holds {recordType}'s child records, and containment is expressed by the " +
-                "source tree's own structure rather than by a field (ADR-0007). Adding, removing or " +
+                "source tree's own structure rather than by a field (ADR-0006). Adding, removing or " +
                 "reordering a container's children is a structural gesture, not a field edit.");
         }
 

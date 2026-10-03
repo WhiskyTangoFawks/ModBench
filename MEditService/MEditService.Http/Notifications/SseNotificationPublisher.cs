@@ -5,7 +5,7 @@ using MEditService.Ports;
 
 namespace MEditService.Http.Notifications;
 
-/// <summary>ADR-0014's first notification transport. A subscriber that falls behind is dropped: a
+/// <summary>The notification port's transport adapter (ADR-0014). A subscriber that falls behind is dropped: a
 /// missed event is recoverable, an unbounded queue behind a stalled client is not.</summary>
 public sealed class SseNotificationPublisher : INotificationPublisher
 {

@@ -19,7 +19,7 @@ public sealed class UntrackedReadOnlyTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        Assert.Contains("Modbench: Track\u2026", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Run \"Modbench: Track Mod\u2026\"", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public sealed class UntrackedReadOnlyTests
         Assert.NotEqual(trackable.Refusal, notTrackable.Refusal);
         Assert.DoesNotContain("patch", trackable.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Track", notTrackable.Message, StringComparison.Ordinal);
-        Assert.Contains("Modbench: Track\u2026", trackable.Message, StringComparison.Ordinal);
+        Assert.Contains("Run \"Modbench: Track Mod\u2026\"", trackable.Message, StringComparison.Ordinal);
     }
 
     [Fact]
