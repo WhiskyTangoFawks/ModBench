@@ -22,9 +22,6 @@ import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/
 const pluginRow = (name: string, origin = 'SomeMod') => new PluginNode({ name, enabled: true }, origin);
 const lockedRow = (name: string) => new ImplicitMasterNode(name, 'Data');
 
-// VS Code's own calling convention: a context menu passes the right-clicked row, and the
-// selection only when several rows are selected and the right-clicked row is among them. A key
-// and the palette pass nothing.
 function entryWhenInvoked(viewSelection: readonly PluginsTreeNode[], ...args: unknown[]): GestureEntry {
   let received: GestureEntry | undefined;
   const disposable = registerPluginsGesture('modbench.test.gesture', () => viewSelection, (entry) => { received = entry; });
@@ -61,8 +58,7 @@ describe('what VS Code hands a Plugins gesture becomes its entry', () => {
     expect(pluralArgument(entry, 'plugin')).toEqual([alpha, gamma]);
   });
 
-  // A keybinding with no args of its own is invoked with null (VS Code 1.24 release notes).
-  it('a key gives a plural gesture the view\'s selection', () => {
+  it('a key, invoked with null args as VS Code does, gives a plural gesture the view\'s selection', () => {
     const entry = entryWhenInvoked([beta, gamma], null);
     expect(pluralArgument(entry, 'plugin')).toEqual([beta, gamma]);
   });
@@ -164,8 +160,6 @@ describe('a singular Plugins gesture\'s Argument', () => {
   });
 });
 
-// commands.md, The surface supplies the Argument; No dead entries: with no row, a palette entry or
-// key reads the Plugins selection, and is absent where it would have nothing to act on.
 describe('what the Plugins palette entries and keys read off the selection', () => {
   const withFlags = <T extends PluginsTreeNode>(row: T, contextValue: string): T => {
     row.contextValue = contextValue;
@@ -221,7 +215,6 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(compilableSelected([compilable, alpha])).toBeUndefined();
   });
 
-  // plugins.md, Menus and keys, story 4: no record edit on an untracked plugin.
   it('create sees exactly one selected record type or plugin that is tracked and editable', () => {
     expect(context([weapons]).singleCreatable).toBe(true);
     expect(context([compilable]).singleCreatable).toBe(true);
@@ -232,13 +225,10 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([own]).singleCreatable).toBe(false);
   });
 
-  // plugins.md, Create record, story 4 ("No dead entries"): a container type's group, tracked and
-  // editable though it is, sends a type the server refuses — the palette must not offer it.
   it('create does not see a tracked, editable group of a type the game cannot create', () => {
     expect(context([quests]).singleCreatable).toBe(false);
   });
 
-  // No item is sent that the gesture would refuse.
   it('delete sees a selection of records, cells included, their plugins all let it remove', () => {
     expect(context([own, cell]).allDeletableRecords).toBe(true);
     expect(context([own, immutable]).allDeletableRecords).toBe(false);
@@ -247,15 +237,12 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([]).allDeletableRecords).toBe(false);
   });
 
-  // A copy reads its source, so any record copies, whatever its plugin allows.
   it('copy sees a selection of records, cells included, whatever their plugins allow', () => {
     expect(context([own, cell, immutable, untrackedRecord]).allRecords).toBe(true);
     expect(context([own, alpha]).allRecords).toBe(false);
     expect(context([]).allRecords).toBe(false);
   });
 
-  // mods.md, Menus and keys, story 2, which plugins.md, Menus and keys, story 3 follows: Space
-  // takes the focused row's direction, and a selection of one row stands for the focused row.
   it('Space takes the first selected plugin\'s direction, as its line is now', () => {
     expect(context([alpha, beta]).selectionToggle).toBe('disable');
     expect(context([beta, alpha]).selectionToggle).toBe('enable');

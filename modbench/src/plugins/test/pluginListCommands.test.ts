@@ -3,7 +3,6 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom,
 } from '../../test/vscodeMock';
 
-// Captures every registerCommand(id, handler) so the row's handler can be invoked directly.
 const {
   handlers, registerCommand, executeCommand, showInputBox, showQuickPick,
 } = vi.hoisted(() => {
@@ -132,7 +131,6 @@ describe('registerCreatePluginCommand', () => {
     expect(['A.esp', 'B.ESM', 'C.esl'].map(validate)).toEqual([undefined, undefined, undefined]);
   });
 
-  // Rival: an extension check alone, which would let .esl through on a game with none.
   it('refuses an .esl name inline when the game has no light plugins, leaving .esp and .esm alone', async () => {
     type Validate = (v: string) => string | undefined;
     const prompt: { validate?: Validate } = {};
@@ -162,8 +160,6 @@ describe('registerCreatePluginCommand', () => {
     ]);
   });
 
-  // Rival: checking the name across the whole load order, which would also leave out Overwrite
-  // and the other enabled mods.
   it('picks the enabled mods first, then Overwrite, leaving out the place that holds the name', async () => {
     showInputBox.mockResolvedValue('mypatch.ESP');
     const pick = offering();
@@ -199,8 +195,6 @@ describe('registerCreatePluginCommand', () => {
     expect(reporter.landings).toEqual([]);
   });
 
-  // Rival: resolving the folder from the value the pick was built from, which still names a mod
-  // the instance has lost since.
   it('refuses a mod that vanished between the pick and the answer, naming it, and creates nothing', async () => {
     const client = new InMemoryMEditClient();
     const mo2 = makeMo2();
@@ -237,7 +231,6 @@ describe('registerCreatePluginCommand', () => {
     ]);
   });
 
-  // Rival: handing mEdit an empty folder for Overwrite before the first read lands.
   it('refuses Overwrite while the value names no folder for it, and creates nothing', async () => {
     const client = new InMemoryMEditClient();
     const mo2 = makeMo2();
@@ -290,8 +283,6 @@ describe('registerCreatePluginCommand', () => {
     ]);
   });
 
-  // ADR-0007, invariant 2: create writes only the file and returns; the new row arrives with the
-  // Instance loader's next value, once the watch sees the file, never from the command itself.
   it('refreshes nothing once the plugin lands, and the rows show it when the next instance value arrives', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createPlugin', { name: 'MyPatch.esp', origin: 'overwrite', path: '/instance/overwrite/MyPatch.esp' });
@@ -339,8 +330,7 @@ describe('registerRevealInExplorerCommand', () => {
     return { run: present(handlers.get('modbench.plugin.reveal'), "the reveal plugin command's registered handler"), reporter };
   }
 
-  // plugins.md, Menus and keys: the locked row's reveal opens the game folder's copy.
-  it('reveals a locked row\'s file from the row the tree resolves it to', async () => {
+  it('reveals a locked row\'s copy in the game folder, resolved from the row', async () => {
     const { run } = invoke((name) => Promise.resolve(`/game/Data/${name}`));
 
     await run(new ImplicitMasterNode('Fallout4.esm', 'Data'));
@@ -391,8 +381,6 @@ describe('registerRevealInExplorerCommand', () => {
     expect(executeCommand).not.toHaveBeenCalled();
   });
 
-  // commands.md, The surface supplies the Argument: the palette hands the gesture no row, so it
-  // takes the one selected plugin.
   it('reveals the one selected plugin from the palette', async () => {
     const { run } = invoke(
       (name) => Promise.resolve(`/instance/mods/MyMod/${name}`), [new PluginNode({ name: 'Selected.esp', enabled: true }, 'SomeMod')]);
@@ -424,8 +412,6 @@ describe('registerRevealInExplorerCommand', () => {
   });
 });
 
-// plugins.md, Menus and keys, story 5: copy value copies each selected plugin as its file name and
-// each selected record as `EditorID [FormKey]`, or the FormKey alone with no EditorID, one to a line.
 describe('pluginsCopyValueText', () => {
   const plugin = new PluginNode({ name: 'Alpha.esp', enabled: true }, 'ModA');
   const locked = new ImplicitMasterNode('Fallout4.esm', 'Data');
@@ -457,7 +443,6 @@ describe('pluginsCopyValueText', () => {
     expect(pluginsCopyValueText(() => mixed)(locked, undefined)).toBe('Fallout4.esm');
   });
 
-  // Another view's row or key, and the palette's bare call, belong to the next adapter.
   it('defers what is not the Plugins view\'s', () => {
     const copy = pluginsCopyValueText(() => mixed);
     expect(copy(undefined, undefined)).toBeUndefined();
@@ -466,15 +451,13 @@ describe('pluginsCopyValueText', () => {
   });
 });
 
-// plugins.md, Order and view state, story 1; common.md, A view, story 4: a lens, not a setting.
 describe('the sort direction', () => {
   const directionKeys = () => executeCommand.mock.calls
     .filter((c) => c[0] === 'setContext' && (c as unknown[])[1] === 'modbench.plugin.winningAtTop')
     .map((c) => (c as unknown[])[2]);
   const run = (command: string) => present(handlers.get(command), command)();
 
-  // A context key outlives an extension host restart; the view's direction does not.
-  it('starts losing at the top, and the title-bar icon agrees', () => {
+  it('starts losing at the top, and sets the title-bar icon\'s key to agree without waiting for a toggle', () => {
     const setViewDirection = vi.fn();
     registerPluginSortCommands({ setViewDirection });
 

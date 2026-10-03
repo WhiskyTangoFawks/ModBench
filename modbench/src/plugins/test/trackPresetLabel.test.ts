@@ -1,5 +1,3 @@
-// The Edits preset's label names the plugin source root's real folder name. The Instance adapter
-// hides layout.ts from every other box, so this reads text rather than importing it.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -27,7 +25,6 @@ describe('the Track preset label', () => {
     expect(labelledName).toBe(folderName);
   });
 
-  // Rival: a comparison that reports a match however the two files really read.
   it('catches a planted mismatch', () => {
     const layoutText = "export const PLUGIN_SOURCE_FOLDER = 'plugin-source';\n";
     const commandsText = "const EDITS_OPTION = { description: 'Keeps source/ and .gitignore' };\n";

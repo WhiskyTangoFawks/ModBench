@@ -40,7 +40,6 @@ const CREATABLE = [
 ];
 const NEW_NPC = { applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' };
 
-// The order the gesture reaches the view and mEdit in.
 function harness(viewSelection: readonly PluginsTreeNode[] = []) {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getCreatableRecordTypes', CREATABLE);
@@ -75,8 +74,6 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
 
 beforeEach(() => { showQuickPick.mockReset(); });
 
-// plugins.md, Pickers, Create record, story 1: on a group, a new record of that type with no
-// prompt; on a plugin, a pick of the record type first.
 describe('modbench.record.create', () => {
   it('on a group, awaits the new record of its type, then creates it, asking nothing', async () => {
     const { steps, create } = harness([OTHER_GROUP]);
@@ -108,7 +105,6 @@ describe('modbench.record.create', () => {
     expect(steps).toEqual(['await MyPatch.esp ModA npc_', 'create MyPatch.esp ModA npc_']);
   });
 
-  // commands.md, Esc changes nothing.
   it('creates nothing, awaits nothing and says nothing when the type pick is left with Esc', async () => {
     const { steps, reporter, create } = harness();
     showQuickPick.mockResolvedValue(undefined);
@@ -142,8 +138,7 @@ describe('modbench.record.create', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  // ADR-0012 invariant 1: the overridden plugin of the name is indexed too.
-  it('creates in the group\'s own plugin of a shared filename', async () => {
+  it('creates in the group\'s own plugin when another plugin shares its filename', async () => {
     const { steps, create } = harness();
     const overriding = new RecordTypeNode('MyPatch.esp', recordTypeCountFixture({ type: 'npc_', count: 3, displayName: 'Non-Player Character' }), 'ModB', EDITABLE);
 
@@ -160,7 +155,6 @@ describe('modbench.record.create', () => {
     expect(reporter.landings).toEqual(['Created 000900:MyPatch.esp.']);
   });
 
-  // plugins.md, Pickers, Create record, story 3: the refusal names the remedies, as mEdit words it.
   it('reports a refusal as mEdit words it, and stops awaiting a record it did not write', async () => {
     const { client, steps, reporter, create } = harness();
     const message = 'MyPatch.esp has exhausted its ESL FormKey space. Clear the light flag in the header, or change a record\'s FormID.';
@@ -174,7 +168,6 @@ describe('modbench.record.create', () => {
   });
 });
 
-// common.md, Unconfirmed writes, story 2: the row a record is created in carries the mark.
 describe('modbench.record.create marks the row it creates in', () => {
   it('marks the group before the write, and tells it the new FormKey', async () => {
     const { client, marks, create } = harness();
@@ -206,7 +199,6 @@ describe('modbench.record.create marks the row it creates in', () => {
     expect(marks).toEqual(['mark MyPatch.esp ModA npc_', 'answered undefined']);
   });
 
-  // common.md, Unconfirmed writes, story 6: only the disk can say what a create with no answer did.
   it('tells the mark a create mEdit never answered, and reports it as before', async () => {
     const { client, marks, reporter, create } = harness();
     const message = 'Could not create a new npc_ record in "MyPatch.esp" — socket hang up';

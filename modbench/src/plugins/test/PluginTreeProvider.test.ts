@@ -21,14 +21,10 @@ import { expectInstanceOf, expectInstanceOfOrUndefined, expectInstancesOf } from
 import { present } from '../../ports/present';
 import { listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
 
-// ── helpers ───────────────────────────────────────────────────────────────────
-
 function makeRecord(
   i: number, workingTreeState: RecordSummary['workingTreeState'] = 'None', hasContainerChildren = false,
 ): RecordSummary {
   return {
-    // mEdit's real shape: a record row's plugin is the plugin browsed (Search's `plugin = $1`), and
-    // its FormKey, Mutagen's "<hex6>:<ModKey>", names the master it overrides.
     formKey: `${String(i).padStart(6, '0')}:Fallout4.esm`,
     plugin: 'Plugin0.esp',
     loadOrderIndex: 0,
@@ -55,7 +51,6 @@ function makeClient(overrides: Partial<{
   client.setQueryAnswer('getWorldspaces', []);
   client.setQueryAnswer('getWorldspaceBlocks', { blocks: [], topCells: [] });
   client.setQueryAnswer('getCellChildRecords', { persistent: [], temporary: [] });
-  // A Quest/DialogTopic row's own children — empty by default, overridden per-test below.
   client.setQueryAnswer('getContainerChildren', []);
   client.setQueryAnswer('getInteriorCells', []);
   return client;
@@ -79,8 +74,6 @@ async function interiorCellsBeneath(provider: PluginTreeProvider, group: PluginT
   return provider.getChildren(present(subBlock, 'the sole sub-block'));
 }
 
-// Every record row a plugin row expands into, at every depth: the nodes themselves, in DFS order,
-// so a caller reads a leaf's own contextValue and origin.
 async function rowsBeneath(
   provider: PluginTreeProvider, pluginName: string, origin: string, told: PluginConditions,
 ): Promise<PluginTreeNode[]> {
@@ -95,15 +88,6 @@ async function rowsBeneath(
   await walk(await provider.getPluginChildren(pluginName, origin, told));
   return states;
 }
-
-// getPluginChildren(name, origin) is the one way into a plugin's children — there is no root listing
-// (also true in production: PluginsTreeProvider always calls it directly, never
-// getChildren(undefined) — see the comment on getChildren itself).
-
-// The merged tree's name filter is covered in PluginsTreeProvider.test.ts — this provider has
-// none of its own.
-
-// ── getPluginChildren (record types) ────────────────────────────────────────────
 
 describe('PluginTreeProvider.getPluginChildren (record types)', () => {
   it('returns one RecordTypeNode per record type', async () => {
@@ -129,7 +113,6 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
     expect(typeNode.recordType).toBe('acti');
   });
 
-  // plugins.md, Create record, story 4.
   it('carries the backend\'s isCreatable verdict onto the group\'s contextValue', async () => {
     const repo = makeClient({
       recordTypes: [
@@ -146,8 +129,6 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
   });
 });
 
-// ── getChildren(RecordTypeNode) ───────────────────────────────────────────────
-
 describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
   it('returns a RecordNode for every record in one call', async () => {
     const records = [makeRecord(0), makeRecord(1), makeRecord(2)];
@@ -161,27 +142,22 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
   });
 
-  // Record-type children do not paginate — xEdit's own record-type group nodes load in full
-  // (`vstNavInitChildren`, xeMainForm.pas), and measurement found no meaningful cost even at the
-  // realistic worst case (~78k INFO rows, ~500ms).
   it('returns every record in one call at a large, realistic-worst-case count — no manual step', async () => {
-    const count = 78_089; // Fallout4.esm's own measured INFO count in a full FO4 load order
-    const records = Array.from({ length: count }, (_, i) => makeRecord(i));
-    const repo = makeClient({ records: { items: records, total: count } });
+    const FALLOUT4_ESM_INFO_COUNT = 78_089;
+    const records = Array.from({ length: FALLOUT4_ESM_INFO_COUNT }, (_, i) => makeRecord(i));
+    const repo = makeClient({ records: { items: records, total: FALLOUT4_ESM_INFO_COUNT } });
     const provider = new PluginTreeProvider(repo);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'Data'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const children = await provider.getChildren(typeNode);
 
-    expect(children).toHaveLength(count);
+    expect(children).toHaveLength(FALLOUT4_ESM_INFO_COUNT);
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
-    // One call, offset 0, and a limit far beyond any page size — the whole type
-    // requested up front, not paged.
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
     expect(repo.calls).toContainEqual({ method: 'getRecords', args: ['Plugin0.esp', 'WEAP', 0, expect.any(Number), 'Data'] });
     const limitArg = present(repo.calls.find(c => c.method === 'getRecords'), 'the getRecords call').args[3];
     if (typeof limitArg !== 'number') throw new Error(`Expected a number, got ${String(limitArg)}`);
-    expect(limitArg).toBeGreaterThan(count);
+    expect(limitArg).toBeGreaterThan(FALLOUT4_ESM_INFO_COUNT);
   });
 
   it('uses cache on second expand without re-fetching', async () => {
@@ -195,9 +171,6 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
   });
 
-  // fetchRecords maps each row's own hasContainerChildren straight from the single
-  // getRecords response — a "qust" row with none is a leaf, one with some is Collapsed, read from
-  // the listing rather than guessed from the record type alone.
   it('a "qust" row\'s collapsible state follows its own RecordSummary.hasContainerChildren, not its record type alone', async () => {
     const repo = makeClient({
       recordTypes: [{ type: 'qust', count: 2 }],
@@ -216,36 +189,27 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
 
     const withChildren = present(children.find(c => c.record.formKey === 'qustWithChildren:Fallout4.esm'), 'the qustWithChildren row');
     const withoutChildren = present(children.find(c => c.record.formKey === 'qustWithoutChildren:Fallout4.esm'), 'the qustWithoutChildren row');
-    expect(withChildren.collapsibleState).toBe(1); // Collapsed
-    expect(withoutChildren.collapsibleState).toBe(0); // None
+    expect(withChildren.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+    expect(withoutChildren.collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 });
 
-// A per-row `getContainerChildren` fan-out was rejected on cost: up to ~1,300 concurrent round
-// trips for one "expand all Quests" on Fallout4.esm. Presence travels inside the single
-// getRecords response instead, so no extra repository calls.
 describe('PluginTreeProvider.getChildren(RecordTypeNode) — no per-row fan-out for container presence', () => {
   it('listing ~1,300 Quests issues exactly one getRecords call and zero getContainerChildren calls', async () => {
-    const count = 1_300; // Fallout4.esm's own approximate QUST count
+    const FALLOUT4_ESM_QUST_COUNT = 1_300;
     const records = Array.from(
-      { length: count }, (_, i) => makeRecord(i, 'None', i % 2 === 0));
-    const repo = makeClient({ recordTypes: [{ type: 'qust', count }], records: { items: records, total: count } });
+      { length: FALLOUT4_ESM_QUST_COUNT }, (_, i) => makeRecord(i, 'None', i % 2 === 0));
+    const repo = makeClient({ recordTypes: [{ type: 'qust', count: FALLOUT4_ESM_QUST_COUNT }], records: { items: records, total: FALLOUT4_ESM_QUST_COUNT } });
     const provider = new PluginTreeProvider(repo);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'Data'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const children = await provider.getChildren(typeNode);
 
-    expect(children).toHaveLength(count);
+    expect(children).toHaveLength(FALLOUT4_ESM_QUST_COUNT);
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
     expect(repo.calls.some(c => c.method === 'getContainerChildren')).toBe(false);
   });
 });
-
-// The merged tree's plugin rows (contextValue "plugin"/"pluginImplicit", lock icon absent —
-// see plugins.md) are covered in PluginsTreeProvider.test.ts; this provider has no plugin-row
-// node of its own.
-
-// ── WorldspacesNode ───────────────────────────────────────────────────────────
 
 describe('WorldspacesNode', () => {
   it('has no icon, so it sorts alphabetically alongside icon-less record-type nodes', () => {
@@ -254,8 +218,6 @@ describe('WorldspacesNode', () => {
   });
 });
 
-// ── InteriorCellsNode ─────────────────────────────────────────────────────────
-
 describe('InteriorCellsNode', () => {
   it('has no icon, so it sorts alphabetically alongside icon-less record-type nodes', () => {
     const node = new InteriorCellsNode('M.esp', 'Cell', 0, 'Data');
@@ -263,12 +225,8 @@ describe('InteriorCellsNode', () => {
   });
 });
 
-// ── RecordTypeNode ────────────────────────────────────────────────────────────
-
 describe('RecordTypeNode', () => {
   it('uses the xEdit display name as label, keeping recordType as the raw signature', () => {
-    // The tree must show "Weapon", not "weap" — but recordType (used for
-    // caching, commands, contextValue) stays the raw signature.
     const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'weap', count: 42, displayName: 'Weapon' }), 'Data');
     expect(node.label).toBe('Weapon');
     expect(node.recordType).toBe('weap');
@@ -284,14 +242,11 @@ describe('RecordTypeNode', () => {
     expect(node.contextValue).toBe('recordType untracked creatable');
   });
 
-  // plugins.md, Create record, story 4: no create record on a group of container records.
   it('states no create on a container type\'s group (a quest, say)', () => {
     const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'qust', count: 3, displayName: 'Quest', isCreatable: false }), 'Data');
     expect(node.contextValue).toBe('recordType untracked');
   });
 });
-
-// ── RecordNode ────────────────────────────────────────────────────────────────
 
 describe('RecordNode', () => {
   it('wires .command to modbench.record.open with its formKey alone', () => {
@@ -315,7 +270,6 @@ describe('RecordNode', () => {
     expect(node.contextValue).toBe('record untracked editable');
   });
 
-  // plugins.md, Menus and keys: the record menu is the same on every record row, an override's too.
   it('states an override as it states the plugin\'s own records', () => {
     const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
     expect(new RecordNode(record, 'Data', { tracked: true, editable: true }).contextValue).toBe('record tracked editable');
@@ -330,9 +284,6 @@ describe('RecordNode', () => {
     expect(new RecordNode(makeRecord(0), 'Data').contextValue).toBe('record untracked');
   });
 
-  // resourceUri is what RecordDecorationProvider keys its badge lookup on — carries the same
-  // (plugin, origin, formKey) identity ADR-0012 already requires everywhere a record row is
-  // addressed, via the synthetic medit-record: scheme (recordResourceUri.ts).
   it('carries a medit-record: resourceUri identifying (plugin, origin, formKey)', () => {
     const record = makeRecord(0);
     const node = new RecordNode(record, 'ModA');
@@ -340,8 +291,6 @@ describe('RecordNode', () => {
     expect(node.resourceUri).toEqual(recordResourceUri(record.plugin, 'ModA', record.formKey));
   });
 });
-
-// ── a read of a record group names its rows, so their badges follow the read ─────
 
 describe('onDidReadRecords / workingTreeStateOf', () => {
   async function readGroup(repo: InMemoryMEditClient) {
@@ -371,7 +320,6 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     expect(read).toHaveLength(1);
   });
 
-  // ADR-0015 invariant 3: mEdit's published rows reach the badge through the next read.
   it('names the rows again, with mEdit\'s new state, when a refresh makes the group read again', async () => {
     const record = makeRecord(0, 'None');
     const repo = makeClient({ records: { items: [record], total: 1 } });
@@ -387,7 +335,6 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     expect(provider.workingTreeStateOf(recordResourceUri(record.plugin, 'Data', record.formKey))).toBe('Modified');
   });
 
-  // ADR-0015 invariant 3: a read answered before mEdit's rows changed is not the rows' state now.
   it('drops a read that was in flight when a refresh came, and names only the read that follows it', async () => {
     const record = makeRecord(0, 'None');
     const repo = makeClient();
@@ -415,8 +362,6 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     expect(provider.workingTreeStateOf(recordResourceUri('Plugin0.esp', 'Data', '000001:Fallout4.esm'))).toBeUndefined();
   });
 
-  // The rival: a lookup that skips the scheme would badge another provider's row whose path
-  // happens to spell a cached record.
   it('workingTreeStateOf is undefined for a URI outside the medit-record: scheme', async () => {
     const record = makeRecord(0, 'Modified');
     const { provider, typeNode } = await readGroup(makeClient({ records: { items: [record], total: 1 } }));
@@ -427,12 +372,6 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
   });
 });
 
-// ── record rows carry their copy identity ─────────────────────────────────────
-// A record-scoped command acts on the clicked row's own copy, so the row says which copy it is
-// ((plugin, origin), ADR-0012); rows whose plugin cannot be edited hide Remove.
-
-// plugins.md, Menus and keys: the record menu is on worldspaces, cells and placed references too,
-// so each states its record as the record gestures read one: FormKey, EditorID, plugin and origin.
 describe('worldspace, cell and placed rows state their record', () => {
   it.each([
     ['worldspace', new WorldspaceNode('A.esp', { formKey: '000801:A.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }, 'ModA')],
@@ -466,8 +405,6 @@ describe('record rows carry their copy identity', () => {
 
 });
 
-// plugins.md, Menus and keys: every row beneath a plugin states that plugin's conditions, which
-// its plugin row hands down as it expands (ADR-0012: never looked up by filename alone).
 describe('a plugin\'s conditions reach every row beneath it', () => {
   const TRACKED: PluginConditions = { tracked: true, editable: true };
   const cell = {
@@ -509,14 +446,11 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
     const states = (await rowsBeneath(new PluginTreeProvider(spatialClient()), 'Plugin0.esp', 'Data', { tracked: false, editable: true }))
       .map((n) => String(n.contextValue));
 
-    // Conditions only: creatable is a per-type fact, not a plugin condition, so it is dropped here.
     const CONDITION_WORDS = new Set(['tracked', 'untracked', 'editable']);
     const conditionsOf = (state: string) => state.split(' ').filter((w) => CONDITION_WORDS.has(w)).join(' ');
     expect(new Set(states.map(conditionsOf))).toEqual(new Set(['untracked editable']));
   });
 });
-
-// ── refresh ───────────────────────────────────────────────────────────────────
 
 describe('PluginTreeProvider.refresh', () => {
   it('clears cache so next getChildren re-fetches', async () => {
@@ -524,9 +458,9 @@ describe('PluginTreeProvider.refresh', () => {
     const provider = new PluginTreeProvider(repo);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'Data'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
-    await provider.getChildren(typeNode);  // fills cache
+    await provider.getChildren(typeNode);
     provider.refresh();
-    await provider.getChildren(typeNode);  // should re-fetch
+    await provider.getChildren(typeNode);
 
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(2);
   });
@@ -541,8 +475,6 @@ describe('PluginTreeProvider.refresh', () => {
     expect(fired).toHaveLength(1);
   });
 });
-
-// ── Worldspace / cell / placed-object tree ──────────────────────────
 
 describe('PluginTreeProvider worldspace tree', () => {
   it('expands a worldspace into its persistent cell and blocks, labeled the way xEdit does', async () => {
@@ -561,13 +493,13 @@ describe('PluginTreeProvider worldspace tree', () => {
     const subBlocks = await provider.getChildren(blockNode);
     const cells = await provider.getChildren(subBlocks[0]);
 
-    expect(wsChildren).toHaveLength(2); // persistent cell + 1 block
+    expect(wsChildren).toHaveLength(2);
     expect(present(topCellNode, 'the persistent-cell child').label).toBe('TopCell');
     expect(present(blockNode, 'the block child').label).toBe('Block 0, 0');
     expect(present(subBlocks[0], "the fixture's single sub-block").label).toBe('Sub-Block 0, 0');
     expect(expectInstanceOf(cells[0], CellNode).cell.cellX).toBe(12);
-    // xEdit's StrRight right-justifies each coordinate to width 3 inside the angle brackets.
-    expect(present(cells[0], "the fixture's single cell").label).toBe('< 12,  -5>');
+    const RIGHT_JUSTIFIED_WIDTH_3_COORDINATES_LABEL = '< 12,  -5>';
+    expect(present(cells[0], "the fixture's single cell").label).toBe(RIGHT_JUSTIFIED_WIDTH_3_COORDINATES_LABEL);
   });
 
   it('surfaces every block-less cell row under a worldspace, not just the first', async () => {
@@ -601,7 +533,7 @@ describe('PluginTreeProvider worldspace tree', () => {
     const cellNode = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false }, 'Data');
 
     const groups = await provider.getChildren(cellNode);
-    expect(groups).toHaveLength(1); // only persistent (temporary empty)
+    expect(groups).toHaveLength(1);
     const persistentGroup = present(groups[0], 'the sole group');
     expect(persistentGroup.label).toBe('Persistent');
 
@@ -663,11 +595,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   });
 });
 
-// ── Fetch failures render an error node instead of an empty list (ADR-0019) ──
-
 describe('PluginTreeProvider fetch failures', () => {
-  // The merged Plugins tree's rows are Mod Management's, not this provider's, so it needs a
-  // way in that starts from a plugin rather than from a PluginNode this provider built.
   it('getPluginChildren: builds a plugin\'s children from its (origin, filename)', async () => {
     const repo = makeClient({
       recordTypes: [
@@ -684,8 +612,6 @@ describe('PluginTreeProvider fetch failures', () => {
     expect(children.map(c => c.label)).toEqual(['Cell', 'Weapon', 'Worldspace']);
   });
 
-  // A record reached by expanding a load-order row is the same node carrying its own command, so
-  // the merged tree inherits the open-editor behaviour rather than re-implementing it.
   it('getPluginChildren: records below it carry the open-editor command', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
@@ -768,8 +694,6 @@ describe('PluginTreeProvider fetch failures', () => {
   });
 });
 
-// ── headerFormKeyFor ───────────────────────────────────────────────────────────
-
 describe('headerFormKeyFor', () => {
   it('builds the synthetic header FormKey for a plugin name', () => {
     expect(headerFormKeyFor('Fallout4.esm')).toBe('000000:Fallout4.esm');
@@ -779,10 +703,6 @@ describe('headerFormKeyFor', () => {
     expect(headerFormKeyFor('MyPatch.esp')).toBe('000000:MyPatch.esp');
   });
 });
-
-// ── spatial node chain carries origin (ADR-0012) ───────────────────────────────
-// Every node in the chain must carry the origin its row was built with, or a deep node silently
-// reverts to browsing the load-order winner instead of the plugin the user opened.
 
 describe('PluginTreeProvider spatial origin threading', () => {
   it('fetchWorldspaces: asks the repository for the node\'s own plugin, and the WorldspaceNodes it builds carry that origin forward', async () => {
@@ -852,9 +772,6 @@ describe('PluginTreeProvider spatial origin threading', () => {
     expect(present(cellNode, 'the sole cell').origin).toBe('ModB');
   });
 
-  // refCache/interiorCache must be keyed by (origin, plugin) like pageCache — a key on plugin
-  // alone serves one plugin's pages under the other plugin's node, invisible when only one plugin
-  // of that filename loads.
   it('refCache: caches each plugin\'s cell references separately, so one plugin\'s page is never served for the other', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
@@ -880,7 +797,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(2);
   });
 
-  it('a cell row and a placed-reference row of a shared filename read their own plugin\'s tracked/read-only facts, not the other plugin\'s', async () => {
+  it('a cell row and a placed-reference row of a shared filename, expanded concurrently, read their own plugin\'s tracked/read-only facts, not the other plugin\'s', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }] });
     repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
@@ -895,8 +812,6 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const TRACKED_EDITABLE: PluginConditions = { tracked: true, editable: true };
     const READ_ONLY: PluginConditions = { tracked: false, editable: false };
 
-    // Both expansions run concurrently, so a filename-keyed (rather than parameter-threaded)
-    // lookup of conditions would have B's write clobber A's read mid-flight.
     const [fromA, fromB] = await Promise.all([
       rowsBeneath(provider, 'Shared.esp', 'ModA', TRACKED_EDITABLE),
       rowsBeneath(provider, 'Shared.esp', 'ModB', READ_ONLY),
@@ -921,8 +836,6 @@ describe('PluginTreeProvider spatial origin threading', () => {
   });
 
 });
-
-// ── browsing a specific plugin of a filename (ADR-0012) ────────────────────────
 
 describe('PluginTreeProvider.getPluginChildren (origin)', () => {
   const sharedClient = () => listsForThePluginAsked(makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] }));
@@ -955,12 +868,9 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
     await provider.getChildren(fromA);
     await provider.getChildren(fromB);
 
-    // Two fetches, not one served from a shared "Shared.esp::WEAP" cache entry.
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(2);
   });
 
-  // ADR-0012: a plugin is `(origin, filename)`, and both compare without case, as MO2 and a
-  // Windows filesystem compare them.
   it('caches one plugin once, whatever case its filename and origin arrive in', async () => {
     const repo = sharedClient();
     const provider = new PluginTreeProvider(repo);
@@ -988,8 +898,6 @@ describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific plug
   });
 });
 
-// ── Quest/DialogTopic child records ────────────────────────────────────────────
-
 function makeContainerChild(
   formKey: string, recordType: string, editorId: string | null = null, hasContainerChildren = false,
 ): ContainerChildSummary {
@@ -1001,33 +909,29 @@ function makeContainerChild(
 }
 
 describe('RecordNode collapsibility for container types', () => {
-  // Rival named: a RecordNode that always constructs CollapsibleState.None regardless of
-  // record type — this pins the behaviour against exactly that rival.
   it('is Collapsed when built as a "qust" row that actually has container children', () => {
     const node = new RecordNode(makeRecord(0), 'Data', undefined, 'qust', true);
-    expect(node.collapsibleState).toBe(1); // TreeItemCollapsibleState.Collapsed (mocked to 1 above)
+    expect(node.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
   });
 
   it('is Collapsed when built as a "dial" row that actually has container children', () => {
     const node = new RecordNode(makeRecord(0), 'Data', undefined, 'dial', true);
-    expect(node.collapsibleState).toBe(1);
+    expect(node.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
   });
 
-  // Collapsibility reads the listing's own hasContainerChildren fact, not the record's type
-  // signature: a Quest with zero container children must show no expand chevron.
   it('stays None (a leaf) when built as a "qust" row with no container children', () => {
     const node = new RecordNode(makeRecord(0), 'Data', undefined, 'qust', false);
-    expect(node.collapsibleState).toBe(0);
+    expect(node.collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 
   it('stays None (a leaf) when built as a "dial" row with no container children', () => {
     const node = new RecordNode(makeRecord(0), 'Data', undefined, 'dial', false);
-    expect(node.collapsibleState).toBe(0);
+    expect(node.collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 
   it('stays None (a leaf) when no containerChildType is given, as every other record type does', () => {
     const node = new RecordNode(makeRecord(0), 'Data');
-    expect(node.collapsibleState).toBe(0); // TreeItemCollapsibleState.None
+    expect(node.collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 });
 
@@ -1048,14 +952,10 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     expect(children).toHaveLength(2);
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
     expect(expectInstanceOf(children[0], RecordNode).record.editorId).toBe('TopicA');
-    // Standard record-row affordances — same command every ordinary
-    // RecordNode gets, so a container child opens in the record editor exactly like any other row.
     expect(expectInstanceOf(children[0], RecordNode).command).toMatchObject({ command: 'modbench.record.open' });
   });
 
-  // dial1 has a genuine container child and dial2 has none: a "dial" child with no children must
-  // stay a leaf exactly like a top-level one, or every dial row shows a chevron expanding to nothing.
-  it('a returned "dial" child with its own children is itself Collapsed — expandable to its own Responses; one with none stays a leaf', async () => {
+  it('a returned "dial" child with its own children is itself Collapsed — expandable to its own Responses; one with none and a scene stay leaves', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getContainerChildren', [
       makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA', true),
@@ -1071,9 +971,9 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     const dialWithChildren = present(children.find(c => c.record.formKey === 'dial1:Fallout4.esm'), 'the dial1 row');
     const dialWithoutChildren = present(children.find(c => c.record.formKey === 'dial2:Fallout4.esm'), 'the dial2 row');
     const scenChild = present(children.find(c => c.record.formKey === 'scen1:Fallout4.esm'), 'the scen1 row');
-    expect(dialWithChildren.collapsibleState).toBe(1); // Collapsed — a nested "dial" with its own children
-    expect(dialWithoutChildren.collapsibleState).toBe(0); // None — a "dial" with none stays a leaf
-    expect(scenChild.collapsibleState).toBe(0); // None — a Scene is always a leaf
+    expect(dialWithChildren.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+    expect(dialWithoutChildren.collapsibleState).toBe(TreeItemCollapsibleState.None);
+    expect(scenChild.collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 
   it('a "dial" RecordNode expands via repository.getContainerChildren into its Responses', async () => {
@@ -1104,8 +1004,6 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     expect(repo.calls.filter(c => c.method === 'getContainerChildren')).toHaveLength(1);
   });
 
-  // Two same-filename plugins expanding the same Quest FormKey must hit their own cache entry: a
-  // key built from formKey alone returns ModA's cached children for ModB's expansion.
   it('origin-keyed caching: two plugins that share a filename browse their own children independently', async () => {
     const repo = makeClient();
     repo.setQueryAnswerOnce('getContainerChildren', [makeContainerChild('dial-a:Shared.esp', 'dial', 'TopicModA')]);
@@ -1127,8 +1025,6 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     expect(present(childrenB[0], "ModB's sole child").record.editorId).toBe('TopicModB');
   });
 });
-
-// ── the failure prefix ────────────────────────────────────────────────────────
 
 describe('the failure prefix', () => {
   it('marks a record whose document could not be read, and only that record', async () => {
