@@ -111,9 +111,18 @@ internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartia
             if (fromTheLeft && left?[member] is { } value) record[member] = value.DeepClone();
             else if (fromTheLeft || Deletes || member != RecordMembers.EditorId) record.Remove(member);
         }
-        if (left?[RecordMembers.FormVersion] is { } formVersion) record[RecordMembers.FormVersion] = formVersion.DeepClone();
-        else if (left != null) record.Remove(RecordMembers.FormVersion);
+        if (left == null) return;
+        if (left[RecordMembers.FormVersion] is { } formVersion) record[RecordMembers.FormVersion] = formVersion.DeepClone();
+        else record.Remove(RecordMembers.FormVersion);
+        foreach (var stamp in VersionControlStamps(schema)) record[stamp] = 0;
     }
+
+    // xEdit's AssignInternal sets Version Control Info 1 and 2 to 0: the header stamps it ignores in
+    // conflicts, but Form Version.
+    private static IEnumerable<string> VersionControlStamps(RecordTableSchema schema) =>
+        schema.RecordColumns
+            .Where(c => c.Field is { IsRecordHeaderMember: true, IgnoredInConflicts: true } && c.PropertyName != RecordMembers.FormVersion)
+            .Select(c => c.PropertyName);
 
     internal JsonObject? LeftOf(LeftCopy? copyOnTheLeft) =>
         Refills && copyOnTheLeft?.FoundText is { } text ? JsonNode.Parse(text) as JsonObject : null;

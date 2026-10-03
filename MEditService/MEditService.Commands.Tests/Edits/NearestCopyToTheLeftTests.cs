@@ -238,18 +238,30 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
-    public void ClearingPartialForm_KeepsTheCopysRecordHeaderRowsAndChildren()
+    public void ClearingPartialForm_KeepsTheCopysChildren()
     {
         var theirs = new PlacedObject(TheRef, Fallout4Release.Fallout4) { EditorID = "Theirs" };
         var mine = new PlacedObject(new FormKey(ModKey.FromFileName("Override.esp"), 0x801), Fallout4Release.Fallout4) { EditorID = "Mine" };
         Load(
-            (Plugin("Fallout4.esm", CellCopy(0, "Inside", 5f, cell => { cell.VersionControl = 3; cell.Temporary.Add(theirs); })), false),
-            (Plugin("Override.esp", CellCopy(PartialForm, "Inside", also: cell => { cell.VersionControl = 7; cell.Temporary.Add(mine); })), true));
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside", 5f, Placing(theirs))), false),
+            (Plugin("Override.esp", CellCopy(PartialForm, "Inside", also: Placing(mine))), true));
 
         var whole = Written(TheCell, 0);
 
-        Assert.Equal(7, whole["VersionControl"]?.GetValue<int>());
         Assert.Equal([mine.FormKey.ToString()], whole["Temporary"].Require().AsArray().Select(r => r?["FormKey"]?.GetValue<string>()));
+    }
+
+    [Fact]
+    public void ClearingPartialForm_SetsVersionControlInfo1And2ToZero()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside", also: cell => { cell.VersionControl = 3; cell.Version2 = 4; })), false),
+            (Plugin("Override.esp", CellCopy(PartialForm, "Inside", also: cell => { cell.VersionControl = 7; cell.Version2 = 8; })), true));
+
+        var whole = Written(TheCell, 0);
+
+        Assert.Equal(0, whole["VersionControl"]?.GetValue<int>() ?? 0);
+        Assert.Equal(0, whole["Version2"]?.GetValue<int>() ?? 0);
     }
 
     [Fact]
