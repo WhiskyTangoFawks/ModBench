@@ -5,9 +5,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Tests.Indexing;
 
-// Game discovery must skip an installed game whose Mutagen assembly is not referenced: log and
-// continue, never throw. This build references only Fallout4, so SkyrimSE is a real unreferenced
-// condition; adding that reference moves the case with no change here.
 public sealed class SchemaReflectorAvailabilityTests
 {
     private static (ILoggerFactory factory, List<LogEntry> entries) CapturingLoggerFactory()
@@ -22,7 +19,7 @@ public sealed class SchemaReflectorAvailabilityTests
     }
 
     [Fact]
-    public void IsSupported_ReturnsFalseForReleaseWhoseAssemblyIsNotReferenced()
+    public void IsSupported_ReturnsFalseForReleaseWhoseAssemblyIsNotReferenced_SkyrimSEBeingUnreferencedByThisBuild()
     {
         var reflector = new SchemaReflector();
 
@@ -32,10 +29,8 @@ public sealed class SchemaReflectorAvailabilityTests
     }
 
     [Fact]
-    public void IsSupported_ReturnsTrueForReferencedRelease()
+    public void IsSupported_ReturnsTrueForReferencedRelease_BecauseFallout4AssemblyIsReferencedAndAStubAlwaysReturningFalseMustFail()
     {
-        // Guards against a stub that always returns false: Fallout4's assembly genuinely is
-        // referenced, so this must come back true.
         var reflector = new SchemaReflector();
 
         var supported = reflector.IsSupported(GameRelease.Fallout4);

@@ -6,16 +6,12 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Codec.Tests.Schema;
 
-/// <summary>The metadata describes the codec document by Mutagen's own names: every field a
-/// declared property, every discriminator the document's MutagenObjectType, a type-varying member
-/// one field with a variant per leaf (ADR-0005).</summary>
 public sealed class DocumentWireSchemaTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    // Mutagen's own spelling: PascalCase, with an underscore only where Mutagen wrote one (EdgeLink_0_1).
-    private static readonly Regex MutagenPropertyName = new("^[A-Z][A-Za-z0-9_]*$", RegexOptions.Compiled);
+    private static readonly Regex MutagenPascalCaseWithUnderscoreOnlyWhereMutagenWroteOneAsInEdgeLink_0_1 = new("^[A-Z][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
     private static readonly string[] LeafKinds =
         ["bool", "int", "float", "string", "translatedString", "hex", "color", "vector", "enum", "flags", "formKey", "struct", "array"];
@@ -57,7 +53,7 @@ public sealed class DocumentWireSchemaTests
     public void EveryFieldName_IsAMutagenPropertyName()
     {
         var offenders = AllFields()
-            .Where(f => f.Meta.Name.Length > 0 && !MutagenPropertyName.IsMatch(f.Meta.Name))
+            .Where(f => f.Meta.Name.Length > 0 && !MutagenPascalCaseWithUnderscoreOnlyWhereMutagenWroteOneAsInEdgeLink_0_1.IsMatch(f.Meta.Name))
             .Select(f => f.Path)
             .ToList();
 
@@ -113,14 +109,12 @@ public sealed class DocumentWireSchemaTests
         Assert.Equal("MutagenObjectType", discriminator.Name);
     }
 
-    // A table backed by several record classes is a union at the record level, and its document
-    // names its class first like any union element's does.
     [Theory]
     [InlineData("gmst", "GameSettingFloat")]
     [InlineData("glob", "GlobalFloat")]
     [InlineData("dmgt", "DamageTypeIndexed")]
     [InlineData("omod", "ArmorModification")]
-    public void ATableOfSeveralRecordClasses_CarriesTheDocumentsDiscriminatorAsAColumn(string table, string leaf)
+    public void ATableOfSeveralRecordClasses_IsARecordLevelUnionCarryingTheDocumentsDiscriminatorAsAColumn_NamingItsClassFirstLikeAnyUnionElement(string table, string leaf)
     {
         var discriminator = Column(table, "MutagenObjectType");
 

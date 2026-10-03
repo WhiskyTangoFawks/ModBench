@@ -42,10 +42,8 @@ public class FormKeyResolutionTests
         Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
     }
 
-    // Engine-hardcoded FormIDs: a lookup miss in the implicitly-always-loaded master's module space
-    // is not a broken link but a record type the lookup was never going to carry.
     [Fact]
-    public void From_HardcodedFormKeyMissingFromLookup_ResolvesValidTypeBypassingValidation()
+    public void From_EngineHardcodedFormKeyMissingFromLookup_ResolvesValidTypeBypassingValidation_BecauseAMissInTheImplicitlyAlwaysLoadedMastersModuleSpaceIsARecordTypeTheLookupNeverCarried()
     {
         var resolution = FormKeyResolution.From("000007:Fallout4.esm", null, ["npc_"], GameRelease.Fallout4);
         Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
@@ -53,37 +51,29 @@ public class FormKeyResolutionTests
         Assert.Null(resolution.EditorId);
     }
 
-    // Module-space guard (rival: gate on ObjectID alone) — a low ObjectID in a plugin that is not
-    // implicitly-always-loaded is an ordinary broken reference, not an engine constant.
     [Fact]
-    public void From_LowObjectIdInOrdinaryPlugin_StaysUnresolved()
+    public void From_LowObjectIdInOrdinaryPlugin_StaysUnresolved_BecauseItIsABrokenReferenceNotAnEngineConstantSoGatingOnObjectIdAloneIsWrong()
     {
         var resolution = FormKeyResolution.From("000007:SomeMod.esp", null, ["npc_"], GameRelease.Fallout4);
         Assert.Equal(FormKeyResolutionState.Unresolved, resolution.State);
     }
 
-    // Boundary guard (rival: off-by-one, <= instead of <) — $800 itself is the first ordinary,
-    // non-reserved ObjectID and must still be checked normally.
     [Fact]
-    public void From_ObjectIdAtHighRangeBoundary_StaysUnresolved()
+    public void From_ObjectId0x800AtHighRangeBoundary_StaysUnresolved_BecauseItIsTheFirstOrdinaryNonReservedObjectIdAndMustStillBeChecked()
     {
         var resolution = FormKeyResolution.From("000800:Fallout4.esm", null, ["npc_"], GameRelease.Fallout4);
         Assert.Equal(FormKeyResolutionState.Unresolved, resolution.State);
     }
 
-    // The other side of the same boundary — one ObjectID below it is still reserved.
     [Fact]
-    public void From_ObjectIdJustBelowHighRangeBoundary_ResolvesValidType()
+    public void From_ObjectIdJustBelowHighRangeBoundary_ResolvesValidType_BecauseOneBelow0x800IsStillReserved()
     {
         var resolution = FormKeyResolution.From("0007FF:Fallout4.esm", null, ["npc_"], GameRelease.Fallout4);
         Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
     }
 
-    // A malformed editor string reaches here before the edit gesture's refusal path can reject it,
-    // and FormKey.Factory throws for it, so the hardcoded check must use TryFactory and treat
-    // "cannot even parse" as "definitely not hardcoded".
     [Fact]
-    public void From_MalformedFormKeyString_StaysUnresolved_DoesNotThrow()
+    public void From_MalformedFormKeyString_StaysUnresolved_DoesNotThrow_BecauseItReachesHereBeforeTheEditRefusalAndFormKeyFactoryThrowsSoUnparseableMeansNotHardcoded()
     {
         var resolution = FormKeyResolution.From("not-a-formkey", null, ["npc_"], GameRelease.Fallout4);
         Assert.Equal(FormKeyResolutionState.Unresolved, resolution.State);

@@ -9,8 +9,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Tests.Schema;
 
-// The shared kernel's answer to "which FormKeys does this document reference", driven the way every
-// caller drives it: a document and the schema for its record type, nothing else.
 public class FormReferenceCollectorTests
 {
     private static ColumnSpec Column(SubFieldSpec field) => new(field, field.Name, "JSON");
@@ -35,8 +33,6 @@ public class FormReferenceCollectorTests
             ElementSpec: new SubFieldSpec(name, "struct", [], [],
                 SubFields: [.. fkSubFields.Select(f => new SubFieldSpec(f, "formKey", [], []))])));
 
-    // The column's value sits in a document under the column's own name; JSON text is the
-    // document's spelling of it, a JsonElement one already parsed.
     private static List<(string Path, string Fk)> Collect(ColumnSpec col, object? value)
     {
         var results = new List<(string, string)>();
@@ -52,8 +48,6 @@ public class FormReferenceCollectorTests
         results.AddRange(FormReferences.Collect(root.RootElement, SchemaOf(col)).Select(r => (r.FieldPath, r.TargetFormKey)));
         return results;
     }
-
-    // --- Case 1: scalar formKey ---
 
     [Fact]
     public void Collect_ScalarFormKey_StringInput_IsYielded()
@@ -88,8 +82,6 @@ public class FormReferenceCollectorTests
         Assert.Empty(Collect(col, "Null"));
     }
 
-    // --- Case 2: array of formKey ---
-
     [Fact]
     public void Collect_ArrayFormKey_StringJsonInput_IndexedPaths()
     {
@@ -122,8 +114,6 @@ public class FormReferenceCollectorTests
         Assert.Equal(("Keywords[2]", "000003:Plugin.esp"), hits[0]);
     }
 
-    // --- Case 3: array of struct with formKey subfields ---
-
     [Fact]
     public void Collect_ArrayStruct_StringJsonInput_SubFieldPaths()
     {
@@ -147,7 +137,7 @@ public class FormReferenceCollectorTests
     [Fact]
     public void Collect_ArrayStruct_NonFormKeySubFieldsIgnored()
     {
-        var col = ArrayStructCol("Factions", "Faction"); // "Rank" is not in fkSubFields
+        var col = ArrayStructCol("Factions", "Faction");
         var json = "[{\"Faction\":\"000010:Plugin.esp\",\"Rank\":1}]";
         var hits = Collect(col, json);
         Assert.Single(hits);
@@ -174,16 +164,12 @@ public class FormReferenceCollectorTests
         Assert.Contains(("links[1].LinkTo", "000004:A.esp"), hits);
     }
 
-    // --- Unrecognized ApiType ---
-
     [Fact]
     public void Collect_UnknownApiType_IsNotYielded()
     {
         var col = new ColumnSpec(new SubFieldSpec("Name", "string", [], []), "Name", "VARCHAR");
         Assert.Empty(Collect(col, "some value"));
     }
-
-    // --- Non-string/non-null elements in formKey array skipped (not throw) ---
 
     [Fact]
     public void Collect_ArrayFormKey_NonStringElementSkipped()
@@ -194,8 +180,6 @@ public class FormReferenceCollectorTests
         Assert.Single(hits);
         Assert.Equal(("Keywords[1]", "000001:Fallout4.esm"), hits[0]);
     }
-
-    // --- Non-object elements in struct array skipped (not throw) ---
 
     [Fact]
     public void Collect_ArrayStruct_NullElementSkipped()
@@ -225,17 +209,13 @@ public class FormReferenceCollectorTests
         Assert.Empty(Collect(col, json));
     }
 
-    // --- Array with null ElementType (SchemaReflector can produce this for opaque Loqui elements) ---
-
     [Fact]
-    public void Collect_ArrayWithNullElementType_IsNotYielded()
+    public void Collect_ArrayWithNullElementType_IsNotYielded_BecauseSchemaReflectorProducesOneForOpaqueLoquiElements()
     {
         var col = Column(new SubFieldSpec("items", "array", [], [], ElementSpec: null));
         var hits = Collect(col, "[\"000001:Fallout4.esm\"]");
         Assert.Empty(hits);
     }
-
-    // --- Depth-2: struct sub-field that is itself a struct containing a formKey ---
 
     [Fact]
     public void Collect_ArrayStruct_NestedStructSubField_FormKeyReached()
@@ -252,18 +232,14 @@ public class FormReferenceCollectorTests
         Assert.Equal(("links[0].inner.Target", "000001:Plugin.esp"), hits[0]);
     }
 
-    // --- The whole record, the way every caller asks: one document, one schema ---
-
     [Fact]
-    public void Collect_ARecordWithANestedStruct_AListOfLinks_AndAUnionField_YieldsEachTargetOnce()
+    public void Collect_ARecordWithANestedStruct_AListOfLinks_AndAUnionField_YieldsEachTargetOnce_TheLeafNamedByTheDocumentsOwnDiscriminatorDecidingTheShape()
     {
         var nested = Column(new SubFieldSpec("Ownership", "struct", [], [],
             SubFields: [new SubFieldSpec("Owner", "struct", [], [],
                 SubFields: [new SubFieldSpec("Faction", "formKey", [], [])])]));
         var list = Column(new SubFieldSpec("Keywords", "array", [], [],
             ElementSpec: new SubFieldSpec("Keywords", "formKey", [], [])));
-        // A union member: the leaf named by the document's own discriminator decides the shape, so
-        // the link under the named leaf is reached and the other leaf's is not.
         var union = Column(new SubFieldSpec("Value", "struct", [], [], Variants: new Dictionary<string, SubFieldSpec>
         {
             ["ObjectValue"] = new SubFieldSpec("Value", "struct", [], [],
@@ -305,8 +281,6 @@ public class FormReferenceCollectorTests
         Assert.Equal(
             ["Fallout4.esm"],
             masters.Value.EnumerateArray().Select(m => m.GetProperty("Master").GetString()));
-        // The schema types a master as the plugin name it is, so the collector reaches no leaf: the
-        // references table has never held a row sourced at a header.
         Assert.Empty(FormReferences.Collect(document.RootElement, header));
     }
 }

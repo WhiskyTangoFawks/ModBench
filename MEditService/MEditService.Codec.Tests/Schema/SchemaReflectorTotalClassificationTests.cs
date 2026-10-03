@@ -5,16 +5,11 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Tests.Indexing;
 
-/// <summary>Unlike the leaf-coverage sweep, this needs no shape filter or depth cap: it does not
-/// re-derive classification, it asks the reflector what it failed to classify, so there is no
-/// tautology to avoid.</summary>
 public class SchemaReflectorTotalClassificationTests
 {
-    private static List<LogEntry> BuildAndCollect()
+    private static List<LogEntry> BuildAndCollect_PrivateBecauseTheSharedReflectorIsNullLoggedAndCached_DebugBecauseTheDefaultFloorDropsTheseLines()
     {
         var entries = new List<LogEntry>();
-        // A private reflector: the shared one is built once with a null logger and caches, so it has
-        // no anomalies left to report. Debug minimum, since the default floor drops those lines.
         using var factory = LoggerFactory.Create(b => b
             .SetMinimumLevel(LogLevel.Debug)
             .AddProvider(new CollectingLoggerProvider(entries)));
@@ -25,12 +20,10 @@ public class SchemaReflectorTotalClassificationTests
     private const string UnclassifiedAnomalyPrefix = "SchemaReflector: unclassified";
 
     [Fact]
-    public void EveryPropertyTheWalkReaches_IsClassifiedOrExplicitlyExcluded()
+    public void EveryPropertyTheWalkReaches_IsClassifiedOrExplicitlyExcluded_ByAskingTheReflectorWhatItFailedToClassifyNotByReDerivingClassification()
     {
-        var entries = BuildAndCollect();
-        // A collector wired to nothing would also find zero anomalies below — this is the canary
-        // that it received the walk's own trace.
-        Assert.NotEmpty(entries);
+        var entries = BuildAndCollect_PrivateBecauseTheSharedReflectorIsNullLoggedAndCached_DebugBecauseTheDefaultFloorDropsTheseLines();
+        Assert.True(entries.Count > 0, "Expected the collector to receive the walk's own trace; a collector wired to nothing would find zero anomalies too.");
 
         var anomalies = entries
             .Where(e => e.Message.StartsWith(UnclassifiedAnomalyPrefix, StringComparison.Ordinal))
@@ -50,7 +43,7 @@ public class SchemaReflectorTotalClassificationTests
     [Fact]
     public void GenderedItemFields_AreTheTwentyThisTicketDefers()
     {
-        var gendered = BuildAndCollect()
+        var gendered = BuildAndCollect_PrivateBecauseTheSharedReflectorIsNullLoggedAndCached_DebugBecauseTheDefaultFloorDropsTheseLines()
             .Where(e => e.Message.Contains("IGenderedItemGetter", StringComparison.Ordinal))
             .Select(e => e.Message)
             .Distinct()
