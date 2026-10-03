@@ -362,11 +362,12 @@ internal sealed class WriteTargets(
             ? throw new InvalidDataException($"{source.Plugin.Name}'s document for {formKey} is no record document: {why}")
             : null);
 
-    /// <summary>The nearest copy left of <paramref name="plugin"/> that <paramref name="says"/> accepts,
-    /// passing over by its header one holding a flag of <paramref name="passOver"/>. An unreadable copy
-    /// ends the walk.</summary>
-    internal LeftCopy NearestCopyToTheLeft(PluginAddress plugin, string formKey, Func<JsonObject, bool> says, long passOver = 0) =>
-        NearestToTheLeft(plugin, formKey, source =>
+    /// <summary>The nearest copy left of <paramref name="plugin"/>, among <paramref name="among"/> if given,
+    /// that <paramref name="says"/> accepts, passing over one whose header holds a flag of
+    /// <paramref name="passOver"/>. An unreadable copy ends the walk.</summary>
+    internal LeftCopy NearestCopyToTheLeft(
+        PluginAddress plugin, string formKey, Func<JsonObject, bool> says, long passOver = 0, IReadOnlySet<string>? among = null) =>
+        NearestToTheLeft(plugin, formKey, among, source =>
         {
             if (IdentityIn(source, formKey) is not { } identity) return null;
             if (passOver != 0 && (source.RecordFlags(identity) & passOver) != 0) return null;
@@ -374,19 +375,22 @@ internal sealed class WriteTargets(
             return JsonNode.Parse(body) is JsonObject copy && says(copy) ? body : null;
         });
 
-    /// <summary>The nearest copy left of <paramref name="plugin"/> of the exterior cell at grid
-    /// (<paramref name="x"/>, <paramref name="y"/>) of <paramref name="worldspace"/>.</summary>
-    internal LeftCopy NearestCellToTheLeft(PluginAddress plugin, string worldspace, int x, int y) =>
-        NearestToTheLeft(plugin, worldspace, source =>
+    /// <summary>The nearest copy left of <paramref name="plugin"/>, among <paramref name="among"/>, of the
+    /// exterior cell at grid (<paramref name="x"/>, <paramref name="y"/>) of <paramref name="worldspace"/>.</summary>
+    internal LeftCopy NearestCellToTheLeft(PluginAddress plugin, string worldspace, int x, int y, IReadOnlySet<string> among) =>
+        NearestToTheLeft(plugin, worldspace, among, source =>
             source.CellAt(worldspace, x, y) is { } cell && IdentityIn(source, cell) is { } identity ? source.Body(identity) : null);
 
     // The plugins left of this one, nearest first, until one answers a text. An unreadable one ends the
     // walk, named by what it was asked about.
-    private LeftCopy NearestToTheLeft(PluginAddress plugin, string askedAbout, Func<CopySource, string?> answer)
+    private LeftCopy NearestToTheLeft(
+        PluginAddress plugin, string askedAbout, IReadOnlySet<string>? among, Func<CopySource, string?> answer)
     {
         var current = loadOrder.Current;
         var index = current.LoadOrderIndex(plugin) ?? current.Active.Count;
-        foreach (var left in current.Active.Take(index).Reverse().Select(registered => registered.Key))
+        var asked = current.Active.Take(index).Reverse().Select(registered => registered.Key)
+            .Where(left => among?.Contains(left.Name) ?? true);
+        foreach (var left in asked)
         {
             using var source = new CopySource(left, current, adapter, codec, schemaReflector);
             try

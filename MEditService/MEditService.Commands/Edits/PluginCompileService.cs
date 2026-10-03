@@ -155,33 +155,15 @@ public sealed class PluginCompileService(
         // document, so nothing is derived from it.
         var schemas = schemaReflector.GetSchemas(loadOrder.GameRelease);
         var records = new List<SourceRecord>();
+        var required = new RequiredMasters(plugin);
         foreach (var document in tree.Documents(schemas))
         {
-            records.Add(new SourceRecord(
-                document.RecordType, schemas[document.RecordType], document,
-                WriteTargets.EditorIdOf(document.Text)));
+            var schema = schemas[document.RecordType];
+            records.Add(new SourceRecord(document.RecordType, schema, document, WriteTargets.EditorIdOf(document.Text)));
+            required.Add(document, schema);
         }
 
-        var links = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var masters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var record in records)
-        {
-            // An override carries another plugin's FormKey, which needs that plugin as a master
-            // whether or not the record references anything.
-            if (PluginNameIn(record.Document.FormKey) is { } native) masters.Add(native);
-
-            using var document = JsonDocument.Parse(record.Document.Text);
-            var referenced = FormReferences.Collect(document.RootElement, record.Schema)
-                .Select(reference => reference.TargetFormKey);
-            foreach (var target in referenced)
-            {
-                links.Add(target);
-                if (PluginNameIn(target) is { } master) masters.Add(master);
-            }
-        }
-
-        masters.Remove(plugin.Name);
-        return new Content(records, InLoadOrderOrder(masters, loadOrder), links);
+        return new Content(records, InLoadOrderOrder(required.Masters, loadOrder), required.Links);
     }
 
     // ADR-0007 invariant 4: a dangling link is emittable, so compile writes the plugin and reports
@@ -200,7 +182,7 @@ public sealed class PluginCompileService(
         var unread = answers.UnreadableFiles.ToDictionary(
             file => file.FileName, file => file.Reason, StringComparer.OrdinalIgnoreCase);
         string? WhyUnchecked(string formKey) =>
-            PluginNameIn(formKey) is { } owner && unread.TryGetValue(owner, out var reason)
+            RequiredMasters.PluginNameIn(formKey) is { } owner && unread.TryGetValue(owner, out var reason)
                 ? $"{owner} could not be read, so this link was not checked: {reason}"
                 : null;
 
@@ -258,7 +240,7 @@ public sealed class PluginCompileService(
 
     // An active master sorts by its load index; one that is not falls after every active master,
     // alphabetically among themselves, so the result is stable either way.
-    private static IReadOnlyList<string> InLoadOrderOrder(HashSet<string> masters, LoadOrderSnapshot loadOrder)
+    private static IReadOnlyList<string> InLoadOrderOrder(IReadOnlySet<string> masters, LoadOrderSnapshot loadOrder)
     {
         if (masters.Count == 0) return [];
 
@@ -270,11 +252,6 @@ public sealed class PluginCompileService(
             .OrderBy(m => loadIndex.GetValueOrDefault(m, int.MaxValue))
             .ThenBy(m => m, StringComparer.OrdinalIgnoreCase)];
     }
-
-    // The plugin half of a FormKey, which is how a reference names the master it needs. Mutagen's
-    // own parser, not a split on the colon: a FormKey's spelling is its definition.
-    private static string? PluginNameIn(string formKey) =>
-        FormKey.TryFactory(formKey, out var parsed) ? parsed.ModKey.FileName.String : null;
 
     // Whatever is wrong with the source, the remedy is re-Track (ADR-0006), so the catch is
     // deliberately unfiltered and the message uniform.

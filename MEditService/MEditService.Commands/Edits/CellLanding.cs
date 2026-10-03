@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>A placed record moving into another cell of its worldspace, through one source transaction. A
-/// cell the plugin lacks is copied in from its nearest copy to the left, or created, as xEdit's Add does.</summary>
+/// cell the plugin lacks is copied in from the nearest of its masters to hold it, or created, as xEdit's Add does.</summary>
 internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, SchemaReflector schemaReflector, ILogger logger)
 {
     // The cell document that takes the record in, and where a new one goes.
@@ -112,7 +112,9 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
             ? new Step<JsonObject>.Done(held)
             : CopiedOrNew(
                     move,
-                    targets.NearestCopyToTheLeft(move.Plugin, move.Worldspace, copy => copy[PlacedCell.WorldspacePersistentCellMember] is JsonObject),
+                    targets.NearestCopyToTheLeft(
+                        move.Plugin, move.Worldspace, copy => copy[PlacedCell.WorldspacePersistentCellMember] is JsonObject,
+                        among: MastersOf(move)),
                     copy => Parsed(copy, move.Worldspace)[PlacedCell.WorldspacePersistentCellMember],
                     PersistentFlag.Bit, (0, 0))
                 .Then<JsonObject>(copied =>
@@ -134,7 +136,7 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         if (move.Repository.CellAt(move.Plugin, move.Worldspace, grid.X, grid.Y) is { } held)
             return new Step<Landed>.Done(IntoHeldCell(move, held, record));
 
-        var left = targets.NearestCellToTheLeft(move.Plugin, move.Worldspace, grid.X, grid.Y);
+        var left = targets.NearestCellToTheLeft(move.Plugin, move.Worldspace, grid.X, grid.Y, MastersOf(move));
         if (left.FoundText is { } copy && FormKeyOf(Parsed(copy, move.Worldspace)) is var copied
             && move.Repository.IdentityOf(move.Plugin, copied, schemaReflector.GetSchemas(move.Release)) is not null)
         {
@@ -162,17 +164,22 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         return new(Document(identity, codec.RoundTrip(cell.ToJsonString(), move.Release, identity.RecordType)), null);
     }
 
-    // The own fields of the nearest copy to the left, as an override, or else a new cell native to the plugin.
+    // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile), and a tracked
+    // plugin's masters are what its working tree's content requires (ADR-0008 invariant 2).
+    private IReadOnlySet<string> MastersOf(Move move) =>
+        RequiredMasters.InTheTree(move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release));
+
+    // The own fields of the nearest master's copy, as an override, or else a new cell native to the plugin.
     private Step<JsonObject> CopiedOrNew(Move move, LeftCopy left, Func<string, JsonNode?> cellIn, long flags, (int X, int Y) grid)
     {
         switch (left)
         {
             case LeftCopy.Unreadable unreadable:
                 return new Step<JsonObject>.Refused(unreadable.Refusal(
-                    move.Spelled, $"the cell {move.Moved.FormKey} moves into is copied in from its nearest copy to the left"));
+                    move.Spelled, $"the cell {move.Moved.FormKey} moves into is copied in from the nearest of {move.Plugin.Name}'s masters to hold it"));
             case LeftCopy.Found found:
                 var copy = cellIn(found.Text)?.ToJsonString()
-                    ?? throw new InvalidOperationException($"The copy to the left of {move.Plugin.Name} holds no cell where it was found.");
+                    ?? throw new InvalidOperationException($"The copy of a master of {move.Plugin.Name} holds no cell where it was found.");
                 return new Step<JsonObject>.Done(
                     Parsed(ContainerDocumentEdits.WithoutChildren(codec, copy, move.Release, move.CellType), move.Worldspace));
         }
