@@ -161,8 +161,7 @@ internal sealed class WriteTargets(
         return RefuseIfNotLoaded(plugin);
     }
 
-    // Tracking is per mod folder and implies neither that the plugin is active nor that it is not
-    // (ADR-0012 invariant 5).
+    // Tracking is per mod folder and implies neither that the plugin is active nor that it is not.
     private RecordEditResult? RefuseIfNotLoaded(PluginAddress plugin) =>
         loadOrder.Current.IsActive(plugin)
             ? null
@@ -182,7 +181,7 @@ internal sealed class WriteTargets(
                 // The palette entry verbatim; naming a command that does not exist is its own dead end.
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
-    // Neither origin's way out is the other's (ADR-0012 invariant 2).
+    // Neither origin's way out is the other's.
     private static string NoModFolderMessage(PluginAddress plugin) =>
         PluginOrigin.IsOverwrite(plugin.Origin)
             ? $"{plugin.Name} is loaded from Overwrite, an origin and not a mod, so it has no mod " +

@@ -1,7 +1,6 @@
 namespace MEditService.LoadOrder;
 
-/// <summary>Where the shared kernel keeps the current load order. Only the put-load-order handler
-/// calls <see cref="Apply"/> (ADR-0013 invariant 4).</summary>
+/// <summary>Where the shared kernel keeps the current load order (ADR-0013 invariant 4).</summary>
 public sealed class LoadOrderHolder
 {
     // Replaced wholesale, never mutated, so a reader mid-Apply sees the previous arrival whole: its

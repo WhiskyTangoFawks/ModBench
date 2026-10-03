@@ -19,8 +19,7 @@ public sealed class TrackService(
     private readonly INotificationPublisher? _notifications = notifications;
     private readonly PluginDecompiler _decompiler = new(logger, adapter);
 
-    /// <summary>Each plugin of the selection lands or is refused on its own (commands.md, "A selection
-    /// is one gesture"). git missing refuses the whole selection once, before any write.</summary>
+    /// <summary>Per plugin (commands.md, A selection is one gesture).</summary>
     public async Task<TrackSelectionResult> TrackAsync(
         LoadOrderSnapshot loadOrder,
         IReadOnlyList<PluginAddress> plugins,
@@ -119,7 +118,7 @@ public sealed class TrackService(
         }
     }
 
-    // Every refusal comes before the plugin's commit (commands.md, A failed gesture writes nothing).
+    // Every refusal comes before the plugin's commit (commands.md, A selection is one gesture).
     private async Task<Verification> VerifyAsync(
         LoadOrderSnapshot loadOrder, PluginAddress key, string? upstreamVersion, Action onParsed, CancellationToken cancel)
     {

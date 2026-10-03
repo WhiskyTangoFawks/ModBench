@@ -18,6 +18,10 @@ public sealed class PluginCompileService(
     IPluginAdapter adapter,
     ILogger<PluginCompileService> logger)
 {
+    // The palette entry verbatim; a tracked mod refuses Track, so decompile is the way back
+    // (ADR-0007 invariant 2).
+    private const string RegenerateTheSource = "Run \"Modbench: Decompile Plugin\" to regenerate the source.";
+
     public async Task<CompileResult> CompileAsync(PluginAddress plugin)
     {
         var loadOrder = loadOrderHolder.Current;
@@ -252,8 +256,6 @@ public sealed class PluginCompileService(
             .ThenBy(m => m, StringComparer.OrdinalIgnoreCase)];
     }
 
-    // The catch is deliberately unfiltered, and every cause's remedy is re-Track (ADR-0006
-    // invariant 5).
     private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(
         IReadOnlyList<TreeFile> files, string pluginName, GameRelease release)
     {
@@ -263,7 +265,7 @@ public sealed class PluginCompileService(
         logger.LogWarning(read.Error, "{Plugin} could not be read from its source", pluginName);
         var diagnosis = read.Diagnosis
             ?? throw new InvalidOperationException("Expected a failed read to carry a diagnosis.");
-        return (null, $"{pluginName} could not be read from its source: {diagnosis.Describe()} Re-Track to regenerate the source.");
+        return (null, $"{pluginName} could not be read from its source: {diagnosis.Describe()} {RegenerateTheSource}");
     }
 
     // ADR-0006 invariant 6. The generated deserializer skips an unrecognized property or file without
@@ -289,7 +291,7 @@ public sealed class PluginCompileService(
 
             var offender = file.RelativePath == headerDocument ? "the plugin header" : file.RelativePath;
             return $"{pluginName} does not round-trip through its own source: {offender} does not match " +
-                "what the current codec would produce from it. Re-Track to regenerate the source.";
+                $"what the current codec would produce from it. {RegenerateTheSource}";
         }
 
         var regeneratedPaths = regeneratedFiles.Select(f => f.RelativePath).ToHashSet(StringComparer.Ordinal);
@@ -301,7 +303,7 @@ public sealed class PluginCompileService(
         {
             return $"{pluginName} does not round-trip through its own source: {unproduced} is in the source, " +
                 "but the current codec produces no such file from it, so nothing it holds reaches the plugin " +
-                "(a document left over from an earlier source layout, or a stray file). Re-Track to regenerate the source.";
+                $"(a document left over from an earlier source layout, or a stray file). {RegenerateTheSource}";
         }
 
         return null;

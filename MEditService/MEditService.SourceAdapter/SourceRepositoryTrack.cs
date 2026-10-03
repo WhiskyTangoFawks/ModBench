@@ -151,7 +151,6 @@ public sealed partial class SourceRepository
             GitCli.Run(gitDir, workTree, "config", "user.email", "modbench@localhost");
     }
 
-    // meta.ini and the plugin binaries are ignored in every preset (plugins.md, Track, story 2).
     private static string GitignoreContent(SourcePreset preset) => preset switch
     {
         // Root-anchored: a bare "plugin-source/" would also un-ignore a same-named folder nested

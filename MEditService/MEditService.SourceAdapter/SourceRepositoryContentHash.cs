@@ -17,9 +17,6 @@ public sealed partial class SourceRepository
 /// are provably the same object (ADR-0011).</summary>
 internal static class GitBlobHash
 {
-    // Inequality is not an edit because overlay and deep-parse serialization diverge on a few records
-    // (4 of 3,940 measured, e.g. Cell 092A18:Fallout4.esm Lighting.Versioning).
-
     /// <summary>The 40-character lowercase hex name <c>git hash-object</c> prints.</summary>
     public static string Of(ReadOnlySpan<byte> content)
     {

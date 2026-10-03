@@ -15,8 +15,8 @@ public interface IWorldspaceQueryService
     IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string origin);
 }
 
-/// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin winner
-/// (plugins.md, The tree).</summary>
+/// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin
+/// winner.</summary>
 public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<WorldspaceQueryService>? logger = null)
     : IWorldspaceQueryService
 {
