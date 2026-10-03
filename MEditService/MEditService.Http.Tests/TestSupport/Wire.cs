@@ -20,7 +20,7 @@ internal static class Wire
         client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins));
 
     /// <summary>What Modbench sends once its watch sees a change: the snapshot again, whose arrival
-    /// validates every file (ADR-0009).</summary>
+    /// validates every file (ADR-0003).</summary>
     internal static async Task NextSnapshot(this HttpClient client, ScatteredFixtureData fx, params string[] origins) =>
         (await client.PutLoadOrder(fx, origins)).EnsureSuccessStatusCode();
 

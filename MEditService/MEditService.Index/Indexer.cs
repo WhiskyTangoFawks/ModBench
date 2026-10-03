@@ -78,7 +78,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     private readonly Dictionary<PluginAddress, FailedRead?> _failedReads = new(PluginAddress.Comparer);
 
     // What a failed read read from: the binary's hash, and for a plugin with a tree, what git named
-    // at its HEAD then (ADR-0009).
+    // at its HEAD then (ADR-0003).
     private sealed record FailedRead(string? Binary, TreeChanges? Tree)
     {
         public bool Holds(FailedRead now) =>
@@ -219,7 +219,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     }
 
     /// <summary>ADR-0013's one verb, on the caller's thread, then every plugin validated
-    /// (ADR-0009). Every outcome becomes status data, published once
+    /// (ADR-0003). Every outcome becomes status data, published once
     /// <paramref name="version"/> is answered; one that changes nothing publishes nothing.</summary>
     public void Reconcile(LoadOrderSnapshot snapshot, long version) => Reconcile(() => (snapshot, version));
 
@@ -337,7 +337,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    // ADR-0009.
+    // ADR-0010.
     // Published before any plugin is opened, which is what makes the reconcile progressive.
     private (HeldPlugins Held, IRecordIndex Index) EnsureScope(LoadOrderSnapshot snapshot)
     {
@@ -463,7 +463,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
 
         foreach (var key in moved)
         {
-            // ADR-0009.
+            // ADR-0012.
             var metadata = held.Update(open[key], snapshot.RegistrationOf(key));
             index.Register(metadata.Key, metadata.Registration);
         }
@@ -633,7 +633,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         return repository.ChangesSince(key, since) is { Named: not null } tree ? new FailedRead(binary, tree) : null;
     }
 
-    // ADR-0009: a plugin the store has seen, still matching the disk, is registered, not
+    // ADR-0010: a plugin the store has seen, still matching the disk, is registered, not
     // indexed; ADR-0015 validates a tracked plugin by content on that same warm path.
     private void RegisterOrIndex(HeldPlugins held, IRecordIndex index, PluginMetadata plugin, CancellationToken token)
     {
@@ -1098,7 +1098,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0009: drops the index file, floors its sequence at what this process
+    /// <summary>ADR-0010: drops the index file, floors its sequence at what this process
     /// handed out, and returns the refill against the load order held, run off the caller's thread.
     /// </summary>
     public Task RebuildStore(GameRelease gameRelease, string instanceRoot)

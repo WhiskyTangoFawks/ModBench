@@ -52,7 +52,7 @@ export async function putLoadOrder(
 }
 
 /** The rebuild of commands.md's `refresh`: mEdit reads every plugin again against the load order
- *  it holds, and nothing is sent. Held-elsewhere is its own refusal (ADR-0009). */
+ *  it holds, and nothing is sent. Held-elsewhere is its own refusal (ADR-0010). */
 export type RefreshResult =
   | { applied: true }
   | { applied: false; heldElsewhere: true }

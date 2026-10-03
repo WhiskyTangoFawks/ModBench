@@ -1,6 +1,6 @@
 namespace MEditService.Index;
 
-/// <summary>One index file per instance, inside the instance root (ADR-0009).</summary>
+/// <summary>One index file per instance, inside the instance root (ADR-0010).</summary>
 internal static class IndexFile
 {
     /// <summary>The index file for one instance. Pure — it creates nothing;

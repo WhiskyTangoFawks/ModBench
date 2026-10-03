@@ -15,7 +15,7 @@ internal enum RecordRef
     Head,
 }
 
-/// <summary>The reserved <c>winners.record_ref</c> values (ADR-0009), spelled out
+/// <summary>The reserved <c>winners.record_ref</c> values, spelled out
 /// rather than <c>RecordRef.ToString()</c> because the database and the view SQL hold them, so a
 /// renamed enum member must not change them.</summary>
 internal static class WinnerRef

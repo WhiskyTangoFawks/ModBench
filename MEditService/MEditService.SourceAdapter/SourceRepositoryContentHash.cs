@@ -4,7 +4,7 @@ using System.Text;
 namespace MEditService.SourceAdapter;
 
 /// <summary>The content hash: how a stored body and a tracked source file are named the same object
-/// (ADR-0011).</summary>
+/// (ADR-0005).</summary>
 public sealed partial class SourceRepository
 {
     /// <summary>The name git gives these same bytes, so equality proves the tracked file holds them.
@@ -14,7 +14,7 @@ public sealed partial class SourceRepository
 }
 
 /// <summary>Git's own blob object name, so <c>documents.content_hash</c> and a tracked source file
-/// are provably the same object (ADR-0011).</summary>
+/// are provably the same object (ADR-0005).</summary>
 internal static class GitBlobHash
 {
     /// <summary>The 40-character lowercase hex name <c>git hash-object</c> prints.</summary>

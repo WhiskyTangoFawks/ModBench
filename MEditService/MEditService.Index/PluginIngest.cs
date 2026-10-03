@@ -35,7 +35,7 @@ internal sealed class PluginIngest
         List<ContainerChildRow> ChildRows, List<PlacementRow> Placements, CellLocationRow? CellLocation,
         string? EditorId, string? ParseDiagnosis);
 
-    // ADR-0009: a re-index replaces its own rows, the header's included. Called before
+    // A re-index replaces its own rows, the header's included. Called before
     // DuckDbRecordIndex.Index creates the appender rather than resting on an unverified assumption
     // about how an appender behaves relative to a later delete.
     public void DeletePriorDocuments(string plugin, string origin)
@@ -48,7 +48,7 @@ internal sealed class PluginIngest
         DeleteExistingForOrigin("records_committed", plugin, origin);
     }
 
-    // ADR-0011, from the one stream that carries the documents. The appender is opened once per
+    // ADR-0005, from the one stream that carries the documents. The appender is opened once per
     // Index() call because `records` spans every type. DeletePriorDocuments must run first.
     public IndexTiming IndexPlugin(
         IPluginDocuments documents, string plugin, string origin,
@@ -90,7 +90,7 @@ internal sealed class PluginIngest
                 AppendFormReference(refAppender, r, plugin, origin);
         }
 
-        // ADR-0011: one form_lookup row per indexed record, with no second indexing pass over the
+        // One form_lookup row per indexed record, with no second indexing pass over the
         // plugin.
         DeleteExistingForOrigin("form_lookup", plugin, origin);
         if (lookupRows.Count > 0)
@@ -297,7 +297,7 @@ internal sealed class PluginIngest
         row.EndRow();
     }
 
-    // The worldspace-tree side tables (ADR-0011).
+    // The worldspace-tree side tables.
     private void WritePlacement(
         string plugin, string origin,
         List<PlacementRow> placementRows, List<CellLocationRow> cellLocationRows)

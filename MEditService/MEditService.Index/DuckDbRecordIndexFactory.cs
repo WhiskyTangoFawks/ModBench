@@ -21,7 +21,7 @@ internal sealed class DuckDbRecordIndexFactory(
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
     private readonly TimeProvider? _timeProvider = timeProvider;
 
-    /// <summary>ADR-0009. A null <paramref name="instanceRoot"/> means an in-memory
+    /// <summary>ADR-0010. A null <paramref name="instanceRoot"/> means an in-memory
     /// index that dies with this object.</summary>
     public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null)
     {

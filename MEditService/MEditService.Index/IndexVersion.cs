@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>The shape a persistent file's rows were written under (ADR-0009). Four
+/// <summary>The shape a persistent file's rows were written under (ADR-0010). Four
 /// parts: format version, game release, Mutagen assembly version, and a digest of the reflected
 /// schema.</summary>
 internal static class IndexVersion

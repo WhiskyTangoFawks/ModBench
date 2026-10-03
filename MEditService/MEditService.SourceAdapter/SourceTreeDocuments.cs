@@ -210,7 +210,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         {
             if (!ContainerChildFields.EmbeddedSlotsFor(_release.ToCategory()).Contains((containerType, child.SlotName))) continue;
 
-            // The index holds the file's own bytes (ADR-0011), so a hand edit the codec would respell
+            // The index holds the file's own bytes (ADR-0005), so a hand edit the codec would respell
             // reaches it as the file spells it.
             var text = EmbeddedChildSplice.TextOf(ownerBytes, containerType, child.FormKey, _release)
                 ?? throw new UnreadableSourceDocumentException(

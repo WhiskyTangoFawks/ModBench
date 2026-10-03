@@ -24,7 +24,7 @@ public sealed record RowsChangedNotification(PluginAddress Plugin, IReadOnlyList
     public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin, Keys, Sequence);
 }
 
-/// <summary>A validation re-derived or removed a whole plugin (ADR-0009) — too many
+/// <summary>A validation re-derived or removed a whole plugin (ADR-0003) — too many
 /// rows to name, so this names the plugin instead.</summary>
 public sealed record PluginChangedNotification(PluginAddress Plugin, long Sequence)
     : Notification("plugin-changed")

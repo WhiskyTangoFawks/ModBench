@@ -89,7 +89,7 @@ export type RecordEditOutcome =
   | { applied: true; newFormKey?: string }
   | { applied: false; refusal: string; message: string };
 
-/** `rebuildIndex`'s own outcome (ADR-0009). */
+/** `rebuildIndex`'s own outcome (ADR-0010). */
 export type RebuildIndexOutcome =
   | { rebuilt: true }
   | { rebuilt: false; heldElsewhere: true }

@@ -13,10 +13,10 @@ namespace MEditService.Index;
 internal sealed class SourceValidation(
     DuckDbRecordIndex index, DuckDBConnection connection, GameRelease release, ILogger logger)
 {
-    // One per index (ADR-0009).
+    // One per index.
     private readonly Dictionary<PluginAddress, string> _validatedHeads = new(PluginAddress.Comparer);
 
-    /// <summary>ADR-0009. A later validation also reads what the
+    /// <summary>ADR-0003. A later validation also reads what the
     /// index holds as dirty.</summary>
     internal ValidationReport Validate(PluginAddress key, string modFolder)
     {

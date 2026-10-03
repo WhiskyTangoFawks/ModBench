@@ -247,7 +247,7 @@ type RowDecoration = {
 };
 
 // What a row not resolved by the load order shows (plugins.md, States, stories 3, 4 and 6).
-// `everyRow`: a second window (ADR-0009). `unheldRow`: mEdit unreachable, or a `Failed` reconcile.
+// `everyRow`: a second window (ADR-0010). `unheldRow`: mEdit unreachable, or a `Failed` reconcile.
 type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
 // plugins.md, A row: the five statuses, in the order that sets the icon. `words` is the
@@ -851,7 +851,7 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** The load order's own refusal (ADR-0009; plugins.md, States, stories 4 and 6). */
+  /** The load order's own refusal (ADR-0010; plugins.md, States, stories 4 and 6). */
   applyRefused(refusal: LoadOrderRefusal): void {
     this.generation++;
     this.indexFailure = refusal.kind === 'failed' ? refusal.message : undefined;
