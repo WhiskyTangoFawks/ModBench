@@ -3,9 +3,12 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { present } from '../../ports/present';
 
-const VIEW_DIR = join(__dirname, '..');
+const SRC = join(__dirname, '..', '..');
 
-const VIEW_FILES_WALKED_NOT_LISTED =readdirSync(VIEW_DIR)
+const VIEW_DIRS = ['downloads', 'drivingLib'];
+
+const VIEW_FILES_WALKED_NOT_LISTED = VIEW_DIRS
+  .flatMap((dir) => readdirSync(join(SRC, dir)).map((name) => join(dir, name)))
   .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
   .sort();
 
@@ -30,13 +33,15 @@ function fileAccessIn(source: string): string[] {
   return [...imported, ...FS_CALLS_NAMED_BECAUSE_AN_ALIAS_EVADES_THE_IMPORT_CHECK.filter((call) => new RegExp(`\\b${call}\\(`).test(codeWithoutCommentLines(source))), ...host];
 }
 
-const read = (file: string): string => readFileSync(join(VIEW_DIR, file), 'utf8');
+const read = (file: string): string => readFileSync(join(SRC, file), 'utf8');
 
 describe('the Downloads view reads no file of its own: it imports no filesystem module and names no filesystem call', () => {
   it('walks every file the view is made of', () => {
     expect(VIEW_FILES_WALKED_NOT_LISTED).toEqual(expect.arrayContaining([
-      'DownloadsPanel.ts', 'DownloadsProvider.ts', 'ExcludedDownloadDecorationProvider.ts',
-      'downloadRows.ts', 'upgradeCandidates.ts',
+      join('downloads', 'DownloadsPanel.ts'), join('downloads', 'DownloadsProvider.ts'),
+      join('downloads', 'ExcludedDownloadDecorationProvider.ts'), join('downloads', 'downloadRows.ts'),
+      join('downloads', 'upgradeCandidates.ts'), join('drivingLib', 'errorNode.ts'),
+      join('drivingLib', 'instanceFirstRead.ts'),
     ]));
     expect(VIEW_FILES_WALKED_NOT_LISTED.filter((file) => read(file).length === 0)).toEqual([]);
   });
