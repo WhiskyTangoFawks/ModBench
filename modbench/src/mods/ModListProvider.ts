@@ -631,7 +631,6 @@ export class ModListProvider
     return mods.filter(this.holdsMatch).map((m) => this.modNode(m, 'matching'));
   }
 
-  /** Under a row showing only what matches, a mod whose name matches still shows all its files. */
   private modNode(m: Mod, shown: ChildrenShown = 'all'): ModNode {
     const write = this.unconfirmed.get(m.name);
     const files = this.instanceValue.filesByMod.get(m.name) ?? [];

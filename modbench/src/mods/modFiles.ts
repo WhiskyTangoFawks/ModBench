@@ -112,9 +112,9 @@ function byLevel<T extends { readonly relativePath: string }>(entries: readonly 
   return { here, below };
 }
 
-/** The folders, then the files, directly in `parent`, each by name. `files` and `folders` are
- *  those under it, and `path` is its own path in its mod, none for the mod or Overwrite itself.
- *  Under a parent showing `matching`, a folder whose name does not match shows only what matches. */
+/** The folders, then the files, directly in `parent`, each by name. `files` and `folders` are those under
+ *  it, `path` is its own path in its mod, and under a `matching` parent a folder whose name does not
+ *  match shows only what matches. */
 export function filesIn(
   parent: ModlistNode, origin: FileOrigin, files: readonly OriginFile[], folders: readonly OriginFolder[], path?: string,
   filter?: { shown: ChildrenShown; matches: NameMatch },
