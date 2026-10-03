@@ -43,16 +43,17 @@ internal interface IRecordIndex : IDisposable
     /// switch is cheap (ADR-0009).</summary>
     string? IndexedContentHash(PluginAddress key);
 
-    /// <summary>The hash of the file at <paramref name="path"/> now (ADR-0009). Null when the file cannot be read.</summary>
+    /// <summary>The hash of the file at <paramref name="path"/> now (ADR-0009). Null when the file
+    /// cannot be read.</summary>
     string? FileContentHash(string path);
 
     /// <summary>Removes every trace of <paramref name="key"/>, rows and registration alike. ADR-0009's file-gone verb — never the meaning of a plugin leaving the load order, which is
     /// <see cref="Unregister"/>.</summary>
     void Unindex(PluginAddress key);
 
-    /// <summary>Writes <paramref name="key"/>'s <c>registrations</c> row so its already-indexed rows
-    /// answer again with no re-index (ADR-0009); an upsert. Winner state is stale until the next
-    /// sweep.</summary>
+    /// <summary>Upserts <paramref name="key"/>'s <c>registrations</c> row: its indexed facts answer
+    /// with no re-index (ADR-0009), its records too when it is active. Winners stay stale until the
+    /// next sweep.</summary>
     void Register(PluginAddress key, Registration registration);
 
     /// <summary>ADR-0013: every plugin the index currently registers — what a reconcile diffs the

@@ -52,8 +52,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     /// state, not a file mirror: it lives in <c>main</c> beside <c>registrations</c>.</summary>
     internal const string WinnersRelation = "winners";
 
-    /// <summary>One row per plugin file the load order holds, carrying its load index (ADR-0013).
-    /// Every public view joins it.</summary>
+    /// <summary>One row per plugin the snapshot names, carrying its load index, null when it is not
+    /// active (ADR-0013). Every public view joins it.</summary>
     internal const string RegistrationsRelation = "registrations";
 
     /// <summary>The active plugins with their load index (ADR-0013), which the sweep
@@ -244,8 +244,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-    // Only the active plugins compete for winners (ADR-0012). No PRIMARY KEY on any appended table:
-    // re-index is delete-then-append, and the ART index across the rebuild measured 6x the sweep.
+    // No PRIMARY KEY on any appended table: re-index is delete-then-append, and the ART index across
+    // the rebuild measured 6x the sweep.
     private static void CreateWinnersTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
