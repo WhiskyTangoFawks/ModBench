@@ -8,8 +8,6 @@ using Noggog;
 
 namespace MEditService.Index.Tests.Records;
 
-// ADR-0012: plugin identity is (origin, filename). Two plugins share a filename, each in its own
-// mod folder; a read sees only the one the game loads, so each origin is read while it wins.
 public class CompoundPluginIdentityTests
 {
     private readonly LoadOrderHolder _holder = new();
@@ -20,10 +18,7 @@ public class CompoundPluginIdentityTests
     private static readonly PluginAddress ModA = new("Shared.esp", "ModA");
     private static readonly PluginAddress ModB = new("Shared.esp", "ModB");
 
-    // Both mods share ModKey "Shared.esp" and each adds one NPC first, so deterministic FormID
-    // assignment lands them on the identical FormKey: the collision at its sharpest, differing only
-    // in origin.
-    private static ScatteredFixtureData SharedFilenameFixture(string prefix, out FormKey npcKey, bool modBEnabled = true, int modBSlot = 1)
+    private static ScatteredFixtureData SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey(string prefix, out FormKey npcKey, bool modBEnabled = true, int modBSlot = 1)
     {
         FormKey key = default;
         var fixture = new PluginFixtureBuilder(prefix)
@@ -40,7 +35,7 @@ public class CompoundPluginIdentityTests
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_IndexBothWithoutCollidingOnDelete()
     {
-        using var fixture = SharedFilenameFixture("identity-both", out var npcKey);
+        using var fixture = SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey("identity-both", out var npcKey);
         using var index = Indexes.Open(_holder);
 
         string? EditorIdWhileWinning(PluginAddress winner) => Assert.Single(
@@ -50,11 +45,10 @@ public class CompoundPluginIdentityTests
         Assert.Equal("FromModB", EditorIdWhileWinning(ModB));
     }
 
-    // ADR-0012: GetDocument's plugin filter must pick one origin's copy over the other's.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_GetRecord_ScopesToRequestedOrigin()
     {
-        using var fixture = SharedFilenameFixture("identity-get", out var npcKey);
+        using var fixture = SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey("identity-get", out var npcKey);
         using var index = Indexes.Reconciled(fixture);
 
         var record = index.RequireReads().GetDocument(npcKey.ToString(), ModA);
@@ -64,11 +58,10 @@ public class CompoundPluginIdentityTests
         Assert.Equal("ModA", record.Plugin.Origin);
     }
 
-    // ADR-0012: without origin scoping, two same-filename origins' counts silently sum into one.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_CountRecordsForPlugin_CountsRequestedOriginOnly()
     {
-        using var fixture = SharedFilenameFixture("identity-count", out _);
+        using var fixture = SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey("identity-count", out _);
         using var index = Indexes.Open(_holder);
         var reads = ReadsWithWinner(index, fixture, ModA);
 
@@ -76,9 +69,6 @@ public class CompoundPluginIdentityTests
         Assert.Equal(0, reads.CountOf(ModB, "npc_"));
     }
 
-    // ADR-0012: GetNativeFormKeys must not filter by plugin filename alone. The origins need genuinely
-    // different FormKey sets, or a filter bug looks like a working one, so ModB carries a second NPC
-    // and an origin-scoped read sees fewer keys.
     [Fact]
     public void TwoOrigins_SameFilenameDifferentNativeFormKeys_GetNativeFormKeys_ScopesToRequestedOrigin()
     {
@@ -103,11 +93,10 @@ public class CompoundPluginIdentityTests
         Assert.Empty(whileBWins.GetNativeFormKeys(ModA));
     }
 
-    // ADR-0012: a listing scoped to one filename must not silently merge both origins' rows.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_GetRecords_FiltersToRequestedOriginAndSurfacesIt()
     {
-        using var fixture = SharedFilenameFixture("identity-list", out var npcKey);
+        using var fixture = SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey("identity-list", out var npcKey);
         using var index = Indexes.Reconciled(fixture);
 
         var modAResult = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "Shared.esp", Origin: "ModA", Limit: 100, Offset: 0));
@@ -121,10 +110,9 @@ public class CompoundPluginIdentityTests
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_NonParticipatingOriginNeverWinsViaOtherOriginsParticipation()
     {
-        // ModB sits later in its own load order and would compute as winner if the sweep's join
-        // matched by filename alone: ModA's participation is a different origin's row and must not
-        // leak.
-        using var fixture = SharedFilenameFixture("identity-winner", out var npcKey, modBEnabled: false, modBSlot: 5);
+        const int modBSlotLaterThanModAWhereAFilenameOnlyJoinWouldPickIt = 5;
+        using var fixture = SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey(
+            "identity-winner", out var npcKey, modBEnabled: false, modBSlot: modBSlotLaterThanModAWhereAFilenameOnlyJoinWouldPickIt);
         using var index = Indexes.Reconciled(fixture);
 
         var only = Assert.Single(index.RequireReads().GetOverrideStack(npcKey.ToString())?.Entries ?? []);
@@ -133,10 +121,7 @@ public class CompoundPluginIdentityTests
         Assert.True(only.IsWinner);
     }
 
-    // The same identical-build-sequence trick, extended to the re-keyed side tables, so the
-    // corresponding records land on identical FormKeys: the same collision, on the placement,
-    // cell-location and reference reads the tests above do not reach.
-    private static void PopulateStructural(Fallout4Mod mod, string suffix, out FormKey cellKey, out FormKey placedKey, out FormKey npcKey, out FormKey raceKey)
+    private static void PopulateStructuralInTheSameBuildOrderSoCorrespondingRecordsLandOnIdenticalFormKeys(Fallout4Mod mod, string suffix, out FormKey cellKey, out FormKey placedKey, out FormKey npcKey, out FormKey raceKey)
     {
         var wrld = mod.Worldspaces.AddNew($"World{suffix}");
         var cell = new Cell(mod) { EditorID = $"Cell{suffix}", Grid = new CellGrid { Point = new P2Int(0, 0) } };
@@ -161,12 +146,10 @@ public class CompoundPluginIdentityTests
         FormKey cellA = default, placedA = default, npcA = default, raceA = default;
         FormKey cellB = default, placedB = default, npcB = default, raceB = default;
         var fixture = new PluginFixtureBuilder(prefix)
-            .WithPlugin("Shared.esp", mod => PopulateStructural(mod, "A", out cellA, out placedA, out npcA, out raceA), origin: "ModA")
-            .WithPlugin("Shared.esp", mod => PopulateStructural(mod, "B", out cellB, out placedB, out npcB, out raceB), origin: "ModB")
+            .WithPlugin("Shared.esp", mod => PopulateStructuralInTheSameBuildOrderSoCorrespondingRecordsLandOnIdenticalFormKeys(mod, "A", out cellA, out placedA, out npcA, out raceA), origin: "ModA")
+            .WithPlugin("Shared.esp", mod => PopulateStructuralInTheSameBuildOrderSoCorrespondingRecordsLandOnIdenticalFormKeys(mod, "B", out cellB, out placedB, out npcB, out raceB), origin: "ModB")
             .BuildScattered();
 
-        // Confirms the premise before testing the consequence: identical build order really does
-        // produce identical FormKeys across the two independently-built mods.
         Assert.Equal(cellA, cellB);
         Assert.Equal(placedA, placedB);
         Assert.Equal(npcA, npcB);
@@ -176,34 +159,40 @@ public class CompoundPluginIdentityTests
     }
 
     [Fact]
-    public void TwoOrigins_SameFilenameSameFormKeys_PlacementCellLocationAndFormReferencesBothPersist()
+    public void TwoOrigins_SameFilenameSameFormKeys_PlacementCellLocationAndFormReferencesPersist_WhileModAWins() =>
+        AssertStructuralRowsPersistForOnlyTheWinningOrigin(winner: ModA, other: ModB);
+
+    [Fact]
+    public void TwoOrigins_SameFilenameSameFormKeys_PlacementCellLocationAndFormReferencesPersist_WhileModBWins() =>
+        AssertStructuralRowsPersistForOnlyTheWinningOrigin(winner: ModB, other: ModA);
+
+    private void AssertStructuralRowsPersistForOnlyTheWinningOrigin(PluginAddress winner, PluginAddress other)
     {
         using var fixture = StructuralFixture("identity-structural", out var cellKey, out var placedKey, out _, out var raceKey);
         using var index = Indexes.Open(_holder);
 
-        foreach (var (winner, other) in new[] { (ModA, ModB), (ModB, ModA) })
-        {
-            var reads = ReadsWithWinner(index, fixture, winner);
-            Assert.NotNull(reads.GetCellLocation(winner, cellKey.ToString()));
-            Assert.NotNull(reads.GetPlacement(placedKey.ToString(), winner));
-            Assert.Null(reads.GetCellLocation(other, cellKey.ToString()));
-            Assert.Null(reads.GetPlacement(placedKey.ToString(), other));
-            Assert.Single(reads.GetReferencedBy(raceKey.ToString()), r => r.FieldPath == "Race");
-        }
+        var reads = ReadsWithWinner(index, fixture, winner);
+        Assert.NotNull(reads.GetCellLocation(winner, cellKey.ToString()));
+        Assert.NotNull(reads.GetPlacement(placedKey.ToString(), winner));
+        Assert.Null(reads.GetCellLocation(other, cellKey.ToString()));
+        Assert.Null(reads.GetPlacement(placedKey.ToString(), other));
+        Assert.Single(reads.GetReferencedBy(raceKey.ToString()), r => r.FieldPath == "Race");
     }
 
-    // ADR-0012: GetReferencedBy never filters by plugin, so its rows must carry Origin, or a caller
-    // cannot tell which of two same-filename sources holds the reference.
     [Fact]
-    public void TwoOrigins_SameFilenameSameFormKeys_GetReferences_SurfacesOriginPerRow()
+    public void TwoOrigins_SameFilenameSameFormKeys_GetReferences_SurfacesOriginPerRow_WhileModAWins() =>
+        AssertTheReferenceCarriesTheWinningOrigin(ModA);
+
+    [Fact]
+    public void TwoOrigins_SameFilenameSameFormKeys_GetReferences_SurfacesOriginPerRow_WhileModBWins() =>
+        AssertTheReferenceCarriesTheWinningOrigin(ModB);
+
+    private void AssertTheReferenceCarriesTheWinningOrigin(PluginAddress winner)
     {
         using var fixture = StructuralFixture("identity-references", out _, out _, out _, out var raceKey);
         using var index = Indexes.Open(_holder);
 
-        foreach (var winner in new[] { ModA, ModB })
-        {
-            var reference = Assert.Single(ReadsWithWinner(index, fixture, winner).GetReferencedBy(raceKey.ToString()));
-            Assert.Equal(winner.Origin, reference.Origin);
-        }
+        var reference = Assert.Single(ReadsWithWinner(index, fixture, winner).GetReferencedBy(raceKey.ToString()));
+        Assert.Equal(winner.Origin, reference.Origin);
     }
 }

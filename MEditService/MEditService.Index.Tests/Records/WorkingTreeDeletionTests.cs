@@ -8,9 +8,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>A body is what every extracted index table was built from, so an edit that updates one
-/// and not the others leaves the read model disagreeing with itself; a deletion is the sharpest
-/// case.</summary>
 public sealed class WorkingTreeDeletionTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
@@ -63,8 +60,6 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         Assert.Null(reads.GetDocument(_raceA, _baseKey));
         Assert.Null(reads.GetDocument(_raceA));
 
-        // The committed row is kept beneath the deletion: the same bytes coming back is no change at
-        // all, not a record the working tree added.
         index.Create(_base, _raceA, "race", "RaceA", committed.BodyOf());
         var restored = reads.StackEntry(_raceA, _baseKey);
         Assert.NotNull(restored);
@@ -81,8 +76,6 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         Assert.NotNull(initialWinner);
         Assert.Equal("Winner.esp", initialWinner.Plugin.Name);
 
-        // Winner.esp's copy is deleted in its working tree and Base.esm's must become the winner: a
-        // winner is a fact about the stack that survives at this ref, not a stored flag that goes stale.
         index.Delete(_winner, reads.DocumentOf(_npc, _winnerKey));
 
         var effectiveWinner = reads.GetDocument(_npc);
@@ -102,14 +95,11 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         var winnersDocument = reads.DocumentOf(_npc, _winnerKey);
         var winnersBody = winnersDocument.BodyOf();
 
-        // Winner.esp's copy is deleted in its working tree, so Base.esm holds the field...
         index.Delete(_winner, winnersDocument);
         var afterDeletion = reads.GetDocument(_npc);
         Assert.NotNull(afterDeletion);
         Assert.Equal("Base.esm", afterDeletion.Plugin.Name);
 
-        // ...and then the file comes back carrying a different value, the direction a create takes
-        // too, so its appearance has to move winner status.
         var edited = winnersBody.Replace("TestNpc", "RestoredByWorkingTree", StringComparison.Ordinal);
         Assert.NotEqual(winnersBody, edited);
         index.Create(_winner, _npc, "npc_", "TestNpc", edited);
@@ -120,7 +110,6 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         Assert.True(effectiveWinner.IsWinner);
         Assert.Equal("RestoredByWorkingTree", effectiveWinner.EditorId);
 
-        // Head never lost it: the committed copy is the one the deletion was made over.
         var stack = reads.GetOverrideStack(_npc);
         Assert.NotNull(stack);
         Assert.Equal([("Base.esm", false), ("Winner.esp", true)], stack.Entries.Select(e => (e.Plugin.Name, e.IsWinner)));
@@ -129,19 +118,23 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         Assert.Equal("TestNpc", winnerEntry.Head.EditorId);
     }
 
+    private string? RaceLinkErrorOfTheNpc(IRecordReads reads) => reads.DocumentOf(_npc, _baseKey).Fields
+        .Single(f => f.Metadata.Name.Equals("Race", StringComparison.OrdinalIgnoreCase))
+        .CheckError;
+
     [Fact]
     public void DeletingARecord_StopsItResolving_SoAFormLinkToItReadsAsDangling()
     {
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
         Assert.NotNull(reads.Resolve(_raceA));
+        Assert.Null(RaceLinkErrorOfTheNpc(reads));
 
         index.Delete(_base, reads.DocumentOf(_raceA, _baseKey));
 
-        // FormKey resolution is what every FormLink check reads (CheckErrorBuilder), so this is the
-        // mechanism by which a link to a record the working tree deleted becomes a dangling link.
         Assert.Null(reads.Resolve(_raceA));
         Assert.NotNull(reads.Resolve(_raceB));
+        Assert.Contains("Could not be resolved", RaceLinkErrorOfTheNpc(reads));
     }
 
     [Fact]
@@ -154,7 +147,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
 
         var npcDocument = reads.DocumentOf(_npc, _baseKey);
         var body = npcDocument.BodyOf();
-        Assert.Contains(_raceA, body, StringComparison.Ordinal); // the fixture really does carry the link being repointed
+        Assert.Contains(_raceA, body, StringComparison.Ordinal);
         index.Edit(_base, npcDocument, body.Replace(_raceA, _raceB, StringComparison.Ordinal));
 
         Assert.DoesNotContain(reads.GetReferencedBy(_raceA), r => r.FormKey == _npc && r.Plugin == "Base.esm");

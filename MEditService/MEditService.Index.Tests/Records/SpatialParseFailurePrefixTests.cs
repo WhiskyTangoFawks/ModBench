@@ -11,9 +11,6 @@ using Noggog;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>The nested chains' half of "anything with an error on it or below it carries the
-/// prefix", at the reads the tree listings are built from. Ingest's side has its own test against
-/// the real fixture.</summary>
 public sealed class SpatialParseFailurePrefixTests
 {
     [Fact]
@@ -90,8 +87,6 @@ public sealed class SpatialParseFailurePrefixTests
         Assert.False(world.Row("qust").HasParseFailure);
     }
 
-    // The worldspace itself is a record the listing reads: the worldspace row is only reachable at
-    // all because ingest indexed it beside its cells.
     [Fact]
     public void AWorldspace_IsListedWithItsCellsBelowIt()
     {
@@ -126,7 +121,7 @@ public sealed class SpatialParseFailurePrefixTests
 
         internal static readonly PluginAddress Plugin = new(PluginName, Origin);
 
-        private readonly string _dataFolder = Directory.CreateTempSubdirectory("medit-spatial-").FullName;
+        private readonly ScratchDirectory _dataFolder = new("medit-spatial-");
         private readonly string _path;
         private readonly DiagnosingAdapter _adapter = new();
         private readonly Indexer _index;
@@ -183,8 +178,6 @@ public sealed class SpatialParseFailurePrefixTests
                 adapter: _adapter);
         }
 
-        // The record's document arrives as an identity-only stub carrying a diagnosis, the shape
-        // the adapter hands over for a record it could not read, and the plugin is re-derived.
         internal void MarkUnreadable(string formKey)
         {
             _adapter.Unreadable = formKey;
@@ -195,7 +188,7 @@ public sealed class SpatialParseFailurePrefixTests
         public void Dispose()
         {
             _index.Dispose();
-            try { Directory.Delete(_dataFolder, recursive: true); } catch (IOException) { }
+            _dataFolder.Dispose();
         }
     }
 

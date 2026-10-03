@@ -6,8 +6,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Records;
 
-// The sequence await measures its timeout on the injected clock, so "not yet" is a clock answer
-// and never a wall-clock one: a test moves the clock, and nothing here waits real time out.
 public sealed class SequenceAwaitTests : IDisposable
 {
     private static readonly DateTimeOffset Start = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -43,12 +41,12 @@ public sealed class SequenceAwaitTests : IDisposable
         Assert.True(await pending);
     }
 
-    // The rival this pins: a stopwatch. With a day's timeout, a wall-clock await would still be
-    // pending long after the fake clock passed the deadline, and the bound below would fail it.
+    private static readonly TimeSpan DayLongTimeoutSoAStopwatchAwaitWouldStillBePending = TimeSpan.FromDays(1);
+
     [Fact]
     public async Task AwaitSequence_NotReached_AnswersNotYet_OnceTheClockPassesTheTimeout()
     {
-        var pending = _index.AwaitSequenceAsync(_index.Sequence + 1, TimeSpan.FromDays(1));
+        var pending = _index.AwaitSequenceAsync(_index.Sequence + 1, DayLongTimeoutSoAStopwatchAwaitWouldStillBePending);
 
         _clock.SetUtcNow(Start + TimeSpan.FromDays(2));
 
@@ -65,8 +63,6 @@ public sealed class SequenceAwaitTests : IDisposable
         PluginBinaries.Touch(path);
         Assert.True(_index.Revalidate());
 
-        // The landing already happened above; this wakes the poll due on the fake clock's own
-        // timer to re-check, never touching the day-long deadline that answers "not yet".
         _clock.Advance(TimeSpan.FromMilliseconds(50));
 
         Assert.True(await Waits.CompletesWithin(pending, Generous));

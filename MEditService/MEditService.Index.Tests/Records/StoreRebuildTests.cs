@@ -6,8 +6,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Records;
 
-// ADR-0009 invariant 5: a rebuild drops every trace of the file, to fix a row no hash-validate can
-// (a wrong but self-consistent body), then reads every plugin again against the load order held.
 public sealed class StoreRebuildTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("store-rebuild")
@@ -41,8 +39,6 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Equal(0, result.Total);
     }
 
-    // An index handed no instance has nowhere to keep a file and says so by being in-memory rather
-    // than by guessing a home.
     [Fact]
     public void WithNoInstanceRoot_NothingIsKeptBetweenIndexes()
     {
@@ -71,11 +67,9 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.NotEmpty(_index.RequireReads().GetDocuments(Key));
     }
 
-    // plugins.md, Order and view state, story 3: the record filter clears only on purpose. A.esp
-    // holds the one NPC it matches beside one it does not; B.esp is parked mid-refill.
     private const string MatchesNpcA = "SELECT form_key FROM npc_ WHERE editor_id = 'NpcA'";
 
-    private static PluginFixtureData FilteredRefillFixture(string name) => new PluginFixtureBuilder(name)
+    private static PluginFixtureData NpcAAndNpcOtherInAespAndNpcBInBespFixture(string name) => new PluginFixtureBuilder(name)
         .WithPlugin("A.esp", mod => { mod.Npcs.AddNew("NpcA"); mod.Npcs.AddNew("NpcOther"); })
         .WithPlugin("B.esp", mod => mod.Npcs.AddNew("NpcB"))
         .Build();
@@ -86,7 +80,7 @@ public sealed class StoreRebuildTests : IDisposable
     [Fact]
     public async Task Rebuild_KeepsTheRecordFilter_AndTheRefilledRowsAnswerThroughIt()
     {
-        using var data = FilteredRefillFixture("store-rebuild-filter-kept");
+        using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-kept");
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, _opens);
         index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
@@ -101,7 +95,7 @@ public sealed class StoreRebuildTests : IDisposable
     [Fact]
     public async Task WhileARebuildRefills_TheRowsAlreadyBackAnswerThroughTheFilter()
     {
-        using var data = FilteredRefillFixture("store-rebuild-filter-refill");
+        using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-refill");
         using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
         var holder = new LoadOrderHolder();
         using var index = new Indexer(holder, gate, SharedSchemaReflector.Instance);
@@ -120,11 +114,10 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Equal(["NpcA"], ListedNpcs(index));
     }
 
-    // While no store is open, a filter is still reported, so it must still clear.
     [Fact]
     public async Task AFilterKeptThroughARebuild_ClearsBeforeTheRefillOpensAStore()
     {
-        using var data = FilteredRefillFixture("store-rebuild-filter-clear");
+        using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-clear");
         var refills = new HeldBackScheduler();
         var holder = new LoadOrderHolder();
         using var index = new Indexer(holder, _opens, SharedSchemaReflector.Instance, refillScheduler: refills);
@@ -152,9 +145,6 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Throws<NoLoadOrderException>(() => _index.RequireReads());
     }
 
-    // The refill reads the load order held once it holds the exclusive right, so an arrival that
-    // landed after the rebuild started is the one it fills, even when the refill cancelled that
-    // arrival's own reconcile.
     [Fact]
     public async Task ARefill_FillsTheLoadOrderHeldWhenItRuns_NotTheOneHeldWhenTheRebuildStarted()
     {
@@ -180,8 +170,6 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.True(index.RequireReads().OpenedPlugins.ContainsKey(data.Plugins[1].KeyOf()), "the refill filled the load order held when it ran");
     }
 
-    // The process may already have answered a caller with a sequence value the fresh file's own
-    // table does not know about; the rebuild must never let Sequence regress within one process.
     [Fact]
     public async Task Rebuild_SeedsTheSequence_AtLeastTheValueAlreadyHandedOut()
     {
@@ -195,27 +183,26 @@ public sealed class StoreRebuildTests : IDisposable
             $"rebuilt sequence {_index.Sequence} regressed below the prior process value {priorSequence}");
     }
 
-    // ADR-0009 invariant 5: the same refusal PutLoadOrder answers with, at the seam that actually
-    // guards it — deleting an open file succeeds on POSIX and destroys a live index.
     [ForeignIndexHolderFact]
-    public void Rebuild_RefusesAndNeverDeletes_WhenAnotherProcessHoldsTheFile()
+    public void Rebuild_RefusesAndLeavesTheFileInPlace_WhenAnotherProcessHoldsIt()
     {
         using (var earlier = Indexes.Open(new LoadOrderHolder(), _opens))
             earlier.Reconcile(new LoadOrderHolder(), _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        var indexPath = IndexFiles.In(_fixture.InstanceRoot);
-        var bytesBeforeHold = File.ReadAllBytes(indexPath);
-        using var otherWindow = ForeignIndexHolder.Hold(indexPath);
+        var indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex = IndexFiles.In(_fixture.InstanceRoot);
+        var bytesBeforeHold = File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
+        using var otherWindow = ForeignIndexHolder.Hold(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
 
         Assert.Throws<IndexHeldElsewhereException>(() => { _ = _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot); });
 
-        Assert.True(File.Exists(indexPath), "the file must still exist — a refusal must never delete it");
-        Assert.Equal(bytesBeforeHold, File.ReadAllBytes(indexPath));
+        Assert.True(File.Exists(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex), "the file must still exist — a refusal must never delete it");
+        Assert.Equal(bytesBeforeHold, File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex));
     }
 
-    // Disposing a store under a read in flight is a native crash, not an exception: the rebuild
-    // waits the readers out, and this test finishing at all is the assertion.
+    private static bool ScopeClosedUnderTheReadSoTheAnswerIsNoStore(Exception ex) =>
+        ex is ObjectDisposedException or InvalidOperationException or NoLoadOrderException;
+
     [Fact]
-    public async Task ARebuildWithReadsInFlight_CompletesAndLeavesNothingOfTheOldRows()
+    public async Task ARebuildWithReadsInFlight_Completes_WhereDisposingTheStoreUnderAReadWouldCrashNatively()
     {
         Reconcile(_fixture.InstanceRoot);
         using var rebuilding = new CancellationTokenSource();
@@ -228,9 +215,8 @@ public sealed class StoreRebuildTests : IDisposable
                 {
                     if (_index.RequireReads().GetDocuments(Key) is { Count: > 0 }) Interlocked.Increment(ref answered);
                 }
-                catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException or NoLoadOrderException)
+                catch (Exception ex) when (ScopeClosedUnderTheReadSoTheAnswerIsNoStore(ex))
                 {
-                    // The scope closed under the read: the answer the reader gets is "no store", not a crash.
                 }
             }
         })).ToArray();

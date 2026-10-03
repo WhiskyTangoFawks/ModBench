@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-// ADR-0015 invariant 3: the Index is the one announcer. Every landing it owns publishes exactly
-// once through its own announce door, carrying the sequence the store reached.
 public sealed class IndexAnnouncementTests : IDisposable
 {
     private const string PluginName = "Watched.esp";
@@ -19,8 +17,8 @@ public sealed class IndexAnnouncementTests : IDisposable
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly LoadOrderHolder _holder = new();
     private readonly Indexer _index;
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-announce-game-").FullName;
-    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-announce-instance-").FullName;
+    private readonly ScratchDirectory _gameDirectory = new("medit-announce-game-");
+    private readonly ScratchDirectory _instanceRoot = new("medit-announce-instance-");
     private readonly string _pluginPath;
 
     public IndexAnnouncementTests()
@@ -33,8 +31,8 @@ public sealed class IndexAnnouncementTests : IDisposable
     public void Dispose()
     {
         _index.Dispose();
-        Directory.Delete(_gameDirectory, recursive: true);
-        Directory.Delete(_instanceRoot, recursive: true);
+        _gameDirectory.Dispose();
+        _instanceRoot.Dispose();
     }
 
     private LoadOrderEntry Entry => new(PluginName, _pluginPath, Origin, 0, Enabled: true, Winning: true);
@@ -46,7 +44,6 @@ public sealed class IndexAnnouncementTests : IDisposable
         mod.WriteToBinary(path);
     }
 
-    // Everything published after the reconcile: the landing under test is what follows it.
     private int _publishedByReconcile;
 
     private IEnumerable<Notification> SinceReconcile => _notifications.Notifications.Skip(_publishedByReconcile);
@@ -88,8 +85,6 @@ public sealed class IndexAnnouncementTests : IDisposable
         TheOnePluginChanged();
     }
 
-    // The rival this pins: identical bytes settling again, which must announce nothing — a
-    // subscriber told to re-read would find nothing changed.
     [Fact]
     public async Task IdenticalBytesSettlingAgain_AnnounceNothing()
     {

@@ -6,8 +6,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>ADR-0009: once a validation has read the whole tree, the next reads only what git names
-/// as changed since the HEAD it validated, and what the index itself holds as dirty.</summary>
 public sealed class ValidateThroughGitTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
@@ -43,12 +41,10 @@ public sealed class ValidateThroughGitTests : IDisposable
 
     private string GitPath(string file) => Path.GetRelativePath(_mod.ModFolderOf(), file).Replace('\\', '/');
 
-    // A handle that denies sharing makes a read fail, so a clean answer while it is open came from
-    // git vouching for the document.
     [Fact]
     public void ADocumentGitReportsClean_IsNotRead()
     {
-        using var held = new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None);
+        using var handleDenyingSharingSoAnyReadOfTheDocumentWouldFail = new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None);
 
         Assert.False(_index.Revalidate());
 
@@ -64,9 +60,8 @@ public sealed class ValidateThroughGitTests : IDisposable
         Assert.False(_index.Revalidate());
     }
 
-    // Clean again, so git names nothing: the index's own dirty row is what brings it back.
     [Fact]
-    public void AHandEditThatGitRestores_ReturnsTheRecordToHead()
+    public void AHandEditThatGitRestores_ReturnsTheRecordToHead_WhereGitNamesNothing()
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
         Validate();
@@ -94,7 +89,6 @@ public sealed class ValidateThroughGitTests : IDisposable
         Assert.False(Reads.StackEntry(_npc, _mod.KeyOf()).Require().HasWorkingTreeChange);
     }
 
-    // Never committed, so once gone git has nothing to say about it.
     [Fact]
     public void AnUncommittedDocumentDeletedByHand_LosesItsRows()
     {
@@ -111,10 +105,8 @@ public sealed class ValidateThroughGitTests : IDisposable
         Assert.Null(Reads.GetDocument(created, _mod.KeyOf()));
     }
 
-    // HEAD held back from the deletion would make the same bytes coming back a clean record rather
-    // than one the working tree adds.
     [Fact]
-    public void ADeletionCommittedOutsideModbench_LeavesNothingAtHead()
+    public void ADeletionCommittedOutsideModbench_LeavesNothingAtHead_SoTheSameBytesComingBackAreAdded()
     {
         var file = NpcFile;
         var text = File.ReadAllText(file);
@@ -143,8 +135,6 @@ public sealed class ValidateThroughGitTests : IDisposable
         Assert.Equal("RenamedByHand", entry.Head.EditorId);
     }
 
-    // Refreshing the locked document throws, so that validation records no HEAD, and the next one
-    // names the commit again.
     [Fact]
     public void ADocumentACommitChangedButThatCouldNotBeRead_IsRefreshedByTheNextValidation()
     {
@@ -159,9 +149,8 @@ public sealed class ValidateThroughGitTests : IDisposable
         Assert.Equal("RenamedByHand", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
     }
 
-    // Committed, so git names it only once: the plugin's failure stands until the tree changes.
     [Fact]
-    public void ACommittedDocumentDeclaringNoRecord_FailsThePlugin_ThroughEveryValidation()
+    public void ACommittedDocumentDeclaringNoRecord_FailsThePlugin_AndStillFailsItOnTheNextValidation()
     {
         var stray = Path.Combine(Path.GetDirectoryName(NpcFile).Require(), "Stray - 000A00_Fixture.esp.json");
         File.WriteAllText(stray, "{\"EditorID\":\"Stray\"}");
@@ -175,56 +164,44 @@ public sealed class ValidateThroughGitTests : IDisposable
         Assert.True(PluginFailed);
     }
 
-    // The tree gone, the rows come from the binary; the tree back at the same HEAD reads clean to
-    // git, so only a whole-tree read puts the tree's rows back.
     [Fact]
     public void ATreeRestoredAtTheSameHead_ReplacesTheBinarysRows()
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
         _mod.Git("commit", "-q", "-am", "an edit committed outside Modbench");
         Validate();
-        var tree = SourceRepository.RootIn(_mod.ModFolderOf(), _mod.Name);
-        Directory.Move(tree, tree + ".away");
+        var treeWhoseRestoreAtTheSameHeadReadsCleanToGit = SourceRepository.RootIn(_mod.ModFolderOf(), _mod.Name);
+        Directory.Move(treeWhoseRestoreAtTheSameHeadReadsCleanToGit, treeWhoseRestoreAtTheSameHeadReadsCleanToGit + ".away");
         Validate();
         Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
-        Directory.Move(tree + ".away", tree);
+        Directory.Move(treeWhoseRestoreAtTheSameHeadReadsCleanToGit + ".away", treeWhoseRestoreAtTheSameHeadReadsCleanToGit);
 
         Validate();
 
         Assert.Equal("RenamedByHand", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
     }
 
-    // The first validation after an open reads the whole tree, and HEAD holds nothing for a
-    // record whose deletion was committed while the index was closed.
     [Fact]
     public void ADeletionCommittedBetweenOpens_LeavesNothingAtHead()
     {
-        var instanceRoot = Directory.CreateTempSubdirectory("validate-through-git-instance-").FullName;
-        try
+        using var instanceRoot = new ScratchDirectory("validate-through-git-instance-");
+        var file = NpcFile;
+        var text = File.ReadAllText(file);
+        using (var first = Indexes.Reconciled(_fixture, instanceRoot))
         {
-            var file = NpcFile;
-            var text = File.ReadAllText(file);
-            using (var first = Indexes.Reconciled(_fixture, instanceRoot))
-            {
-                File.Delete(file);
-                first.NextSnapshot();
-            }
-            _mod.Git("commit", "-q", "-am", "a deletion committed while the index was closed");
-
-            using var second = Indexes.Reconciled(_fixture, instanceRoot);
-            File.WriteAllText(file, text);
-            second.NextSnapshot();
-
-            var listing = second.RequireReads().Search(new RecordQuery(Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
-            Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == _npc).WorkingTreeState);
+            File.Delete(file);
+            first.NextSnapshot();
         }
-        finally
-        {
-            Directory.Delete(instanceRoot, recursive: true);
-        }
+        _mod.Git("commit", "-q", "-am", "a deletion committed while the index was closed");
+
+        using var second = Indexes.Reconciled(_fixture, instanceRoot);
+        File.WriteAllText(file, text);
+        second.NextSnapshot();
+
+        var listing = second.RequireReads().Search(new RecordQuery(Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
+        Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == _npc).WorkingTreeState);
     }
 
-    // A staged move names the path it left as well as the one it made, so HEAD keeps the record.
     [Fact]
     public void AStagedRename_KeepsTheRecordAtHead()
     {
@@ -251,8 +228,6 @@ public sealed class ValidateThroughGitTests : IDisposable
         Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == _npc).WorkingTreeState);
     }
 
-    // A copy under a name that carries its FormKey reads as a new document for a record HEAD
-    // already holds, and only the whole tree shows the two documents.
     [Fact]
     public void ACopyOfACommittedDocument_IsReportedWithBothDocuments()
     {
@@ -296,9 +271,8 @@ public sealed class ValidateThroughGitTests : IDisposable
     [Fact]
     public void AnUnreadableCommittedTree_IsReportedAndChangesNothing()
     {
-        // An unborn HEAD: git cannot list the committed tree, and answers the same way it would for a
-        // repository mid-rebase or with a corrupt object.
-        _mod.Git("symbolic-ref", "HEAD", "refs/heads/no-such-branch");
+        const string unbornBranchSoGitCannotListTheCommittedTreeAsItCouldNotMidRebaseOrWithACorruptObject = "refs/heads/no-such-branch";
+        _mod.Git("symbolic-ref", "HEAD", unbornBranchSoGitCannotListTheCommittedTreeAsItCouldNotMidRebaseOrWithACorruptObject);
         var before = _index.Sequence;
 
         Validate();

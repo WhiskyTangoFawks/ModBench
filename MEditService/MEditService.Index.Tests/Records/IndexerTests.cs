@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>ADR-0015 invariant 3 and ADR-0013 invariant 4, at the Index's own seam: a load order
-/// value in, registrations and one sequence advance out, over a real DuckDB.</summary>
 public sealed class IndexerTests
 {
     private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
@@ -20,8 +18,7 @@ public sealed class IndexerTests
         return (Indexes.Open(holder, opens), opens);
     }
 
-    // A.esm defines SharedNPC; B.esp overrides it — the two-provider stack the winner assertions read.
-    private static ScatteredFixtureData TwoProviders(string prefix) =>
+    private static ScatteredFixtureData TwoProvidersOfSharedNpcDefinedInAEsmAndOverriddenInBEsp(string prefix) =>
         new PluginFixtureBuilder(prefix)
             .WithPlugin("A.esm", mod => mod.Npcs.AddNew("SharedNPC"))
             .WithPlugin("B.esp", (mod, built) =>
@@ -34,12 +31,10 @@ public sealed class IndexerTests
     private static LoadOrderSnapshot Snapshot(ScatteredFixtureData fx, IReadOnlyList<LoadOrderEntry>? plugins = null) =>
         SnapshotPlugins.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, plugins ?? fx.Plugins);
 
-    // The load-order endpoint's order: the value lands in the kernel, then the Index reconciles it.
-    private static void Reconcile(Indexer indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
+    private static void ReconcileInTheLoadOrderEndpointsOrder(Indexer indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
         indexer.Reconcile(snapshot, holder.Apply(snapshot));
 
-    // The next snapshot's re-derivation: bytes that differ, then the validation of the plugin.
-    private static void ReDerive(Indexer indexer, LoadOrderEntry entry)
+    private static void ReDeriveByTouchingTheBytesThenValidating(Indexer indexer, LoadOrderEntry entry)
     {
         PluginBinaries.Touch(entry.Path);
         Assert.True(indexer.Revalidate());
@@ -57,22 +52,19 @@ public sealed class IndexerTests
         return stack.Entries.Single(e => e.IsWinner).Plugin.Name;
     }
 
-    // ADR-0013 invariant 4: the sweep is handed the kernel's load order. The holder alone takes the
-    // next snapshot here, so the plugins the Index has open still carry the old winner: an Indexer
-    // reading them answers B.esp.
     [Fact]
     public async Task ASweepBetweenSnapshots_TakesItsWinnersFromTheHolder_NotFromThePluginsItHasOpen()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("indexer-winners-from-holder");
+        using var fx = TwoProvidersOfSharedNpcDefinedInAEsmAndOverriddenInBEsp("indexer-winners-from-holder");
         using var indexer = MakeIndexer(holder);
-        Reconcile(indexer, holder, Snapshot(fx));
+        ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, Snapshot(fx));
         var npc = SharedNpc(indexer);
         Assert.Equal("B.esp", WinnerOf(indexer, npc));
 
         var b = fx.Plugins.Single(p => p.Name == "B.esp");
         holder.Apply(Snapshot(fx, [.. fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Winning = false } : p)]));
-        ReDerive(indexer, b);
+        ReDeriveByTouchingTheBytesThenValidating(indexer, b);
 
         Assert.Equal("A.esm", WinnerOf(indexer, npc));
     }
@@ -81,11 +73,11 @@ public sealed class IndexerTests
     public void Reconcile_RegistersExactlyTheLoadOrdersPlugins()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("indexer-registrations");
+        using var fx = TwoProvidersOfSharedNpcDefinedInAEsmAndOverriddenInBEsp("indexer-registrations");
         using var indexer = MakeIndexer(holder);
         var snapshot = Snapshot(fx);
 
-        Reconcile(indexer, holder, snapshot);
+        ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, snapshot);
 
         Assert.All(snapshot.Plugins, plugin => Assert.NotEmpty(indexer.RequireReads().GetDocuments(plugin.Key)));
         Assert.Equal(
@@ -93,18 +85,15 @@ public sealed class IndexerTests
             indexer.RequireReads().OpenedPlugins.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
     }
 
-    // Header flags, the master list and the record count are read out of the file when the plugin is
-    // opened and are stored in no row, so the reads answer them from the plugins the Index holds
-    // open.
     [Fact]
-    public void TheReads_CarryTheContentFactsOfEveryPluginTheIndexOpened()
+    public void TheReads_CarryTheHeaderFlagsMastersAndRecordCountOfThePluginsTheIndexOpened()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("indexer-opened-content");
+        using var fx = TwoProvidersOfSharedNpcDefinedInAEsmAndOverriddenInBEsp("indexer-opened-content");
         using var indexer = MakeIndexer(holder);
         var snapshot = Snapshot(fx);
 
-        Reconcile(indexer, holder, snapshot);
+        ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, snapshot);
 
         var opened = indexer.RequireReads().OpenedPlugins;
         var patch = opened[snapshot.Plugins.Single(c => c.Name == "B.esp").Key];
@@ -114,18 +103,16 @@ public sealed class IndexerTests
         Assert.True(opened[snapshot.Plugins.Single(c => c.Name == "A.esm").Key].IsMaster);
     }
 
-    // A plugin the Index could not open has no content to report, and the plugin listing is built by
-    // joining the load order's plugins to exactly this set.
     [Fact]
     public void TheReads_OmitAPluginTheIndexCouldNotOpen()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("indexer-unopenable-content");
+        using var fx = TwoProvidersOfSharedNpcDefinedInAEsmAndOverriddenInBEsp("indexer-unopenable-content");
         using var indexer = MakeIndexer(holder);
         var gone = new LoadOrderEntry("Gone.esp", Path.Combine(fx.GameDirectory, "Gone.esp"), "SomeMod", 9, true, true);
         var snapshot = Snapshot(fx, [.. fx.Plugins, gone]);
 
-        Reconcile(indexer, holder, snapshot);
+        ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, snapshot);
 
         var opened = indexer.RequireReads().OpenedPlugins;
         Assert.DoesNotContain(new PluginAddress("Gone.esp", "SomeMod"), opened.Keys);
@@ -136,9 +123,9 @@ public sealed class IndexerTests
     public async Task AWholePluginProjection_AdvancesTheSequenceExactlyOnce()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("indexer-one-advance");
+        using var fx = TwoProvidersOfSharedNpcDefinedInAEsmAndOverriddenInBEsp("indexer-one-advance");
         using var indexer = MakeIndexer(holder);
-        Reconcile(indexer, holder, Snapshot(fx));
+        ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, Snapshot(fx));
         PluginBinaries.Touch(fx.Plugins.Single(p => p.Name == "B.esp").Path);
         var before = indexer.Sequence;
 
@@ -151,9 +138,9 @@ public sealed class IndexerTests
     public void AValidationOfSeveralPlugins_AdvancesTheSequenceOnce()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("indexer-batch");
+        using var fx = TwoProvidersOfSharedNpcDefinedInAEsmAndOverriddenInBEsp("indexer-batch");
         using var indexer = MakeIndexer(holder);
-        Reconcile(indexer, holder, Snapshot(fx));
+        ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, Snapshot(fx));
         foreach (var entry in fx.Plugins) PluginBinaries.Touch(entry.Path);
         var before = indexer.Sequence;
 
@@ -166,12 +153,12 @@ public sealed class IndexerTests
     public void AnArrivingPlugin_ReappliesTheFilter_SoItsRowsAnswerThroughIt()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("indexer-arriving-filter");
+        using var fx = TwoProvidersOfSharedNpcDefinedInAEsmAndOverriddenInBEsp("indexer-arriving-filter");
         using var indexer = MakeIndexer(holder);
-        Reconcile(indexer, holder, Snapshot(fx, [fx.Plugins[0]]));
+        ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, Snapshot(fx, [fx.Plugins[0]]));
         indexer.SetFilter("SELECT form_key FROM records", "filter.sql");
 
-        Reconcile(indexer, holder, Snapshot(fx));
+        ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, Snapshot(fx));
 
         var arrived = fx.Plugins[1];
         var rows = indexer.RequireReads().Search(new RecordQuery(
@@ -183,26 +170,23 @@ public sealed class IndexerTests
     public void AFilteredReadAfterAProjection_ReflectsTheFilter_WithNoCallerReapplyingIt()
     {
         var holder = new LoadOrderHolder();
-        // C.esp holds its own NPC rather than an override of A's, so its FormKey is one the filter
-        // could not already have listed when it was first materialized.
+        const string charlieNpcOwnedNotOverriddenFromASoTheFilterCouldNotAlreadyHaveListedItsFormKey = "CharlieNpc";
         using var fx = new PluginFixtureBuilder("indexer-filter")
             .WithPlugin("A.esm", mod => mod.Npcs.AddNew("AlphaNpc"))
-            .WithPlugin("C.esp", mod => mod.Npcs.AddNew("CharlieNpc"))
+            .WithPlugin("C.esp", mod => mod.Npcs.AddNew(charlieNpcOwnedNotOverriddenFromASoTheFilterCouldNotAlreadyHaveListedItsFormKey))
             .BuildScattered();
         using var indexer = MakeIndexer(holder);
         var onlyA = fx.Plugins.Where(p => p.Name == "A.esm").ToList();
-        Reconcile(indexer, holder, Snapshot(fx, onlyA));
+        ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, Snapshot(fx, onlyA));
         indexer.SetFilter("SELECT form_key FROM npc_", "filter.sql");
 
-        Reconcile(indexer, holder, Snapshot(fx));
+        ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, Snapshot(fx));
 
         var matched = indexer.RequireReads()
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "C.esp", Origin: PluginOrigin.DataDirectory, Limit: 10, Offset: 0));
-        Assert.Equal(["CharlieNpc"], matched.Items.Select(i => i.EditorId));
+        Assert.Equal([charlieNpcOwnedNotOverriddenFromASoTheFilterCouldNotAlreadyHaveListedItsFormKey], matched.Items.Select(i => i.EditorId));
     }
 
-    // common.md, The status bar, story 1: Ready counts the active plugins, while progress counts
-    // every plugin the snapshot holds.
     [Fact]
     public void Status_CountsTheActivePlugins_BesideEveryPlugin()
     {
