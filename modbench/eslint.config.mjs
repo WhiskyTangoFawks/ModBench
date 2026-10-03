@@ -30,7 +30,7 @@ const MESSAGE_API_SITES = [
     `ObjectPattern > Property[key.name=${MESSAGE_API}]`,
 ];
 
-const VIEW_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor'];
+const DRIVING_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'drivingLib'];
 
 export default defineConfig(
     { ignores: ['src/wire/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
@@ -97,10 +97,11 @@ export default defineConfig(
 
 
     // modbench/CLAUDE.md: a view takes every path from the instance value and never builds one.
-    // The views are README's driving band: Toolbox, Mods, Plugins, Downloads and Editor.
+    // The driving band: README's views, Toolbox, Mods, Plugins, Downloads and Editor, and the driving
+    // lib they share.
     {
-        files: VIEW_BOXES.map((box) => `src/${box}/**/*.ts`),
-        ignores: VIEW_BOXES.map((box) => `src/${box}/test/**`),
+        files: DRIVING_BOXES.map((box) => `src/${box}/**/*.ts`),
+        ignores: DRIVING_BOXES.map((box) => `src/${box}/test/**`),
         rules: {
             'no-restricted-imports': ['error', { patterns: [{
                 group: ['node:path', 'node:path/*', 'path', 'path/*'],
@@ -194,6 +195,7 @@ export default defineConfig(
                     './src/downloadsCommands/tsconfig.json',
                     './src/install/tsconfig.json',
                     './src/client/tsconfig.json',
+                    './src/drivingLib/tsconfig.json',
                     './src/mods/tsconfig.json',
                     './src/downloads/tsconfig.json',
                     './src/plugins/tsconfig.json',

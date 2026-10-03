@@ -36,7 +36,7 @@ describe('the Downloads view reads no file of its own: it imports no filesystem 
   it('walks every file the view is made of', () => {
     expect(VIEW_FILES_WALKED_NOT_LISTED).toEqual(expect.arrayContaining([
       'DownloadsPanel.ts', 'DownloadsProvider.ts', 'ExcludedDownloadDecorationProvider.ts',
-      'downloadRows.ts', 'errorNode.ts', 'instanceFirstRead.ts', 'upgradeCandidates.ts',
+      'downloadRows.ts', 'upgradeCandidates.ts',
     ]));
     expect(VIEW_FILES_WALKED_NOT_LISTED.filter((file) => read(file).length === 0)).toEqual([]);
   });

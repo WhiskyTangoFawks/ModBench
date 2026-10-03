@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/drivingLib",
+    // The driving lib holds code two or more views share (ADR-0014), so it sees what a view sees.
+    "types": ["node", "vscode"]
+  },
+  "references": [
+    { "path": "../instanceLoader" }
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

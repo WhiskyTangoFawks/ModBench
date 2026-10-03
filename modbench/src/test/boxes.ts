@@ -20,14 +20,16 @@ export const CORE_BOXES: Record<string, string[]> = {
   client: ['ports', 'wire'],
 };
 
-// The driving band: each view reads a value and fires a command. No Toolbox file uses its drawn
-// deploy commands or tables, so both are left out.
-export const VIEW_BOXES: Record<string, string[]> = {
+// The driving band: each view reads a value and fires a command, and the driving lib holds the
+// code two or more views share (ADR-0014). No Toolbox file uses its drawn deploy commands or
+// tables, so both are left out.
+export const DRIVING_BOXES: Record<string, string[]> = {
   toolbox: ['instanceCommands', 'instanceLoader', 'ports'],
-  mods: ['install', 'instanceLoader', 'modlist', 'ports'],
-  downloads: ['downloadsCommands', 'install', 'instanceLoader', 'ports'],
-  plugins: ['client', 'instanceLoader', 'pluginsCommands', 'ports'],
+  mods: ['drivingLib', 'install', 'instanceLoader', 'modlist', 'ports'],
+  downloads: ['downloadsCommands', 'drivingLib', 'install', 'instanceLoader', 'ports'],
+  plugins: ['client', 'drivingLib', 'instanceLoader', 'pluginsCommands', 'ports'],
   editor: ['client', 'ports', 'wire'],
+  drivingLib: ['instanceLoader'],
 };
 
-export const REFERENCING_BOXES: Record<string, string[]> = { ...DRIVEN_BOXES, ...CORE_BOXES, ...VIEW_BOXES };
+export const REFERENCING_BOXES: Record<string, string[]> = { ...DRIVEN_BOXES, ...CORE_BOXES, ...DRIVING_BOXES };

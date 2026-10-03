@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions, type DownloadsTreeNode } from '../DownloadsProvider';
-import { ErrorNode } from '../errorNode';
+import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
