@@ -1,6 +1,3 @@
-// target-architecture.d2: the Instance adapter is the one reader and writer of the instance. Every
-// other module asks it, and the two files below open the extension's own storage, never the
-// instance.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
@@ -16,14 +13,11 @@ const ADAPTER_PATH = join(SRC, 'instanceAdapter', 'files.ts');
 const FS_SPECIFIERS = new Set(['node:fs', 'node:fs/promises', 'fs', 'fs/promises']);
 const QUEUE_NAMES = new Set(['createWriteQueue', 'WriteQueue']);
 
-// Storage of the extension's own, which no MO2 instance holds: the scripts folder under the
-// extension's storage path, and the temp file an external editor opens.
 const NOT_THE_INSTANCE = [
   join('extension.ts'),
   join('editor', 'extendedFieldEditor.ts'),
 ];
 
-// Production files only: a test builds a real MO2 tree of its own and opens it directly.
 const productionFiles = (dir: string): string[] =>
   tsFiles(dir, { exclude: ['generated', 'test'], tsx: false, includeTests: false });
 
@@ -48,8 +42,6 @@ function fsImportsIn(path: string): string[] {
   return importSpecifiers(readFileSync(path, 'utf8'), path).filter((spec) => FS_SPECIFIERS.has(spec));
 }
 
-// Shared by the production assertion and the rival below, so a broken walk fails both the same
-// way, not just the matcher.
 function findOffenders(root: string, allowlist: readonly string[]): Record<string, string[]> {
   const offenders: Record<string, string[]> = {};
   for (const path of productionFiles(root)) {
@@ -61,7 +53,6 @@ function findOffenders(root: string, allowlist: readonly string[]): Record<strin
   return offenders;
 }
 
-// Every top-level declared or re-exported name, whether or not `export` sits on its own line.
 function exportedNames(sourceText: string, fileName: string): string[] {
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
   const found: string[] = [];
@@ -88,7 +79,7 @@ function queueNamesExportedBy(path: string): string[] {
   return exportedNames(readFileSync(path, 'utf8'), path).filter((name) => QUEUE_NAMES.has(name));
 }
 
-describe('no file outside the Instance adapter imports the file system to read the instance', () => {
+describe('no file outside the Instance adapter imports the file system to read the instance, the adapter being the one reader and writer of the instance', () => {
   it('covers the whole extension source tree', () => {
     expect(productionFiles(SRC).length).toBeGreaterThan(100);
   });
@@ -104,10 +95,7 @@ describe('no file outside the Instance adapter imports the file system to read t
     expect(findOffenders(SRC, NOT_THE_INSTANCE)).toEqual({});
   });
 
-  // Rival: a command, a view or a derivation reaching back into node:fs/promises rather than
-  // asking the Instance adapter. Planted in a real file under a real root, so the walk is
-  // exercised too.
-  it('the walk itself catches a node:fs/promises import planted outside the box', async () => {
+  it('the walk itself catches a node:fs/promises import planted outside the box, in a real file under a real root so the walk is exercised too', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-fs-import-scan-'));
     try {
       await writeFile(join(dir, 'planted.ts'), "import { readFile } from 'node:fs/promises';\n");
@@ -117,15 +105,12 @@ describe('no file outside the Instance adapter imports the file system to read t
     }
   });
 
-  // Rival: the allowlist growing silently. Each entry is one of the extension's own storage
-  // paths, and each really does open a file.
-  it('the allowlist is exactly the two files that open storage of the extension’s own', () => {
+  it('the allowlist is exactly the two files that open storage of the extension’s own, the scripts folder under its storage path and the temp file an external editor opens, each importing the file system', () => {
     expect(NOT_THE_INSTANCE).toEqual([
       'extension.ts', join('editor', 'extendedFieldEditor.ts'),
     ]);
-    for (const rel of NOT_THE_INSTANCE) {
-      expect(fsImportsIn(join(SRC, rel)).length).toBeGreaterThan(0);
-    }
+    const listedFilesImportingNoFileSystem = NOT_THE_INSTANCE.filter((rel) => fsImportsIn(join(SRC, rel)).length === 0);
+    expect(listedFilesImportingNoFileSystem).toEqual([]);
   });
 });
 
@@ -134,8 +119,7 @@ describe('the keyed write queue is the adapter’s own, not exported', () => {
     expect(queueNamesExportedBy(ADAPTER_PATH)).toEqual([]);
   });
 
-  // Rival this catches: the queue factory un-privatized and exported again for reuse.
-  it('flags a module that exports createWriteQueue or WriteQueue', async () => {
+  it('flags a module that exports createWriteQueue or WriteQueue, the queue factory un-privatized and exported again for reuse', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-queue-export-scan-'));
     try {
       const planted = join(dir, 'planted.ts');

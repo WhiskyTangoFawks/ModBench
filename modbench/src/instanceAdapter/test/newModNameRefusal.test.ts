@@ -23,14 +23,11 @@ describe('newModNameRefusal', () => {
       'A mod named "Harder VATS" already exists — install its next release from the Downloads view instead.');
   });
 
-  // Rival: an exact match, which lets the prompt accept a name the create or the install then refuses.
-  it('names the collision for a mod of that name in another case, in the name as given', async () => {
+  it('names the collision for a mod of that name in another case, in the name as given, so the prompt does not accept a name the create or the install then refuses', async () => {
     expect(await newModNameRefusal(adapter, 'harder vats')).toMatch(/"harder vats" already exists/);
   });
 
-  // The manager knows a mod by its folder's name, and this one is a separator's. Rival: asking for
-  // a mod of that name, which reads it as free.
-  it('names the collision for a name a separator\'s folder has', async () => {
+  it('names the collision for a name a separator\'s folder has, the manager knowing a mod by its folder\'s name and this one being a separator\'s', async () => {
     expect(await newModNameRefusal(adapter, 'Unassigned (Modlist Development)_separator')).toMatch(/already exists/);
   });
 

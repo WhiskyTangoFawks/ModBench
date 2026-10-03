@@ -6,7 +6,6 @@ import {
 
 describe('gameReleaseForGame', () => {
   it('maps a game\'s name, as an instance\'s settings spell it, to Mutagen\'s release name', () => {
-    // Each mapping is independent real data, so each earns its own assertion.
     expect(gameReleaseForGame('Fallout 4')).toBe('Fallout4');
     expect(gameReleaseForGame('Fallout 4 VR')).toBe('Fallout4VR');
     expect(gameReleaseForGame('Fallout 3')).toBe('Fallout3');
@@ -17,16 +16,11 @@ describe('gameReleaseForGame', () => {
     expect(gameReleaseForGame('Oblivion')).toBe('Oblivion');
   });
 
-  // The one name whose two vocabularies disagree beyond spacing: MO2 says "Skyrim" for what
-  // Mutagen calls the Legendary Edition, so a whitespace strip would answer a release that
-  // does not exist.
-  it('maps MO2\'s bare "Skyrim" to the Legendary Edition, not to "Skyrim"', () => {
+  it('maps MO2\'s bare "Skyrim" to the Legendary Edition, not to "Skyrim", the one name whose vocabularies disagree beyond spacing, so a whitespace strip would answer a release that does not exist', () => {
     expect(gameReleaseForGame('Skyrim')).toBe('SkyrimLE');
   });
 
-  // Every value has to be a name the backend's Enum.TryParse<GameRelease> accepts, so a game
-  // Mutagen has no release for gets no entry rather than a plausible-looking one.
-  it('answers undefined for a game Mutagen has no release for', () => {
+  it('answers undefined for a game Mutagen has no release for, as every value must be a name the backend\'s Enum.TryParse<GameRelease> accepts', () => {
     expect(gameReleaseForGame('Morrowind')).toBeUndefined();
   });
 
@@ -40,7 +34,6 @@ describe('nexusSlugFor', () => {
   it('maps a release to its Nexus slug', () => {
     expect(nexusSlugFor('Fallout4', 'Fallout 4')).toBe('fallout4');
     expect(nexusSlugFor('SkyrimSE', 'Skyrim Special Edition')).toBe('skyrimspecialedition');
-    // Each mapping is independent real data, so each earns its own assertion.
     expect(nexusSlugFor('Fallout3', 'Fallout 3')).toBe('fallout3');
     expect(nexusSlugFor('FalloutNV', 'Fallout New Vegas')).toBe('newvegas');
     expect(nexusSlugFor('SkyrimLE', 'Skyrim')).toBe('skyrim');
@@ -53,14 +46,11 @@ describe('nexusSlugFor', () => {
     expect(nexusSlugFor('SkyrimVR', 'Skyrim VR')).toBe('skyrimspecialedition');
   });
 
-  // Rival: keying on the name as the instance's settings spell it, beside the release answered.
-  it('keys on the release, not the name', () => {
+  it('keys on the release, not on the name as the instance\'s settings spell it', () => {
     expect(nexusSlugFor('SkyrimSE', 'Fallout 4')).toBe('skyrimspecialedition');
   });
 
-  // Morrowind has no release, so this exercises the fallback path rather than a table row — the
-  // fallback happens to match Nexus's own slug.
-  it('falls back to a lowercased, space-stripped name for a game with no release', () => {
+  it('falls back to a lowercased, space-stripped name for a game with no release, which for Morrowind happens to match Nexus\'s own slug', () => {
     expect(nexusSlugFor(undefined, 'Morrowind')).toBe('morrowind');
     expect(nexusSlugFor(undefined, 'Some Game')).toBe('somegame');
   });
@@ -76,9 +66,7 @@ describe('gamePathInfoForRelease', () => {
     });
   });
 
-  // A release the table only knows the Nexus slug for carries no Steam facts — the
-  // autodetector's signal to give up rather than guess a folder.
-  it('answers no Steam facts for a release the table cannot autodetect', () => {
+  it('answers no Steam facts for a release the table only knows the Nexus slug for, the autodetector\'s signal to give up rather than guess a folder', () => {
     const info = gamePathInfoForRelease('SkyrimSE');
     expect(info).toMatchObject({ gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition' });
     expect(info?.steamAppId).toBeUndefined();
@@ -107,10 +95,8 @@ describe('dataFolderFile', () => {
   });
 });
 
-// ADR-0013 invariant 3: Mod Management takes the game's masters from this table. Each release's
-// list is Mutagen's Implicits.Listings, in the order the game loads them.
 describe('gameMastersOf', () => {
-  it('answers the game\'s masters, in the order the game loads them', () => {
+  it('answers the game\'s masters, as Mutagen\'s Implicits.Listings, in the order the game loads them', () => {
     expect(gameMastersOf('Fallout4')).toEqual([
       'Fallout4.esm', 'DLCRobot.esm', 'DLCworkshop01.esm', 'DLCCoast.esm', 'DLCworkshop02.esm', 'DLCworkshop03.esm',
       'DLCNukaWorld.esm',

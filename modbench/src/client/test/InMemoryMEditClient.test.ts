@@ -24,9 +24,7 @@ describe('InMemoryMEditClient — unscripted queries reject', () => {
     await expect(client.getPlugins()).rejects.toThrow(/getPlugins/);
   });
 
-  // The rival: silently falling back to an empty array/undefined would render a plausible but
-  // wrong tree instead of failing the test that forgot to script it.
-  it('does not fall back to an empty answer once scripted, only before', async () => {
+  it('does not fall back to an empty answer once scripted, only before, so a test that forgot to script it fails rather than rendering a plausible but wrong tree', async () => {
     const client = new InMemoryMEditClient();
     await expect(client.getDiagnoses()).rejects.toThrow();
     client.setQueryAnswer('getDiagnoses', []);
@@ -35,7 +33,7 @@ describe('InMemoryMEditClient — unscripted queries reject', () => {
 });
 
 describe('InMemoryMEditClient — a scripted query failure', () => {
-  it('rejects every call with the scripted error until re-scripted', async () => {
+  it('rejects every call with the scripted error until re-scripted, an answer alone not clearing a standing failure', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
 
@@ -43,8 +41,6 @@ describe('InMemoryMEditClient — a scripted query failure', () => {
     await expect(client.getPlugins()).rejects.toThrow('ECONNREFUSED');
 
     client.setQueryAnswer('getPlugins', []);
-    // A fixed failure reads before a fixed answer in `query()`'s own order, so this still
-    // rejects — an answer alone does not clear a standing failure.
     await expect(client.getPlugins()).rejects.toThrow('ECONNREFUSED');
   });
 });
@@ -108,9 +104,7 @@ describe('InMemoryMEditClient — a disconnected script', () => {
     await expect(client.getDiagnoses()).rejects.toThrow();
   });
 
-  // The rival this guards: clearing only fixed answers leaves a scripted failure standing, so a
-  // disconnected read rejects with that stale reason instead of the adapter's own generic one.
-  it('clears a scripted failure too, not just a fixed answer', async () => {
+  it('clears a scripted failure too, not just a fixed answer, so a disconnected read rejects with the adapter\'s own generic reason rather than a stale one', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
 
