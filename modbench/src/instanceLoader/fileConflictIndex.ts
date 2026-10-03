@@ -121,7 +121,7 @@ export async function buildFileConflictIndex(
     foldersByMod.set(mod.name, folders);
     if (!mod.enabled) continue;
 
-    for (const file of ownFiles) {
+    for (const file of ownFiles.filter((own) => !own.excluded)) {
       const existing = files.get(file.relativePath);
       if (existing) {
         existing.providers.push(modOrigin(mod.name)); // loses to the earlier (winning) provider
@@ -137,7 +137,7 @@ export async function buildFileConflictIndex(
   }
 
   // The run-time output wins over every mod.
-  for (const file of overwriteFiles) {
+  for (const file of overwriteFiles.filter((own) => !own.excluded)) {
     const existing = files.get(file.relativePath);
     files.set({
       relativePath: file.relativePath,

@@ -584,8 +584,8 @@ describe('the MO2 Instance adapter', () => {
         expect(files.files.find((f) => f.relativePath === 'Textures/a.dds'))
           .toMatchObject({ path: join(folder, 'Textures', 'a.dds'), sourcePath: join(folder, 'Textures', 'a.dds') });
         expect(files.folders).toEqual([
-          { relativePath: 'Textures', path: join(folder, 'Textures') },
-          { relativePath: 'Textures/Source', path: join(folder, 'Textures', 'Source') },
+          { relativePath: 'Textures', path: join(folder, 'Textures'), excluded: false },
+          { relativePath: 'Textures/Source', path: join(folder, 'Textures', 'Source'), excluded: false },
         ]);
       });
 
@@ -599,7 +599,7 @@ describe('the MO2 Instance adapter', () => {
         const files = await adapter.originFiles(mod('Harder VATS'));
 
         expect(files.files.find((f) => f.relativePath === 'Linked.esp'))
-          .toEqual({ relativePath: 'Linked.esp', path: join(folder, 'Linked.esp'), sourcePath: await realpath(target) });
+          .toEqual({ relativePath: 'Linked.esp', path: join(folder, 'Linked.esp'), sourcePath: await realpath(target), excluded: false });
         expect(relativePaths(files.files)).not.toContain('Broken.esp');
         expect(files.notes.join('\n')).toMatch(/Broken\.esp/);
       });
@@ -640,6 +640,24 @@ describe('the MO2 Instance adapter', () => {
         expect(paths).toContain('Source/Script.psc');
       });
 
+      it.each([
+        ['a mod', mod('Harder VATS'), join('mods', 'Harder VATS')],
+        ['Overwrite', { kind: 'runtimeOutput' as const }, 'overwrite'],
+      ])('says which files and folders of %s are excluded: a name with the suffix in any case, and everything in such a folder', async (_, origin, folder) => {
+        await mkdir(join(root, folder, 'Textures.mohidden', 'Armour'), { recursive: true });
+        await writeFile(join(root, folder, 'Textures.mohidden', 'Armour', 'a.dds'), '');
+        await writeFile(join(root, folder, 'Hidden.esp.MOHIDDEN'), '');
+        await writeFile(join(root, folder, 'Kept.esp'), '');
+
+        const files = await adapter.originFiles(origin);
+        const excludedOf = (entries: readonly { relativePath: string; excluded: boolean }[], relativePath: string) =>
+          entries.find((entry) => entry.relativePath === relativePath)?.excluded;
+
+        expect(['Textures.mohidden/Armour/a.dds', 'Hidden.esp.MOHIDDEN', 'Kept.esp'].map((path) => excludedOf(files.files, path)))
+          .toEqual([true, true, false]);
+        expect(['Textures.mohidden', 'Textures.mohidden/Armour'].map((path) => excludedOf(files.folders, path))).toEqual([true, true]);
+      });
+
       it('follows a linked folder, its files keyed beneath the link\'s own name', async () => {
         const shared = join(root, 'shared-textures');
         await mkdir(shared);
@@ -649,7 +667,7 @@ describe('the MO2 Instance adapter', () => {
         const files = await adapter.originFiles(mod('Harder VATS'));
 
         expect(files.files.find((f) => f.relativePath === 'linked/foo.dds')?.path).toBe(join(root, 'mods', 'Harder VATS', 'linked', 'foo.dds'));
-        expect(files.folders).toContainEqual({ relativePath: 'linked', path: join(root, 'mods', 'Harder VATS', 'linked') });
+        expect(files.folders).toContainEqual({ relativePath: 'linked', path: join(root, 'mods', 'Harder VATS', 'linked'), excluded: false });
       });
 
       it('notes a link cycle and walks each file once', async () => {
@@ -707,7 +725,7 @@ describe('the MO2 Instance adapter', () => {
         expect(relativePaths(files.files)).toContain('Stray.esp');
         expect(relativePaths(files.files).some((path) => path.startsWith('F4SE/'))).toBe(true);
         expect(files.files.every((f) => !f.relativePath.endsWith('.tmp'))).toBe(true);
-        expect(files.folders).toContainEqual({ relativePath: 'F4SE', path: join(folder, 'F4SE') });
+        expect(files.folders).toContainEqual({ relativePath: 'F4SE', path: join(folder, 'F4SE'), excluded: false });
       });
 
       it.each([

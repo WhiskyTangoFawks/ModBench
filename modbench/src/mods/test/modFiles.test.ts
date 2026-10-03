@@ -22,7 +22,7 @@ import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
-const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath });
+const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath, excluded: false });
 
 // Every folder that holds a file, sitting where the file's own path puts it, as the adapter lists
 // each folder it walks.
@@ -32,7 +32,7 @@ function foldersOf(files: readonly OriginFile[]): OriginFolder[] {
     const segments = relativePath.split('/');
     for (let depth = 1; depth < segments.length; depth++) {
       const folder = segments.slice(0, depth).join('/');
-      byPath.set(folder, { relativePath: folder, path: path.slice(0, path.length - relativePath.length + folder.length) });
+      byPath.set(folder, { relativePath: folder, path: path.slice(0, path.length - relativePath.length + folder.length), excluded: false });
     }
   }
   return [...byPath.values()];
@@ -114,7 +114,7 @@ describe('a mod opens into its files as a folder tree (mods.md, The tree, story 
 
   it('a folder with no files is a row with no expander, as a mod with none is', async () => {
     const provider = providerOver([mod('Armour')], { Armour: [file('Armour.esp')] }, [], {
-      byMod: { Armour: [{ relativePath: 'empty', path: '/instance/mods/Armour/empty' }] },
+      byMod: { Armour: [{ relativePath: 'empty', path: '/instance/mods/Armour/empty', excluded: false }] },
     });
     const children = await provider.getChildren(await rootOf(provider, ModNode, 'Armour'));
 
@@ -210,21 +210,21 @@ describe('a file or folder row\'s parts (mods.md, A row, File and folder)', () =
   it('carries where each folder sits as the value names it, by its whole path in its mod, in a mod and in Overwrite', async () => {
     const provider = providerOver([mod('Armour')], { Armour: [file('meshes/textures/a.nif'), file('textures/armour/a.dds')] }, [file('F4SE/a.log')], {
       byMod: { Armour: [
-        { relativePath: 'meshes', path: '/instance/mods/Armour/meshes' },
-        { relativePath: 'meshes/textures', path: '/instance/mods/Armour/meshes/textures' },
-        { relativePath: 'textures', path: '/instance/mods/Armour/textures' },
-        { relativePath: 'textures/armour', path: '/instance/mods/Armour/textures/armour' },
+        { relativePath: 'meshes', path: '/instance/mods/Armour/meshes', excluded: false },
+        { relativePath: 'meshes/textures', path: '/instance/mods/Armour/meshes/textures', excluded: false },
+        { relativePath: 'textures', path: '/instance/mods/Armour/textures', excluded: false },
+        { relativePath: 'textures/armour', path: '/instance/mods/Armour/textures/armour', excluded: false },
       ] },
-      overwrite: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE' }],
+      overwrite: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE', excluded: false }],
     });
     const textures = expectInstanceOf(await childNamed(provider, await rootOf(provider, ModNode, 'Armour'), 'textures'), FolderNode);
     const armour = expectInstanceOf(await childNamed(provider, textures, 'armour'), FolderNode);
     const f4se = expectInstanceOf(await childNamed(provider, await rootOf(provider, OverwriteNode, 'Overwrite'), 'F4SE'), FolderNode);
 
     expect([textures.folder, armour.folder, f4se.folder]).toEqual([
-      { relativePath: 'textures', path: '/instance/mods/Armour/textures' },
-      { relativePath: 'textures/armour', path: '/instance/mods/Armour/textures/armour' },
-      { relativePath: 'F4SE', path: '/instance/overwrite/F4SE' },
+      { relativePath: 'textures', path: '/instance/mods/Armour/textures', excluded: false },
+      { relativePath: 'textures/armour', path: '/instance/mods/Armour/textures/armour', excluded: false },
+      { relativePath: 'F4SE', path: '/instance/overwrite/F4SE', excluded: false },
     ]);
   });
 

@@ -7,7 +7,7 @@ function toFileMap(byMod: Record<string, string[]>): Map<string, OriginFile[]> {
   return new Map(
     Object.entries(byMod).map(([mod, paths]) => [
       mod,
-      paths.map((relativePath) => ({ relativePath, path: `/mods/${mod}/${relativePath}`, sourcePath: `/mods/${mod}/${relativePath}` })),
+      paths.map((relativePath) => ({ relativePath, path: `/mods/${mod}/${relativePath}`, sourcePath: `/mods/${mod}/${relativePath}`, excluded: false })),
     ]),
   );
 }
@@ -28,7 +28,7 @@ describe('findPluginsOutsideLoadOrder — the plugin files the effective load or
   });
 
   it('names a linked plugin by where it is read from, the link\'s target', () => {
-    const linked = { relativePath: 'Linked.esp', path: '/mods/ModA/Linked.esp', sourcePath: '/shared/Real.esp' };
+    const linked = { relativePath: 'Linked.esp', path: '/mods/ModA/Linked.esp', sourcePath: '/shared/Real.esp', excluded: false };
     const index: FileConflictIndex = { files: new FileConflictLookup(), filesByMod: new Map([['ModA', [linked]]]), foldersByMod: new Map() };
 
     expect(findPluginsOutsideLoadOrder(index, [])).toEqual([{ name: 'Linked.esp', path: '/shared/Real.esp', origin: 'ModA' }]);

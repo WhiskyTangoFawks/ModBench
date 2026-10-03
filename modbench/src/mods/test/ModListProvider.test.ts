@@ -65,7 +65,7 @@ function valueOf(
 }
 
 const overwriteHolding = (count: number): InstanceValue['overwriteFiles'] =>
-  Array.from({ length: count }, (_, at) => ({ relativePath: `F4SE/${at}.log`, path: `/instance/overwrite/F4SE/${at}.log`, sourcePath: `/instance/overwrite/F4SE/${at}.log` }));
+  Array.from({ length: count }, (_, at) => ({ relativePath: `F4SE/${at}.log`, path: `/instance/overwrite/F4SE/${at}.log`, sourcePath: `/instance/overwrite/F4SE/${at}.log`, excluded: false }));
 
 const SEQUENCE_ALREADY_LOADED = 1;
 const SEQUENCE_NOT_READ_YET = 0;
@@ -283,7 +283,7 @@ describe('a click on a separator, a mod, Overwrite or a folder only selects', ()
     const entries = [mod('Nexus Mod', true, { nexusId: '42' }), sep('Section'), mod('Loose')];
     const provider = makeProvider([], { instance: new FakeInstance(instanceValueFixture({
       ...valueOf(entries, { overwriteFiles: overwriteHolding(5) }),
-      overwriteFolders: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE' }],
+      overwriteFolders: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE', excluded: false }],
     })) });
     const roots = await provider.getChildren();
     const children = await Promise.all(roots.map((n) => provider.getChildren(n)));
