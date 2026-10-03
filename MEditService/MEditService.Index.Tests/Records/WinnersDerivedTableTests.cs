@@ -58,7 +58,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
         Assert.NotNull(stack);
         Assert.Single(stack.Entries, e => e.IsWinner);
 
-        string HeaderFormKeyOf(PluginAddress plugin) => PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
+        static string HeaderFormKeyOf(PluginAddress plugin) => PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
         PluginAddress?[] headerWinnersAssertedBecauseNoWinnerReadsAsNoHeaderThroughOpenHeadersWinnerOnlyLookup =
             [WinnerOf(HeaderFormKeyOf(BaseKey)), WinnerOf(HeaderFormKeyOf(OverKey))];
         Assert.Equal<PluginAddress?>(
