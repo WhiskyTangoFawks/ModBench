@@ -2800,6 +2800,7 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
     await reconcile(h, [held('A.esp')]);
 
     const item = await rowItem(h);
+    expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsWarningIcon.foreground'));
     expect(item.description).toBe('malformed');
     expect(item.tooltip).toContain('RDAT is 6 bytes');
   });
@@ -2993,17 +2994,15 @@ describe('PluginsTreeProvider — several statuses on one row', () => {
 });
 
 describe('PluginsTreeProvider applies no decoration of its own to a healthy plugin row', () => {
-  it('renders every plugin row plainly, whatever the load order state', async () => {
+  it.each([[0, 'A.esp'], [1, 'B.esp']])('renders plugin row %i plainly, whatever the load order state', async (index, name) => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp'), held('B.esp')]);
 
-    const names = ['A.esp', 'B.esp'];
-    for (const index of [0, 1]) {
-      const item = await rowItem(h, index);
-      expect(item.contextValue).toBe('plugin enabled inUntrackedMod untracked editable');
-      expect(item.description).toBeUndefined();
-      expect(item.tooltip).toBe(`${names[index]}\nSomeMod`);
-    }
+    const item = await rowItem(h, index);
+
+    expect(item.contextValue).toBe('plugin enabled inUntrackedMod untracked editable');
+    expect(item.description).toBeUndefined();
+    expect(item.tooltip).toBe(`${name}\nSomeMod`);
   });
 });
 
