@@ -196,8 +196,11 @@ As a user, I want:
 As a user, I want:
 
 1. A pick of the mode, then a pick of the destination: the plugins I can edit, each with its load index. A destination that already holds a copy asks whether to replace it. Esc on either copies nothing. *catalog `copy`*
-2. A copy as new to take the next free FormKey. Its child records get new FormKeys, a reference to itself follows it, and a container the destination lacks is created bare, as a Partial Form.
+2. A copy as new to take the next free FormKey. A reference to itself follows it, and a container the destination lacks is created bare, as a Partial Form.
 3. A copy as override into a plugin that loads before the source refused: that is an underride. A cell or a worldspace copied as new refused.
+4. Deep copy as override in the mode pick when a selected record has child records. It copies each such record with its fields and all its child records, at any depth. A selected record with no child records copies as an override. Override and new copy each record without its child records. While it runs, the Plugins view's progress bar, from whichever view it started. *xEdit; No dead entries*
+5. Deep copy as override into a destination that holds any of the record's child records to ask whether to replace them, once for the selection. Replace overwrites each child record the destination holds, and keeps its copy of the record itself. A child record the destination holds and the source lacks stays. Declining leaves those destinations as they are. *xEdit; Confirm what destroys; xedit.md, divergence 26*
+6. A worldspace deep copy as override that fails part way to say so, naming the cells that landed and the cell that failed, and not to roll back. Discarding the working-tree changes is the recovery. This is an exception to *A failed gesture writes nothing* and to *A selection is one gesture, and each item lands on its own*.
 
 ### Delete
 

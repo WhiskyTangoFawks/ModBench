@@ -46,17 +46,45 @@ public sealed class DocumentEditRealDataTests : IDisposable
         try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
     }
 
+    public static TheoryData<string> RecordTypesOfferingGestures()
+    {
+        var recordTypes = new TheoryData<string>();
+        foreach (var recordType in EveryGesture.Value.Select(g => g.Record.RecordType).Distinct().Order(StringComparer.Ordinal))
+            recordTypes.Add(recordType);
+        return recordTypes;
+    }
+
     [Fact]
-    public void EveryGestureARecordTypeOffers_OnItsSmallestRecord_ChangesExactlyItsPath() =>
-        RunSweep(gestures => gestures
-            .OrderBy(g => g.Record.Text.Length)
-            .DistinctBy(g => (g.Record.RecordType, g.Envelope.Op, g.Path)), minGestures: 100);
+    public void TheSmallestRecordOfEachShape_OffersOverAHundredGestures() =>
+        Assert.True(OnTheSmallestRecordOfEachShape().Count() > 100,
+            $"the plugin should offer plenty of gestures; it offered {OnTheSmallestRecordOfEachShape().Count()}");
+
+    [Theory]
+    [MemberData(nameof(RecordTypesOfferingGestures))]
+    public void EveryGestureARecordTypeOffers_OnItsSmallestRecord_ChangesExactlyItsPath(string recordType) =>
+        RunSweep([.. OnTheSmallestRecordOfEachShape().Where(g => g.Record.RecordType == recordType)]);
 
     [SmokeFact("sweep every record of the cut-down plugin, not one per gesture shape")]
-    public void EveryGestureOfEveryRecord_ChangesExactlyItsPath() =>
-        RunSweep(gestures => gestures, minGestures: 4900);
+    public void EveryGestureOfEveryRecord_ChangesExactlyItsPath()
+    {
+        Assert.True(EveryGesture.Value.Count > 4900, $"the plugin should offer plenty of gestures; it offered {EveryGesture.Value.Count}");
+        RunSweep(EveryGesture.Value);
+    }
+
+    private static IEnumerable<Gesture> OnTheSmallestRecordOfEachShape() => EveryGesture.Value
+        .OrderBy(g => g.Record.Text.Length)
+        .DistinctBy(g => (g.Record.RecordType, g.Envelope.Op, g.Path));
 
     private readonly record struct Gesture(PluginDocument Record, RecordEditEnvelope Envelope, string Path);
+
+    private static readonly Lazy<IReadOnlyList<Gesture>> EveryGesture = new(() =>
+    {
+        var modPath = new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath);
+        var strings = PluginStrings.In(Path.GetDirectoryName(CutDownPluginFixture.PluginPath)
+            ?? throw new InvalidOperationException("Expected the cut-down plugin's path to sit in a directory."));
+        using var documents = TestAdapters.Mutagen().OpenDocuments(modPath, GameRelease.Fallout4, Schemas, strings);
+        return [.. documents.Records.Prepend(documents.Header).SelectMany(GesturesOn)];
+    });
 
     private static IEnumerable<Gesture> GesturesOn(PluginDocument record)
     {
@@ -71,15 +99,8 @@ public sealed class DocumentEditRealDataTests : IDisposable
             yield return new(record, envelope, path);
     }
 
-    private void RunSweep(Func<IEnumerable<Gesture>, IEnumerable<Gesture>> select, int minGestures)
+    private void RunSweep(IReadOnlyList<Gesture> gestures)
     {
-        var modPath = new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath);
-        var strings = PluginStrings.In(Path.GetDirectoryName(CutDownPluginFixture.PluginPath)
-            ?? throw new InvalidOperationException("Expected the cut-down plugin's path to sit in a directory."));
-        List<Gesture> gestures;
-        using (var documents = TestAdapters.Mutagen().OpenDocuments(modPath, GameRelease.Fallout4, Schemas, strings))
-            gestures = [.. select(documents.Records.Prepend(documents.Header).SelectMany(GesturesOn))];
-        Assert.True(gestures.Count > minGestures, $"the plugin should offer plenty of gestures; it offered {gestures.Count}");
 
         var trackedTree = TrackedTree();
         var befores = gestures.Select(g => g.Record.FormKey).Distinct().ToDictionary(formKey => formKey, formKey =>
