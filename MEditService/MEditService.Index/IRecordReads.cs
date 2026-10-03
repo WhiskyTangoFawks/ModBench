@@ -2,8 +2,9 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
-/// <summary>Every read the index answers, at the caller's <see cref="RecordRef"/> (ADR-0009
-/// invariant 1). A plugin's own facts answer while the snapshot names it.</summary>
+/// <summary>Every read the index answers, at the caller's <see cref="RecordRef"/>. A record read
+/// sees only the active plugins (ADR-0009 invariant 1); a plugin's own facts answer while the
+/// snapshot names it.</summary>
 public interface IRecordReads
 {
     /// <summary>What the Index read out of each plugin it has open, keyed by identity. A plugin it has
@@ -37,9 +38,8 @@ public interface IRecordReads
     /// backed by <c>form_lookup</c> (ADR-0011).</summary>
     RecordLookupEntry? Resolve(string formKey);
 
-    /// <summary>One response's <see cref="Resolve"/> about <paramref name="formKey"/>: the links its
-    /// copies carry resolve in one query up front, any other FormKey alone (ADR-0005 invariant
-    /// 6).</summary>
+    /// <summary>One response's <see cref="Resolve"/> about <paramref name="formKey"/>, each distinct
+    /// FormKey asked once. The store resolves the links its copies carry in one query up front.</summary>
     Func<string, RecordLookupEntry?> LinkResolver(string formKey) => FormKeyResolutionCache.Memoize(Resolve);
 
     IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey);

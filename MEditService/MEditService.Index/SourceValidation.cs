@@ -13,11 +13,11 @@ namespace MEditService.Index;
 internal sealed class SourceValidation(
     DuckDbRecordIndex index, DuckDBConnection connection, GameRelease release, ILogger logger)
 {
-    // One per index, so an open reads every document (ADR-0009).
+    // One per index (ADR-0009, Derived tactical observations).
     private readonly Dictionary<PluginAddress, string> _validatedHeads = new(PluginAddress.Comparer);
 
-    /// <summary>The first validation reads every document, and each later one only what git names as
-    /// changed since the HEAD it validated and what the index holds as dirty (ADR-0009).</summary>
+    /// <summary>ADR-0009, Derived tactical observations. A later validation also reads what the
+    /// index holds as dirty.</summary>
     internal ValidationReport Validate(PluginAddress key, string modFolder)
     {
         var report = ValidateAgainstGit(key, modFolder, out var head);

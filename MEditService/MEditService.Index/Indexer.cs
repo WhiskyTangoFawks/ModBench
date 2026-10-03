@@ -663,7 +663,6 @@ public sealed class Indexer : IQueryIndex, IDisposable
         var indexTimer = Stopwatch.StartNew();
         try
         {
-            // ADR-0012 invariant 1.
             IndexOnePlugin(held, index, plugin, holdsTree, token);
             if (_logger.IsEnabled(LogLevel.Debug))
             {

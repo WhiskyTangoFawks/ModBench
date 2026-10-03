@@ -316,7 +316,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         // Effective, one relation: the header is an ordinary `records` row, swept here by
         // construction. form_lookup gets no branch: ingest keeps one lookup row per Effective
-        // record row (ADR-0011), so `records`' winners are form_lookup's.
+        // record row, so `records`' winners are form_lookup's.
         InsertWinners(RecordRef.Effective, "SELECT form_key, plugin, origin FROM mirror.records");
 
         // Head, over the same membership relation records_head itself is built on. A record the
@@ -1119,7 +1119,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 SELECT p.placement_group, r.record_type, p.form_key, r.editor_id,
                        json_extract_string(r.body, '$.Base'), r.parse_diagnosis IS NOT NULL, {FullNameOf("r")},
                        r.parse_diagnosis,
-                       -- plugins.md, Record: the reference's own plugin's copy of its base, else the winning copy.
+                       -- The base record's EditorID (plugins.md, Record). Its copy in the reference's own plugin, else the winning copy.
                        (SELECT b.editor_id FROM {records} b
                         WHERE b.form_key = json_extract_string(r.body, '$.Base')
                         ORDER BY (b.plugin = r.plugin AND b.origin = r.origin) DESC, b.is_winner DESC, b.plugin, b.origin
@@ -1198,9 +1198,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         private static string FullNameOf(string alias) =>
             $"NULLIF({TranslatedStringSql.Resolved($"{alias}.body", "$.Name")}, '')";
 
-        // origin (ADR-0012): nullable and independent of plugin — a *filter*, not an identity field.
-        // This builder doesn't enforce invariant 1 itself; every live caller already passes both or
-        // neither.
+        // The callers hold ADR-0012 invariant 1, not this builder: RecordQueryService's
+        // RecordFilterGuard refuses a plugin without its origin, and every other caller passes both
+        // or neither.
         private static (string where, List<string> paramValues) BuildWhere(
             string? plugin, string? search, string? filterCondition = null, string? origin = null,
             IReadOnlyList<string>? recordTypes = null, string? groupCondition = null, string? searchFormKey = null)
@@ -1269,8 +1269,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         private static List<ReferenceRow> GetReferences(DuckDBConnection connection, string targetFormKey)
         {
-            // ADR-0007 invariant 3: WorkingTreeOverlay keeps form_references rewritten as the working
-            // tree changes, so this already sees every edit without applying anything itself.
+            // WorkingTreeOverlay keeps form_references rewritten as the working tree changes, so this
+            // already sees every edit without applying anything itself.
             const string sql = """
                 SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
                 FROM form_references fr

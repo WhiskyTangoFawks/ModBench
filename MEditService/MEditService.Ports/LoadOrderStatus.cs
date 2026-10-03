@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Ports;
 
-/// <summary>Where the Index's reconcile is right now (ADR-0013). Reconciling is
+/// <summary>Where the Index's reconcile is right now. Reconciling is
 /// observable rather than an internal phase: a plugin's records are browsable the moment it is
 /// indexed, well before the reconcile finishes.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -34,12 +34,11 @@ public sealed record IndexedPlugin(string Name, string Origin);
 
 /// <summary>Exists so an absent conflict badge is never mistakable for "no conflict": a caller
 /// reading <see cref="ConflictsComputed"/> false knows nothing has looked yet, which is a different
-/// question from the state being Ready (ADR-0013).</summary>
+/// question from the state being Ready.</summary>
 public sealed record LoadOrderStatus(
     LoadOrderState State,
     // Every plugin the snapshot holds, which the reconcile indexes.
     int TotalPlugins,
-    // ADR-0009 invariant 1.
     int ActivePlugins,
     IReadOnlyList<IndexedPlugin> IndexedPlugins,
     bool ConflictsComputed,

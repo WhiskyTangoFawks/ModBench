@@ -78,7 +78,7 @@ internal sealed class PluginIngest
         WritePlacement(plugin, origin, placementRows, cellLocationRows);
 
         // Before the form_lookup flush, so the header's row and lookup row go through the same two
-        // flushes as every record's (ADR-0011: one lookup row per record row, by construction).
+        // flushes as every record's: one lookup row per record row, by construction.
         if (schemas.ContainsKey(PluginHeader.RecordType))
             lookupRows.Add(HeaderIndexer.Index(documents.Header, plugin, origin, documentAppender));
 

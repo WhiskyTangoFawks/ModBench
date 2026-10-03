@@ -328,8 +328,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0011: global form_key -> (record type, EditorID) lookup, one row per (form_key, plugin),
-    // so CheckErrorBuilder and the compare resolvers resolve a FormKey in O(1).
+    // The form lookup ADR-0011 extracts at ingest: form_key -> (record type, EditorID). One row per
+    // (form_key, plugin), so CheckErrorBuilder and the compare resolvers resolve a FormKey in O(1).
     internal static void CreateFormLookupTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
