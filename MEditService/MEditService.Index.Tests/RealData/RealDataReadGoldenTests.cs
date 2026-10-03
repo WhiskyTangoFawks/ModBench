@@ -4,15 +4,12 @@ using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.RealData;
 
-/// <summary>Field values only, not <c>FieldMetadata</c>: metadata is schema-derived, identical by
-/// construction, and would bury the values under thousands of lines of enum domains.</summary>
 [Collection(CutDownPluginCollection.Name)]
 public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
 {
     private readonly IRecordReads _repo = fixture.Reads;
     private const string Origin = "Data";
     private const int PerType = 3;
-    // Larger than the record count of any type in the cut-down plugin (info, the largest, has 2,873).
     private const int WholeType = 5000;
 
     private static readonly string[] Types =
@@ -31,18 +28,17 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
         CheckErrors = d.Fields.Where(f => f.CheckError != null).ToDictionary(f => f.Metadata.Name, f => f.CheckError),
     };
 
-    // Listing order is ORDER BY editor_id and real placed refs and cells have none, so which rows a
-    // small page returns is up to the engine's tie-breaking: sampling would make this golden's own
-    // subject non-deterministic.
-    private IReadOnlyList<string> FormKeysOf(string type) =>
-        [.. _repo.Search(new RecordQuery(RecordTypes: [type], Limit: WholeType, Offset: 0)).Items
-            .Select(r => r.FormKey).Order(StringComparer.Ordinal).Take(PerType)];
+    private IReadOnlyList<string> LowestFormKeysOf(string type)
+    {
+        var page = _repo.Search(new RecordQuery(RecordTypes: [type], Limit: WholeType, Offset: 0));
+        Assert.True(page.Total <= WholeType, $"'{type}' has {page.Total} records, more than the {WholeType} one page lists.");
+        return [.. page.Items.Select(r => r.FormKey).Order(StringComparer.Ordinal).Take(PerType)];
+    }
 
-    // Total plus the first rows of the sorted listing: `info` alone has 2,873 rows, and a golden that
-    // is 90% repetition is one nobody re-reads when it fails.
     private object WholeListing(string type)
     {
         var page = _repo.Search(new RecordQuery(RecordTypes: [type], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0));
+        Assert.True(page.Total <= WholeType, $"'{type}' has {page.Total} records, more than the {WholeType} one page lists.");
         return new
         {
             page.Total,
@@ -55,7 +51,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
     {
         var captured = Types.ToDictionary(
             type => type,
-            type => FormKeysOf(type)
+            type => LowestFormKeysOf(type)
                 .SelectMany(fk => _repo.GetDocument(fk, new PluginAddress(TestPluginName, Origin))
                     is not { } document ? [] : new[] { Project(document) })
                 .ToList());
@@ -83,8 +79,8 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
     [Fact]
     public void SpatialReads_MatchGolden()
     {
-        var worldspaces = FormKeysOf("wrld");
-        var cells = FormKeysOf("cell");
+        var worldspaces = LowestFormKeysOf("wrld");
+        var cells = LowestFormKeysOf("cell");
         var captured = new
         {
             WorldspaceCells = worldspaces.ToDictionary(
@@ -102,7 +98,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
                         Temporary = refs.Temporary.OrderBy(r => r.FormKey, StringComparer.Ordinal).ToList(),
                     };
                 }),
-            Placements = FormKeysOf("refr").ToDictionary(
+            Placements = LowestFormKeysOf("refr").ToDictionary(
                 fk => fk, fk => _repo.GetPlacement(fk, new PluginAddress(TestPluginName, Origin))),
         };
 
@@ -112,15 +108,9 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
     [Fact]
     public void ReferencesAndResolution_MatchGolden()
     {
-        // Targets are drawn from every captured record and then narrowed to what something points at: a
-        // curated slice can contain keywords nothing references, pinning an all-empty golden that passes
-        // after the reference index stops being populated.
-        var allFormKeys = Types.SelectMany(FormKeysOf).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        var allFormKeys = Types.SelectMany(LowestFormKeysOf).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
         var captured = new
         {
-            // One keyword here is referenced 1,248 times, which would bury the golden. The count
-            // catches a reference index that stopped being populated; the sample catches a changed
-            // row.
             ReferencedBy = allFormKeys
                 .Select(fk => (FormKey: fk, Refs: _repo.GetReferencedBy(fk)))
                 .Where(r => r.Refs.Count > 0)
