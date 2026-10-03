@@ -20,8 +20,8 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     private const string BravoName = "Bravo.esm";
     private const string CharlieName = "Charlie.esm";
     private const string DeltaName = "Delta.esm";
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-masters-").FullName;
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-masters-game-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-masters-");
+    private readonly ScratchDirectory _gameDirectory = new("medit-masters-game-");
     private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginAddress _plugin = new(PluginName, "MastersMod");
     private readonly FormKey _npc;
@@ -85,15 +85,8 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
 
     public void Dispose()
     {
-        TryDelete(_modFolder);
-        TryDelete(_gameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
+        _modFolder.Dispose();
+        _gameDirectory.Dispose();
     }
 
     private PluginCompileService CompileService() =>

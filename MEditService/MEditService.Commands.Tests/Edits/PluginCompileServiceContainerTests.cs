@@ -30,8 +30,8 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
     private const string QuestRecordType = "quest";
 
-    private readonly string _modFolder;
-    private readonly string _gameDirectory;
+    private readonly ScratchDirectory _modFolder = new("medit-container-compile-");
+    private readonly ScratchDirectory _gameDirectory = new("medit-container-compile-game-");
     private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginAddress _plugin = new(PluginName, Origin);
 
@@ -48,9 +48,6 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
     public PluginCompileServiceContainerTests()
     {
-        _modFolder = Directory.CreateTempSubdirectory("medit-container-compile-").FullName;
-        _gameDirectory = Directory.CreateTempSubdirectory("medit-container-compile-game-").FullName;
-
         var pluginPath = Path.Combine(_modFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         mod.ModHeader.Author = HeaderAuthor;
@@ -138,15 +135,8 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
     public void Dispose()
     {
-        TryDelete(_modFolder);
-        TryDelete(_gameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
+        _modFolder.Dispose();
+        _gameDirectory.Dispose();
     }
 
     private PluginCompileService CompileService() => CompileServices.Over(_loadOrder);

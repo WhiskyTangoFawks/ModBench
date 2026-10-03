@@ -27,13 +27,9 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     private static readonly string NpcRelativePath =
         Path.Combine("plugin-source", PluginName, "Npcs", $"{NpcEditorId} - 000800_{PluginName}.json");
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-dirtof-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-dirtof-");
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private SourceRepository Tracked(params TreeFile[] extraFiles)
     {

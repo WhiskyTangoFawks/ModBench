@@ -17,8 +17,8 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     private const string PluginName = "CellFullName.esp";
     private const string Origin = "CellFullNameMod";
     private readonly PluginAddress _plugin = new(PluginName, Origin);
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-cell-fullname-mod-").FullName;
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-cell-fullname-game-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-cell-fullname-mod-");
+    private readonly ScratchDirectory _gameDirectory = new("medit-cell-fullname-game-");
     private readonly Indexer _index;
     private readonly string _worldspaceFormKey;
 
@@ -59,15 +59,8 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     public void Dispose()
     {
         _index.Dispose();
-        TryDelete(_modFolder);
-        TryDelete(_gameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
+        _modFolder.Dispose();
+        _gameDirectory.Dispose();
     }
 
     [Fact]

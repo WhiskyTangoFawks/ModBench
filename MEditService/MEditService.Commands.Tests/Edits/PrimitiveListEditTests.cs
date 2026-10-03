@@ -261,8 +261,8 @@ public sealed class PrimitiveListEditTests : IDisposable
         private const string RaceEditorId = "Race699";
         private const string MaterialObjectEditorId = "Mato699";
 
-        private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-699-instance-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-699-game-").FullName;
+        private readonly ScratchDirectory _instanceRoot = new("medit-699-instance-");
+        private readonly ScratchDirectory _gameDirectory = new("medit-699-game-");
         private readonly string _modFolder;
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
@@ -338,15 +338,8 @@ public sealed class PrimitiveListEditTests : IDisposable
 
         public void Dispose()
         {
-            TryDelete(_instanceRoot);
-            TryDelete(_gameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
+            _instanceRoot.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }

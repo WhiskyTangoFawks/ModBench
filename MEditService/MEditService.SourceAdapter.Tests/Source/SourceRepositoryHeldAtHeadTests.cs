@@ -26,7 +26,7 @@ public sealed class SourceRepositoryHeldAtHeadTests : IDisposable
     private static readonly string NpcRelativePath =
         Path.Combine("plugin-source", PluginName, "Npcs", $"FixtureNpc - 000900_{PluginName}.json");
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-held-at-head-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-held-at-head-");
     private readonly string _childFormKey;
     private readonly SourceRepository _repository;
 
@@ -51,11 +51,7 @@ public sealed class SourceRepositoryHeldAtHeadTests : IDisposable
         _repository = SourceRepository.Over(_modFolder, Release);
     }
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
