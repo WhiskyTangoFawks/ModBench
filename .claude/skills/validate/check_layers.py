@@ -78,6 +78,12 @@ def top2(box_id: str):
     return '.'.join(box_id.split('.')[:2])
 
 
+def reaches_its_bands_lib(src_id: str, dst_id: str):
+    """target-architecture.md: a box references its band's lib by the band's rule."""
+    s, d = top2(src_id), top2(dst_id)
+    return s.split('.')[0] == d.split('.')[0] and d.split('.')[-1].endswith('lib')
+
+
 def parent_of(box_id: str):
     parts = box_id.split('.')
     return '.'.join(parts[:-1]) if len(parts) >= 3 else None
@@ -113,6 +119,8 @@ def check_reference_view(ref_path: Path, permitted, exceptions):
         if dst_band == 'kernel' and column_of(a.src) == column_of(a.dst):
             continue
         if (a.src, a.dst) in exceptions:
+            continue
+        if reaches_its_bands_lib(a.src, a.dst):
             continue
         failures.append(
             f"{a.where()}: reference must point to a lower layer or its column's kernel, and "
@@ -188,6 +196,8 @@ def message_allowed(src, dst, msg_class, ref_pairs, store_pairs, boxes_by_band):
 
     pair = frozenset((s2, d2))
     if pair in ref_pairs or pair in store_pairs:
+        return True
+    if reaches_its_bands_lib(s2, d2) or reaches_its_bands_lib(d2, s2):
         return True
 
     src_band, dst_band = band_of(src_id), band_of(dst_id)
