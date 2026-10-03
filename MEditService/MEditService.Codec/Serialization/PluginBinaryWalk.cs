@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using MEditService.Codec.Schema;
 
 namespace MEditService.Codec.Serialization;
 
@@ -9,8 +10,6 @@ namespace MEditService.Codec.Serialization;
 /// where the data goes missing.</summary>
 public static class PluginBinaryWalk
 {
-    private const uint CompressedFlag = 0x00040000;
-
     /// <summary>One top-level record or GRUP header. For a GRUP only <c>Start</c>/<c>DataStart</c> are
     /// meaningful (its header carries no FormID); for a record the data span bounds its subrecord stream.</summary>
     public readonly record struct RecordSpan(string Type, uint FormId, uint Flags, int Start, int DataStart, int DataLen, bool IsGrup);
@@ -119,8 +118,8 @@ public static class PluginBinaryWalk
             if (!rewrittenByIdentity.TryGetValue((original.Type, original.FormId), out var rewritten))
                 continue;
 
-            var originalCompressed = (original.Flags & CompressedFlag) != 0;
-            var rewrittenCompressed = (rewritten.Flags & CompressedFlag) != 0;
+            var originalCompressed = (original.Flags & CompressedFlag.Bit) != 0;
+            var rewrittenCompressed = (rewritten.Flags & CompressedFlag.Bit) != 0;
             if (originalCompressed != rewrittenCompressed)
                 continue;
 

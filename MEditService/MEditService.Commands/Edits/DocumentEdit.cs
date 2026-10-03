@@ -51,7 +51,8 @@ internal static class DocumentEdit
             return cannot;
         if (emptying?.RefuseRefill(request.RefillCopyOnTheLeft, request.Schema, record[FormKeyMember]?.GetValue<string>(), spelled) is { } unreadable)
             return unreadable;
-        if (emptying != null) envelope = envelope with { Value = emptying.FlagsWith(request.RefillCopyOnTheLeft) };
+        var left = emptying?.LeftOf(request.RefillCopyOnTheLeft);
+        if (emptying != null) envelope = envelope with { Value = emptying.FlagsWith(left) };
         if (RefusePersistentOnDeleted(record, request, cursor.Column, envelope.Value, spelled) is { } deleted) return deleted;
         var move = CellGroupMove.Of(record, request.Prefix, request.Schema, cursor.Column, envelope.Value);
         AnotherCell? into = null;
@@ -72,7 +73,7 @@ internal static class DocumentEdit
             };
         if (patched is { } refused) return refused;
         ClearAliases(record, cursor.Column);
-        emptying?.Apply(record, request.Schema, request.RefillCopyOnTheLeft);
+        emptying?.Apply(record, request.Schema, left);
         var prefix = into == null ? move?.Apply(root) ?? request.Prefix : request.Prefix;
 
         var started = envelope is { Op: RecordEditEnvelope.Add, Value: null or { ValueKind: JsonValueKind.Null } } && edited is JsonArray grown

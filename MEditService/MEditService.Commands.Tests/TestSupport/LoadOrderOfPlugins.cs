@@ -54,8 +54,8 @@ internal sealed class LoadOrderOfPlugins : IDisposable
 
     internal string Text(IModGetter mod, FormKey formKey) => TrackedTree.Body(FolderOf(mod), Address(mod), formKey.ToString());
 
-    /// <summary>Replaces a tracked plugin's document for <paramref name="formKey"/> with a body no reader can make a record of.</summary>
-    internal void MakeUnreadable(IModGetter mod, FormKey formKey, string recordType, string replaced, string with)
+    /// <summary>Replaces <paramref name="replaced"/> in a tracked plugin's document for <paramref name="formKey"/>.</summary>
+    internal void Respell(IModGetter mod, FormKey formKey, string recordType, string replaced, string with)
     {
         var text = Text(mod, formKey);
         if (!text.Contains(replaced, StringComparison.Ordinal))
