@@ -64,6 +64,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         {
             await UnblockEveryReaderByOpeningThePipeReadWriteAndClosingItToGiveEndOfFile(
                 pipeWhoseOpenForReadingNeverReturnsUntilSomethingWritesToIt, put);
+            await put;
             Assert.Fail("Put opened another document to place a record no document holds.");
         }
     }

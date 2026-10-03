@@ -41,7 +41,7 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
     }
 
     [Fact]
-    public void IsTracked_FolderGoneSinceTheLoadedModsWereListed_IsFalseNotAThrow()
+    public void IsTracked_FolderThatDoesNotExist_IsFalseNotAThrow()
     {
         Assert.False(SourceRepository.IsTracked(Path.Combine(_modFolder, "Gone")));
     }

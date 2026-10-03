@@ -140,7 +140,7 @@ public class ConflictClassifierTests
     }
 
     [Fact]
-    public void Classify_SameFilenameDifferentOrigin_AChangeToOneColumnsValueNeverAppearsOnTheOthersDiffEntry()
+    public void Classify_SameFilenameDifferentOrigin_EditingOneColumnsValue_LeavesTheOtherColumnsValueInTheDiff()
     {
         var modA = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, false, ("Name", "Original"));
         var modB = MakeOverrideWithOrigin("Shared.esp", "ModB", 1, true, ("Name", "Original"));
@@ -263,7 +263,7 @@ public class ConflictClassifierTests
     }
 
     [Fact]
-    public void Classify_NullFieldInNonMaster_TreatedAsAbsent_NotConflictLoses_ForAPartialFormThatDoesNotOverrideTheField()
+    public void Classify_NullFieldInNonMaster_TreatedAsAbsent_NotConflictLoses_ForAPluginThatLeavesTheFieldAbsent()
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 1));
         var partial = MakeOverride("B.esp", 1, false, ("Name", null), ("Level", 5));

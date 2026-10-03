@@ -32,6 +32,9 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
         Assert.Empty(repository.DirtOf(new PluginAddress(Plugin, "TestMod")).Documents);
 
         Assert.Equal(before, File.ReadAllBytes(IndexOf(modFolder)));
+
+        GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "status", "--porcelain");
+        Assert.NotEqual(before, File.ReadAllBytes(IndexOf(modFolder)));
     }
 
     [Fact]

@@ -52,7 +52,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
     }
 
     [Fact]
-    public void Track_EditsPreset_DoesNotUnignoreATopLevelFolderThatMerelyEndsWithPluginSource_ForThePatternIsRootAnchoredToTheLiteralPluginSource()
+    public void Track_EditsPreset_DoesNotUnignoreATopLevelFolderThatMerelyEndsWithPluginSource_ForThePatternIsNotASuffixMatch()
     {
         using var modFolder = new ScratchDirectory("medit-track-gitignore-");
         Directory.CreateDirectory(Path.Combine(modFolder, "My-plugin-source"));

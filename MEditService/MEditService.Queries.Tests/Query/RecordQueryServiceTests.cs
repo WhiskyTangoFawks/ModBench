@@ -550,7 +550,7 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public void GetCompare_NonMastersAgreeingOnTheFieldButDifferingOnVmad_AgainstAMasterCarryingAnAdapter_EscalateToConflict()
+    public void GetCompare_NonMastersAgreeingOnTheFieldButDifferingOnVmad_AgainstAMasterCarryingAnAdapter_EscalateToConflict_NotOverride()
     {
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
@@ -705,7 +705,7 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public void GetCompare_ConditionFormParameter_ResolvesEditorId_ThroughTheSameNestedLeafPathAsEveryOtherReflectedFormKeyLeaf()
+    public void GetCompare_ConditionFormParameter_ResolvesEditorId_AsTheConditionsParameterOneRecordResolutionInItsColumn()
     {
         FormKey cobjKey = default;
         var fixture = new FakeFixtureBuilder(Release)

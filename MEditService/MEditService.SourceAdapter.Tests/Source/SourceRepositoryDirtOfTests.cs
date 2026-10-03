@@ -54,10 +54,11 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     }
 
     [Fact]
-    public void DirtOf_OfAStagedRenameOutOfAFolderNamedLikeTheTree_FindsNothingToReconcile_ForARenamesOldPathRidesABareTokenWithNoStatusCode()
+    public void DirtOf_OfAStagedRenameOutOfAFolderNamedLikeTheTree_FindsNothingToReconcile_GuardingAgainstARenamesBareOldPathTokenReturningWhichNoRenamesTurnsOff()
     {
         var rootSegment = SourceRepository.RootFor(PluginName).Split(Path.DirectorySeparatorChar)[0];
-        var lookalikeFolderName = "xyz" + rootSegment;
+        const int widthOfThePorcelainStatusCodeAnEntryParseDrops = 3;
+        var lookalikeFolderName = new string('x', widthOfThePorcelainStatusCodeAnEntryParseDrops) + rootSegment;
         var oldFolder = Directory.CreateDirectory(Path.Combine(_modFolder, lookalikeFolderName, PluginName)).FullName;
         File.WriteAllText(Path.Combine(oldFolder, "notes.txt"), "notes");
         PluginBaselines.Track(_modFolder, SourcePreset.Everything, [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
