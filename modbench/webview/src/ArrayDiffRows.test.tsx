@@ -24,30 +24,26 @@ const linkArrayMeta = fieldMeta({
   elementType: fieldMeta({ name: '', type: 'formKey' }),
 });
 
-// A decoy ahead of the array in every column's field list: the wire path has to be resolved
-// against the root field's own value, which "the first field" would only accidentally be.
-const decoyMeta = fieldMeta({ name: 'Level', type: 'int' });
+const decoyFieldAheadOfTheArrayInEveryColumn = fieldMeta({ name: 'Level', type: 'int' });
 
 const pluginsResponse = [
   { name: 'Fallout4.esm', isImmutable: true },
   { name: 'MyMod.esp' },
 ];
 
-// mEdit's alignment of ['PkgA', 'PkgX'] and ['PkgA', 'PkgA'] in sequence: MyMod.esp's second PkgA
-// is row [2], and its own element 1.
-const linkArrayCompareResult: CompareResult = compareResultFixture({
+const sequenceAlignedLinkArrayCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'Override',
   overrides: [
     compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
       isWinner: false, editorId: 'TestNPC',
-      fields: [{ metadata: decoyMeta, value: 4 }, { metadata: linkArrayMeta, value: ['PkgA', 'PkgX'] }],
+      fields: [{ metadata: decoyFieldAheadOfTheArrayInEveryColumn, value: 4 }, { metadata: linkArrayMeta, value: ['PkgA', 'PkgX'] }],
       conflictThis: 'Master',
     }),
     compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
       isWinner: true, editorId: 'TestNPC',
-      fields: [{ metadata: decoyMeta, value: 4 }, { metadata: linkArrayMeta, value: ['PkgA', 'PkgA'] }],
+      fields: [{ metadata: decoyFieldAheadOfTheArrayInEveryColumn, value: 4 }, { metadata: linkArrayMeta, value: ['PkgA', 'PkgA'] }],
       conflictThis: 'Override',
     }),
   ],
@@ -206,7 +202,7 @@ function renderPanel() {
 describe('RecordPanel — array child rows (in sequence)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    currentCompare = linkArrayCompareResult;
+    currentCompare = sequenceAlignedLinkArrayCompareResult;
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -218,8 +214,7 @@ describe('RecordPanel — array child rows (in sequence)', () => {
     expect(screen.queryByText('{…}')).not.toBeInTheDocument();
   });
 
-  // An element the column does not carry is nothing there — not a null link, which reads "—".
-  it('row [1] is empty for MyMod.esp, whose array has no such element', async () => {
+  it('row [1] is empty, not a null link reading "—", for MyMod.esp, whose array has no such element', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('[1]'));
     const cells = required(screen.getByText('[1]').closest('tr'), 'the [1] row').querySelectorAll('td');
@@ -375,8 +370,7 @@ describe('RecordPanel — array editing', () => {
     await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Values'), at(2)], canMoveUp: true }));
   });
 
-  // As VS Code moves a line: at the end of the array nothing happens.
-  it('the first element tells the host it cannot move up', async () => {
+  it('the first element tells the host it cannot move up, as VS Code moves a line: at the end of the array nothing happens', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[0]'));
@@ -397,7 +391,6 @@ describe('RecordPanel — array editing', () => {
   });
 });
 
-// Module scope: the inline-edit blocks below share these fixtures.
 const editableIntArrayMeta = fieldMeta({
   name: 'Values', type: 'array', isArray: true,
   elementType: fieldMeta({ name: '', type: 'int' }),
@@ -451,13 +444,10 @@ function renderEditablePanel() {
   return { client, ...render(<RecordPanel client={client} />) };
 }
 
-// The same number can appear in more than one column, so the editable last cell is addressed
-// by row rather than by value text.
-function editLastCellOfRow(rowLabel: string, shownValue: string, typed: string) {
+function editLastCellOfRowByXEditDoubleClick(rowLabel: string, shownValue: string, typed: string) {
   const row = required(screen.getByText(rowLabel).closest('tr'), `${rowLabel}'s row`);
   const cells = row.querySelectorAll('td');
   const cell = required(cells[cells.length - 1], `${rowLabel}'s last cell`);
-  // xEdit's own gesture (ADR-0018): a double click opens the editor on a resting cell.
   fireEvent.doubleClick(within(cell).getByText(shownValue));
   const input = required(cell.querySelector('input'), `${rowLabel}'s open editor input`);
   fireEvent.change(input, { target: { value: typed } });
@@ -477,7 +467,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[1]'));
 
-    editLastCellOfRow('[1]', '22', '99');
+    editLastCellOfRowByXEditDoubleClick('[1]', '22', '99');
 
     expect(lastEnvelope()).toEqual({ op: 'set', path: [member('Values'), at(1)], value: 99 });
   });
@@ -488,13 +478,12 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     await waitFor(() => screen.getByText('ObjectBounds'));
     await waitFor(() => screen.getByText('X1'));
 
-    editLastCellOfRow('X1', '5', '7');
+    editLastCellOfRowByXEditDoubleClick('X1', '5', '7');
 
     expect(lastEnvelope()).toEqual({ op: 'set', path: [member('ObjectBounds'), member('X1')], value: 7 });
   });
 
-  // OMOD `Properties[i].step` shape: the leaf sits two hops deep, and every hop travels.
-  it('a member of a struct element inside a struct: every hop from the record down', async () => {
+  it('a member of a struct element inside a struct, as OMOD Properties[i].step sits two hops deep: every hop from the record down', async () => {
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
@@ -502,7 +491,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
     await waitFor(() => screen.getByText('Weight'));
 
-    editLastCellOfRow('Weight', '1', '7');
+    editLastCellOfRowByXEditDoubleClick('Weight', '1', '7');
 
     expect(lastEnvelope()).toEqual({
       op: 'set', path: [member('Container'), member('Entries'), at(0), member('Weight')], value: 7,
@@ -530,18 +519,17 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     renderEditablePanel();
     await waitFor(() => screen.getByText('Level'));
 
-    editLastCellOfRow('Level', '4', '6');
+    editLastCellOfRowByXEditDoubleClick('Level', '4', '6');
 
     expect(lastEnvelope()).toEqual({ op: 'set', path: [member('Level')], value: 6 });
   });
 
-  // The message carries the column's compound identity beside the envelope, nothing else.
   it('the message names the record and the column, and carries the envelope alone', async () => {
     currentCompare = scalarResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Level'));
 
-    editLastCellOfRow('Level', '4', '6');
+    editLastCellOfRowByXEditDoubleClick('Level', '4', '6');
 
     const calls = vi.mocked(vscode.postMessage).mock.calls;
     const postedCall = required([...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD), "a posted EDIT_FIELD message");
@@ -688,11 +676,9 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
   });
 });
 
-// Aligned in sequence, an element sits at its own position in each column; the hop is that position
-// in the column being written, whatever the row's place and whatever else holds the same value.
 describe('RecordPanel — an element of an array without a key is addressed at its position in this column', () => {
   function renderLinkArrayPanel() {
-    const client = panelClient(() => linkArrayCompareResult, {
+    const client = panelClient(() => sequenceAlignedLinkArrayCompareResult, {
       plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }],
     });
     return render(<RecordPanel client={client} />);
@@ -716,7 +702,6 @@ describe('RecordPanel — an element of an array without a key is addressed at i
     fireEvent.click(cell);
     fireEvent.doubleClick(within(cell).getByText('PkgA'));
 
-    // The native QuickPick answers through the bridge; this is its reply.
     type OpenFormKeyPicker = Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER }>;
     const isOpenFormKeyPicker = (call: [WebviewToExtension]): call is [OpenFormKeyPicker] =>
       call[0].type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER;
@@ -769,11 +754,9 @@ describe('RecordPanel — an element of an array without a key is addressed at i
   });
 });
 
-// A null slot is an element its column holds, so the elements after it sit one place further on.
 describe('RecordPanel — an element after a null slot is addressed at its own index', () => {
   const itemsMeta = fieldMeta({ name: 'Items', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'string' }) });
-  // mEdit's alignment of ['A', 'B'] and ['A', null, 'B'].
-  const withNullSlot = compareResultFixture({
+  const sequenceAlignedWithNullSlot = compareResultFixture({
     overrides: [
       compareOverride({
         formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', editorId: 'TestNPC',
@@ -803,7 +786,7 @@ describe('RecordPanel — an element after a null slot is addressed at its own i
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     vi.mocked(vscode.postMessage).mockClear();
-    render(<RecordPanel client={panelClient(() => withNullSlot, {
+    render(<RecordPanel client={panelClient(() => sequenceAlignedWithNullSlot, {
       plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }],
     })} />);
   });

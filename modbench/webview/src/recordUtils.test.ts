@@ -37,9 +37,7 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
   };
 }
 
-// One column per CompareOverride, in the wire's own load order — master leftmost, winner
-// rightmost, as in xEdit — trusted as sent rather than re-sorted here.
-describe('buildColumns', () => {
+describe('buildColumns, one column per CompareOverride in the wire\'s own load order (master leftmost, winner rightmost, as in xEdit), trusted as sent rather than re-sorted', () => {
   it('returns one column per override, in response order', () => {
     const cols = buildColumns([
       makeOverride('Fallout4.esm'),
@@ -49,9 +47,7 @@ describe('buildColumns', () => {
     expect(cols.map(c => c.override.plugin)).toEqual(['Fallout4.esm', 'Patch.esp', 'MyMod.esp']);
   });
 
-  // ADR-0012: two loaded plugins sharing a filename are two columns with distinct keys — the
-  // compound (plugin, origin) identity is minted here, once, for every consumer.
-  it('keys same-filename columns by compound identity', () => {
+  it('keys same-filename columns by the compound (plugin, origin) identity, minted here once for every consumer', () => {
     const cols = buildColumns([
       makeOverride('Shared.esp', { origin: 'ModA' }),
       makeOverride('Shared.esp', { origin: 'ModB' }),
@@ -65,8 +61,7 @@ describe('buildColumns', () => {
   });
 });
 
-// One rule, since the panel's handler wiring, the cell menu and the native menu all ask it.
-describe('isArrayElementHop', () => {
+describe('isArrayElementHop, one rule, since the panel\'s handler wiring, the cell menu and the native menu all ask it', () => {
   it('an array\'s element is one, at a position or at its index in each column', () => {
     expect(isArrayElementHop({ kind: 'index', index: 0 })).toBe(true);
     expect(isArrayElementHop({ kind: 'element', indexes: { 'A.esp': 0 }, keyed: false })).toBe(true);
@@ -78,8 +73,7 @@ describe('isArrayElementHop', () => {
   });
 });
 
-// One recursive reader for a value at any depth along an envelope's hops.
-describe('getAtPath', () => {
+describe('getAtPath, one recursive reader for a value at any depth along an envelope\'s hops', () => {
   it('returns the root itself for an empty path', () => {
     expect(getAtPath({ X: 1 }, [])).toEqual({ X: 1 });
   });
@@ -94,8 +88,7 @@ describe('getAtPath', () => {
     expect(getAtPath(['a', 'b', 'c'], path)).toBe('b');
   });
 
-  // Struct-in-array-in-struct: a depth a fixed-level union could never express.
-  it('reads through a member → index → member chain (struct-in-array-in-struct depth)', () => {
+  it('reads through a member → index → member chain (struct-in-array-in-struct depth, which a fixed-level union could never express)', () => {
     const path: PathHop[] = [
       { kind: 'member', name: 'Outer' },
       { kind: 'index', index: 1 },
@@ -110,9 +103,7 @@ describe('getAtPath', () => {
   });
 });
 
-// `path` is the envelope's own wire path, never a bare scalar index: an array nested inside a
-// struct needs every hop. `canMoveUp`/`canMoveDown` read the last hop.
-describe('arrayElementContext', () => {
+describe('arrayElementContext, whose `path` is the envelope\'s own wire path, never a bare scalar index, as an array nested inside a struct needs every hop', () => {
   it('produces the data-vscode-context object for a middle element', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }];
     expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3, false)).toEqual({
@@ -137,13 +128,11 @@ describe('arrayElementContext', () => {
     expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3, false).canMoveUp).toBe(false);
   });
 
-  // canMoveUp/canMoveDown must key off the last hop, not path.length, and the full chain must
-  // survive onto the payload rather than collapse to the trailing index.
   it('a nested element carries every hop of its own path, and the Moves read the last one', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Sub' }, { kind: 'index', index: 0 }];
     const ctx = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 2, false);
     expect(ctx.path).toEqual(path);
-    expect(ctx.canMoveUp).toBe(false); // last hop's index is 0
+    expect(ctx.canMoveUp).toBe(false);
     expect(ctx.canMoveDown).toBe(true);
   });
 });
@@ -160,18 +149,14 @@ describe('arrayParentContext', () => {
     });
   });
 
-  // A nested array's "Add" must address the array itself, which is more hops than the record's
-  // own member.
-  it('carries every hop down to a nested array-parent cell', () => {
+  it('carries every hop down to a nested array-parent cell, as its "Add" addresses the array itself, more hops than the record\'s own member', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }];
     const ctx = arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path);
     expect(ctx.path).toEqual(path);
   });
 });
 
-// A row can be more than one structural-op target at once, so combining contexts rather than
-// picking one is what makes both menus reachable from the same cell.
-describe('combineVscodeContexts', () => {
+describe('combineVscodeContexts, combining rather than picking one, as a row can be more than one structural-op target and both menus must be reachable from the same cell', () => {
   const TAGS_PATH: PathHop[] = [{ kind: 'member', name: 'tags' }, { kind: 'index', index: 0 }];
 
   it('returns undefined when every context is absent', () => {
@@ -216,9 +201,7 @@ describe('combineVscodeContexts', () => {
   });
 });
 
-// Unconditional on the column's read-only-ness, since copying from an immutable column is the
-// headline use case, unlike every row-scoped context above.
-describe('headerCellContext', () => {
+describe('headerCellContext, unconditional on the column\'s read-only-ness, as copying from an immutable column is the headline use case', () => {
   it('identifies the header cell, carrying the column\'s own record identity', () => {
     expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', true)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
@@ -238,9 +221,7 @@ describe('headerCellContext', () => {
   });
 });
 
-// ADR-0018: the string-cell right-click menu's own identity — the extended editor's only
-// trigger, since no left-click gesture reaches it.
-describe('stringValueContext', () => {
+describe('stringValueContext, the string-cell right-click menu\'s own identity and the extended editor\'s only trigger, since no left-click gesture reaches it', () => {
   const NAME_PATH: PathHop[] = [{ kind: 'member', name: 'Name' }];
 
   it('carries the cell\'s own identity, record label, current value and readOnly flag', () => {
@@ -266,8 +247,7 @@ describe('stringValueContext', () => {
     ).readOnly).toBe(true);
   });
 
-  // A nested string leaf's set envelope lands at its own hops, not the member it sits under.
-  it('carries every hop of a nested string leaf\'s wire path', () => {
+  it('carries every hop of a nested string leaf\'s wire path, so its set envelope lands at its own hops, not the member it sits under', () => {
     const path: PathHop[] = [
       { kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' },
       { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' },
@@ -315,9 +295,7 @@ describe('wirePath', () => {
   });
 });
 
-// A collapsed row's prose summary has only a path, never the row's own resolved metadata, so it
-// descends FieldMetadata itself to reach a nested array's element type.
-describe('metaAtPath', () => {
+describe('metaAtPath, descending FieldMetadata itself, as a collapsed row\'s prose summary has only a path, never the row\'s own resolved metadata', () => {
   const idMeta = fieldMeta({ name: 'Id', type: 'string' });
   const weightMeta = fieldMeta({ name: 'Weight', type: 'int' });
   const entryMeta = fieldMeta({ name: '', type: 'struct', fields: [idMeta, weightMeta] });
@@ -336,7 +314,6 @@ describe('metaAtPath', () => {
     expect(metaAtPath(entriesMeta, [{ kind: 'index', index: 0 }])).toBe(entryMeta);
   });
 
-  // A nested array's own element type, reached through a member chain from the subtree root.
   it('finds a nested array\'s own element type through a member chain', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Entries' }];
     expect(metaAtPath(containerMeta, path)?.elementType).toBe(entryMeta);

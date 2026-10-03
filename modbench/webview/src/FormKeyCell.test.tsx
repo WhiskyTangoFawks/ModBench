@@ -3,8 +3,6 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
-// A plain click on an editable cell calls pickFormKey, the native-QuickPick bridge — mocked so
-// these cases assert the call rather than rendered picker DOM.
 const pickFormKey = vi.fn<(seed: string, validTypes: string[]) => Promise<string | null>>().mockResolvedValue(null);
 vi.mock('./nativeBridge', () => ({ pickFormKey: (seed: string, validTypes: string[]) => pickFormKey(seed, validTypes) }));
 
@@ -14,11 +12,8 @@ import { fieldMeta } from './test/fixtures';
 
 const fkMeta = fieldMeta({ name: 'Race', type: 'formKey', validFormKeyTypes: ['race'] });
 
-// Navigation requires the leaf's own resolution to say the reference is followable.
-const resolvedFixture: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: null };
+const followableResolutionFixture: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: null };
 
-// One gesture split, uniform across the grid — plain click edits (opens the
-// picker), Ctrl+click follows the reference.
 describe('FormKeyCell — read-only column', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
@@ -39,9 +34,7 @@ describe('FormKeyCell — read-only column', () => {
   });
 });
 
-// ADR-0018: a mutable column's plain click opens the native QuickPick, so selection and Ctrl+V
-// are the platform's; an immutable column opens nothing and copies with Ctrl+C.
-describe('FormKeyCell — immutable column opens nothing', () => {
+describe('FormKeyCell — immutable column opens nothing, leaving copy to Ctrl+C', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
   const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
@@ -76,8 +69,7 @@ describe('FormKeyCell — immutable column opens nothing', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
-  // The warning icon is the cell's, not the link's — clicking must not hide it.
-  it('keeps the checkError icon visible', () => {
+  it('keeps the checkError icon, the cell\'s own rather than the link\'s, visible when clicked', () => {
     render(
       <FormKeyCell
         value="000019:Fallout4.esm" meta={fkMeta} editable={false}
@@ -89,7 +81,7 @@ describe('FormKeyCell — immutable column opens nothing', () => {
   });
 });
 
-describe('FormKeyCell — editable column', () => {
+describe('FormKeyCell — editable column, whose plain click opens the native QuickPick so selection and Ctrl+V are the platform\'s', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
   it('shows "—" when value is null, not a picker button', () => {
@@ -109,8 +101,7 @@ describe('FormKeyCell — editable column', () => {
     expect(pickFormKey).toHaveBeenCalledWith('', ['race']);
   });
 
-  // Seeded with the current reference — the picker needs to know what it's replacing.
-  it('plain click on a cell with a value opens the picker', () => {
+  it('plain click on a cell with a value opens the picker seeded with the reference it replaces', () => {
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('000019:Fallout4.esm'));
     expect(pickFormKey).toHaveBeenCalledWith('000019:Fallout4.esm', ['race']);
@@ -143,9 +134,7 @@ describe('FormKeyCell — editable column', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
-  // The picker's input is a mutable column's only surface for copying the value, so a bare
-  // FormKey seed would leave the one editable column unable to hand over what it displays.
-  it('seeds the picker with the composite label the cell displays', () => {
+  it('seeds the picker with the composite label the cell displays, as the picker\'s input is a mutable column\'s only surface for copying it', () => {
     const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onCommit={vi.fn()} resolution={validType} />);
     fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
@@ -153,14 +142,12 @@ describe('FormKeyCell — editable column', () => {
   });
 
   it('Ctrl+click opens no picker: go to record is the menu\'s', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onCommit={vi.fn()} resolution={resolvedFixture} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onCommit={vi.fn()} resolution={followableResolutionFixture} />);
     fireEvent.click(screen.getByText('000019:Fallout4.esm'), { ctrlKey: true });
     expect(pickFormKey).not.toHaveBeenCalled();
   });
 });
 
-// ADR-0018: same open-gate as ScalarCell/FlagCell — second click on the
-// already-focused cell, F2 (via DiskCell's data-open-trigger dispatch), or a double click.
 describe('FormKeyCell — mutable column gates opening on the focus check', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
@@ -187,12 +174,10 @@ describe('FormKeyCell — mutable column gates opening on the focus check', () =
   });
 });
 
-// ADR-0005: the label keys off the leaf's own resolution signal.
 describe('FormKeyCell — resolution-driven label', () => {
   const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
 
-  // The composite, not the bare EditorID: the path the grid's generic FormKey fields take.
-  it('labels the link with the resolved EditorID [FormKey] composite', () => {
+  it('labels the link with the resolved EditorID [FormKey] composite, not the bare EditorID, as the grid\'s generic FormKey fields do', () => {
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onCommit={vi.fn()} resolution={validType} />);
     expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]')).toBeInTheDocument();
   });
