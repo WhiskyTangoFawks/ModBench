@@ -48,6 +48,7 @@ Gestures Modbench does differently.
 | 23 | A deleted reference | Keeps only its record header | Keeps its base record from FO4 on | Mutagen decides the data: Mutagen writes a deleted record as its header alone. |
 | 24 | Persistent on a deleted record | Refused, naming the reason | Reverts the change in silence | Principle: Never silently wrong. |
 | 25 | Two flag changes in one write | Clearing Partial Form and setting Deleted on a Partial Form copy leaves it Deleted | Reverts it to Partial Form, by the order it applies the two changes | Ruling: a write ends as it asks. |
+| 26 | Deep copy as override into a plugin that holds some of the child records | One confirmation for the selection | Two items: one keeps each record the destination holds; one, with overwriting, asks for each | Principle, Minimal by default: one gesture asks once. |
 
 ## Omissions by object
 
