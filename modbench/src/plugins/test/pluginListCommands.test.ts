@@ -452,11 +452,19 @@ describe('pluginsCopyValueText', () => {
 });
 
 describe('registerPluginSortCommands', () => {
-  it('puts the Plugins view on the sort toggle', async () => {
+  const pluginKey = () => executeCommand.mock.calls
+    .filter((c) => c[0] === 'setContext' && (c as unknown[])[1] === 'modbench.plugin.winningAtTop')
+    .map((c) => (c as unknown[])[2]);
+
+  it('registers both title-bar commands and drives the manifest\'s winningAtTop key', async () => {
     const setViewDirection = vi.fn();
     registerPluginSortCommands({ setViewDirection });
 
+    expect([...handlers.keys()].sort()).toEqual(['modbench.plugin.sortLosingAtTop', 'modbench.plugin.sortWinningAtTop']);
+    expect(pluginKey()).toEqual([false]);
+
     await present(handlers.get('modbench.plugin.sortWinningAtTop'), 'sortWinningAtTop')();
     expect(setViewDirection).toHaveBeenCalledWith('winningAtTop');
+    expect(pluginKey()).toEqual([false, true]);
   });
 });
