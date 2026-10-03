@@ -341,14 +341,14 @@ export interface InstanceAdapter {
    *  done goes with it. */
   trashDownloadedFileMeta(name: string, trash: MoveToTrash): Promise<boolean>;
   selectProfile(profile: string): Promise<Written>;
-  /** Marks a file or folder by its path in the origin's tree. A mark already true changes nothing.
-   *  Refuses a path outside the origin's folder, and a mark that would replace what is at the
-   *  new name. */
-  markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<Marked>;
 
   // Put and rename in mods/.
   /** Refuses a folder already there, whatever it holds, matched as the manager matches names. */
   createModFolder(mod: string): Promise<void>;
+  /** Marks a file or folder by its path in the origin's tree; a mark already true changes nothing.
+   *  Refuses a path outside the origin, an include its folder overrides, and a mark that would
+   *  replace a file. */
+  markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<Marked>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** Makes the folder of a mod that is new. Refuses a folder already there, whatever it holds,

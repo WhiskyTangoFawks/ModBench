@@ -810,9 +810,27 @@ describe('the MO2 Instance adapter', () => {
     it('renames a folder, which excludes everything in it', async () => {
       await put(join(root, 'mods', 'Harder VATS', 'Textures', 'a.dds'));
 
-      await adapter.markOriginFile(modOrigin, 'Textures', 'Excluded');
+      expect(await adapter.markOriginFile(modOrigin, 'Textures', 'Excluded')).toEqual({ gone: false, wrote: true });
 
+      expect(await isThere(join(root, 'mods', 'Harder VATS', 'Textures'))).toBe(false);
       expect(await isThere(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'))).toBe(true);
+    });
+
+    it('refuses to include a file its folder excludes, changing nothing', async () => {
+      await put(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'));
+      const before = await snapshotTree(root);
+
+      await expect(adapter.markOriginFile(modOrigin, 'Textures.mohidden/a.dds', 'Included')).rejects.toThrow(/excluded by its folder/);
+
+      assertOnlyChanged(before, await snapshotTree(root), new Set());
+    });
+
+    it('includes a file whose suffix is in capitals', async () => {
+      await put(join(root, 'mods', 'Harder VATS', 'a.dds.MOHIDDEN'), 'pixels');
+
+      expect(await adapter.markOriginFile(modOrigin, 'a.dds.MOHIDDEN', 'Included')).toEqual({ gone: false, wrote: true });
+
+      expect(await text(root, join('mods', 'Harder VATS', 'a.dds'))).toBe('pixels');
     });
 
     it('leaves a file already as asked, and reads the suffix without case', async () => {
@@ -848,14 +866,18 @@ describe('the MO2 Instance adapter', () => {
       await put(join(root, 'mods', 'overwrite', 'a.esp'));
       await put(join(root, 'overwrite', 'a.esp'));
 
-      await adapter.markOriginFile({ kind: 'mod', name: 'overwrite' }, 'a.esp', 'Excluded');
+      expect(await adapter.markOriginFile({ kind: 'mod', name: 'overwrite' }, 'a.esp', 'Excluded')).toEqual({ gone: false, wrote: true });
 
       expect(await isThere(join(root, 'mods', 'overwrite', 'a.esp.mohidden'))).toBe(true);
       expect(await isThere(join(root, 'overwrite', 'a.esp'))).toBe(true);
     });
 
-    it.each(['../outside.txt', 'a/../../outside.txt', '/etc/hosts', ''])('refuses the path "%s", which leaves the origin\'s folder', async (path) => {
+    it.each(['../outside.txt', 'a/../../outside.txt', '/etc/hosts', '', 'a\\..\\..\\outside.txt'])('refuses the path "%s", which leaves the origin\'s folder, changing nothing', async (path) => {
+      const before = await snapshotTree(root);
+
       await expect(adapter.markOriginFile(modOrigin, path, 'Excluded')).rejects.toThrow(/Not a file of/);
+
+      assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
 
     it('refuses a mod that has no folder', async () => {
@@ -864,7 +886,7 @@ describe('the MO2 Instance adapter', () => {
   });
 
   describe('changes to mod order', () => {
-    const change =(changes: readonly ModOrderChange[]) =>
+    const change = (changes: readonly ModOrderChange[]) =>
       adapter.changeModOrder('Default', () => changes);
     const separatorFolder = (name: string): string => join(root, 'mods', `${name}_separator`);
 

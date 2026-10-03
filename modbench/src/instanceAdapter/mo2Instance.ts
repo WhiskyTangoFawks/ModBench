@@ -7,6 +7,8 @@ import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { gameDirectoryResolver, type GameDetectors } from './gameDirectory';
 import type { GameDirectoryOverrides, InstanceAdapter } from './instanceAdapter';
 import { mo2Changes } from './mo2Changes';
+import { mo2ModOrder } from './mo2ModOrder';
+import { mo2OriginFiles } from './mo2OriginFiles';
 import type { Mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
 import { mo2Reads } from './mo2Reads';
@@ -38,7 +40,7 @@ export function mo2InstanceAdapter({
   };
   return {
     names: { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME },
-    ...mo2Reads(context), ...mo2Changes(context), ...mo2Landing(context),
+    ...mo2Reads(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2Landing(context),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
 }
