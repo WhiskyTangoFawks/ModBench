@@ -122,20 +122,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             File.Copy(FixturePath(fileName), PluginPath);
             Plugin = new PluginAddress(fileName, "FixtureMod");
 
-            var inputs = new List<LoadOrderEntry>();
-            using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(
-                new ModPath(ModKey.FromFileName(fileName), PluginPath), Fallout4Release.Fallout4))
-            {
-                foreach (var master in overlay.ModHeader.MasterReferences)
-                {
-                    var emptyMasterStubPath = Path.Combine(_gameDirectory, master.Master.FileName);
-                    new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(emptyMasterStubPath);
-                    inputs.Add(new LoadOrderEntry(master.Master.FileName, emptyMasterStubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
-                }
-            }
-            inputs.Add(new LoadOrderEntry(fileName, PluginPath, Plugin.Origin, Slot: inputs.Count, Enabled: true, Winning: true));
-
-            _loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, inputs);
+            _loadOrder = EmptyMasterStubs.LoadOrderOver(PluginPath, Plugin.Origin, _gameDirectory);
             Holder.Apply(_loadOrder);
         }
 

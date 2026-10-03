@@ -1,11 +1,9 @@
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.RealData;
 
@@ -48,20 +46,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
             var pluginPath = Path.Combine(ModFolder, FixtureFileName);
             File.Copy(FixturePath, pluginPath);
 
-            var inputs = new List<LoadOrderEntry>();
-            using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(
-                new ModPath(ModKey.FromFileName(FixtureFileName), pluginPath), Fallout4Release.Fallout4))
-            {
-                foreach (var master in overlay.ModHeader.MasterReferences)
-                {
-                    var emptyMasterStubPath = Path.Combine(_gameDirectory, master.Master.FileName);
-                    new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(emptyMasterStubPath);
-                    inputs.Add(new LoadOrderEntry(master.Master.FileName, emptyMasterStubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
-                }
-            }
-            inputs.Add(new LoadOrderEntry(FixtureFileName, pluginPath, "TrueStormsMod", Slot: inputs.Count, Enabled: true, Winning: true));
-
-            _loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, inputs);
+            _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, "TrueStormsMod", _gameDirectory);
         }
 
         public async Task<TrackResult> TrackAsync() =>

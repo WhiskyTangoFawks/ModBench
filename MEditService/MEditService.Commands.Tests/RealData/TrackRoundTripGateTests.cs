@@ -49,54 +49,51 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
         Assert.Contains(quests, q => q.Scenes.Count >= 1);
 
         var documents = Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories).ToList();
-        foreach (var slot in new[] { nameof(Quest.DialogTopics), nameof(Quest.DialogBranches), nameof(Quest.Scenes), nameof(DialogTopic.Responses) })
-        {
-            Assert.DoesNotContain(
-                Directory.EnumerateDirectories(fixture.SourceRoot, "*", SearchOption.AllDirectories),
-                d => Path.GetFileName(d) == slot);
-        }
+        string[] questDescendantSlots =
+            [nameof(Quest.DialogTopics), nameof(Quest.DialogBranches), nameof(Quest.Scenes), nameof(DialogTopic.Responses)];
+        Assert.DoesNotContain(
+            Directory.EnumerateDirectories(fixture.SourceRoot, "*", SearchOption.AllDirectories),
+            d => questDescendantSlots.Contains(Path.GetFileName(d)));
 
-        foreach (var quest in quests)
-        {
-            var parsed = JsonNode.Parse(File.ReadAllText(TheSingleDocumentCarrying(documents, quest.FormKey.ToString())))
-                ?? throw new InvalidOperationException($"Expected {quest.FormKey}'s document to parse as JSON.");
-            var root = parsed.AsObject();
+        var questDocuments = quests
+            .Select(quest => (Quest: quest, Root: RequireNode(
+                JsonNode.Parse(File.ReadAllText(TheSingleDocumentCarrying(documents, quest.FormKey.ToString()))),
+                $"{quest.FormKey}'s document").AsObject()))
+            .ToList();
 
-            foreach (var (slot, children) in new (string, IEnumerable<IMajorRecordGetter>)[]
-                     {
-                         (nameof(Quest.DialogTopics), quest.DialogTopics),
-                         (nameof(Quest.DialogBranches), quest.DialogBranches),
-                         (nameof(Quest.Scenes), quest.Scenes),
-                     })
+        var slotCases = questDocuments
+            .SelectMany(document => new (string Slot, IEnumerable<IMajorRecordGetter> Children)[]
             {
-                var expected = children.Select(c => c.FormKey.ToString()).ToList();
-                foreach (var child in expected)
-                    Assert.Null(SourceRepository.PathCarrying(documents, CutDownPluginFixture.PluginFileName, child));
-                if (expected.Count == 0)
-                {
-                    Assert.Null(root[slot]);
-                    continue;
-                }
-                Assert.Equal(
-                    expected,
-                    RequireNode(root[slot], slot).AsArray().Select(FormKeyOf));
-            }
+                (nameof(Quest.DialogTopics), document.Quest.DialogTopics),
+                (nameof(Quest.DialogBranches), document.Quest.DialogBranches),
+                (nameof(Quest.Scenes), document.Quest.Scenes),
+            }.Select(slot => (document.Root, slot.Slot, Expected: slot.Children.Select(c => c.FormKey.ToString()).ToList())))
+            .ToList();
+        Assert.All(
+            slotCases.SelectMany(slotCase => slotCase.Expected),
+            child => Assert.Null(SourceRepository.PathCarrying(documents, CutDownPluginFixture.PluginFileName, child)));
+        Assert.All(slotCases, slotCase => Assert.Equal(slotCase.Expected.Count == 0, slotCase.Root[slotCase.Slot] is null));
+        Assert.All(
+            slotCases.Where(slotCase => slotCase.Expected.Count > 0),
+            slotCase => Assert.Equal(
+                slotCase.Expected,
+                RequireNode(slotCase.Root[slotCase.Slot], slotCase.Slot).AsArray().Select(FormKeyOf)));
 
-            foreach (var topic in quest.DialogTopics)
-            {
-                foreach (var response in topic.Responses)
-                {
-                    Assert.Null(SourceRepository.PathCarrying(
-                        documents, CutDownPluginFixture.PluginFileName, response.FormKey.ToString()));
-                }
-                var inline = RequireNode(root[nameof(Quest.DialogTopics)], nameof(Quest.DialogTopics)).AsArray()
-                    .Single(t => FormKeyOf(t) == topic.FormKey.ToString())
-                    ?? throw new InvalidOperationException($"Expected {topic.FormKey} to be present among inlined dialog topics.");
-                Assert.Equal(
-                    topic.Responses.Select(r => r.FormKey.ToString()),
-                    inline[nameof(DialogTopic.Responses)]?.AsArray().Select(FormKeyOf) ?? []);
-            }
-        }
+        var topicCases = questDocuments
+            .SelectMany(document => document.Quest.DialogTopics.Select(topic => (document.Root, Topic: topic)))
+            .ToList();
+        Assert.All(
+            topicCases.SelectMany(topicCase => topicCase.Topic.Responses),
+            response => Assert.Null(SourceRepository.PathCarrying(
+                documents, CutDownPluginFixture.PluginFileName, response.FormKey.ToString())));
+        Assert.All(topicCases, topicCase =>
+        {
+            var inline = RequireNode(topicCase.Root[nameof(Quest.DialogTopics)], nameof(Quest.DialogTopics)).AsArray()
+                .Single(t => FormKeyOf(t) == topicCase.Topic.FormKey.ToString());
+            Assert.Equal(
+                topicCase.Topic.Responses.Select(r => r.FormKey.ToString()),
+                inline?[nameof(DialogTopic.Responses)]?.AsArray().Select(FormKeyOf) ?? []);
+        });
     }
 
     [Fact]
@@ -113,8 +110,11 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
             .ToDictionary(kv => kv.Key, kv => kv.Value);
 
         Assert.Equal(libraryGroupDocuments.Keys.Order(), trackedGroupDocuments.Keys.Order());
-        foreach (var (path, bytes) in libraryGroupDocuments)
-            Assert.True(bytes.AsSpan().SequenceEqual(trackedGroupDocuments[path]), $"{path} is not the library's own document.");
+        Assert.All(
+            libraryGroupDocuments,
+            document => Assert.True(
+                document.Value.AsSpan().SequenceEqual(trackedGroupDocuments[document.Key]),
+                $"{document.Key} is not the library's own document."));
     }
 
     internal static string TheSingleDocumentCarrying(IReadOnlyList<string> documents, string formKey) =>

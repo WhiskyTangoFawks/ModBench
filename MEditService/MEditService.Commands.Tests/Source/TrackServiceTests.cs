@@ -112,8 +112,9 @@ public sealed class TrackServiceTests
         Assert.Contains(deserializedMod.Npcs, n => n.FormKey == npc1.FormKey && n.EditorID == "FirstNpc");
         Assert.Contains(deserializedMod.Npcs, n => n.FormKey == npc2.FormKey && n.EditorID == "SecondNpc");
 
-        foreach (var file in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories))
-            Assert.DoesNotContain((byte)'\r', await File.ReadAllBytesAsync(file));
+        Assert.DoesNotContain(
+            Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories),
+            file => File.ReadAllBytes(file).Contains((byte)'\r'));
     }
 
     private static Task<IFallout4Mod> DeserializeWithoutExtraMetaBecauseItsOverloadCollidesAsSerializesDoes(string sourceRoot) =>
@@ -393,7 +394,7 @@ public sealed class TrackServiceTests
         Assert.True(SourceRepository.IsTracked(modFolder));
     }
 
-    public static IEnumerable<object[]> AllowListedHeaderFieldCorruptions()
+    public static IEnumerable<object[]> HeaderFieldCorruptionsMirroringCodecsOpaqueHeaderFields()
     {
         yield return new object[] { "TypeOffsets", Setter(h => h.TypeOffsets = new byte[] { 1, 2, 3 }), Setter(h => h.TypeOffsets = new byte[] { 9, 9, 9 }) };
         yield return new object[] { "Deleted", Setter(h => h.Deleted = new byte[] { 1, 2, 3 }), Setter(h => h.Deleted = new byte[] { 9, 9, 9 }) };
@@ -407,7 +408,7 @@ public sealed class TrackServiceTests
     }
 
     [Theory]
-    [MemberData(nameof(AllowListedHeaderFieldCorruptions))]
+    [MemberData(nameof(HeaderFieldCorruptionsMirroringCodecsOpaqueHeaderFields))]
     public async Task TrackAsync_ForEveryAllowListedHeaderField_RefusesNamingItWhenCorruptedAlone(
         string fieldName, Action<Fallout4ModHeader> setBaseline, Action<Fallout4ModHeader> corrupt)
     {
