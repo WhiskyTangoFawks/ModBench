@@ -718,7 +718,7 @@ describe('Instance — a value that survives a bad read', () => {
     await instance.refresh();
 
     expect(instance.value.mods).toEqual([]);
-    expect(instance.value.files.size).toBe(0);
+    expect(instance.value.filesByMod.size).toBe(0);
     expect(instance.sequence).toBe(before + 1);
   });
 

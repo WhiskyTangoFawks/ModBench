@@ -1,6 +1,6 @@
 // The effective merged mod view — the merge a VFS performs over the Mod override order.
 
-import type { InstanceAdapter, ModlistEntry } from '../instanceAdapter/instanceAdapter';
+import { OVERWRITE_ORIGIN, type InstanceAdapter, type ModlistEntry, type OriginFile } from '../instanceAdapter/instanceAdapter';
 
 export interface ConflictEntry {
   /** The winner's own on-disk casing: Proton/Wine folds case over case-sensitive ext4, so
@@ -9,7 +9,7 @@ export interface ConflictEntry {
   /** Absolute path of the winning enabled provider (nearest the winning end). */
   winner: string;
   winnerMod: string;
-  /** Every enabled mod providing this relative path. */
+  /** Every provider of this relative path, winning-most first; Overwrite is `OVERWRITE_ORIGIN`. */
   providers: string[];
 }
 
@@ -54,7 +54,7 @@ export class FileConflictLookup {
 export type FileWinners = Omit<FileConflictLookup, 'set'>;
 
 export interface FileConflictIndex {
-  /** Conflict/winner info, for every path provided by >=1 enabled mod. */
+  /** Conflict/winner info, for every path provided by >=1 enabled mod or by Overwrite. */
   files: FileConflictLookup;
   /** Each enabled mod's own files, so callers don't need a second filesystem walk. */
   filesByMod: Map<string, { relativePath: string; absolutePath: string }[]>;
@@ -93,6 +93,7 @@ export async function buildFileConflictIndex(
   entries: readonly ModlistEntry[],
   adapter: Pick<InstanceAdapter, 'originFiles'>,
   log: (msg: string) => void,
+  overwriteFiles: readonly OriginFile[],
 ): Promise<FileConflictIndex> {
   const files = new FileConflictLookup();
   const filesByMod = new Map<string, { relativePath: string; absolutePath: string }[]>();
@@ -128,6 +129,17 @@ export async function buildFileConflictIndex(
         });
       }
     }
+  }
+
+  // The run-time output wins over every mod (MO2 places Overwrite at the winning end).
+  for (const file of overwriteFiles) {
+    const existing = files.get(file.relativePath);
+    files.set({
+      relativePath: file.relativePath,
+      winner: file.path,
+      winnerMod: OVERWRITE_ORIGIN,
+      providers: [OVERWRITE_ORIGIN, ...(existing?.providers ?? [])],
+    });
   }
 
   return { files, filesByMod, disabledModFiles };

@@ -44,7 +44,7 @@ describe('computeModStatuses', () => {
   });
 
   async function statuses() {
-    const index = await buildFileConflictIndex(entriesHighWinningOverLowOnSharedNif, adapterOver(instanceRoot), () => {});
+    const index = await buildFileConflictIndex(entriesHighWinningOverLowOnSharedNif, adapterOver(instanceRoot), () => {}, []);
     return computeModStatuses(entriesHighWinningOverLowOnSharedNif, index);
   }
 
@@ -69,7 +69,7 @@ describe('computeModStatuses', () => {
 
   it('skips separator entries entirely — no status map entry', async () => {
     const withSeparator: ModlistEntry[] = [{ kind: 'separator', name: 'WEAPONS', enabled: true }, ...entriesHighWinningOverLowOnSharedNif];
-    const index = await buildFileConflictIndex(withSeparator, adapterOver(instanceRoot), () => {});
+    const index = await buildFileConflictIndex(withSeparator, adapterOver(instanceRoot), () => {}, []);
     const result = computeModStatuses(withSeparator, index);
     expect(result.has('WEAPONS')).toBe(false);
   });
@@ -80,7 +80,7 @@ describe('computeModStatuses — case-insensitive conflicts, Proton/Wine resolvi
   const entries: ModlistEntry[] = [mod('ModA'), mod('ModB')];
 
   it('reports a badge conflict for case-variant paths from two mods, winner-by-priority', async () => {
-    const index = await buildFileConflictIndex(entries, adapterOver(caseFixture), () => {});
+    const index = await buildFileConflictIndex(entries, adapterOver(caseFixture), () => {}, []);
     const statuses = computeModStatuses(entries, index);
 
     expect(statuses.get('ModA')?.status).toEqual({ kind: 'overrides', count: 1 });

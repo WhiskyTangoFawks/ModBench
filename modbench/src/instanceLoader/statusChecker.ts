@@ -27,7 +27,7 @@ function computeEntryStatus(entry: ModlistEntry, index: FileConflictIndex): ModS
   if (!entry.enabled) return { status: { kind: 'ok' }, conflictLines: [] };
 
   const modFiles = index.filesByMod.get(entry.name) ?? [];
-  const { conflictLines, conflicts, overrides } = countConflicts(modFiles, index, entry.name);
+  const { conflictLines, conflicts, overrides } = countConflicts(modFiles, index);
   return { status: classifyStatus(conflicts, overrides), conflictLines };
 }
 
@@ -35,7 +35,6 @@ function computeEntryStatus(entry: ModlistEntry, index: FileConflictIndex): ModS
 function countConflicts(
   modFiles: ModFile[],
   index: FileConflictIndex,
-  modName: string,
 ): { conflictLines: string[]; conflicts: number; overrides: number } {
   const conflictLines: string[] = [];
   let conflicts = 0;
@@ -44,7 +43,7 @@ function countConflicts(
     const conflict = index.files.get(file.relativePath);
     if (!conflict || conflict.providers.length < 2) continue;
     conflictLines.push(`${file.relativePath} → winner: ${conflict.winnerMod}`);
-    if (conflict.winnerMod === modName) overrides++;
+    if (conflict.winner === file.absolutePath) overrides++;
     else conflicts++;
   }
   return { conflictLines, conflicts, overrides };
