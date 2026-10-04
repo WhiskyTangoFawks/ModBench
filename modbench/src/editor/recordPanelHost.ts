@@ -130,7 +130,7 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
     });
 
     showWebviewPage(panel.webview, context.extensionUri, {
-      script: 'main.js', stylesheet: 'main.css', globals: { mEditFormKey: formKey },
+      script: 'main.js', globals: { mEditFormKey: formKey },
     });
   }
 }

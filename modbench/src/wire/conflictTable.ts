@@ -23,6 +23,7 @@ export interface ConflictColumn {
 export interface ConflictCell {
   readonly state: ConflictCellState | null;
   readonly unreadable?: string;
+  readonly winning?: true;
 }
 
 /** A cell for each column, in column order; null where the column's mod has no copy. */
@@ -37,10 +38,11 @@ export type ConflictRow =
     readonly state: ConflictRowState | null;
   };
 
-/** The table, or the message shown in its place. */
+/** The table, the message shown in its place, or the error row of a first read that failed. */
 export type ConflictTable =
   | { readonly kind: 'table'; readonly columns: readonly ConflictColumn[]; readonly rows: readonly ConflictRow[] }
-  | { readonly kind: 'message'; readonly text: string };
+  | { readonly kind: 'message'; readonly text: string }
+  | { readonly kind: 'error'; readonly reason: string };
 
 export const CONFLICT_TABLE_SHOWN = 'conflictTableShown';
 // The webview's listener exists only once its script has run, so the host answers this rather
@@ -65,11 +67,24 @@ export interface ConflictColumnContext {
   readonly preventDefaultContextMenuItems: true;
 }
 
+export interface ConflictCellContext {
+  readonly webviewSection: 'conflictCell';
+  readonly origin: ConflictOrigin;
+  readonly path: string;
+  readonly preventDefaultContextMenuItems: true;
+}
+
+function isOrigin(value: unknown): value is ConflictOrigin {
+  if (!isObject(value)) return false;
+  const kind: unknown = Reflect.get(value, 'kind');
+  return kind === 'runtimeOutput' || (kind === 'mod' && typeof Reflect.get(value, 'name') === 'string');
+}
+
 const isObject = (value: unknown): value is object => typeof value === 'object' && value !== null;
 
 // Shallow: the table is the host's own build, trusted once the envelope checks out.
 function isConflictTable(value: unknown): value is ConflictTable {
-  return isObject(value) && (Reflect.get(value, 'kind') === 'table' || Reflect.get(value, 'kind') === 'message');
+  return isObject(value) && ['table', 'message', 'error'].includes(String(Reflect.get(value, 'kind')));
 }
 
 export function parseConflictTableShown(value: unknown): ConflictTableShown | undefined {
@@ -88,4 +103,11 @@ export function modOfConflictColumn(value: unknown): string | undefined {
   if (!isObject(value) || Reflect.get(value, 'webviewSection') !== 'conflictColumn') return undefined;
   const mod: unknown = Reflect.get(value, 'mod');
   return typeof mod === 'string' ? mod : undefined;
+}
+
+export function copyOfConflictCell(value: unknown): { readonly origin: ConflictOrigin; readonly path: string } | undefined {
+  if (!isObject(value) || Reflect.get(value, 'webviewSection') !== 'conflictCell') return undefined;
+  const origin: unknown = Reflect.get(value, 'origin');
+  const path: unknown = Reflect.get(value, 'path');
+  return isOrigin(origin) && typeof path === 'string' ? { origin, path } : undefined;
 }

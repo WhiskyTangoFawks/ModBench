@@ -1,4 +1,5 @@
 import React from "react";
+import "@vscode/codicons/dist/codicon.css";
 import { createRoot } from "react-dom/client";
 import { ConflictTableView } from "./ConflictTable";
 
