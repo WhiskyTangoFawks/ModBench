@@ -60,7 +60,7 @@ As a user, I want:
 | Status | When | The tooltip says | Source |
 |---|---|---|---|
 | `(parse failure)` | mEdit could not read this copy of the record. The column shows what could be stored. | the diagnosis | Never silently wrong |
-| `(read-only)` | the plugin is the game's own, a DLC's or a Creation Club plugin | that the game's plugins are not edited | ruling |
+| `(read-only)` | the game folder provides the plugin | that the game's plugins are not edited | ruling |
 | `(in Overwrite)` | the plugin is in Overwrite | that Overwrite is not a mod, and a plugin moved into a mod can be tracked | ruling |
 | `(untracked)` | the plugin is not tracked | that Track, or decompile in a tracked mod, in this header's menu, makes it editable | ADR-0007 |
 | `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
