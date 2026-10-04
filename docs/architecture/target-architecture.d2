@@ -62,7 +62,7 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven
 
 medit_driven: "MEDIT · Driven adapters — the record index is a view over the two beside it" {
   class: band; grid-rows: 1
-  index: "Record index — one deep module, rebuildable\ninterface: reads, of the active plugins only · validate by hash ·\nset and clear the record filter · rebuild · the sequence and its\nawait\nhides: the Indexer and the Store; the reconcile" {
+  index: "Record index — one deep module, rebuildable\ninterface: reads, of the active plugins only · set and clear the\nrecord filter · rebuild · the sequence and its await\nhides: the Indexer and the Store; the reconcile" {
     indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: driven}
     store: "Store\nDuckDB: every plugin's rows" {class: derived}
   }
