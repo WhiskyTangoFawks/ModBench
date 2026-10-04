@@ -50,7 +50,7 @@ import {
   modsCopyValueText,
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
-import type { NexusModRow } from '../../drivingLib/lastSelectedView';
+import type { NexusModRow } from '../../drivingLib/inFocusedView';
 import { MODS_KEY_ARGS } from '../gestureEntry';
 import { FileNode, FolderNode } from '../modFiles';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';

@@ -141,12 +141,12 @@ export async function syncPlugins(
   return result.applied ? { ...result, ...delta } : result;
 }
 
-/** Plugin sync's inputs, as the composition root projects them off a landed value. */
+/** Plugin sync's inputs, which the instance value carries. */
 export interface PluginSyncInputs {
-  profile: string;
-  provided: ReadonlyMap<string, string>;
-  inData: DataFolderPlugins;
-  loadedWithNoLine: readonly string[] | undefined;
+  readonly profile: string;
+  readonly provided: ReadonlyMap<string, string>;
+  readonly inData: DataFolderPlugins;
+  readonly loadedWithNoLine: readonly string[] | undefined;
 }
 
 /** Plugin sync on one run's inputs. */
