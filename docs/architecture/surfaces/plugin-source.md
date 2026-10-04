@@ -24,6 +24,6 @@ As a user, I want:
 
 The source is files, and any tool can change them. As a user, I want:
 
-1. A change made outside Modbench to compile like any other: a deleted file deletes its record, and an added file adds one. *Modbench owns nothing*
+1. A change made outside Modbench to compile like any other: a deleted file deletes its record, and an added file adds one. *ADR-0003*
 2. A file compile cannot read, or two files that claim one FormKey, to stop compile, naming the files, so a broken change never becomes a broken plugin. *Never silently wrong*
 3. A record file in the wrong place to compile, with a warning naming where it belongs. Modbench's next write to that record moves it there. *Never silently wrong*
