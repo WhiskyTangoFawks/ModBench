@@ -1170,8 +1170,8 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect(instance.value.loadOrderSnapshot).toMatchObject({
       gameDirectory: dataFolder,
       loadedWithNoLine: [{ name: 'DLCCoast.esm', origin: 'Consumer' }],
-      active: expect.arrayContaining([{ name: 'DLCCoast.esm', origin: 'Consumer' }]),
     });
+    expect(instance.value.loadOrderSnapshot?.active).toContainEqual({ name: 'DLCCoast.esm', origin: 'Consumer' });
   });
 
   it('carries no answer and no snapshot while the game folder is not found', async () => {

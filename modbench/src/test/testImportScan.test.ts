@@ -105,8 +105,7 @@ function assertEveryTestStaysInItsBox(offenders: readonly string[]): void {
     'A test imports a box its own box\'s tsconfig does not reference. A test drives its own box '
     + 'through the seams it owns: the boxes its tsconfig references, and the shared doubles in '
     + 'src/test. Answer another box\'s part with a fake at your box\'s seam, or move a test of two '
-    + 'boxes composed to the composition root that composes them. The reference lists are the '
-    + 'maintainer\'s: never add one to make a test compile.',
+    + 'boxes composed to the composition root that composes them. Never add a reference to make a test compile.',
   ).toEqual([]);
 }
 
@@ -173,7 +172,7 @@ describe('a test reaches only its own box and the boxes that box references', ()
         'view/test/view.test.ts: ../../kernel/codec (kernel)',
         `view/test/view.test.ts: ../../wiring (${ROOT_BOX})`,
       ]);
-      expect(() => assertEveryTestStaysInItsBox(unreferencedImports(src))).toThrow(/never add one/);
+      expect(() => assertEveryTestStaysInItsBox(unreferencedImports(src))).toThrow(/never add a reference/i);
     } finally {
       rmSync(src, { recursive: true, force: true });
     }

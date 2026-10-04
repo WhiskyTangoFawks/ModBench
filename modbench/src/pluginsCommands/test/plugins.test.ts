@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../plugins';
 import { accessTo, adapterOver, providedPluginsIn } from '../../test/mo2/adapterOver';
 import { isPluginFile, type PluginOrderChange } from '../../instanceAdapter/instanceAdapter';
-import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
+import type { DataFolderPlugins } from '../../instanceAdapter/instanceAdapter';
 
 const PROFILE = 'Default';
 const INITIAL = '# header\r\n*Base.esp\r\nOther.esp\r\n';
