@@ -95,9 +95,9 @@ class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vsco
   }
 }
 
-/** One decoration provider for each indicator, since VS Code shows every provider's badge on a row
- *  and takes one decoration from each. VS Code never re-queries a provider on its own, so each
- *  fires on every new instance value (ADR-0003) and on every change to its settings. */
+/** A provider per indicator: VS Code takes one decoration from each, and joins their badges. It
+ *  never re-queries a provider, so each fires on every new instance value (ADR-0003) and every
+ *  change to its settings. */
 export class ModIndicatorDecorations implements vscode.Disposable {
   readonly providers: readonly IndicatorDecorationProvider[];
   private carriers: ReadonlyMap<string, readonly ModIndicator[]> | undefined;
