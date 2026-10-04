@@ -19,7 +19,7 @@ modbench_drivers: "MODBENCH · Drivers — the user, in VS Code's trees, panels 
 
 medit_driving: "MEDIT · Driving adapters — the API" {
   class: band; grid-rows: 1
-  http: "HTTP endpoints\nowns: the API: one endpoint per command and query, the\nnotification stream, and mEdit's composition root\nhides: HTTP and SSE" {class: driving}
+  http: "HTTP endpoints\nowns: the API: one endpoint per command and query, the\nnotification stream, and mEdit's composition root\nhides: the wire: status codes and SSE" {class: driving}
 }
 modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fire a command" {
   class: band; grid-rows: 1
@@ -33,7 +33,7 @@ modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fir
 
 medit_core: "MEDIT · Core — the write side and the read side; each references the kernel" {
   class: band; grid-rows: 1
-  commands: "Commands\nowns: the write side: one handler per gesture, each answering\napplied or a typed refusal\nhides: resolution under the load order; the external-change\ncheck" {class: core}
+  commands: "Commands\nowns: the write side: one handler per gesture\nhides: resolution under the load order; the external-change\ncheck" {class: core}
   queries: "Queries\nowns: the read side: every answer the API gives, from the\nrecord index\nhides: the Index's reads" {class: core}
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
@@ -43,7 +43,7 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
   instancecommands: "instance commands\nowns: the gestures on the instance itself: profile, load order,\nrefresh\nhides: nothing" {class: core}
   downloadscommands: "downloads commands\nowns: the gestures on a downloaded file\nhides: nothing" {class: core}
   install: "install\nowns: putting a mod's files into the instance: a new mod or an\nupgrade\nhides: extraction and what an upgrade keeps" {class: core}
-  deploy: "deploy commands\nowns: deploy and purge, with the winners as an argument\nhides: the rules that refuse a deploy" {class: core}
+  deploy: "deploy commands\nowns: deploy and purge\nhides: the rules that refuse a deploy" {class: core}
 }
 
 medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
@@ -54,10 +54,10 @@ medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a 
 }
 modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven adapter; a kernel box references nothing" {
   class: band; grid-rows: 1
-  loadorderfilecodec: "Load-order file codec\nowns: plugins.txt: parse and byte-faithful splice, and the line\nmechanics a splice rests on\nhides: the game's format, per release" {class: kernel}
+  loadorderfilecodec: "Load-order file codec\nowns: plugins.txt as text: parse and byte-faithful splice\nhides: the game's format, per release" {class: kernel}
   wire: "Wire\nowns: the generated API types; the webview message protocol\nhides: nothing; generated" {class: kernel}
   tables: "per-release tables\nowns: what differs per game release: paths, the load-order\nfile's destination, the game's masters\nhides: every game name" {class: kernel}
-  ports: "Ports\nowns: how the core reaches the extension host: failures,\nquestions, a selection's outcome, the system trash\nhides: nothing; the composition root implements them over the\nwindow API (ADR-0019)" {class: kernel}
+  ports: "Ports\nowns: how the core reaches the extension host: failures\n(ADR-0019), questions, a selection's outcome, the system trash\nhides: nothing; the composition root implements it" {class: kernel}
 }
 
 medit_driven: "MEDIT · Driven adapters — the record index is a view over the two beside it" {
@@ -66,15 +66,15 @@ medit_driven: "MEDIT · Driven adapters — the record index is a view over the 
     indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: driven}
     store: "Store\nDuckDB: every plugin's rows" {class: derived}
   }
-  sourceadapter: "Source adapter\nowns: a tracked plugin's source tree and its git repository\nhides: layout and git" {class: driven}
+  sourceadapter: "Source adapter\nowns: a tracked plugin's source tree\nhides: layout and git" {class: driven}
   pluginadapter: "Plugin adapter\nowns: a plugin file, read and written through Mutagen\nhides: the game assemblies; when a file is re-read" {class: driven}
 }
 modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {
   class: band; grid-rows: 1
-  instanceloader: "Instance loader\nowns: the instance value, recomputed whole on every change\nhides: the recompute: its debounce, which file wins each path,\nwhich plugins are active" {class: driven}
-  instanceadapter: "Instance adapter — a repository; MO2 is one implementation\nowns: the instance, read and written in the manager's formats,\nand the one watch\nhides: layout; the manager's file formats, their splices and\nlocks; the watch; how it finds the game folder" {class: driven}
+  instanceloader: "Instance loader\nowns: the instance value, recomputed whole on every change\nhides: the recompute: which file wins each path, which plugins\nare active" {class: driven}
+  instanceadapter: "Instance adapter — a repository; MO2 is one implementation\nowns: the instance, read and written in the manager's formats,\nand the one watch\nhides: layout; the manager's file formats; how it finds the\ngame folder" {class: driven}
   deployment: "deployment\nowns: making the game see the instance's winners\nhides: the deployment model and what it writes into the game\nfolder" {class: driven}
-  client: "mEdit client\nowns: Modbench's one reach to mEdit: commands, queries,\nnotifications, the process\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}
+  client: "mEdit client\nowns: Modbench's one reach to mEdit: commands, queries,\nnotifications\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}
 }
 
 medit_data: "MEDIT · Systems of record" {
