@@ -32,7 +32,7 @@ public sealed partial class SourceRepository
     /// <summary>The same set as <paramref name="gitRef"/> committed it, straight from the object store:
     /// a working-tree edit is invisible here, and the ref needs no checkout. Empty when nothing is at
     /// that ref.</summary>
-    public IReadOnlyList<SourceDocument> ReadAll(PluginAddress plugin, string gitRef) =>
+    internal IReadOnlyList<SourceDocument> ReadAll(PluginAddress plugin, string gitRef) =>
         [.. BlobsAtRef(plugin.Name, gitRef)
             .Select(blob => DocumentAt(blob.RelativePath, blob.Text, plugin.Name))
             .OfType<SourceDocument>()];
@@ -50,6 +50,12 @@ public sealed partial class SourceRepository
     /// deletion freed stays taken until the plugin is compiled.</summary>
     public IReadOnlySet<string> NativeFormKeysHeldAt(PluginAddress plugin, string gitRef) =>
         Native(ReadAll(plugin, gitRef), plugin, _release);
+
+    /// <summary>The plugin's tree as the documents it holds right now, each record's own. The caller
+    /// disposes it.</summary>
+    public IPluginDocuments OpenDocuments(
+        PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        new SourceTreeDocuments(_modFolder, plugin.Name, _release, schemas);
 
     private static HashSet<string> Native(IReadOnlyList<SourceDocument> documents, PluginAddress plugin, GameRelease release)
     {

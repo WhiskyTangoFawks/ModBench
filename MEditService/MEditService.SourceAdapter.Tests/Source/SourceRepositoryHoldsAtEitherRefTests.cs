@@ -44,7 +44,7 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
         Git("rm", "--cached", "-q", "--", headerPathInGitsForwardSlashes);
         Git("commit", "-q", "-m", "leave the header at no ref, as a plugin minted since the last commit has it");
 
-        Assert.DoesNotContain(repository.ReadAll(Plugin, "HEAD"), d => d.FormKey == headerFormKey);
+        Assert.Empty(Git("ls-tree", "-r", "--name-only", "HEAD", "--", headerPathInGitsForwardSlashes));
         Assert.True(repository.HoldsAtEitherRef(Plugin, headerFormKey));
     }
 

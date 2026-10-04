@@ -60,12 +60,12 @@ public sealed class EditRecordHandlerTests : IDisposable
     }
 
     [Fact]
-    public void EditField_LeavesTheCommittedTextAsItWas_UntilItIsCommitted()
+    public void EditField_LeavesTheEditUncommitted_UntilItIsCommitted()
     {
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.Contains("0.75", _mod.Document(_mod.Npc.ToString()).Require().Body, StringComparison.Ordinal);
-        Assert.DoesNotContain("0.75", _mod.CommittedDocument(_mod.Npc.ToString()).Require().Body, StringComparison.Ordinal);
+        Assert.Equal([_mod.Npc.ToString()], _mod.ChangedFormKeys());
     }
 
     [Fact]

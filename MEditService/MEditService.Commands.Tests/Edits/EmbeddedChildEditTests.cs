@@ -20,9 +20,6 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
     private string WorkingTreeCell() => _fixture.Document(_fixture.EmbedCell.ToString()).Require().Body;
 
-    private string CommittedCell() =>
-        _fixture.CommittedDocument(_fixture.EmbedCell.ToString()).Require().Body;
-
     [Fact]
     public void EditingAnEmbeddedPlacedRefsField_RewritesOnlyThatFieldInTheOwningCellsDocument()
     {
@@ -59,13 +56,12 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void AfterAnEmbeddedEdit_TheOwningCellDivergesFromHead()
     {
-        Assert.Equal(CommittedCell(), WorkingTreeCell());
+        Assert.DoesNotContain(_fixture.EmbedCell.ToString(), _fixture.ChangedFormKeys());
 
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("4.5")).Applied);
 
-        Assert.NotEqual(CommittedCell(), WorkingTreeCell());
+        Assert.Contains(_fixture.EmbedCell.ToString(), _fixture.ChangedFormKeys());
         Assert.Contains("\"Scale\": 4.5", WorkingTreeCell(), StringComparison.Ordinal);
-        Assert.DoesNotContain("\"Scale\": 4.5", CommittedCell(), StringComparison.Ordinal);
     }
 
     [Fact]

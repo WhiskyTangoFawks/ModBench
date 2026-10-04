@@ -69,16 +69,6 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     }
 
     [Fact]
-    public void ReadAll_AtARef_HoldsThePluginHeaderUnderTheFormKeyPluginHeaderComputes()
-    {
-        var header = TrackedWithHeader().ReadAll(Plugin, "refs/heads/main")
-            .SingleOrDefault(d => d.FormKey == HeaderFormKey);
-
-        Assert.NotNull(header);
-        Assert.Equal(PluginHeader.RecordType, header.RecordType);
-    }
-
-    [Fact]
     public void ReadAll_AtTheWorkingTree_IsEveryDocumentPut()
     {
         var repository = Tracked();
@@ -107,32 +97,20 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     }
 
     [Fact]
-    public void ReadAll_AtTheParkedCompileRef_IsTheCommittedTextNotTheWorkingTreesEdit()
-    {
-        var repository = Tracked();
-        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, EditedBody));
-
-        var parked = repository.ReadAll(Plugin, SourceRepository.LastCompileRef(PluginName));
-
-        Assert.Equal([NpcBody], parked.Select(d => d.Body).ToList());
-        Assert.Equal([EditedBody], repository.ReadAll(Plugin).Select(d => d.Body).ToList());
-    }
-
-    [Fact]
-    public void ReadAll_AtTheParkedCompileRef_DoesNotSeeARecordCreatedSince()
+    public void NativeFormKeysHeldAt_TheParkedCompileRef_DoesNotSeeARecordCreatedSince()
     {
         var repository = Tracked();
         repository.Put(Plugin, new SourceDocument("000900:Fixture.esp", "weap", "Later", LaterBody));
 
-        var parked = repository.ReadAll(Plugin, SourceRepository.LastCompileRef(PluginName));
+        var parked = repository.NativeFormKeysHeldAt(Plugin, SourceRepository.LastCompileRef(PluginName));
 
-        Assert.Equal([NpcFormKey], parked.Select(d => d.FormKey).ToList());
+        Assert.Equal([NpcFormKey], parked.ToList());
     }
 
     [Fact]
-    public void ReadAll_AtARefThatHoldsNothingForThisPlugin_IsEmpty()
+    public void NativeFormKeysHeldAt_ARefThatHoldsNothingForThisPlugin_IsEmpty()
     {
-        Assert.Empty(Tracked().ReadAll(new PluginAddress("Other.esp", "FixtureMod"), "refs/heads/main"));
+        Assert.Empty(Tracked().NativeFormKeysHeldAt(new PluginAddress("Other.esp", "FixtureMod"), "refs/heads/main"));
     }
 
     [Fact]

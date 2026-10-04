@@ -39,7 +39,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     private readonly List<IDisposable> _overlays = [];
 
     private void AssertOnlyTheQuestDocumentChanged() =>
-        Assert.Equal([_fixture.Quest.ToString()], _fixture.ChangedFormKeys());
+        Assert.Equal([_fixture.DocumentFile(_fixture.Quest.ToString()).Require()], _fixture.ChangedDocumentFiles());
 
     private IReadOnlyList<string> QuestSlot(string slotName) => SlotOf(_fixture.Quest, slotName);
 
@@ -163,7 +163,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
                  })
         {
             Assert.Null(_fixture.Document(gone.ToString()));
-            Assert.NotNull(_fixture.CommittedDocument(gone.ToString()));
+            Assert.True(_fixture.CommittedHolds(gone.ToString()));
         }
         Assert.Equal([_fixture.DialogTopic2.ToString(), _fixture.DialogTopic3.ToString()], QuestSlot(nameof(Quest.DialogTopics)));
 

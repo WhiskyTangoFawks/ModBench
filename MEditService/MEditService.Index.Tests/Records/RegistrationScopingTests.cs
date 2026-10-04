@@ -214,10 +214,7 @@ public class RegistrationScopingTests
         fx.Reconcile(fx.WithBetaDisabled);
 
         Assert.All(relations, relation => Assert.False(HoldsBeta(relation), relation));
-        const string recordsCommittedWhichBetaNeverHeldBecauseItIsUntracked = "records_committed";
-        Assert.False(HoldsBeta(recordsCommittedWhichBetaNeverHeldBecauseItIsUntracked));
         Assert.False(fx.Index.Accepts($"SELECT form_key FROM mirror.records WHERE plugin = '{BetaKey.Name}'"));
-        Assert.False(fx.Index.Accepts($"SELECT form_key FROM mirror.records_committed WHERE plugin = '{BetaKey.Name}'"));
     }
 
     [Fact]

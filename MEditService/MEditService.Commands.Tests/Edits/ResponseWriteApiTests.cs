@@ -54,7 +54,7 @@ public sealed class ResponseWriteApiTests : IDisposable
         Assert.Equal(
             before.Replace($"\"EditorID\": \"{ContainerModFixture.ResponseEditorId}\"", "\"EditorID\": \"RenamedResponse\"", StringComparison.Ordinal),
             QuestText);
-        Assert.Equal([_fixture.Quest.ToString()], _fixture.ChangedFormKeys());
+        Assert.Equal([_fixture.DocumentFile(_fixture.Quest.ToString()).Require()], _fixture.ChangedDocumentFiles());
 
         Assert.Equal("RenamedResponse", _fixture.Document(_fixture.Response.ToString()).Require().EditorId);
         Assert.Equal(["RenamedResponse", ContainerModFixture.Response2EditorId], await CompiledResponseEditorIds());
@@ -69,10 +69,10 @@ public sealed class ResponseWriteApiTests : IDisposable
         var after = QuestText;
         Assert.DoesNotContain($"\"{ContainerModFixture.ResponseEditorId}\"", after, StringComparison.Ordinal);
         Assert.Contains($"\"{ContainerModFixture.Response2EditorId}\"", after, StringComparison.Ordinal);
-        Assert.Equal([_fixture.Quest.ToString()], _fixture.ChangedFormKeys());
+        Assert.Equal([_fixture.DocumentFile(_fixture.Quest.ToString()).Require()], _fixture.ChangedDocumentFiles());
 
         Assert.Null(_fixture.Document(_fixture.Response.ToString()));
-        Assert.NotNull(_fixture.CommittedDocument(_fixture.Response.ToString()));
+        Assert.True(_fixture.CommittedHolds(_fixture.Response.ToString()));
         Assert.Equal([_fixture.Response2.ToString()], ResponseFormKeys());
 
         Assert.Equal([ContainerModFixture.Response2EditorId], await CompiledResponseEditorIds());
@@ -88,7 +88,7 @@ public sealed class ResponseWriteApiTests : IDisposable
         var after = QuestText;
         Assert.Contains(result.NewFormKey.Require(), after, StringComparison.Ordinal);
         Assert.DoesNotContain(_fixture.Response.ToString(), after, StringComparison.Ordinal);
-        Assert.Equal([_fixture.Quest.ToString()], _fixture.ChangedFormKeys());
+        Assert.Equal([_fixture.DocumentFile(_fixture.Quest.ToString()).Require()], _fixture.ChangedDocumentFiles());
 
         Assert.Equal([result.NewFormKey.Require(), _fixture.Response2.ToString()], ResponseFormKeys());
 

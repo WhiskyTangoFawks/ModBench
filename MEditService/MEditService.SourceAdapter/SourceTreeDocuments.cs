@@ -186,8 +186,8 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
     private const string MutagenObjectTypeMember = "MutagenObjectType";
 
-    /// <summary>One document already in hand, plus every child it embeds — the committed side of a
-    /// reconcile, which reads its text from git rather than the working tree.</summary>
+    /// <summary>One document already in hand, plus every child it embeds, whether its text came from
+    /// the working tree or from the last commit.</summary>
     internal IEnumerable<PluginDocument> Expand(string recordType, string formKey, string text)
     {
         var table = _containers.RecordTypeNamed(recordType) ?? recordType;

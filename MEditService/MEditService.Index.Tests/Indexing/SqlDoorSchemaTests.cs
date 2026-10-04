@@ -68,7 +68,7 @@ public sealed class SqlDoorSchemaTests : IDisposable
     [Theory]
     [InlineData("records", true)]
     [InlineData("form_lookup", true)]
-    [InlineData("records_committed", false)]
+    [InlineData("container_child", false)]
     public void ARelation_ExposesWinner_OnlyWhereAReaderAsksForIt(string relation, bool exposesWinner)
     {
         var sql = $"SELECT form_key FROM {relation} WHERE is_winner";
@@ -92,14 +92,6 @@ public sealed class SqlDoorSchemaTests : IDisposable
         _index.SetFilter($"SELECT form_key FROM {relation} WHERE load_order_idx = 1", "filter.sql");
 
         Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
-    }
-
-    [Fact]
-    public void RecordsCommitted_ExposesLoadOrderIndex_AndHoldsNoRowOfACleanPlugin()
-    {
-        _index.SetFilter("SELECT form_key FROM records_committed WHERE load_order_idx = 1", "filter.sql");
-
-        Assert.Empty(Listing());
     }
 
     [Fact]
