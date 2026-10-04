@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.SourceAdapter;
 using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -15,8 +14,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     private PluginCompileService CompileService() =>
         _mod.CompileService();
 
-    private string GitDir => Path.Combine(_mod.ModFolder, ".git");
-    private IReadOnlyList<string> Parked() => SourceRepository.ParkedCompileBinarySha256s(_mod.ModFolder, CompileFixture.PluginName);
+    private IReadOnlyList<string> Parked() => LastWriteRecord.Of(_mod.ModFolder, CompileFixture.PluginName);
 
     private static string Sha256Of(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
 
@@ -52,7 +50,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var before = File.ReadAllBytes(pluginPath);
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        var refLock = Path.Combine(GitDir, SourceRepository.LastCompileRef(CompileFixture.PluginName) + ".lock");
+        var refLock = LastWriteRecord.LockFileOfTheOnlyPlugin(_mod.ModFolder);
         File.WriteAllText(refLock, "");
         try
         {

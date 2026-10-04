@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -9,6 +10,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
 {
     private const string Plugin = "A.esp";
     private const string Sha = "ABCDEF0123";
+    private static readonly PluginAddress Address = new(Plugin, "TestMod");
     private readonly ScratchDirectory _modFolder = new("medit-replace-source-");
 
     public SourceRepositoryReplaceSourceTests() =>
@@ -22,14 +24,14 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Repository.ReplaceSourceFrom(Plugin, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha);
 
         Assert.Equal(["npc_/A.esp/000002.json"], FilesUnderRoot());
-        Assert.Equal([Sha], SourceRepository.ParkedCompileBinarySha256s(_modFolder, Plugin));
+        Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address));
         Assert.Equal(" D plugin-source/A.esp/npc_/A.esp/000001.json", Git("status", "--porcelain", "--untracked-files=no").TrimEnd('\n'));
     }
 
     [Fact]
     public void ReplaceSourceFrom_AFileThatCannotBeWritten_LeavesTheSourceAndTheRefAsTheyWere()
     {
-        var refBefore = Git("rev-parse", SourceRepository.LastCompileRef(Plugin));
+        var lastWrittenBefore = Repository.LastWrittenBinarySha256s(Address);
 
         TreeFile[] secondFileNeedsADirectoryTheFirstOccupies = [File("npc_", "{}"), File("npc_/A.esp/000002.json", "{}")];
 
@@ -38,7 +40,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
 
         Assert.Equal(["npc_/A.esp/000001.json"], FilesUnderRoot());
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
-        Assert.Equal(refBefore, Git("rev-parse", SourceRepository.LastCompileRef(Plugin)));
+        Assert.Equal(lastWrittenBefore, Repository.LastWrittenBinarySha256s(Address));
     }
 
     [Fact]
@@ -46,7 +48,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     {
         Repository.ReplaceSourceFrom(Plugin, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha);
 
-        var parked = SourceRepository.LastCompileRef(Plugin);
+        var parked = LastWriteRecord.RefOfTheOnlyPlugin(_modFolder);
         Assert.Equal(
             [".gitignore", "plugin-source/A.esp/npc_/A.esp/000002.json"],
             Git("ls-tree", "-r", "--name-only", parked).Split('\n', StringSplitOptions.RemoveEmptyEntries));
@@ -57,7 +59,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     [Fact]
     public void ReplaceSourceFrom_OnABranchWithNoCommitYetWhereGitRefusesToParkAfterEveryFileIsWritten_LeavesTheSourceAndTheRefAsTheyWere()
     {
-        var refBefore = Git("rev-parse", SourceRepository.LastCompileRef(Plugin));
+        var lastWrittenBefore = Repository.LastWrittenBinarySha256s(Address);
         Git("checkout", "-q", "--orphan", "unborn");
 
         Assert.ThrowsAny<InvalidOperationException>(() => Repository.ReplaceSourceFrom(
@@ -65,7 +67,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
 
         Assert.Equal(["npc_/A.esp/000001.json"], FilesUnderRoot());
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
-        Assert.Equal(refBefore, Git("rev-parse", SourceRepository.LastCompileRef(Plugin)));
+        Assert.Equal(lastWrittenBefore, Repository.LastWrittenBinarySha256s(Address));
     }
 
     [Fact]
@@ -84,9 +86,10 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     [Fact]
     public void AGitStep_InAModFolderAnotherToolRemoved_FailsNamingTheFolder_NotGit()
     {
+        var repository = Repository;
         Directory.Delete(_modFolder, recursive: true);
 
-        var failure = Assert.ThrowsAny<Exception>(() => SourceRepository.ParkCompileSnapshot(_modFolder, Plugin, Sha));
+        var failure = Assert.ThrowsAny<Exception>(() => repository.WriteBinary(Address, Sha, () => { }));
 
         Assert.IsNotType<GitUnavailableException>(failure);
         Assert.Contains(_modFolder, failure.Message, StringComparison.Ordinal);

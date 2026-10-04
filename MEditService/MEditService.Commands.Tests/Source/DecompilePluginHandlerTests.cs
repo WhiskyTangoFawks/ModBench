@@ -67,7 +67,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
         Assert.Equal(
             [PluginBinaryHash.TrailerFormOfFile(Path.Combine(_trackedMod, "Second.esp"))],
-            SourceRepository.ParkedCompileBinarySha256s(_trackedMod, "Second.esp"));
+            LastWriteRecord.Of(_trackedMod, "Second.esp"));
     }
 
     [Fact]

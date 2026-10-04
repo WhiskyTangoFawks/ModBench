@@ -1,6 +1,8 @@
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -20,15 +22,51 @@ public sealed class SourceRepositoryRefEncodingTests
     [Theory]
     [InlineData("LitR - Settings Holotapes Sorting.esp")]
     [InlineData("[ARRETH] FGEP-DE.esp")]
-    public void ParkCompileSnapshot_ThenParkedCompileBinarySha256s_RoundTrips_ForANameWithSpacesOrBracketsWhichGitRefNamesForbid(string plugin)
+    [InlineData("SomePlugin.lock")]
+    [InlineData(".hidden..esp")]
+    public void WriteBinary_ThenLastWrittenBinarySha256s_RoundTrips_ForANameWhichGitRefNamesForbid(string plugin)
     {
         using var modFolder = new ScratchDirectory("medit-refencoding-");
-        PluginBaselines.Track(
-            modFolder, SourcePreset.Edits, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
+        var repository = TrackedOver(modFolder, plugin);
+        var address = new PluginAddress(plugin, "TestMod");
 
-        SourceRepository.ParkCompileSnapshot(modFolder, plugin, binarySha256: "DEADBEEF");
+        repository.WriteBinary(address, "DEADBEEF", () => { });
 
-        Assert.Equal(["DEADBEEF"], SourceRepository.ParkedCompileBinarySha256s(modFolder, plugin));
+        Assert.Equal(["DEADBEEF"], repository.LastWrittenBinarySha256s(address));
+    }
+
+    [Fact]
+    public void ASpaceName_AndTheUnderscoreNameAnUnderscoreReplacementWouldMergeItWith_RecordTheirOwnBinaries()
+    {
+        using var modFolder = new ScratchDirectory("medit-refencoding-");
+        PluginBaselines.Track(modFolder, SourcePreset.Edits, [.. FilesOf("A B.esp"), .. FilesOf("A_B.esp")]);
+        var repository = SourceRepository.Over(modFolder, GameRelease.Fallout4);
+        var spaced = new PluginAddress("A B.esp", "TestMod");
+        var underscored = new PluginAddress("A_B.esp", "TestMod");
+
+        repository.WriteBinary(spaced, "SPACED", () => { });
+        repository.WriteBinary(underscored, "UNDERSCORED", () => { });
+
+        Assert.Equal(["SPACED"], repository.LastWrittenBinarySha256s(spaced));
+        Assert.Equal(["UNDERSCORED"], repository.LastWrittenBinarySha256s(underscored));
+    }
+
+    [Fact]
+    public void WriteBinary_Throws_ForAnEmptyPluginName()
+    {
+        using var modFolder = new ScratchDirectory("medit-refencoding-");
+        var repository = TrackedOver(modFolder, "Test.esp");
+
+        Assert.Throws<ArgumentException>(() => repository.WriteBinary(new PluginAddress("", "TestMod"), "DEADBEEF", () => { }));
+    }
+
+    private static TreeFile[] FilesOf(string plugin) =>
+        [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())];
+
+    private static SourceRepository TrackedOver(ScratchDirectory modFolder, string plugin)
+    {
+        PluginBaselines.Track(modFolder, SourcePreset.Edits, FilesOf(plugin));
+        return SourceRepository.Over(modFolder, GameRelease.Fallout4);
     }
 
     private static string GitProbeSubject(string modFolder) =>

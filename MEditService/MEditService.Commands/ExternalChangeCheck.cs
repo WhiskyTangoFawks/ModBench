@@ -31,7 +31,7 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
                 if (SourceRepository.IsTracked(mod.Key))
                 {
                     tracked.Add(mod.Key);
-                    Tell(origin, mod.Key, [.. mod]);
+                    Tell(origin, SourceRepository.Over(mod.Key, snapshot.GameRelease), [.. mod]);
                 }
                 else if (_trackedAtLastCheck.Contains(mod.Key))
                 {
@@ -42,20 +42,20 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
         }
     }
 
-    private void Tell(string origin, string modFolder, IReadOnlyList<RegisteredPlugin> plugins)
+    private void Tell(string origin, SourceRepository repository, IReadOnlyList<RegisteredPlugin> plugins)
     {
-        var tracked = plugins.ToLookup(plugin => SourceRepository.HoldsTreeFor(modFolder, plugin.Name));
+        var tracked = plugins.ToLookup(plugin => SourceRepository.HoldsTreeFor(repository.ModFolder, plugin.Name));
         notifications.Publish(new ExternalChangeNotification(origin, [.. tracked[true]
-            .Select(plugin => new ChangedPlugin(plugin.Name, hashes.Of(plugin.Path)))
-            .Where(plugin => !MatchesLastWrite(modFolder, plugin))]));
+            .Select(plugin => (plugin.Key, Observed: hashes.Of(plugin.Path)))
+            .Where(plugin => !MatchesLastWrite(repository, plugin.Key, plugin.Observed))
+            .Select(plugin => new ChangedPlugin(plugin.Key.Name, plugin.Observed))]));
 
         if (tracked[false].Any())
             notifications.Publish(new UntrackedPluginsNotification(origin, [.. tracked[false].Select(plugin => plugin.Name)]));
     }
 
     // Bytes that cannot be read, or a last write that cannot, match nothing (ADR-0003).
-    private static bool MatchesLastWrite(string modFolder, ChangedPlugin plugin) =>
-        plugin.BytesSha256 is { } observed
-        && SourceRepository.ParkedCompileBinarySha256s(modFolder, plugin.Name)
-            .Contains(observed, StringComparer.OrdinalIgnoreCase);
+    private static bool MatchesLastWrite(SourceRepository repository, PluginAddress plugin, string? observed) =>
+        observed is not null
+        && repository.LastWrittenBinarySha256s(plugin).Contains(observed, StringComparer.OrdinalIgnoreCase);
 }
