@@ -81,8 +81,8 @@ internal static class Indexes
     }
 
     /// <summary>The held load order arriving again (ADR-0013), answered once
-    /// <paramref name="announced"/> holds, the arrival's status is out when it re-derived, and its
-    /// validation has ended, which only the write gate shows when nothing was re-derived.</summary>
+    /// <paramref name="announced"/> holds, its status is out and its validation has ended: an
+    /// arrival that re-derived nothing shows that only in the write gate.</summary>
     internal static void NextSnapshotUntil(this OpenedIndex index, Func<bool> announced, string what)
     {
         index.NextSnapshotUnsettledUntil(announced, what);
