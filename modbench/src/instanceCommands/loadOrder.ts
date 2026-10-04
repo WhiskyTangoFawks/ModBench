@@ -13,10 +13,9 @@ export interface InstanceGame {
   readonly gameRelease: string | undefined;
 }
 
-/** The slice of the instance value put load order sends: the loader's snapshot, none while the
- *  game folder is not found or its plugins cannot be listed. */
+/** The slice of the instance value put load order sends. */
 export interface LoadOrderSource extends InstanceGame {
-  readonly loadOrderSnapshot: Omit<LoadOrderSnapshot, 'instanceRoot' | 'gameRelease'> | undefined;
+  readonly loadOrderSnapshot: (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine'> & { readonly dataFolder: string }) | undefined;
 }
 
 /** Nothing is sent without a game folder found: there is no Data folder to key the load order on. */
@@ -32,7 +31,10 @@ export async function putLoadOrder(
   sender: Pick<LoadOrderSender, 'send'>, instanceRoot: string, value: LoadOrderSource,
 ): Promise<PutLoadOrderResult> {
   if (!value.loadOrderSnapshot) return { sent: false };
-  const snapshot: LoadOrderSnapshot = { ...value.loadOrderSnapshot, instanceRoot, gameRelease: releaseOf(value) };
+  const { plugins, active, loadedWithNoLine, dataFolder } = value.loadOrderSnapshot;
+  const snapshot: LoadOrderSnapshot = {
+    plugins, active, loadedWithNoLine, gameDirectory: dataFolder, instanceRoot, gameRelease: releaseOf(value),
+  };
   return { sent: true, snapshot, outcome: await sender.send(snapshot) };
 }
 

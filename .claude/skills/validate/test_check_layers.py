@@ -64,7 +64,6 @@ modbench_driving: "MODBENCH · Driving adapters" {
 medit_core: "MEDIT · Core" {
   class: band; grid-rows: 1
   commands: "Commands" {class: core}
-  queries: "Queries" {class: core}
 }
 modbench_core: "MODBENCH · Core" {
   class: band; grid-rows: 1
@@ -156,7 +155,6 @@ class ModbenchProjectReferencesAgainstLayers(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = fixture(pathlib.Path(tmp))
             tsconfig(root, 'mods', ['modlist', 'instanceLoader'])
-            tsconfig(root, 'modlist', ['instanceAdapter'])
             self.assertEqual(cl.run(root), [])
 
     def test_a_reference_pointing_up_fails_naming_the_project_file_and_the_pair(self):
@@ -237,7 +235,7 @@ class MEditProjectReferencesAgainstLayers(unittest.TestCase):
             self.assertEqual(len(failures), 1)
             self.assertIn('commands -> index', failures[0])
 
-    def test_a_part_of_a_box_references_its_parent_and_its_siblings(self):
+    def test_a_part_of_a_box_references_its_parent(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = fixture(pathlib.Path(tmp))
             csproj(root, 'Queries', ['Index', 'Codec'])

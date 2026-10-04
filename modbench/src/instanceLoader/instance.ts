@@ -88,8 +88,8 @@ export interface InstanceValue {
   /** The plugins the game loads with no line, in the order it loads them; undefined while the
    *  game folder's plugins cannot be listed. */
   readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
-  /** ADR-0013's snapshot, what put load order sends; undefined while the game folder is not found
-   *  or its plugins cannot be listed, so nothing silently wrong is sent. */
+  /** ADR-0013's snapshot; undefined while the game folder is not found or its plugins cannot be
+   *  listed, so nothing silently wrong is sent. */
   readonly loadOrderSnapshot: LoadOrderSnapshotValue | undefined;
   /** Overwrite's own files, recursive; none when the folder is absent or empty. */
   readonly overwriteFiles: readonly OriginFile[];

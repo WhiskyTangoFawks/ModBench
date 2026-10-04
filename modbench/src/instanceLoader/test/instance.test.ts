@@ -1168,7 +1168,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
     await instance.refresh();
 
     expect(instance.value.loadOrderSnapshot).toMatchObject({
-      gameDirectory: dataFolder,
+      dataFolder,
       loadedWithNoLine: [{ name: 'DLCCoast.esm', origin: 'Consumer' }],
     });
     expect(instance.value.loadOrderSnapshot?.active).toContainEqual({ name: 'DLCCoast.esm', origin: 'Consumer' });

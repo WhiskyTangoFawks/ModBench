@@ -285,7 +285,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   }));
   const { tree: pluginsTree, view: pluginListView, nameFilter: pluginsFilter } = plugins;
   session.plugins = plugins;
-  // The value's slice the load order is built from, under the names instance commands give it.
   const loadOrderSource = (): LoadOrderSource => {
     const { loadOrderSnapshot, gameName, gameRelease } = instance.value;
     return { loadOrderSnapshot, gameName, gameRelease };

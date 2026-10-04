@@ -5,6 +5,8 @@ surfaces: "Mods · Plugins · Toolbox · Downloads" {class: driving}
 cmds: "modlist · plugins · instance · downloads commands" {class: core}
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
+activation: @../target-architecture.modbench_drivers.activation
+activation.label: Activation
 client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
@@ -12,8 +14,6 @@ instanceadapter.label: Instance adapter
 instance: @../target-architecture.modbench_data.instance
 instance.label: "Instance\nmod order · plugins.txt · the mod manager's configuration · mods · downloaded files"
 views: "every view" {class: driving}
-activation: @../target-architecture.modbench_drivers.activation
-activation.label: Activation
 
 surfaces -> cmds: "the gesture: its Argument and Options" {class: loadorder}
 instanceloader -> activation: value {class: loadorder}

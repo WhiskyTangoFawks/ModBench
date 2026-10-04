@@ -101,9 +101,9 @@ function pluginLinesDelta(
   provided: ReadonlyMap<string, string>,
   inData: ReadonlySet<string>,
 ): PluginLinesDelta {
-  const listedFolded = new Set(listed.map(pluginKey));
+  const listedKeys = new Set(listed.map(pluginKey));
   const added = [...provided]
-    .filter(([folded]) => !listedFolded.has(folded))
+    .filter(([key]) => !listedKeys.has(key))
     .map(([, real]) => real)
     .sort((a, b) => pluginKey(a).localeCompare(pluginKey(b)));
   const dropped = listed.filter((name) => !provided.has(pluginKey(name)) && !inData.has(pluginKey(name)));
@@ -125,7 +125,7 @@ export async function syncPlugins(
   // The tree gives a plugin the game loads with no line a row of its own (plugins.md, The tree,
   // story 2), so a mod's plugin of that name earns no line.
   const noLine = new Set((loadedWithNoLine ?? []).map(pluginKey));
-  const addable = new Map([...provided].filter(([folded]) => !noLine.has(folded)));
+  const addable = new Map([...provided].filter(([key]) => !noLine.has(key)));
   const inDataNames = inData.names;
 
   let delta: PluginLinesDelta = { added: [], dropped: [] };

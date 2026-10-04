@@ -63,7 +63,7 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model 
 medit_readmodel: "MEDIT · Read model — the record index, a view over the repositories below it" {
   class: band; grid-rows: 1
   index: "Record index — one deep module, rebuildable\nowns: the read model: every plugin's rows, read for the active\nplugins only, and every answer the API draws from them\nhides: the Indexer and the Store; the reconcile" {
-    queries: "Queries\nthe face: every answer the API gives, the record filter, rebuild" {class: readmodel}
+    queries: "Queries\nthe face: what the API asks of the read model" {class: readmodel}
     indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: readmodel}
     store: "Store\nDuckDB: every plugin's rows" {class: derived}
   }

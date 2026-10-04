@@ -272,11 +272,11 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
       .toBeUndefined();
   });
 
-  it('carries the game folder\'s Data folder as the game directory, and every plugin with its origin and path', () => {
+  it('carries the game folder\'s dataFolder, and every plugin with its origin and path', () => {
     const a = row('a.esp', 'ModA', 0);
     const stray = row('stray.esp', 'ModS', null);
 
-    expect(snapshotOf([a, stray])).toMatchObject({ gameDirectory: '/game/Data', plugins: [sent(a), sent(stray)] });
+    expect(snapshotOf([a, stray])).toMatchObject({ dataFolder: '/game/Data', plugins: [sent(a), sent(stray)] });
   });
 
   it('sends as active the winning plugin of each enabled line, in line order rather than the value\'s row order, with no disabled or overridden row slipping in', () => {

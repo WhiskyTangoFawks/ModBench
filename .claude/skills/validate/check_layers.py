@@ -129,17 +129,17 @@ def load_boxes(zoom_out: Path):
     """Every box the zoom-out draws, a part of a box included, by column and name:
     {'medit': {'index': 'medit_readmodel.index', 'queries': 'medit_readmodel.index.queries'}}."""
     boxes = {}
-    path = []
+    column, path = None, []
     for line in zoom_out.read_text().splitlines():
         m = CONTAINER_RE.match(line)
         if m:
-            path = [f'{m.group("column")}_{m.group("band")}']
+            column, path = m.group('column'), [f'{m.group("column")}_{m.group("band")}']
             continue
         m = MEMBER_RE.match(line)
-        if m and path:
+        if m and column:
             depth = len(m.group('indent')) // 2
             path = path[:depth] + [m.group('id')]
-            boxes.setdefault(path[0].split('_', 1)[0], {})[m.group('id')] = '.'.join(path)
+            boxes.setdefault(column, {})[m.group('id')] = '.'.join(path)
     return boxes
 
 

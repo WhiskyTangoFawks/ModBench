@@ -19,7 +19,7 @@ const VALUE: LoadOrderSource = {
   gameName: 'Fallout 4',
   gameRelease: 'Fallout4',
   loadOrderSnapshot: {
-    plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, gameDirectory: '/game/Data',
+    plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, dataFolder: '/game/Data',
   },
 };
 
