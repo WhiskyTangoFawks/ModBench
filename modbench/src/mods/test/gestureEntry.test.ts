@@ -190,8 +190,8 @@ describe('what the Mods keys read off the selection', () => {
   });
 
   it('the palette\'s track sees a selection that holds a mod with no repository providing a plugin', () => {
-    const withPlugin = new ModNode({ kind: 'mod', name: 'Patch', enabled: true }, { holdsPlugin: true, tracked: false });
-    const trackedWithPlugin = new ModNode({ kind: 'mod', name: 'Tracked', enabled: true }, { holdsPlugin: true, tracked: true });
+    const withPlugin = new ModNode({ kind: 'mod', name: 'Patch', enabled: true }, { holdsPlugin: true, tracked: false, fileOrderConflict: false });
+    const trackedWithPlugin = new ModNode({ kind: 'mod', name: 'Tracked', enabled: true }, { holdsPlugin: true, tracked: true, fileOrderConflict: false });
     expect(modsKeyContext([enabledMod, withPlugin], byRow).holdsUntrackedModWithPlugin).toBe(true);
     expect(modsKeyContext([enabledMod, trackedWithPlugin], byRow).holdsUntrackedModWithPlugin).toBe(false);
     expect(modsKeyContext([enabledMod, group], byRow).holdsUntrackedModWithPlugin).toBe(false);
@@ -238,6 +238,17 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([conflicting, alone], byRow).singleGoToModRow).toBe(false);
     expect(modsKeyContext([enabledMod], byRow).singleGoToModRow).toBe(false);
     expect(modsKeyContext([], byRow).singleGoToModRow).toBe(false);
+  });
+
+  it('open conflicts sees exactly one selected mod that has a file order conflict', () => {
+    const facts = (fileOrderConflict: boolean) => ({ holdsPlugin: false, tracked: false, fileOrderConflict });
+    const conflicting = new ModNode({ kind: 'mod', name: 'Shares', enabled: true }, facts(true));
+    const alone = new ModNode({ kind: 'mod', name: 'Alone', enabled: true }, facts(false));
+    expect(modsKeyContext([conflicting], byRow).singleOpenConflictsRow).toBe(true);
+    expect(modsKeyContext([alone], byRow).singleOpenConflictsRow).toBe(false);
+    expect(modsKeyContext([conflicting, alone], byRow).singleOpenConflictsRow).toBe(false);
+    expect(modsKeyContext([group], byRow).singleOpenConflictsRow).toBe(false);
+    expect(modsKeyContext([], byRow).singleOpenConflictsRow).toBe(false);
   });
 
   it('open folder sees exactly one selected row it takes: a mod, Overwrite, a file or a folder', () => {

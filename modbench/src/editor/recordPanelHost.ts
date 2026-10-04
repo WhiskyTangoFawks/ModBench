@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import type { EditsInFlight } from './followRecord';
-import { buildWebviewHtml } from './webviewHtml';
+import { showWebviewPage } from '../drivingLib/webviewPage';
 import { pickRecord } from './recordPicker';
 import { routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps } from './recordPanelMessageRouter';
 import type { FocusedCells } from './focusedCells';
@@ -102,11 +102,6 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
     const formKey = document.formKey;
     panel.title = recordTitle(formKey, undefined);
 
-    panel.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'out', 'webview')],
-    };
-
     recordPanels.add(panel);
     panel.onDidDispose(() => recordPanels.delete(panel));
     panel.onDidDispose(() => { editsInFlight.forget(panel); });
@@ -133,12 +128,7 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
       void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells));
     });
 
-    const asset = (file: string) => panel.webview.asWebviewUri(
-      vscode.Uri.joinPath(context.extensionUri, 'out', 'webview', 'assets', file),
-    ).toString();
-    panel.webview.html = buildWebviewHtml({
-      formKey, scriptUri: asset('main.js'), styleUri: asset('main.css'), cspSource: panel.webview.cspSource,
-    });
+    showWebviewPage(panel.webview, context.extensionUri, 'main', { mEditFormKey: formKey });
   }
 }
 

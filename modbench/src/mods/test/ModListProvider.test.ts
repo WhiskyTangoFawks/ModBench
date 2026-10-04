@@ -422,6 +422,24 @@ describe('ModListProvider', () => {
     ]);
   });
 
+  it('a mod row states in its contextValue whether the mod has a file order conflict, which open conflicts reads', async () => {
+    const value = await indexedValueOf([mod('High'), mod('Low'), mod('Apart'), mod('Off', false)], {
+      High: { files: [file('High', 'a.dds')] },
+      Low: { files: [file('Low', 'a.dds')] },
+      Apart: { files: [file('Apart', 'b.dds')] },
+      Off: { files: [file('Off', 'a.dds')] },
+    });
+    const rows = (await makeProvider([], { instance: new FakeInstance(value) }).getChildren())
+      .filter((n): n is ModNode => n instanceof ModNode);
+
+    expect(rows.map((n) => [n.mod.name, n.contextValue])).toEqual([
+      ['Off', 'mod disabled untracked'],
+      ['Apart', 'mod enabled untracked'],
+      ['Low', 'mod enabled untracked fileOrderConflict'],
+      ['High', 'mod enabled untracked fileOrderConflict'],
+    ]);
+  });
+
   it('names the mod a mod row stands for, and no mod for any other row or value', async () => {
     const provider = makeProvider([mod('Patch'), sep('Tools')]);
     const roots = await provider.getChildren();

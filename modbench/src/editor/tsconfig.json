@@ -9,6 +9,8 @@
   },
   "references": [
     { "path": "../client" },
+    { "path": "../drivingLib" },
+    { "path": "../instanceLoader" },
     { "path": "../ports" },
     { "path": "../wire" }
   ],
