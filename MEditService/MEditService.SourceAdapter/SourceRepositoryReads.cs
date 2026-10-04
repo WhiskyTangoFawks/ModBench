@@ -41,9 +41,8 @@ public sealed partial class SourceRepository
     /// destination.</summary>
     public IReadOnlySet<string> EditorIdsHeld(PluginAddress plugin) => EditorIds(ReadAll(plugin));
 
-    /// <summary>Every FormKey the plugin's source uses, committed or not: a record's own and an
-    /// embedded child's, the header's synthetic key included. A working-tree deletion does not
-    /// free its key until the plugin is compiled.</summary>
+    /// <summary>Every FormKey the plugin's source uses, committed or not: a record's own, an embedded
+    /// child's and the header's synthetic one. A deletion frees none until the plugin is compiled.</summary>
     public IReadOnlySet<string> FormKeysUsed(PluginAddress plugin)
     {
         var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
