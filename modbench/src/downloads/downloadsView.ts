@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { DownloadFile, InstanceView } from '../instanceLoader/instance';
+import type { DownloadFile, Instance, InstanceView } from '../instanceLoader/instance';
 import type { DownloadsAccess } from '../downloadsCommands/downloads';
 import type { InstallAccess } from '../install/install';
 import type { Reporter } from '../ports/reporter';
@@ -17,7 +17,7 @@ import { downloadsKeyContext } from './keyContext';
 
 export interface DownloadsViewDeps {
   access: DownloadsAccess & InstallAccess;
-  instance: InstanceView;
+  instance: InstanceView & Pick<Instance, 'refresh'>;
   reporter: Reporter;
   ask: AskQuestion;
   trash: MoveToTrash;
@@ -36,7 +36,7 @@ export interface DownloadsView extends vscode.Disposable {
 export function createDownloadsView(
   { access, instance, reporter, ask, trash, install, logUnresolved }: DownloadsViewDeps,
 ): DownloadsView {
-  const provider = new DownloadsProvider({ instance, log: install.log }); // disposes its Instance subscriptions
+  const provider = new DownloadsProvider({ instance }); // disposes its Instance subscriptions
   const view = vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: provider,
     canSelectMany: true,
@@ -75,7 +75,7 @@ export function createDownloadsView(
     registerDownloadsSortCommand(provider),
     ...registerDownloadsExcludedToggleCommands(provider),
     ...registerDownloadsSingleRowCommands(reporter, () => view.selection),
-    ...registerDownloadsMultiRowCommands(access, reporter, ask, trash, install.log, () => view.selection, provider),
+    ...registerDownloadsMultiRowCommands(access, instance, reporter, ask, trash, install.log, () => view.selection),
     nameFilter,
     view,
     provider,
