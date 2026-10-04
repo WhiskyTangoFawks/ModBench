@@ -461,7 +461,7 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
     const row = await rootOf(provider, OverwriteNode, 'Overwrite');
 
     expect(row.description).toBe('2');
-    expect(row.iconPath?.color).toBeDefined();
+    expect(expectInstanceOf(row.iconPath, ThemeIcon).color).toBeDefined();
   });
 
   it('Overwrite holding files, none of them found, still counts and tints them, and lists none', async () => {
@@ -469,7 +469,7 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
     const row = await rootOf(provider, OverwriteNode, 'Overwrite');
 
     expect(row.description).toBe('1');
-    expect(row.iconPath?.color).toBeDefined();
+    expect(expectInstanceOf(row.iconPath, ThemeIcon).color).toBeDefined();
     expect(row.lists()).toBe(false);
   });
 
