@@ -14,8 +14,8 @@ public sealed class SourceRepositoryInterfaceScanTests
 
     private static readonly string[] HiddenMechanism =
     [
-        "GitCli", "GitBlobHash", "SourceUnit", "Locate", "SourceTreeDocuments",
-        "PristineFileWriter", "WorkingTreeStatus", "ReadCommittedSourceText", "CommittedSourceHashes",
+        "GitCli", "SourceUnit", "Locate", "SourceTreeDocuments",
+        "PristineFileWriter", "WorkingTreeStatus", "ReadCommittedSourceText",
         "ParseDocumentPath", "RootStringIn", "RecordBodyFromOwnerBytes",
     ];
 

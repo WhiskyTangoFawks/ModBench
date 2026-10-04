@@ -3,7 +3,6 @@ using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
@@ -182,14 +181,11 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     [Fact]
-    public void AnEqualSnapshot_OfATreeThatFailedToRead_OpensNoFileGitDoesNotName()
+    public void AnEqualSnapshot_OfATreeThatFailedToRead_AndStandsUnchanged_ReadsItNoMore()
     {
         var document = _tracked.SourceFileOf(_index.RequireReads().DocumentOf(_trackedNpc, _tracked.KeyOf()));
         File.Copy(document, Path.Combine(Path.GetDirectoryName(document).Require(), "Backup.json"));
         ArrivalAnnouncing(FailureNamed(Tracked));
-        var header = Path.Combine(SourceRepository.RootIn(_tracked.ModFolderOf(), Tracked), "RecordData.json");
-
-        using var heldShut = new FileStream(header, FileMode.Open, FileAccess.Read, FileShare.None);
 
         var announced = _index.AnnouncedByEqualArrivals(_notifications, () => Touched(_untracked));
 

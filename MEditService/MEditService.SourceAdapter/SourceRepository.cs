@@ -327,62 +327,6 @@ public sealed partial class SourceRepository
     /// can be made or written here.</summary>
     public static void EnsureTrackable() => GitCli.EnsureOnPath();
 
-    /// <summary>Object names as <c>HEAD</c> has them (<c>git ls-tree</c>, one process per batch) — not
-    /// working-tree status, which diverges after the external commits this exists for. Directly
-    /// comparable to records.content_hash. Null when untracked.</summary>
-    internal static IReadOnlyDictionary<string, string>? CommittedSourceHashes(
-        string modFolder, IReadOnlyList<string> relativePaths)
-    {
-        if (!IsTracked(modFolder) || relativePaths.Count == 0) return null;
-
-        var gitDir = Path.Combine(modFolder, ".git");
-        string[] args = ["ls-tree", "-z", "HEAD", "--", .. relativePaths.Select(ToGitPath)];
-        // TryRun, not Run: an unborn HEAD (a repo whose branch has no commit yet) is a real state,
-        // and "nothing is committed" is an answer here, not a failure to report.
-        if (!GitCli.TryRun(gitDir, modFolder, out var stdout, args)) return null;
-
-        var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
-        // -z so paths carrying spaces or non-ASCII survive verbatim; git otherwise quotes and escapes
-        // them, and every source path segment comes from a plugin filename.
-        foreach (var entry in stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-        {
-            // "<mode> SP <type> SP <object> TAB <file>"
-            var tab = entry.IndexOf('\t', StringComparison.Ordinal);
-            if (tab < 0) continue;
-            var fields = entry[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (fields.Length < 3 || fields[1] != "blob") continue;
-            hashes[entry[(tab + 1)..]] = fields[2];
-        }
-        return hashes;
-    }
-
-    /// <summary>Every blob under one plugin's committed source subtree, path to object name, from one
-    /// <c>ls-tree</c>. Null, never an empty map, when the tree could not be read at all: what tells
-    /// absence from silence.</summary>
-    public static IReadOnlyDictionary<string, string>? CommittedSourceTree(string modFolder, string pluginFileName)
-    {
-        if (!IsTracked(modFolder)) return null;
-
-        var gitDir = Path.Combine(modFolder, ".git");
-        var sourcePrefix = ToGitPath(RootFor(pluginFileName));
-        if (!GitCli.TryRun(gitDir, modFolder, out var stdout, "ls-tree", "-r", "-z", "HEAD", "--", $"{sourcePrefix}/"))
-            return null;
-
-        var blobs = new Dictionary<string, string>(StringComparer.Ordinal);
-        // -z for the same reason CommittedSourceHashes uses it: every source path segment comes from a
-        // plugin filename or an EditorID, either of which may carry a space.
-        foreach (var entry in stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-        {
-            // "<mode> SP <type> SP <object> TAB <file>"
-            var tab = entry.IndexOf('\t', StringComparison.Ordinal);
-            if (tab < 0) continue;
-            var fields = entry[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (fields.Length < 3 || fields[1] != "blob") continue;
-            blobs[entry[(tab + 1)..]] = fields[2];
-        }
-        return blobs;
-    }
-
     /// <summary>One file's text at <paramref name="gitRef"/>, or null. cat-file -p, not git show: for
     /// a missing glob-shaped path, show exits 0 with empty output — a lying empty string.</summary>
     internal static string? ReadCommittedSourceText(string modFolder, string relativePath, string gitRef = "HEAD")

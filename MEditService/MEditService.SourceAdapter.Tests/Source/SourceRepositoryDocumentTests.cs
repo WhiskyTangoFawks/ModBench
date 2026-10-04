@@ -1,3 +1,4 @@
+using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
@@ -197,20 +198,16 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Put_WithANewEditorId_LeavesTheNextValidationOneChangedDocumentAtTheNewPathAndTheOldOneGone()
+    public void Put_WithANewEditorId_LeavesOneStampAtTheFormKey_ForTheNewBody()
     {
         var repository = Opened();
-        RunGit("add", "-A");
-        RunGit("commit", "-q", "-m", "baseline");
-        var validated = repository.ChangesSince(Plugin, validatedHead: null).Head.Require();
 
         repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "RenamedNpc", WithEditorId("RenamedNpc")));
 
-        var changed = repository.ChangesSince(Plugin, validated).Documents.Require();
-        Assert.Equal(2, changed.Count);
-        Assert.All(changed, document => Assert.Equal(NpcFormKey, document.FormKey));
-        Assert.Single(changed, document => document.WorkingTreeText == null);
-        Assert.Single(changed, document => document.WorkingTreeText == WithEditorId("RenamedNpc"));
+        var stamps = repository.StampsOf(Plugin).ByFormKey;
+        Assert.Equal(
+            SourceRepository.ContentStamp(Encoding.UTF8.GetBytes(WithEditorId("RenamedNpc"))),
+            stamps[NpcFormKey]);
     }
 
     [Fact]

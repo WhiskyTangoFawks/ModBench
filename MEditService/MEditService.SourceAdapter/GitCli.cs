@@ -56,61 +56,6 @@ internal static class GitCli
         return stdout;
     }
 
-    /// <summary>Each object's bytes in the order asked, from one <c>cat-file --batch</c>; null for one
-    /// git reports missing. Null when git fails.</summary>
-    internal static IReadOnlyList<byte[]?>? CatFileBatch(string gitDir, string workTree, IReadOnlyList<string> objects)
-    {
-        var psi = StartInfo(gitDir, workTree, null, ["cat-file", "--batch"]);
-        using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
-        // Written from a thread of its own: git answers each object as it reads the next, and both
-        // pipes fill.
-        var feed = new Thread(() =>
-        {
-            using var input = process.StandardInput;
-            foreach (var name in objects) input.Write(name + "\n");
-        })
-        { IsBackground = true };
-        feed.Start();
-        var stderr = string.Empty;
-        var drainStderr = new Thread(() => stderr = process.StandardError.ReadToEnd()) { IsBackground = true };
-        drainStderr.Start();
-        using var stdout = new MemoryStream();
-        process.StandardOutput.BaseStream.CopyTo(stdout);
-        feed.Join();
-        drainStderr.Join();
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-        {
-            Log.Warning("git cat-file --batch failed ({ExitCode}): {Stderr}", process.ExitCode, stderr);
-            return null;
-        }
-        return BatchAnswers(stdout.ToArray(), objects.Count);
-    }
-
-    // "<oid> <type> <size>\n<bytes>\n" per object, or "<name> missing\n".
-    private static List<byte[]?>? BatchAnswers(byte[] output, int count)
-    {
-        var answers = new List<byte[]?>(count);
-        var at = 0;
-        while (answers.Count < count)
-        {
-            var end = Array.IndexOf(output, (byte)'\n', at);
-            if (end < 0) return null;
-            var header = System.Text.Encoding.UTF8.GetString(output, at, end - at);
-            at = end + 1;
-            if (header.EndsWith(" missing", StringComparison.Ordinal))
-            {
-                answers.Add(null);
-                continue;
-            }
-            var space = header.LastIndexOf(' ');
-            if (space < 0 || !int.TryParse(header[(space + 1)..], out var size) || at + size > output.Length) return null;
-            answers.Add(output[at..(at + size)]);
-            at += size + 1;
-        }
-        return answers;
-    }
-
     // Only the subcommand is named: the full argument vector can carry scratch paths onto the wire via
     // Results.Problem(ex.Message), so it goes to the log instead.
     private static GitCommandFailedException Failed(string[] args, int exitCode, string stderr)

@@ -43,11 +43,14 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
     public void Dispose() => _root.Dispose();
 
+    private string Head() =>
+        GitProbe.Run(Path.Combine(_trackedMod, ".git"), _trackedMod, "rev-parse", "HEAD").Trim();
+
     [Fact]
     public async Task Decompile_OfAnUntrackedPluginInATrackedMod_WritesItsSourceToTheWorkingTree_AndCommitsNothing()
     {
-        var headBefore = Repository.ChangesSince(Tracked("First.esp"), validatedHead: null).Head;
-        Assert.NotNull(headBefore);
+        var headBefore = Head();
+        Assert.NotEmpty(headBefore);
 
         var result = await Decompile(Tracked("Second.esp"));
 
@@ -55,7 +58,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Assert.Empty(result.Refused);
         Assert.Contains("SecondNpc", SourceTextOf("Second.esp"), StringComparison.Ordinal);
         Assert.Empty(Repository.ReadAll(Tracked("Second.esp"), "HEAD"));
-        Assert.Equal(headBefore, Repository.ChangesSince(Tracked("First.esp"), validatedHead: null).Head);
+        Assert.Equal(headBefore, Head());
     }
 
     [Fact]

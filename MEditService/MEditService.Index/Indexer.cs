@@ -78,16 +78,18 @@ public sealed class Indexer : IQueryIndex, IDisposable
     // reads from changes, which the state recorded beside it detects.
     private readonly Dictionary<PluginAddress, FailedRead?> _failedReads = new(PluginAddress.Comparer);
 
-    // What a failed read read from: the binary's hash, and for a plugin with a tree, what git named
-    // at its HEAD then (ADR-0003).
-    private sealed record FailedRead(string? Binary, TreeChanges? Tree)
+    // What a failed read read from: the binary's hash, and for a plugin with a tree, each document's
+    // content stamp then, or the doubly claimed FormKey the tree named instead (ADR-0003).
+    private sealed record FailedRead(string? Binary, IReadOnlyDictionary<string, string>? Stamps, string? Ambiguity = null)
     {
         public bool Holds(FailedRead now) =>
             Binary == now.Binary
-            && (Tree, now.Tree) switch
+            && Ambiguity == now.Ambiguity
+            && (Stamps, now.Stamps) switch
             {
                 (null, null) => true,
-                ({ Named: { } then }, { Named: { } named }) => Tree.Head == now.Tree.Head && then.SequenceEqual(named),
+                ({ } then, { } stamps) => then.Count == stamps.Count && then.All(
+                    stamp => stamps.TryGetValue(stamp.Key, out var nowStamp) && nowStamp == stamp.Value),
                 _ => false,
             };
     }
@@ -574,12 +576,12 @@ public sealed class Indexer : IQueryIndex, IDisposable
         {
             if (!_failedReads.TryGetValue(key, out failedAt)) return false;
         }
-        return failedAt is not null && ReadStateOf(index, key, path, failedAt.Tree?.Head) is { } now && failedAt.Holds(now);
+        return failedAt is not null && ReadStateOf(index, key, path) is { } now && failedAt.Holds(now);
     }
 
     // A failure that says what the plugin already said publishes nothing.
     private void FailRead(HeldPlugins? held, IRecordIndex index, PluginAddress key, string path, string reason) =>
-        Fail(held, key, reason, ReadStateOf(index, key, path, head: null));
+        Fail(held, key, reason, ReadStateOf(index, key, path));
 
     // A file another process held is read again at the next snapshot, whatever it reads from.
     private void FailReadUntilTheNextSnapshot(HeldPlugins held, PluginAddress key, string reason) =>
@@ -594,14 +596,13 @@ public sealed class Indexer : IQueryIndex, IDisposable
 
     private void RecordFailedRead(IRecordIndex index, PluginAddress key, string path)
     {
-        var state = ReadStateOf(index, key, path, head: null);
+        var state = ReadStateOf(index, key, path);
         lock (_lock) _failedReads[key] = state;
     }
 
     // Null, which vouches for nothing, when what the plugin reads from cannot be read: an untracked
-    // binary, or what git names. A tree is asked against the HEAD the failure saw, so a commit since
-    // is a change.
-    private FailedRead? ReadStateOf(IRecordIndex index, PluginAddress key, string path, string? head)
+    // binary, or a tree with an unreadable document.
+    private FailedRead? ReadStateOf(IRecordIndex index, PluginAddress key, string path)
     {
         var binary = index.FileContentHash(path);
         if (LoadOrderSnapshot.ModFolderOf(key.Origin, path) is not { } modFolder
@@ -610,9 +611,15 @@ public sealed class Indexer : IQueryIndex, IDisposable
             return binary is null ? null : new FailedRead(binary, null);
         }
 
-        var repository = SourceRepository.Over(modFolder, _gameRelease);
-        if ((head ?? repository.ChangesSince(key, null).Head) is not { } since) return null;
-        return repository.ChangesSince(key, since) is { Named: not null } tree ? new FailedRead(binary, tree) : null;
+        try
+        {
+            var stamps = SourceRepository.Over(modFolder, _gameRelease).StampsOf(key);
+            return stamps.Unreadable.Count == 0 ? new FailedRead(binary, stamps.ByFormKey) : null;
+        }
+        catch (AmbiguousSourceUnitException ex)
+        {
+            return new FailedRead(binary, null, ex.Message);
+        }
     }
 
     // ADR-0010: a plugin the store has seen, still matching the disk, is registered, not
