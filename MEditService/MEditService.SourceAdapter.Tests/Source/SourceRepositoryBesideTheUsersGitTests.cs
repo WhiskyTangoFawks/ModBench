@@ -46,11 +46,12 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
         var usersLock = IndexOf(modFolder) + ".lock";
         File.WriteAllText(usersLock, "");
 
-        SourceRepository.ParkCompileSnapshot(modFolder, Plugin, binarySha256: "DEADBEEF");
-
-        var parked = GitProbe.Run(
-            Path.Combine(modFolder, ".git"), modFolder, "cat-file", "-p",
-            $"{SourceRepository.LastCompileRef(Plugin)}:{Document}");
+        string? parked = null;
+        SourceRepository.Over(modFolder, GameRelease.Fallout4).WriteBinary(
+            new PluginAddress(Plugin, "TestMod"), "DEADBEEF",
+            () => parked = GitProbe.Run(
+                Path.Combine(modFolder, ".git"), modFolder, "cat-file", "-p",
+                $"{LastWriteRecord.RefOfTheOnlyPlugin(modFolder)}:{Document}"));
         Assert.Equal("{\"a\":2}", parked);
         Assert.True(File.Exists(usersLock), "the user's own lock is theirs to release");
     }

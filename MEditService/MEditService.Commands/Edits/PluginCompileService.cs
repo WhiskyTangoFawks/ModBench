@@ -112,9 +112,7 @@ public sealed class PluginCompileService(
         }
         using (save)
         {
-            SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, save.BinarySha256());
-            save.Commit();
-            SourceRepository.NarrowCompileSnapshot(modFolder, plugin.Name);
+            repository.WriteBinary(plugin, save.BinarySha256(), save.Commit);
         }
 
         if (logger.IsEnabled(LogLevel.Information))
