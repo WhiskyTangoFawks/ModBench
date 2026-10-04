@@ -328,9 +328,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // --- Working-tree changes ---
 
-    /// <summary>The Indexer's landing of re-derived documents: one transaction for the batch, so a
-    /// throw partway cannot leave the rows half-projected. A null body is the document gone. Returns
-    /// every key whose rows moved, embedded children included, for the caller to announce (ADR-0015).</summary>
+    // One transaction for the batch, so a throw partway leaves no row half-projected. A null body is
+    // the document gone. Returns every key whose rows moved, embedded children included.
     private List<string> ProjectDocuments(PluginAddress key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
         if (deltas.Count == 0) return [];

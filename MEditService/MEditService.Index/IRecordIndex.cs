@@ -68,8 +68,8 @@ internal interface IRecordIndex : IDisposable
     void UpdateWinners(IReadOnlyList<RegisteredPlugin> active);
 
     /// <summary>Sets each of <paramref name="key"/>'s rows to how the Source repository says its record
-    /// stands against the last commit (ADR-0007), and returns the keys of the rows that moved for the
-    /// caller to announce. A commit made outside Modbench clears them.</summary>
+    /// stands against the last commit (ADR-0007). Returns the keys that moved, for the caller to
+    /// announce.</summary>
     IReadOnlyList<string> LearnWorkingTreeStates(PluginAddress key, string modFolder);
 
     /// <summary>Materializes <paramref name="sql"/>'s matches and the records holding them (null
