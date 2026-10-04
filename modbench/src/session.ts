@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { MinimalRepository } from './plugins/pluginRowCommands';
 import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
 import type { LoadOrderSender, RecordFilter } from './client';
-import type { NameFilter } from './nameFilter';
+import type { NameFilter } from './drivingLib/nameFilter';
 import { say } from './editingTeardown';
 
 /** Records a disposable against its owner's teardown and hands it back. The Toolbox's one way

@@ -13,13 +13,14 @@ import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './edi
 import { createReferencedByView } from './editor/referencedByView';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
-import { createFocusedView, lastSelectedViewSelection } from './treeViews';
+import { lastSelectedViewSelection } from './treeViews';
+import { createFocusedView } from './drivingLib/focusedView';
 import { moveToTrash } from './trash';
 import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './medit/extendedFieldFiles';
 import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './editor';
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
-import { registerNameFilter } from './nameFilter';
+import { registerNameFilter } from './drivingLib/nameFilter';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
 import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText, type FocusedCellContext } from './editor/focusedCells';
 import { meditConfig } from './workspaceConfig';

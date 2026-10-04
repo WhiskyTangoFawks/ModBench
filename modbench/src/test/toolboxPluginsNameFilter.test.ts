@@ -9,7 +9,7 @@ import { FakeInstance } from './mo2/fakeInstance';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 import {
   filterBoxWindowMock, filterBoxCommandsMock, currentBoxOf, waitForMessage,
-} from './nameFilterViewHarness';
+} from '../drivingLib/test/nameFilterViewHarness';
 import type { InstanceValue } from '../instanceLoader/instance';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../instanceLoader/loadOrderSnapshot';
 

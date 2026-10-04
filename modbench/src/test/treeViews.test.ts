@@ -10,7 +10,8 @@ import {
 } from './vscodeMock';
 import {
   filterBoxWindowMock, filterBoxCommandsMock, commandInvoker, currentBoxOf, waitForMessage,
-} from './nameFilterViewHarness';
+} from '../drivingLib/test/nameFilterViewHarness';
+import { fakeView } from '../drivingLib/test/selectableViewDouble';
 
 const h = vi.hoisted(() => ({
   state: {
@@ -71,7 +72,7 @@ vi.mock('vscode', () => ({
 import { Instance } from '../instanceLoader/instance';
 import { ModListProvider, ModNode, SeparatorNode } from '../mods/ModListProvider';
 import {
-  createFocusedView, createModListView, lastSelectedViewSelection, nexusRowInLastSelectedView, registerDownloadsView, type DownloadsViewDeps,
+  createModListView, lastSelectedViewSelection, nexusRowInLastSelectedView, registerDownloadsView, type DownloadsViewDeps,
 } from '../treeViews';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
@@ -442,23 +443,6 @@ describe('the Downloads view tells its palette entries, which are handed no row,
   });
 });
 
-type SelectionChange = vscode.TreeViewSelectionChangeEvent<unknown>;
-function fakeView(): { selection: readonly unknown[]; select(rows: readonly unknown[]): void; onDidChangeSelection: vscode.Event<SelectionChange> } {
-  const listeners: ((e: SelectionChange) => void)[] = [];
-  const view = {
-    selection: [] as readonly unknown[],
-    select(rows: readonly unknown[]) {
-      view.selection = rows;
-      for (const listener of listeners) listener({ selection: rows });
-    },
-    onDidChangeSelection: (listener: (e: SelectionChange) => void) => {
-      listeners.push(listener);
-      return { dispose: () => undefined };
-    },
-  };
-  return view;
-}
-
 describe('view on Nexus from the palette: the row it opens and the view the palette offers it on', () => {
   const KEY = 'modbench.mod.nexusRowIn';
 
@@ -498,35 +482,6 @@ describe('a palette gesture two views offer: the selection of the view last sele
     expect([h.state.contextKeys.get(KEY), selection()]).toEqual(['modbench.modList', ['ModA', 'ModB']]);
     plugins.select(['First.esp']);
     expect([h.state.contextKeys.get(KEY), selection()]).toEqual(['modbench.pluginListTree', ['First.esp']]);
-  });
-});
-
-describe('the focused view', () => {
-  it('is none until a view is selected in or entered', () => {
-    expect(createFocusedView().id()).toBeUndefined();
-  });
-
-  it('is the followed view last selected in', () => {
-    const focused = createFocusedView();
-    const mods = fakeView();
-    const plugins = fakeView();
-    focused.follow('modbench.modList', mods);
-    focused.follow('modbench.pluginListTree', plugins);
-    mods.select(['ModA']);
-    expect(focused.id()).toBe('modbench.modList');
-    plugins.select(['First.esp']);
-    expect(focused.id()).toBe('modbench.pluginListTree');
-  });
-
-  it('is a surface outside the trees from the moment it is entered, until a tree is selected in again', () => {
-    const focused = createFocusedView();
-    const mods = fakeView();
-    focused.follow('modbench.modList', mods);
-    mods.select(['ModA']);
-    focused.enter('modbench.recordGrid');
-    expect(focused.id()).toBe('modbench.recordGrid');
-    mods.select(['ModB']);
-    expect(focused.id()).toBe('modbench.modList');
   });
 });
 

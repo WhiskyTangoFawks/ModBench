@@ -28,7 +28,7 @@ export const DRIVING_BOXES: Record<string, string[]> = {
   downloads: ['downloadsCommands', 'drivingLib', 'install', 'instanceLoader', 'ports'],
   plugins: ['client', 'drivingLib', 'instanceLoader', 'pluginsCommands', 'ports'],
   editor: ['client', 'ports', 'wire'],
-  drivingLib: ['instanceLoader'],
+  drivingLib: ['instanceLoader', 'ports'],
 };
 
 export const REFERENCING_BOXES: Record<string, string[]> = { ...DRIVEN_BOXES, ...CORE_BOXES, ...DRIVING_BOXES };

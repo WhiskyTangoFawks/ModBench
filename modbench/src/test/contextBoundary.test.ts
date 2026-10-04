@@ -271,13 +271,15 @@ describe('the Plugins view\'s failure prefix stays a decoration', () => {
   });
 });
 
-describe('composition-root modules import from neither context', () => {
-  it('the name filter imports from neither context', () => {
-    const imports = importsOf(read('nameFilter.ts'));
+describe('the driving lib\'s name filter imports from neither context', () => {
+  it('imports nothing but vscode', () => {
+    const imports = importsOf(read(join('drivingLib', 'nameFilter.ts')));
     expect(imports.filter((s) => s.includes('medit') || s.includes('mods') || s.includes('downloads'))).toEqual([]);
     expect(imports).toEqual(['vscode']);
   });
+});
 
+describe('composition-root modules import from neither context', () => {
   it('the editing teardown module imports from neither context', () => {
     const imports = importsOf(read('editingTeardown.ts'));
     expect(imports.filter((s) => s.includes('medit') || s.includes('mods') || s.includes('downloads'))).toEqual([]);
