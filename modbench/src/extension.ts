@@ -156,7 +156,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
   const recordViews = [
     { id: REFERENCED_BY_VIEW, view: referencedByTreeView },
-    ...(session.pluginsTreeView ? [{ id: 'modbench.pluginListTree', view: session.pluginsTreeView }] : []),
+    ...(session.plugins ? [{ id: 'modbench.pluginListTree', view: session.plugins.view }] : []),
   ];
   context.subscriptions.push(
     toolbox,
@@ -169,7 +169,7 @@ export function activate(context: vscode.ExtensionContext) {
     ...registerFilterCommands({
       scripts: filterScripts, client: meditClient, treeProvider,
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
-      showRecordFilter: (filter) => session.showRecordFilter?.(filter),
+      showRecordFilter: (filter) => session.plugins?.showRecordFilter(filter),
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
@@ -181,9 +181,9 @@ export function activate(context: vscode.ExtensionContext) {
         (disposable) => { context.subscriptions.push(disposable); return disposable; }, recordViews, 'modbench.record.selectionIn'),
       viewSelections: new Map(recordViews.map(({ id, view }) => [id, () => view.selection])),
       recordMarks: {
-        deleting: (records, editorIds) => session.pluginsTree?.recordMarks.deleting(records, editorIds) ?? UNMARKED,
+        deleting: (records, editorIds) => session.plugins?.tree.recordMarks.deleting(records, editorIds) ?? UNMARKED,
         copying: (items, mode, replacing, editorIds) =>
-          session.pluginsTree?.recordMarks.copying(items, mode, replacing, editorIds) ?? UNMARKED,
+          session.plugins?.tree.recordMarks.copying(items, mode, replacing, editorIds) ?? UNMARKED,
       },
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
@@ -197,7 +197,7 @@ export function activate(context: vscode.ExtensionContext) {
       setStatusText: (t) => { statusBarItem.text = t; },
       abandonReconcile: () => session.loadOrderSender?.abandon(),
       refreshTree: () => { void refreshMatchingPlugins(session); },
-      setUnreachable: (reason) => session.pluginsTree?.applyBackendUnreachable(reason),
+      setUnreachable: (reason) => session.plugins?.tree.applyBackendUnreachable(reason),
     }),
   });
 
@@ -210,7 +210,7 @@ export function activate(context: vscode.ExtensionContext) {
     folder: toolbox.folder, instanceRead: toolbox.instanceRead,
     modListProvider: toolbox.modListProvider, downloadsProvider: toolbox.downloadsProvider,
     pluginsTree: toolbox.pluginsTree,
-    pluginListView: session.pluginsTreeView,
+    pluginListView: session.plugins?.view,
     outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session, meditClient),
     client: meditClient, instance: toolbox.instance,
     // The record tab in focus reporting its focused cell, as its webview's `focusCell` does.
@@ -248,17 +248,17 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
       reporter: makeReporter(outputChannel, 'plugin.decompile'),
       ask: askQuestion,
-    }, () => session.pluginsTreeView?.selection ?? []),
-    registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),
+    }, () => session.plugins?.view.selection ?? []),
+    registerCompileCommand(compileDeps(deps), () => session.plugins?.view.selection ?? []),
     registerRecordCreateCommand({
       client, reporter: makeReporter(outputChannel, 'record.create'),
-      marks: { creating: (row) => session.pluginsTree?.recordMarks.creating(row) ?? UNMARKED },
+      marks: { creating: (row) => session.plugins?.tree.recordMarks.creating(row) ?? UNMARKED },
       createdRecords: createdRecordSelection({
         client, reporter: makeReporter(outputChannel, 'record.create'),
-        rowOf: (group, formKey) => session.pluginsTree?.recordRow(group, formKey) ?? Promise.resolve(undefined),
-        view: { reveal: (row, options) => session.pluginsTreeView?.reveal(row, options) ?? Promise.resolve() },
+        rowOf: (group, formKey) => session.plugins?.tree.recordRow(group, formKey) ?? Promise.resolve(undefined),
+        view: { reveal: (row, options) => session.plugins?.view.reveal(row, options) ?? Promise.resolve() },
       }),
-    }, () => session.pluginsTreeView?.selection ?? []),
+    }, () => session.plugins?.view.selection ?? []),
   ];
 }
 

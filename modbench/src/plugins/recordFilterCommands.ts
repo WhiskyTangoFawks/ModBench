@@ -21,8 +21,6 @@ export interface FilterCommandDeps {
   /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
    *  hidden (plugins.md). */
   refreshMatchingPlugins: () => void;
-  /** The record filter's single writer — the context key, the code lens, and the view's
-   *  description and message. */
   showRecordFilter: (filter: RecordFilter | null) => void;
   reporter: Reporter;
 }

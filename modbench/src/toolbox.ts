@@ -151,7 +151,7 @@ interface ReconcileNarrationDeps {
   session: ExtensionSession;
   client: ToolboxClient;
   /** The record browser a reconciled load order refreshes — a different provider from
-   *  `session.pluginsTree`, which `applyLoadOrderToTree` below owns. */
+   *  `session.plugins`' tree, which `applyLoadOrderToTree` below owns. */
   recordBrowser: PluginTreeProvider;
   outputChannel: vscode.LogOutputChannel;
   setStatusText: (text: string) => void;
@@ -166,7 +166,7 @@ function applySyncedFilterState(
   return syncActiveFilter(() => client.getActiveFilter(), {
     log: (m) => outputChannel.info(`[toolbox] ${m}`),
     warn: (m) => reporter.report('warning', m),
-    showRecordFilter: (filter) => session.showRecordFilter?.(filter),
+    showRecordFilter: (filter) => session.plugins?.showRecordFilter(filter),
   });
 }
 
@@ -177,8 +177,8 @@ function narrateReconciles(own: Own, deps: ReconcileNarrationDeps): ReconcileNar
   const { session, client, recordBrowser, outputChannel, setStatusText, notifyConflictsComputed, reporter } = deps;
   const narrator = createReconcileNarrator({
     showProgress: (until) => void withPluginsViewProgress(session, () => until),
-    applyIndexed: (indexedPlugins, failures) => session.pluginsTree?.applyIndexed(indexedPlugins, failures),
-    applyRefused: (refusal) => session.pluginsTree?.applyRefused(refusal),
+    applyIndexed: (indexedPlugins, failures) => session.plugins?.tree.applyIndexed(indexedPlugins, failures),
+    applyRefused: (refusal) => session.plugins?.tree.applyRefused(refusal),
     setStatusText,
     settle: (status) => settleReconciled(status, {
       log: (m) => outputChannel.info(`[toolbox] ${m}`),
@@ -229,7 +229,7 @@ async function applyLoadOrderToTree(
   // healthy reconcile would read as short.
   totalPlugins: number,
 ): Promise<void> {
-  const held = await session.pluginsTree?.applyReconciled(failures);
+  const held = await session.plugins?.tree.applyReconciled(failures);
   if (held === undefined) {
     // Leaving every row a leaf is a safe *render* but not an honest one: the reconcile did land,
     // so the tree would claim editing is unavailable with nothing on screen to say why (ADR-0019).
@@ -377,10 +377,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     log: (level, msg) => outputChannel[level](msg),
   }));
   const { tree: pluginsTree, view: pluginListView, nameFilter: pluginsFilter } = plugins;
-  session.pluginsTree = pluginsTree;
-  session.pluginsTreeView = pluginListView; // progress and message live here
-  session.pluginsNameFilter = pluginsFilter;
-  session.showRecordFilter = plugins.showRecordFilter;
+  session.plugins = plugins;
   const runModSync = modSyncOver(access);
   const modSync = own(registerModSync(instance, runModSync, outputChannel));
   const { modListView, modListFilter } = createModListView(

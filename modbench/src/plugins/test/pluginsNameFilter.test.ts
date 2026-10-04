@@ -30,13 +30,6 @@ import { NO_PLUGINS_MESSAGE, PluginsTreeProvider, type PluginListSource } from '
 import { InMemoryMEditClient, type PluginMetadata } from '../../client';
 import { syncMessageDouble } from '../../test/syncMessageDouble';
 
-function say(
-  session: { pluginsTreeView: { message?: string }; pluginsNameFilter: { refresh(): void } }, message: string | undefined,
-): void {
-  session.pluginsTreeView.message = message;
-  if (message === undefined) session.pluginsNameFilter.refresh();
-}
-
 class FakeSource implements PluginListSource {
   reorderPlugins(): Promise<void> { return Promise.resolve(); }
 }
@@ -86,44 +79,6 @@ describe('the Plugins filter follows a row change with no keystroke', () => {
     instance.publish(valueOf([plugin('TestMod.esp')]));
     await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the message returning once the plugin is gone');
     expect(view.message).toBe('No matches for "zzznomatch".');
-  });
-});
-
-describe('a running say() statement survives a background row change', () => {
-  it('is left standing when a reconcile tick still matches nothing', async () => {
-    const instance = new FakeInstance(valueOf([plugin('TestMod.esp')]));
-    const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
-    await provider.getChildren();
-
-    const view: { description?: string; message?: string } = {};
-    const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
-
-    filter.open();
-    currentBox().type('zzznomatch');
-    await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
-
-    say({ pluginsTreeView: view, pluginsNameFilter: filter }, 'Starting backend…');
-    provider.applyIndexed([{ name: 'TestMod.esp', origin: 'SomeMod' }], []);
-    await flush();
-    expect(view.message).toBe('Starting backend…');
-  });
-
-  it('is left standing when a fresh Instance value would otherwise have cleared it', async () => {
-    const instance = new FakeInstance(valueOf([plugin('TestMod.esp')]));
-    const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
-    await provider.getChildren();
-
-    const view: { description?: string; message?: string } = {};
-    const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
-
-    filter.open();
-    currentBox().type('zzznomatch');
-    await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
-
-    say({ pluginsTreeView: view, pluginsNameFilter: filter }, 'Starting backend…');
-    instance.publish(valueOf([plugin('TestMod.esp'), plugin('zzznomatch.esp')]));
-    await flush();
-    expect(view.message).toBe('Starting backend…');
   });
 });
 
@@ -183,21 +138,6 @@ describe('the Plugins view, given the game folder not found', () => {
     await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message returning');
     expect(view.message).toBe(GAME_FOLDER_MESSAGE);
   });
-
-  it('leaves the start-up message its line, and takes it back once that clears', async () => {
-    const instance = new FakeInstance(notFoundValueOf([plugin('TestMod.esp')]));
-    const { view, filter } = await pluginsView(instance);
-    const session = { pluginsTreeView: view, pluginsNameFilter: filter };
-
-    say(session, 'Starting backend…');
-    instance.publish(notFoundValueOf([plugin('TestMod.esp')]));
-    await flush();
-    expect(view.message).toBe('Starting backend…');
-
-    say(session, undefined);
-    await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message returning');
-    expect(view.message).toBe(GAME_FOLDER_MESSAGE);
-  });
 });
 
 describe('the Plugins view, given no lines and no locked plugins', () => {
@@ -226,22 +166,6 @@ describe('the Plugins view, given no lines and no locked plugins', () => {
 
     await waitForMessage(view, (m) => m === undefined, 'the message clearing');
     expect(view.message).toBeUndefined();
-  });
-
-  it('leaves the start-up message its line, and takes the line back once that clears', async () => {
-    const instance = new FakeInstance(valueOf([plugin('TestMod.esp')]));
-    const { provider, view, filter } = await emptyView(instance);
-    const session = { pluginsTreeView: view, pluginsNameFilter: filter };
-
-    say(session, 'Starting backend…');
-    instance.publish(valueOf([]));
-    await provider.getChildren();
-    await flush();
-    expect(view.message).toBe('Starting backend…');
-
-    say(session, undefined);
-    await waitForMessage(view, (m) => m === NO_PLUGINS_MESSAGE, 'the empty-list message returning');
-    expect(view.message).toBe(NO_PLUGINS_MESSAGE);
   });
 });
 

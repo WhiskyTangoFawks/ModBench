@@ -73,7 +73,7 @@ beforeEach(() => {
   h.views.length = 0;
 });
 
-describe('the Plugins view, built by its own entry', () => {
+describe('the Plugins view follows mEdit\'s pushes and shows the record filter', () => {
   it('re-reads the record browser and the plugin facts on mEdit\'s changed rows', () => {
     const { client, recordBrowser, plugins } = pluginsView();
     const refresh = vi.spyOn(recordBrowser, 'refresh');

@@ -38,7 +38,6 @@ export interface PluginsView extends vscode.Disposable {
   tree: PluginsTreeProvider;
   view: vscode.TreeView<PluginsTreeNode>;
   nameFilter: NameFilter;
-  /** The record filter's single writer. */
   showRecordFilter: (filter: RecordFilter | null) => void;
 }
 
