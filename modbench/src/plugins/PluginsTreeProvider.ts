@@ -3,7 +3,7 @@ import type {
   PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress,
   NotificationEvent,
 } from '../client';
-import { lastGoodReadMessage, type InstanceValue, type InstanceView, type PluginEntry } from '../instanceLoader/instance';
+import { lastGoodReadMessage, type Instance, type InstanceValue, type InstanceView, type PluginEntry } from '../instanceLoader/instance';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
@@ -15,38 +15,18 @@ import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginConditions, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { pluginAddressKey } from './trackedRepositories';
-import { isRecordRow } from './gestureEntry';
+import { isRecordRow, PLUGINS_KEY_ARGS } from './gestureEntry';
+import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { RecordGroup } from './createdRecordSelection';
 import {
-  MARK_DELAY_MS, UNCONFIRMED_TOOLTIP, UnconfirmedRecordRows, type MarkedRow,
+  UNCONFIRMED_TOOLTIP, UnconfirmedRecordRows, type MarkedRow,
 } from './unconfirmedRecordRows';
 import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
+export type PluginsInstance = InstanceView & Pick<Instance, 'refresh'>;
+
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
-
-function whatTheDiskShows(shown: boolean | undefined, on: string, off: string): string {
-  if (shown === undefined) return 'it is gone from the disk';
-  return `the disk now shows it ${shown ? on : off}`;
-}
-
-interface UnconfirmedWrite {
-  readonly name: string;
-  readonly enabled: boolean;
-  marked: boolean;
-  differedOnce: boolean;
-  readonly timer: ReturnType<typeof setTimeout>;
-}
-
-interface UnconfirmedShape {
-  readonly moved: PluginAddress[];
-  readonly covered: (value: InstanceValue) => boolean;
-  marked: boolean;
-  differedOnce: boolean;
-  readonly timer: ReturnType<typeof setTimeout>;
-}
-
-const sameAddress = (a: PluginAddress, b: PluginAddress): boolean => a.name === b.name && a.origin === b.origin;
 
 // One entry per plugins.txt line: the winning plugin of every listed name, in file order
 // (plugins.md, The tree, stories 1 and 3). An overridden plugin carries the same slot and is
@@ -56,8 +36,6 @@ function listedPlugins(value: InstanceValue): (InstanceValue['plugins'][number] 
     .filter((p): p is InstanceValue['plugins'][number] & { slot: number } => p.slot !== null && p.winning)
     .sort((a, b) => a.slot - b.slot);
 }
-
-const orderOf = (value: InstanceValue): string[] => listedPlugins(value).map((p) => pluginAddressKey(p.name, p.origin));
 
 // `DataTransferItem.value` is `any` — handleDrag, above `handleDrop` below, is this provider's
 // only writer of it. Exported so a test narrows the same payload the same way, instead of a
@@ -111,7 +89,7 @@ export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 't
 
 export interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin: the row input. */
-  instance: InstanceView;
+  instance: PluginsInstance;
   source: PluginListSource;
   /** A row's children. Absent in tests that exercise rows alone. */
   records?: RecordBrowser;
@@ -321,14 +299,12 @@ export class PluginsTreeProvider
   private readonly log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly dataFolderFile: (name: string) => string | undefined;
-  private readonly instance: InstanceView;
+  private readonly instance: PluginsInstance;
   private readonly records?: RecordBrowser;
   private readonly client?: PluginFactsClient;
   private readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
   private readonly publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
   private instanceValue: InstanceValue;
-  private readonly unconfirmed = new Map<string, UnconfirmedWrite>();
-  private readonly unconfirmedShapes = new Set<UnconfirmedShape>();
   private readonly unconfirmedRecords: UnconfirmedRecordRows;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
@@ -359,7 +335,6 @@ export class PluginsTreeProvider
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
     this.subscriptions.push(this.firstRead, options.instance.subscribe((value) => {
-      this.settleUnconfirmed(value);
       this.instanceValue = value;
       this.invalidate();
     }), options.instance.onReadFailure(() => this.render()));
@@ -394,111 +369,9 @@ export class PluginsTreeProvider
   }
 
   dispose(): void {
-    this.clearUnconfirmed();
     this.unconfirmedRecords.dispose();
     for (const subscription of this.subscriptions) subscription.dispose();
     this._onDidChangeTreeData.dispose();
-  }
-
-  private settleUnconfirmed(value: InstanceValue): void {
-    for (const [address, write] of this.unconfirmed) {
-      const disk = value.plugins.find((p) => p.winning && pluginAddressKey(p.name, p.origin) === address);
-      if (disk?.enabled !== write.enabled) {
-        if (!write.differedOnce) {
-          write.differedOnce = true;
-          continue;
-        }
-        this.log('warn', `[PluginsTreeProvider] "${write.name}" was written ${write.enabled ? 'enabled' : 'disabled'}, and ${whatTheDiskShows(disk?.enabled, 'enabled', 'disabled')}.`);
-      }
-      clearTimeout(write.timer);
-      this.unconfirmed.delete(address);
-    }
-    this.settleUnconfirmedShapes(value);
-  }
-
-  private settleUnconfirmedShapes(value: InstanceValue): void {
-    for (const shape of this.unconfirmedShapes) {
-      if (!shape.covered(value)) {
-        if (!shape.differedOnce) {
-          shape.differedOnce = true;
-          continue;
-        }
-        this.log('warn', `[PluginsTreeProvider] ${shape.moved.map(({ name }) => `"${name}"`).join(', ')} was moved, and the disk does not show the move.`);
-      }
-      this.dropShape(shape);
-    }
-  }
-
-  private dropShape(shape: UnconfirmedShape): void {
-    clearTimeout(shape.timer);
-    this.unconfirmedShapes.delete(shape);
-  }
-
-  private markMoved(moved: readonly PluginAddress[]): void {
-    if (moved.length === 0) return;
-    const movedKeys = new Set(moved.map(({ name, origin }) => pluginAddressKey(name, origin)));
-    const rest = (value: InstanceValue) => orderOf(value).filter((key) => !movedKeys.has(key)).join('\n');
-    const before = orderOf(this.instanceValue).join('\n');
-    const restBefore = rest(this.instanceValue);
-    const shape: UnconfirmedShape = {
-      moved: [...moved], covered: (value) => orderOf(value).join('\n') !== before && rest(value) === restBefore, marked: false, differedOnce: false,
-      timer: setTimeout(() => {
-        shape.marked = true;
-        this.render();
-      }, MARK_DELAY_MS),
-    };
-    this.unconfirmedShapes.add(shape);
-  }
-
-  private forgetMoved(moved: readonly PluginAddress[]): void {
-    let shown = false;
-    for (const shape of this.unconfirmedShapes) {
-      const left = shape.moved.filter((own) => !moved.some((forgotten) => sameAddress(forgotten, own)));
-      shown ||= shape.marked && left.length < shape.moved.length;
-      shape.moved.splice(0, shape.moved.length, ...left);
-      if (left.length === 0) this.dropShape(shape);
-    }
-    if (shown) this.render();
-  }
-
-  private isMarked(address: PluginAddress): boolean {
-    return this.unconfirmed.get(pluginAddressKey(address.name, address.origin))?.marked === true || this.shapeMarked(address)
-      || this.unconfirmedRecords.isMarked({ plugin: address });
-  }
-
-  private shapeMarked(address: PluginAddress): boolean {
-    return [...this.unconfirmedShapes].some((shape) => shape.marked && shape.moved.some((row) => sameAddress(row, address)));
-  }
-
-  /** A check box's new state shows at once; the mark follows after a delay. */
-  markUnconfirmed(row: PluginNode, enabled: boolean): void {
-    const address = pluginAddressKey(row.plugin.name, row.origin);
-    clearTimeout(this.unconfirmed.get(address)?.timer);
-    const write: UnconfirmedWrite = {
-      name: row.plugin.name, enabled, marked: false, differedOnce: false,
-      timer: setTimeout(() => {
-        write.marked = true;
-        this.render();
-      }, MARK_DELAY_MS),
-    };
-    this.unconfirmed.set(address, write);
-    this.cache = undefined;
-    this.render();
-  }
-
-  /** A refused or failed write shows the disk's value at once, with no mark. */
-  forgetUnconfirmed(row: PluginNode): void {
-    const address = pluginAddressKey(row.plugin.name, row.origin);
-    clearTimeout(this.unconfirmed.get(address)?.timer);
-    this.unconfirmed.delete(address);
-    this.invalidate();
-  }
-
-  private clearUnconfirmed(): void {
-    for (const write of this.unconfirmed.values()) clearTimeout(write.timer);
-    this.unconfirmed.clear();
-    for (const shape of this.unconfirmedShapes) clearTimeout(shape.timer);
-    this.unconfirmedShapes.clear();
   }
 
   // ── rows ──────────────────────────────────────────────────────────────────
@@ -573,8 +446,6 @@ export class PluginsTreeProvider
   /** Whether the row's line is enabled now: a row the view still holds may predate the value. */
   isEnabled(row: PluginNode): boolean {
     const address = pluginAddressKey(row.plugin.name, row.origin);
-    const written = this.unconfirmed.get(address);
-    if (written !== undefined) return written.enabled;
     return this.instanceValue.plugins.some((p) => p.winning && p.enabled && pluginAddressKey(p.name, p.origin) === address);
   }
 
@@ -686,7 +557,7 @@ export class PluginsTreeProvider
     return [
       ...lockedRows,
       ...dedupedOrder.map((p) => new PluginNode({
-        name: p.name, enabled: this.unconfirmed.get(pluginAddressKey(p.name, p.origin))?.enabled ?? p.enabled,
+        name: p.name, enabled: p.enabled,
       }, p.origin)),
     ];
   }
@@ -752,7 +623,7 @@ export class PluginsTreeProvider
     if (this.facts?.get(file, row.origin)?.readOnly === true) lines.push('read-only');
     for (const status of statuses) lines.push(status.tooltipLine);
     row.tooltip = lines.join('\n');
-    if (this.isMarked({ name: file, origin: row.origin })) {
+    if (this.unconfirmedRecords.isMarked({ plugin: { name: file, origin: row.origin } })) {
       row.iconPath = new vscode.ThemeIcon('sync~spin');
       row.tooltip = UNCONFIRMED_TOOLTIP;
     }
@@ -1001,10 +872,8 @@ export class PluginsTreeProvider
         this.reporter?.report('error', 'Could not move plugins.', refusal);
         return;
       }
-      this.markMoved(moved);
-      await this.source.reorderPlugins(names, drop);
+      await runWritingGesture(PLUGINS_KEY_ARGS.view, this.instance, () => this.source.reorderPlugins(names, drop));
     } catch (e) {
-      this.forgetMoved(moved);
       this.log('info', `[PluginsTreeProvider] reorderPlugins failed: ${errorMessage(e)}`);
       this.reporter?.report('error', 'Failed to move plugins.', errorMessage(e));
     }

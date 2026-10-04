@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { setPluginsParticipation } = vi.hoisted(() => ({ setPluginsParticipation: vi.fn() }));
 
@@ -12,27 +12,29 @@ import {
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
-vi.mock('vscode', () => ({
-  ...fakeVscodeModule(),
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFile, from: uriFrom },
-}));
+vi.mock('vscode', async () => {
+  const { recordedWithProgress } = await import('../../test/recordedProgress');
+  return {
+    ...fakeVscodeModule(),
+    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
+    Uri: { file: uriFile, from: uriFrom },
+    window: { withProgress: recordedWithProgress },
+  };
+});
 
 import { onPluginCheckboxChanged } from '../pluginCheckboxHandler';
-import { PluginNode, PluginsTreeProvider } from '../PluginsTreeProvider';
+import { PluginNode } from '../PluginsTreeProvider';
 import { RecordNode } from '../PluginTreeProvider';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { recordSummaryFixture } from '../../client/test/fixtures';
-import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { accessTo } from '../../test/mo2/adapterOver';
+import { progressSteps } from '../../test/recordedProgress';
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
 
 const profile = () => 'Default';
 const access = accessTo('/instance');
-const marks = { markUnconfirmed: vi.fn(), forgetUnconfirmed: vi.fn() };
+const instance = { refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); } };
 
 describe('onPluginCheckboxChanged', () => {
   it('enables the plugin and says nothing on a full landing', async () => {
@@ -41,7 +43,7 @@ describe('onPluginCheckboxChanged', () => {
 
     await onPluginCheckboxChanged(
       { items: [[new PluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod'), 1]] },
-      access, profile, reporter, marks,
+      access, profile, reporter, instance,
     );
 
     expect(setPluginsParticipation).toHaveBeenCalledWith(access, 'Default', [{ name: 'TestMod.esp', enabled: true }]);
@@ -59,7 +61,7 @@ describe('onPluginCheckboxChanged', () => {
           [new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'), 1],
         ],
       },
-      access, profile, reporter, marks,
+      access, profile, reporter, instance,
     );
 
     expect(setPluginsParticipation).toHaveBeenCalledOnce();
@@ -79,7 +81,7 @@ describe('onPluginCheckboxChanged', () => {
           [new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'), 0],
         ],
       },
-      access, profile, reporter, marks,
+      access, profile, reporter, instance,
     );
 
     expect(setPluginsParticipation).toHaveBeenCalledOnce();
@@ -94,7 +96,7 @@ describe('onPluginCheckboxChanged', () => {
 
     await onPluginCheckboxChanged(
       { items: [[new PluginNode({ name: 'TestMod.esp', enabled: false }, 'SomeMod'), 0]] },
-      access, profile, reporter, marks,
+      access, profile, reporter, instance,
     );
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to disable plugins.', detail: 'disk full' }]);
@@ -111,7 +113,7 @@ describe('onPluginCheckboxChanged', () => {
           [new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'), 0],
         ],
       },
-      access, profile, reporter, marks,
+      access, profile, reporter, instance,
     );
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to update plugins.', detail: 'disk full' }]);
@@ -131,7 +133,7 @@ describe('onPluginCheckboxChanged', () => {
           [new PluginNode({ name: 'B.esp', enabled: false }, 'SomeMod'), 1],
         ],
       },
-      access, profile, reporter, marks,
+      access, profile, reporter, instance,
     );
 
     expect(reporter.reports).toEqual([
@@ -142,99 +144,47 @@ describe('onPluginCheckboxChanged', () => {
   it('ignores a non-plugin row (a record-tree row sharing the merged view)', async () => {
     const recordNode = new RecordNode(recordSummaryFixture(), 'Data');
 
-    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, access, profile, recordingReporter(), marks);
+    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, access, profile, recordingReporter(), instance);
 
     expect(setPluginsParticipation).not.toHaveBeenCalled();
   });
 });
 
-describe('the check box and the unconfirmed marks', () => {
-  beforeEach(() => { marks.markUnconfirmed.mockClear(); marks.forgetUnconfirmed.mockClear(); });
+describe('a check box ends when the read lands (common.md, A gesture that writes)', () => {
+  const a = new PluginNode({ name: 'A.esp', enabled: false }, 'ModOne');
 
-  it('marks each toggled row by its (origin, filename) before the write, and keeps the marks when it lands', async () => {
+  it('shows the progress bar from the click until the read after the write lands', async () => {
     setPluginsParticipation.mockImplementation(() => {
-      expect(marks.markUnconfirmed).toHaveBeenCalledTimes(2);
-      return Promise.resolve({ applied: true, outcome: { landed: ['A.esp', 'B.esp'], refused: [] } });
+      progressSteps.push('write plugins.txt');
+      return Promise.resolve({ applied: true, outcome: { landed: ['A.esp'], refused: [] } });
     });
-    const a = new PluginNode({ name: 'A.esp', enabled: false }, 'ModOne');
-    const b = new PluginNode({ name: 'B.esp', enabled: true }, 'ModTwo');
 
-    await onPluginCheckboxChanged({ items: [[a, 1], [b, 0]] }, access, profile, recordingReporter(), marks);
+    await onPluginCheckboxChanged({ items: [[a, 1]] }, access, profile, recordingReporter(), instance);
 
-    expect(marks.markUnconfirmed.mock.calls).toEqual([[a, true], [b, false]]);
-    expect(marks.forgetUnconfirmed).not.toHaveBeenCalled();
+    expect(progressSteps).toEqual([
+      'progress opens on modbench.pluginListTree',
+      'write plugins.txt',
+      'Instance loader: read every file again',
+      'progress closes',
+    ]);
   });
 
-  it('forgets every mark when the whole toggle is refused', async () => {
+  it('still ends on the read when the write is refused', async () => {
     setPluginsParticipation.mockResolvedValue({ applied: false, refusal: 'disk full' });
-    const a = new PluginNode({ name: 'A.esp', enabled: false }, 'ModOne');
 
-    await onPluginCheckboxChanged({ items: [[a, 1]] }, access, profile, recordingReporter(), marks);
+    await onPluginCheckboxChanged({ items: [[a, 1]] }, access, profile, recordingReporter(), instance);
 
-    expect(marks.forgetUnconfirmed.mock.calls).toEqual([[a]]);
+    expect(progressSteps).toEqual([
+      'progress opens on modbench.pluginListTree',
+      'Instance loader: read every file again',
+      'progress closes',
+    ]);
   });
 
-  it('forgets the mark of a refused row alone', async () => {
-    setPluginsParticipation.mockResolvedValue({
-      applied: true, outcome: { landed: ['A.esp'], refused: [{ item: 'B.esp', reason: 'gone' }] },
-    });
-    const a = new PluginNode({ name: 'A.esp', enabled: false }, 'ModOne');
-    const b = new PluginNode({ name: 'B.esp', enabled: false }, 'ModOne');
-
-    await onPluginCheckboxChanged({ items: [[a, 1], [b, 1]] }, access, profile, recordingReporter(), marks);
-
-    expect(marks.forgetUnconfirmed.mock.calls).toEqual([[b]]);
-  });
-
-  it('marks no record row', async () => {
+  it('opens no progress for a record row', async () => {
     await onPluginCheckboxChanged(
-      { items: [[new RecordNode(recordSummaryFixture(), 'Data'), 1]] }, access, profile, recordingReporter(), marks);
+      { items: [[new RecordNode(recordSummaryFixture(), 'Data'), 1]] }, access, profile, recordingReporter(), instance);
 
-    expect(marks.markUnconfirmed).not.toHaveBeenCalled();
-  });
-});
-
-describe('a check-box enable and the Plugins rows', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); });
-
-  const valueWith = (enabled: boolean) => instanceValueFixture({
-    plugins: [{ name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'SomeMod', slot: 0, enabled, winning: true }],
-  });
-
-  async function firstRow(tree: PluginsTreeProvider) {
-    const [row] = await tree.getChildren();
-    return expectInstanceOf(row, PluginNode);
-  }
-
-  it('shows the written state at once and the disk\'s once its value lands', async () => {
-    setPluginsParticipation.mockResolvedValue({ applied: true, outcome: { landed: ['TestMod.esp'], refused: [] } });
-    const instance = new FakeInstance(valueWith(false));
-    const tree = new PluginsTreeProvider({ instance, source: { reorderPlugins: () => Promise.resolve() } });
-    const row = await firstRow(tree);
-
-    await onPluginCheckboxChanged({ items: [[row, TreeItemCheckboxState.Checked]] }, access, profile, recordingReporter(), tree);
-
-    expect((await firstRow(tree)).checkboxState).toBe(TreeItemCheckboxState.Checked);
-
-    instance.publish(valueWith(true));
-
-    expect((await firstRow(tree)).checkboxState).toBe(TreeItemCheckboxState.Checked);
-    vi.advanceTimersByTime(1000);
-    expect(tree.getTreeItem(await firstRow(tree)).iconPath).toBeUndefined();
-  });
-
-  it('a refused write shows the disk\'s state at once, with no mark', async () => {
-    setPluginsParticipation.mockResolvedValue({ applied: false, refusal: 'disk full' });
-    const instance = new FakeInstance(valueWith(false));
-    const tree = new PluginsTreeProvider({ instance, source: { reorderPlugins: () => Promise.resolve() } });
-    const row = await firstRow(tree);
-
-    await onPluginCheckboxChanged({ items: [[row, TreeItemCheckboxState.Checked]] }, access, profile, recordingReporter(), tree);
-    vi.advanceTimersByTime(1000);
-
-    const shown = await firstRow(tree);
-    expect(shown.checkboxState).toBe(TreeItemCheckboxState.Unchecked);
-    expect(tree.getTreeItem(shown).tooltip).not.toBe('Written; waiting for the disk to confirm');
+    expect(progressSteps).toEqual([]);
   });
 });
