@@ -931,8 +931,12 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
   it('VS Code\'s own Space on a focused mod row leaves its check box alone', async function () {
     if (!root) this.skip();
     await enabledAndSelected();
-    const mods = present(ext?.exports.modListProvider, "the activated extension's modListProvider export");
-    assert.strictEqual(await checkBoxTogglesMarkedByTheNextTurn(mods, 'list.toggleExpand'), 0);
+    const before = fs.readFileSync(modlistPath, 'utf8');
+
+    await vscode.commands.executeCommand('list.toggleExpand');
+    await new Promise((window) => setTimeout(window, 500));
+
+    assert.strictEqual(fs.readFileSync(modlistPath, 'utf8'), before);
   });
 
   it('copies the selection of the view last selected in when Copy Value is run from the palette', async function () {
