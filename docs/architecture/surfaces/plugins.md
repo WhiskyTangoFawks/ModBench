@@ -120,7 +120,7 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · create record… · track… (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy value |
+| Plugin menu | reveal · enable or disable · create record… · track (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open to the side · create record… (on a container record) · copy… · copy value · delete |
