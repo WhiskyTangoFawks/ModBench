@@ -9,7 +9,7 @@ public record RecordSummary(
     string? EditorId,
     string Origin,
     // Defaults to None (test fixtures, GetOverrideStack's own unrelated read paths) — Search() is
-    // the only real producer of a non-None value; see DuckDbRecordIndex.Search.
+    // the only real producer of a non-None value; see RelationReads.Search.
     WorkingTreeState WorkingTreeState = WorkingTreeState.None,
     // Whether at least one container_child row names this FormKey as parent — the Plugins tree's
     // expand chevron for a qust/dial row. Search() is the only producer of true; every
