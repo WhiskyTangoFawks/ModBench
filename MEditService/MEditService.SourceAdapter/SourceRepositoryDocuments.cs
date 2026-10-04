@@ -14,7 +14,7 @@ public sealed partial class SourceRepository
 {
     /// <summary>The container document of <paramref name="identity"/>: its own when it has a file of
     /// its own, else the document of the container it is embedded in — a container may itself be
-    /// embedded.</summary>
+    /// embedded. Null when no document holds it, or the document that carries it names no record.</summary>
     public SourceDocument? ContainerDocument(
         PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
@@ -24,10 +24,7 @@ public sealed partial class SourceRepository
         if (!unit.IsEmbedded)
             return new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, text);
 
-        var owner = IdentityOf(plugin, unit.OwnerFormKey, schemas)
-            ?? throw new InvalidOperationException(
-                $"{unit.RelativePath} carries {identity.FormKey}, but {unit.OwnerFormKey} names no " +
-                "document of its own.");
+        if (IdentityOf(plugin, unit.OwnerFormKey, schemas) is not { } owner) return null;
         return new SourceDocument(owner.FormKey, owner.RecordType, owner.EditorId, text);
     }
 
@@ -36,11 +33,10 @@ public sealed partial class SourceRepository
     public DocumentContainment? ContainerOf(
         PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        if (ContainerDocument(plugin, identity, schemas) is not { } owner
-            || owner.FormKey.Equals(identity.FormKey, StringComparison.Ordinal))
-        {
-            return null;
-        }
+        if (Locate(plugin, identity) is not { IsEmbedded: true } unit) return null;
+        var owner = ContainerDocument(plugin, identity, schemas)
+            ?? throw new UnreadableSourceDocumentException(
+                $"{unit.RelativePath} carries {identity.FormKey}, but {unit.OwnerFormKey} names no document of its own.");
 
         using var parsed = JsonDocument.Parse(owner.Body);
         return new ContainerDocuments(_release, schemas).ContainmentOf(owner.RecordType, parsed.RootElement, identity.FormKey);

@@ -42,6 +42,22 @@ public sealed class UnreadableCopySourceTests : IDisposable
     }
 
     [Fact]
+    public void CopyAsOverride_OntoADestinationDocumentThatIsNoJsonDocument_IsRefused_AndLeavesItAlone()
+    {
+        Assert.True(_mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, _mod.FlatNpc.ToString(), _mod.DestinationPlugin).Applied);
+        var document = _mod.Document(_mod.DestinationPlugin, _mod.FlatNpc.ToString()).Require();
+        var file = TreeTampering.FileOf(_mod.DestinationModFolder, _mod.DestinationPlugin, document.Identity);
+        var broken = document.Body.Replace('{', '[');
+        File.WriteAllText(file, broken);
+
+        var result = _mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, _mod.FlatNpc.ToString(), _mod.DestinationPlugin, replace: true);
+
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Contains("is not a readable document", result.Message, StringComparison.Ordinal);
+        Assert.Equal(broken, File.ReadAllText(file));
+    }
+
+    [Fact]
     public void CopyAsOverride_OfAChildIntoADestinationWhoseContainerDocumentIsNoJsonDocument_IsRefused_AndLeavesItAlone()
     {
         Assert.True(_mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, _mod.DialogTopic.ToString(), _mod.DestinationPlugin).Applied);

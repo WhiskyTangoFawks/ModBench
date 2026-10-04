@@ -267,6 +267,31 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Equal("DialogTopics", container?.SlotName);
     }
 
+    private void GiveTheInteriorCellsDocumentNoFormKey()
+    {
+        var path = FullPath(InteriorCellPath);
+        File.WriteAllText(path, File.ReadAllText(path).Replace(_interiorCell.FormKey.ToString(), "NotAFormKey", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ContainerDocument_OfAChildWhoseOwnerDocumentNamesNoRecord_IsNull()
+    {
+        GiveTheInteriorCellsDocumentNoFormKey();
+
+        Assert.Null(Repository.ContainerDocument(Plugin, Identity(_temporaryRef, "refr"), Schemas));
+    }
+
+    [Fact]
+    public void ContainerOf_AChildWhoseOwnerDocumentNamesNoRecord_RefusesWithTheReadersWords()
+    {
+        GiveTheInteriorCellsDocumentNoFormKey();
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.ContainerOf(Plugin, Identity(_temporaryRef, "refr"), Schemas));
+
+        Assert.Contains("names no document of its own", refused.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void ContainerOf_ARecordWithADocumentOfItsOwn_IsNull()
     {

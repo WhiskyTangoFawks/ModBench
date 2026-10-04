@@ -307,7 +307,7 @@ public sealed partial class SourceRepository
 
         var text = File.ReadAllText(unit.FullPath);
         if (NotADocument(text) is { } why)
-            throw new InvalidOperationException($"{unit.RelativePath} is not a readable document, so its EditorID cannot be compared: {why}");
+            throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its EditorID cannot be compared: {why}");
         return !string.Equals(EditorIdOf(text), document.EditorId, StringComparison.Ordinal);
     }
 
