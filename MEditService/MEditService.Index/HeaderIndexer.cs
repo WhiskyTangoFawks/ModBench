@@ -21,7 +21,7 @@ internal static class HeaderIndexer
         row.AppendValue(origin);
         row.AppendValue(PluginHeader.RecordType);
         row.AppendNullValue();    // editor_id: headers have no EditorID concept
-        row.AppendValue(SourceRef.Committed);
+        row.AppendValue(WorkingTreeState.None.Stored());
         row.AppendValue(header.Text);
         row.AppendValue(SourceRepository.ContentStamp(header.Text));
         row.AppendNullValue();    // parse_diagnosis: the header is written from what already parsed

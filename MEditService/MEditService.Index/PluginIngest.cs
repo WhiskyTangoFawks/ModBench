@@ -42,10 +42,6 @@ internal sealed class PluginIngest
     {
         DeleteExistingForOrigin("record_type_failure", plugin, origin);
         DeleteExistingForOrigin("records", plugin, origin);
-        // The Head snapshots go too: head_rows is records_committed UNION ALL the still-clean
-        // records rows, and the halves must stay disjoint. Deleting here rather than at each caller
-        // is what makes every caller inherit it.
-        DeleteExistingForOrigin("records_committed", plugin, origin);
     }
 
     // ADR-0005, from the one stream that carries the documents. The appender is opened once per
@@ -130,7 +126,6 @@ internal sealed class PluginIngest
     public void DeleteAllRowsFor(string plugin, string origin)
     {
         DeleteExistingForOrigin("records", plugin, origin);
-        DeleteExistingForOrigin("records_committed", plugin, origin);
         DeleteExistingForOrigin("form_lookup", plugin, origin);
         DeleteFormReferencesForPlugin(plugin, origin);
         DeleteExistingForOrigin("placement", plugin, origin);
@@ -287,7 +282,7 @@ internal sealed class PluginIngest
             row.AppendValue(editorId);
         else
             row.AppendNullValue();
-        row.AppendValue(SourceRef.Committed);
+        row.AppendValue(WorkingTreeState.None.Stored());
         row.AppendValue(Encoding.UTF8.GetString(prepared.Body));
         row.AppendValue(prepared.ContentHash);
         if (prepared.ParseDiagnosis is { } diagnosis)

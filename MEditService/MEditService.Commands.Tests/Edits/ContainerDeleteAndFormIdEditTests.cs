@@ -32,8 +32,8 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         Assert.Null(_fixture.Document(_fixture.Navmesh.ToString()));
         Assert.Null(_fixture.Document(_fixture.Landscape.ToString()));
 
-        Assert.NotNull(_fixture.CommittedDocument(_fixture.EmbedCell.ToString()));
-        Assert.NotNull(_fixture.CommittedDocument(_fixture.TemporaryRef.ToString()));
+        Assert.True(_fixture.CommittedHolds(_fixture.EmbedCell.ToString()));
+        Assert.True(_fixture.CommittedHolds(_fixture.TemporaryRef.ToString()));
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         Assert.Contains(ContainerModPlugin.LandscapeEditorId, after, StringComparison.Ordinal);
 
         Assert.Null(_fixture.Document(_fixture.TemporaryRef.ToString()));
-        Assert.NotNull(_fixture.CommittedDocument(_fixture.TemporaryRef.ToString()));
+        Assert.True(_fixture.CommittedHolds(_fixture.TemporaryRef.ToString()));
         Assert.DoesNotContain(
             ContainerModPlugin.TemporaryRefEditorId,
             _fixture.Document(_fixture.EmbedCell.ToString()).Require().Body,
@@ -110,7 +110,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
 
         Assert.Null(_fixture.Document(_fixture.TopCell.ToString()));
         Assert.Null(_fixture.Document(_fixture.TopCellRef.ToString()));
-        Assert.NotNull(_fixture.CommittedDocument(_fixture.TopCell.ToString()));
+        Assert.True(_fixture.CommittedHolds(_fixture.TopCell.ToString()));
         Assert.NotNull(_fixture.Document(_fixture.Worldspace.ToString()));
     }
 
@@ -144,7 +144,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
             EmbedCellText());
 
         Assert.Null(_fixture.Document(_fixture.TemporaryRef.ToString()));
-        Assert.NotNull(_fixture.CommittedDocument(_fixture.TemporaryRef.ToString()));
+        Assert.True(_fixture.CommittedHolds(_fixture.TemporaryRef.ToString()));
         Assert.NotNull(_fixture.Document(result.NewFormKey.Require()));
     }
 

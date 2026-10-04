@@ -263,32 +263,6 @@ public sealed class SourceIngestTests : IDisposable
     }
 
     [Fact]
-    public void APartialReconcileThenBinaryFallback_LeavesExactlyOneEntry_NotTwo()
-    {
-        var sourceRoot = Path.Combine(ModFolder, SourceRepository.RootFor(PluginName));
-        string keywordFile;
-        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
-            keywordFile = _entry.SourceFileOf(live.RequireReads().DocumentOf(_keyword, Plugin));
-
-        var committedFileTheCodecCannotReadBackUnderNpcsWhichSortsAfterKeywordsSoGitPorcelainProcessesTheGoodDeletionFirst =
-            Path.Combine(sourceRoot, "Npcs", "zzbroken.json");
-        File.WriteAllText(committedFileTheCodecCannotReadBackUnderNpcsWhichSortsAfterKeywordsSoGitPorcelainProcessesTheGoodDeletionFirst, "{ not a record");
-        _entry.Git("add", "-A");
-        _entry.Git("commit", "-q", "-m", "commit an unreadable record");
-
-        File.Delete(keywordFile);
-        File.Delete(committedFileTheCodecCannotReadBackUnderNpcsWhichSortsAfterKeywordsSoGitPorcelainProcessesTheGoodDeletionFirst);
-
-        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
-
-        Assert.NotEmpty(reloaded.Status.Failures);
-
-        var stack = reloaded.RequireReads().GetOverrideStack(_keyword);
-        Assert.NotNull(stack);
-        Assert.Single(stack.Entries);
-    }
-
-    [Fact]
     public void AnEditorIdRename_ReadsAsOneDirtyRecordAfterReload_NotACreateAndADelete()
     {
         RenameTheNpc("RenamedAcrossReload");

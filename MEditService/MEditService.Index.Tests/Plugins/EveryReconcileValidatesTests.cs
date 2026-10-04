@@ -101,29 +101,16 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     [Fact]
-    public void AnEqualSnapshot_TakesEveryRowOfAPluginWhoseRepositoryAndBinaryWent_ItsDirtyRecordsHeadRowsToo()
+    public void AnEqualSnapshot_TakesEveryRowOfAPluginWhoseRepositoryAndBinaryWent()
     {
         HandEditTracked();
         ArrivalAnnouncing(RowsChanged(_trackedNpc));
-        Assert.NotEqual(0, CommittedRowsOf(_tracked));
 
         Directory.Delete(Path.Combine(_tracked.ModFolderOf(), ".git"), recursive: true);
         File.Delete(_tracked.Path);
         ArrivalAnnouncing(PluginChanged(_tracked));
 
-        Assert.Equal(0, CommittedRowsOf(_tracked));
         Assert.Empty(_index.RequireReads().GetDocuments(_tracked.KeyOf()));
-    }
-
-    private long CommittedRowsOf(LoadOrderEntry plugin)
-    {
-        using var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_fixture.InstanceRoot)}");
-        connection.Open();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT count(*) FROM mirror.records_committed WHERE plugin = $1 AND origin = $2";
-        cmd.Parameters.Add(new DuckDBParameter(plugin.Name));
-        cmd.Parameters.Add(new DuckDBParameter(plugin.Origin));
-        return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
     }
 
     [Fact]

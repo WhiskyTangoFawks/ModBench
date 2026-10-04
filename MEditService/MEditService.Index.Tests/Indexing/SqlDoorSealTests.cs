@@ -6,8 +6,6 @@ public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<Sql
 {
     [Theory]
     [InlineData("SELECT form_key FROM mirror.records")]
-    [InlineData("SELECT form_key FROM mirror.records_committed")]
-    [InlineData("SELECT form_key FROM mirror.head_rows")]
     [InlineData("SELECT form_key FROM records WHERE form_key IN (SELECT form_key FROM mirror.records)")]
     [InlineData("SELECT table_name AS form_key FROM information_schema.tables")]
     [InlineData("SELECT form_key FROM query('SELECT form_key FROM mirror.records')")]
