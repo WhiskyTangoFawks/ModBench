@@ -146,7 +146,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     }
 
     // `body` is VARCHAR, never DuckDB's JSON type, which normalizes what it stores: "the same bytes
-    // as the source file" is what makes content_hash a real git object name. `ref` is quoted
+    // as the source file" is what lets content_hash stamp them. `ref` is quoted
     // everywhere: REF is a DuckDB keyword.
     private static void CreateRecordsTable(DuckDBConnection connection)
     {

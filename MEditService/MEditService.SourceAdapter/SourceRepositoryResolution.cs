@@ -183,7 +183,7 @@ public sealed partial class SourceRepository
     // directory holds its record in RecordData.json, a file is the record.
     private IEnumerable<string> DocumentsNaming(string sourceRoot, string spelled)
     {
-        // Computed once rather than per entry: NameCarriesFormKey reparses the FormKey on every call.
+        // Computed once rather than per entry: FilesafeFormKey reparses the FormKey on every call.
         var filesafe = FilesafeFormKey(spelled);
         foreach (var entry in EntriesUnder(sourceRoot))
         {

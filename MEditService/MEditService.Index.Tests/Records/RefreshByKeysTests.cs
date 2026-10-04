@@ -36,26 +36,6 @@ public sealed class RefreshByKeysTests : IDisposable
     private void Refresh() => _index.NextSnapshot();
 
     [Fact]
-    public void ACommitMadeOutsideModbench_LeavesTheRecordClean_OnTheNextRefresh()
-    {
-        _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
-
-        Refresh();
-        Assert.True(Reads.StackEntry(_npc, _mod.KeyOf()).Require().HasWorkingTreeChange);
-
-        _mod.Git("add", "-A");
-        _mod.Git("commit", "-q", "-m", "committed outside Modbench");
-
-        Refresh();
-
-        var stack = Reads.GetOverrideStack(_npc);
-        Assert.NotNull(stack);
-        var entry = stack.Entries.Single();
-        Assert.False(entry.HasWorkingTreeChange);
-        Assert.Equal("RenamedByHand", entry.Effective.EditorId);
-    }
-
-    [Fact]
     public void AHandEditMadeBeforeAnyRefresh_LeavesTheServedDocumentUnchanged()
     {
         var before = Reads.DocumentOf(_npc, _mod.KeyOf()).Body;

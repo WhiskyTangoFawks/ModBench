@@ -169,6 +169,24 @@ public sealed class PersistentIndexTests : IDisposable
     }
 
     [Fact]
+    public void AFileWhoseContentHashesAreOfAnotherFormat_RebuildsAndRestampsEveryRecord()
+    {
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
+        using (Launched([alpha])) { }
+
+        AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce("""
+            UPDATE mirror.records SET content_hash = repeat('0', 40);
+            UPDATE mirror.index_version SET value = '11' || substr(value, strpos(value, '|'));
+            """);
+
+        using (var second = Launched([alpha]))
+            Assert.Equal(["Alpha.esp"], second.Opens.Opened);
+
+        Assert.NotEqual(0, CountOf("SELECT COUNT(*) FROM mirror.records"));
+        Assert.Equal(0, CountOf("SELECT COUNT(*) FROM mirror.records WHERE length(content_hash) <> 64"));
+    }
+
+    [Fact]
     public void AFileWrittenUnderAnotherVersion_HoldingNoIndexedPlugin_RebuildsFromScratch()
     {
         using (Launched([])) { }
@@ -190,6 +208,15 @@ public sealed class PersistentIndexTests : IDisposable
         using var cmd = connection.CreateCommand();
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
+    }
+
+    private long CountOf(string sql)
+    {
+        using var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_instanceRoot)}");
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private bool TableExists(string name)

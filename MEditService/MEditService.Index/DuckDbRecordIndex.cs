@@ -419,7 +419,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             RefreshOneKey(repository, key, formKey);
     }
 
-    // Re-derives one key's rows at both refs. Called again with the same bytes, nothing below fires.
+    // Re-derives one key's rows. Called again with the same bytes, nothing below fires.
     private void RefreshOneKey(SourceRepository repository, PluginAddress key, string formKey)
     {
         var effective = StoredRow(EffectiveRows, key, formKey);
@@ -443,14 +443,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         if (!string.Equals(workingTreeText, effective?.Body, StringComparison.Ordinal))
             ProjectDocuments(key, [(formKey, workingTreeText)]);
-
-        // Re-read, since the projection above may have moved this record's committed row too. Asked
-        // only for a record the index already believes dirty.
-        if (StoredRow(TableDdlBuilder.HeadRowsRelation, key, formKey)?.Body is { } committedBody
-            && repository.CommittedTextIfMoved(key, identity, committedBody) is { } movedText)
-        {
-            SetCommittedBaseline(key, [(formKey, movedText)]);
-        }
     }
 
     private const string EffectiveRows = $"{TableDdlBuilder.MirrorSchema}.records";
@@ -537,12 +529,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     public ValidationReport Validate(PluginAddress key, string? modFolder)
     {
         var sourceValidation = _sourceValidation ?? throw new InvalidOperationException("Call Initialize before using the repository.");
-        if (modFolder != null && SourceRepository.HoldsTreeFor(modFolder, key.Name))
-            return sourceValidation.Validate(key, modFolder);
-
-        // Whatever HEAD vouched for is gone with the tree, so a tree that returns is read whole.
-        sourceValidation.Forget(key);
-        return ValidateAgainstBinary(key);
+        return modFolder != null && SourceRepository.HoldsTreeFor(modFolder, key.Name)
+            ? sourceValidation.Validate(key, modFolder)
+            : ValidateAgainstBinary(key);
     }
 
     /// <summary>Restates which truth <paramref name="key"/>'s rows read as, for Validate's tracked
@@ -550,9 +539,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     internal void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom) =>
         _store.RestampDerivation(key, derivedFrom);
 
-    // Validate's own publish. MarkWorkingTreeOnly does not publish for itself: ingest calls it for
-    // every reconciled record of a whole plugin, where a notification per record would be noise.
-    internal void PublishRowsChanged(PluginAddress key, IReadOnlyList<string> formKeys) =>
+    private void PublishRowsChanged(PluginAddress key, IReadOnlyList<string> formKeys) =>
         _store.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence)));
 
     // ADR-0003, asked of one plugin. A binary has no smaller unit, so a mismatch is a
