@@ -3,15 +3,15 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>A tree state no record operation can reach: a file beside a record's own, or one held
-/// open. The only place the tests name a file the adapter placed.</summary>
+/// <summary>The tests' view of the tree's files: where a record's document sits, what lies under a
+/// directory, and states no record operation reaches. The only place the tests name a placed file.</summary>
 internal static class TreeTampering
 {
     internal static string FileOf(string modFolder, PluginAddress plugin, RecordIdentity identity)
     {
-        var unit = TrackedTree.Repository(modFolder).UnitHolding(plugin, identity)
+        var relativePath = TrackedTree.Repository(modFolder).RelativePathOf(plugin, identity)
             ?? throw new InvalidOperationException($"Expected a document in '{modFolder}' to hold {identity.FormKey}.");
-        return Path.Combine(modFolder, unit.RelativePath);
+        return Path.Combine(modFolder, relativePath);
     }
 
     /// <summary>The directory holding the record's document: a container's own directory.</summary>

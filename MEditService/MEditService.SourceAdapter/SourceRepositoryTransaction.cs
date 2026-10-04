@@ -98,6 +98,11 @@ public sealed partial class SourceRepository
             }
         }
 
+        /// <summary><see cref="SourceRepository.PutInWorldspace"/>, holding what the put writes so the rollback
+        /// takes a new cell away again.</summary>
+        public void PutInWorldspace(SourceRepository repository, PluginAddress plugin, SourceDocument cell, string worldspace) =>
+            Put(repository, plugin, cell, SourceRepository.PlacementIn(worldspace, cell));
+
         /// <summary>Takes one repository's record out of the tree, holding the document's bytes so the
         /// rollback puts it back. The pre-image is that one document, so a shape whose removal takes more
         /// than it is refused.</summary>

@@ -253,7 +253,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         var file = Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json");
         File.WriteAllText(file, "this is not a document");
 
-        var refusal = Assert.Throws<InvalidOperationException>(
+        var refusal = Assert.Throws<UnreadableSourceDocumentException>(
             () => repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "RenamedNpc", WithEditorId("RenamedNpc"))));
 
         Assert.Contains("not a readable document", refusal.Message, StringComparison.Ordinal);
