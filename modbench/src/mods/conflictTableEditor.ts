@@ -47,7 +47,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
     panel.webview.onDidReceiveMessage((message: unknown) => {
       if (isConflictTableReady(message)) show(conflictTable(this.instance, mod));
     });
-    showWebviewPage(panel.webview, this.extensionUri, 'conflicts');
+    showWebviewPage(panel.webview, this.extensionUri, { script: 'conflicts.js' });
   }
 }
 

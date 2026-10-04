@@ -955,8 +955,20 @@ describe('package.json track\'s palette entry', () => {
   });
 });
 
+describe('package.json conflict table menus follow mods-conflicts.md', () => {
+  const menu = (): MenuEntry[] => present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']")
+    .filter((e) => holds(e.when, { webviewId: 'modbench.conflicts', webviewSection: 'conflictColumn' })
+      || holds(e.when, { webviewId: 'modbench.conflicts' }));
+
+  it('column header: open conflicts, and nothing else anywhere in the table', () => {
+    expect(placed(menu())).toEqual([['modbench.mod.openConflicts', '1_open']]);
+    expect(holds(present(menu()[0], 'the column header\'s open conflicts').when, { webviewId: 'modbench.conflicts' })).toBe(false);
+  });
+});
+
 describe('package.json record tab menus', () => {
-  const menu = (): MenuEntry[] => present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
+  const menu = (): MenuEntry[] => present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']")
+    .filter((e) => requires(e.when, "webviewId == 'modbench.record'"));
   const tab = { webviewId: 'modbench.record', 'modbench.mod.tracked': ['Tracked'], 'modbench.mod.untracked': ['Untracked'] };
   const offered = (facts: Record<string, unknown>): string[] =>
     placed(menu().filter((e) => holds(e.when, { ...tab, ...facts }))).map(([command]) => command);
@@ -1184,6 +1196,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   it('mod menu: open, change, create, source control, copy, then destroy', () => {
     expect(placed(rowMenu(MOD_ROW))).toEqual([
       ['modbench.mod.openFolder', '1_open'],
+      ['modbench.mod.openConflicts', '1_open'],
       ['modbench.mod.viewOnNexus', '1_open'],
       ['modbench.mod.enable', '2_change'],
       ['modbench.mod.disable', '2_change'],
@@ -1202,6 +1215,12 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     expect(holds(track.when, { view: 'modbench.modList', viewItem: 'mod enabled holdsPlugin untracked' })).toBe(true);
     expect(holds(track.when, { view: 'modbench.modList', viewItem: 'mod enabled holdsPlugin' })).toBe(false);
     expect(holds(track.when, { view: 'modbench.modList', viewItem: 'mod enabled untracked' })).toBe(false);
+  });
+
+  it('mod menu: open conflicts only on a mod that has a file order conflict', () => {
+    const entry = present(rowMenu(MOD_ROW).find((e) => e.command === 'modbench.mod.openConflicts'), 'the mod menu\'s open conflicts');
+    expect(holds(entry.when, { view: 'modbench.modList', viewItem: 'mod enabled untracked fileOrderConflict' })).toBe(true);
+    expect(holds(entry.when, { view: 'modbench.modList', viewItem: 'mod enabled untracked' })).toBe(false);
   });
 
   it('mod menu: enable and disable share one slot', () => {
@@ -1279,6 +1298,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.install', undefined],
     ['modbench.mod.openFolder', 'modbench.mod.singleOpenFolderRow'],
     ['modbench.mod.goToMod', 'modbench.mod.singleGoToModRow'],
+    ['modbench.mod.openConflicts', 'modbench.mod.singleOpenConflictsRow'],
     ['modbench.mod.excludeFile', 'modbench.mod.holdsIncludedFile'],
     ['modbench.mod.includeFile', 'modbench.mod.holdsExcludedFile'],
   ] as const;

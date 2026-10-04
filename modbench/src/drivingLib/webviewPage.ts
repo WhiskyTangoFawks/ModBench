@@ -1,40 +1,36 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 
-function buildWebviewHtml(params: {
-  scriptUri: string;
-  styleUri: string;
-  cspSource: string;
-  globals: Readonly<Record<string, unknown>>;
-}): string {
-  const { scriptUri, styleUri, cspSource, globals } = params;
-  const nonce = crypto.randomBytes(16).toString('base64');
-  const assignments = Object.entries(globals).map(([name, value]) => `window.${name} = ${JSON.stringify(value)};`).join(' ');
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; script-src 'nonce-${nonce}' ${cspSource}; style-src ${cspSource} 'unsafe-inline'; font-src ${cspSource};">
-  <link rel="stylesheet" href="${styleUri}">
-</head>
-<body>
-  <div id="root"></div>
-  <script nonce="${nonce}">${assignments}</script>
-  <script type="module" src="${scriptUri}"></script>
-</body>
-</html>`;
+/** A page of the webview build: its script, the stylesheet the build emits for it when it imports
+ *  any, and what is set on `window` before the script runs. */
+export interface WebviewPage {
+  readonly script: string;
+  readonly stylesheet?: string;
+  readonly globals?: Readonly<Record<string, unknown>>;
 }
 
-/** Loads one page of the webview build, its script and stylesheet named after it, with each of
- *  `globals` set on `window` before the script runs. */
 export function showWebviewPage(
-  webview: Pick<vscode.Webview, 'options' | 'html' | 'cspSource' | 'asWebviewUri'>, extensionUri: vscode.Uri, page: string, globals: Readonly<Record<string, unknown>> = {},
+  webview: Pick<vscode.Webview, 'options' | 'html' | 'cspSource' | 'asWebviewUri'>, extensionUri: vscode.Uri,
+  { script, stylesheet, globals = {} }: WebviewPage,
 ): void {
   const root = vscode.Uri.joinPath(extensionUri, 'out', 'webview');
   webview.options = { enableScripts: true, localResourceRoots: [root] };
   const asset = (file: string) => webview.asWebviewUri(vscode.Uri.joinPath(root, 'assets', file)).toString();
-  webview.html = buildWebviewHtml({
-    scriptUri: asset(`${page}.js`), styleUri: asset(`${page}.css`), cspSource: webview.cspSource, globals,
-  });
+  const { cspSource } = webview;
+  const nonce = crypto.randomBytes(16).toString('base64');
+  const assignments = Object.entries(globals).map(([name, value]) => `window.${name} = ${JSON.stringify(value)};`).join(' ');
+  const link = stylesheet === undefined ? '' : `\n  <link rel="stylesheet" href="${asset(stylesheet)}">`;
+  webview.html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'nonce-${nonce}' ${cspSource}; style-src ${cspSource} 'unsafe-inline'; font-src ${cspSource};">${link}
+</head>
+<body>
+  <div id="root"></div>
+  <script nonce="${nonce}">${assignments}</script>
+  <script type="module" src="${asset(script)}"></script>
+</body>
+</html>`;
 }

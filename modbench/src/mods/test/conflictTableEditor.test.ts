@@ -132,6 +132,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
     expect(panel.title).toBe('Conflicts: High');
     expect(panel.webview.html).toContain('assets/conflicts.js');
+    expect(panel.webview.html).not.toContain('<link');
   });
 
   it('shows the table once the page is ready to hear it', async () => {
