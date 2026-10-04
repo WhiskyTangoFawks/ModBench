@@ -8,7 +8,7 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class EmbeddedChildEditTests : IDisposable
+public sealed partial class EmbeddedChildEditTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
 
@@ -258,13 +258,14 @@ public sealed class EmbeddedChildEditTests : IDisposable
     private SourceDocument EmbedCellDocument() => _fixture.DocumentCarrying(ContainerModPlugin.EmbedCellEditorId);
 
     private static string WithoutTheTemporaryRef(string cellBody) =>
-        System.Text.RegularExpressions.Regex.Replace(
-            cellBody, $@"\s*\{{[^{{}}]*""{ContainerModPlugin.TemporaryRefEditorId}""[^{{}}]*\}},?", "",
-            System.Text.RegularExpressions.RegexOptions.Singleline);
+        MyRegex().Replace(cellBody, "");
 
     private static string ReplaceFirst(string text, string what, string with)
     {
         var at = text.IndexOf(what, StringComparison.Ordinal);
         return text[..at] + with + text[(at + what.Length)..];
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\s*\{[^{}]*""TempRef""[^{}]*\},?", System.Text.RegularExpressions.RegexOptions.Singleline)]
+    private static partial System.Text.RegularExpressions.Regex MyRegex();
 }

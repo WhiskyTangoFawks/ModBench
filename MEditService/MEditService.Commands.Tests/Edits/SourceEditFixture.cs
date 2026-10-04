@@ -52,8 +52,10 @@ public sealed class SourceEditFixture : IDisposable
         GameDirectory = Directory.CreateDirectory(Path.Combine(InstanceRoot, "game")).FullName;
 
         var pluginPath = Path.Combine(ModFolder, pluginName);
-        var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4);
-        mod.IsSmallMaster = isLight;
+        var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4)
+        {
+            IsSmallMaster = isLight
+        };
         var race = mod.Races.AddNew(RaceEditorId);
         var keyword = mod.Keywords.AddNew(KeywordEditorId);
         var npc = mod.Npcs.AddNew(NpcEditorId);

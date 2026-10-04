@@ -60,7 +60,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.Equal(2, responses.Count);
         Assert.Equal(
             [ContainerCopyFixture.Response1EditorId + "DUPLICATE001", ContainerCopyFixture.Response2EditorId + "DUPLICATE001"],
-            responses.Select(r => Member(r, "EditorID")).ToArray());
+            [.. responses.Select(r => Member(r, "EditorID"))]);
         Assert.All(responses, r =>
             Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, Member(r, "FormKey"), StringComparison.OrdinalIgnoreCase));
         var responseKeys = responses.Select(r => Member(r, "FormKey")).ToList();
@@ -76,7 +76,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId + "DUPLICATE001", compiledTopic.EditorID);
         Assert.Equal(
             [ContainerCopyFixture.Response1EditorId + "DUPLICATE001", ContainerCopyFixture.Response2EditorId + "DUPLICATE001"],
-            compiledTopic.Responses.Select(r => r.EditorID.Require()).ToArray());
+            [.. compiledTopic.Responses.Select(r => r.EditorID.Require())]);
         var copiedResponse2 = compiledTopic.Responses.Single(
             r => r.EditorID == ContainerCopyFixture.Response2EditorId + "DUPLICATE001");
         Assert.Equal(_fixture.Response1, copiedResponse2.PreviousDialog.FormKeyNullable);
@@ -101,7 +101,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var responses = Responses(secondTopicFormKey);
         Assert.Equal(
             [ContainerCopyFixture.Response1EditorId + "DUPLICATE002", ContainerCopyFixture.Response2EditorId + "DUPLICATE002"],
-            responses.Select(r => Member(r, "EditorID")).ToArray());
+            [.. responses.Select(r => Member(r, "EditorID"))]);
     }
 
     [Fact]

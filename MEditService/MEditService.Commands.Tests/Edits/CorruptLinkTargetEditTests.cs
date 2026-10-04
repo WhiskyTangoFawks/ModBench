@@ -15,10 +15,13 @@ public sealed class CorruptLinkTargetEditTests : IDisposable
         var cell = _mod.DocumentCarrying(_mod.SourcePlugin, ContainerCopyFixture.PersistentRefEditorId);
         _mod.Overwrite(
             _mod.SourcePlugin,
-            cell with { Body = cell.Body.Replace(
+            cell with
+            {
+                Body = cell.Body.Replace(
                 $"\"EditorID\": \"{ContainerCopyFixture.PersistentRefEditorId}\"",
                 $"\"MajorRecordFlagsRaw\": notanumber,\n\"EditorID\": \"{ContainerCopyFixture.PersistentRefEditorId}\"",
-                StringComparison.Ordinal) });
+                StringComparison.Ordinal)
+            });
 
         var result = _mod.EditHandler.Set(
             _mod.SourcePlugin, _mod.FlatNpc.ToString(), "Keywords",
