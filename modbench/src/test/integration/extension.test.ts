@@ -384,7 +384,7 @@ describe('modbench.mod.sync syncs the instance value it is handed', () => {
     fs.writeFileSync(path.join(profileDir, 'modlist.txt'), '+Gone Mod\r\n');
     const instance = present(instanceExport(), "the activated extension's instance export");
 
-    await vscode.commands.executeCommand('modbench.mod.sync', { ...instance.value, activeProfile: PROFILE });
+    await vscode.commands.executeCommand('modbench.mod.sync', { ...instance.value, modSyncArguments: { ...instance.value.modSyncArguments, profile: PROFILE } });
 
     assert.strictEqual(fs.readFileSync(path.join(profileDir, 'modlist.txt'), 'utf8'), '');
   });
@@ -1282,7 +1282,10 @@ describe('Plugin sync takes the instance value', () => {
   it('modbench.plugin.sync syncs the instance value it is handed: a Data folder it lists empty drops the line', async () => {
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n'));
     const instance = present(instanceExport(), "the activated extension's instance export");
-    const handed = { ...instance.value, dataFolderPlugins: { kind: 'listed', names: new Set<string>() } };
+    const handed = {
+      ...instance.value,
+      pluginSyncArguments: { ...instance.value.pluginSyncArguments, inData: { kind: 'listed', names: new Set<string>() } },
+    };
 
     await vscode.commands.executeCommand('modbench.plugin.sync', handed);
 

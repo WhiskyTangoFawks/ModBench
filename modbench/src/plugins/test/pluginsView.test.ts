@@ -51,7 +51,6 @@ import { InMemoryMEditClient, type NotificationEvent } from '../../client';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
-import { syncMessageDouble } from '../../test/syncMessageDouble';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 
@@ -64,7 +63,8 @@ function pluginsView() {
   const recordBrowser = new PluginTreeProvider(client);
   const plugins = createPluginsView({
     instance: new FakeInstance(instanceValueFixture()), access: accessTo('/instance'), recordBrowser, client,
-    pluginSync: syncMessageDouble(), dataFolderFile: () => undefined, log: () => undefined, reporterFor: recordingReporter,
+    syncPlugins: () => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }), channel: { error: vi.fn(), info: vi.fn() },
+    dataFolderFile: () => undefined, log: () => undefined, reporterFor: recordingReporter,
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, notifyConflictsComputed: vi.fn(),
   });
   return { client, recordBrowser, plugins };
