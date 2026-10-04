@@ -84,7 +84,7 @@ public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<Worldspace
     }
 
     public CellChildRecords GetCellChildRecords(string plugin, string cellFormKey, string origin) =>
-        _index.RequireReads().GetCellChildRecords(new PluginAddress(plugin, origin), cellFormKey);
+        _index.RequireReads().GetCellChildRecords(new PluginAddress(plugin, origin), cellFormKey).ToQuery();
 
     public IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string origin)
     {

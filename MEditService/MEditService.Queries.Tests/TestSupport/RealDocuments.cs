@@ -21,7 +21,7 @@ internal static class RealDocuments
     // The one column a test asserts on, by name — the same public calls DocumentNodes,
     // SyntheticBits and CheckErrorBuilder that the store itself calls, aimed at a single field
     // rather than every field a schema declares.
-    internal static FieldValue FieldOf(
+    internal static Index.FieldValue FieldOf(
         RecordTableSchema schema, JsonElement root, string columnName, GameRelease release,
         Func<string, RecordLookupEntry?>? resolveFormKey = null)
     {
@@ -34,7 +34,7 @@ internal static class RealDocuments
         ResolvedFormKey? Resolve(string formKey) =>
             (resolveFormKey ?? (_ => null))(formKey) is { } entry ? new ResolvedFormKey(entry.RecordType, entry.EditorId) : null;
 
-        return new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, root), value, Resolve, release));
+        return new Index.FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, root), value, Resolve, release));
     }
 
     // fieldNames names the columns the test reads; a schema lacking one of them is skipped for it.

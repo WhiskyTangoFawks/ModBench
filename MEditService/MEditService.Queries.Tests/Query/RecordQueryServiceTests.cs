@@ -314,14 +314,27 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public void GetRecords_ReturnsExactlyWhatReadsSearchProvides()
+    public void GetRecords_AnswersEveryRowFactTheIndexSearchProvides_InQueriesOwnTypes()
     {
-        _reads.SearchResult = new PagedResult<RecordSummary>(
-            [new RecordSummary("000800:Test.esp", PluginName, 0, IsWinner: true, "FromFake", "Data")], 1);
+        _reads.SearchResult = new Index.PagedResult<Index.RecordSummary>(
+            [
+                new Index.RecordSummary(
+                    "000800:Test.esp", PluginName, 3, IsWinner: true, "FromFake", "Data", Index.WorkingTreeState.Modified,
+                    HasContainerChildren: true, ParseDiagnosis: "bad", HasParseFailure: false, FullName: "Full"),
+                new Index.RecordSummary("000801:Test.esp", PluginName, 0, false, null, "Data", Index.WorkingTreeState.Added),
+            ], 7);
 
         var result = _svc.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 10, offset: 0);
 
-        Assert.Same(_reads.SearchResult, result);
+        Assert.Equal(7, result.Total);
+        Assert.Equal(
+            [
+                new RecordSummary(
+                    "000800:Test.esp", PluginName, 3, true, "FromFake", "Data", WorkingTreeState.Modified,
+                    true, "bad", false, "Full"),
+                new RecordSummary("000801:Test.esp", PluginName, 0, false, null, "Data", WorkingTreeState.Added),
+            ],
+            result.Items);
     }
 
     [Fact]
@@ -1083,11 +1096,34 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public async Task RebuildStore_ForwardsGameReleaseAndInstanceRootToTheIndex()
+    public void RebuildStore_ForwardsGameReleaseAndInstanceRootToTheIndex()
     {
-        await _svc.RebuildStore(Release, @"C:\Instance");
+        _svc.RebuildStore(Release, @"C:\Instance");
 
         Assert.Equal(Release, _manager.LastRebuildRelease);
         Assert.Equal(@"C:\Instance", _manager.LastRebuildInstanceRoot);
+    }
+
+    [Fact]
+    public void RebuildStore_ReportsTheRefusalAsData_WhenTheIndexIsHeldElsewhere()
+    {
+        _manager.RefusalToRebuild = "held by another window";
+
+        Assert.Equal("held by another window", _svc.RebuildStore(Release, @"C:\Instance"));
+    }
+
+    [Fact]
+    public void GetRecords_MapsEveryWorkingTreeStateTheIndexHas()
+    {
+        var states = Enum.GetValues<Index.WorkingTreeState>();
+        _reads.SearchResult = new Index.PagedResult<Index.RecordSummary>(
+            [.. states.Select((state, i) => new Index.RecordSummary($"00080{i}:Test.esp", PluginName, 0, true, null, "Data", state))],
+            states.Length);
+
+        var result = _svc.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 10, offset: 0);
+
+        Assert.Equal(
+            states.Select(state => state.ToString()),
+            result.Items.Select(row => row.WorkingTreeState.ToString()));
     }
 }
