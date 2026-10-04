@@ -1,4 +1,4 @@
-import type { MEditClient } from '../client';
+import type { MEditClient } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
 
 type StatusSource = Pick<MEditClient, 'onStatusChanged'>;

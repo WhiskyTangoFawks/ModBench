@@ -817,3 +817,28 @@ describe('HttpMEditClient — read timeout, checked through getRecordTypes, stan
     await expect(client.getRecordTypes('MyPatch.esp', 'ModA')).resolves.toEqual([]);
   });
 });
+
+describe('HttpMEditClient, the backend process it hides', () => {
+  it('files the spawned backend\'s output in the log channel at its own level, and spawns it at the channel\'s level', async () => {
+    const { Readable } = await import('node:stream');
+    const channel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), logLevel: 2 };
+    const state = { healthy: false };
+    const spawn = vi.fn(() => {
+      state.healthy = true;
+      return { kill: vi.fn(), on: vi.fn(), stdout: Readable.from(['[10:00:00 WRN] slow\n']), stderr: null };
+    });
+    const client = new HttpMEditClient({
+      backend: {
+        freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x/backend',
+        checkHealth: () => Promise.resolve(state.healthy),
+      },
+      backendLog: channel,
+      fetch: neverFetch(),
+    });
+
+    await client.start();
+
+    expect(spawn).toHaveBeenCalledWith('/x/backend', ['--urls', 'http://localhost:5172', '--Serilog:MinimumLevel:Default', 'Debug']);
+    await vi.waitFor(() => expect(channel.warn).toHaveBeenCalledWith('[backend] slow'));
+  });
+});

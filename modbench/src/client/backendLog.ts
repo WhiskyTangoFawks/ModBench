@@ -1,7 +1,7 @@
-import type { LogOutputChannel } from 'vscode';
-import type { BackendStream } from '../client';
+import type { BackendStream } from './backendLifecycle';
 
-type LeveledChannel = Pick<LogOutputChannel, 'debug' | 'info' | 'warn' | 'error'>;
+type LeveledChannel = Record<'debug' | 'info' | 'warn' | 'error', (message: string) => void>;
+export type BackendLogChannel = LeveledChannel & { logLevel: number };
 
 // Serilog's `{Level:u3}` tokens, as they appear in its default console template.
 type SerilogTag = 'VRB' | 'DBG' | 'INF' | 'WRN' | 'ERR' | 'FTL';

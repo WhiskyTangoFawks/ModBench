@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from './client';
-import { createLoadOrderSender, type LoadOrderSender } from './client';
+import { createLoadOrderSender, enterEditingAcrossRestarts, type LoadOrderSender } from './client';
 import type { ReconcileNarrator } from './plugins/reconcileNarrator';
 import { reportPutOutcome } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
@@ -24,7 +24,6 @@ import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerFilterCommands, type NameFilter } from './drivingLib/nameFilter';
 import { registerCopyValueCommand } from './drivingLib/copyValue';
 import type { FocusedView } from './drivingLib/focusedView';
-import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { pluginSyncOver } from './pluginsCommands/plugins';
 import { registerModSync } from './modSyncTrigger';
 import { modSyncOver } from './modlist/modlist';

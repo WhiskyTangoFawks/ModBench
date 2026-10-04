@@ -13,9 +13,11 @@ export type { RecordEditEnvelope } from './MEditClient';
 export { isMEditGone, isRefused, isUnanswered, UNLIMITED_RECORDS } from './MEditClient';
 export { toLoadOrderStatus } from './apiClient';
 export { HttpMEditClient, type HttpMEditClientDeps } from './HttpMEditClient';
+export type { BackendLogChannel } from './backendLog';
 export type { BackendLifecycleOptions, BackendStream } from './backendLifecycle';
 export { InMemoryMEditClient, type RecordedCall } from './InMemoryMEditClient';
 export {
   createLoadOrderSender,
   type LoadOrderSender, type LoadOrderSnapshot, type LoadOrderSendClient,
 } from './loadOrderSender';
+export { enterEditingAcrossRestarts } from './crashReentry';

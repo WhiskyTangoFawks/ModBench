@@ -244,7 +244,7 @@ describe('a box reaches only the boxes its project references', () => {
 describe('the composition root reaches the Instance adapter through its interface', () => {
   it('scans the activation file, its wiring and medit/', () => {
     const files = rootFiles().map((path) => relative(SRC, path));
-    expect(files).toEqual(expect.arrayContaining(['extension.ts', 'toolbox.ts', join('medit', 'backendStatus.ts')]));
+    expect(files).toEqual(expect.arrayContaining(['extension.ts', 'toolbox.ts', join('medit', 'notificationWiring.ts')]));
     expect(files.filter((f) => f.startsWith('instanceAdapter'))).toEqual([]);
   });
 

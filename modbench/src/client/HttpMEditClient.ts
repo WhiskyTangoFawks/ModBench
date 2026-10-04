@@ -4,6 +4,7 @@ import {
   toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
+import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } from './backendLog';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import {
@@ -26,12 +27,24 @@ const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 export interface HttpMEditClientDeps {
   /** The process this client is the front of; nothing outside this module configures it. */
   backend: BackendLifecycleOptions;
+  /** Where the spawned backend's output goes, at its own level; the backend is spawned at this
+   *  channel's level, read fresh at each spawn. */
+  backendLog?: BackendLogChannel;
   /** Overrides the production fetch (undici, unlimited timeouts) — a test scripts the backend's
    *  HTTP responses through this. */
   fetch?: (input: Request) => Promise<Response>;
   log?: (msg: string) => void;
   timeoutMs?: number;
   reconnectDelayMs?: number;
+}
+
+function withBackendLog(backend: BackendLifecycleOptions, channel: BackendLogChannel | undefined): BackendLifecycleOptions {
+  if (!channel) return backend;
+  return {
+    ...backend,
+    onOutput: makeBackendLogForwarder(channel),
+    serilogLevelArgs: () => backendLogLevelArgs(channel.logLevel),
+  };
 }
 
 /** The HTTP adapter the mEdit client hides (target-architecture.d2): the generated client,
@@ -52,7 +65,7 @@ export class HttpMEditClient implements MEditClient {
       log: deps.log,
       reconnectDelayMs: deps.reconnectDelayMs,
     });
-    this.lifecycle = new BackendLifecycle(deps.backend);
+    this.lifecycle = new BackendLifecycle(withBackendLog(deps.backend, deps.backendLog));
     // The stream is open exactly while the backend is attached, so no module outside this one
     // starts or stops it.
     this.lifecycle.onStatusChanged((status) => {

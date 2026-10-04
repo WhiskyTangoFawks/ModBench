@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import * as cp from 'child_process';
-import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { HttpMEditClient, type BackendLifecycleOptions } from './client';
 import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
@@ -80,7 +79,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(compileDiagnostics);
 
   // ADR-0002.
-  const meditClient = new HttpMEditClient({ backend: backendOptions(attachPort, outputChannel), log });
+  const meditClient = new HttpMEditClient({ backend: backendOptions(attachPort, outputChannel), backendLog: outputChannel, log });
   activeClient = meditClient; // deactivate()'s only way to reach it
   const statusBar = createStatusBar(meditClient);
   context.subscriptions.push(statusBar);
@@ -281,13 +280,6 @@ function backendOptions(attachPort: number | undefined, channel: vscode.LogOutpu
   return {
     attachPort,
     log: (msg) => channel.info(msg),
-    // Pipe the backend's Serilog console output into the same channel, at its own level. Only
-    // applies to a backend we spawn — an attached dev-launched one logs to its own terminal.
-    onOutput: makeBackendLogForwarder(channel),
-    // The backend's Serilog minimum level follows the channel's at spawn time, so raising the
-    // channel to Debug actually surfaces backend lines. Read fresh per spawn; never applied when
-    // attaching to an already-running backend.
-    serilogLevelArgs: () => backendLogLevelArgs(channel.logLevel),
     executablePath: path.join(__dirname, '..', 'backend', backendExe),
     spawn: (exe, args) => cp.spawn(exe, args, { detached: false, stdio: ['ignore', 'pipe', 'pipe'] }),
   };
