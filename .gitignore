@@ -22,9 +22,6 @@ __pycache__/
 *.duckdb
 *.duckdb.wal
 
-# VS Code extension generated
-src/generated/
-
 # VS Code integration test runner artifacts
 modbench/.vscode-test/
 modbench/out/
