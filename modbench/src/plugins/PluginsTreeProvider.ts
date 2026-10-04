@@ -24,6 +24,8 @@ import {
 import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
+export type PluginsInstance = InstanceView & Pick<Instance, 'refresh'>;
+
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
 // One entry per plugins.txt line: the winning plugin of every listed name, in file order
@@ -87,7 +89,7 @@ export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 't
 
 export interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin: the row input. */
-  instance: InstanceView & Pick<Instance, 'refresh'>;
+  instance: PluginsInstance;
   source: PluginListSource;
   /** A row's children. Absent in tests that exercise rows alone. */
   records?: RecordBrowser;
@@ -297,7 +299,7 @@ export class PluginsTreeProvider
   private readonly log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly dataFolderFile: (name: string) => string | undefined;
-  private readonly instance: InstanceView & Pick<Instance, 'refresh'>;
+  private readonly instance: PluginsInstance;
   private readonly records?: RecordBrowser;
   private readonly client?: PluginFactsClient;
   private readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;

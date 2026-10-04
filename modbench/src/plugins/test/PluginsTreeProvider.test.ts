@@ -628,6 +628,19 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     return { reports: reporter.reports, fired };
   }
 
+  it('carries the origin of each dragged row, so two plugins of one filename stay apart', () => {
+    const { tree } = makeTree(fixturePlugins());
+    const dt = new DataTransfer();
+
+    tree.handleDrag([
+      new PluginNode({ name: 'Same.esp', enabled: true }, 'ModOne'),
+      new PluginNode({ name: 'Same.esp', enabled: true }, 'ModTwo'),
+    ], dt, IGNORED_TOKEN);
+
+    expect(pluginsFrom(dt.get('application/vnd.medit.pluginlist-node')))
+      .toEqual([{ name: 'Same.esp', origin: 'ModOne' }, { name: 'Same.esp', origin: 'ModTwo' }]);
+  });
+
   it('handleDrag serialises the whole selection, not just the grabbed row', () => {
     const { tree } = makeTree(fixturePlugins());
     const dt = new DataTransfer();
@@ -642,7 +655,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
   });
 
-  it('a drop refreshes nothing after its write', async () => {
+  it('a drop fires nothing before the read lands', async () => {
     const { fired } = await drag(new FakeSource(), ['A.esp'], 'D.esp');
     expect(fired).toBe(false);
   });
@@ -762,7 +775,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(source.reorderPluginsCalls).toEqual([]);
   });
 
-  it('surfaces a write failure via the reporter, naming why, and refreshes nothing (ADR-0019)', async () => {
+  it('surfaces a write failure via the reporter, naming why (ADR-0019)', async () => {
     const source = new FakeSource();
     source.reorderPluginsError = new Error('disk full');
     const { reports, fired } = await drag(source, ['A.esp'], 'D.esp');

@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
 import type { MEditClient, RecordFilter } from '../client';
-import type { Instance, InstanceView } from '../instanceLoader/instance';
 import { originFiles } from '../instanceLoader/loadOrderSnapshot';
 import { messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
 import { reorderOver, type PluginsAccess } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
-import { PluginsTreeProvider, type PluginFactsClient, type PluginsTreeNode } from './PluginsTreeProvider';
+import { PluginsTreeProvider, type PluginFactsClient, type PluginsInstance, type PluginsTreeNode } from './PluginsTreeProvider';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import { publishPluginWarnings } from './loadDiagnostics';
 import { pluginsKeyContext } from './gestureEntry';
@@ -23,7 +22,7 @@ import type { StatusBar } from './statusBar';
 
 export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, slot, enabled and winning for every plugin. */
-  instance: InstanceView & Pick<Instance, 'refresh'>;
+  instance: PluginsInstance;
   access: PluginsAccess;
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: PluginTreeProvider;

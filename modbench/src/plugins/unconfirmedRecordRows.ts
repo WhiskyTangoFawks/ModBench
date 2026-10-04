@@ -1,7 +1,7 @@
 import type { CopyItem, CopyMode, MEditClient, PluginAddress, RecordAddress } from '../client';
 import { pluginAddressKey } from './trackedRepositories';
 
-export const MARK_DELAY_MS = 300;
+const MARK_DELAY_MS = 300;
 
 export const UNCONFIRMED_TOOLTIP = 'Written; waiting for the disk to confirm';
 
