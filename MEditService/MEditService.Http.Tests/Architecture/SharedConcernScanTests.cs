@@ -7,7 +7,7 @@ public sealed class SharedConcernScanTests
 {
     private static readonly (string Concern, string Needle)[] ConcernMechanismNeedles =
     [
-        ("target resolution", @"\bUnreadableDocumentFor\b"),
+        ("target resolution", @"\.Get\(plugin, formKey, schemaReflector\b"),
         ("FormKey allocation", @"\bHighRangeFormIdFloor\b"),
         ("FormKey allocation", @"\bFullIdMask\b"),
     ];
@@ -63,18 +63,18 @@ public sealed class SharedConcernScanTests
             Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
             File.WriteAllText(
                 Path.Combine(root, "Layer", "Second.cs"),
-                "if (repository.UnreadableDocumentFor(plugin, formKey) is { } why) return why;\n"
+                "found = repository.Get(plugin, formKey, schemaReflector.GetSchemas(release));\n"
                 + "var floor = PluginFlagPredicates.HighRangeFormIdFloor(release);\n");
-            File.WriteAllText(Path.Combine(root, "Layer", SharedModuleFileName), "repository.UnreadableDocumentFor(plugin, id);");
-            File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "repository.UnreadableDocumentFor(a, b);");
+            File.WriteAllText(Path.Combine(root, "Layer", SharedModuleFileName), "repository.Get(plugin, id, schemaReflector.GetSchemas(release));");
+            File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "repository.Get(plugin, formKey, schemaReflector.GetSchemas(release));");
             File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "repository.Put(plugin, document);");
 
             var counts = Counts(root, ["Layer"]);
 
             Assert.Equal(
                 [
+                    @"Layer/Second.cs: \.Get\(plugin, formKey, schemaReflector\b: 1",
                     @"Layer/Second.cs: \bHighRangeFormIdFloor\b: 1",
-                    @"Layer/Second.cs: \bUnreadableDocumentFor\b: 1",
                 ],
                 counts);
         }
