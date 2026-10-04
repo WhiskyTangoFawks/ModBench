@@ -18,13 +18,16 @@ const { registerCommand, executeCommand, showQuickPick } = vi.hoisted(() => {
   return { registerCommand, executeCommand: executeCommandRunningTheHandlerRegisteredLastUnderItsId, showQuickPick: vi.fn() };
 });
 
-vi.mock('vscode', () => ({
-  ...fakeVscodeModule(),
-  commands: { registerCommand, executeCommand },
-  window: { showQuickPick },
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
-}));
+vi.mock('vscode', async () => {
+  const { recordedWithProgress } = await import('../../test/recordedProgress');
+  return {
+    ...fakeVscodeModule(),
+    commands: { registerCommand, executeCommand },
+    window: { showQuickPick, withProgress: recordedWithProgress },
+    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
+    Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
+  };
+});
 
 import { Instance } from '../../instanceLoader/instance';
 import { ModListProvider, SeparatorNode, type ModlistNode, type SortDirection } from '../ModListProvider';
@@ -64,13 +67,13 @@ async function viewShownAfterTheInstanceReadsBackTheFileTheActWrote(
     log: () => {}, logReadFailure: () => {},
     adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadedFiles: NO_DOWNLOADS }),
   });
-  const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
+  const provider = new ModListProvider({ instance });
   try {
     await instance.refresh();
     provider.setViewDirection(direction);
     registerCommand.mockClear();
     const reporter = recordingReporter();
-    registerModMoveCommand(accessTo(root), instance, { selection: () => [], direction: () => provider.viewDirection() }, reporter, provider);
+    registerModMoveCommand(accessTo(root), instance, { selection: () => [], direction: () => provider.viewDirection() }, reporter);
     await act(provider, (await shownRowsTopToBottomWithEverySeparatorExpanded(provider)).rows);
     expect(reporter.reports).toEqual([]);
     await instance.refresh();

@@ -6,6 +6,8 @@ import {
   ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder, installNameRefusal,
   type InstallAccess,
 } from '../install/install';
+import { runWritingGesture } from '../drivingLib/writingGesture';
+import { MODS_KEY_ARGS } from './gestureEntry';
 
 /** What the gesture answers its invoker: whether a mod landed. A cancelled picker, a cancelled
  *  name prompt and a refused install are one answer, since each leaves nothing installed. */
@@ -16,7 +18,7 @@ const NOT_INSTALLED: InstallOutcome = { installed: false };
 
 export interface ModInstallDeps {
   access: InstallAccess;
-  instance: Pick<Instance, 'value'>;
+  instance: Pick<Instance, 'value' | 'refresh'>;
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>;
   promptModName: (
     defaultName: string, validate?: (value: string) => Thenable<string | undefined> | string | undefined,
@@ -44,29 +46,30 @@ interface SourceKindItem extends vscode.QuickPickItem {
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { access, instance, runModAction, promptModName, warnIfFomod, installDownloaded } = deps;
+  const runWriting = (command: () => Promise<void>) => runWritingGesture(MODS_KEY_ARGS.view, instance, command);
   const validateName = (name: string) => installNameRefusal(access, name);
   const installArchive = async (archivePath: string): Promise<InstallOutcome> => {
     const name = await promptModName(defaultModName(archivePath), validateName);
     if (!name) return NOT_INSTALLED;
     let succeeded = false;
-    await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
+    await runWriting(() => runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
       const outcome = await installFromArchive(access, { kind: 'new', name }, archivePath, { gameName: instance.value.gameName });
       if (!outcome.applied) throw new Error(outcome.refusal);
       warnIfFomod(name, outcome.isFomod);
       succeeded = true;
-    });
+    }));
     return { installed: succeeded };
   };
   const installFolder = async (folder: string): Promise<InstallOutcome> => {
     const name = await promptModName(defaultModNameForFolder(folder), validateName);
     if (!name) return NOT_INSTALLED;
     let succeeded = false;
-    await runModAction('installFromFolder', `Failed to install "${name}".`, async () => {
+    await runWriting(() => runModAction('installFromFolder', `Failed to install "${name}".`, async () => {
       const outcome = await installFromFolder(access, { kind: 'new', name }, folder, { gameName: instance.value.gameName });
       if (!outcome.applied) throw new Error(outcome.refusal);
       warnIfFomod(name, outcome.isFomod);
       succeeded = true;
-    });
+    }));
     return { installed: succeeded };
   };
   return [
