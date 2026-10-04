@@ -279,9 +279,7 @@ describe('the driving lib\'s name filter imports from neither context', () => {
 
 describe('composition-root modules import from neither context', () => {
   it('the editing teardown module imports from neither context', () => {
-    const imports = importsOf(read('editingTeardown.ts'));
-    expect(imports.filter((s) => s.includes('medit') || s.includes('mods') || s.includes('downloads'))).toEqual([]);
-    expect(imports).toEqual(['vscode']);
+    expect(importsOf(read('editingTeardown.ts'))).toEqual([]);
   });
 
 });

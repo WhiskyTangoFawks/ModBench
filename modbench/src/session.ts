@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import type { MinimalRepository } from './plugins/pluginRowCommands';
 import type { PluginsView } from './plugins/pluginsView';
 import type { LoadOrderSender } from './client';
-import { say } from './editingTeardown';
 
 /** Records a disposable against its owner's teardown and hands it back. The Toolbox's one way
  *  in: `src/test/toolboxScan.test.ts` fails on a registration that skips it. */
@@ -12,8 +11,6 @@ export type Own = <T extends vscode.Disposable>(disposable: T) => T;
 // one object rather than nine module-level singletons. `undefined` until the wiring reaches the
 // field; every reader treats "not yet built" and "no live workspace" alike.
 export interface ExtensionSession {
-  /** Its view carries the load's own progress and incompleteness statement (`TreeView.message`,
-   *  via `say`). */
   plugins?: PluginsView;
   /** The one sender of ADR-0013's snapshot. */
   loadOrderSender?: LoadOrderSender;
@@ -21,14 +18,4 @@ export interface ExtensionSession {
    *  successful field edit can prompt that repository's `status()` and make the Source Control
    *  panel pick up the working-tree change without a manual Refresh. */
   pluginRepositories?: Map<string, MinimalRepository>;
-}
-
-// plugins.md, States, story 2: progress lives in the loading view, never a notification. The
-// message clears on every exit path, so no failure leaves the view claiming a load that is not
-// running.
-export function withPluginsViewProgress<T>(session: ExtensionSession, work: () => Promise<T>): Promise<T> {
-  return Promise.resolve(vscode.window.withProgress(
-    { location: { viewId: 'modbench.pluginListTree' } },
-    async () => { try { return await work(); } finally { say(session, undefined); } },
-  ));
 }

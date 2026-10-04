@@ -4,7 +4,6 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as cp from 'child_process';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
-import { backendStatusText, wireBackendStatus } from './medit/backendStatus';
 import { HttpMEditClient, type BackendLifecycleOptions } from './client';
 import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
@@ -17,16 +16,17 @@ import { createFocusedView } from './drivingLib/focusedView';
 import { moveToTrash } from './trash';
 import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './medit/extendedFieldFiles';
 import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './editor';
-import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
+import { exitEditing } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { registerNameFilter } from './drivingLib/nameFilter';
-import { withPluginsViewProgress, type ExtensionSession } from './session';
+import type { ExtensionSession } from './session';
+import { createStatusBar } from './plugins/statusBar';
 import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText, type FocusedCellContext } from './editor/focusedCells';
 import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 import {
   registerTrackCommand, registerDecompileCommand, registerCompileCommand, CompileProblems, type CompileDeps, type TrackDeps,
-  conflictsComputedOver, refreshSourceControlFor,
+  conflictsComputedOver, refreshSourceControlFor, type PluginsViewProgress,
 } from './plugins/pluginRowCommands';
 import type { OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { registerFilterCommands, type FilterScripts } from './plugins/recordFilterCommands';
@@ -73,8 +73,6 @@ export function activate(context: vscode.ExtensionContext) {
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
 
-  const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  context.subscriptions.push(statusBarItem);
   // Compile's diagnostics — one collection for every tracked mod's source files, in which
   // CompileProblems replaces a plugin's own entries each time it compiles.
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
@@ -83,6 +81,8 @@ export function activate(context: vscode.ExtensionContext) {
   // ADR-0002.
   const meditClient = new HttpMEditClient({ backend: backendOptions(attachPort, outputChannel), log });
   activeClient = meditClient; // deactivate()'s only way to reach it
+  const statusBar = createStatusBar(meditClient);
+  context.subscriptions.push(statusBar);
   const treeProvider = new PluginTreeProvider(meditClient, log);
   const recordPanels = new Set<vscode.WebviewPanel>();
   // The Referenced By view's input — which record panel is active and what FormKey it shows.
@@ -144,7 +144,7 @@ export function activate(context: vscode.ExtensionContext) {
     trash: moveToTrash,
     recordBrowser: treeProvider,
     pluginFacts: meditClient,
-    setStatusText: (t) => { statusBarItem.text = t; },
+    statusBar,
     notifyConflictsComputed,
     extensionId: context.extension.id,
     // Copy value's Referenced By and grid adapters (commands.md, Every view) — the Toolbox owns
@@ -168,7 +168,7 @@ export function activate(context: vscode.ExtensionContext) {
     // lives under plugins/), so it is wired here rather than inside Editor's own registration.
     ...registerFilterCommands({
       scripts: filterScripts, client: meditClient, treeProvider,
-      refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
+      refreshMatchingPlugins: () => { void session.plugins?.tree.refreshFacts(); },
       showRecordFilter: (filter) => session.plugins?.showRecordFilter(filter),
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
@@ -189,17 +189,6 @@ export function activate(context: vscode.ExtensionContext) {
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),
   );
-
-  statusBarItem.text = backendStatusText(meditClient.status);
-  statusBarItem.show();
-  context.subscriptions.push({
-    dispose: wireBackendStatus(meditClient, {
-      setStatusText: (t) => { statusBarItem.text = t; },
-      abandonReconcile: () => session.loadOrderSender?.abandon(),
-      refreshTree: () => { void refreshMatchingPlugins(session); },
-      setUnreachable: (reason) => session.plugins?.tree.applyBackendUnreachable(reason),
-    }),
-  });
 
   wireAutoLaunch(session, meditClient, context, outputChannel, toolbox.enterEditing);
 
@@ -235,9 +224,10 @@ interface PluginRowCommandDeps {
 // editor's own commands (delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
   const { session, client, outputChannel, conflictsComputed, instancePlugins, instanceMods, trackSelection } = deps;
+  const progress = pluginsProgress(session);
   return [
     registerTrackCommand({
-      progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
+      progress,
       client, reporter: makeReporter(outputChannel, 'mod.track'), onTracked: conflictsComputed,
       plugins: instancePlugins,
       mods: instanceMods,
@@ -245,7 +235,7 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
     }, trackSelection),
     registerDecompileCommand({
       client,
-      progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
+      progress,
       reporter: makeReporter(outputChannel, 'plugin.decompile'),
       ask: askQuestion,
     }, () => session.plugins?.view.selection ?? []),
@@ -262,11 +252,19 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
   ];
 }
 
+// Outside an instance there is no Plugins view to show the work.
+function pluginsProgress(session: ExtensionSession): PluginsViewProgress {
+  return {
+    while: (work) => session.plugins?.progress.while(work) ?? work(),
+    say: (message) => session.plugins?.progress.say(message),
+  };
+}
+
 function compileDeps(deps: PluginRowCommandDeps): CompileDeps {
   const { session, client, outputChannel, compileProblems, originFiles } = deps;
   return {
     client,
-    progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
+    progress: pluginsProgress(session),
     reporter: makeReporter(outputChannel, 'plugin.compile'),
     problems: compileProblems,
     originFiles,

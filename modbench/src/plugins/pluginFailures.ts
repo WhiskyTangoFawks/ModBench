@@ -1,6 +1,6 @@
 // ADR-0019; plugins.md, Reporting, story 1.
 
-import type { components } from '../wire/generated/api';
+import type { PluginLoadFailure } from '../client';
 
 export interface FailureSink {
   log: (msg: string) => void;
@@ -8,7 +8,7 @@ export interface FailureSink {
 }
 
 export function reportSkippedPlugins(
-  failures: ReadonlyArray<components['schemas']['PluginLoadFailure']>,
+  failures: readonly PluginLoadFailure[],
   sink: FailureSink,
 ): void {
   if (failures.length === 0) return;

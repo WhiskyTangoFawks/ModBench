@@ -1,8 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { reportSkippedPlugins } from '../pluginFailures';
-import type { components } from '../../wire/generated/api';
-
-type PluginLoadFailure = components['schemas']['PluginLoadFailure'];
+import type { PluginLoadFailure } from '../../client';
 
 function failure(name: string, reason = 'could not be parsed'): PluginLoadFailure {
   return { name, origin: 'SomeMod', reason };

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { RecordFilter } from '../client';
+import type { MEditClient, RecordFilter } from '../client';
 import type { InstanceView } from '../instanceLoader/instance';
 import { originFiles } from '../instanceLoader/loadOrderSnapshot';
 import { messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
@@ -16,6 +16,10 @@ import { registerPluginEnableCommands } from './pluginParticipationCommands';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
 import { makeShowRecordFilter } from './recordFilterCommands';
 import { subscribeTreeToNotifications } from './treeNotifications';
+import { followIndexStatus } from './indexStatus';
+import type { PluginsViewProgress } from './pluginRowCommands';
+import type { ReconcileNarrator } from './reconcileNarrator';
+import type { StatusBar } from './statusBar';
 
 export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, slot, enabled and winning for every plugin. */
@@ -23,8 +27,12 @@ export interface PluginsViewDeps {
   access: PluginsAccess;
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: PluginTreeProvider;
-  /** Every plugin-keyed fact the tree's badges read, and the pushes that re-read them. */
-  client: PluginFactsClient;
+  /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the index
+   *  status. */
+  client: PluginFactsClient & Pick<MEditClient, 'getActiveFilter' | 'onReconnected'>;
+  statusBar: StatusBar;
+  /** A reconcile reached Ready: what the views outside this box refetch. */
+  notifyConflictsComputed: () => void;
   /** Plugin sync's failure, for the view's message line. */
   pluginSync: SyncMessage;
   /** The path of a file at the root of the Data folder, answered by a box this view does not
@@ -39,11 +47,13 @@ export interface PluginsView extends vscode.Disposable {
   view: vscode.TreeView<PluginsTreeNode>;
   nameFilter: NameFilter;
   showRecordFilter: (filter: RecordFilter | null) => void;
+  progress: PluginsViewProgress;
+  narrator: ReconcileNarrator;
 }
 
 // The one Plugins tree (ADR-0017; target-architecture.d2, Plugins).
 export function createPluginsView(deps: PluginsViewDeps): PluginsView {
-  const { instance, access, recordBrowser, client, pluginSync, log, reporterFor } = deps;
+  const { instance, access, recordBrowser, client, pluginSync, statusBar, notifyConflictsComputed, log, reporterFor } = deps;
   const filesOf = (origin: string) => originFiles(instance.value.plugins, origin);
   const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
   const changedOutsideDiagnostics = vscode.languages.createDiagnosticCollection('modbench-changed-outside');
@@ -75,9 +85,16 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const keyContextSubscriptions = [view.onDidChangeSelection(showKeyContext), tree.onDidChangeTreeData(showKeyContext)];
   const nameFilter = registerPluginsNameFilter(view, tree, pluginSync);
   const lens = new FilterCodeLensProvider();
+  const showRecordFilter = makeShowRecordFilter(lens, { pluginsNameFilter: nameFilter, pluginsTree: tree });
+  const progress = pluginsViewProgress(view, nameFilter);
+  const indexStatus = followIndexStatus({
+    client, tree, recordBrowser, progress, statusBar, showRecordFilter, notifyConflictsComputed, log,
+    reporter: reporterFor('loadOrder'),
+  });
   const unsubscribe = subscribeTreeToNotifications(client, recordBrowser, () => { void tree.refreshFacts(); });
   // Disposed in order: what reads the tree and the view goes before them.
   const disposable = vscode.Disposable.from(
+    indexStatus,
     { dispose: unsubscribe },
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, lens),
     ...registerPluginEnableCommands(
@@ -94,9 +111,25 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     view, tree, changedOutsideDiagnostics, loadDiagnostics,
   );
   return {
-    tree, view, nameFilter,
-    showRecordFilter: makeShowRecordFilter(lens, { pluginsNameFilter: nameFilter, pluginsTree: tree }),
+    tree, view, nameFilter, showRecordFilter, progress, narrator: indexStatus.narrator,
     dispose: () => { disposable.dispose(); },
+  };
+}
+
+// `TreeView.message` is the view's message line.
+export function pluginsViewProgress(
+  view: { message?: string | vscode.MarkdownString }, nameFilter: Pick<NameFilter, 'refresh'>,
+): PluginsViewProgress {
+  const say = (message: string | undefined) => {
+    view.message = message;
+    if (message === undefined) nameFilter.refresh();
+  };
+  return {
+    say,
+    while: (work) => Promise.resolve(vscode.window.withProgress(
+      { location: { viewId: 'modbench.pluginListTree' } },
+      async () => { try { await work(); } finally { say(undefined); } },
+    )),
   };
 }
 

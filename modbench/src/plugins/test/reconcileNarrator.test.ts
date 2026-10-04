@@ -18,7 +18,6 @@ function narrated(settle: (status: LoadOrderProgress) => Promise<void> = () => P
     }),
     applyIndexed: vi.fn(),
     applyRefused: vi.fn(),
-    setStatusText: vi.fn(),
     settle: vi.fn(settle),
     log: vi.fn(),
   };
@@ -95,7 +94,7 @@ describe('the reconcile narrator, the view\'s progress and each row\'s indexed s
     expect(deps.settle).toHaveBeenCalledTimes(1);
   });
 
-  it('closes the progress on a refusal and says so in the status bar, handing nothing over', async () => {
+  it('closes the progress on a refusal, handing nothing over', async () => {
     const { deps, progress, narrator } = narrated();
     narrator.hear(tick());
 
@@ -103,11 +102,10 @@ describe('the reconcile narrator, the view\'s progress and each row\'s indexed s
     await flushed();
 
     expect(progress).toEqual([{ closed: true }]);
-    expect(deps.setStatusText).toHaveBeenCalledWith('$(error) mEdit: another Modbench window holds this instance');
     expect(deps.settle).not.toHaveBeenCalled();
   });
 
-  it('hands the refusal to the tree as well as the status bar', async () => {
+  it('hands the refusal to the views', async () => {
     const { deps, narrator } = narrated();
     const refusal = { kind: 'heldElsewhere' as const, message: 'another Modbench window holds this instance' };
 

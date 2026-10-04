@@ -32,6 +32,7 @@ vi.mock('vscode', () => {
         return view;
       },
       registerFileDecorationProvider: disposable,
+      withProgress: (_options: unknown, task: () => Promise<unknown>) => task(),
     },
     languages: {
       createDiagnosticCollection: () => new FakeDiagnosticCollection(),
@@ -44,7 +45,7 @@ vi.mock('vscode', () => {
   };
 });
 
-import { createPluginsView } from '../pluginsView';
+import { createPluginsView, pluginsViewProgress } from '../pluginsView';
 import { PluginTreeProvider } from '../PluginTreeProvider';
 import { InMemoryMEditClient, type NotificationEvent } from '../../client';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -64,6 +65,7 @@ function pluginsView() {
   const plugins = createPluginsView({
     instance: new FakeInstance(instanceValueFixture()), access: accessTo('/instance'), recordBrowser, client,
     pluginSync: syncMessageDouble(), dataFolderFile: () => undefined, log: () => undefined, reporterFor: recordingReporter,
+    statusBar: { ready: vi.fn(), notReady: vi.fn(), dispose: vi.fn() }, notifyConflictsComputed: vi.fn(),
   });
   return { client, recordBrowser, plugins };
 }
@@ -103,5 +105,40 @@ describe('the Plugins view follows mEdit\'s pushes and shows the record filter',
     const [lens] = present(h.lenses[0], 'the registered code lens provider').provideCodeLenses({ getText: () => ARMOR_SQL });
     expect(lens?.command?.command).toBe('modbench.record.clearFilter');
     expect(present(h.views[0], 'the Plugins tree view').description).toBe('records: armor.sql');
+  });
+});
+
+describe('the Plugins view\'s progress', () => {
+  const held = () => {
+    const view: { message?: string } = { message: 'Indexing 3/100…' };
+    const nameFilter = { refresh: vi.fn() };
+    return { view, nameFilter, progress: pluginsViewProgress(view, nameFilter) };
+  };
+
+  it('takes the message line without asking the name filter', () => {
+    const { view, nameFilter, progress } = held();
+
+    progress.say('Starting backend…');
+
+    expect(view.message).toBe('Starting backend…');
+    expect(nameFilter.refresh).not.toHaveBeenCalled();
+  });
+
+  it('gives a cleared line back to the name filter', () => {
+    const { view, nameFilter, progress } = held();
+
+    progress.say(undefined);
+
+    expect(view.message).toBeUndefined();
+    expect(nameFilter.refresh).toHaveBeenCalledOnce();
+  });
+
+  it('clears the line when the work it runs fails', async () => {
+    const { view, nameFilter, progress } = held();
+
+    await expect(progress.while(() => Promise.reject(new Error('boom')))).rejects.toThrow('boom');
+
+    expect(view.message).toBeUndefined();
+    expect(nameFilter.refresh).toHaveBeenCalledOnce();
   });
 });

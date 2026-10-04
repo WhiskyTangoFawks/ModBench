@@ -1,134 +1,38 @@
 import { describe, it, expect, vi } from 'vitest';
-import { backendStatusText, wireBackendStatus, enterEditingAcrossRestarts } from '../backendStatus';
+import { abandonSendWhenMEditGoes, enterEditingAcrossRestarts } from '../backendStatus';
 import { InMemoryMEditClient, createLoadOrderSender } from '../../client';
 import { present } from '../../ports/present';
 
-function makeViews() {
-  return { setStatusText: vi.fn(), abandonReconcile: vi.fn(), refreshTree: vi.fn(), setUnreachable: vi.fn() };
-}
-
-describe('backendStatusText', () => {
-  it('names each backend state the way the status bar shows it', () => {
-    expect(backendStatusText('starting')).toBe('$(loading~spin) mEdit: Starting…');
-    expect(backendStatusText('running')).toBe('$(plug) mEdit: Running');
-    expect(backendStatusText('disconnected')).toBe('$(error) mEdit: Disconnected');
-    expect(backendStatusText('stopped')).toBe('$(circle-slash) mEdit: Stopped');
-  });
-});
-
-describe('wireBackendStatus', () => {
-  it('writes the status bar on every change', () => {
+describe('abandonSendWhenMEditGoes', () => {
+  it.each(['disconnected', 'stopped'] as const)('abandons the send in flight when mEdit is %s', (status) => {
     const client = new InMemoryMEditClient();
-    const views = makeViews();
-    wireBackendStatus(client, views);
+    const sender = { abandon: vi.fn() };
+    abandonSendWhenMEditGoes(client, sender);
 
-    client.setStatus('running');
+    client.setStatus(status);
 
-    expect(views.setStatusText).toHaveBeenCalledWith('$(plug) mEdit: Running');
+    expect(sender.abandon).toHaveBeenCalledOnce();
   });
 
-  it('refreshes the tree when the backend goes, since the badges it holds describe a backend that is gone', () => {
+  it.each(['starting', 'running'] as const)('leaves the armed send alone while mEdit is %s, since a launch arms its send before the start', (status) => {
     const client = new InMemoryMEditClient();
-    const views = makeViews();
-    wireBackendStatus(client, views);
+    const sender = { abandon: vi.fn() };
+    abandonSendWhenMEditGoes(client, sender);
 
-    client.setStatus('disconnected');
+    client.setStatus(status);
 
-    expect(views.refreshTree).toHaveBeenCalled();
+    expect(sender.abandon).not.toHaveBeenCalled();
   });
 
-  it('abandons an in-flight reconcile when the backend goes disconnected', () => {
+  it('abandons nothing once unsubscribed', () => {
     const client = new InMemoryMEditClient();
-    const views = makeViews();
-    wireBackendStatus(client, views);
-
-    client.setStatus('disconnected');
-
-    expect(views.abandonReconcile).toHaveBeenCalled();
-  });
-
-  it('abandons an in-flight reconcile when the backend stops', () => {
-    const client = new InMemoryMEditClient();
-    const views = makeViews();
-    wireBackendStatus(client, views);
-
-    client.setStatus('stopped');
-
-    expect(views.abandonReconcile).toHaveBeenCalled();
-  });
-
-  it('leaves the armed reconcile alone while the backend is starting, since a launch arms its reconcile before the start that emits starting', () => {
-    const client = new InMemoryMEditClient();
-    const views = makeViews();
-    wireBackendStatus(client, views);
-
-    client.setStatus('starting');
-
-    expect(views.abandonReconcile).not.toHaveBeenCalled();
-    expect(views.refreshTree).not.toHaveBeenCalled();
-  });
-
-  it('an attached backend is left to the reconcile, since the tree reading the plugin list before that PUT would ask a backend that holds no load order', () => {
-    const client = new InMemoryMEditClient();
-    const views = makeViews();
-    wireBackendStatus(client, views);
-
-    client.setStatus('running');
-
-    expect(views.abandonReconcile).not.toHaveBeenCalled();
-    expect(views.refreshTree).not.toHaveBeenCalled();
-  });
-
-  it('stops reporting once unsubscribed', () => {
-    const client = new InMemoryMEditClient();
-    const views = makeViews();
-    const off = wireBackendStatus(client, views);
+    const sender = { abandon: vi.fn() };
+    const off = abandonSendWhenMEditGoes(client, sender);
 
     off();
     client.setStatus('disconnected');
 
-    expect(views.setStatusText).not.toHaveBeenCalled();
-    expect(views.abandonReconcile).not.toHaveBeenCalled();
-  });
-
-  it('names the tree unreachable when the backend disconnects, from the same status the bar reads', () => {
-    const client = new InMemoryMEditClient();
-    const views = makeViews();
-    wireBackendStatus(client, views);
-
-    client.setStatus('disconnected');
-
-    expect(views.setUnreachable).toHaveBeenCalledWith('mEdit is disconnected.');
-  });
-
-  it('names the tree unreachable when the backend stops', () => {
-    const client = new InMemoryMEditClient();
-    const views = makeViews();
-    wireBackendStatus(client, views);
-
-    client.setStatus('stopped');
-
-    expect(views.setUnreachable).toHaveBeenCalledWith('mEdit is stopped.');
-  });
-
-  it('never names the tree unreachable while the backend is starting', () => {
-    const client = new InMemoryMEditClient();
-    const views = makeViews();
-    wireBackendStatus(client, views);
-
-    client.setStatus('starting');
-
-    expect(views.setUnreachable).not.toHaveBeenCalled();
-  });
-
-  it('never names the tree unreachable once attached', () => {
-    const client = new InMemoryMEditClient();
-    const views = makeViews();
-    wireBackendStatus(client, views);
-
-    client.setStatus('running');
-
-    expect(views.setUnreachable).not.toHaveBeenCalled();
+    expect(sender.abandon).not.toHaveBeenCalled();
   });
 });
 
@@ -145,9 +49,7 @@ describe('a backend that disconnects mid-send', () => {
       signal.addEventListener('abort', () => resolve({ outcome: 'abandoned' }));
     }));
     const sender = createLoadOrderSender(client);
-    wireBackendStatus(client, {
-      setStatusText: vi.fn(), abandonReconcile: () => sender.abandon(), refreshTree: vi.fn(), setUnreachable: vi.fn(),
-    });
+    abandonSendWhenMEditGoes(client, sender);
 
     const outcome = sender.send({
       plugins: [], active: [], loadedWithNoLine: [], gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4',
