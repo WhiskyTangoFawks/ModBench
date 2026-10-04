@@ -96,11 +96,12 @@ export class FileNode extends vscode.TreeItem {
     public readonly file: OriginFile,
     name: string,
     public readonly inConflict = false,
+    public readonly losesConflict = false,
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
     fileRow(this, parent, origin, name, file.relativePath);
     this.exclusion = FILE_MARKS[file.excludedByName ? 'Excluded' : 'Included'].state;
-    this.contextValue = ['file', inConflict && 'conflict', this.exclusion].filter(Boolean).join(' ');
+    this.contextValue = ['file', inConflict && 'conflict', losesConflict && 'losing', this.exclusion].filter(Boolean).join(' ');
     this.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file.path), { preview: true }] };
   }
 
@@ -113,7 +114,7 @@ export class FileNode extends vscode.TreeItem {
  *  those under it, and `path` is its own path in its mod, none for the mod or Overwrite itself. */
 export function filesIn(
   parent: ModlistNode, origin: FileOrigin, files: readonly OriginFile[], folders: readonly OriginFolder[], path?: string,
-  filter?: { shown: ChildrenShown; matches: NameMatch; inConflict: (origin: FileOrigin, file: OriginFile) => boolean },
+  filter?: { shown: ChildrenShown; matches: NameMatch; inConflict: (origin: FileOrigin, file: OriginFile) => boolean; losesConflict: (origin: FileOrigin, file: OriginFile) => boolean },
 ): (FolderNode | FileNode)[] {
   const prefix = path === undefined ? '' : `${path}/`;
   const ownFiles = byLevel(files, prefix);
@@ -123,6 +124,6 @@ export function filesIn(
       parent, origin, folder, ownFiles.below.get(name) ?? [], ownFolders.below.get(name) ?? [], name,
       filter ? shownUnder(filter.shown, filter.matches, name) : 'all',
     )),
-    ...[...ownFiles.here].sort(byName).map(([name, file]) => new FileNode(parent, origin, file, name, filter?.inConflict(origin, file))),
+    ...[...ownFiles.here].sort(byName).map(([name, file]) => new FileNode(parent, origin, file, name, filter?.inConflict(origin, file), filter?.losesConflict(origin, file))),
   ];
 }

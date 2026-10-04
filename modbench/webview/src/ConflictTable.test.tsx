@@ -116,16 +116,22 @@ describe('a mod named as Overwrite is', () => {
 });
 
 describe('the conflict table\'s cells', () => {
-  it('hand a menu their mod and file only where the copy is a mod\'s and not the winning one', () => {
-    const cell = (winning?: true): ConflictCell => ({ state: null, ...(winning && { winning }) });
-    show({
-      kind: 'table', columns,
-      rows: [{ kind: 'file', name: 'a.dds', path: 'a.dds', cells: [cell(), cell(true), null], state: null }],
-    });
+  const contextsOf = (cells: (ConflictCell | null)[]) => {
+    show({ kind: 'table', columns, rows: [{ kind: 'file', name: 'a.dds', path: 'a.dds', cells, state: null }] });
+    return Array.from(rowOf('a.dds').querySelectorAll('td')).slice(1)
+      .map((td) => td.getAttribute('data-vscode-context')).map((context) => context && JSON.parse(context) as unknown);
+  };
+  const cell = (winning?: true): ConflictCell => ({ state: null, ...(winning && { winning }) });
 
-    const contexts = Array.from(rowOf('a.dds').querySelectorAll('td')).slice(1).map((td) => td.getAttribute('data-vscode-context'));
-    expect(contexts.map((context) => context && JSON.parse(context) as unknown)).toEqual([
-      { webviewSection: 'conflictCell', mod: 'Low', path: 'a.dds', preventDefaultContextMenuItems: true }, null, null,
+  it('hand a menu their origin and file where the copy is not the winning one', () => {
+    expect(contextsOf([cell(), cell(true), null])).toEqual([
+      { webviewSection: 'conflictCell', origin: { kind: 'mod', name: 'Low' }, path: 'a.dds', preventDefaultContextMenuItems: true }, null, null,
+    ]);
+  });
+
+  it('hand a menu nothing from Overwrite\'s winning copy, nor from a column with no copy', () => {
+    expect(contextsOf([null, cell(), cell(true)])).toEqual([
+      null, { webviewSection: 'conflictCell', origin: { kind: 'mod', name: 'Opened' }, path: 'a.dds', preventDefaultContextMenuItems: true }, null,
     ]);
   });
 });

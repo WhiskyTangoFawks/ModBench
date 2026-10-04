@@ -1,17 +1,17 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
+import { WEBVIEW_STYLESHEET } from './webviewStylesheet';
 
-/** A page of the webview build: its script, the stylesheet the build emits for it when it imports
- *  any, and what is set on `window` before the script runs. */
+/** A page of the webview build: its script, and what is set on `window` before the script runs.
+ *  Every page links the build's one stylesheet. */
 export interface WebviewPage {
   readonly script: string;
-  readonly stylesheet?: string;
   readonly globals?: Readonly<Record<string, unknown>>;
 }
 
 export function showWebviewPage(
   webview: Pick<vscode.Webview, 'options' | 'html' | 'cspSource' | 'asWebviewUri'>, extensionUri: vscode.Uri,
-  { script, stylesheet, globals = {} }: WebviewPage,
+  { script, globals = {} }: WebviewPage,
 ): void {
   const root = vscode.Uri.joinPath(extensionUri, 'out', 'webview');
   webview.options = { enableScripts: true, localResourceRoots: [root] };
@@ -19,13 +19,13 @@ export function showWebviewPage(
   const { cspSource } = webview;
   const nonce = crypto.randomBytes(16).toString('base64');
   const assignments = Object.entries(globals).map(([name, value]) => `window.${name} = ${JSON.stringify(value)};`).join(' ');
-  const link = stylesheet === undefined ? '' : `\n  <link rel="stylesheet" href="${asset(stylesheet)}">`;
   webview.html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; script-src 'nonce-${nonce}' ${cspSource}; style-src ${cspSource} 'unsafe-inline'; font-src ${cspSource};">${link}
+    content="default-src 'none'; script-src 'nonce-${nonce}' ${cspSource}; style-src ${cspSource} 'unsafe-inline'; font-src ${cspSource};">
+  <link rel="stylesheet" href="${asset(WEBVIEW_STYLESHEET)}">
 </head>
 <body>
   <div id="root"></div>

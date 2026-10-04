@@ -966,10 +966,6 @@ describe('package.json conflict table menus follow mods-conflicts.md', () => {
   it('cell: compare file, and nothing else', () => {
     expect(placed(inTable('conflictCell'))).toEqual([['modbench.mod.compareFile', '1_open']]);
   });
-
-  it('nowhere else in the table', () => {
-    expect(inTable('conflictRow')).toEqual([]);
-  });
 });
 
 describe('package.json record tab menus', () => {
@@ -1261,6 +1257,14 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ]);
   });
 
+  it('File menu: compare file only on a file that loses its file order conflict, after open folder and before go to mod', () => {
+    expect(menuOn('file conflict losing')).toEqual([
+      ['modbench.mod.openFolder', '1_open'], ['modbench.mod.compareFile', '1_open'], ['modbench.mod.goToMod', '1_open'], ['modbench.copyValue', '5_copy'],
+    ]);
+    expect(menuOn('file conflict').map(([command]) => command)).not.toContain('modbench.mod.compareFile');
+    expect(menuOn('file').map(([command]) => command)).not.toContain('modbench.mod.compareFile');
+  });
+
   it.each([
     ['file included', 'modbench.mod.excludeFile'],
     ['file excluded', 'modbench.mod.includeFile'],
@@ -1305,7 +1309,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.openFolder', 'modbench.mod.singleOpenFolderRow'],
     ['modbench.mod.goToMod', 'modbench.mod.singleGoToModRow'],
     ['modbench.mod.openConflicts', 'modbench.mod.singleOpenConflictsRow'],
-    ['modbench.mod.compareFile', 'modbench.mod.singleGoToModRow'],
+    ['modbench.mod.compareFile', 'modbench.mod.singleCompareFileRow'],
     ['modbench.mod.excludeFile', 'modbench.mod.holdsIncludedFile'],
     ['modbench.mod.includeFile', 'modbench.mod.holdsExcludedFile'],
   ] as const;

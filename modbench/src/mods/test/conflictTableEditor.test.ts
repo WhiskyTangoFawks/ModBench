@@ -157,7 +157,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
     expect(panel.title).toBe('Conflicts: High');
     expect(panel.webview.html).toContain('assets/conflicts.js');
-    expect(panel.webview.html).toContain('assets/main.css');
+    expect(panel.webview.html).toContain('assets/webview.css');
   });
 
   it('shows the table, each cell and header in the state the which-copies answer gives, once the page is ready to hear it', async () => {

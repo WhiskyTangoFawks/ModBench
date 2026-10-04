@@ -23,7 +23,6 @@ export interface ConflictColumn {
 export interface ConflictCell {
   readonly state: ConflictCellState | null;
   readonly unreadable?: string;
-  /** The copy the game reads. */
   readonly winning?: true;
 }
 
@@ -70,9 +69,15 @@ export interface ConflictColumnContext {
 
 export interface ConflictCellContext {
   readonly webviewSection: 'conflictCell';
-  readonly mod: string;
+  readonly origin: ConflictOrigin;
   readonly path: string;
   readonly preventDefaultContextMenuItems: true;
+}
+
+function isOrigin(value: unknown): value is ConflictOrigin {
+  if (!isObject(value)) return false;
+  const kind: unknown = Reflect.get(value, 'kind');
+  return kind === 'runtimeOutput' || (kind === 'mod' && typeof Reflect.get(value, 'name') === 'string');
 }
 
 const isObject = (value: unknown): value is object => typeof value === 'object' && value !== null;
@@ -100,10 +105,9 @@ export function modOfConflictColumn(value: unknown): string | undefined {
   return typeof mod === 'string' ? mod : undefined;
 }
 
-/** The mod and file a cell's context names. */
-export function copyOfConflictCell(value: unknown): { readonly mod: string; readonly path: string } | undefined {
+export function copyOfConflictCell(value: unknown): { readonly origin: ConflictOrigin; readonly path: string } | undefined {
   if (!isObject(value) || Reflect.get(value, 'webviewSection') !== 'conflictCell') return undefined;
-  const mod: unknown = Reflect.get(value, 'mod');
+  const origin: unknown = Reflect.get(value, 'origin');
   const path: unknown = Reflect.get(value, 'path');
-  return typeof mod === 'string' && typeof path === 'string' ? { mod, path } : undefined;
+  return isOrigin(origin) && typeof path === 'string' ? { origin, path } : undefined;
 }

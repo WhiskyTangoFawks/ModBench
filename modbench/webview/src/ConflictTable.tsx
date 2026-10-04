@@ -24,8 +24,8 @@ function headerContext({ origin }: ConflictColumn): string | undefined {
 }
 
 function cellContext({ origin }: ConflictColumn, path: string, cell: ConflictCell | null): string | undefined {
-  if (origin.kind !== 'mod' || cell === null || cell.winning === true) return undefined;
-  const context: ConflictCellContext = { webviewSection: 'conflictCell', mod: origin.name, path, preventDefaultContextMenuItems: true };
+  if (cell === null || cell.winning === true) return undefined;
+  const context: ConflictCellContext = { webviewSection: 'conflictCell', origin, path, preventDefaultContextMenuItems: true };
   return JSON.stringify(context);
 }
 

@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "path";
+import { WEBVIEW_STYLESHEET } from "../src/drivingLib/webviewStylesheet";
 
 export default defineConfig({
   plugins: [react()],
@@ -20,7 +21,7 @@ export default defineConfig({
       output: {
         entryFileNames: "assets/[name].js",
         chunkFileNames: "assets/[name].js",
-        assetFileNames: ({ name }) => (name === "style.css" ? "assets/main.css" : "assets/[name][extname]"),
+        assetFileNames: ({ name }) => (name === "style.css" ? `assets/${WEBVIEW_STYLESHEET}` : "assets/[name][extname]"),
       },
     },
   },
