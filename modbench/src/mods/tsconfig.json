@@ -12,7 +12,8 @@
     { "path": "../instanceLoader" },
     { "path": "../install" },
     { "path": "../modlist" },
-    { "path": "../ports" }
+    { "path": "../ports" },
+    { "path": "../wire" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

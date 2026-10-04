@@ -5,18 +5,12 @@ import type { FileOrigin, OriginFile, OriginFolder } from '../instanceLoader/ins
 import { originLabel } from '../instanceLoader/fileConflictIndex';
 import type { ModlistNode } from './ModListProvider';
 import type { OriginFileMark, OriginFileRef } from '../modlist/modlist';
+import { byLevel, byName } from './fileTree';
 
 // Not `file:`: VS Code badges and tints a row whose resourceUri carries a diagnostic or another
 // provider's file decoration, and a file row draws neither. The file icon theme reads the name
 // from the URI's last segment.
 const FILE_ROW_SCHEME = 'modbench-mod-file';
-
-// The Explorer's default order: case aside, and a run of digits by its value. Names equal but for
-// case, which a case-sensitive file system holds, then go by code unit, as the Explorer's do.
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-const byName = ([a]: readonly [string, unknown], [b]: readonly [string, unknown]): number =>
-  collator.compare(a, b) || byCodeUnit(a, b);
 
 export type ChildrenShown = 'all' | 'matching';
 
@@ -113,24 +107,6 @@ export class FileNode extends vscode.TreeItem {
   get ref(): OriginFileRef {
     return { origin: this.origin, relativePath: this.file.relativePath };
   }
-}
-
-// Each entry directly in a folder by its name, and those below it by the name of the folder that
-// holds them.
-function byLevel<T extends { readonly relativePath: string }>(entries: readonly T[], prefix: string) {
-  const here = new Map<string, T>();
-  const below = new Map<string, T[]>();
-  for (const entry of entries) {
-    const rest = entry.relativePath.slice(prefix.length);
-    const slash = rest.indexOf('/');
-    if (slash === -1) {
-      here.set(rest, entry);
-      continue;
-    }
-    const name = rest.slice(0, slash);
-    below.set(name, [...below.get(name) ?? [], entry]);
-  }
-  return { here, below };
 }
 
 /** The folders, then the files, directly in `parent`, each by name. `files` and `folders` are

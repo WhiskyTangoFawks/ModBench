@@ -147,6 +147,7 @@ export function activate(context: vscode.ExtensionContext) {
     statusBar,
     notifyConflictsComputed,
     extensionId: context.extension.id,
+    extensionUri: context.extensionUri,
     // Copy value's Referenced By and grid adapters (commands.md, Every view) — the Toolbox owns
     // the command's one registration, alongside the other lists' gestures.
     focusedView,

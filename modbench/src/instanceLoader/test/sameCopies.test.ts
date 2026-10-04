@@ -181,7 +181,7 @@ describe('Instance — which copies of a file are the same', () => {
 });
 
 describe('SameCopies — what it remembers', () => {
-  it('forgets a copy the value it answers for no longer holds', async () => {
+  it('reads again a copy that left the value and came back', async () => {
     const stamp = { size: 4n, modifiedNs: 1n, changedNs: 1n };
     const digested: string[] = [];
     const copies = new SameCopies({

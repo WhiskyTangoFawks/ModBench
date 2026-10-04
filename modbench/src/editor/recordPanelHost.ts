@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import type { EditsInFlight } from './followRecord';
-import { buildWebviewHtml } from './webviewHtml';
+import { showWebviewPage } from '../drivingLib/webviewPage';
+import { reportFailure } from '../drivingLib/reportFailure';
 import { pickRecord } from './recordPicker';
 import { routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps } from './recordPanelMessageRouter';
 import type { FocusedCells } from './focusedCells';
@@ -102,11 +103,6 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
     const formKey = document.formKey;
     panel.title = recordTitle(formKey, undefined);
 
-    panel.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'out', 'webview')],
-    };
-
     recordPanels.add(panel);
     panel.onDidDispose(() => recordPanels.delete(panel));
     panel.onDidDispose(() => { editsInFlight.forget(panel); });
@@ -133,11 +129,8 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
       void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells));
     });
 
-    const asset = (file: string) => panel.webview.asWebviewUri(
-      vscode.Uri.joinPath(context.extensionUri, 'out', 'webview', 'assets', file),
-    ).toString();
-    panel.webview.html = buildWebviewHtml({
-      formKey, scriptUri: asset('main.js'), styleUri: asset('main.css'), cspSource: panel.webview.cspSource,
+    showWebviewPage(panel.webview, context.extensionUri, {
+      script: 'main.js', stylesheet: 'main.css', globals: { mEditFormKey: formKey },
     });
   }
 }
@@ -189,30 +182,34 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     ...registerDeleteHereCommands(deps.viewSelections),
     vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {
       const plan = recordOpenPlan(argument, deps.focusedViewSelection());
-      if (plan.addresses.length > 0) return openRecordTabs(plan);
       const reporter = deps.reporterFor('recordOpen');
+      if (plan.addresses.length > 0) return openRecordTabs(reporter, plan);
       if (argument !== undefined) {
         reporter.report('error', 'Could not open a record.', 'What was given names no record.');
         return;
       }
       const formKey = await pickRecord({ meditClient, reporter }, '', []);
-      if (formKey) await openRecordTab({ formKey }, vscode.ViewColumn.Active, true);
+      if (formKey) await openRecordTab(reporter, { formKey }, vscode.ViewColumn.Active, true);
     }),
     vscode.commands.registerCommand('modbench.record.openToSide', (row?: unknown, selection?: unknown) =>
       vscode.commands.executeCommand('modbench.record.open', besideArgument(row, selection))),
   ];
 }
 
-async function openRecordTab(address: RecordAddress, viewColumn: vscode.ViewColumn, preview: boolean): Promise<void> {
-  await vscode.commands.executeCommand('vscode.openWith', recordUri(address), RECORD_EDITOR_VIEW_TYPE, { viewColumn, preview });
+async function openRecordTab(
+  reporter: Reporter, address: RecordAddress, viewColumn: vscode.ViewColumn, preview: boolean,
+): Promise<void> {
+  await reportFailure(reporter, `Failed to open "${address.formKey}".`, async () => {
+    await vscode.commands.executeCommand('vscode.openWith', recordUri(address), RECORD_EDITOR_VIEW_TYPE, { viewColumn, preview });
+  });
 }
 
 // `ViewColumn.Beside` resolves once: the first tab opened becomes active, so a second Beside call
 // would cascade a new column per record — the await lets this loop read it after each tab settles.
-async function openRecordTabs({ addresses, beside, preview }: RecordOpenPlan): Promise<void> {
+async function openRecordTabs(reporter: Reporter, { addresses, beside, preview }: RecordOpenPlan): Promise<void> {
   let column: vscode.ViewColumn = beside ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active;
   for (const address of addresses) {
-    await openRecordTab(address, column, preview);
+    await openRecordTab(reporter, address, column, preview);
     if (beside) column = vscode.window.tabGroups.activeTabGroup.viewColumn;
   }
 }

@@ -126,6 +126,17 @@ describe('modbench.record.open from the palette, with no Argument', () => {
     expect(executeCommand).not.toHaveBeenCalled();
   });
 
+  it('reports a record VS Code could not open, and still opens the rest', async () => {
+    reporter.report.mockClear();
+    executeCommand.mockRejectedValueOnce(new Error('no editor'));
+    register(() => [{ formKey: '000801:A.esp', kind: 'placed' }, { formKey: '000802:A.esp', kind: 'placed' }]);
+
+    await open();
+
+    expect(reporter.report.mock.calls).toEqual([['error', 'Failed to open "000801:A.esp".', 'no editor']]);
+    expect(executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith')).toHaveLength(2);
+  });
+
   it('does not ask when the selection holds a record', async () => {
     register(() => [{ formKey: '000801:A.esp', kind: 'placed' }]);
 

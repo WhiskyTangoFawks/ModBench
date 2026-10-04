@@ -6,7 +6,7 @@ import type { FileOrigin, Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import { registerModsGesture, singularArgument } from './gestureEntry';
 import type { ModlistNode, ModNode, OverwriteNode } from './ModListProvider';
-import { reportFailure } from './modManagementCommands';
+import { reportFailure } from '../drivingLib/reportFailure';
 
 export interface GoToModView {
   selection: () => readonly ModlistNode[];

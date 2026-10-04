@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { FileOrigin, Mod, OriginFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
-import { goToModCandidates, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { inFileOrderConflict, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistGroup, type ModlistTree } from './modlistTree';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
@@ -15,6 +15,7 @@ import {
   type ChildrenShown,
 } from './modFiles';
 import { modRowUri } from './modIndicators';
+import { filesInConflict } from './conflictTable';
 
 /** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
 export type SortDirection = 'losingAtTop' | 'winningAtTop';
@@ -137,15 +138,17 @@ function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>, facts: ModFacts 
   const flags = [
     mod.nexusId !== undefined && 'hasNexus', mod.enabled ? 'enabled' : 'disabled',
     facts?.holdsPlugin === true && 'holdsPlugin', facts?.tracked === false && 'untracked',
+    facts?.fileOrderConflict === true && 'fileOrderConflict',
   ];
   return ['mod', ...flags.filter((f): f is string => f !== false)].join(' ');
 }
 
-/** What the instance value says of a mod beyond its entry: whether it holds a plugin, and whether
- *  its folder holds a repository. */
+/** What the instance value says of a mod beyond its entry: whether it holds a plugin, whether its
+ *  folder holds a repository, and whether it has a file order conflict. */
 export interface ModFacts {
   readonly holdsPlugin: boolean;
   readonly tracked: boolean;
+  readonly fileOrderConflict: boolean;
 }
 
 /** A separator and the mods it shows: every mod it holds, or only the matching ones when a filter
@@ -678,6 +681,7 @@ export class ModListProvider
     const found = shown === 'matching' ? narrowToMatches(files, folders, this.matches) : { files, folders };
     const row = new ModNode({ ...m, enabled: write?.enabled ?? m.enabled }, {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked: this.instanceValue.trackedMods.has(m.name),
+      fileOrderConflict: filesInConflict(this.instanceValue, m.name).length > 0,
     }, found.files, found.folders, shown);
     if (write?.marked || this.shapeMarked(m)) markRow(row);
     return row;
@@ -685,7 +689,7 @@ export class ModListProvider
 
   private within(row: ModNode | OverwriteNode | FolderNode) {
     const inConflict = (origin: FileOrigin, file: OriginFile) =>
-      goToModCandidates(this.instanceValue.files.get(file.relativePath), origin).length > 0;
+      inFileOrderConflict(this.instanceValue.files.get(file.relativePath), origin);
     return { shown: row.shown, matches: this.matches, inConflict };
   }
 

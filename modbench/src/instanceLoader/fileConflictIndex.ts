@@ -33,6 +33,12 @@ export function goToModCandidates(entry: ConflictEntry | undefined, own: FileOri
   return at === 0 ? providers.slice(1) : providers.slice(0, 1);
 }
 
+/** Whether `own` provides the path, and another enabled copy or Overwrite's does too. */
+export function inFileOrderConflict(entry: ConflictEntry | undefined, own: FileOrigin): boolean {
+  const providers = entry?.providers ?? [];
+  return providers.length > 1 && providers.some((provider) => sameOrigin(provider, own));
+}
+
 /** Comparison keys only — never display, never written back to disk. Locale-independent,
  *  since a case-variant collision is a filesystem fact rather than a locale one. */
 export function foldPath(relativePath: string): string {
