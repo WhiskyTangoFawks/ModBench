@@ -2,16 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
-import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+import { cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
   uriFile, uriFrom, DataTransferItem, DataTransfer,
-} from './vscodeMock';
+} from '../../test/vscodeMock';
 import {
   filterBoxWindowMock, filterBoxCommandsMock, currentBoxOf, waitForMessage,
-} from '../drivingLib/test/nameFilterViewHarness';
-import { fakeView } from '../drivingLib/test/selectableViewDouble';
+} from '../../drivingLib/test/nameFilterViewHarness';
 
 const h = vi.hoisted(() => ({
   state: {
@@ -32,6 +31,7 @@ vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
   Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
+  Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
   window: {
     ...filterBoxWindowMock(h.state),
     createTreeView: (id: string, options: { treeDataProvider: unknown }) => {
@@ -46,6 +46,7 @@ vi.mock('vscode', () => ({
           h.visibilityListeners.push(listener);
           return { dispose: () => undefined };
         },
+        onDidChangeCheckboxState: () => ({ dispose: () => undefined }),
         reveal: (element: { label: unknown }, revealOptions: unknown) => {
           if (h.revealRefusal.value) return Promise.reject(h.revealRefusal.value);
           h.reveals.push({ label: element.label, options: revealOptions });
@@ -69,21 +70,15 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { Instance } from '../instanceLoader/instance';
-import { ModListProvider, ModNode, SeparatorNode } from '../mods/ModListProvider';
-import {
-  createModListView, lastSelectedViewSelection, nexusRowInLastSelectedView,
-} from '../treeViews';
-import { DownloadNode } from '../downloads/DownloadsProvider';
-import { downloadRowFixture } from './mo2/downloadRowFixture';
-import { withUnreadCorpusInstance } from './mo2/unreadCorpusInstance';
-import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
-import { adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
-import { syncMessageDouble } from './syncMessageDouble';
-import { FakeInstance } from './mo2/fakeInstance';
-import { instanceValueFixture } from './mo2/instanceValueFixture';
-
-const own = <T extends { dispose: () => void }>(d: T): T => d;
+import { Instance } from '../../instanceLoader/instance';
+import { ModNode, SeparatorNode } from '../ModListProvider';
+import { createModsView } from '../modsView';
+import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
+import { adapterOver, STEADY_WINDOW } from '../../test/mo2/adapterOver';
+import { syncMessageDouble } from '../../test/syncMessageDouble';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const currentBox = currentBoxOf(h.state);
 
@@ -115,10 +110,10 @@ describe('the Mods filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
     const root = cloneCorpusFixture();
     const instance = await makeSettledInstance(root);
-    const provider = new ModListProvider({ instance });
+    const { provider, view: modListView, nameFilter: modListFilter } =
+      createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
     await provider.getChildren();
 
-    const { modListView, modListFilter } = createModListView(own, provider, () => undefined, syncMessageDouble());
     modListFilter.open();
     currentBox().type('zzznomatch');
     await waitForMessage(modListView, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
@@ -142,8 +137,7 @@ describe('the Mods view\'s description counts the mods', () => {
   it('reads the enabled mods over the listed mods, then the term, counting the whole list', async () => {
     const root = cloneCorpusFixture();
     const instance = await makeSettledInstance(root);
-    const provider = new ModListProvider({ instance });
-    const { modListView, modListFilter } = createModListView(own, provider, () => undefined, syncMessageDouble());
+    const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
     expect(modListView.description).toBe('7 / 8');
 
     modListFilter.open();
@@ -154,14 +148,26 @@ describe('the Mods view\'s description counts the mods', () => {
   it('follows a new instance value, with nothing pushed', async () => {
     const root = cloneCorpusFixture();
     const instance = await makeSettledInstance(root);
-    const provider = new ModListProvider({ instance });
-    const { modListView } = createModListView(own, provider, () => undefined, syncMessageDouble());
+    const { view: modListView } = createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
 
     const modlistPath = join(root, DEFAULT_MODLIST);
     await writeFile(modlistPath, `${await readFile(modlistPath, 'utf8')}-Parked Mod\r\n`);
     await instance.refresh();
 
     expect(modListView.description).toBe('7 / 9');
+  });
+});
+
+describe('the Mods title-bar sort icons', () => {
+  it('set the tree\'s own direction, and the key the icon reads', async () => {
+    const instance = await makeSettledInstance(cloneCorpusFixture());
+    const { provider } = createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
+
+    expect(h.state.contextKeys.get('modbench.mod.winningAtTop')).toBe(false);
+    await h.state.commands.get('modbench.mod.sortWinningAtTop')?.();
+    expect([provider.viewDirection(), h.state.contextKeys.get('modbench.mod.winningAtTop')]).toEqual(['winningAtTop', true]);
+    await h.state.commands.get('modbench.mod.sortLosingAtTop')?.();
+    expect([provider.viewDirection(), h.state.contextKeys.get('modbench.mod.winningAtTop')]).toEqual(['losingAtTop', false]);
   });
 });
 
@@ -174,8 +180,7 @@ describe('the Mods view tells its keys, which are handed no row, what the select
   it('sets the Space direction and the Delete and F2 kind off the selection', async () => {
     const root = cloneCorpusFixture();
     const instance = await makeSettledInstance(root);
-    const provider = new ModListProvider({ instance });
-    const { modListView } = createModListView(own, provider, () => undefined, syncMessageDouble());
+    const { view: modListView } = createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
 
     const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod']
       .map((name) => `modbench.mod.${name}`);
@@ -199,8 +204,7 @@ describe('the Mods view tells its keys, which are handed no row, what the select
   it('follows a mod enabled on disk while the selection still holds the row built before', async () => {
     const root = cloneCorpusFixture();
     const instance = await makeSettledInstance(root);
-    const provider = new ModListProvider({ instance });
-    const { modListView } = createModListView(own, provider, () => undefined, syncMessageDouble());
+    const { view: modListView } = createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
     select(modListView, [new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
 
     const modlistPath = join(root, DEFAULT_MODLIST);
@@ -215,8 +219,7 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   const mountFiltered = async (term: string, log: (line: string) => void = () => undefined) => {
     const root = cloneCorpusFixture();
     const instance = await makeSettledInstance(root);
-    const provider = new ModListProvider({ instance });
-    createModListView(own, provider, log, syncMessageDouble()).modListFilter.open();
+    createModsView({ instance, log, modSync: syncMessageDouble() }).nameFilter.open();
     currentBox().type(term);
     await new Promise((resolve) => setTimeout(resolve, 20));
   };
@@ -263,8 +266,7 @@ describe('the Mods view says when the list is empty', () => {
   it('says nothing before the first read, says so once an empty list lands, and gives way to the no-match message', async () => {
     await withUnreadCorpusInstance(async (instance, root) => {
       await writeFile(join(root, DEFAULT_MODLIST), '# This file was automatically generated by Mod Organizer.\r\n');
-      const provider = new ModListProvider({ instance });
-      const { modListView, modListFilter } = createModListView(own, provider, () => undefined, syncMessageDouble());
+      const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
       expect(modListView.message).toBeUndefined();
       expect(modListView.description).toBeUndefined();
 
@@ -277,16 +279,14 @@ describe('the Mods view says when the list is empty', () => {
 
       currentBox().type('');
       await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message back');
-      provider.dispose();
     });
   });
 
   it('says mod sync\'s refusal beside it, and drops only that once the sync lands', async () => {
     await withUnreadCorpusInstance(async (instance, root) => {
       await writeFile(join(root, DEFAULT_MODLIST), '# This file was automatically generated by Mod Organizer.\r\n');
-      const provider = new ModListProvider({ instance });
       const modSync = syncMessageDouble();
-      const { modListView } = createModListView(own, provider, () => undefined, modSync);
+      const { view: modListView } = createModsView({ instance, log: () => undefined, modSync });
       await instance.refresh();
       await instance.refresh();
       await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
@@ -297,50 +297,7 @@ describe('the Mods view says when the list is empty', () => {
 
       modSync.say(undefined);
       await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message alone');
-      provider.dispose();
     });
-  });
-});
-
-describe('view on Nexus from the palette: the row it opens and the view the palette offers it on', () => {
-  const KEY = 'modbench.mod.nexusRowIn';
-
-  it('offers it on the view whose one selected row it opens, and nowhere while that row has no Nexus id', () => {
-    const mods = fakeView();
-    const downloads = fakeView();
-    const nexusRow = nexusRowInLastSelectedView(own, [
-      { id: 'modbench.modList', view: mods }, { id: 'modbench.downloads', view: downloads },
-    ]);
-    const nexusMod = new ModNode({ kind: 'mod', name: 'On Nexus', enabled: true, nexusId: '42' });
-    const nexusFile = new DownloadNode(downloadRowFixture('a.7z', { modID: '7' }));
-
-    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual([undefined, undefined]);
-    mods.select([nexusMod]);
-    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual(['modbench.modList', nexusMod]);
-    downloads.select([new DownloadNode(downloadRowFixture('b.7z'))]);
-    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual([undefined, undefined]);
-    downloads.select([nexusFile]);
-    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual(['modbench.downloads', nexusFile]);
-    mods.select([nexusMod, new ModNode({ kind: 'mod', name: 'Also', enabled: true, nexusId: '43' })]);
-    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual([undefined, undefined]);
-  });
-});
-
-describe('a palette gesture two views offer: the selection of the view last selected in', () => {
-  const KEY = 'modbench.mod.trackRowsIn';
-
-  it('takes the selection of the view last selected in, and names that view in its key', () => {
-    const mods = fakeView();
-    const plugins = fakeView();
-    const selection = lastSelectedViewSelection(own, [
-      { id: 'modbench.modList', view: mods }, { id: 'modbench.pluginListTree', view: plugins },
-    ], KEY);
-
-    expect([h.state.contextKeys.get(KEY), selection()]).toEqual([undefined, []]);
-    mods.select(['ModA', 'ModB']);
-    expect([h.state.contextKeys.get(KEY), selection()]).toEqual(['modbench.modList', ['ModA', 'ModB']]);
-    plugins.select(['First.esp']);
-    expect([h.state.contextKeys.get(KEY), selection()]).toEqual(['modbench.pluginListTree', ['First.esp']]);
   });
 });
 
@@ -361,8 +318,8 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
       overwriteFiles: overwrite ? [file('F4SE/a.log')] : [],
       overwriteFolders: overwrite ? [folder('F4SE')] : [],
     });
-    const provider = new ModListProvider({ instance: new FakeInstance(value) });
-    const { modListView, modListFilter } = createModListView(own, provider, () => undefined, syncMessageDouble());
+    const { view: modListView, nameFilter: modListFilter } =
+      createModsView({ instance: new FakeInstance(value), log: () => undefined, modSync: syncMessageDouble() });
     modListFilter.open();
     currentBox().type(term);
     return modListView;

@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
-import { ModListProvider, type ModlistNode, type SortDirection } from './ModListProvider';
+import type { ModlistNode } from './ModListProvider';
+import type { SortDirection } from '../drivingLib/sortDirectionToggle';
+import type { NexusModRow } from '../drivingLib/lastSelectedView';
 import {
   isModsKeyArgs, isRowOf, modsGestureEntry, runModsWriting, openFolderArgument, pluralArgument, registerModsGesture, selectionArgument,
   singularArgument, type GestureEntry, type RowOf,
@@ -32,21 +34,6 @@ import { installNameRefusal } from '../install/install';
 import { errorMessage } from '../ports/errorMessage';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { applyOrThrow } from '../ports/applyOrThrow';
-
-/** The Mods tree's view direction writes no instance file, so it lives with the view it flips. It
- *  starts losing at the top on each activation, and the context key, which outlives an extension
- *  host restart, is told so. */
-export function registerModListCoreCommands(modListProvider: Pick<ModListProvider, 'setViewDirection'>): vscode.Disposable[] {
-  const show = (direction: SortDirection) => {
-    modListProvider.setViewDirection(direction);
-    void vscode.commands.executeCommand('setContext', 'modbench.mod.winningAtTop', direction === 'winningAtTop');
-  };
-  void vscode.commands.executeCommand('setContext', 'modbench.mod.winningAtTop', false);
-  return [
-    vscode.commands.registerCommand('modbench.mod.sortWinningAtTop', () => show('winningAtTop')),
-    vscode.commands.registerCommand('modbench.mod.sortLosingAtTop', () => show('losingAtTop')),
-  ];
-}
 
 // modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
 // Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
@@ -317,12 +304,6 @@ function folderOf(
     case 'folder': return { name: node.folder.relativePath, folder: uriOf(node.folder.path) };
     case 'file': return { name: node.file.relativePath, folder: uriOf(node.file.path) };
   }
-}
-
-/** The Argument of view on Nexus. Each surface's row adapts itself to it, so a mod row and a
- *  downloaded file row reach the same gesture. */
-export interface NexusModRow {
-  readonly nexusModId?: string;
 }
 
 /** `selectedRow` is the palette's Argument, which hands the command no row. */

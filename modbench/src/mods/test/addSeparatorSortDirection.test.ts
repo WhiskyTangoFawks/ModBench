@@ -23,7 +23,8 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { ModListProvider, type ModlistNode, type SortDirection } from '../ModListProvider';
+import { ModListProvider, type ModlistNode } from '../ModListProvider';
+import type { SortDirection } from '../../drivingLib/sortDirectionToggle';
 import { registerSeparatorCommands } from '../modManagementCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';

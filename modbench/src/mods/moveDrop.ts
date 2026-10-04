@@ -2,7 +2,8 @@
 
 import { pluralArgument } from './gestureEntry';
 import { endAtTop, type MoveTarget } from './movePick';
-import type { ModlistNode, ModNode, SeparatorNode, SortDirection } from './ModListProvider';
+import type { ModlistNode, ModNode, SeparatorNode } from './ModListProvider';
+import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import type { OrderEnd } from '../modlist/modlist';
 
 /** The rows a drag carries, and the row whose kind a drag that mixes kinds takes. */
