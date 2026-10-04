@@ -12,9 +12,8 @@ namespace MEditService.SourceAdapter;
 /// in.</summary>
 public sealed partial class SourceRepository
 {
-    /// <summary>The container document of <paramref name="identity"/>: its own when it has a file of
-    /// its own, else the document of the container it is embedded in — a container may itself be
-    /// embedded. Null when no document holds it, or the document that carries it names no record.</summary>
+    /// <summary>The document carrying <paramref name="identity"/>: its own, else its container's. Null
+    /// when no document holds it, or the document carrying it names no record.</summary>
     public SourceDocument? ContainerDocument(
         PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {

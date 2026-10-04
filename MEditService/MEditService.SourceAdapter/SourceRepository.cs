@@ -95,10 +95,8 @@ public sealed partial class SourceRepository
         return body == null ? null : new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body);
     }
 
-    /// <summary>The record the tree holds at <paramref name="formKey"/> — one with a document of its
-    /// own, an embedded child, or the header — or null when nothing carries it. A document named for
-    /// the key whose text is no document refuses with the reader's words, since that is present and
-    /// not absent.</summary>
+    /// <summary>The record the tree holds at <paramref name="formKey"/>, or null when nothing carries
+    /// it. A document named for the key whose text is no document refuses with the reader's words.</summary>
     public SourceDocument? Get(
         PluginAddress plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {

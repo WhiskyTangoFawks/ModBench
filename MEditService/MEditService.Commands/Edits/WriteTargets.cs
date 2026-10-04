@@ -59,9 +59,8 @@ internal sealed class WriteTargets(
         }
         catch (Exception ex) when (ex is not (OutOfMemoryException or AmbiguousSourceUnitException))
         {
-            // Naming this record means reading the document that carries it, and the codec is the only
-            // reader of one: its own words are the reason. A document named for the record whose text
-            // is not one is present, so this is not absence.
+            // Naming this record means reading the document that carries it: the reader's own words
+            // are the reason. A document named for the record whose text is not one is not absence.
             return RefuseUnreadable(formKey, ex.Message);
         }
 

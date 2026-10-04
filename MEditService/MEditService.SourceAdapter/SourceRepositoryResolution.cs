@@ -362,9 +362,8 @@ public sealed partial class SourceRepository
         return new CellPlacement(worldspace, blockX, blockY, subX, subY, IsInterior: false);
     }
 
-    /// <summary>The worldspace whose subtree carries the cell <paramref name="identity"/> names; null for
-    /// an interior cell, and for a cell the plugin does not hold. A tree that files an exterior cell
-    /// outside every worldspace's blocks refuses with the reader's words.</summary>
+    /// <summary>The worldspace carrying the cell <paramref name="identity"/> names; null for an interior
+    /// cell or one the plugin does not hold. A cell filed under neither refuses with the reader's words.</summary>
     public string? WorldspaceOf(PluginAddress plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is null) return null;

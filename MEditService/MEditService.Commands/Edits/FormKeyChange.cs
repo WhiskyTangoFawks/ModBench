@@ -115,10 +115,9 @@ internal sealed class FormKeyChange(
         return null;
     }
 
-    // The container moves whole, its block subtree with it, and the put that follows finds and
-    // replaces it; a flat record's put lands at the leaf the new FormKey computes, and the remove
-    // takes the file the old FormKey named. An embedded record has no leaf of its own, so the owner's
-    // reserialized document is the whole write, and nothing is left for the remove to find.
+    // Move, put, remove for every shape: a container moves whole and the put replaces it, a flat
+    // record's put lands at the new leaf and the remove takes the old, and an embedded record's
+    // put rewrites its owner, leaving the remove nothing to find.
     private static void WriteTargetRewrite(
         SourceRepository.SourceTransaction transaction, SourceRepository repository, PluginAddress plugin,
         ComputedTarget target, string newFormKey)

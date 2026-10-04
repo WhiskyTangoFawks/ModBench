@@ -4,8 +4,7 @@ using MEditService.LoadOrder;
 namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>The tests' view of the tree's files: where a record's document sits, what lies under a
-/// directory, and the states no record operation can reach, such as a file beside a record's own or
-/// one held open. The only place the tests name a file the adapter placed.</summary>
+/// directory, and states no record operation reaches. The only place the tests name a placed file.</summary>
 internal static class TreeTampering
 {
     internal static string FileOf(string modFolder, PluginAddress plugin, RecordIdentity identity)
