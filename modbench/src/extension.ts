@@ -8,7 +8,7 @@ import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './edi
 import { createReferencedByView } from './editor/referencedByView';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
-import { lastSelectedViewSelection } from './treeViews';
+import { lastSelectedViewSelection } from './drivingLib/lastSelectedView';
 import { createFocusedView } from './drivingLib/focusedView';
 import { moveToTrash } from './trash';
 import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './medit/extendedFieldFiles';

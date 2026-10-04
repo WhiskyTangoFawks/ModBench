@@ -3,7 +3,7 @@
 import type { ModlistEntry } from '../instanceLoader/instance';
 import type { MovePlace, OrderEnd, SeparatorsPlace } from '../modlist/modlist';
 import { groupModlist, type ModlistGroup } from './modlistTree';
-import type { SortDirection } from './ModListProvider';
+import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 
 export interface MovePickItem<T> {
   readonly label: string;

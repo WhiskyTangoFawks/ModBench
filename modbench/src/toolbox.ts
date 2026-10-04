@@ -7,7 +7,7 @@ import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
-import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
+import type { ModListProvider, ModlistNode } from './mods/ModListProvider';
 import { InactiveFileDecorationProvider } from './mods/inactiveFiles';
 import { ModIndicatorDecorations } from './mods/modIndicators';
 import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
@@ -34,10 +34,10 @@ import { registerModInstallCommands } from './mods/installCommands';
 import { registerCompareFileCommand } from './mods/compareFile';
 import { registerGoToModCommand } from './mods/goToMod';
 import { registerConflictTable } from './mods/conflictTableEditor';
-import { registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText } from './mods/modManagementCommands';
+import { registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText } from './mods/modManagementCommands';
 import { reportFailure } from './drivingLib/reportFailure';
-import { createModListView, lastSelectedViewSelection, nexusRowInLastSelectedView } from './treeViews';
-import { onModCheckboxChanged } from './mods/modCheckboxHandler';
+import { createModsView } from './mods/modsView';
+import { lastSelectedViewSelection, nexusRowInLastSelectedView } from './drivingLib/lastSelectedView';
 import { modRepositoryContext } from './modRepositories';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
 import type { FolderCheck } from './folderContext';
@@ -263,7 +263,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   // this kicks off the first real read. The Plugins tree's own `sequence === 0` guard is
   // what keeps activation from being blocking here.
   void instance.refresh();
-  const modListProvider = own(new ModListProvider({ instance }));
   own(vscode.window.registerFileDecorationProvider(own(new InactiveFileDecorationProvider(instance, vscode.workspace))));
   for (const provider of own(new ModIndicatorDecorations(instance, vscode.workspace)).providers) {
     own(vscode.window.registerFileDecorationProvider(provider));
@@ -297,8 +296,9 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     outputChannel, loadOrderReporter, plugins.narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
   const runModSync = modSyncOver(access);
   const modSync = own(registerModSync(instance, runModSync, outputChannel));
-  const { modListView, modListFilter } = createModListView(
-    own, modListProvider, (line) => outputChannel.warn(`[modList] ${line}`), modSync);
+  const { provider: modListProvider, view: modListView, nameFilter: modListFilter } = own(createModsView({
+    instance, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync,
+  }));
   const showModRepositories = (value: InstanceValue) => {
     for (const [name, mods] of Object.entries(modRepositoryContext(value))) {
       void vscode.commands.executeCommand('setContext', `modbench.mod.${name}`, mods);
@@ -332,8 +332,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
   ));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putCurrentLoadOrder));
-  own(modListView.onDidChangeCheckboxState(onModCheckboxChanged));
-  ownAll(own, registerModListCoreCommands(modListProvider));
   const toolboxProvider = own(new ToolboxProvider({ instance }));
   ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor }));
   ownAll(own, registerModContextCommands({

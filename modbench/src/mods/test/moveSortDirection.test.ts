@@ -30,7 +30,8 @@ vi.mock('vscode', async () => {
 });
 
 import { Instance } from '../../instanceLoader/instance';
-import { ModListProvider, SeparatorNode, type ModlistNode, type SortDirection } from '../ModListProvider';
+import { ModListProvider, SeparatorNode, type ModlistNode } from '../ModListProvider';
+import type { SortDirection } from '../../drivingLib/sortDirectionToggle';
 import { registerModMoveCommand } from '../modManagementCommands';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
