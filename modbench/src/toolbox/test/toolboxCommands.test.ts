@@ -1,15 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { handlers, registerCommand, executeCommand, showQuickPick, withProgress, progressSteps } = vi.hoisted(() => {
+const { handlers, registerCommand, executeCommand, showQuickPick } = vi.hoisted(() => {
   const handlers = new Map<string, () => Promise<void> | void>();
-  const progressSteps: string[] = [];
   return {
     handlers,
-    progressSteps,
-    withProgress: vi.fn(async (options: { location: { viewId: string } }, task: () => Promise<unknown>) => {
-      progressSteps.push(`progress opens on ${options.location.viewId}`);
-      try { return await task(); } finally { progressSteps.push('progress closes'); }
-    }),
     registerCommand: vi.fn((command: string, handler: () => Promise<void> | void) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
@@ -19,10 +13,15 @@ const { handlers, registerCommand, executeCommand, showQuickPick, withProgress, 
   };
 });
 
-vi.mock('vscode', () => ({
-  commands: { registerCommand, executeCommand },
-  window: { showQuickPick, withProgress },
-}));
+vi.mock('vscode', async () => {
+  const { recordedWithProgress } = await import('../../test/recordedProgress');
+  return {
+    commands: { registerCommand, executeCommand },
+    window: { showQuickPick, withProgress: recordedWithProgress },
+  };
+});
+
+import { progressSteps } from '../../test/recordedProgress';
 
 const { switchProfile } = vi.hoisted(() => ({ switchProfile: vi.fn() }));
 
@@ -38,16 +37,14 @@ import type { RefreshResult } from '../../instanceCommands/loadOrder';
 const value = instanceValueFixture({ activeProfile: 'Default', profiles: ['Default', 'Modding', 'Survival'] });
 
 const access = accessTo('/instance');
-const marks = { markUnconfirmedProfile: vi.fn(), forgetUnconfirmedProfile: vi.fn() };
 
 function register(over: Partial<ToolboxCommandDeps> = {}) {
   const reporter = recordingReporter();
   registerToolboxCommands({
     access,
-    instance: { value },
+    instance: { value, refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
     extensionId: 'publisher.modbench',
     reporterFor: () => reporter,
-    marks,
     ...over,
   });
   return {
@@ -118,38 +115,41 @@ describe('Switch profile', () => {
     expect(switchProfile).toHaveBeenCalledWith(access, 'Modding', ['Default', 'Modding', 'Survival']);
   });
 
-  it('marks the picked profile before the write, and keeps the mark when it lands', async () => {
-    const order: string[] = [];
-    marks.markUnconfirmedProfile.mockImplementation(() => order.push('mark'));
-    switchProfile.mockImplementationOnce(() => { order.push('write'); return Promise.resolve({ applied: true }); });
+  it('writes the switch under the Toolbox\'s progress, which closes once the Instance loader has read again', async () => {
+    switchProfile.mockImplementationOnce(() => { progressSteps.push('write'); return Promise.resolve({ applied: true }); });
     showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
 
-    const { run } = register();
+    const { reporter, run } = register();
     await run('modbench.profile.switch');
 
-    expect(order).toEqual(['mark', 'write']);
-    expect(marks.markUnconfirmedProfile).toHaveBeenCalledWith('Modding');
-    expect(marks.forgetUnconfirmedProfile).not.toHaveBeenCalled();
+    expect(progressSteps).toEqual([
+      'progress opens on modbench.toolbox', 'write', 'Instance loader: read every file again', 'progress closes',
+    ]);
+    expect(reporter.reports).toEqual([]);
+    expect(reporter.landings).toEqual([]);
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 
-  it('marks nothing on Esc, or when the pick is the active profile', async () => {
-    showQuickPick.mockResolvedValueOnce(undefined).mockResolvedValueOnce({ label: 'Default' });
-
-    const { run } = register();
-    await run('modbench.profile.switch');
-    await run('modbench.profile.switch');
-
-    expect(marks.markUnconfirmedProfile).not.toHaveBeenCalled();
-  });
-
-  it('forgets the mark when the switch is refused', async () => {
+  it('reads again after a refused switch, since the disk is what the view shows', async () => {
     showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
     switchProfile.mockResolvedValueOnce({ applied: false, refusal: 'read-only' });
 
     const { run } = register();
     await run('modbench.profile.switch');
 
-    expect(marks.forgetUnconfirmedProfile).toHaveBeenCalledOnce();
+    expect(progressSteps).toEqual([
+      'progress opens on modbench.toolbox', 'Instance loader: read every file again', 'progress closes',
+    ]);
+  });
+
+  it('opens no progress on Esc, or when the pick is the active profile', async () => {
+    showQuickPick.mockResolvedValueOnce(undefined).mockResolvedValueOnce({ label: 'Default' });
+
+    const { run } = register();
+    await run('modbench.profile.switch');
+    await run('modbench.profile.switch');
+
+    expect(progressSteps).toEqual([]);
   });
 
   it('reports a refused switch at error', async () => {
@@ -164,27 +164,6 @@ describe('Switch profile', () => {
     ]);
   });
 
-  it('writes and forgets: the profile write is its only effect', async () => {
-    showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
-
-    const { reporter, run } = register();
-    await run('modbench.profile.switch');
-
-    expect({
-      writes: switchProfile.mock.calls,
-      commands: executeCommand.mock.calls,
-      progress: withProgress.mock.calls,
-      reports: reporter.reports,
-      landings: reporter.landings,
-    }).toEqual({
-      writes: [[access, 'Modding', ['Default', 'Modding', 'Survival']]],
-      commands: [],
-      progress: [],
-      reports: [],
-      landings: [],
-    });
-  });
-
   it('switches nothing when the picked profile is the active one', async () => {
     showQuickPick.mockResolvedValueOnce({ label: 'Default' });
 
@@ -197,7 +176,7 @@ describe('Switch profile', () => {
 
 describe('Refresh', () => {
   function registerRefresh(
-    result: RefreshResult, rereadFailure?: string, instanceRoot = '/instance',
+    result: RefreshResult, instanceRoot = '/instance',
     refill: Promise<void> = Promise.resolve(),
   ) {
     const reporter = recordingReporter();
@@ -208,7 +187,7 @@ describe('Refresh', () => {
       instance: {
         refresh: () => {
           progressSteps.push('Instance loader: read every file again');
-          return Promise.resolve(rereadFailure);
+          return Promise.resolve(undefined);
         },
       },
       reporter,
@@ -233,7 +212,7 @@ describe('Refresh', () => {
 
   it('keeps the Toolbox\'s progress open until mEdit\'s refill ends, not only until the rebuild answers with the index still empty', async () => {
     let refillEnds!: () => void;
-    const { run } = registerRefresh({ applied: true }, undefined, '/instance', new Promise<void>((resolve) => { refillEnds = resolve; }));
+    const { run } = registerRefresh({ applied: true }, '/instance', new Promise<void>((resolve) => { refillEnds = resolve; }));
 
     const running = run();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -244,27 +223,27 @@ describe('Refresh', () => {
     expect(progressSteps.at(-1)).toBe('progress closes');
   });
 
-  it('reports the second-window refusal in toolbox.md\'s words, naming this instance since Modbench cannot name the other window, and reads nothing again', async () => {
-    const { reporter, run } = registerRefresh({ applied: false, heldElsewhere: true }, undefined, '/instance/FO4');
+  it('reports the second-window refusal in toolbox.md\'s words, naming this instance since Modbench cannot name the other window, and still reads again', async () => {
+    const { reporter, run } = registerRefresh({ applied: false, heldElsewhere: true }, '/instance/FO4');
 
     await run();
 
     expect(progressSteps).toEqual([
-      'progress opens on modbench.toolbox', 'instance commands: refresh', 'progress closes',
+      'progress opens on modbench.toolbox', 'instance commands: refresh', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(reporter.reports).toEqual([
       { severity: 'error', message: "This instance's index is open in another Modbench window", detail: '/instance/FO4' },
     ]);
   });
 
-  it('reports any other refused refresh with its own generic message at error, the backend\'s refusal as its reason, and reads nothing again', async () => {
+  it('reports any other refused refresh with its own generic message at error, the backend\'s refusal as its reason, and still reads again', async () => {
     const refusal = 'Failed to rebuild the store.';
     const { reporter, run } = registerRefresh({ applied: false, heldElsewhere: false, refusal });
 
     await run();
 
     expect(progressSteps).toEqual([
-      'progress opens on modbench.toolbox', 'instance commands: refresh', 'progress closes',
+      'progress opens on modbench.toolbox', 'instance commands: refresh', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not rebuild the index.', detail: refusal },
@@ -273,21 +252,10 @@ describe('Refresh', () => {
 
   it('releases the wait it armed for a refill, since a refused rebuild starts none', async () => {
     const { released, run } = registerRefresh(
-      { applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' }, undefined, '/instance', new Promise<void>(() => {}));
+      { applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' }, '/instance', new Promise<void>(() => {}));
 
     await run();
 
     expect(released).toEqual([true]);
-  });
-
-  it('reports a re-read that failed at error, with its reason, the only word the user gets that the views kept their last value', async () => {
-    const { reporter, run } = registerRefresh(
-      { applied: true }, 'ModOrganizer.ini: no selected_profile');
-
-    await run();
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not read the instance again.', detail: 'ModOrganizer.ini: no selected_profile',
-    }]);
   });
 });

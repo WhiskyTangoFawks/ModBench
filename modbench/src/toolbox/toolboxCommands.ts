@@ -2,23 +2,24 @@ import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import { switchProfile, type ProfileAccess } from '../instanceCommands/profile';
 import type { RefreshResult } from '../instanceCommands/loadOrder';
-import type { ToolboxProvider } from './ToolboxProvider';
+import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
+
+const TOOLBOX_VIEW = 'modbench.toolbox';
 
 export interface ToolboxCommandDeps {
   access: ProfileAccess;
-  /** The profiles and the active one, from the instance value (ADR-0015). */
-  instance: Pick<Instance, 'value'>;
+  /** The profiles and the active one, from the instance value (ADR-0015); `refresh` ends each gesture. */
+  instance: Pick<Instance, 'value' | 'refresh'>;
   /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
   extensionId: string;
   reporterFor: (tag: string) => Reporter;
-  marks: Pick<ToolboxProvider, 'markUnconfirmedProfile' | 'forgetUnconfirmedProfile'>;
 }
 
 // The instance-wide gestures the Toolbox view owns (toolbox.md), registered
 // for the box that draws them.
 export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Disposable[] {
-  const { access, instance, extensionId, reporterFor, marks } = deps;
+  const { access, instance, extensionId, reporterFor } = deps;
   const profileReporter = reporterFor('switchProfile');
   return [
     vscode.commands.registerCommand('modbench.profile.switch', async () => {
@@ -28,12 +29,10 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
         { placeHolder: 'Switch profile' },
       );
       if (!picked || picked.label === active) return;
-      marks.markUnconfirmedProfile(picked.label);
-      const outcome = await switchProfile(access, picked.label, profiles);
-      if (!outcome.applied) {
-        profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
-        marks.forgetUnconfirmedProfile();
-      }
+      await runWritingGesture(TOOLBOX_VIEW, instance, async () => {
+        const outcome = await switchProfile(access, picked.label, profiles);
+        if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
+      });
     }),
     vscode.commands.registerCommand('modbench.settings.open', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${extensionId}`)),
@@ -69,9 +68,7 @@ export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposa
       return;
     }
     await refill.ended;
-    const rereadFailure = await deps.instance.refresh();
-    if (rereadFailure !== undefined) deps.reporter.report('error', 'Could not read the instance again.', rereadFailure);
   };
   return vscode.commands.registerCommand('modbench.instance.refresh', () =>
-    vscode.window.withProgress({ location: { viewId: 'modbench.toolbox' } }, run));
+    runWritingGesture(TOOLBOX_VIEW, deps.instance, run));
 }

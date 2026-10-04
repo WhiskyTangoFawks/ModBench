@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const {
-  handlers, registerCommand, showQuickPick, createQuickPick, withProgress, executeCommand, openRepository,
+  handlers, registerCommand, showQuickPick, createQuickPick, executeCommand, openRepository,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
@@ -16,7 +16,6 @@ const {
         Promise<{ label: string; description?: string } | undefined>
     >(),
     createQuickPick: vi.fn(),
-    withProgress: vi.fn((_options: unknown, work: () => Promise<unknown>) => work()),
     executeCommand: vi.fn().mockResolvedValue(undefined),
   };
 });
@@ -26,17 +25,26 @@ import {
   Diagnostic, DiagnosticSeverity, Range, uriFile,
 } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({
-  commands: { registerCommand, executeCommand },
-  extensions: { getExtension: () => ({ isActive: true, exports: { getAPI: () => ({ openRepository }) } }) },
-  window: { showQuickPick, createQuickPick, withProgress },
-  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
-  Diagnostic, DiagnosticSeverity, Range,
-  Uri: { file: uriFile },
-}));
+vi.mock('vscode', async () => {
+  const { recordedWithProgress } = await import('../../test/recordedProgress');
+  return {
+    commands: { registerCommand, executeCommand },
+    extensions: { getExtension: () => ({ isActive: true, exports: { getAPI: () => ({ openRepository }) } }) },
+    window: { showQuickPick, createQuickPick, withProgress: recordedWithProgress },
+    TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
+    Diagnostic, DiagnosticSeverity, Range,
+    Uri: { file: uriFile },
+  };
+});
+
+import { progressSteps } from '../../test/recordedProgress';
+
+const instanceThatReads = {
+  refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
+};
 
 import {
-  conflictsComputedOver, registerTrackCommand, registerCompileCommand, registerDecompileCommand, CompileProblems, type PluginsViewProgress,
+  conflictsComputedOver, registerTrackCommand, registerCompileCommand, registerDecompileCommand, CompileProblems,
 } from '../pluginRowCommands';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import type { InstanceValue } from '../../instanceLoader/instance';
@@ -49,6 +57,7 @@ import { present } from '../../ports/present';
 
 beforeEach(() => {
   handlers.clear();
+  progressSteps.length = 0;
   vi.clearAllMocks();
 });
 
@@ -109,10 +118,10 @@ describe('modbench.mod.track', () => {
     paletteSelection: () => readonly unknown[] = () => [],
   ) {
     const said: (string | undefined)[] = [];
-    const progress: PluginsViewProgress = { while: (work) => work(), say: (message) => said.push(message) };
+    const progress = { say: (message: string | undefined) => said.push(message) };
     const reporter = recordingReporter();
     registerTrackCommand({
-      progress, client, reporter, onTracked,
+      progress, instance: instanceThatReads, client, reporter, onTracked,
       plugins: () => INSTANCE_PLUGINS,
       mods: () => INSTANCE_MODS,
       modOfRow: (value) => (value instanceof ModsRowStandIn ? value.modName : undefined),
@@ -149,6 +158,19 @@ describe('modbench.mod.track', () => {
     expect(reporter.landings).toEqual(['Tracked "ModA".']);
     expect(reporter.reports).toEqual([]);
     expect(onTracked).toHaveBeenCalledOnce();
+  });
+
+  it('ends the gesture on a read the Instance loader makes after the track, and clears its message line', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [FIRST, SECOND], refused: [] });
+    const { handler, said } = invokeTrack(client);
+
+    await runTrackedWithPreset(handler, EDITS_ITEM, row(FIRST));
+
+    expect(progressSteps).toEqual([
+      'progress opens on modbench.pluginListTree', 'Instance loader: read every file again', 'progress closes',
+    ]);
+    expect(said.at(-1)).toBeUndefined();
   });
 
   it('on selected plugin rows of one mod, tracks that mod once', async () => {
@@ -361,8 +383,6 @@ describe('modbench.plugin.compile', () => {
   function registered(client: InMemoryMEditClient, options: { viewSelection?: readonly PluginNode[] } = {}) {
     const reporter = recordingReporter();
     const diagnostics = new FakeDiagnosticCollection();
-    const progress = { running: false, runs: 0 };
-    const compiledWhileRunning: boolean[] = [];
     client.setQueryAnswer('getPlugins', [
       pluginMetadataFixture({ name: PATCH.name, origin: PATCH.origin, isTracked: true, isImmutable: false, inLoadOrder: true }),
       pluginMetadataFixture({ name: OTHER.name, origin: OTHER.origin, isTracked: true, isImmutable: false, inLoadOrder: true }),
@@ -373,39 +393,33 @@ describe('modbench.plugin.compile', () => {
       client: {
         getPlugins: () => client.getPlugins(),
         compile: (plugins) => {
-          compiledWhileRunning.push(progress.running);
+          progressSteps.push('compile');
           return client.compile(plugins);
         },
       },
-      progress: {
-        while: async (work) => {
-          progress.running = true;
-          progress.runs++;
-          try { await work(); } finally { progress.running = false; }
-        },
-        say: () => undefined,
-      },
+      instance: instanceThatReads,
       reporter, problems: new CompileProblems(diagnostics),
       originFiles: (origin) => (origin === 'ModA' ? PATCH_FILES : undefined),
     }, () => options.viewSelection ?? []);
     return {
       handler: present(handlers.get('modbench.plugin.compile'), 'the compile command registerCompileCommand registers'),
-      reporter, diagnostics, progress, compiledWhileRunning,
+      reporter, diagnostics,
     };
   }
 
   const compileCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'compile').map((c) => c.args);
 
-  it('compiles the right-clicked plugin under the view\'s progress bar, and lands once', async () => {
+  it('compiles the right-clicked plugin, and the view\'s progress bar closes once the Instance loader has read again, and lands once', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('compile', { landed: [compiledPluginFixture({ plugin: PATCH })], refused: [] });
-    const { handler, reporter, progress, compiledWhileRunning } = registered(client);
+    const { handler, reporter } = registered(client);
 
     await handler(row(PATCH));
 
     expect(compileCalls(client)).toEqual([[[PATCH]]]);
-    expect(compiledWhileRunning).toEqual([true]);
-    expect(progress.runs).toBe(1);
+    expect(progressSteps).toEqual([
+      'progress opens on modbench.pluginListTree', 'compile', 'Instance loader: read every file again', 'progress closes',
+    ]);
     expect(reporter.landings).toEqual(['Compiled "MyPatch.esp".']);
     expect(reporter.reports).toEqual([]);
   });
@@ -611,43 +625,37 @@ describe('modbench.plugin.decompile', () => {
   function registered(client: InMemoryMEditClient, answer: string | undefined, viewSelection: readonly PluginNode[] = []) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(answer);
-    const progress = { running: false };
-    const decompiledWhileRunning: boolean[] = [];
     registerDecompileCommand({
       client: {
         decompile: (plugins) => {
-          decompiledWhileRunning.push(progress.running);
+          progressSteps.push('decompile');
           return client.decompile(plugins);
         },
       },
-      progress: {
-        while: async (work) => {
-          progress.running = true;
-          try { await work(); } finally { progress.running = false; }
-        },
-        say: () => undefined,
-      },
+      instance: instanceThatReads,
       reporter, ask,
     }, () => viewSelection);
     return {
       handler: present(handlers.get('modbench.plugin.decompile'), 'the decompile command registerDecompileCommand registers'),
-      reporter, ask, decompiledWhileRunning,
+      reporter, ask,
     };
   }
 
   const decompileCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'decompile').map((c) => c.args);
 
-  it('on a plugin row, asks once naming it, then decompiles it under the view\'s progress bar and lands once', async () => {
+  it('on a plugin row, asks once naming it, then decompiles it, the view\'s progress bar closing once the Instance loader has read again, and lands once', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('decompile', { landed: [SECOND], refused: [] });
-    const { handler, reporter, ask, decompiledWhileRunning } = registered(client, 'Decompile');
+    const { handler, reporter, ask } = registered(client, 'Decompile');
 
     await handler(row(SECOND));
 
     assertAskedOnce(ask, { messageContains: '"Second.esp"', buttons: ['Decompile'] });
     expect(ask.asked[0]?.message).toContain('replaces its source in the working tree from its bytes');
     expect(decompileCalls(client)).toEqual([[[SECOND]]]);
-    expect(decompiledWhileRunning).toEqual([true]);
+    expect(progressSteps).toEqual([
+      'progress opens on modbench.pluginListTree', 'decompile', 'Instance loader: read every file again', 'progress closes',
+    ]);
     expect(reporter.landings).toEqual(['Decompiled "Second.esp".']);
     expect(reporter.reports).toEqual([]);
   });

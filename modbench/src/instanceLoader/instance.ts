@@ -246,9 +246,9 @@ export class Instance implements Subscription {
   }
 
   /** The recompute activation runs, and the one that corrects the value after a change the
-   *  adapter never signalled. Identical to the one a signal runs. Answers with this read's own
-   *  failure, undefined when it landed. */
-  refresh(): Promise<string | undefined> {
+   *  adapter never signalled. Identical to the one a signal runs. Settles when its read has landed
+   *  or failed. */
+  refresh(): Promise<void> {
     clearTimeout(this.timer); // a refresh mid-burst is the burst's recompute, not a second one
     return this.run();
   }
@@ -292,7 +292,7 @@ export class Instance implements Subscription {
     this.timer = setTimeout(() => void this.run(), SETTLE_MS);
   }
 
-  private run(): Promise<string | undefined> {
+  private run(): Promise<void> {
     const task = this.queue.then(() => this.recompute());
     this.queue = task;
     return task;
@@ -300,7 +300,7 @@ export class Instance implements Subscription {
 
   // A read that throws logs and leaves the last value and the last sequence in place, so a file
   // another tool is half-way through writing never empties the trees.
-  private async recompute(): Promise<string | undefined> {
+  private async recompute(): Promise<void> {
     let next: InstanceValue;
     try {
       next = await this.read();
@@ -309,13 +309,12 @@ export class Instance implements Subscription {
       this.options.logReadFailure(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
       this.notify(this.failureListeners, (listener) => listener());
-      return failure;
+      return;
     }
     this.current = next;
     this.failure = undefined;
     this.seq++;
     this.notify(this.subscribers, (subscriber) => subscriber(next, this.seq));
-    return undefined;
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute

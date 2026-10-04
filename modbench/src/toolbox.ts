@@ -336,8 +336,8 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   own(modListView.onDidChangeCheckboxState((e) =>
     onModCheckboxChanged(e, modListProvider, reporterFor('modList.checkbox'))));
   ownAll(own, registerModListCoreCommands(modListProvider));
-  const toolboxProvider = own(new ToolboxProvider({ instance, log: (line) => outputChannel.warn(`[toolbox] ${line}`) }));
-  ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor, marks: toolboxProvider }));
+  const toolboxProvider = own(new ToolboxProvider({ instance }));
+  ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor }));
   ownAll(own, registerModContextCommands({
     access, instance, viewSelection: () => modListView.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
     log: (line) => outputChannel.warn(`[modList] ${line}`), marks: modListProvider,
@@ -426,7 +426,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   const opened = openedFolder(deps.outputChannel);
   const side = opened.folder === 'instance' ? buildInstanceSide(own, opened.instanceRoot, deps) : undefined;
 
-  const provider = side?.toolboxProvider ?? own(new ToolboxProvider({ instance: undefined, log: () => undefined }));
+  const provider = side?.toolboxProvider ?? own(new ToolboxProvider({ instance: undefined }));
   const toolboxView = own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: provider }));
   const showMessage = () => { toolboxView.message = provider.viewMessage(); };
   showMessage();

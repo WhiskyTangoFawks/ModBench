@@ -8,6 +8,7 @@
     "types": ["node", "vscode"]
   },
   "references": [
+    { "path": "../drivingLib" },
     { "path": "../instanceLoader" },
     { "path": "../instanceCommands" },
     { "path": "../ports" }
