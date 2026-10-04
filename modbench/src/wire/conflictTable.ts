@@ -1,14 +1,14 @@
 // mods-conflicts.md: the conflict table as Mods builds it, and the messages between the extension
 // and the table's webview.
 
-import type { components } from './generated/api';
+import type { ConflictAll, ConflictThis } from './messages';
 
 /** Whose copies a column holds: a mod, by its name, or Overwrite, which a mod's name never names
  *  (ADR-0012). */
 export type ConflictOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
 
-export type ConflictCellState = Exclude<components['schemas']['ConflictThis'], 'OnlyOne'>;
-export type ConflictRowState = Exclude<components['schemas']['ConflictAll'], 'OnlyOne'>;
+export type ConflictCellState = Exclude<ConflictThis, 'OnlyOne'>;
+export type ConflictRowState = Exclude<ConflictAll, 'OnlyOne'>;
 
 export interface ConflictColumn {
   readonly name: string;
