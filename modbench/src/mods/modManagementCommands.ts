@@ -82,6 +82,11 @@ export function registerModEnableCommands(
 
 const fileLabel = ({ origin, relativePath }: OriginFileRef): string => `${originLabel(origin)}/${relativePath}`;
 
+const FILE_MARKS = {
+  Excluded: { verb: 'exclude', state: 'excluded' },
+  Included: { verb: 'include', state: 'included' },
+} as const;
+
 // modbench.mod.excludeFile / modbench.mod.includeFile: the direction is the command's, so a mixed
 // selection takes the right-clicked row's (mods.md, Menus and keys, story 7).
 export function registerFileExclusionCommands(
@@ -91,12 +96,14 @@ export function registerFileExclusionCommands(
   const run = (mark: OriginFileMark) => async (entry: GestureEntry) => {
     const rows = pluralArgument(entry, 'file');
     if (rows.length === 0) return;
-    const shown = mark === 'Excluded' ? 'excluded' : 'included';
-    const refOf = (row: typeof rows[number]): OriginFileRef => ({ origin: row.origin, relativePath: row.file.relativePath });
-    marks.markExclusions(rows.filter((row) => row.exclusion !== shown).map(refOf), mark);
-    const outcome = await markFiles(access, rows.map(refOf), mark);
-    reporter.selectionOutcome(
-      `Could not ${mark === 'Excluded' ? 'exclude' : 'include'} ${outcome.refused.length} of ${rows.length} files.`, outcome, fileLabel);
+    // No spec line draws what either direction does to a file its folder excludes.
+    const byFolder = rows.filter((row) => row.exclusion === undefined).map((row) => ({ item: row.ref, reason: 'its folder excludes it' }));
+    const writable = rows.filter((row) => row.exclusion !== undefined);
+    const { verb, state } = FILE_MARKS[mark];
+    marks.markExclusions(writable.filter((row) => row.exclusion !== state).map((row) => row.ref), mark);
+    const outcome = await markFiles(access, writable.map((row) => row.ref), mark);
+    const refused = [...byFolder, ...outcome.refused];
+    reporter.selectionOutcome(`Could not ${verb} ${refused.length} of ${rows.length} files.`, { landed: outcome.landed, refused }, fileLabel);
     marks.forgetUnconfirmedExclusions(outcome.refused.map(({ item }) => item));
   };
   return [

@@ -406,9 +406,9 @@ export class ModListProvider
     return [...this.unconfirmedShapes].some((shape) => shape.marked && shape.rows.some((row) => sameRow(row, ref)));
   }
 
-  private markedFiles(rows: (FolderNode | FileNode)[]): (FolderNode | FileNode)[] {
+  private withFileMarks(rows: (FolderNode | FileNode)[]): (FolderNode | FileNode)[] {
     for (const row of rows) {
-      if (row instanceof FileNode && this.shapeMarked(fileRef({ origin: row.origin, relativePath: row.file.relativePath }))) markRow(row);
+      if (row instanceof FileNode && this.shapeMarked(fileRef(row.ref))) markRow(row);
     }
     return rows;
   }
@@ -572,13 +572,13 @@ export class ModListProvider
   async getChildren(element?: ModlistNode): Promise<ModlistNode[]> {
     if (element instanceof SeparatorNode) return element.mods.map((m) => this.modNode(m, element.shown));
     if (element instanceof ModNode) {
-      return this.markedFiles(filesIn(element, modOrigin(element.mod.name), element.files, element.folders, undefined, this.within(element)));
+      return this.withFileMarks(filesIn(element, modOrigin(element.mod.name), element.files, element.folders, undefined, this.within(element)));
     }
     if (element instanceof OverwriteNode) {
-      return this.markedFiles(filesIn(element, RUNTIME_OUTPUT, element.listed.files, element.listed.folders, undefined, this.within(element)));
+      return this.withFileMarks(filesIn(element, RUNTIME_OUTPUT, element.listed.files, element.listed.folders, undefined, this.within(element)));
     }
     if (element instanceof FolderNode) {
-      return this.markedFiles(
+      return this.withFileMarks(
         filesIn(element, element.origin, element.files, element.folders, element.folder.relativePath, this.within(element)));
     }
     if (element) return [];

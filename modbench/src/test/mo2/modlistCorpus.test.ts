@@ -195,7 +195,7 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  it('markFiles excludes a mod\'s file and an Overwrite file, then includes them back byte-identical', async () => {
+  it('excludes a mod\'s file and an Overwrite file, then includes them back byte-identical', async () => {
     const before = await snapshotTree(dir);
 
     const excluded = await markFiles(accessTo(dir), [inMod, inOverwrite], 'Excluded');
@@ -216,7 +216,7 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
   });
 
-  it('markFiles refuses a file gone from disk by name, and one the instance refuses with its reason, while the rest land', async () => {
+  it('refuses a file gone from disk by name, and one the instance refuses with its reason, while the rest land', async () => {
     const own = { ...inMod, relativePath: 'textures/dummy.dds.mohidden' };
     const gone = { ...inMod, relativePath: 'Missing.esp' };
     const byFolder = { ...inMod, relativePath: 'meshes.mohidden/a.nif' };

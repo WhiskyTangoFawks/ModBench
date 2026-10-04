@@ -261,7 +261,7 @@ export async function newModNameRefusal(adapter: Pick<InstanceAdapter, 'entryFol
 /** Whether the game gets a file of a mod or of Overwrite. */
 export type OriginFileMark = 'Excluded' | 'Included';
 
-/** The refusal of a mark on a downloaded file that is gone. */
+/** The refusal of a mark on a file that is gone. */
 export const goneFromDisk = (name: string): string => `"${name}" is gone from disk.`;
 
 /** What a subscriber disposes of to hear no more. */

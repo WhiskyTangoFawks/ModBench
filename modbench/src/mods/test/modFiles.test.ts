@@ -521,15 +521,13 @@ describe('a file row\'s context, which the File menu\'s exclude or include reads
     expect(flags(await childNamed(provider, row, 'b.dds.mohidden'))).toEqual(['file', 'excluded']);
   });
 
-  it('flags neither on a file its folder excludes, whatever its own name', async () => {
+  it.each(['a.dds', 'b.dds.mohidden'])('flags neither on a file its folder excludes, whatever its own name: %s', async (name) => {
     const files = [excludedFile('Textures.mohidden/a.dds'), excludedFile('Textures.mohidden/b.dds.mohidden')];
     const folder: OriginFolder = { relativePath: 'Textures.mohidden', path: '/instance/mods/Textures.mohidden', excluded: true };
     const provider = providerOver([mod('M')], { M: files }, [], { byMod: { M: [folder] } });
     const textures = await childNamed(provider, await rootOf(provider, ModNode, 'M'), 'Textures.mohidden');
 
-    for (const name of ['a.dds', 'b.dds.mohidden']) {
-      expect(flags(await childNamed(provider, textures, name))).toEqual(['file']);
-    }
+    expect(flags(await childNamed(provider, textures, name))).toEqual(['file']);
   });
 });
 

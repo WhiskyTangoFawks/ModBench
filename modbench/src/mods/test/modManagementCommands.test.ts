@@ -1540,6 +1540,28 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     expect(marks.forgetUnconfirmedExclusions.mock.calls).toEqual([[[refOf(gone)]]]);
   });
 
+  it.each([
+    ['excludeFile', 'exclude', included], ['includeFile', 'include', excluded],
+  ] as const)('%s refuses a file its folder excludes by name, writing and marking nothing for it', async (verb, word, clicked) => {
+    const hidingFolder = new FolderNode(
+      modRow, origin, { relativePath: 'x.mohidden', path: '/instance/mods/M/x.mohidden', excluded: true }, [], [], 'x.mohidden');
+    const byFolder = new FileNode(hidingFolder, origin,
+      { relativePath: 'x.mohidden/c.dds', path: '/instance/mods/M/x.mohidden/c.dds', sourcePath: '/instance/mods/M/x.mohidden/c.dds', excluded: true },
+      'c.dds');
+    markFiles.mockResolvedValue({ landed: [refOf(clicked)], refused: [] });
+    const reporter = recordingReporter();
+
+    registerFileExclusionCommands(access, () => [], reporter, marks);
+    await invoke(`modbench.mod.${verb}`, clicked, [clicked, byFolder]);
+
+    expect(markFiles).toHaveBeenCalledWith(access, [refOf(clicked)], expect.anything());
+    expect(marks.markExclusions).toHaveBeenCalledWith([refOf(clicked)], expect.anything());
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: `Could not ${word} 1 of 2 files.`,
+      detail: '"M/x.mohidden/c.dds" (its folder excludes it)',
+    }]);
+  });
+
   it('calls nothing and reports nothing over a selection with no file', async () => {
     const reporter = recordingReporter();
 

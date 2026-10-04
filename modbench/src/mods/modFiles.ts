@@ -3,6 +3,7 @@
 import * as vscode from 'vscode';
 import type { FileOrigin, OriginFile, OriginFolder } from '../instanceLoader/instance';
 import type { ModlistNode } from './ModListProvider';
+import type { OriginFileRef } from '../modlist/modlist';
 
 // Not `file:`: VS Code badges and tints a row whose resourceUri carries a diagnostic or another
 // provider's file decoration, and a file row draws neither. The file icon theme reads the name
@@ -102,6 +103,10 @@ export class FileNode extends vscode.TreeItem {
     this.exclusion = exclusionOf(parent, file);
     this.contextValue = ['file', inConflict && 'conflict', this.exclusion].filter(Boolean).join(' ');
     this.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file.path), { preview: true }] };
+  }
+
+  get ref(): OriginFileRef {
+    return { origin: this.origin, relativePath: this.file.relativePath };
   }
 }
 
