@@ -294,13 +294,18 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
     private const string FreeFormKey = "000F00:Embedded.esp";
 
+    private DocumentRekey Rekeying => new(
+        (document, newKey) => RecordDocumentEdits.WithFormKey(_codec, document.Body, Release, document.RecordType, newKey),
+        (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
+            _codec, owner.Body, Release, owner.RecordType, oldKey, newKey));
+
     [Fact]
     public void Rekey_AnEmbeddedChild_RewritesOnlyTheOwnersDocument_AndRollbackPutsItBack()
     {
         var before = TreeSnapshot.Of(_modFolder);
         var transaction = new SourceRepository.SourceTransaction();
 
-        transaction.Rekey(Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, _codec);
+        transaction.Rekey(Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, Rekeying);
 
         Assert.NotNull(Repository.Get(Plugin, FreeFormKey, Schemas));
         Assert.Null(Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas));
@@ -314,7 +319,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var before = TreeSnapshot.Of(_modFolder);
         var transaction = new SourceRepository.SourceTransaction();
 
-        transaction.Rekey(Repository, Plugin, Identity(_worldspace, "wrld"), FreeFormKey, Schemas, _codec);
+        transaction.Rekey(Repository, Plugin, Identity(_worldspace, "wrld"), FreeFormKey, Schemas, Rekeying);
 
         var moved = Repository.Get(Plugin, new RecordIdentity(FreeFormKey, "wrld", _worldspace.EditorID));
         Assert.NotNull(moved);
@@ -329,7 +334,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var before = TreeSnapshot.Of(_modFolder);
 
         Assert.Throws<InvalidOperationException>(() => new SourceRepository.SourceTransaction().Rekey(
-            Repository, Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent"), FreeFormKey, Schemas, _codec));
+            Repository, Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent"), FreeFormKey, Schemas, Rekeying));
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 

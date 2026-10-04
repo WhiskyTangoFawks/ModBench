@@ -175,9 +175,9 @@ public sealed partial class SourceRepository
         /// container's folder, an embedded child's owner text, or a flat file.</summary>
         public void Rekey(
             SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey,
-            IReadOnlyDictionary<string, RecordTableSchema> schemas, RecordTextCodec codec)
+            IReadOnlyDictionary<string, RecordTableSchema> schemas, DocumentRekey rekey)
         {
-            var rekeyed = repository.RekeyedDocument(plugin, identity, newFormKey, schemas, codec);
+            var rekeyed = repository.RekeyedDocument(plugin, identity, newFormKey, schemas, rekey);
             Move(repository, plugin, identity, newFormKey);
             Put(repository, plugin, rekeyed);
             if (Remove(repository, plugin, identity) == SourceRemoval.OwnerDoesNotCarryIt)

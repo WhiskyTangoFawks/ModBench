@@ -26,7 +26,7 @@ internal sealed class FormKeyChange(
         PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, JsonElement? value)
     {
-        var (_, identity, repository) = editTarget;
+        var (release, identity, repository) = editTarget;
         if (identity.RecordType == PluginHeader.RecordType)
         {
             return DocumentEdit.ReadOnlyRefusal(Member, Member, PluginHeader.FormIdReadOnly);
@@ -61,7 +61,10 @@ internal sealed class FormKeyChange(
         var transaction = new SourceRepository.SourceTransaction();
         if (SourceCommit.Write(transaction, repository, logger, $"Changing the FormID of {formKey} to {targetFormKey} failed.", () =>
             {
-                transaction.Rekey(repository, plugin, identity, targetFormKey, schemas, codec);
+                transaction.Rekey(repository, plugin, identity, targetFormKey, schemas, new DocumentRekey(
+                    (document, newKey) => RecordDocumentEdits.WithFormKey(codec, document.Body, release, document.RecordType, newKey),
+                    (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
+                        codec, owner.Body, release, owner.RecordType, oldKey, newKey)));
                 return null;
             }) is { } refused) return refused;
 
