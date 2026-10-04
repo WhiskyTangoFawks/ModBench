@@ -61,8 +61,8 @@ public sealed partial class SourceRepository
     }
 
     /// <summary>Where the source and <paramref name="serialized"/>, the door's tree for the mod it
-    /// compiles to, first part ways; null when they match. A file that cannot be read outranks every
-    /// other answer, and content the door does not write was dropped by the parse.</summary>
+    /// compiles to, first part ways; null when they match. An unreadable file outranks every other
+    /// answer.</summary>
     public SourceDivergence? DivergenceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> serialized)
     {
         var source = FilesOf(plugin);
