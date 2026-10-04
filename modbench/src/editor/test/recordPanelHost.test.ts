@@ -35,12 +35,16 @@ import { InMemoryMEditClient, type NotificationEvent } from '../../client';
 
 const reporter = { report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() };
 
+function isPanel(candidate: unknown): candidate is vscode.WebviewPanel {
+  return typeof candidate === 'object' && candidate !== null && 'webview' in candidate;
+}
+
 function register(
   focusedViewSelection: () => readonly unknown[] = () => [],
   panels: { recordPanels: Set<vscode.WebviewPanel>; tracker: ActiveRecordTracker<vscode.WebviewPanel>; meditClient: InMemoryMEditClient }
     = { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient: new InMemoryMEditClient() },
   override: {
-    meditClient?: InMemoryMEditClient; refreshPanels?: () => void; focusedCells?: FocusedCells<vscode.WebviewPanel>;
+    meditClient?: InMemoryMEditClient; focusedCells?: FocusedCells<vscode.WebviewPanel>;
   } = {},
 ): void {
   const { recordPanels, tracker } = panels;
@@ -53,7 +57,6 @@ function register(
     focusedCells: override.focusedCells ?? new FocusedCells(() => undefined, () => undefined),
     recordBadgeSource: { workingTreeStateOf: () => undefined, onDidReadRecords: () => ({ dispose: () => undefined }) },
     meditClient,
-    refreshPanels: override.refreshPanels ?? (() => undefined),
     focusedViewSelection,
     viewSelections: new Map(),
     recordWrite: (command) => command(),
@@ -78,6 +81,17 @@ describe('registerEditorCommands', () => {
     expect(registerCustomEditorProvider).toHaveBeenCalledWith(
       'modbench.record', expect.anything(), { webviewOptions: { retainContextWhenHidden: true } },
     );
+  });
+});
+
+describe('a record panel and the notifications', () => {
+  it('subscribes to rows-changed reports and to reconnects as soon as it is registered', () => {
+    const meditClient = new InMemoryMEditClient();
+    const onReconnected = vi.spyOn(meditClient, 'onReconnected');
+    register(undefined, { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient });
+
+    expect(meditClient.calls).toContainEqual({ method: 'subscribe', args: ['rows-changed'] });
+    expect(onReconnected).toHaveBeenCalled();
   });
 });
 
@@ -238,13 +252,15 @@ describe('a record panel open while mEdit reports a plugin it cannot read', () =
 
   it('has the panels refreshed on a failure arriving and on it clearing, and not on an identical tick', () => {
     const meditClient = new InMemoryMEditClient();
-    const refreshPanels = vi.fn();
-    register(() => [], undefined, { meditClient, refreshPanels });
+    const postMessage = vi.fn();
+    const panel: unknown = { webview: { postMessage } };
+    if (!isPanel(panel)) throw new Error('not a panel');
+    register(() => [], { recordPanels: new Set([panel]), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient });
 
     meditClient.emit(tick([bad]));
     meditClient.emit(tick([bad]));
-    expect(refreshPanels).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledTimes(1);
     meditClient.emit(tick([]));
-    expect(refreshPanels).toHaveBeenCalledTimes(2);
+    expect(postMessage).toHaveBeenCalledTimes(2);
   });
 });
