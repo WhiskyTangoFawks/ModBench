@@ -30,8 +30,6 @@ import { NO_PLUGINS_MESSAGE, PluginsTreeProvider, type PluginListSource } from '
 import { InMemoryMEditClient, type PluginMetadata } from '../../client';
 import { syncMessageDouble } from '../../test/syncMessageDouble';
 
-/** The line's other writer, the launch's step statement, as the root's `say` writes it: it holds
- *  the line, and hands it back by restating the filter's readout. */
 function say(
   session: { pluginsTreeView: { message?: string }; pluginsNameFilter: { refresh(): void } }, message: string | undefined,
 ): void {

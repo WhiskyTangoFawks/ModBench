@@ -16,7 +16,6 @@ function entriesAsFsPathAndDiagnosticsInInsertionOrder(collection: FakeDiagnosti
   return [...collection].map(([uri, diagnostics]) => [uri.fsPath, diagnostics] as const);
 }
 
-// The instance value's rows, one plugin file in each origin's folder.
 const originFilesFrom = (folders: Record<string, string>): OriginFilesOf => (origin) => originFiles(
   Object.entries(folders).map(([rowOrigin, folder]) => ({ origin: rowOrigin, path: `${folder}/Any.esp` })), origin);
 
