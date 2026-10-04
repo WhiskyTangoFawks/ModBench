@@ -4,7 +4,7 @@ Modbench reconstructs Mod Organizer 2's workflow with VS Code's own UI conventio
 
 ## Alternatives rejected
 
-- **Two containers by default, Downloads in the aux bar, for literal MO2 parity.** Claims the space reserved for chat.
-- **A custom webview tab-switcher mimicking MO2's three-tab panel.** Reinvents widgets VS Code provides natively; the point is leaning on the platform, not rebuilding MO2's chrome.
-- **Downloads as an editor-tab webview.** The richer per-item meta a tab's width could show turned out to be four columns behind a native context menu, nothing a tree cannot show.
-- **Two Plugins trees, one per bounded context.** Kept the load order apart from the record browser to avoid conflating the contexts. Both objections are answered structurally: the tree works with no backend, and a plugin's identity, `(origin, filename)` ([ADR-0012](0012-index-every-plugin-filter-to-the-active-ones.md)), keeps the contexts apart.
+- Two containers by default, Downloads in the aux bar, for literal MO2 parity. Claims the space reserved for chat.
+- A custom webview tab-switcher mimicking MO2's three-tab panel. Reinvents widgets VS Code provides natively; the point is leaning on the platform, not rebuilding MO2's chrome.
+- Downloads as an editor-tab webview. The richer per-item meta a tab's width could show turned out to be four columns behind a native context menu, nothing a tree cannot show.
+- Two Plugins trees, one per bounded context. Kept the load order apart from the record browser to avoid conflating the contexts. Both objections are answered structurally: the tree works with no backend, and a plugin's identity, `(origin, filename)` ([ADR-0012](0012-index-every-plugin-filter-to-the-active-ones.md)), keeps the contexts apart.

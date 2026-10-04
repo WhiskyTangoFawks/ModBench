@@ -4,11 +4,11 @@ The record index is a DuckDB file that persists across launches. The vanilla mas
 
 ## Consequences
 
-- **The index is derived state.** A file that cannot be opened is rebuilt from the files, at the cost of one cold load. Nothing in it is migrated or repaired.
+- The index is derived state. A file that cannot be opened is rebuilt from the files, at the cost of one cold load. Nothing in it is migrated or repaired.
 
 ## Alternatives rejected
 
-- **A per-plugin cache beside an in-memory index.** A second store with its own writer, reader, key and eviction policy, with every runtime mutation copied into it.
-- **SQLite.** Adequate for one plugin at modest scale. JSON support is an afterthought, and analytical queries across every plugin in an instance are slow.
-- **Kuzu, a graph database.** The reference graph is a graph problem, but a flat references table answers what is asked today.
-- **PostgreSQL or any external database.** A local desktop tool should require no server process.
+- A per-plugin cache beside an in-memory index. A second store with its own writer, reader, key and eviction policy, with every runtime mutation copied into it.
+- SQLite. Adequate for one plugin at modest scale. JSON support is an afterthought, and analytical queries across every plugin in an instance are slow.
+- Kuzu, a graph database. The reference graph is a graph problem, but a flat references table answers what is asked today.
+- PostgreSQL or any external database. A local desktop tool should require no server process.

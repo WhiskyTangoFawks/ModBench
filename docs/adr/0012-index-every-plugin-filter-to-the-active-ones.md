@@ -4,10 +4,10 @@ The record index holds every plugin file in the instance, active or not. Every r
 
 ## Consequences
 
-- **A filename no longer names a plugin.** Two mods can ship the same filename, and the index holds both. A plugin is `(origin, filename)`: the file and the folder that provides it.
+- A filename no longer names a plugin. Two mods can ship the same filename, and the index holds both. A plugin is `(origin, filename)`: the file and the folder that provides it.
 
 ## Alternatives rejected
 
-- **Keep the index in step with the active plugins.** Each load order change becomes a file read or a dropped row. A plugin that is not active then needs a second reading path.
-- **Bare filename as identity.** It holds only while one file answers to each name.
-- **Absolute path as identity.** It changes when the instance moves. It leaks the user's filesystem into every wire message.
+- Keep the index in step with the active plugins. Each load order change becomes a file read or a dropped row. A plugin that is not active then needs a second reading path.
+- Bare filename as identity. It holds only while one file answers to each name.
+- Absolute path as identity. It changes when the instance moves. It leaks the user's filesystem into every wire message.

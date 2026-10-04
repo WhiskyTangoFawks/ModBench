@@ -8,9 +8,9 @@ Describes xEdit only, read from source; takes no position on mEdit. The right-pa
 
 Paths relative to `references/TES5Edit/xEdit/` (grep-only clone, never modified). `xeMainForm.dfm` = `.dfm`, `xeMainForm.pas` = `.pas`.
 
-- **Read** = cited file:line. **Inferred** = marked *(inferred)*; used only for VirtualTreeView / VCL framework behaviour, since `External/VirtualTrees/` is not cloned.
+- Read = cited file:line. Inferred = marked (inferred); used only for VirtualTreeView / VCL framework behaviour, since `External/VirtualTrees/` is not cloned.
 - Menu visibility is decided in the popup handler, never by greying: `pmuNavPopup` (`.pas:15403`) sets `.Visible`; no nav item is ever set `.Enabled := False`. "Condition" below therefore means the `Visible` rule. Key accelerators re-run the popup handler and click the item only if visible (`.pas:20397-20420`), so a key is exactly as available as its menu item.
-- Common gates in every write path: `wbEditAllowed`, `not wbTranslationMode` (translation mode hides every edit item), and `EditWarn` (`.pas:6060`), a one-time modal "Time to think..." dialog (`xeEditWarningForm.dfm:6`) skipped if `wbIKnowWhatImDoing`. These are abbreviated **gate** below.
+- Common gates in every write path: `wbEditAllowed`, `not wbTranslationMode` (translation mode hides every edit item), and `EditWarn` (`.pas:6060`), a one-time modal "Time to think..." dialog (`xeEditWarningForm.dfm:6`) skipped if `wbIKnowWhatImDoing`. These are abbreviated gate below.
 - Gesture table `Effect`: `writes` = changes a plugin/file/record (in memory unless noted; saved only via Ctrl+S / exit); `reads` = changes only what is shown, or opens something.
 
 ## Layout
@@ -47,13 +47,13 @@ Painting (`vstNavPaintText`, `.pas:20545-20610`): bold = `Element.Modified`; ita
 
 Config: `.dfm:2125-2185`. SelectionOptions `[toFullRowSelect, toLevelSelectConstraint, toMultiSelect, toRightClickSelect]` (`.dfm:2151`); MiscOptions include `toToggleOnDblClick`; `DragOperations = [doCopy]`; `IncrementalSearch = isVisibleOnly`; `toAutoFreeOnCollapse` set.
 
-- **Multi-select**: yes. `toLevelSelectConstraint` restricts a selection to one tree level *(inferred, framework)* — which is why every multi-record menu item below can assume same-parent nodes.
-- **Selection drives the right pane automatically**: `vstNavChange` → `TryViewOrCompareSelectedRecords` (`.pas:19698`, `20493`). One record → View tab shows it. A file → shows its first record. Other container → shows its container. **2 up to `wbAutoCompareSelectedLimit` selected records** → View compares them side-by-side with no menu action (`.pas:20505`). Ctrl held while `ComparingSiblings` also compares (`.pas:20505`). Skipped while the View is pinned (`IsPinned`, `bnPinned`).
-- **Click**: no `OnClick` handler; focus and selection only (framework).
-- **Double click**: no `OnDblClick` handler; `toToggleOnDblClick` = expand/collapse *(inferred, framework)*. Alt while expanding = full recursive expand (`vstNavExpanding`, `.pas:19932`; `EditTips.txt:39`).
-- **Right click**: selects the node (`toRightClickSelect`) and opens `pmuNav`. Menu is assigned only after load completes (`.pas:21443`) and removed during Compare-to reload (`.pas:3615`, `3673`), so it does not exist while the loader runs (`EditTips.txt:7`).
-- **Drag**: `vstNavDragAllowed` (`.pas:21574`) allows dragging only nodes whose element is a main record. `vstNavDragOver` (`.pas:21587`) accepts nothing: the nav tree is a drag source only. The drop target is the View grid: `GetSourceElement` accepts `vstNav` as a source, builds a single element or `wbMultipleElements` (`.pas:7138-7165`), and `vstViewDragOver` / `vstViewDragDrop` (`.pas:18706-18740`) assign it into a field if `CanAssign` (a reference field taking a record, or a list taking entries). So dragging a navigator record onto a View cell is a write.
-- **Keys** (`vstNavKeyDown`, `.pas:20387`; only when `wbLoaderDone`):
+- Multi-select: yes. `toLevelSelectConstraint` restricts a selection to one tree level (inferred, framework) — which is why every multi-record menu item below can assume same-parent nodes.
+- Selection drives the right pane automatically: `vstNavChange` → `TryViewOrCompareSelectedRecords` (`.pas:19698`, `20493`). One record → View tab shows it. A file → shows its first record. Other container → shows its container. 2 up to `wbAutoCompareSelectedLimit` selected records → View compares them side-by-side with no menu action (`.pas:20505`). Ctrl held while `ComparingSiblings` also compares (`.pas:20505`). Skipped while the View is pinned (`IsPinned`, `bnPinned`).
+- Click: no `OnClick` handler; focus and selection only (framework).
+- Double click: no `OnDblClick` handler; `toToggleOnDblClick` = expand/collapse (inferred, framework). Alt while expanding = full recursive expand (`vstNavExpanding`, `.pas:19932`; `EditTips.txt:39`).
+- Right click: selects the node (`toRightClickSelect`) and opens `pmuNav`. Menu is assigned only after load completes (`.pas:21443`) and removed during Compare-to reload (`.pas:3615`, `3673`), so it does not exist while the loader runs (`EditTips.txt:7`).
+- Drag: `vstNavDragAllowed` (`.pas:21574`) allows dragging only nodes whose element is a main record. `vstNavDragOver` (`.pas:21587`) accepts nothing: the nav tree is a drag source only. The drop target is the View grid: `GetSourceElement` accepts `vstNav` as a source, builds a single element or `wbMultipleElements` (`.pas:7138-7165`), and `vstViewDragOver` / `vstViewDragDrop` (`.pas:18706-18740`) assign it into a field if `CanAssign` (a reference field taking a record, or a list taking entries). So dragging a navigator record onto a View cell is a write.
+- Keys (`vstNavKeyDown`, `.pas:20387`; only when `wbLoaderDone`):
 
 | Key | Action |
 | --- | --- |
@@ -66,15 +66,15 @@ Config: `.dfm:2125-2185`. SelectionOptions `[toFullRowSelect, toLevelSelectConst
 | Alt+Arrow (form-level) | moves nav selection (Up/Down = prev/next visible, Left = parent+collapse, Right = expand+first child) while keeping the View's focused column/row (`FormKeyDown`, `.pas:6791-6880`) |
 | Ctrl+S / Ctrl+O (form-level) | Save changed files dialog; Options (`.pas:6802-6807`) |
 
-Other arrows, Home/End, type-to-search: framework; type-ahead limited to visible nodes (`isVisibleOnly`, `.dfm:2135`) *(inferred)*.
+Other arrows, Home/End, type-to-search: framework; type-ahead limited to visible nodes (`isVisibleOnly`, `.dfm:2135`) (inferred).
 
-`EditTips.txt` keys with **no handler in `xeMainForm.pas`** (grep for `Bookmark`, `VK_F5`, `VK_F3` finds nothing there): Ctrl+1..5 / Alt+1..5 bookmarks (`EditTips.txt:21`), F5 save-over-original (`:15`), Ctrl+F3 Assets Browser (`:53`), Alt+F3 Worldspace Browser (`:54`), Ctrl+W weather editor (`:55`). Documented in `.dfm:639-645` help text but not implemented in the files read; treat as unverified here (may live in a unit not in this clone).
+`EditTips.txt` keys with no handler in `xeMainForm.pas` (grep for `Bookmark`, `VK_F5`, `VK_F3` finds nothing there): Ctrl+1..5 / Alt+1..5 bookmarks (`EditTips.txt:21`), F5 save-over-original (`:15`), Ctrl+F3 Assets Browser (`:53`), Alt+F3 Worldspace Browser (`:54`), Ctrl+W weather editor (`:55`). Documented in `.dfm:639-645` help text but not implemented in the files read; treat as unverified here (may live in a unit not in this clone).
 
 ### 1.3 `pmuNav` — every item
 
 Order as in `.dfm:2336-2710`. Visibility from `pmuNavPopup` (`.pas:15403-15669`). "Element" = the focused node's element. `gate` as defined above. `File` = focused node is `etFile`. `Selection editable/removable` = `EditableSelection` / `RemovableSelection` (`.pas:15975`, `16042`): selected nodes filtered by `IsEditable` / `IsRemovable`.
 
-**Compare and filter (display only, except Compare to)**
+Compare and filter (display only, except Compare to)
 
 | Caption | Visible when | Handler effect |
 | --- | --- | --- |
@@ -82,13 +82,13 @@ Order as in `.dfm:2336-2710`. Visibility from `pmuNavPopup` (`.pas:15403-15669`)
 | Create delta patch using... | File, not translation mode | Open-file dialog, then creates a new patch plugin of differences (`.pas:3625`); refuses non-plugins. Creates a new file. |
 | Compare Selected (n) | focused is a main record and all selected nodes are main records of the same signature, n>1 (`.pas:15570-15595`) | View pane compares those records (`DoSetActiveRecord`, `.pas:3543`). Display only. |
 | Remove Filter | always | `ReInitTree` (`.pas:12549`): rebuilds the tree unfiltered. |
-| Apply Filter | always | Opens **Filter...** dialog (§6), then prunes the tree (`.pas:13470-13540`). Display only. |
+| Apply Filter | always | Opens Filter... dialog (§6), then prunes the tree (`.pas:13470-13540`). Display only. |
 | Apply Filter to show Conflicts | always | Preset filter, no dialog (`.pas:14363`). Display only. |
 | Apply Filter for Cleaning | `wbManualCleaningAllow` | Preset filter (`.pas:14435`). Display only. |
-| Apply Filter for Cleaning (obsolete twin) | not `wbManualCleaningAllow` and not `wbManualCleaningHide` | Calls `mniNavCleaningObsoleteClick` (`.pas:3526`), an explanatory stub *(name-based; body not traced)*. |
+| Apply Filter for Cleaning (obsolete twin) | not `wbManualCleaningAllow` and not `wbManualCleaningHide` | Calls `mniNavCleaningObsoleteClick` (`.pas:3526`), an explanatory stub (name-based; body not traced). |
 | ...(selected files only) ×3 | same rules as above | Same filters but asks which files via `TfrmFileSelect` (`.pas:13980`). |
 
-**Checks (read-only analysis, output in Messages)**
+Checks (read-only analysis, output in Messages)
 
 | Caption | Visible when | Effect |
 | --- | --- | --- |
@@ -96,7 +96,7 @@ Order as in `.dfm:2336-2710`. Visibility from `pmuNavPopup` (`.pas:15403-15669`)
 | Check for Circular Leveled Lists | same | Same, for LVLI/LVLN cycles (`.pas:3460`). |
 | BOSS/LOOT Cleaning Report | same and LOOT info loaded | Reports LOOT dirty info to Messages (`.pas:12274`). |
 
-**Record-identity edits (write)**
+Record-identity edits (write)
 
 | Caption | Visible when | Effect |
 | --- | --- | --- |
@@ -107,7 +107,7 @@ Order as in `.dfm:2336-2710`. Visibility from `pmuNavPopup` (`.pas:15403-15669`)
 | Inject Forms into master... | as above and file has masters | Same handler. Writes. |
 | Batch Change Referencing Records | gate and File | Batch form of Change Referencing (`.pas:9774`). Writes. |
 
-**Cleaning (write)**
+Cleaning (write)
 
 | Caption | Visible when | Effect |
 | --- | --- | --- |
@@ -118,7 +118,7 @@ Order as in `.dfm:2336-2710`. Visibility from `pmuNavPopup` (`.pas:15403-15669`)
 | Temporary / Persistent | never visible (`.pas:15540-15541`) | `mniNavCellChild`. Dead. |
 | not Visible When Distant / Visible When Distant | gate and selection is only REFRs (checked reflects selection) | Toggles VWD on selected REFRs (`.pas:10049`). Writes. |
 
-**Structure, add, remove (write)**
+Structure, add, remove (write)
 
 | Caption | Visible when | Effect |
 | --- | --- | --- |
@@ -130,14 +130,14 @@ Order as in `.dfm:2336-2710`. Visibility from `pmuNavPopup` (`.pas:15403-15669`)
 | Sort Masters (to match current load order) | as Add Masters | `aFile.SortMasters` on selected files (`.pas:11322`). Writes. |
 | Clean Masters (= Remove all unused Masters) | as Add Masters | `aFile.CleanMasters` (`.pas:3534`). Writes. |
 
-**ModGroups (write to a sidecar `.modgroups` text file next to the data, not to a plugin)**
+ModGroups (write to a sidecar `.modgroups` text file next to the data, not to a plugin)
 
 | Caption | Visible when | Effect |
 | --- | --- | --- |
 | Create ModGroup... | File focused and >1 file selected (`.pas:15600-15620`); also Ctrl+M | Dialogs `TfrmModuleSelect` / `TfrmModGroupEdit`; appends to `<module>.modgroups` (`.pas:4172-4300`). |
 | Edit ModGroup... / Delete ModGroups... / Update CRC in ModGroups... | any ModGroup exists | `TfrmModGroupSelect` then edit / delete / refresh CRCs in the same files (`.pas:4441`, `4404`, `11975`). |
 
-**Copy into another plugin (write)**
+Copy into another plugin (write)
 
 All go through `mniNavCopyIntoClick` (`.pas:3800`): gate, then `CopyInto` (`.pas:2960`) which shows `TfrmModuleSelect` "Which files do you want to add this record to?" (destination files only: editable, at or after the source's load order; excludes the source file unless overwriting), with EditorID prefix/suffix fields when multiple (`.pas:2986-3080`).
 
@@ -150,11 +150,11 @@ All go through `mniNavCopyIntoClick` (`.pas:3800`): gate, then `CopyInto` (`.pas
 | Cleanup references to injected records | override visible and record `ReferencesInjected` (`.pas:4493`) |
 | Copy Idle Animations into... | game ≤ FNV and no File selected (`.pas:3685`) |
 
-**Other**
+Other
 
 | Caption | Visible when | Effect |
 | --- | --- | --- |
-| Apply Script... | gate | `TfrmScript` picker (`xeScriptForm.dfm:5`), then runs a Pascal script over the selection (`.pas:9180`). Writes if the script does *(script-dependent)*. |
+| Apply Script... | gate | `TfrmScript` picker (`xeScriptForm.dfm:5`), then runs a Pascal script over the selection (`.pas:9180`). Writes if the script does (script-dependent). |
 | Hidden (checkbox) | any element | `Element.Hide` / `Show` per selected node: display-only hiding of records (`.pas:12578`). `reads`. |
 | Test / Bandit Fix | `DebugHook <> 0` / `Visible = False` in dfm | Developer items (`.pas:11331`, `9692`). |
 | Other > Create Merged Patch | gate | Builds a merged patch plugin (`.pas:3848`). |
@@ -182,14 +182,14 @@ Left-click on a header sorts by that column (§1.2).
 
 ### 1.5 `pmuNavAdd`
 
-`.dfm:3135`, an empty popup. `pmuNavPopup` calls `pmuNavAdd.Items.Clear` (`.pas:15519`) but the Add entries are built under `mniNavAdd` instead (`.pas:15522-15545`); nothing populates `pmuNavAdd`. Its one caller is the Insert key with more than one Add entry, which pops it (`.pas:20414`). **Read as-is, that pops an empty menu**; the Add entries are reachable only through right-click → Add.
+`.dfm:3135`, an empty popup. `pmuNavPopup` calls `pmuNavAdd.Items.Clear` (`.pas:15519`) but the Add entries are built under `mniNavAdd` instead (`.pas:15522-15545`); nothing populates `pmuNavAdd`. Its one caller is the Insert key with more than one Add entry, which pops it (`.pas:20414`). Read as-is, that pops an empty menu; the Add entries are reachable only through right-click → Add.
 
 ### 1.6 Search boxes on the left (same object, other gesture)
 
 | Control | Behaviour |
 | --- | --- |
 | FormID (`edFormIDSearch`) | Enter: finds the record by load-order FormID (`0x` accepted), `JumpTo` it; green = found in tree, yellow = found but not in tree (filtered), red = not found (`.pas:5941-6058`). |
-| EditorID (`edEditorIDSearch`) | Enter: next node whose EditorID *starts with* the text; skips hidden (`.pas:5808-5860`). Red / yellow / green as above. |
+| EditorID (`edEditorIDSearch`) | Enter: next node whose EditorID starts with the text; skips hidden (`.pas:5808-5860`). Red / yellow / green as above. |
 | Filename filter + RegEx | Filters the file nodes as typed (`edFileNameFilterChange`, `.pas:5863`). |
 
 ### 1.7 Gesture table — navigator
@@ -224,13 +224,13 @@ Left-click on a header sorts by that column (§1.2).
 | Create / Edit / Delete ModGroup, Update CRC | writes | menu (Ctrl+M for create), dialog answer | plugins | `.modgroups` sidecar file |
 | Apply Script | writes | menu, dialog answer | selection | Script decides |
 
-**Same object elsewhere.** A record is also shown in Referenced By (§2) and as a View column header (`pmuViewHeader`, §4). Copy-as-*, Remove, Mark Modified, Apply Script, Compare Selected are offered in all three; Change FormID, Add, Hide (nav) and Jump to (header) are not. See the matrix at the end.
+Same object elsewhere. A record is also shown in Referenced By (§2) and as a View column header (`pmuViewHeader`, §4). Copy-as-*, Remove, Mark Modified, Apply Script, Compare Selected are offered in all three; Change FormID, Add, Hide (nav) and Jump to (header) are not. See the matrix at the end.
 
 ---
 
 ## 2. Referenced By tab (`tbsReferencedBy`, `pmuRefBy`)
 
-`.dfm:323-478`. A `TListView` (`lvReferencedBy`, `.dfm:328`): report style, owner-data (virtual), read-only, row-select, **multi-select**, columns Record, Signature, File, FormID, RawFileName (`.dfm:332-353`). The tab shows only when the selected record has referencers (`TabVisible := wbLoaderDone and Count>0`, `.pas:16800`, `17243`). Caption becomes `Referenced By (n)`, or `(n / F: filtered / S: selected)` when active (`.pas:8951`).
+`.dfm:323-478`. A `TListView` (`lvReferencedBy`, `.dfm:328`): report style, owner-data (virtual), read-only, row-select, multi-select, columns Record, Signature, File, FormID, RawFileName (`.dfm:332-353`). The tab shows only when the selected record has referencers (`TabVisible := wbLoaderDone and Count>0`, `.pas:16800`, `17243`). Caption becomes `Referenced By (n)`, or `(n / F: filtered / S: selected)` when active (`.pas:8951`).
 
 Filter row (`pnlReferencedByTop`, `.dfm:378`): Filter by Record, and/or, by Signature, AND by FileName; typed edits re-filter on a 250 ms timer (`tmrReferencedByFilterApply`).
 
@@ -260,7 +260,7 @@ Filter row (`pnlReferencedByTop`, `.dfm:378`): Filter by Record, and/or, by Sign
 | Mark Modified | base | `MarkModifiedRecursive` (`.pas:9437`). `writes`. |
 | Visible When Distant / not Visible When Distant | every selected is an editable REFR; shows the opposite of what is set | Toggles VWD (`.pas:11573`). `writes`. |
 
-Not offered here (offered in the nav): Change FormID, Add, Hidden, masters, filters. Not offered anywhere on this tab: any edit of the *reference* itself (the referencing field) — the row is the referencing **record**, not the field.
+Not offered here (offered in the nav): Change FormID, Add, Hidden, masters, filters. Not offered anywhere on this tab: any edit of the reference itself (the referencing field) — the row is the referencing record, not the field.
 
 ### Gesture table — Referenced By
 
@@ -282,12 +282,12 @@ Not offered here (offered in the nav): Change FormID, Add, Hidden, masters, filt
 
 ## 3. Messages tab (`tbsMessages`, `pmuMessages`)
 
-`.dfm:479-500`. A single `TMemo` (`mmoMessages`, `.dfm:483`): scroll bars both, no word wrap, **no `ReadOnly` in the dfm and none set in `.pas` (grep `mmoMessages.ReadOnly` empty)**, so the log is editable text (*inferred*: TMemo default). Written to by `AddMessage` / `wbProgress`; also opened automatically for long operations (`pgMain.ActivePage := tbsMessages` at `.pas:2229`, `3681`, `10257`, `12284`). The shown tab set collapses to Messages alone when a load fails (`.pas:6570`).
+`.dfm:479-500`. A single `TMemo` (`mmoMessages`, `.dfm:483`): scroll bars both, no word wrap, no `ReadOnly` in the dfm and none set in `.pas` (grep `mmoMessages.ReadOnly` empty), so the log is editable text (inferred: TMemo default). Written to by `AddMessage` / `wbProgress`; also opened automatically for long operations (`pgMain.ActivePage := tbsMessages` at `.pas:2229`, `3681`, `10257`, `12284`). The shown tab set collapses to Messages alone when a load fails (`.pas:6570`).
 
 | Gesture | Behaviour |
 | --- | --- |
-| Double click on a bracketed FormID `[XXXXXXXX]` or `[XXXX:XXXXXXXX]` **with Ctrl held** | Puts the FormID in the FormID search box and fires Enter → `JumpTo` (`.pas:9544-9575`). Without Ctrl, or under 8 chars, nothing. |
-| Text selection, Ctrl+C, scroll | Standard TMemo *(inferred)* |
+| Double click on a bracketed FormID `[XXXXXXXX]` or `[XXXX:XXXXXXXX]` with Ctrl held | Puts the FormID in the FormID search box and fires Enter → `JumpTo` (`.pas:9544-9575`). Without Ctrl, or under 8 chars, nothing. |
+| Text selection, Ctrl+C, scroll | Standard TMemo (inferred) |
 
 `pmuMessages` (`.dfm:3145`, no popup handler, so all items always visible):
 
@@ -316,9 +316,9 @@ A record referred to by FormID text in Messages is not offered any record gestur
 
 `.dfm:501-878`, caption "Information". A read-only `TMemo` (`Memo1`, `ReadOnly = True`, `.dfm:~870`) of static help text: what the nav/View panes are, colour legend pointer, filtering, command-line switches, keyboard shortcut list including Ctrl+1..5 bookmarks and Ctrl+F3 (`.dfm:639-645`), and "Only Master and Leafs" explanation (`.dfm:830-860`). No popup menu, no handlers. There are no gestures beyond native scroll/select. Separate from the modal `TfrmTip` ("Tip" popups from `EditTips.txt`, off via Options "Show tip on start", `xeTipForm.pas:64`) and the "What's New?" rich-edit shown at start (`.pas:5328`).
 
-### 4.2 `pmuViewHeader` (right-click on a **column header** of `vstView`)
+### 4.2 `pmuViewHeader` (right-click on a column header of `vstView`)
 
-`.dfm:2961`. The menu is attached only while the mouse is over a column that has an `ActiveRecords` entry (`vstViewHeaderMouseMove`, `.pas:19197-19206`). Each View column is one record, so this is a **record-level** menu for the record that column shows. Popup rules: `.pas:15753-15825`. Base gate: `wbEditAllowed`, not translation mode, column is a record column (`Column ≥ 1`) and its element is a main record; otherwise everything hidden.
+`.dfm:2961`. The menu is attached only while the mouse is over a column that has an `ActiveRecords` entry (`vstViewHeaderMouseMove`, `.pas:19197-19206`). Each View column is one record, so this is a record-level menu for the record that column shows. Popup rules: `.pas:15753-15825`. Base gate: `wbEditAllowed`, not translation mode, column is a record column (`Column ≥ 1`) and its element is a main record; otherwise everything hidden.
 
 | Caption | Visible when | Effect |
 | --- | --- | --- |
@@ -351,21 +351,21 @@ Not offered here: Change FormID, Mark Modified, Add, Apply Script, Compare Selec
 
 ### 5.1 `pmuMain` — hamburger button
 
-Button `bnMainMenu` (`.dfm:1371`): disabled until first load completes (`Enabled = False`, `.pas:21444` enables), opens `pmuMain` on left mouse down (`.pas:9083`). `pmuMainPopup` at `.pas:15354`. Only four groups; there is **no** New, Open, Quit, About or Settings menu bar.
+Button `bnMainMenu` (`.dfm:1371`): disabled until first load completes (`Enabled = False`, `.pas:21444` enables), opens `pmuMain` on left mouse down (`.pas:9083`). `pmuMainPopup` at `.pas:15354`. Only four groups; there is no New, Open, Quit, About or Settings menu bar.
 
 | Item | Visible when | Kind | Effect |
 | --- | --- | --- | --- |
 | Localization > Language > (one radio item per available strings language) | Skyrim / FO4 / FO76 / SF (`.pas:15362`) | Application (loaded-string language) | Switches the active strings language (`mniMainLocalizationLanguageClick`, `.pas:12730`). Display. |
 | Localization > Editor | same | Surface (opens dialog) | `TfrmLocalization.ShowModal` (`.pas:12718`); edits string tables, Save writes strings files. |
 | Pluggy Link (GameLink) > Disabled / Reference / Base Object / Inventory / Enchantment / Spell | TES4, or `xEdit\xEditLink.ini` exists (`.pas:15385`); last three TES4 only | Application (external-game link mode) | Sets what xEdit sends to the running game (`mniMainPluggyLinkClick`, `.pas:2193`). |
-| Save (Ctrl+S) | gate: `wbEditAllowed` and not `wbDontSave` (`.pas:15395`) | **Plugin action** | `SaveChanged`: `TfrmFileSelect` "Save changed files:" listing unsaved plugins (+ modified localization files), plus a "Backup plugins" check box; writes each checked file with a timestamped temp name, backs up originals (`.pas:16237`, `16291-16340`; `EditTips.txt:11-15`). |
+| Save (Ctrl+S) | gate: `wbEditAllowed` and not `wbDontSave` (`.pas:15395`) | Plugin action | `SaveChanged`: `TfrmFileSelect` "Save changed files:" listing unsaved plugins (+ modified localization files), plus a "Backup plugins" check box; writes each checked file with a timestamped temp name, backs up originals (`.pas:16237`, `16291-16340`; `EditTips.txt:11-15`). |
 | Options (Ctrl+O) | always | Application | `TfrmOptions` (`.pas:14599`): General, View, colours, fonts, etc. |
 
-Save is the **only** main-menu item that writes plugin data. Nothing in `pmuMain` opens, loads, unloads or reorders plugins: the load order is fixed at start via the plugin-selection dialog (§6) and "You can't reorder plugins in xEdit" (`EditTips.txt:47`).
+Save is the only main-menu item that writes plugin data. Nothing in `pmuMain` opens, loads, unloads or reorders plugins: the load order is fixed at start via the plugin-selection dialog (§6) and "You can't reorder plugins in xEdit" (`EditTips.txt:47`).
 
 ### 5.2 `pmuBtnMenu`
 
-`.dfm:5393`; attached to the link-button strip `pnlBtn` (`.dfm:1590`). One item: **Shrink Buttons** (check, `.pas:15351`) toggles `wbShrinkButtons` (application, display). The strip itself is eight external-link buttons — PayPal, Patreon, NexusMods, Ko-Fi, Help, Videos, GitHub, Discord (`.dfm:1592-2089`) — each launching the browser (e.g. `bnHelpClick`, `.pas:9054`). Application-level.
+`.dfm:5393`; attached to the link-button strip `pnlBtn` (`.dfm:1590`). One item: Shrink Buttons (check, `.pas:15351`) toggles `wbShrinkButtons` (application, display). The strip itself is eight external-link buttons — PayPal, Patreon, NexusMods, Ko-Fi, Help, Videos, GitHub, Discord (`.dfm:1592-2089`) — each launching the browser (e.g. `bnHelpClick`, `.pas:9054`). Application-level.
 
 ### 5.3 Other main-window actions
 
@@ -399,24 +399,24 @@ Trigger column: where it is created (`.pas` line in `xeMainForm.pas` unless note
 
 | Dialog (form) | Trigger | Asks | Changes |
 | --- | --- | --- | --- |
-| **Select Game Mode** (`xeGameSelectForm`, caption `.dfm:5`) | startup, only if no game inferred from exe name / switches (`xeInit.pas:667`) | Pick a game mode from a list | Sets process game mode |
-| **Master/Plugin Selection** (`xeFileSelectForm`, `.dfm:5`) | startup load-order picker (`.pas:5370`, `5566`); also reused as a generic checklist: Save changed files (`16291`), filter-by-selected-files (`13980`), Copy Idle (`3738`), LODGen worldspaces (`10770`), spreadsheet keyword filter (`17518`, `17587`), ChangeReferencedBy (`17263`) | Which plugins to load / which items to act on. Search box, Backup check box (save use), right-click Select All / None / Invert (`.dfm:76-84`). Double click loads only that plugin and its masters; with option `RequireCtrlForDblClick` it needs Ctrl (`xeFileSelectForm.pas:83-85`; `EditTips.txt:50`). Shift+OK skips building references (`EditTips.txt:57`) | Startup: chooses what is loaded. Save use: chooses which files are written. |
-| **Module Selection** (`xeModuleSelectForm`, `.dfm:5`) | Copy-into destination (`2986`), Add Masters (`8603`), Create New File template (`3289`), Change FormID target (`10192`), Renumber (`13060`), Build Reference Info (`10004`), ModGroup create / update (`4190`, `4267`, `11982`) | Pick modules; Preset combo with Load / Save / Delete, Filter box + RegEx, Select All / None / Invert; caption varies by caller ("Which masters do you want to add?", "What type of module do you want to create?") | Only returns the selection; the caller writes |
-| **Filter...** (`xeFilterOptionsForm`, `.dfm:5`) | Nav "Apply Filter" (`13533`) | Preset; by conflict status (all/this), record signature, base-record signature/EditorID/FormID/name, EditorID / Name / element-value contains (+ RegEx), deleted, injected, not reachable, persistence, VWD, precombined, position/rotation changed, flatten blocks / cell children (`.dfm:32-417`) | Display only: prunes the nav tree; presets saved in settings |
-| **Time to think...** (`xeEditWarningForm`, `.dfm:6`) | first write gesture in a session (`.pas:6060`) | "Yes I'm absolutely sure" / "let me think..." | Only unlocks the write |
-| **View elements / extended editor** (`xeViewElementsForm`) | double click in View on a non-numeric cell (`.pas:18669`), or `mniViewEdit` (`10387`, see [xedit-ux-audit.md](xedit-ux-audit.md)) | One tab per compared plugin; Save, Close, Compare (external tool, "Configure external tool"), Copy. Modeless; modal with Shift or `wbIKnowWhatImDoing` | Save writes the element value back |
-| **Apply Script** (`xeScriptForm`, `.dfm:5`) | nav or Referenced By "Apply Script..." (`.pas:9185`) | Which script; Filter box; "Include scripts from subdirectories" | Runs it over the selection |
-| **LODGen Options** (`xeLODGenForm`, `.dfm:5`) | Nav > Other > Generate LOD (`10798`) | Worldspaces; objects / trees LOD; atlas and texture settings; brightness | Runs the LOD generator, writes LOD output files |
-| **Localization Editor** (`xeLocalizationForm`, `.dfm:4`) | pmuMain > Localization > Editor (`12723`); also View edit of a localized string (`10413`) | Edit string tables; Save; Export to / Import from file | Writes strings files |
-| **Localize plugin** (`xeLocalizePluginForm`, `.dfm:5`) | Nav > Other > Localization > Localize (`12805`) | From-language, To-language, translation option | Converts a plugin to/from localized strings |
-| **ModGroup Selection / Edit** (`xeModGroupSelectForm`, `xeModGroupEditForm`) | Nav ModGroup items (`4257`, `4410`, `4449`, `4466`, `12031`) | Pick or name a group | `.modgroups` sidecar |
-| **Options** (`xeOptionsForm`, `.dfm:5`) | pmuMain / Ctrl+O / Nav > Other (`14605`) | Tabs General, View, colours/fonts: e.g. Hide unused, Load BSAs, Show file header flags, Reset Modified (Bold) on Save, Always save ONAM, Hide Manual Cleaning functions, fields/types collapsed by default (`.dfm:33-348`) | Settings ini only; some need restart |
-| **Worldspace Cell** (`xeWorldspaceCellDetailsForm`, `.dfm:5`) | callback at `xeWorldspaceCellDetailsForm.pas:61` | X, Y, Persistent / Temporary | Returns X/Y grid cell and persistent/temporary flag through `wbGetCellDetailsForWorldspaceCallback` (`xeWorldspaceCellDetailsForm.pas:57-73`); the Core caller that triggers it was not traced |
-| **Log Analyzer** (`xeLogAnalyzerForm`) | Nav > Other > Log Analyzer (`12940`) | Log file, size, first N | Reads only |
-| **What's New / Tip / Developer message** (`xeRichEditForm`, `xeTipForm`, `xeDeveloperMessageForm`) | startup (`5328`, `21168`, `17353`) | Read-only notices with "don't show again" | Settings ini |
-| **Legend** (`xeLegendForm`) | Legend button (`.pas:9075`) | none | Modeless colour key; selects the cell for the focused conflict state (`.pas:18940-18955`) |
-| **Wait / progress** (`xeWaitForm`) | long actions (`PerformLongAction`) | Cancel | none |
-| **Element detail** (`xeElementDetailForm`) | none | Empty placeholder `TForm1` with no controls (`.dfm:1-4`, `.pas:19-27`) | Dead |
+| Select Game Mode (`xeGameSelectForm`, caption `.dfm:5`) | startup, only if no game inferred from exe name / switches (`xeInit.pas:667`) | Pick a game mode from a list | Sets process game mode |
+| Master/Plugin Selection (`xeFileSelectForm`, `.dfm:5`) | startup load-order picker (`.pas:5370`, `5566`); also reused as a generic checklist: Save changed files (`16291`), filter-by-selected-files (`13980`), Copy Idle (`3738`), LODGen worldspaces (`10770`), spreadsheet keyword filter (`17518`, `17587`), ChangeReferencedBy (`17263`) | Which plugins to load / which items to act on. Search box, Backup check box (save use), right-click Select All / None / Invert (`.dfm:76-84`). Double click loads only that plugin and its masters; with option `RequireCtrlForDblClick` it needs Ctrl (`xeFileSelectForm.pas:83-85`; `EditTips.txt:50`). Shift+OK skips building references (`EditTips.txt:57`) | Startup: chooses what is loaded. Save use: chooses which files are written. |
+| Module Selection (`xeModuleSelectForm`, `.dfm:5`) | Copy-into destination (`2986`), Add Masters (`8603`), Create New File template (`3289`), Change FormID target (`10192`), Renumber (`13060`), Build Reference Info (`10004`), ModGroup create / update (`4190`, `4267`, `11982`) | Pick modules; Preset combo with Load / Save / Delete, Filter box + RegEx, Select All / None / Invert; caption varies by caller ("Which masters do you want to add?", "What type of module do you want to create?") | Only returns the selection; the caller writes |
+| Filter... (`xeFilterOptionsForm`, `.dfm:5`) | Nav "Apply Filter" (`13533`) | Preset; by conflict status (all/this), record signature, base-record signature/EditorID/FormID/name, EditorID / Name / element-value contains (+ RegEx), deleted, injected, not reachable, persistence, VWD, precombined, position/rotation changed, flatten blocks / cell children (`.dfm:32-417`) | Display only: prunes the nav tree; presets saved in settings |
+| Time to think... (`xeEditWarningForm`, `.dfm:6`) | first write gesture in a session (`.pas:6060`) | "Yes I'm absolutely sure" / "let me think..." | Only unlocks the write |
+| View elements / extended editor (`xeViewElementsForm`) | double click in View on a non-numeric cell (`.pas:18669`), or `mniViewEdit` (`10387`, see [xedit-ux-audit.md](xedit-ux-audit.md)) | One tab per compared plugin; Save, Close, Compare (external tool, "Configure external tool"), Copy. Modeless; modal with Shift or `wbIKnowWhatImDoing` | Save writes the element value back |
+| Apply Script (`xeScriptForm`, `.dfm:5`) | nav or Referenced By "Apply Script..." (`.pas:9185`) | Which script; Filter box; "Include scripts from subdirectories" | Runs it over the selection |
+| LODGen Options (`xeLODGenForm`, `.dfm:5`) | Nav > Other > Generate LOD (`10798`) | Worldspaces; objects / trees LOD; atlas and texture settings; brightness | Runs the LOD generator, writes LOD output files |
+| Localization Editor (`xeLocalizationForm`, `.dfm:4`) | pmuMain > Localization > Editor (`12723`); also View edit of a localized string (`10413`) | Edit string tables; Save; Export to / Import from file | Writes strings files |
+| Localize plugin (`xeLocalizePluginForm`, `.dfm:5`) | Nav > Other > Localization > Localize (`12805`) | From-language, To-language, translation option | Converts a plugin to/from localized strings |
+| ModGroup Selection / Edit (`xeModGroupSelectForm`, `xeModGroupEditForm`) | Nav ModGroup items (`4257`, `4410`, `4449`, `4466`, `12031`) | Pick or name a group | `.modgroups` sidecar |
+| Options (`xeOptionsForm`, `.dfm:5`) | pmuMain / Ctrl+O / Nav > Other (`14605`) | Tabs General, View, colours/fonts: e.g. Hide unused, Load BSAs, Show file header flags, Reset Modified (Bold) on Save, Always save ONAM, Hide Manual Cleaning functions, fields/types collapsed by default (`.dfm:33-348`) | Settings ini only; some need restart |
+| Worldspace Cell (`xeWorldspaceCellDetailsForm`, `.dfm:5`) | callback at `xeWorldspaceCellDetailsForm.pas:61` | X, Y, Persistent / Temporary | Returns X/Y grid cell and persistent/temporary flag through `wbGetCellDetailsForWorldspaceCallback` (`xeWorldspaceCellDetailsForm.pas:57-73`); the Core caller that triggers it was not traced |
+| Log Analyzer (`xeLogAnalyzerForm`) | Nav > Other > Log Analyzer (`12940`) | Log file, size, first N | Reads only |
+| What's New / Tip / Developer message (`xeRichEditForm`, `xeTipForm`, `xeDeveloperMessageForm`) | startup (`5328`, `21168`, `17353`) | Read-only notices with "don't show again" | Settings ini |
+| Legend (`xeLegendForm`) | Legend button (`.pas:9075`) | none | Modeless colour key; selects the cell for the focused conflict state (`.pas:18940-18955`) |
+| Wait / progress (`xeWaitForm`) | long actions (`PerformLongAction`) | Cancel | none |
+| Element detail (`xeElementDetailForm`) | none | Empty placeholder `TForm1` with no controls (`.dfm:1-4`, `.pas:19-27`) | Dead |
 
 ### Gesture table — dialogs
 
@@ -457,17 +457,17 @@ Rows are xEdit objects; cells list the gestures offered on that surface. "—" =
 
 | Object | Navigator (`pmuNav`) | Referenced By | Messages | View header (`pmuViewHeader`) | Main menu / dialogs | View grid ([audit](xedit-ux-audit.md)) |
 | --- | --- | --- | --- | --- | --- | --- |
-| **Plugin / file** | Compare to, delta patch, Add / Sort / Clean Masters, Renumber / Compact / Inject, Create ModGroup, Localize, Generate LOD, SEQ, merged patch, Mark Modified, Remove filter / Apply filter (selected files), Copy Ctrl+C, Hide | — (rows only show the file name as a column) | — | Remove (record only, gated by file editable), Create ModGroup | **Save** (Ctrl+S) is the only plugin write; plugin selection at startup; Create New File | Column-level file identity is the header label only |
-| **Record** | Select / auto-compare, Compare Selected, Add (into group), Remove, Mark Modified, Change FormID (F2), Change Referencing Records, Copy as override / new / wrapper / deep, Cleanup injected, VWD toggle, Hide, Apply Script, Check for errors, drag to a View field, Ctrl+C | Jump to (double click), Compare Selected, Copy as override / new / disabled / deep, Remove, Mark Modified, VWD toggle, Apply Script, Ctrl+C | Jump to (Ctrl+double click on `[FormID]` text) | Copy as override / new / wrapper / deep, Remove, Jump to, Hide / Unhide, Create ModGroup | Copy-into dialog picks destination; Remove confirmation | Column = one record; Ctrl+click on a reference field follows to a record |
-| **Element / field** | Add (child of container), Remove (chapter/branch nodes), Mark Modified (`EditableSelection` includes non-record elements) | — | — | — | Extended editor dialog (Save) | All field gestures: inline edit, Ctrl+C/X/V, Add / Remove / Clear, Move Up / Down, Copy to selected, Stick to, drag (see audit) |
-| **Reference (link)** | Referrers reachable indirectly: Change Referencing Records, Batch Change; Build Reference Info | Each row *is* a referencing record; no gesture edits the reference field itself | FormID text is followable (Ctrl+double click) | — | — | Ctrl+click follows the link; drop a nav record onto the field assigns the link |
+| Plugin / file | Compare to, delta patch, Add / Sort / Clean Masters, Renumber / Compact / Inject, Create ModGroup, Localize, Generate LOD, SEQ, merged patch, Mark Modified, Remove filter / Apply filter (selected files), Copy Ctrl+C, Hide | — (rows only show the file name as a column) | — | Remove (record only, gated by file editable), Create ModGroup | Save (Ctrl+S) is the only plugin write; plugin selection at startup; Create New File | Column-level file identity is the header label only |
+| Record | Select / auto-compare, Compare Selected, Add (into group), Remove, Mark Modified, Change FormID (F2), Change Referencing Records, Copy as override / new / wrapper / deep, Cleanup injected, VWD toggle, Hide, Apply Script, Check for errors, drag to a View field, Ctrl+C | Jump to (double click), Compare Selected, Copy as override / new / disabled / deep, Remove, Mark Modified, VWD toggle, Apply Script, Ctrl+C | Jump to (Ctrl+double click on `[FormID]` text) | Copy as override / new / wrapper / deep, Remove, Jump to, Hide / Unhide, Create ModGroup | Copy-into dialog picks destination; Remove confirmation | Column = one record; Ctrl+click on a reference field follows to a record |
+| Element / field | Add (child of container), Remove (chapter/branch nodes), Mark Modified (`EditableSelection` includes non-record elements) | — | — | — | Extended editor dialog (Save) | All field gestures: inline edit, Ctrl+C/X/V, Add / Remove / Clear, Move Up / Down, Copy to selected, Stick to, drag (see audit) |
+| Reference (link) | Referrers reachable indirectly: Change Referencing Records, Batch Change; Build Reference Info | Each row is a referencing record; no gesture edits the reference field itself | FormID text is followable (Ctrl+double click) | — | — | Ctrl+click follows the link; drop a nav record onto the field assigns the link |
 
-**Where the same object recurs.** A record appears in the navigator, as a Referenced By row, in a Messages FormID, and as a View column. Gestures common to navigator, Referenced By and View header: Copy as override / new / deep (same `CopyInto` dialog), Remove (same confirmation). Only in the navigator: Change FormID, Add, Hide (nav) / Unhide all (header), Apply Script beside Referenced By, Change Referencing Records, masters, filters. Only in Referenced By: Copy as disabled override, sort / filter. Only in the View header: Jump to, Create ModGroup by column. Messages offers navigation only. The spreadsheets offer only Compare Selected and Rebuild.
+Where the same object recurs. A record appears in the navigator, as a Referenced By row, in a Messages FormID, and as a View column. Gestures common to navigator, Referenced By and View header: Copy as override / new / deep (same `CopyInto` dialog), Remove (same confirmation). Only in the navigator: Change FormID, Add, Hide (nav) / Unhide all (header), Apply Script beside Referenced By, Change Referencing Records, masters, filters. Only in Referenced By: Copy as disabled override, sort / filter. Only in the View header: Jump to, Create ModGroup by column. Messages offers navigation only. The spreadsheets offer only Compare Selected and Rebuild.
 
 ## Surprising or worth noting (all read)
 
 - `pmuNavAdd` is never populated; the Insert key with several Add entries pops an empty menu (`.pas:15519`, `20414`).
-- The nav tree has no double-click, click, or drop handler of its own; double click is framework expand/collapse, and it is a drag *source* only, the View grid is the target (`.pas:21574-21590`, `7138`).
+- The nav tree has no double-click, click, or drop handler of its own; double click is framework expand/collapse, and it is a drag source only, the View grid is the target (`.pas:21574-21590`, `7138`).
 - Selecting 2+ records auto-compares with no menu action, up to `wbAutoCompareSelectedLimit` (`.pas:20505`).
 - Ctrl+1..5 bookmarks, F5, Ctrl+F3, Alt+F3 and Ctrl+W are described in `EditTips.txt` and the Information tab but have no handler in `xeMainForm.pas`.
 - The main menu is four groups; Save (Ctrl+S) is its only plugin write, with a per-plugin checklist and backup toggle.
