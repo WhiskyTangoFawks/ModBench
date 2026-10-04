@@ -39,8 +39,6 @@ public sealed class ValidateThroughGitTests : IDisposable
 
     private void Validate() => _index.NextSnapshot();
 
-    // One arrival validates every plugin before it announces, so a plugin that stays silent is
-    // known silent once the change made beside it is announced.
     private void ChangeThePartner()
     {
         var document = Reads.Search(new RecordQuery(Plugin: _partner.Name, Origin: _partner.Origin, RecordTypes: ["npc_"], Limit: 1)).Items.Single();
@@ -49,8 +47,6 @@ public sealed class ValidateThroughGitTests : IDisposable
         _partnerEditorId = next;
     }
 
-    // A step that depends on the last one's effect waits for that effect, not for an advance a
-    // step before it may have made.
     private void ValidateUntilEditorId(string editorId) =>
         _index.NextSnapshotUntil(() => Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId == editorId, $"the record named {editorId}");
 

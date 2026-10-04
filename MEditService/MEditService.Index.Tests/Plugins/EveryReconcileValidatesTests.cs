@@ -52,9 +52,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     private void Reconcile() =>
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
-    // An equal snapshot has no version to wait on, so a test waits for what the arrival announces.
-    // One arrival validates every plugin before it announces, so a plugin that stays silent is
-    // known silent once a change the same arrival finds has been announced.
     private IReadOnlyList<Notification> PublishedUntil(Func<Notification, bool> announced)
     {
         var before = _notifications.Notifications.Count;
