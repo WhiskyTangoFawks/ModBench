@@ -4,7 +4,7 @@ Modbench's data is two layers. The file layer is the mods and their files, resol
 
 ## Consequences
 
-- Mod Management reads no plugin binary and writes no record. A plugin's masters come from Editing, so two views never disagree over them.
+- Mod Management interprets no plugin binary and writes no record. A plugin's masters come from Editing, so two views never disagree over them.
 
 ## Alternatives rejected
 

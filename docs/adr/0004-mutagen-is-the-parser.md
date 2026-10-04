@@ -1,6 +1,6 @@
 # Mutagen is the parser
 
-Mutagen is the only maintained parser with typed records for every supported Bethesda game, and Modbench uses it as a library, never through a CLI. So everything that touches a plugin binary or the record index is C#, in a local service behind an HTTP API that any language can script.
+Mutagen is the only maintained parser with typed records for every supported Bethesda game, and Modbench uses it as a library, never through a CLI. So everything that reads or writes a plugin's records, or the record index, is C#, in a local service behind an HTTP API that any language can script. A content digest interprets nothing, so either process may hash any file, a plugin included.
 
 ## Alternatives rejected
 
