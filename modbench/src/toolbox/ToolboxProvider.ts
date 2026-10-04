@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
+import { logGameFolderNotFound } from './gameFolderNotFoundLog';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 
-export interface ToolboxDeps {
-  /** `undefined` with no instance open. The view still registers then — it is the container's
-   *  first view and must never be a hole — but the commands its rows activate do not exist, so
-   *  it renders no rows. */
-  instance: InstanceView | undefined;
-}
+/** `instance` is `undefined` with no instance open. The view still registers then — it is the
+ *  container's first view and must never be a hole — but the commands its rows activate do not
+ *  exist, so it renders no rows. */
+export type ToolboxDeps =
+  | { instance: InstanceView; channel: { warn(msg: string): void } }
+  | { instance: undefined };
 
 function gameRow({ gameName, gameFolder }: InstanceValue): vscode.TreeItem {
   const row = new vscode.TreeItem('Game');
@@ -57,7 +58,10 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
   constructor(private readonly deps: ToolboxDeps) {
     const changed = () => this._onDidChangeTreeData.fire(undefined);
     this.subscriptions = deps.instance
-      ? [deps.instance.subscribe(changed), deps.instance.onReadFailure(changed)]
+      ? [
+        deps.instance.subscribe(changed), deps.instance.onReadFailure(changed),
+        logGameFolderNotFound(deps.instance, (line) => deps.channel.warn(line)),
+      ]
       : [];
   }
 
