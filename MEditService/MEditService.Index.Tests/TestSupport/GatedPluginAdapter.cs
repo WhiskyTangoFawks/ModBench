@@ -56,8 +56,9 @@ internal abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginA
         inner.CreateAndWriteAsync(modKey, folder, gameRelease);
 }
 
-/// <summary>Parks a reconcile just before a named plugin's documents are opened until the test
-/// releases it, once, which is what makes progressive loading testable without sleeps.</summary>
+/// <summary>Parks a read just before a named plugin's documents are opened until the test
+/// releases it, once per arming, which is what makes progressive loading and write order
+/// testable without sleeps.</summary>
 internal sealed class GatedPluginAdapter(
     string? gateBefore = null, string? poisonPlugin = null, IPluginAdapter? inner = null)
     : DelegatingPluginAdapter(inner ?? TestAdapters.Mutagen()), IDisposable
@@ -95,12 +96,21 @@ internal sealed class GatedPluginAdapter(
 
     private bool ShouldParkBefore(string pluginName)
     {
-        if (gateBefore == null || !pluginName.Equals(gateBefore, StringComparison.OrdinalIgnoreCase)) return false;
         lock (_gate)
         {
+            if (gateBefore == null || !pluginName.Equals(gateBefore, StringComparison.OrdinalIgnoreCase)) return false;
             if (_parkedOnce) return false;
             _parkedOnce = true;
             return true;
+        }
+    }
+
+    public void ParkNextOpenOf(string pluginName)
+    {
+        lock (_gate)
+        {
+            gateBefore = pluginName;
+            _parkedOnce = false;
         }
     }
 
