@@ -1,4 +1,4 @@
-import type { MEditClient, PluginLoadFailure } from '../client';
+import { isMEditGone, type MEditClient, type PluginLoadFailure } from '../client';
 
 /** The load-order status's latest answer, kept live off the notification stream. Before the first
  *  tick, `current` reads false (never "settled") and `failures` is empty. */
@@ -32,7 +32,7 @@ export function trackLoadOrderStatus(
   // Mirrors reconcileNarrator's own detached() reset, on the same two signals
   // (plugins/indexStatus.ts): a crash-and-restart or a reattached stream starts the next process's
   // reconcile from unsettled.
-  const unsubscribeStatusChanged = client.onStatusChanged((status) => { if (status !== 'running') forget(); });
+  const unsubscribeStatusChanged = client.onStatusChanged((status) => { if (isMEditGone(status)) forget(); });
   const unsubscribeReconnected = client.onReconnected(forget);
   return {
     current: () => value,

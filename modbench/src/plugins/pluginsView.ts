@@ -116,7 +116,6 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   };
 }
 
-// `TreeView.message` is the view's message line.
 export function pluginsViewProgress(
   view: { message?: string | vscode.MarkdownString }, nameFilter: Pick<NameFilter, 'refresh'>,
 ): PluginsViewProgress {

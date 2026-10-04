@@ -11,8 +11,8 @@ const STATUS_TEXT: Record<BackendStatus, string> = {
 // common.md, The status bar. No command: a click does nothing (story 2).
 export interface StatusBar extends vscode.Disposable {
   ready(activePlugins: number): void;
-  /** mEdit's own state again, once the snapshot is not indexed. */
-  notReady(): void;
+  /** While the snapshot is not indexed. */
+  showMEditState(): void;
 }
 
 export function createStatusBar(client: Pick<MEditClient, 'status' | 'onStatusChanged'>): StatusBar {
@@ -23,7 +23,7 @@ export function createStatusBar(client: Pick<MEditClient, 'status' | 'onStatusCh
   const unsubscribe = client.onStatusChanged(showStatus);
   return {
     ready: (activePlugins) => { item.text = `$(check) mEdit: Ready (${activePlugins} plugins)`; },
-    notReady: showStatus,
+    showMEditState: showStatus,
     dispose: () => { unsubscribe(); item.dispose(); },
   };
 }

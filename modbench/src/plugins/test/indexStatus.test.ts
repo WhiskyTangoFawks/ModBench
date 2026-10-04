@@ -1,9 +1,29 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const h = vi.hoisted(() => ({ items: [] as { text: string }[] }));
+
+vi.mock('vscode', () => ({
+  StatusBarAlignment: { Left: 1, Right: 2 },
+  window: {
+    createStatusBarItem: () => {
+      const item = { text: '', show: () => undefined, dispose: () => undefined };
+      h.items.push(item);
+      return item;
+    },
+  },
+}));
+
 import { followIndexStatus, settleReconciled, syncActiveFilter, type IndexStatusDeps } from '../indexStatus';
+import { createStatusBar } from '../statusBar';
 import {
   InMemoryMEditClient, type LoadOrderProgress, type NotificationEvent, type PluginLoadFailure,
 } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { present } from '../../ports/present';
+
+const statusBarText = (): string => present(h.items.at(-1), 'the status bar item').text;
+
+beforeEach(() => { h.items.length = 0; });
 
 const readyStatus: LoadOrderProgress = {
   totalPlugins: 3, activePlugins: 2, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
@@ -11,7 +31,8 @@ const readyStatus: LoadOrderProgress = {
 
 describe('settleReconciled, a reconcile that reached Ready being reported and then applied whoever started it', () => {
   const settleDeps = () => ({
-    log: vi.fn(), warn: vi.fn(), statusBar: { ready: vi.fn() }, refreshTree: vi.fn(), notifyConflictsComputed: vi.fn(),
+    log: vi.fn(), warn: vi.fn(), statusBar: createStatusBar(new InMemoryMEditClient()), refreshTree: vi.fn(),
+    notifyConflictsComputed: vi.fn(),
     syncFilterState: vi.fn().mockResolvedValue(undefined),
     applyReconciled: vi.fn().mockResolvedValue(undefined),
   });
@@ -21,7 +42,7 @@ describe('settleReconciled, a reconcile that reached Ready being reported and th
 
     await settleReconciled(readyStatus, deps);
 
-    expect(deps.statusBar.ready).toHaveBeenCalledWith(2);
+    expect(statusBarText()).toBe('$(check) mEdit: Ready (2 plugins)');
   });
 
   it('refreshes the record browser, whose page, interior and reference caches would otherwise show stale records, and announces that conflicts are computed', async () => {
@@ -122,7 +143,7 @@ function followed() {
     },
     recordBrowser: { refresh: vi.fn() },
     progress: { while: vi.fn((work: () => Promise<void>) => work()), say: vi.fn() },
-    statusBar: { ready: vi.fn(), notReady: vi.fn() },
+    statusBar: createStatusBar(client),
     showRecordFilter: vi.fn(),
     notifyConflictsComputed: vi.fn(),
     log: vi.fn(),
@@ -141,7 +162,21 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
     await flushed();
 
     expect(deps.tree.applyReconciled).toHaveBeenCalledOnce();
-    expect(deps.statusBar.ready).toHaveBeenCalledWith(2);
+    expect(statusBarText()).toBe('$(check) mEdit: Ready (2 plugins)');
+  });
+
+  it.each([
+    ['a later reconcile starts', { state: 'Reconciling', conflictsComputed: false, version: 2 }],
+    ['the index is dropped', { state: 'None', conflictsComputed: false, totalPlugins: 0, version: 2 }],
+  ] as const)('gives Ready back to mEdit\'s own state when %s', async (_when, over) => {
+    const { client } = followed();
+    client.emit(statusEvent());
+    await flushed();
+
+    client.emit(statusEvent(over));
+    await flushed();
+
+    expect(statusBarText()).toBe('$(plug) mEdit: Running');
   });
 
   it.each([
@@ -149,13 +184,14 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
     ['Failed', 'failed', 'the reconcile threw something unexpected'],
   ] as const)('hands a %s refusal to the tree, and gives the status bar back to mEdit\'s own state', async (state, kind, message) => {
     const { client, deps } = followed();
+    client.emit(statusEvent());
+    await flushed();
 
-    client.emit(statusEvent({ state, conflictsComputed: false, message }));
+    client.emit(statusEvent({ state, conflictsComputed: false, message, version: 2 }));
     await flushed();
 
     expect(deps.tree.applyRefused).toHaveBeenCalledWith({ kind, message });
-    expect(deps.statusBar.notReady).toHaveBeenCalledOnce();
-    expect(deps.statusBar.ready).not.toHaveBeenCalled();
+    expect(statusBarText()).toBe('$(plug) mEdit: Running');
   });
 
   it('runs the view\'s progress while the index fills, and closes it on Ready', async () => {

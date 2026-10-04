@@ -65,7 +65,7 @@ function pluginsView() {
   const plugins = createPluginsView({
     instance: new FakeInstance(instanceValueFixture()), access: accessTo('/instance'), recordBrowser, client,
     pluginSync: syncMessageDouble(), dataFolderFile: () => undefined, log: () => undefined, reporterFor: recordingReporter,
-    statusBar: { ready: vi.fn(), notReady: vi.fn(), dispose: vi.fn() }, notifyConflictsComputed: vi.fn(),
+    statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, notifyConflictsComputed: vi.fn(),
   });
   return { client, recordBrowser, plugins };
 }

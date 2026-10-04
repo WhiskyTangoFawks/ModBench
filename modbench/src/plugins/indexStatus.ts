@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { LoadOrderProgress, MEditClient, PluginLoadFailure, RecordFilter } from '../client';
+import { isMEditGone, type LoadOrderProgress, type MEditClient, type PluginLoadFailure, type RecordFilter } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import type { PluginsViewProgress } from './pluginRowCommands';
@@ -66,7 +66,7 @@ export interface IndexStatusDeps {
   /** The record browser a reconciled load order refreshes. */
   recordBrowser: Pick<PluginTreeProvider, 'refresh'>;
   progress: PluginsViewProgress;
-  statusBar: Pick<StatusBar, 'ready' | 'notReady'>;
+  statusBar: Pick<StatusBar, 'ready' | 'showMEditState'>;
   showRecordFilter: (filter: RecordFilter | null) => void;
   notifyConflictsComputed: () => void;
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
@@ -82,10 +82,13 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
   const warn = (m: string) => reporter.report('warning', m);
   const narrator = createReconcileNarrator({
     showProgress: (until) => void progress.while(() => until),
-    applyIndexed: (indexedPlugins, failures) => tree.applyIndexed(indexedPlugins, failures),
+    applyIndexed: (indexedPlugins, failures) => {
+      tree.applyIndexed(indexedPlugins, failures);
+      statusBar.showMEditState();
+    },
     applyRefused: (refusal) => {
       tree.applyRefused(refusal);
-      statusBar.notReady();
+      statusBar.showMEditState();
     },
     settle: (status) => settleReconciled(status, {
       log: info, warn, statusBar, notifyConflictsComputed,
@@ -98,8 +101,8 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
   const unsubscribes = [
     subscribeNarratorToLoadOrderStatus(client, narrator),
     client.onStatusChanged((status) => {
-      if (status !== 'running') narrator.detached();
-      if (status !== 'disconnected' && status !== 'stopped') return;
+      if (!isMEditGone(status)) return;
+      narrator.detached();
       // ADR-0002: the rows stay, and expand into the error row.
       void tree.refreshFacts();
       tree.applyBackendUnreachable(UNREACHABLE_REASON[status]);
@@ -109,7 +112,6 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
   return { narrator, dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); } };
 }
 
-// Rows gain chevrons here, and finish gaining them here.
 async function applyReconciled(
   { tree, log, reporter }: IndexStatusDeps,
   failures: PluginLoadFailure[],

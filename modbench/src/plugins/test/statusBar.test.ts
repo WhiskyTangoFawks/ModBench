@@ -69,7 +69,7 @@ describe('the status bar, one item saying what mEdit is doing', () => {
     const bar = createStatusBar(client);
     bar.ready(2);
 
-    bar.notReady();
+    bar.showMEditState();
 
     expect(theItem().text).toBe('$(plug) mEdit: Running');
   });
