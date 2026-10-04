@@ -110,7 +110,7 @@ Regenerating the typed API client after a backend change: `npm run generate-api`
 
 The repo is set up to be worked on by people and coding agents alike:
 
-- [CLAUDE.md](CLAUDE.md) — the tool commands and the rules no gate can express; the module files under `modbench/` and `MEditService/` carry each side's own.
+- [CLAUDE.md](CLAUDE.md) — the tool commands and the rules no gate can express; the process files under `modbench/` and `MEditService/` carry each side's own.
 - [docs/architecture/](docs/architecture/) — the specification the code is built against: the target architecture, one surface spec per view, one trace per flow.
 - [docs/adr/](docs/adr/) — decisions.
 - [docs/out-of-scope/](docs/out-of-scope/) — the divergence registers, one for each reference tool.

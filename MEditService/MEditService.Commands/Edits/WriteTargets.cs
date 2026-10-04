@@ -303,7 +303,7 @@ internal sealed class WriteTargets(
 
     // Unions the working tree (committed plus uncompiled creates) and HEAD (natives the working tree
     // deleted, whose IDs must not be reused before compile). Null means exhausted.
-    internal static string? NextFreeNativeFormId(Allocator allocator, bool isLight, IReadOnlySet<string>? taken = null)
+    private static string? NextFreeNativeFormId(Allocator allocator, bool isLight, IReadOnlySet<string>? taken = null)
     {
         var floor = PluginFlagPredicates.HighRangeFormIdFloor(allocator.Release);
         var highest = allocator.Taken
