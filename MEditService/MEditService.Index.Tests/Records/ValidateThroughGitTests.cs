@@ -49,6 +49,11 @@ public sealed class ValidateThroughGitTests : IDisposable
         _partnerEditorId = next;
     }
 
+    // A step that depends on the last one's effect waits for that effect, not for an advance a
+    // step before it may have made.
+    private void ValidateUntilEditorId(string editorId) =>
+        _index.NextSnapshotUntil(() => Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId == editorId, $"the record named {editorId}");
+
     private void ValidateUntilFailed() => _index.NextSnapshotUntil(() => PluginFailed, "the plugin's failure");
 
     private bool PluginFailed => _index.Status.Failures.Any(f => f.Name == _mod.Name);
@@ -84,10 +89,10 @@ public sealed class ValidateThroughGitTests : IDisposable
     public void AHandEditThatGitRestores_ReturnsTheRecordToHead_WhereGitNamesNothing()
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
-        Validate();
+        ValidateUntilEditorId("RenamedByHand");
         _mod.Git("checkout", "--", GitPath(NpcFile));
 
-        Validate();
+        ValidateUntilEditorId("FixtureNpc");
 
         var entry = Reads.StackEntry(_npc, _mod.KeyOf()).Require();
         Assert.False(entry.HasWorkingTreeChange);
@@ -99,11 +104,10 @@ public sealed class ValidateThroughGitTests : IDisposable
     {
         var file = NpcFile;
         File.Delete(file);
-        Validate();
-        Assert.Null(Reads.GetDocument(_npc, _mod.KeyOf()));
+        _index.NextSnapshotUntil(() => Reads.GetDocument(_npc, _mod.KeyOf()) is null, "the record gone");
         _mod.Git("checkout", "--", GitPath(file));
 
-        Validate();
+        ValidateUntilEditorId("FixtureNpc");
 
         Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
         Assert.False(Reads.StackEntry(_npc, _mod.KeyOf()).Require().HasWorkingTreeChange);
@@ -130,12 +134,12 @@ public sealed class ValidateThroughGitTests : IDisposable
         var file = NpcFile;
         var text = File.ReadAllText(file);
         File.Delete(file);
-        Validate();
+        _index.NextSnapshotUntil(() => Reads.GetDocument(_npc, _mod.KeyOf()) is null, "the record gone");
         _mod.Git("commit", "-q", "-am", "a deletion committed outside Modbench");
         Validate();
 
         File.WriteAllText(file, text);
-        Validate();
+        ValidateUntilEditorId("FixtureNpc");
 
         var listing = Reads.Search(new RecordQuery(Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
         Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == _npc).WorkingTreeState);
@@ -192,11 +196,12 @@ public sealed class ValidateThroughGitTests : IDisposable
         Validate();
         var treeWhoseRestoreAtTheSameHeadReadsCleanToGit = SourceRepository.RootIn(_mod.ModFolderOf(), _mod.Name);
         Directory.Move(treeWhoseRestoreAtTheSameHeadReadsCleanToGit, treeWhoseRestoreAtTheSameHeadReadsCleanToGit + ".away");
-        Validate();
-        Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
+        ValidateUntilEditorId("FixtureNpc");
+        ChangeThePartner();
+        Assert.True(_index.Revalidate());
         Directory.Move(treeWhoseRestoreAtTheSameHeadReadsCleanToGit + ".away", treeWhoseRestoreAtTheSameHeadReadsCleanToGit);
 
-        Validate();
+        ValidateUntilEditorId("RenamedByHand");
 
         Assert.Equal("RenamedByHand", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
     }
