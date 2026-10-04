@@ -5,20 +5,8 @@ import * as vscode from 'vscode';
 import { ModListProvider, ModNode, OverwriteNode, type ModlistNode } from './mods/ModListProvider';
 import type { NexusModRow } from './mods/modManagementCommands';
 import { errorMessage } from './ports/errorMessage';
-import {
-  installDownloadedFile, registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands,
-  registerDownloadsSingleRowCommands, registerDownloadsSortCommand, type DownloadInstallDeps,
-} from './downloads/DownloadsPanel';
-import { DownloadNode, DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
-import { ExcludedDownloadDecorationProvider } from './downloads/ExcludedDownloadDecorationProvider';
-import { downloadsKeyContext } from './downloads/keyContext';
-import type { DownloadFile, InstanceView } from './instanceLoader/instance';
-import type { DownloadsAccess } from './downloadsCommands/downloads';
-import type { InstallAccess } from './install/install';
+import { DownloadNode } from './downloads/DownloadsProvider';
 import type { Own } from './session';
-import type { Reporter } from './ports/reporter';
-import type { AskQuestion } from './ports/dialog';
-import type { MoveToTrash } from './ports/trash';
 import { messageLine, registerNameFilter, type NameFilter, type SyncMessage } from './drivingLib/nameFilter';
 import { modsKeyContext } from './mods/gestureEntry';
 
@@ -122,65 +110,4 @@ export function lastSelectedViewSelection(
     }));
   }
   return () => last?.selection ?? [];
-}
-
-export interface DownloadsViewDeps {
-  own: Own;
-  access: DownloadsAccess & InstallAccess;
-  instance: InstanceView;
-  reporter: Reporter;
-  ask: AskQuestion;
-  trash: MoveToTrash;
-  install: DownloadInstallDeps;
-}
-
-/** Returns the live provider alongside its disposables, so integration tests can reach it.
- *  Rows come from the Instance value alone (ADR-0015). */
-export function registerDownloadsView(
-  { own, access, instance, reporter, ask, trash, install }: DownloadsViewDeps,
-): {
-  downloadsProvider: DownloadsProvider; downloadsView: vscode.TreeView<DownloadsTreeNode>; downloadsFilter: NameFilter;
-  installDownloaded: (file: DownloadFile) => Promise<boolean>;
-} {
-  const downloadsProvider = own(new DownloadsProvider({ instance, log: install.log })); // disposes its Instance subscriptions
-  const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
-    treeDataProvider: downloadsProvider,
-    canSelectMany: true,
-  }));
-  // Dims excluded rows once Show excluded is on. VS Code never re-queries a decoration provider
-  // on its own, so this refreshes it on every rows change — exclude, include and a disk edit alike.
-  const excludedDecorations = new ExcludedDownloadDecorationProvider(
-    () => instance.value.paths.downloadsDir, () => downloadsProvider.excludedNames());
-  own(vscode.window.registerFileDecorationProvider(excludedDecorations));
-  own(downloadsProvider.onDidChangeTreeData(() => excludedDecorations.refresh()));
-  const downloadsFilter = own(registerNameFilter({
-    view: downloadsView, object: 'modbench.downloadedFile', placeholder: 'Filter downloads…',
-    setFilter: (text) => downloadsProvider.setFilter(text),
-    hasRows: async () => (await downloadsProvider.getChildren()).length > 0,
-    viewMessage: () => downloadsProvider.viewMessage(),
-    standingMessage: () => downloadsProvider.viewMessage(),
-    onRowsChanged: downloadsProvider.onDidChangeTreeData,
-  }));
-  // package.json's viewsWelcome gates the all-excluded message on this key (downloads.md,
-  // States, story 2), recomputed on every row change so a disk edit reaches it too.
-  const updateAllExcludedContext = () =>
-    void vscode.commands.executeCommand('setContext', 'modbench.downloadedFile.allExcluded', downloadsProvider.allExcluded());
-  updateAllExcludedContext();
-  own(downloadsProvider.onDidChangeTreeData(updateAllExcludedContext));
-  const showKeyContext = () => {
-    for (const [name, value] of Object.entries(downloadsKeyContext(downloadsView.selection))) {
-      void vscode.commands.executeCommand('setContext', `modbench.downloadedFile.${name}`, value);
-    }
-  };
-  showKeyContext();
-  own(downloadsView.onDidChangeSelection(showKeyContext));
-  own(downloadsProvider.onDidChangeTreeData(showKeyContext));
-  own(registerDownloadsSortCommand(downloadsProvider));
-  for (const disposable of [
-    ...registerDownloadsExcludedToggleCommands(downloadsProvider),
-    ...registerDownloadsSingleRowCommands(reporter, () => downloadsView.selection),
-    ...registerDownloadsMultiRowCommands(access, reporter, ask, trash, install.log, () => downloadsView.selection, downloadsProvider),
-  ]) own(disposable);
-  const installDownloaded = (file: DownloadFile) => installDownloadedFile(file, access, instance, reporter, install);
-  return { downloadsProvider, downloadsView, downloadsFilter, installDownloaded };
 }

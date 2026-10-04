@@ -10,6 +10,7 @@ const TOOLBOX_COMMANDS = join(SRC, 'toolbox', 'toolboxCommands.ts');
 const DISPOSABLE_PRODUCERS = [
   'Instance',
   'ModListProvider',
+  'createDownloadsView',
   'createPluginsView',
   'createTreeView',
   'createLoadOrderSender',
