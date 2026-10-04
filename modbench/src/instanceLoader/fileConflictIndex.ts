@@ -39,9 +39,13 @@ export function inFileOrderConflict(entry: ConflictEntry | undefined, own: FileO
   return providers.length > 1 && providers.some((provider) => sameOrigin(provider, own));
 }
 
-/** Whether `own` provides the path, and another enabled copy or Overwrite's wins over it. */
-export function losesFileOrderConflict(entry: ConflictEntry | undefined, own: FileOrigin): boolean {
-  return entry !== undefined && inFileOrderConflict(entry, own) && !sameOrigin(entry.winnerOrigin, own);
+export type FileOrderConflict = 'none' | 'wins' | 'loses';
+
+/** Whether `own`'s copy is in a file order conflict, and wins it or loses it to another enabled
+ *  copy or Overwrite. */
+export function fileOrderConflictOf(entry: ConflictEntry | undefined, own: FileOrigin): FileOrderConflict {
+  if (entry === undefined || !inFileOrderConflict(entry, own)) return 'none';
+  return sameOrigin(entry.winnerOrigin, own) ? 'wins' : 'loses';
 }
 
 /** Comparison keys only — never display, never written back to disk. Locale-independent,

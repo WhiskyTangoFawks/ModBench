@@ -12,13 +12,15 @@ instanceloader -> mods: "value: mod order, each path's providers, Overwrite's fi
 mods."the rows and the columns"
 mods -> instanceloader: "which copies are the same: the files in the mod's file order conflicts" {class: loadorder}
 instanceloader."sizes first; an answer it remembers is not read again"
+instanceloader -> instanceadapter: "stat: the size, date modified and date changed of each copy" {class: loadorder}
+instanceadapter -> instanceloader: "a stamp for each copy, or the reason it could not be read" {class: loadorder}
 instanceloader -> instanceadapter: "get: the content digest of each copy whose size matches another's" {class: loadorder}
 instanceadapter -> instanceloader: "a content digest for each copy, or the reason it could not be read" {class: loadorder}
-instanceloader -> mods: "for each file, which copies are the same, or the reason a copy could not be read" {class: loadorder}
+instanceloader -> mods: "for each file, each copy's size and date modified and which copies are the same, or the reason a copy could not be read" {class: loadorder}
 mods."each cell's state and value"
 
 changed: "the disk changed" {
   instanceloader -> mods: "load-instance: value" {class: loadorder}
   mods -> instanceloader: "which copies are the same: the files in the mod's file order conflicts" {class: loadorder}
-  instanceloader -> mods: "for each file, which copies are the same, or the reason a copy could not be read" {class: loadorder}
+  instanceloader -> mods: "for each file, each copy's size and date modified and which copies are the same, or the reason a copy could not be read" {class: loadorder}
 }

@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { conflictTableHost } from './vscode';
 import { navigate, type NavRow } from './gridNavigation';
 import { ExpandArrow } from './ExpandArrow';
-import { baseCell, focusedRowStyle, getCellStyle, headerBackground, headerCell, rowBackground } from './gridStyles';
+import { baseCell, conflictStateName, focusedRowStyle, getCellStyle, headerBackground, headerCell, rowBackground } from './gridStyles';
 import {
   CONFLICT_TABLE_READY, parseConflictTableShown,
   type ConflictCell, type ConflictCellContext, type ConflictColumn, type ConflictColumnContext, type ConflictRow, type ConflictTable, type ConflictTableShown,
@@ -27,6 +27,13 @@ function cellContext({ origin }: ConflictColumn, path: string, cell: ConflictCel
   if (cell === null || cell.winning === true) return undefined;
   const context: ConflictCellContext = { webviewSection: 'conflictCell', origin, path, preventDefaultContextMenuItems: true };
   return JSON.stringify(context);
+}
+
+function cellTooltip(column: ConflictColumn, cell: ConflictCell | null): string | undefined {
+  if (cell === null) return undefined;
+  if (cell.unreadable !== undefined) return cell.unreadable;
+  if (cell.size === undefined || cell.modified === undefined) return undefined;
+  return [column.name, cell.state === null ? 'State not known' : conflictStateName(cell.state), `${cell.size.toLocaleString()} bytes`, new Date(cell.modified).toLocaleString()].join('\n');
 }
 
 // A collapsed folder shows the worst state beneath it, and an expanded one none (mods-conflicts.md, Cells, story 1).
@@ -130,7 +137,9 @@ export function ConflictTableView() {
                 {table.columns.map((column, index) => {
                   const cell: ConflictCell | null = row.kind === 'file' ? row.cells[index] ?? null : null;
                   return (
-                    <td key={columnKey(column)} title={cell?.unreadable} data-vscode-context={cellContext(column, row.path, cell)} style={{ ...baseCell, ...getCellStyle(cell?.state ?? undefined), ...columnStyle(column) }} />
+                    <td key={columnKey(column)} title={cellTooltip(column, cell)} data-vscode-context={cellContext(column, row.path, cell)} style={{ ...baseCell, ...getCellStyle(cell?.state ?? undefined), ...columnStyle(column) }}>
+                      {cell?.value}
+                    </td>
                   );
                 })}
               </tr>

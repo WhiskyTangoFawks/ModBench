@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import type { Mod, Separator, ModlistEntry } from '../instance';
 import {
-  buildFileConflictIndex, modOrigin, rootLevelWinners, goToModCandidates, inFileOrderConflict, losesFileOrderConflict, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, modOrigin, rootLevelWinners, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
 import type { InstanceAdapter, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../loadOrderSnapshot';
@@ -282,17 +282,17 @@ describe('whether a copy of a file is in a file order conflict', () => {
   });
 });
 
-describe('whether a copy of a file loses its file order conflict', () => {
-  it('is, for a provider that is not the winner, and not for the winner', () => {
-    expect(losesFileOrderConflict(entryOf(high, low), low)).toBe(true);
-    expect(losesFileOrderConflict(entryOf(RUNTIME_OUTPUT, high), high)).toBe(true);
-    expect(losesFileOrderConflict(entryOf(high, low), high)).toBe(false);
-    expect(losesFileOrderConflict(entryOf(RUNTIME_OUTPUT, high), RUNTIME_OUTPUT)).toBe(false);
+describe('whether a copy of a file wins or loses its file order conflict', () => {
+  it('wins, for the winner of a path another copy provides, and loses, for a provider that is not', () => {
+    expect(fileOrderConflictOf(entryOf(high, low), high)).toBe('wins');
+    expect(fileOrderConflictOf(entryOf(RUNTIME_OUTPUT, high), RUNTIME_OUTPUT)).toBe('wins');
+    expect(fileOrderConflictOf(entryOf(high, low), low)).toBe('loses');
+    expect(fileOrderConflictOf(entryOf(RUNTIME_OUTPUT, high), high)).toBe('loses');
   });
 
-  it('is not, for a copy no other copy conflicts with, and a path no one provides', () => {
-    expect(losesFileOrderConflict(entryOf(high), high)).toBe(false);
-    expect(losesFileOrderConflict(entryOf(high, middle), low)).toBe(false);
-    expect(losesFileOrderConflict(undefined, high)).toBe(false);
+  it('is none, for a copy no other copy conflicts with, and a path no one provides', () => {
+    expect(fileOrderConflictOf(entryOf(high), high)).toBe('none');
+    expect(fileOrderConflictOf(entryOf(high, middle), low)).toBe('none');
+    expect(fileOrderConflictOf(undefined, high)).toBe('none');
   });
 });
