@@ -27,7 +27,7 @@ commands -> sourceadapter: "what Modbench last wrote" {class: compile}
 sourceadapter -> source: "what Modbench last wrote" {class: compile}
 commands -> pluginadapter: bytes {class: compile}
 pluginadapter -> plugin: "bytes · a localized plugin's strings" {class: compile}
-commands -> http: "applied, with the masters and the diagnostics, or refusal, per item" {class: edit}
+commands -> http: "applied, with the diagnostics, or refusal, per item" {class: edit}
 http -> client: "applied or refusal, per item" {class: edit}
 client -> plugins: the outcome {class: edit}
 indexer."the next snapshot: index-load-order"
