@@ -37,32 +37,6 @@ public sealed partial class SourceRepository
             .Select(blob => DocumentAt(blob.RelativePath, blob.Text, plugin.Name))
             .OfType<SourceDocument>()];
 
-    /// <summary>One record's own text as <paramref name="gitRef"/> has it, re-extracted through the
-    /// codec when another record's committed document carries it. Null when nothing at that ref holds
-    /// it.</summary>
-    public SourceDocument? GetAt(PluginAddress plugin, RecordIdentity identity, string gitRef)
-    {
-        SourceDocument Own(string body) =>
-            new(identity.FormKey, identity.RecordType, identity.EditorId, body);
-
-        foreach (var (relativePath, text) in BlobsAtRef(plugin.Name, gitRef))
-        {
-            if (DocumentAt(relativePath, text, plugin.Name) is not { } document) continue;
-            if (document.FormKey.Equals(identity.FormKey, StringComparison.Ordinal)) return Own(document.Body);
-
-            // The owner's whole document, so the child is cut back out of it exactly as a working-tree
-            // read does.
-            if (!CarriesFormKey(text, identity.FormKey)) continue;
-            var unit = new SourceUnit(
-                relativePath, relativePath, document.FormKey, document.RecordType, IsEmbedded: true);
-            if (RecordBodyFromOwnerBytes(Encoding.UTF8.GetBytes(text), unit, identity.FormKey, _release) is { } body)
-            {
-                return Own(body);
-            }
-        }
-        return null;
-    }
-
     /// <summary>The text HEAD commits for the record, or null when it is the text
     /// <paramref name="knownText"/> holds, no unit holds the record, or HEAD carries it nowhere. One
     /// record, so a clean one starts no git process.</summary>
@@ -225,28 +199,6 @@ public sealed partial class SourceRepository
             ? null
             : new SourceDocument(formKey, recordType, RootStringIn(text, "EditorID"), text);
     }
-
-    private static bool CarriesFormKey(string text, string formKey)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(text);
-            return CarriesFormKey(document.RootElement, formKey);
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
-    private static bool CarriesFormKey(JsonElement element, string formKey) => element.ValueKind switch
-    {
-        JsonValueKind.Object => element.EnumerateObject().Any(p =>
-            (p.NameEquals("FormKey") && p.Value.ValueKind == JsonValueKind.String && p.Value.ValueEquals(formKey))
-            || CarriesFormKey(p.Value, formKey)),
-        JsonValueKind.Array => element.EnumerateArray().Any(item => CarriesFormKey(item, formKey)),
-        _ => false,
-    };
 
     // Never exclusive owners of the file: it may have been deleted, moved or locked since the listing.
     private static string? ReadOrNull(string path)

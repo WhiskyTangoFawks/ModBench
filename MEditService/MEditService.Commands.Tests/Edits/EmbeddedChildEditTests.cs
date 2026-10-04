@@ -21,8 +21,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     private string WorkingTreeCell() => _fixture.Document(_fixture.EmbedCell.ToString()).Require().Body;
 
     private string CommittedCell() =>
-        _fixture.CommittedDocument(
-            _fixture.EmbedCell.ToString(), "cell", ContainerModPlugin.EmbedCellEditorId).Require().Body;
+        _fixture.CommittedDocument(_fixture.EmbedCell.ToString()).Require().Body;
 
     [Fact]
     public void EditingAnEmbeddedPlacedRefsField_RewritesOnlyThatFieldInTheOwningCellsDocument()

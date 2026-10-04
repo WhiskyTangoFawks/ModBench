@@ -123,7 +123,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
-    public IRecordReads RequireReads() => RequireScopeCore().Index.At(RecordRef.Effective);
+    public IRecordReads RequireReads() => RequireScopeCore().Index.Reads;
 
     // The concrete HeldPlugins and write-capable IRecordIndex the projection methods need, wider
     // than the reads the public method hands out. One lock, one null check, one message.
@@ -409,7 +409,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         // ADR-0007: which truth a plugin reads is its folder's answer, and the stamp
         // records the one its rows came from. Tracking and untracking move the first alone, and no
         // load-order difference above names them.
-        var stampedFromSource = index.At(RecordRef.Effective).GetTrackedPlugins();
+        var stampedFromSource = index.Reads.GetTrackedPlugins();
         var reDerived = resolved.Where(r => open.ContainsKey(r.Key) && TruthMoved(index, r, stampedFromSource)).ToList();
 
         bool conflictsComputed;

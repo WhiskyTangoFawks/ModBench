@@ -75,10 +75,6 @@ public sealed partial class SourceRepository
             .OfType<string>()];
     }
 
-    /// <summary>Whether a plugin can be edited (ADR-0007), asked of its origin and path.</summary>
-    public static bool IsEditable(string origin, string pluginPath) =>
-        LoadOrderSnapshot.ModFolderOf(origin, pluginPath) is { } modFolder && IsTracked(modFolder);
-
     /// <summary>The mod folder only when it is tracked — the single condition under which a plugin
     /// has source text at all.</summary>
     public static string? TrackedModFolderOf(LoadOrderSnapshot loadOrder, PluginAddress plugin) =>

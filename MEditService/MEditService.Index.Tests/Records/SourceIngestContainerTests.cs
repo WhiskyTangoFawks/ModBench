@@ -12,19 +12,7 @@ public sealed class SourceIngestContainerTests : IDisposable
     private Indexer Reloaded() => Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
 
     [Fact]
-    public void AnEmbeddedPlacedReference_AnswersAtBothRefs_OnACleanTree()
-    {
-        using var reloaded = Reloaded();
-
-        var effective = reloaded.RequireReads().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
-        var head = reloaded.RequireReads().HeadDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
-        Assert.NotNull(effective);
-        Assert.NotNull(head);
-        Assert.Equal(effective.Body, head.Body);
-    }
-
-    [Fact]
-    public void AnExternallyEditedContainer_ReconcilesItsHeadState_ThroughStructuralDiff()
+    public void AnExternallyEditedContainer_ServesItsEdit_ThroughStructuralDiff()
     {
         var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         File.WriteAllText(
@@ -37,14 +25,10 @@ public sealed class SourceIngestContainerTests : IDisposable
         var effective = reloaded.RequireReads().GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin);
         Assert.NotNull(effective);
         Assert.Equal("RenamedCell", effective.EditorId);
-
-        var head = reloaded.RequireReads().HeadDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin);
-        Assert.NotNull(head);
-        Assert.Equal(ContainerModPlugin.EmbedCellEditorId, head.EditorId);
     }
 
     [Fact]
-    public void AFlatRecordEditedBesideTheContainer_DoesReconcileItsHead()
+    public void AFlatRecordEditedBesideTheContainer_ServesItsEdit()
     {
         var npcFile = _fixture.SourceFileContaining(ContainerMod.NpcEditorId);
         File.WriteAllText(
@@ -56,13 +40,10 @@ public sealed class SourceIngestContainerTests : IDisposable
         var effective = reloaded.RequireReads().GetDocument(_fixture.Npc.ToString(), _fixture.Plugin);
         Assert.NotNull(effective);
         Assert.Equal("RenamedNpc", effective.EditorId);
-        var head = reloaded.RequireReads().HeadDocument(_fixture.Npc.ToString(), _fixture.Plugin);
-        Assert.NotNull(head);
-        Assert.Equal(ContainerMod.NpcEditorId, head.EditorId);
     }
 
     [Fact]
-    public void AnEmbeddedChildEditedInPlace_ReconcilesItsOwnHeadState()
+    public void AnEmbeddedChildEditedInPlace_ServesItsEdit()
     {
         var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         File.WriteAllText(
@@ -77,9 +58,6 @@ public sealed class SourceIngestContainerTests : IDisposable
         var effective = reloaded.RequireReads().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(effective);
         Assert.Equal("RenamedTempRef", effective.EditorId);
-        var head = reloaded.RequireReads().HeadDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
-        Assert.NotNull(head);
-        Assert.Equal(ContainerModPlugin.TemporaryRefEditorId, head.EditorId);
     }
 
     [Fact]

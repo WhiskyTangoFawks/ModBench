@@ -65,7 +65,7 @@ public sealed class EditRecordHandlerTests : IDisposable
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.Contains("0.75", _mod.Document(_mod.Npc.ToString()).Require().Body, StringComparison.Ordinal);
-        Assert.DoesNotContain("0.75", _mod.CommittedDocument(_mod.Npc.ToString(), "npc_", SourceEditFixture.NpcEditorId).Require().Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("0.75", _mod.CommittedDocument(_mod.Npc.ToString()).Require().Body, StringComparison.Ordinal);
     }
 
     [Fact]

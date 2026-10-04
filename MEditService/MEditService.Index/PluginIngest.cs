@@ -42,7 +42,7 @@ internal sealed class PluginIngest
     {
         DeleteExistingForOrigin("record_type_failure", plugin, origin);
         DeleteExistingForOrigin("records", plugin, origin);
-        // The Head snapshots go too: records_head is records_committed UNION ALL the still-clean
+        // The Head snapshots go too: head_rows is records_committed UNION ALL the still-clean
         // records rows, and the halves must stay disjoint. Deleting here rather than at each caller
         // is what makes every caller inherit it.
         DeleteExistingForOrigin("records_committed", plugin, origin);

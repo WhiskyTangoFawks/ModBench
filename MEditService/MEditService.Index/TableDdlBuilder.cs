@@ -25,7 +25,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         string Table, string PluginColumn, string OriginColumn, bool HoldsRecords, bool DerivesLoadOrder, bool DerivesWinner);
 
     // ADR-0012: the views derive `load_order_idx` and `is_winner` by joining
-    // `registrations` and `winners`, at Effective. `records_head` joins at Head.
+    // `registrations` and `winners`.
     private static readonly PublicView[] PublicViews =
     [
         new("records", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true),
@@ -60,13 +60,12 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     /// orders by. Load-order-owned state, so it lives in <c>main</c>.</summary>
     internal const string ActiveRelation = "active_plugins";
 
-    // A LEFT JOIN, never a correlated EXISTS: winners holds at most one row per (ref, form_key), so
+    // A LEFT JOIN, never a correlated EXISTS: winners holds at most one row per form_key, so
     // the join cannot duplicate a row, and a hash join beats EXISTS on the full-scan reads that
     // dominate.
-    private static string WinnerJoin(string alias, RecordRef @ref, string pluginColumn, string originColumn) => $"""
+    private static string WinnerJoin(string alias, string pluginColumn, string originColumn) => $"""
         LEFT JOIN {WinnersRelation} w
-               ON w.record_ref = '{WinnerRef.Of(@ref)}'
-              AND w.form_key = {alias}.form_key
+               ON w.form_key = {alias}.form_key
               AND w.plugin = {alias}.{pluginColumn}
               AND w.origin = {alias}.{originColumn}
         """;
@@ -90,9 +89,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateSequenceTable(connection);
         Execute(connection, $"CREATE TABLE IF NOT EXISTS {MirrorSchema}.index_version (value VARCHAR NOT NULL)");
 
-        // Views after tables: the public views over every mirror table, then the Head views.
+        // Views after tables: the public views over every mirror table, then the head_rows view.
         CreatePublicViews(connection);
-        CreateHeadView(connection);
+        CreateHeadRowsView(connection);
     }
 
     // ADR-0015: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional,
@@ -134,7 +133,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             var loadOrderColumn = relation.DerivesLoadOrder ? ", p.load_order_idx" : "";
             var winnerColumn = relation.DerivesWinner ? ", (w.form_key IS NOT NULL) AS is_winner" : "";
             var winnerJoin = relation.DerivesWinner
-                ? WinnerJoin("t", RecordRef.Effective, relation.PluginColumn, relation.OriginColumn)
+                ? WinnerJoin("t", relation.PluginColumn, relation.OriginColumn)
                 : "";
             Execute(connection, $"""
                 CREATE OR REPLACE VIEW "{relation.Table}" AS
@@ -177,7 +176,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     // The committed half of the ref dimension: only the snapshot of a record whose working tree
     // diverged, nothing for the clean majority. A column-for-column mirror of `records` so
-    // `records_head` is a plain UNION ALL of one shape.
+    // `head_rows` is a plain UNION ALL of one shape.
     private static void CreateCommittedRecordsTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
@@ -200,11 +199,10 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     }
 
     /// <summary>What Head holds, for every indexed plugin, with no winner column. Outside the SQL
-    /// door: the winner sweep, the projection and <c>records_head</c> read this one
-    /// definition.</summary>
+    /// door: the projection and the overlay read this one definition.</summary>
     internal const string HeadRowsRelation = $"{MirrorSchema}.head_rows";
 
-    private static void CreateHeadView(DuckDBConnection connection)
+    private static void CreateHeadRowsView(DuckDBConnection connection)
     {
         // Disjoint halves by construction (the snapshot write and the `ref` flip share one
         // transaction), so UNION ALL is exact.
@@ -215,19 +213,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             UNION ALL
             SELECT form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash, parse_diagnosis
             FROM {MirrorSchema}.records WHERE "ref" = '{SourceRef.Committed}'
-            """);
-
-        // is_winner is Head's own answer, never Effective's carried through: a working-tree delete
-        // promotes the next plugin at Effective through a clean row this view shares, so reusing
-        // Effective's winner would report two winners at Head.
-        Execute(connection, $"""
-            CREATE OR REPLACE VIEW records_head AS
-            SELECT h.form_key, h.plugin, h.origin, h.record_type, h.editor_id, p.load_order_idx,
-                   (w.form_key IS NOT NULL) AS is_winner,
-                   h."ref", h.body, h.content_hash, h.parse_diagnosis
-            FROM {HeadRowsRelation} h
-            {ActiveJoin("h", "plugin", "origin")}
-            {WinnerJoin("h", RecordRef.Head, "plugin", "origin")}
             """);
     }
 
@@ -249,7 +234,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     {
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {WinnersRelation} (
-                record_ref VARCHAR NOT NULL,
                 form_key   VARCHAR {FilenameIdentity} NOT NULL,
                 plugin     VARCHAR {FilenameIdentity} NOT NULL,
                 origin     VARCHAR {FilenameIdentity} NOT NULL
