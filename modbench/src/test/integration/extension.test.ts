@@ -392,40 +392,6 @@ describe('modbench.mod.sync syncs the instance value it is handed', () => {
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 
-async function checkBoxTogglesMarkedByTheNextTurn(
-  rows: { markUnconfirmed(row: never, enabled: boolean): void }, command: string,
-): Promise<number> {
-  let toggles = 0;
-  const mark = rows.markUnconfirmed.bind(rows);
-  rows.markUnconfirmed = (row, enabled) => {
-    toggles++;
-    mark(row, enabled);
-  };
-  try {
-    await vscode.commands.executeCommand(command);
-    await new Promise((turn) => setImmediate(turn));
-  } finally {
-    rows.markUnconfirmed = mark;
-  }
-  return toggles;
-}
-
-async function readsAskedByTheNextTurn(instance: { refresh(): Promise<void> }, command: string): Promise<number> {
-  let reads = 0;
-  const refresh = instance.refresh.bind(instance);
-  instance.refresh = () => {
-    reads++;
-    return refresh();
-  };
-  try {
-    await vscode.commands.executeCommand(command);
-    await new Promise((turn) => setImmediate(turn));
-  } finally {
-    instance.refresh = refresh;
-  }
-  return reads;
-}
-
 describe('modbench.record.open', () => {
   const titled = (title: string) => openTabs().some(t => t.label === title);
 
