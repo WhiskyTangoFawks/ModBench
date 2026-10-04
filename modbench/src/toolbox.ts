@@ -42,6 +42,7 @@ import { createDownloadsView } from './downloads/downloadsView';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import { refresh } from './instanceCommands/loadOrder';
 import { editingFlow } from './instanceCommands/editing';
+import { editingView } from './toolbox/editingView';
 import type { ExtensionSession, Own } from './session';
 import { pluginsCopyValueText, registerCreatePluginCommand } from './plugins/pluginListCommands';
 
@@ -194,14 +195,17 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
       );
   };
   // commands.md, System commands, `modbench.instance.putLoadOrder`.
+  const view = editingView({
+    narrator: plugins.narrator, progress: plugins.progress, log: outputChannel, revealLog: () => outputChannel.show(true),
+    reportPut: (message) => reporterFor('loadOrder').report('error', message),
+    reportEntry: (message) => reporterFor('enterEditing').report('error', message),
+  });
   const editing = own(editingFlow({
-    client, sender, instance, instanceRoot, narrator: plugins.narrator, progress: plugins.progress, log: outputChannel,
-    report: (message) => reporterFor('enterEditing').report('error', message),
-    revealLog: () => outputChannel.show(true),
-    leave: () => exitEditing(session, client),
+    client, sender, instanceRoot, landed: () => instance.landed(), exitEditing: () => exitEditing(session, client),
+    around: view.around, tell: view.tell, log: (message) => outputChannel.error(message),
   }));
   own(loadOrderPutOnEachValue(instance, editing));
-  own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', () => editing.put()));
+  own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', (value: InstanceValue) => editing.put(value)));
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor }));
   ownAll(own, registerModContextCommands({

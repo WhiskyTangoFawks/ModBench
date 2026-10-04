@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   createLoadOrderSender, InMemoryMEditClient, type LoadOrderOutcome, type LoadOrderPluginInput, type LoadOrderProgress,
 } from '../../client';
-import { editingFlow } from '../editing';
+import { editingFlow, type Told } from '../editing';
 import type { LoadOrderSource } from '../loadOrder';
 
 const STATUS: LoadOrderProgress = {
@@ -10,11 +10,9 @@ const STATUS: LoadOrderProgress = {
 };
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: STATUS };
 
-type Value = LoadOrderSource;
+const NO_SNAPSHOT: LoadOrderSource = { gameName: 'Fallout 4', gameRelease: 'Fallout4', loadOrderSnapshot: undefined };
 
-const NO_SNAPSHOT: Value = { gameName: 'Fallout 4', gameRelease: 'Fallout4', loadOrderSnapshot: undefined };
-
-function valueWith(name: string): Value {
+function valueWith(name: string): LoadOrderSource {
   const plugin = { name, path: `/game/Data/${name}`, origin: 'Data' };
   return {
     ...NO_SNAPSHOT,
@@ -26,18 +24,30 @@ function isPluginInputs(value: unknown): value is LoadOrderPluginInput[] {
   return Array.isArray(value) && value.every((v) => typeof v === 'object' && v !== null && 'name' in v);
 }
 
-function wired(status: 'running' | 'starting', first: Value, outcome: LoadOrderOutcome = APPLIED) {
+function wired(status: 'running' | 'starting', first: LoadOrderSource) {
   const client = new InMemoryMEditClient();
-  client.setCommandResult('putLoadOrder', outcome);
+  client.setCommandResult('putLoadOrder', APPLIED);
   client.setStatus(status);
-  const instance = { value: first, sequence: 1, refresh: vi.fn(() => Promise.resolve()) };
-  const narrator = { hear: vi.fn(), settled: vi.fn(() => Promise.resolve()) };
-  const log = { info: vi.fn(), error: vi.fn() };
-  const report = vi.fn();
-  const leave = vi.fn();
+  const sender = createLoadOrderSender(client);
+  let held = first;
+  let sendFails = false;
+  const landed = vi.fn(() => Promise.resolve(held));
+  const exitEditing = vi.fn();
+  const told: Told[] = [];
+  const tellListeners: (() => void)[] = [];
+  const tell = (what: Told): Promise<void> => {
+    told.push(what);
+    for (const listener of tellListeners.splice(0)) listener();
+    return Promise.resolve();
+  };
+  const toldCount = (count: number): Promise<void> => new Promise((resolve) => {
+    const check = (): void => { if (told.length >= count) resolve(); else tellListeners.push(check); };
+    check();
+  });
   const flow = editingFlow({
-    client, sender: createLoadOrderSender(client), instance, instanceRoot: '/instance', narrator, log, report, leave,
-    progress: { while: (work) => work(), say: () => undefined }, revealLog: () => undefined,
+    client, instanceRoot: '/instance', landed, exitEditing, tell, log: () => undefined,
+    sender: { arm: () => sender.arm(), send: (snapshot) => (sendFails ? Promise.reject(new Error('boom')) : sender.send(snapshot)) },
+    around: (entry) => entry(),
   });
   const putPluginNames = (): string[] => client.calls
     .filter((c) => c.method === 'putLoadOrder')
@@ -46,59 +56,63 @@ function wired(status: 'running' | 'starting', first: Value, outcome: LoadOrderO
       if (!isPluginInputs(plugins)) throw new Error('expected putLoadOrder args[0] to be a plugin array');
       return plugins.map((p) => p.name).join(',');
     });
-  const land = (value: Value): void => { instance.value = value; flow.onRecompute(); };
-  return { client, flow, instance, narrator, log, report, leave, putPluginNames, land };
+  const land = (value: LoadOrderSource): void => { held = value; flow.onRecompute(value); };
+  return {
+    client, flow, sender, landed, exitEditing, told, toldCount, putPluginNames, land,
+    failSends: () => { sendFails = true; },
+  };
 }
 
-const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
-
 describe('entering editing', () => {
-  it('starts the backend, then puts the load order and waits for the reconcile to settle', async () => {
-    const { client, flow, narrator, putPluginNames } = wired('running', valueWith('A.esp'));
+  it('reads the instance value while the backend starts, then puts the load order it carries', async () => {
+    const { client, flow, landed, told, putPluginNames } = wired('running', valueWith('A.esp'));
+    const start = vi.spyOn(client, 'start');
 
     await flow.enter();
 
-    expect(client.calls.some((c) => c.method === 'start')).toBe(true);
+    expect(landed.mock.invocationCallOrder[0]).toBeLessThan(start.mock.invocationCallOrder[0] ?? 0);
     expect(putPluginNames()).toEqual(['A.esp']);
-    expect(narrator.hear).toHaveBeenCalledWith(STATUS);
-    expect(narrator.settled).toHaveBeenCalledWith(7);
+    expect(told.map((t) => t.kind)).toEqual(['put']);
   });
 
-  it('leaves editing, putting nothing, when the value carries no snapshot', async () => {
-    const { flow, leave, putPluginNames } = wired('running', NO_SNAPSHOT);
+  it('exits editing, putting and telling nothing, when the value carries no snapshot', async () => {
+    const { flow, exitEditing, told, putPluginNames } = wired('running', NO_SNAPSHOT);
 
     await flow.enter();
 
-    expect(leave).toHaveBeenCalledOnce();
+    expect(exitEditing).toHaveBeenCalledOnce();
+    expect(putPluginNames()).toEqual([]);
+    expect(told).toEqual([]);
+  });
+
+  it('exits editing and tells when the backend did not come up', async () => {
+    const { flow, exitEditing, told, putPluginNames } = wired('starting', valueWith('A.esp'));
+
+    await flow.enter();
+
+    expect(exitEditing).toHaveBeenCalledOnce();
+    expect(told).toEqual([{ kind: 'backendFailed' }]);
     expect(putPluginNames()).toEqual([]);
   });
 
-  it('leaves editing and says so when the backend did not come up', async () => {
-    const { flow, leave, report, putPluginNames } = wired('starting', valueWith('A.esp'));
+  it('tells an abandoned launch, and neither exits editing nor puts', async () => {
+    const { client, flow, sender, exitEditing, told, putPluginNames } = wired('running', valueWith('A.esp'));
+    client.start = () => { sender.abandon(); return Promise.resolve(); };
 
     await flow.enter();
 
-    expect(leave).toHaveBeenCalledOnce();
-    expect(report).toHaveBeenCalledWith(expect.stringContaining('Backend failed to start'));
+    expect(told).toEqual([{ kind: 'abandoned' }]);
+    expect(exitEditing).not.toHaveBeenCalled();
     expect(putPluginNames()).toEqual([]);
-  });
-
-  it('reads the instance first when no value has landed', async () => {
-    const { flow, instance } = wired('running', valueWith('A.esp'));
-    instance.sequence = 0;
-
-    await flow.enter();
-
-    expect(instance.refresh).toHaveBeenCalledOnce();
   });
 
   it('enters again when the backend restarts after a crash', async () => {
-    const { client, flow, putPluginNames } = wired('running', valueWith('A.esp'));
+    const { client, flow, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
     await flow.enter();
 
     client.setStatus('disconnected');
     client.setStatus('running');
-    await settled();
+    await toldCount(2);
 
     expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
   });
@@ -110,131 +124,119 @@ describe('entering editing', () => {
     flow.dispose();
     client.setStatus('disconnected');
     client.setStatus('running');
-    await settled();
+    await flow.put(valueWith('Z.esp'));
 
-    expect(putPluginNames()).toEqual(['A.esp']);
+    expect(putPluginNames()).toEqual(['A.esp', 'Z.esp']);
   });
 });
 
-describe("a put's own outcome", () => {
-  it("reports a failed send's message verbatim", async () => {
-    const { flow, report } = wired('running', valueWith('A.esp'), { outcome: 'failed', message: 'Failed to send the load order — bad dir' });
+describe('put load order', () => {
+  it('tells the put it made', async () => {
+    const { flow, told } = wired('running', valueWith('A.esp'));
 
-    await flow.put();
+    await flow.put(valueWith('A.esp'));
 
-    expect(report).toHaveBeenCalledWith('Failed to send the load order — bad dir');
+    expect(told).toMatchObject([{ kind: 'put', put: { sent: true, outcome: APPLIED } }]);
   });
 
-  it('says nothing for an abandoned send, which owns no view', async () => {
-    const { flow, report, narrator } = wired('running', valueWith('A.esp'), { outcome: 'abandoned' });
+  it('tells a value without a snapshot as nothing sent', async () => {
+    const { flow, told, putPluginNames } = wired('running', valueWith('A.esp'));
 
-    await flow.put();
+    await flow.put(NO_SNAPSHOT);
 
-    expect(report).not.toHaveBeenCalled();
-    expect(narrator.hear).not.toHaveBeenCalled();
-  });
-
-  it("leaves an applied send's reconcile to the narrator", async () => {
-    const { flow, report } = wired('running', valueWith('A.esp'));
-
-    await flow.put();
-
-    expect(report).not.toHaveBeenCalled();
-  });
-
-  it('tells nothing without a snapshot', async () => {
-    const { flow, report, narrator, log } = wired('running', NO_SNAPSHOT);
-
-    await flow.put();
-
-    expect([report, narrator.hear, log.info].map((f) => f.mock.calls.length)).toEqual([0, 0, 0]);
+    expect(told).toEqual([{ kind: 'put', put: { sent: false } }]);
+    expect(putPluginNames()).toEqual([]);
   });
 });
 
 describe('the load order is put at every recompute', () => {
   it('puts a load order equal to the last one put', async () => {
-    const { flow, land, putPluginNames } = wired('running', valueWith('A.esp'));
+    const { flow, land, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
     await flow.enter();
 
     land(valueWith('A.esp'));
-    await settled();
+    await toldCount(2);
     land(valueWith('B.esp'));
-    await settled();
+    await toldCount(3);
 
     expect(putPluginNames()).toEqual(['A.esp', 'A.esp', 'B.esp']);
   });
 
   it('puts nothing without a game folder, and keeps what mEdit holds', async () => {
-    const { flow, land, putPluginNames } = wired('running', valueWith('A.esp'));
+    const { flow, land, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
     await flow.enter();
 
     land(NO_SNAPSHOT);
-    await settled();
+    await toldCount(2);
 
     expect(putPluginNames()).toEqual(['A.esp']);
   });
 
-  it('logs a put that throws, since no caller is left to hear it', async () => {
-    const { flow, instance, log } = wired('running', valueWith('A.esp'));
+  it('tells a put that threw, since no caller is left to hear it', async () => {
+    const { flow, land, failSends, told, toldCount } = wired('running', valueWith('A.esp'));
     await flow.enter();
-    Object.defineProperty(instance, 'value', { get: () => { throw new Error('boom'); } });
+    failSends();
 
-    flow.onRecompute();
-    await settled();
+    land(valueWith('B.esp'));
+    await toldCount(2);
 
-    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('boom'));
+    expect(told[1]).toEqual({ kind: 'putThrew', message: 'boom' });
   });
 
   it('puts a value that arrived before mEdit started only when it starts, once', async () => {
-    const { client, flow, land, putPluginNames } = wired('starting', valueWith('A.esp'));
+    const { client, flow, land, putPluginNames, told } = wired('starting', valueWith('A.esp'));
 
     land(valueWith('B.esp'));
-    await settled();
     client.setStatus('running');
     await flow.enter();
 
     expect(putPluginNames()).toEqual(['B.esp']);
+    expect(told).toHaveLength(1);
   });
 
   it('puts nothing between the backend going and mEdit next starting', async () => {
-    const { client, flow, land, putPluginNames } = wired('running', valueWith('A.esp'));
+    const { client, flow, land, told, putPluginNames } = wired('running', valueWith('A.esp'));
     await flow.enter();
 
     client.setStatus('stopped');
+    client.setStatus('running');
     land(valueWith('B.esp'));
-    await settled();
+    await flow.put(valueWith('C.esp'));
 
-    expect(putPluginNames()).toEqual(['A.esp']);
+    expect(told).toHaveLength(2);
+    expect(putPluginNames()).toEqual(['A.esp', 'C.esp']);
   });
 
   it('puts on a stream reopen, with no value landing after it', async () => {
-    const { client, flow, putPluginNames } = wired('running', valueWith('A.esp'));
+    const { client, flow, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
     await flow.enter();
 
     client.reconnected();
-    await settled();
+    await toldCount(2);
 
     expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
   });
 
   it('puts nothing on a stream reopen before mEdit started', async () => {
-    const { client, putPluginNames } = wired('running', valueWith('A.esp'));
+    const { client, flow, told, putPluginNames } = wired('running', valueWith('A.esp'));
 
     client.reconnected();
-    await settled();
+    await flow.put(valueWith('Z.esp'));
 
-    expect(putPluginNames()).toEqual([]);
+    expect(told).toHaveLength(1);
+    expect(putPluginNames()).toEqual(['Z.esp']);
   });
 
   it('puts nothing once disposed', async () => {
-    const { client, flow, land, putPluginNames } = wired('running', valueWith('A.esp'));
+    const { client, flow, land, told, putPluginNames } = wired('running', valueWith('A.esp'));
     await flow.enter();
 
     flow.dispose();
     land(valueWith('B.esp'));
     client.reconnected();
-    await settled();
+    await flow.put(valueWith('Z.esp'));
 
-    expect(putPluginNames()).toEqual(['A.esp']);
+    expect(told).toHaveLength(2);
+    expect(putPluginNames()).toEqual(['A.esp', 'Z.esp']);
   });
 });

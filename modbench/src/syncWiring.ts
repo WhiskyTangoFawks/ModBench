@@ -1,5 +1,5 @@
 import type { Sync } from './drivingLib/syncFailureReport';
-import type { Instance, ModSyncArguments, PluginSyncArguments } from './instanceLoader/instance';
+import type { Instance, InstanceValue, ModSyncArguments, PluginSyncArguments } from './instanceLoader/instance';
 
 type ModSync = Pick<Sync<ModSyncArguments>, 'run'>;
 type PluginSync = Pick<Sync<PluginSyncArguments>, 'run'>;
@@ -14,6 +14,6 @@ export function pluginSyncOnEachValue(instance: Pick<Instance, 'subscribe'>, plu
   return instance.subscribe((value) => { void pluginSync.run(value.pluginSyncArguments); });
 }
 
-export function loadOrderPutOnEachValue(instance: Pick<Instance, 'subscribe'>, editing: { onRecompute(): void }) {
-  return instance.subscribe(() => { editing.onRecompute(); });
+export function loadOrderPutOnEachValue(instance: Pick<Instance, 'subscribe'>, editing: { onRecompute(value: InstanceValue): void }) {
+  return instance.subscribe((value) => { editing.onRecompute(value); });
 }

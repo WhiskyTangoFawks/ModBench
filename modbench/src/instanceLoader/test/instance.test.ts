@@ -181,6 +181,19 @@ const isEnabled = (value: InstanceValue, name: string) => value.mods.find((m) =>
 const listedDownloadsOf = (value: InstanceValue) => (value.downloads.kind === 'listed' ? value.downloads.rows : []);
 
 describe('Instance — the value', () => {
+  it('hands the first value once read, and the held one without another read once it has landed', async () => {
+    const { instance, settingsReads } = realInstance();
+
+    const first = await instance.landed();
+    const readsAfterFirst = settingsReads.count;
+    const again = await instance.landed();
+
+    expect(instance.sequence).toBeGreaterThan(0);
+    expect(first.mods.length).toBeGreaterThan(0);
+    expect(again).toBe(first);
+    expect(settingsReads.count).toBe(readsAfterFirst);
+  });
+
   it('starts empty at sequence 0, before anything has been read', () => {
     const { instance } = realInstance();
 
