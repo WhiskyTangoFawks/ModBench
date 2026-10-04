@@ -310,9 +310,9 @@ export async function syncMods(access: ModlistAccess, profile: string, modFolder
 }
 
 /** Mod sync on a landed value's own profile and mod folders. */
-export type ModSyncRun = (value: { readonly activeProfile: string; readonly modFolders: readonly ModFolder[] | undefined }) => Promise<ModSyncResult>;
+export type ModSyncRun = (inputs: { readonly profile: string; readonly modFolders: readonly ModFolder[] | undefined }) => Promise<ModSyncResult>;
 
 /** `syncMods` bound to one instance. */
 export function modSyncOver(access: ModlistAccess): ModSyncRun {
-  return (value) => syncMods(access, value.activeProfile, value.modFolders ?? []);
+  return ({ profile, modFolders }) => syncMods(access, profile, modFolders ?? []);
 }

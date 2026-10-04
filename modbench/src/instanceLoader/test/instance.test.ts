@@ -1073,6 +1073,19 @@ describe('Instance — listing mods/, on a profile listing no mod folder so only
 });
 
 describe('Instance — what a command is handed instead of probing for it', () => {
+  it('carries what mod sync and plugin sync are handed, read with the rest of the value', async () => {
+    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
+    await writeFile(join(root, 'mods', 'Consumer', 'Mine.esp'), 'plugin');
+
+    await instance.refresh();
+
+    const { value } = instance;
+    expect(value.modSyncArguments).toEqual({ profile: value.activeProfile, modFolders: value.modFolders });
+    expect(value.pluginSyncArguments.profile).toBe(value.activeProfile);
+    expect(value.pluginSyncArguments.provided).toEqual(new Map([['mine.esp', 'Mine.esp']]));
+    expect(value.pluginSyncArguments.inData).toBe(value.dataFolderPlugins);
+  });
+
   it('lists every profile directory and no stray file beside them', async () => {
     const { root, instance } = realInstance();
     await writeFile(join(root, 'profiles', 'stray.txt'), 'not a profile');

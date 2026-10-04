@@ -8,7 +8,7 @@ import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './edi
 import { createReferencedByView } from './editor/referencedByView';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
-import { lastSelectedViewSelection } from './drivingLib/lastSelectedView';
+import { selectionInFocusedView } from './drivingLib/lastSelectedView';
 import { createFocusedView } from './drivingLib/focusedView';
 import { moveToTrash } from './trash';
 import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './medit/extendedFieldFiles';
@@ -171,8 +171,9 @@ export function activate(context: vscode.ExtensionContext) {
       context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, recordBadgeSource: treeProvider, meditClient, outputChannel,
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
-      focusedViewSelection: lastSelectedViewSelection(
-        (disposable) => { context.subscriptions.push(disposable); return disposable; }, recordViews, 'modbench.record.selectionIn'),
+      focusedViewSelection: selectionInFocusedView(
+        (disposable) => { context.subscriptions.push(disposable); return disposable; }, focusedView,
+        recordViews.map(({ id }) => id), 'modbench.record.selectionIn'),
       viewSelections: new Map(recordViews.map(({ id, view }) => [id, () => view.selection])),
       recordWrite,
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),

@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
+import type { FocusedView } from './focusedView';
 
-type SelectableView = Pick<vscode.TreeView<unknown>, 'selection' | 'onDidChangeSelection'>;
 type OwnDisposable = (disposable: vscode.Disposable) => unknown;
-type ViewIn = readonly { id: string; view: SelectableView }[];
 
 /** The Argument of view on Nexus. Each surface's row adapts itself to it, so a mod row and a
  *  downloaded file row reach the same gesture. */
@@ -13,34 +12,30 @@ export interface NexusModRow {
 const hasNexusModId = (row: unknown): row is { nexusModId: string } =>
   typeof row === 'object' && row !== null && 'nexusModId' in row && typeof row.nexusModId === 'string';
 
-/** No stable API names the focused view, so the palette's view on Nexus opens the row selected in
- *  the view last selected in, and `modbench.mod.nexusRowIn` names that view while it has one. */
-export function nexusRowInLastSelectedView(own: OwnDisposable, views: ViewIn): () => NexusModRow | undefined {
-  let last: SelectableView | undefined;
+const setContext = (key: string, value: unknown): void => {
+  void vscode.commands.executeCommand('setContext', key, value);
+};
+
+/** The palette's view on Nexus opens the row selected in the focused view among `viewIds`, and
+ *  `contextKey` names that view while it has one. */
+export function nexusRowInFocusedView(
+  own: OwnDisposable, focused: FocusedView, viewIds: readonly string[], contextKey: string,
+): () => NexusModRow | undefined {
   const nexusRow = (): NexusModRow | undefined => {
-    const [only, ...rest] = last?.selection ?? [];
+    const id = focused.id();
+    const [only, ...rest] = id !== undefined && viewIds.includes(id) ? focused.selection() : [];
     return rest.length === 0 && hasNexusModId(only) ? only : undefined;
   };
-  for (const { id, view } of views) {
-    own(view.onDidChangeSelection(() => {
-      last = view;
-      void vscode.commands.executeCommand('setContext', 'modbench.mod.nexusRowIn', nexusRow() && id);
-    }));
-  }
+  own(focused.onDidChange((id) => { setContext(contextKey, nexusRow() && id); }));
   return nexusRow;
 }
 
-/** No stable API names the focused view, so a palette gesture views offer takes the selection of
- *  the view last selected in, and `contextKey`, when given, names that view. */
-export function lastSelectedViewSelection(
-  own: OwnDisposable, views: ViewIn, contextKey?: string,
+/** A palette gesture views offer takes the selection of the focused view among `viewIds`, and
+ *  `contextKey` names that view while it is one of them. */
+export function selectionInFocusedView(
+  own: OwnDisposable, focused: FocusedView, viewIds: readonly string[], contextKey: string,
 ): () => readonly unknown[] {
-  let last: SelectableView | undefined;
-  for (const { id, view } of views) {
-    own(view.onDidChangeSelection(() => {
-      last = view;
-      if (contextKey !== undefined) void vscode.commands.executeCommand('setContext', contextKey, id);
-    }));
-  }
-  return () => last?.selection ?? [];
+  const isOneOf = (id: string | undefined): id is string => id !== undefined && viewIds.includes(id);
+  own(focused.onDidChange((id) => { setContext(contextKey, isOneOf(id) ? id : undefined); }));
+  return () => (isOneOf(focused.id()) ? focused.selection() : []);
 }

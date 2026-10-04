@@ -1,5 +1,5 @@
-import { errorMessage } from './ports/errorMessage';
-import type { SyncMessage } from './drivingLib/nameFilter';
+import { errorMessage } from '../ports/errorMessage';
+import type { SyncMessage } from './nameFilter';
 
 type SyncOutcome =
   | { applied: true }

@@ -9,7 +9,6 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { Instance } from '../instanceLoader/instance';
 import { placeFolder, type PlaceFolder } from '../plugins/pluginPlaces';
 import { syncPlugins } from '../pluginsCommands/plugins';
-import { pluginSyncArguments } from '../pluginSyncTrigger';
 import { accessTo, adapterOver, NO_DOWNLOADS, STEADY_WINDOW } from './mo2/adapterOver';
 
 const PROFILE = 'Default';
@@ -56,7 +55,7 @@ describe('a created plugin reaches plugins.txt through plugin sync alone', () =>
     await writeFile(join(folder, 'New.esp'), 'plugin');
 
     await instance.refresh();
-    const { profile, provided, inData, loadedWithNoLine } = pluginSyncArguments(instance.value);
+    const { profile, provided, inData, loadedWithNoLine } = instance.value.pluginSyncArguments;
     const synced = await syncPlugins(accessTo(dir), profile, provided, inData, loadedWithNoLine);
 
     expect(synced).toEqual({ applied: true, wrote: true, added: ['New.esp'], dropped: [] });

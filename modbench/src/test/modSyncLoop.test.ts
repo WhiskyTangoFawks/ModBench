@@ -1,16 +1,16 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVscodeWatcher';
+import { watchers, fakeVscodeModule, type FakeWatcher } from './mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
-import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
-import { registerModSync } from '../modSyncTrigger';
+import { instanceValueFixture } from './mo2/instanceValueFixture';
+import { wireModSync } from './syncWiring';
 import { modSyncOver, type ModSyncResult } from '../modlist/modlist';
 import type { ModFolder } from '../instanceAdapter/instanceAdapter';
-import { cloneCorpusFixture, DEFAULT_MODLIST } from '../test/mo2/corpusFixture';
+import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';
 import { accessTo, adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
 import { present } from '../ports/present';
 
@@ -67,9 +67,9 @@ async function settledWiredInstance(): Promise<{
   const channel = channelDouble();
   const syncs: Promise<ModSyncResult>[] = [];
   const handed: (readonly ModFolder[] | undefined)[] = [];
-  const trigger = registerModSync(instance, (value) => {
-    handed.push(value.modFolders);
-    const run = modSyncOver(accessTo(root))(value);
+  const trigger = wireModSync(instance, (args) => {
+    handed.push(args.modFolders);
+    const run = modSyncOver(accessTo(root))(args);
     syncs.push(run);
     return run;
   }, channel);
@@ -79,7 +79,7 @@ async function settledWiredInstance(): Promise<{
   return { root, instance, channel, syncs, handed };
 }
 
-describe('registerModSync — driven by the Instance value', () => {
+describe('modSync — driven by the Instance value', () => {
   it('adds a line for a mod folder dropped in, off the Instance value alone', async () => {
     const { root, instance, syncs } = await settledWiredInstance();
     const before = instance.sequence;
@@ -170,7 +170,7 @@ function fired(...outcomes: (() => Promise<ModSyncResult>)[]) {
   const channel = channelDouble();
   const messageChanged = vi.fn();
   const calls: Promise<ModSyncResult>[] = [];
-  const trigger = registerModSync(instance, () => {
+  const trigger = wireModSync(instance, () => {
     const run = present(outcomes[calls.length], 'an outcome for this fire')();
     calls.push(run);
     return run;
@@ -186,7 +186,7 @@ function fired(...outcomes: (() => Promise<ModSyncResult>)[]) {
 const refused = (refusal: string) => () => Promise.resolve<ModSyncResult>({ applied: false, refusal });
 const landed = () => Promise.resolve<ModSyncResult>({ applied: true, added: [], dropped: [] });
 
-describe('registerModSync — settled', () => {
+describe('modSync — settled', () => {
   it('resolves once every run begun has written its Output', async () => {
     const instance = fakeInstance();
     const channel = channelDouble();
@@ -194,7 +194,7 @@ describe('registerModSync — settled', () => {
     const answered = new Promise<ModSyncResult>((resolve) => {
       answer = () => resolve({ applied: true, added: ['New Mod'], dropped: [] });
     });
-    const trigger = registerModSync(instance, () => answered, channel);
+    const trigger = wireModSync(instance, () => answered, channel);
 
     instance.fire();
     const settled = trigger.settled();
@@ -205,7 +205,7 @@ describe('registerModSync — settled', () => {
   });
 });
 
-describe('registerModSync — outcome handling', () => {
+describe('modSync — outcome handling', () => {
   it('logs the lines it added and dropped, one Output line each way', async () => {
     const { channel, fire } = fired(() => Promise.resolve<ModSyncResult>(
       { applied: true, added: ['New Mod'], dropped: ['Gone Mod'] }));
@@ -228,7 +228,7 @@ describe('registerModSync — outcome handling', () => {
   it('names the file mod order is kept in as the value names it', async () => {
     const instance = fakeInstance(instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt' } }));
     const channel = channelDouble();
-    const trigger = registerModSync(instance, () => Promise.resolve<ModSyncResult>(
+    const trigger = wireModSync(instance, () => Promise.resolve<ModSyncResult>(
       { applied: true, added: ['New Mod'], dropped: [] }), channel);
     instance.fire();
     await trigger.settled();

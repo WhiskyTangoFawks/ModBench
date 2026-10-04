@@ -75,12 +75,17 @@ import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
 import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
+import { present } from '../../ports/present';
 import { adapterOver, STEADY_WINDOW } from '../../test/mo2/adapterOver';
-import { syncMessageDouble } from '../../test/syncMessageDouble';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const currentBox = currentBoxOf(h.state);
+
+const NO_SYNC = {
+  syncMods: () => Promise.resolve({ applied: true as const, added: [], dropped: [] }),
+  channel: { error: () => undefined, info: () => undefined },
+};
 
 async function makeSettledInstance(root: string): Promise<Instance> {
   const instance = new Instance({
@@ -111,7 +116,7 @@ describe('the Mods filter follows a row change with no keystroke', () => {
     const root = cloneCorpusFixture();
     const instance = await makeSettledInstance(root);
     const { provider, view: modListView, nameFilter: modListFilter } =
-      createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
+      createModsView({ instance, log: () => undefined, ...NO_SYNC });
     await provider.getChildren();
 
     modListFilter.open();
@@ -137,7 +142,7 @@ describe('the Mods view\'s description counts the mods', () => {
   it('reads the enabled mods over the listed mods, then the term, counting the whole list', async () => {
     const root = cloneCorpusFixture();
     const instance = await makeSettledInstance(root);
-    const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
+    const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
     expect(modListView.description).toBe('7 / 8');
 
     modListFilter.open();
@@ -148,7 +153,7 @@ describe('the Mods view\'s description counts the mods', () => {
   it('follows a new instance value, with nothing pushed', async () => {
     const root = cloneCorpusFixture();
     const instance = await makeSettledInstance(root);
-    const { view: modListView } = createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
+    const { view: modListView } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
 
     const modlistPath = join(root, DEFAULT_MODLIST);
     await writeFile(modlistPath, `${await readFile(modlistPath, 'utf8')}-Parked Mod\r\n`);
@@ -161,7 +166,7 @@ describe('the Mods view\'s description counts the mods', () => {
 describe('the Mods title-bar sort icons', () => {
   it('set the tree\'s own direction, and the key the icon reads', async () => {
     const instance = await makeSettledInstance(cloneCorpusFixture());
-    const { provider } = createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
+    const { provider } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
 
     expect(h.state.contextKeys.get('modbench.mod.winningAtTop')).toBe(false);
     await h.state.commands.get('modbench.mod.sortWinningAtTop')?.();
@@ -180,7 +185,7 @@ describe('the Mods view tells its keys, which are handed no row, what the select
   it('sets the Space direction and the Delete and F2 kind off the selection', async () => {
     const root = cloneCorpusFixture();
     const instance = await makeSettledInstance(root);
-    const { view: modListView } = createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
+    const { view: modListView } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
 
     const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod']
       .map((name) => `modbench.mod.${name}`);
@@ -204,7 +209,7 @@ describe('the Mods view tells its keys, which are handed no row, what the select
   it('follows a mod enabled on disk while the selection still holds the row built before', async () => {
     const root = cloneCorpusFixture();
     const instance = await makeSettledInstance(root);
-    const { view: modListView } = createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
+    const { view: modListView } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
     select(modListView, [new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
 
     const modlistPath = join(root, DEFAULT_MODLIST);
@@ -219,7 +224,7 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   const mountFiltered = async (term: string, log: (line: string) => void = () => undefined) => {
     const root = cloneCorpusFixture();
     const instance = await makeSettledInstance(root);
-    createModsView({ instance, log, modSync: syncMessageDouble() }).nameFilter.open();
+    createModsView({ instance, log, ...NO_SYNC }).nameFilter.open();
     currentBox().type(term);
     await new Promise((resolve) => setTimeout(resolve, 20));
   };
@@ -266,7 +271,7 @@ describe('the Mods view says when the list is empty', () => {
   it('says nothing before the first read, says so once an empty list lands, and gives way to the no-match message', async () => {
     await withUnreadCorpusInstance(async (instance, root) => {
       await writeFile(join(root, DEFAULT_MODLIST), '# This file was automatically generated by Mod Organizer.\r\n');
-      const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, modSync: syncMessageDouble() });
+      const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
       expect(modListView.message).toBeUndefined();
       expect(modListView.description).toBeUndefined();
 
@@ -285,17 +290,22 @@ describe('the Mods view says when the list is empty', () => {
   it('says mod sync\'s refusal beside it, and drops only that once the sync lands', async () => {
     await withUnreadCorpusInstance(async (instance, root) => {
       await writeFile(join(root, DEFAULT_MODLIST), '# This file was automatically generated by Mod Organizer.\r\n');
-      const modSync = syncMessageDouble();
-      const { view: modListView } = createModsView({ instance, log: () => undefined, modSync });
+      const outcomes = [
+        { applied: false as const, refusal: '/instance/mods does not exist' },
+        { applied: true as const, added: [], dropped: [] },
+      ];
+      let run = 0;
+      const { view: modListView, modSync } = createModsView({
+        instance, log: () => undefined, channel: NO_SYNC.channel, syncMods: () => Promise.resolve(present(outcomes[run++], 'an outcome for this run')),
+      });
       await instance.refresh();
       await instance.refresh();
       await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
 
-      const syncRefused = 'modlist.txt is not synced: /instance/mods does not exist.';
-      modSync.say(syncRefused);
-      await waitForMessage(modListView, (m) => m === `${NO_MODS} ${syncRefused}`, 'both messages');
+      modSync.run(instance.value.modSyncArguments);
+      await waitForMessage(modListView, (m) => m === `${NO_MODS} modlist.txt is not synced: /instance/mods does not exist.`, 'both messages');
 
-      modSync.say(undefined);
+      modSync.run(instance.value.modSyncArguments);
       await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message alone');
     });
   });
@@ -319,7 +329,7 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
       overwriteFolders: overwrite ? [folder('F4SE')] : [],
     });
     const { view: modListView, nameFilter: modListFilter } =
-      createModsView({ instance: new FakeInstance(value), log: () => undefined, modSync: syncMessageDouble() });
+      createModsView({ instance: new FakeInstance(value), log: () => undefined, ...NO_SYNC });
     modListFilter.open();
     currentBox().type(term);
     return modListView;

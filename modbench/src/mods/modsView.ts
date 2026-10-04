@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import type { InstanceView } from '../instanceLoader/instance';
 import { errorMessage } from '../ports/errorMessage';
-import { messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
+import { messageLine, registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
+import type { ModSyncRun } from '../modlist/modlist';
+import { createModSync, type ModSync } from './modSync';
 import { modsKeyContext } from './gestureEntry';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
@@ -10,20 +12,23 @@ import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvi
 export interface ModsViewDeps {
   instance: InstanceView;
   log: (line: string) => void;
-  /** Mod sync's failure, for the view's message line. */
-  modSync: SyncMessage;
+  /** Mod sync, whose failure the view's message line says and whose Output lines go to `channel`. */
+  syncMods: ModSyncRun;
+  channel: { error(msg: string): void; info(msg: string): void };
 }
 
 export interface ModsView extends vscode.Disposable {
   provider: ModListProvider;
   view: vscode.TreeView<ModlistNode>;
   nameFilter: NameFilter;
+  modSync: ModSync;
 }
 
 /** Tree, filter and count readout together, because the view's description and message line
  *  each have exactly one owner. Split apart, a row change and a filter keystroke race for them and
  *  the loser silently vanishes. */
-export function createModsView({ instance, log, modSync }: ModsViewDeps): ModsView {
+export function createModsView({ instance, log, syncMods, channel }: ModsViewDeps): ModsView {
+  const modSync = createModSync(syncMods, channel, instance.value.managerNames.modOrderFile);
   const provider = new ModListProvider({ instance });
   const view = vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: provider,
@@ -67,7 +72,7 @@ export function createModsView({ instance, log, modSync }: ModsViewDeps): ModsVi
     view,
     provider,
   );
-  return { provider, view, nameFilter, dispose: () => { disposable.dispose(); } };
+  return { provider, view, nameFilter, modSync, dispose: () => { disposable.dispose(); } };
 }
 
 // VS Code keeps the expansion it remembers for a known row identity over the provider's state, so

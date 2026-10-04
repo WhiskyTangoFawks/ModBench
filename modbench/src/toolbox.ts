@@ -25,10 +25,8 @@ import { registerFilterCommands, type NameFilter } from './drivingLib/nameFilter
 import { registerCopyValueCommand } from './drivingLib/copyValue';
 import type { FocusedView } from './drivingLib/focusedView';
 import { pluginSyncOver } from './pluginsCommands/plugins';
-import { registerModSync } from './modSyncTrigger';
 import { modSyncOver } from './modlist/modlist';
 import { installNameRefusal } from './install/install';
-import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
 import { exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
 import { registerCompareFileCommand } from './mods/compareFile';
@@ -37,7 +35,7 @@ import { registerConflictTable } from './mods/conflictTableEditor';
 import { registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText } from './mods/modManagementCommands';
 import { reportFailure } from './drivingLib/reportFailure';
 import { createModsView } from './mods/modsView';
-import { lastSelectedViewSelection, nexusRowInLastSelectedView } from './drivingLib/lastSelectedView';
+import { nexusRowInFocusedView, selectionInFocusedView } from './drivingLib/lastSelectedView';
 import { modRepositoryContext } from './modRepositories';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
 import type { FolderCheck } from './folderContext';
@@ -277,11 +275,8 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const refreshIndex = () => refresh(client, instanceRoot, instance.value);
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the Instance adapter's watch.
-  const syncPluginsOver = pluginSyncOver(access);
-  const runPluginSync = (value: InstanceValue) => syncPluginsOver(pluginSyncArguments(value));
-  const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
   const plugins = own(createPluginsView({
-    instance, access, recordBrowser, client: pluginFacts, pluginSync, statusBar, notifyConflictsComputed, reporterFor,
+    instance, access, recordBrowser, client: pluginFacts, syncPlugins: pluginSyncOver(access), channel: outputChannel, statusBar, notifyConflictsComputed, reporterFor,
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     // The tree states its own severity (ADR-0019); this routes it to the matching channel level.
     log: (level, msg) => outputChannel[level](msg),
@@ -294,11 +289,11 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   };
   const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
     outputChannel, loadOrderReporter, plugins.narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
-  const runModSync = modSyncOver(access);
-  const modSync = own(registerModSync(instance, runModSync, outputChannel));
-  const { provider: modListProvider, view: modListView, nameFilter: modListFilter } = own(createModsView({
-    instance, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync,
+  const { provider: modListProvider, view: modListView, nameFilter: modListFilter, modSync } = own(createModsView({
+    instance, log: (line) => outputChannel.warn(`[modList] ${line}`), syncMods: modSyncOver(access), channel: outputChannel,
   }));
+  own(instance.subscribe((value) => { modSync.run(value.modSyncArguments); }));
+  own(instance.subscribe((value) => { plugins.pluginSync.run(value.pluginSyncArguments); }));
   const showModRepositories = (value: InstanceValue) => {
     for (const [name, mods] of Object.entries(modRepositoryContext(value))) {
       void vscode.commands.executeCommand('setContext', `modbench.mod.${name}`, mods);
@@ -354,8 +349,8 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   }));
   own(registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => modListView.selection));
   ownAll(own, registerConflictTable(instance, deps.extensionUri, () => modListView.selection, reporterFor('mod.openConflicts'), vscode.workspace));
-  own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
-  own(vscode.commands.registerCommand('modbench.plugin.sync', runPluginSync));
+  own(vscode.commands.registerCommand('modbench.mod.sync', () => { modSync.run(instance.value.modSyncArguments); }));
+  own(vscode.commands.registerCommand('modbench.plugin.sync', () => { plugins.pluginSync.run(instance.value.pluginSyncArguments); }));
   const { provider: downloadsProvider, view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
     access, instance, reporter: reporterFor('downloadList'), ask, trash,
     install: {
@@ -366,9 +361,8 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   ownAll(own, registerModInstallCommands({ access, instance, runModAction, promptModName, warnIfFomod, installDownloaded }));
-  own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), nexusRowInLastSelectedView(own, [
-    { id: 'modbench.modList', view: modListView }, { id: 'modbench.downloads', view: downloadsView },
-  ])));
+  own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), nexusRowInFocusedView(
+    own, deps.focusedView, ['modbench.modList', 'modbench.downloads'], 'modbench.mod.nexusRowIn')));
   own(deps.focusedView.follow('modbench.modList', modListView));
   own(deps.focusedView.follow('modbench.pluginListTree', pluginListView));
   own(deps.focusedView.follow('modbench.downloads', downloadsView));
@@ -379,9 +373,8 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
       ...deps.viewFilters,
     ]),
     () => vscode.window.setStatusBarMessage('Focus a list to filter it.', 5000)));
-  const trackSelection = lastSelectedViewSelection(own, [
-    { id: 'modbench.modList', view: modListView }, { id: 'modbench.pluginListTree', view: pluginListView },
-  ], 'modbench.mod.trackRowsIn');
+  const trackSelection = selectionInFocusedView(
+    own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
   own(registerRefreshCommand({
     refresh: refreshIndex, nextRefill: () => plugins.narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
