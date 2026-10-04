@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Your goal is the delivery of the epic. The executor's goal is its ticket. Deferral belongs to the user. Work inside your goal gets done in this run. A defect the run finds is inside your goal. Root CLAUDE.md's chain of authority decides what reaches the user.
 
-Resolve before you route. A stop, break or question an executor or reviewer raises is a claim until you have worked it through the chain yourself: the principles, the ADRs the work touches, the spec, and CONTEXT.md's words, as they stand on `main`. A caption item covers every need its box's purpose covers, in words other than the claim's. What the chain answers goes back to the lane as the answer, with the texts quoted. Two things reach the user: two documents at one level that disagree, and a need no document speaks to, each with your attempt quoted.
+Resolve before you route. A stop, break or question an executor or reviewer raises is a claim until you have worked it through the chain yourself: the principles, the ADRs the work touches, the spec, and CONTEXT.md's words, as they stand on `main`. What the chain answers goes back to the lane as the answer, with the texts quoted. Two things reach the user: two documents at one level that disagree, and a need no document speaks to, each with your attempt quoted.
 
 Read tickets, reports and the chain's documents; leave source to the executors. Every source file you open is context you will not have later in the run- spend your context wisely.
 
