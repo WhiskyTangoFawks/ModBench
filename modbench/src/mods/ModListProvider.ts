@@ -181,9 +181,7 @@ export class ModListProvider
     this.firstRead.dispose();
   }
 
-  /** Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left:
-   *  a check box whose write failed returns to whatever the Instance is currently holding, not a
-   *  snapshot that predates it. */
+  /** Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left. */
   invalidate(): void {
     this.instanceValue = this.instance.value;
     this.tree = undefined;
@@ -240,8 +238,7 @@ export class ModListProvider
     dataTransfer.set(DND_MIME, new vscode.DataTransferItem(dragged));
   }
 
-  // An entry point to move: it fires the gesture and uses no result, and the watch brings the
-  // write back to the view (commands.md, Entry points are not gestures).
+  // An entry point to move: it fires the gesture and uses no result (commands.md, Entry points are not gestures).
   async handleDrop(
     target: ModlistNode | undefined,
     dataTransfer: vscode.DataTransfer,

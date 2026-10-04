@@ -788,7 +788,7 @@ describe('A Mods gesture\'s write reaches the Mods view through the Instance loa
       if (process.platform === 'linux') {
         assert.strictEqual(takeFromTrash(doomedDir, trashedBefore), 1, 'the separator\'s folder should be in the OS trash');
       }
-      await waitFor('the watch to take the Doomed row away', async () => (await separatorRow('Doomed')) === undefined);
+      await waitFor('the read to take the Doomed row away', async () => (await separatorRow('Doomed')) === undefined);
       assert.strictEqual(instanceRefreshes, 1, 'the gesture should ask the Instance for one re-read');
       assert.strictEqual(unexplainedInvalidates, 0, 'the gesture asked the view to re-pull a value no read landed');
     } finally {
@@ -929,12 +929,8 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
   it('VS Code\'s own Space on a focused mod row leaves its check box alone', async function () {
     if (!root) this.skip();
     await enabledAndSelected();
-    const before = fs.readFileSync(modlistPath, 'utf8');
-
-    await vscode.commands.executeCommand('list.toggleExpand');
-    await new Promise((window) => setTimeout(window, 500));
-
-    assert.strictEqual(fs.readFileSync(modlistPath, 'utf8'), before);
+    const instance = present(instanceExport(), "the activated extension's instance export");
+    assert.strictEqual(await readsAskedByTheNextTurn(instance, 'list.toggleExpand'), 0);
   });
 
   it('copies the selection of the view last selected in when Copy Value is run from the palette', async function () {

@@ -1295,25 +1295,68 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
   const instance = { ...instanceThatReads, value: instanceValueFixture({ activeProfile: 'Default' }) };
   const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true });
   const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
+  const fileRow = new FileNode(
+    modA, { kind: 'mod', name: 'Mod A' },
+    { relativePath: 'a.dds', path: '/a.dds', sourcePath: '/a.dds', excluded: false, excludedByName: false }, 'a.dds');
   const written = (write: ReturnType<typeof vi.fn>, result: unknown) =>
     write.mockImplementation(() => { progressSteps.push('write'); return Promise.resolve(result); });
   const landed = { applied: true, outcome: { landed: ['Mod A'], refused: [] } };
   const endsOnTheRead = ['progress opens on modbench.modList', 'write', 'Instance loader: read every file again', 'progress closes'];
+  const reporter = () => recordingReporter();
 
-  it('enable', async () => {
-    written(setModsEnabled, landed);
-    registerModEnableCommands(access, instance, () => [], recordingReporter());
-
-    await invoke('modbench.mod.enable', modA);
-
-    expect(progressSteps).toEqual(endsOnTheRead);
-  });
-
-  it('a refused enable still ends on the read', async () => {
-    written(setModsEnabled, { applied: false, refusal: 'unreadable' });
-    registerModEnableCommands(access, instance, () => [], recordingReporter());
-
-    await invoke('modbench.mod.enable', modA);
+  it.each<[string, () => Promise<unknown>]>([
+    ['enable', () => {
+      written(setModsEnabled, landed);
+      registerModEnableCommands(access, instance, () => [], reporter());
+      return invoke('modbench.mod.enable', modA);
+    }],
+    ['a refused enable', () => {
+      written(setModsEnabled, { applied: false, refusal: 'unreadable' });
+      registerModEnableCommands(access, instance, () => [], reporter());
+      return invoke('modbench.mod.enable', modA);
+    }],
+    ['move', () => {
+      written(moveMods, landed);
+      registerModMoveCommand(access, instance, { selection: () => [], direction: () => 'losingAtTop' }, reporter());
+      return invoke('modbench.mod.move', modA, [modA], { place: { kind: 'ungrouped' }, end: 'losing' });
+    }],
+    ['uninstall', () => {
+      written(uninstallMods, { applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
+      registerModContextCommands({
+        access, instance, viewSelection: () => [], reporter: reporter(), ask: scriptedDialog('Uninstall'), trash: vi.fn(), log: vi.fn(),
+      });
+      return invoke('modbench.mod.uninstall', modA);
+    }],
+    ['separator delete', () => {
+      written(deleteSeparators, { applied: true, outcome: { landed: [{ name: 'Group A' }], refused: [] } });
+      registerSeparatorCommands(access, instance, reporter(), scriptedDialog('Delete'), vi.fn(), () => []);
+      return invoke('modbench.separator.delete', groupA);
+    }],
+    ['separator rename', () => {
+      showInputBox.mockResolvedValueOnce('Renamed');
+      written(renameSeparator, { applied: true });
+      registerSeparatorCommands(access, instance, reporter(), scriptedDialog(), vi.fn(), () => []);
+      return invoke('modbench.separator.rename', groupA);
+    }],
+    ['separator add', () => {
+      showInputBox.mockResolvedValueOnce('New Group');
+      written(insertSeparator, { applied: true });
+      registerSeparatorCommands(access, instance, reporter(), scriptedDialog(), vi.fn(), () => []);
+      return invoke('modbench.separator.add', groupA);
+    }],
+    ['create empty mod', () => {
+      showInputBox.mockResolvedValueOnce('New Mod');
+      written(createEmptyMod, { applied: true, wrote: true });
+      registerCreateEmptyModCommand(access, instance, reporter());
+      return invoke('modbench.mod.createEmpty');
+    }],
+    ['exclude file', () => {
+      written(markFiles, { landed: [], refused: [] });
+      registerFileExclusionCommands(access, instance, () => [], reporter());
+      return invoke('modbench.mod.excludeFile', fileRow);
+    }],
+  ])('%s', async (_name, run) => {
+    await run();
 
     expect(progressSteps).toEqual(endsOnTheRead);
   });
@@ -1321,7 +1364,7 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
   it('a selection runs its command once, then one read', async () => {
     const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
     written(setModsEnabled, landed);
-    registerModEnableCommands(access, instance, () => [], recordingReporter());
+    registerModEnableCommands(access, instance, () => [], reporter());
 
     await invoke('modbench.mod.disable', modA, [modA, modB]);
 
@@ -1329,75 +1372,15 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
     expect(setModsEnabled).toHaveBeenCalledTimes(1);
   });
 
-  it('move', async () => {
-    written(moveMods, landed);
-    registerModMoveCommand(access, instance, { selection: () => [], direction: () => 'losingAtTop' }, recordingReporter());
-
-    await invoke('modbench.mod.move', modA, [modA], { place: { kind: 'ungrouped' }, end: 'losing' });
-
-    expect(progressSteps).toEqual(endsOnTheRead);
-  });
-
-  it('uninstall', async () => {
-    written(uninstallMods, { applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
-    registerModContextCommands({
-      access, instance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog('Uninstall'),
-      trash: vi.fn(), log: vi.fn(),
-    });
-
-    await invoke('modbench.mod.uninstall', modA);
-
-    expect(progressSteps).toEqual(endsOnTheRead);
-  });
-
-  it('separator delete', async () => {
-    written(deleteSeparators, { applied: true, outcome: { landed: [{ name: 'Group A' }], refused: [] } });
-    registerSeparatorCommands(access, instance, recordingReporter(), scriptedDialog('Delete'), vi.fn(), () => []);
-
-    await invoke('modbench.separator.delete', groupA);
-
-    expect(progressSteps).toEqual(endsOnTheRead);
-  });
-
-  it('separator rename', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    written(renameSeparator, { applied: true });
-    registerSeparatorCommands(access, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
-
-    await invoke('modbench.separator.rename', groupA);
-
-    expect(progressSteps).toEqual(endsOnTheRead);
-  });
-
-  it('separator add', async () => {
-    showInputBox.mockResolvedValueOnce('New Group');
-    written(insertSeparator, { applied: true });
-    registerSeparatorCommands(access, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
-
-    await invoke('modbench.separator.add', groupA);
-
-    expect(progressSteps).toEqual(endsOnTheRead);
-  });
-
-  it('create empty mod', async () => {
-    showInputBox.mockResolvedValueOnce('New Mod');
-    written(createEmptyMod, { applied: true, wrote: true });
-    registerCreateEmptyModCommand(access, instance, recordingReporter());
-
-    await invoke('modbench.mod.createEmpty');
-
-    expect(progressSteps).toEqual(endsOnTheRead);
-  });
-
-  it('exclude file', async () => {
-    const fileRow = new FileNode(
+  it('excluding what is already excluded writes nothing and reads nothing', async () => {
+    const already = new FileNode(
       modA, { kind: 'mod', name: 'Mod A' },
-      { relativePath: 'a.dds', path: '/a.dds', sourcePath: '/a.dds', excluded: false, excludedByName: false }, 'a.dds');
-    written(markFiles, { landed: [], refused: [] });
-    registerFileExclusionCommands(access, instance, () => [], recordingReporter());
+      { relativePath: 'a.dds.mohidden', path: '/a', sourcePath: '/a', excluded: true, excludedByName: true }, 'a.dds.mohidden');
+    registerFileExclusionCommands(access, instance, () => [], reporter());
 
-    await invoke('modbench.mod.excludeFile', fileRow);
+    await invoke('modbench.mod.excludeFile', already);
 
-    expect(progressSteps).toEqual(endsOnTheRead);
+    expect(progressSteps).toEqual([]);
+    expect(markFiles).not.toHaveBeenCalled();
   });
 });

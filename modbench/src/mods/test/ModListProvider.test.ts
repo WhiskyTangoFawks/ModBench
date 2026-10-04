@@ -682,7 +682,7 @@ describe('ModListProvider', () => {
       expect(executeCommand).not.toHaveBeenCalled();
     });
 
-    it('a drop asks for no refresh, since a drop moves no row on screen and the watch brings the write back', async () => {
+    it('a drop asks for no refresh, since a drop moves no row on screen', async () => {
       const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
       await shownRows(provider);
       let fired = false;
