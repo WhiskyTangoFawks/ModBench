@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { logDownloadsFolderUnresolved } from '../downloadsFolderUnresolvedLog';
-import { FakeInstance } from './mo2/fakeInstance';
-import { instanceValueFixture } from './mo2/instanceValueFixture';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const REASON_D_DRIVE = "download_directory \"D:\\Games\\downloads\" could not be resolved: "
   + "Cannot translate Wine drive letter 'D:' in 'D:\\Games\\downloads': only Z: and C: are translated";

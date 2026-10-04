@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { InstanceView } from './instanceLoader/instance';
+import type { InstanceView } from '../instanceLoader/instance';
 
 /** One Output line per failure however many views show it (common.md, States, story 2, scoped to
  *  the Downloads view alone). A folder resolved again after being unresolved, or unresolved for a

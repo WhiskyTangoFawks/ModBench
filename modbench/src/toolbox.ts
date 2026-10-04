@@ -34,14 +34,14 @@ import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
 import { registerGoToModCommand } from './mods/goToMod';
 import { registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
-import { createModListView, lastSelectedViewSelection, nexusRowInLastSelectedView, registerDownloadsView } from './treeViews';
+import { createModListView, lastSelectedViewSelection, nexusRowInLastSelectedView } from './treeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { modRepositoryContext } from './modRepositories';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
 import type { FolderCheck } from './folderContext';
 import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
 import { logGameFolderNotFound } from './gameFolderNotFoundLog';
-import { logDownloadsFolderUnresolved } from './downloadsFolderUnresolvedLog';
+import { createDownloadsView } from './downloads/downloadsView';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import {
   putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
@@ -333,7 +333,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   }));
   const firstRead = own(markFirstReadLanded(instance));
   own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
-  own(logDownloadsFolderUnresolved(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
   // The Instance adapter watches files only, so an edited setting is the root's to hand to the same
   // recompute Refresh's re-read runs, once per burst under the Toolbox's own settle.
   own(refreshOnGameDirectoryChange(vscode.workspace.onDidChangeConfiguration, () => instance.refresh()));
@@ -440,14 +439,15 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   }));
   own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
   own(vscode.commands.registerCommand('modbench.plugin.sync', runPluginSync));
-  const { downloadsProvider, downloadsView, downloadsFilter, installDownloaded } = registerDownloadsView({
-    own, access, instance, reporter: reporterFor('downloadList'), ask, trash,
+  const { provider: downloadsProvider, view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
+    access, instance, reporter: reporterFor('downloadList'), ask, trash,
     install: {
       nameNewMod: (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)),
       warnIfFomod,
       log: (line) => outputChannel.warn(`[downloads] ${line}`),
     },
-  });
+    logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
+  }));
   ownAll(own, registerModInstallCommands({ access, instance, runModAction, promptModName, warnIfFomod, installDownloaded }));
   own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), nexusRowInLastSelectedView(own, [
     { id: 'modbench.modList', view: modListView }, { id: 'modbench.downloads', view: downloadsView },
