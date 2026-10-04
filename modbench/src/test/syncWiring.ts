@@ -9,7 +9,7 @@ export function wireModSync(
   instance: Pick<Instance, 'subscribe' | 'value'>, sync: Parameters<typeof createModSync>[0], channel: Channel,
 ): ModSync {
   const modSync = createModSync(sync, channel, instance.value.managerNames.modOrderFile);
-  instance.subscribe((value) => { modSync.run(value.modSyncArguments); });
+  instance.subscribe((value) => { void modSync.run(value.modSyncArguments); });
   return modSync;
 }
 
@@ -17,6 +17,6 @@ export function wirePluginSync(
   instance: Pick<Instance, 'subscribe'>, sync: Parameters<typeof createPluginSync>[0], channel: Channel,
 ): PluginSync {
   const pluginSync = createPluginSync(sync, channel);
-  instance.subscribe((value) => { pluginSync.run(value.pluginSyncArguments); });
+  instance.subscribe((value) => { void pluginSync.run(value.pluginSyncArguments); });
   return pluginSync;
 }

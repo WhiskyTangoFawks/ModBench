@@ -292,8 +292,8 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const { provider: modListProvider, view: modListView, nameFilter: modListFilter, modSync } = own(createModsView({
     instance, log: (line) => outputChannel.warn(`[modList] ${line}`), syncMods: modSyncOver(access), channel: outputChannel,
   }));
-  own(instance.subscribe((value) => { modSync.run(value.modSyncArguments); }));
-  own(instance.subscribe((value) => { plugins.pluginSync.run(value.pluginSyncArguments); }));
+  own(instance.subscribe((value) => { void modSync.run(value.modSyncArguments); }));
+  own(instance.subscribe((value) => { void plugins.pluginSync.run(value.pluginSyncArguments); }));
   const showModRepositories = (value: InstanceValue) => {
     for (const [name, mods] of Object.entries(modRepositoryContext(value))) {
       void vscode.commands.executeCommand('setContext', `modbench.mod.${name}`, mods);
@@ -349,8 +349,8 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   }));
   own(registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => modListView.selection));
   ownAll(own, registerConflictTable(instance, deps.extensionUri, () => modListView.selection, reporterFor('mod.openConflicts'), vscode.workspace));
-  own(vscode.commands.registerCommand('modbench.mod.sync', () => { modSync.run(instance.value.modSyncArguments); }));
-  own(vscode.commands.registerCommand('modbench.plugin.sync', () => { plugins.pluginSync.run(instance.value.pluginSyncArguments); }));
+  own(vscode.commands.registerCommand('modbench.mod.sync', (value: InstanceValue = instance.value) => modSync.run(value.modSyncArguments)));
+  own(vscode.commands.registerCommand('modbench.plugin.sync', (value: InstanceValue = instance.value) => plugins.pluginSync.run(value.pluginSyncArguments)));
   const { provider: downloadsProvider, view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
     access, instance, reporter: reporterFor('downloadList'), ask, trash,
     install: {

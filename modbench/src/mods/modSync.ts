@@ -5,7 +5,8 @@ import type { ModSyncResult } from '../modlist/modlist';
 
 /** Mod sync's runs and its failure, whose message is the Mods view's, until a run lands. */
 export interface ModSync extends SyncMessage, SyncRuns {
-  run(args: ModSyncArguments): void;
+  /** Resolves once this run has told what it did. */
+  run(args: ModSyncArguments): Promise<void>;
 }
 
 export function createModSync(
@@ -17,7 +18,7 @@ export function createModSync(
   const runs = trackSyncRuns();
   return {
     run: (args) => {
-      runs.begin((async () => {
+      const run = (async () => {
         const outcome = await failures.run(() => sync(args));
         if (outcome === undefined) return;
         if (outcome.added.length > 0) {
@@ -26,7 +27,9 @@ export function createModSync(
         if (outcome.dropped.length > 0) {
           channel.info(`[modlist] mod sync dropped ${outcome.dropped.length} ${modOrderFile} line(s) whose folder is gone from mods/: ${outcome.dropped.join(', ')}`);
         }
-      })());
+      })();
+      runs.begin(run);
+      return run;
     },
     message: () => failures.message(),
     onMessageChanged: (listener) => failures.onMessageChanged(listener),

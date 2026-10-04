@@ -11,7 +11,8 @@ type PluginSyncOutcome =
 
 /** Plugin sync's runs and its failure, whose message is the Plugins view's, until a run lands. */
 export interface PluginSync extends SyncMessage, SyncRuns {
-  run(args: PluginSyncArguments): void;
+  /** Resolves once this run has told what it did. */
+  run(args: PluginSyncArguments): Promise<void>;
 }
 
 export function createPluginSync(
@@ -22,7 +23,7 @@ export function createPluginSync(
   const runs = trackSyncRuns();
   return {
     run: (args) => {
-      runs.begin((async () => {
+      const run = (async () => {
         const outcome = await failures.run(() => sync(args));
         if (outcome === undefined) return;
         if (outcome.added.length > 0) {
@@ -31,7 +32,9 @@ export function createPluginSync(
         if (outcome.dropped.length > 0) {
           channel.info(`[pluginsCommands] plugin sync dropped ${outcome.dropped.length} plugins.txt line(s) with no plugin on disk: ${outcome.dropped.join(', ')}`);
         }
-      })());
+      })();
+      runs.begin(run);
+      return run;
     },
     message: () => failures.message(),
     onMessageChanged: (listener) => failures.onMessageChanged(listener),

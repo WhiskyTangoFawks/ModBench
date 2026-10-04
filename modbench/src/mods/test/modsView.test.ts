@@ -302,10 +302,10 @@ describe('the Mods view says when the list is empty', () => {
       await instance.refresh();
       await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
 
-      modSync.run(instance.value.modSyncArguments);
+      await modSync.run(instance.value.modSyncArguments);
       await waitForMessage(modListView, (m) => m === `${NO_MODS} modlist.txt is not synced: /instance/mods does not exist.`, 'both messages');
 
-      modSync.run(instance.value.modSyncArguments);
+      await modSync.run(instance.value.modSyncArguments);
       await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message alone');
     });
   });
