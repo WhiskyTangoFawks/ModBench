@@ -3,7 +3,7 @@ import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import type { ModlistNode } from './ModListProvider';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
-import type { NexusModRow } from '../drivingLib/lastSelectedView';
+import type { NexusModRow } from '../drivingLib/inFocusedView';
 import {
   isModsKeyArgs, isRowOf, modsGestureEntry, runModsWriting, openFolderArgument, pluralArgument, registerModsGesture, selectionArgument,
   singularArgument, type GestureEntry, type RowOf,

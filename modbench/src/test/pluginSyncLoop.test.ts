@@ -8,13 +8,12 @@ import { accessTo, adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
-import { pluginSyncArguments, registerPluginSync } from '../pluginSyncTrigger';
+import { wireModSync, wirePluginSync } from './syncWiring';
 import { syncPlugins, setPluginsEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
 import { logGameFolderNotFound } from '../gameFolderNotFoundLog';
-import { registerModSync } from '../modSyncTrigger';
 import { modSyncOver } from '../modlist/modlist';
 
 const PROFILE = 'Default';
@@ -86,8 +85,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
 
   const syncs: Promise<PluginSyncResult>[] = [];
   const loadedWithNoLine: (readonly string[] | undefined)[] = [];
-  registerPluginSync(instance, (value) => {
-    const args = pluginSyncArguments(value);
+  wirePluginSync(instance, (args) => {
     loadedWithNoLine.push(args.loadedWithNoLine);
     const run = syncPlugins(accessTo(root), args.profile, args.provided, args.inData, args.loadedWithNoLine);
     syncs.push(run);
@@ -188,11 +186,10 @@ describe('the game folder not found, across the whole instance', () => {
     });
     instances.push(instance);
     logGameFolderNotFound(instance, (line) => channel.warn(`[instance] ${line}`));
-    const pluginSync = registerPluginSync(instance, (value) => {
-      const { profile, provided, inData, loadedWithNoLine } = pluginSyncArguments(value);
+    const pluginSync = wirePluginSync(instance, ({ profile, provided, inData, loadedWithNoLine }) => {
       return syncPlugins(accessTo(root), profile, provided, inData, loadedWithNoLine);
     }, channel);
-    const modSync = registerModSync(instance, modSyncOver(accessTo(root)), channel);
+    const modSync = wireModSync(instance, modSyncOver(accessTo(root)), channel);
 
     await instance.refresh();
     for (const glob of ['profiles/*/plugins.txt', 'mods/**', 'profiles/*/plugins.txt']) {
@@ -247,9 +244,9 @@ function firedAnswering(answer: (profile: string, call: number) => Promise<Plugi
   const messageChanged = vi.fn();
   const calls: Promise<PluginSyncResult>[] = [];
   const profiles: string[] = [];
-  const trigger = registerPluginSync(instance, ({ activeProfile }) => {
-    profiles.push(activeProfile);
-    const run = answer(activeProfile, calls.length);
+  const trigger = wirePluginSync(instance, ({ profile }) => {
+    profiles.push(profile);
+    const run = answer(profile, calls.length);
     calls.push(run);
     return run;
   }, channel);
@@ -270,7 +267,7 @@ const toldAsInstanceState = () => Promise.resolve<PluginSyncResult>({ applied: f
 const refused = (refusal: string) => () => Promise.resolve<PluginSyncResult>({ applied: false, refusal });
 const landed = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] });
 
-describe('registerPluginSync — settled', () => {
+describe('wirePluginSync — settled', () => {
   it('resolves once every run begun has written its Output', async () => {
     let land = (): void => {};
     const instance = {
@@ -284,7 +281,7 @@ describe('registerPluginSync — settled', () => {
     const answered = new Promise<PluginSyncResult>((resolve) => {
       answer = () => resolve({ applied: true, wrote: true, added: ['New.esp'], dropped: [] });
     });
-    const trigger = registerPluginSync(instance, () => answered, channel);
+    const trigger = wirePluginSync(instance, () => answered, channel);
 
     land();
     const settled = trigger.settled();
@@ -295,7 +292,7 @@ describe('registerPluginSync — settled', () => {
   });
 });
 
-describe('registerPluginSync — outcome handling', () => {
+describe('wirePluginSync — outcome handling', () => {
   it('logs the lines it added and dropped, one Output line each way', async () => {
     const { channel, land } = fired(() => Promise.resolve<PluginSyncResult>(
       { applied: true, wrote: true, added: ['New.esp'], dropped: ['Gone.esp'] }));
@@ -355,7 +352,7 @@ describe('registerPluginSync — outcome handling', () => {
   });
 });
 
-describe('registerPluginSync — the game folder not found', () => {
+describe('wirePluginSync — the game folder not found', () => {
   it('reports nothing of its own: no Output line and no message line', async () => {
     const { channel, trigger, messageChanged, land } = fired(toldAsInstanceState);
     await land();
@@ -376,7 +373,7 @@ describe('registerPluginSync — the game folder not found', () => {
   });
 });
 
-describe('registerPluginSync — every value', () => {
+describe('wirePluginSync — every value', () => {
   it('runs on every value that lands, from the first', async () => {
     const { profiles, land } = fired(landed, landed);
 
@@ -384,29 +381,5 @@ describe('registerPluginSync — every value', () => {
     await land(instanceValueFixture({ activeProfile: 'Second' }));
 
     expect(profiles).toEqual(['First', 'Second']);
-  });
-});
-
-describe('pluginSyncArguments', () => {
-  it('hands plugin sync the active profile, the plugins the instance provides, the Data folder and the plugins the game loads with no line', () => {
-    const value = instanceValueFixture({
-      activeProfile: 'Survival',
-      gameName: 'Skyrim Special Edition',
-      gameRelease: 'SkyrimSE',
-      gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
-      dataFolderPlugins: { kind: 'listed', names: new Set(['skyrim.esm']) },
-      pluginsLoadedWithNoLine: [{ name: 'Skyrim.esm', origin: 'Data' }],
-      plugins: [
-        { name: 'Mine.esp', path: join('/instance', 'mods', 'My Mod', 'Mine.esp'), origin: 'My Mod', slot: 0, enabled: true, winning: true },
-        { name: 'Skyrim.esm', path: join('/game', 'Data', 'Skyrim.esm'), origin: 'Data', slot: 1, enabled: true, winning: true },
-      ],
-    });
-
-    expect(pluginSyncArguments(value)).toEqual({
-      profile: 'Survival',
-      provided: new Map([['mine.esp', 'Mine.esp']]),
-      inData: { kind: 'listed', names: new Set(['skyrim.esm']) },
-      loadedWithNoLine: ['Skyrim.esm'],
-    });
   });
 });

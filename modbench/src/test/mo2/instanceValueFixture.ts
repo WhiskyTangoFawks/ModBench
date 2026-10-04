@@ -1,11 +1,12 @@
 import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
+import { modSyncArgumentsOf, pluginSyncArgumentsOf } from '../../instanceLoader/syncArguments';
 import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
 
 /** A whole `InstanceValue` at its neutral value, every field overridable — so a test caring
  *  about one field (`.plugins`, `.downloads`, …) states only that one, typed, with no cast. */
 export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): InstanceValue {
-  return {
+  const base: Omit<InstanceValue, 'modSyncArguments' | 'pluginSyncArguments'> = {
     mods: [],
     modFolders: [],
     trackedMods: new Set(),
@@ -27,6 +28,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     overwriteFiles: [],
     overwriteFolders: [],
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map() },
-    ...overrides,
   };
+  const value = { ...base, ...overrides };
+  return { ...value, modSyncArguments: modSyncArgumentsOf(value), pluginSyncArguments: pluginSyncArgumentsOf(value), ...overrides };
 }

@@ -13,12 +13,14 @@ import {
 } from '../instanceAdapter/instanceAdapter';
 import { SameCopies, type FileCopies } from './sameCopies';
 import { errorMessage } from '../ports/errorMessage';
+import { modSyncArgumentsOf, pluginSyncArgumentsOf, type ModSyncArguments, type PluginSyncArguments } from './syncArguments';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
 export type { FileOrigin, InstalledFileId, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow } from './downloadRows';
 export type { Copy, FileCopies } from './sameCopies';
+export type { ModSyncArguments, PluginSyncArguments } from './syncArguments';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, GameFolderLook } from '../instanceAdapter/instanceAdapter';
 
@@ -99,6 +101,10 @@ export interface InstanceValue {
   readonly overwriteFolders: readonly OriginFolder[];
   /** The paths this generation's rows name. */
   readonly paths: InstancePaths;
+  /** What mod sync is handed, derived once with the rest of the value. */
+  readonly modSyncArguments: ModSyncArguments;
+  /** What plugin sync is handed, derived once with the rest of the value. */
+  readonly pluginSyncArguments: PluginSyncArguments;
 }
 
 export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void;
@@ -169,6 +175,8 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   overwriteFiles: [],
   overwriteFolders: [],
   paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() },
+  modSyncArguments: { profile: '', modFolders: [] },
+  pluginSyncArguments: { profile: '', provided: new Map(), inData: { kind: 'unresolved' }, loadedWithNoLine: undefined },
 });
 
 export class Instance implements Subscription {
@@ -398,9 +406,11 @@ export class Instance implements Subscription {
     const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.files
       ? await this.readInstalledInto(entries, modFolders?.all ?? [])
       : undefined;
+    const modFolderList = modFolders?.all;
+    const syncSource = { activeProfile: profile, modFolders: modFolderList, plugins, dataFolderPlugins, pluginsLoadedWithNoLine };
     return {
       mods: entries,
-      modFolders: modFolders?.all,
+      modFolders: modFolderList,
       trackedMods: new Set(trackedMods.flat()),
       profiles,
       files: index.files,
@@ -425,6 +435,8 @@ export class Instance implements Subscription {
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
       paths: pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders),
+      modSyncArguments: modSyncArgumentsOf(syncSource),
+      pluginSyncArguments: pluginSyncArgumentsOf(syncSource),
     };
   }
 }
