@@ -339,29 +339,24 @@ public sealed partial class SourceRepository
             : null;
     }
 
-    /// <summary>Parks the working tree about to be compiled, naming its binary beside every binary the
-    /// ref already names, so an interrupted write leaves one it names (plugins.md, Compile, story 5).
-    /// Moves no HEAD, branch or index.</summary>
-    public static void ParkCompileSnapshot(string modFolder, string plugin, string binarySha256)
+    /// <summary>Runs <paramref name="write"/>, which puts the plugin's binary on disk, recording
+    /// <paramref name="binarySha256"/> as the one last written. An interrupted write leaves a record
+    /// naming the old and the new binary (ADR-0003).</summary>
+    public void WriteBinary(PluginAddress plugin, string binarySha256, Action write)
     {
-        var gitDir = Path.Combine(modFolder, ".git");
-        var headSha = GitCli.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim();
-        var tree = WorkingTreeSnapshotTree(gitDir, modFolder);
-        var earlier = ParkedCompileBinarySha256s(modFolder, plugin);
-        Repark(gitDir, modFolder, "Compile", plugin, tree, headSha, [$"{BinaryTrailer}: {binarySha256}",
+        var gitDir = Path.Combine(_modFolder, ".git");
+        var headSha = GitCli.Run(gitDir, _modFolder, "rev-parse", "HEAD").Trim();
+        var tree = WorkingTreeSnapshotTree(gitDir, _modFolder);
+        var earlier = LastWrittenBinarySha256s(plugin);
+        Repark(gitDir, _modFolder, "Compile", plugin.Name, tree, headSha, [$"{BinaryTrailer}: {binarySha256}",
             .. earlier.Select(sha => $"{EarlierBinaryTrailer}: {sha}")]);
-    }
 
-    /// <summary>The compiled binary is written, so the parked snapshot names it alone (ADR-0003).</summary>
-    public static void NarrowCompileSnapshot(string modFolder, string plugin)
-    {
-        var gitDir = Path.Combine(modFolder, ".git");
-        var parked = LastCompileRef(plugin);
-        var body = GitCli.Run(gitDir, modFolder, "log", "-1", "--format=%B", parked);
-        var tree = GitCli.Run(gitDir, modFolder, "rev-parse", $"{parked}^{{tree}}").Trim();
-        var parent = GitCli.Run(gitDir, modFolder, "rev-parse", $"{parked}^").Trim();
-        Repark(gitDir, modFolder, "Compile", plugin, tree, parent,
-            [.. ReadTrailers(body, BinaryTrailer).Select(sha => $"{BinaryTrailer}: {sha}")]);
+        write();
+
+        var parked = LastCompileRef(plugin.Name);
+        var parkedTree = GitCli.Run(gitDir, _modFolder, "rev-parse", $"{parked}^{{tree}}").Trim();
+        var parent = GitCli.Run(gitDir, _modFolder, "rev-parse", $"{parked}^").Trim();
+        Repark(gitDir, _modFolder, "Compile", plugin.Name, parkedTree, parent, [$"{BinaryTrailer}: {binarySha256}"]);
     }
 
     // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written. The
@@ -418,15 +413,14 @@ public sealed partial class SourceRepository
         return entries;
     }
 
-    /// <summary>Every binary hash the plugin's last-compile ref names: a baseline's or a landed
-    /// compile's one, or an unfinished compile's with those before it. Empty when the ref is
-    /// missing.</summary>
-    public static IReadOnlyList<string> ParkedCompileBinarySha256s(string modFolder, string plugin)
+    /// <summary>Every binary hash Modbench last wrote for the plugin: one, or several while a write
+    /// was interrupted. Empty when none is recorded.</summary>
+    public IReadOnlyList<string> LastWrittenBinarySha256s(PluginAddress plugin)
     {
-        if (!IsTracked(modFolder)) return [];
+        if (!IsTracked(_modFolder)) return [];
 
-        var gitDir = Path.Combine(modFolder, ".git");
-        if (!GitCli.TryRun(gitDir, modFolder, out var body, "log", "-1", "--format=%B", LastCompileRef(plugin)))
+        var gitDir = Path.Combine(_modFolder, ".git");
+        if (!GitCli.TryRun(gitDir, _modFolder, out var body, "log", "-1", "--format=%B", LastCompileRef(plugin.Name)))
             return [];
 
         return [.. ReadTrailers(body, BinaryTrailer), .. ReadTrailers(body, EarlierBinaryTrailer)];
@@ -436,10 +430,10 @@ public sealed partial class SourceRepository
     // its paths with Path.Combine.
     internal static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
 
-    /// <summary>The one place <c>refs/medit/last-compile/&lt;plugin&gt;</c> is built. Almost every real
-    /// plugin name is ref-unsafe, so the filename is percent-encoded: injective, but deliberately not
-    /// reversible — nothing enumerates these refs.</summary>
-    public static string LastCompileRef(string plugin)
+    // The one place refs/medit/last-compile/<plugin> is built. Almost every real plugin name is
+    // ref-unsafe, so the filename is percent-encoded: injective, but deliberately not reversible —
+    // nothing enumerates these refs.
+    private static string LastCompileRef(string plugin)
     {
         // An empty name is an upstream bug: encoding it would yield a ref ending in "/", which git rejects
         // too.
