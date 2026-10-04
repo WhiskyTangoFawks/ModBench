@@ -10,6 +10,8 @@ export const REREAD_AFTER_WRITE_MESSAGE =
 export const WRITES = new Set([
     'setPluginsParticipation', 'setPluginsEnabled', 'reorderPlugins', 'appendPlugin', 'onPluginCheckboxChanged',
     'createPlugin', 'track', 'createRecord', 'deleteRecords', 'copyRecords', 'editRecord',
+    'setModsEnabled', 'markFiles', 'moveMods', 'moveSeparators', 'uninstallMods', 'renameSeparator', 'insertSeparator',
+    'deleteSeparators', 'createEmptyMod', 'installFromArchive', 'installFromFolder',
 ]);
 
 export const VIEW_REREADS = new Set([

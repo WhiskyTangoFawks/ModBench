@@ -32,7 +32,7 @@ import { cloneCorpusFixture } from './mo2/corpusFixture';
 import { expectInstanceOf } from './expectInstanceOf';
 import { present } from '../ports/present';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
-import { accessTo, adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
+import { adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
 
 const roots: string[] = [];
 const disposables: { dispose(): void }[] = [];
@@ -59,7 +59,7 @@ function fourViewsOverOneInstance() {
     log, logReadFailure: (line) => { channel.error(line); },
     adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
   });
-  const mods = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
+  const mods = new ModListProvider({ instance });
   const plugins = new PluginsTreeProvider({
     instance,
     source: { reorderPlugins: () => Promise.resolve() },

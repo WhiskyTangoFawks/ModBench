@@ -15,7 +15,6 @@ import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue } from '../../instanceLoader/instance';
 import { modOrigin, RUNTIME_OUTPUT } from '../../instanceLoader/fileConflictIndex';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { accessTo } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
 import { ModListProvider, ModNode, type ModlistNode } from '../ModListProvider';
 import { fileRowUri } from '../modFiles';
@@ -112,7 +111,7 @@ describe('the grey on a file the game does not get, in the Mods tree and the Exp
     const instance = new FakeInstance(await indexedValueOf([mod('Winner'), mod('Loser')], {
       Winner: { files: [file('Winner', 'a.dds')] }, Loser: { files: [file('Loser', 'a.dds')] },
     }));
-    const rows = new ModListProvider({ instance, access: accessTo('/instance'), log: () => undefined });
+    const rows = new ModListProvider({ instance });
     const decorations = decorationsOver(instance);
 
     expect(decorations.provideFileDecoration(present((await losingRowOf(rows)).resourceUri, 'its row\'s URI'))).toEqual(GREY);

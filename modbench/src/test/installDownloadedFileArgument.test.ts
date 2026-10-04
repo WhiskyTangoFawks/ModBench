@@ -22,7 +22,7 @@ describe('modbench.mod.install given a Downloads row', () => {
   it('hands the row of the real DownloadNode to the downloaded-file flow', async () => {
     const installDownloaded = vi.fn().mockResolvedValue(true);
     registerModInstallCommands({
-      access: accessTo('/instance'), instance: { value: instanceValueFixture() },
+      access: accessTo('/instance'), instance: { value: instanceValueFixture(), refresh: () => Promise.resolve() },
       runModAction: async (_label, _fail, action) => action(), promptModName: vi.fn(), warnIfFomod: vi.fn(),
       installDownloaded,
     });
