@@ -41,7 +41,6 @@ import { modRepositoryContext } from './modRepositories';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
 import type { FolderCheck } from './folderContext';
 import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
-import { logGameFolderNotFound } from './gameFolderNotFoundLog';
 import { createDownloadsView } from './downloads/downloadsView';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import {
@@ -254,7 +253,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     adapter, window: vscode.window, log, logReadFailure: (line) => outputChannel.error(line),
   }));
   const firstRead = own(markFirstReadLanded(instance));
-  own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
   // The Instance adapter watches files only, so an edited setting is the root's to hand to the same
   // recompute Refresh's re-read runs, once per burst under the Toolbox's own settle.
   own(refreshOnGameDirectoryChange(vscode.workspace.onDidChangeConfiguration, () => instance.refresh()));
@@ -328,7 +326,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
   ));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putCurrentLoadOrder));
-  const toolboxProvider = own(new ToolboxProvider({ instance }));
+  const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor }));
   ownAll(own, registerModContextCommands({
     access, instance, viewSelection: () => modListView.selection, reporter: reporterFor('mod.uninstall'), ask, trash,

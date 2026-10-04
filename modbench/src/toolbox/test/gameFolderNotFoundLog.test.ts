@@ -1,20 +1,24 @@
-import { describe, it, expect } from 'vitest';
-import { logGameFolderNotFound } from '../gameFolderNotFoundLog';
-import { FakeInstance } from './mo2/fakeInstance';
-import { instanceValueFixture } from './mo2/instanceValueFixture';
-import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
+import { describe, it, expect, vi } from 'vitest';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from '../../test/vscodeMock';
+
+vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
+
+import { ToolboxProvider } from '../ToolboxProvider';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 
 const FOUND = instanceValueFixture({ gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' } });
 const NOT_FOUND = instanceValueFixture({ gameFolder: GAME_FOLDER_NOT_FOUND });
 
 const LINE =
-  'Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameDirectory: not set; ' +
+  '[instance] Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameDirectory: not set; ' +
   "ModOrganizer.ini's gamePath: not set; the Steam install: the game is in no Steam library. " +
   'Set modbench.mods.gameDirectory to the game folder to fix it.';
 
 function logged(instance: FakeInstance): string[] {
   const lines: string[] = [];
-  logGameFolderNotFound(instance, (line) => lines.push(line));
+  new ToolboxProvider({ instance, channel: { warn: (line) => lines.push(line) } });
   return lines;
 }
 
@@ -74,7 +78,7 @@ describe('the game folder not found, in the Output', () => {
 
     expect(lines).toEqual([
       LINE,
-      'Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameDirectory: ' +
+      '[instance] Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameDirectory: ' +
         '/moved has no Data folder. Set modbench.mods.gameDirectory to the game folder to fix it.',
     ]);
   });

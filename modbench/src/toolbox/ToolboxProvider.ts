@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { logGameFolderNotFound } from './gameFolderNotFoundLog';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 
 export interface ToolboxDeps {
@@ -6,6 +7,7 @@ export interface ToolboxDeps {
    *  first view and must never be a hole — but the commands its rows activate do not exist, so
    *  it renders no rows. */
   instance: InstanceView | undefined;
+  channel?: { warn(msg: string): void };
 }
 
 function gameRow({ gameName, gameFolder }: InstanceValue): vscode.TreeItem {
@@ -57,7 +59,10 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
   constructor(private readonly deps: ToolboxDeps) {
     const changed = () => this._onDidChangeTreeData.fire(undefined);
     this.subscriptions = deps.instance
-      ? [deps.instance.subscribe(changed), deps.instance.onReadFailure(changed)]
+      ? [
+        deps.instance.subscribe(changed), deps.instance.onReadFailure(changed),
+        ...(deps.channel ? [logGameFolderNotFound(deps.instance, (line) => deps.channel?.warn(line))] : []),
+      ]
       : [];
   }
 
