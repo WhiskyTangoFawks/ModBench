@@ -104,6 +104,16 @@ internal sealed class GatedPluginAdapter(
         }
     }
 
+    /// <summary>Arms the park for a plugin's next open, after the reconcile that opened it first.</summary>
+    public void ParkNextOpenOf(string pluginName)
+    {
+        lock (_gate)
+        {
+            gateBefore = pluginName;
+            _parkedOnce = false;
+        }
+    }
+
     public async Task WaitUntilParkedAsync()
     {
         var arrived = await _arrived.WaitAsync(TimeSpan.FromSeconds(30));
