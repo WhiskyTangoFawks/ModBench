@@ -217,7 +217,9 @@ public sealed class PluginCompileService(
     {
         var header = new RecordIdentity(
             PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), PluginHeader.RecordType, null);
-        return new(header.FormKey, repository.RelativePathOf(plugin, header) ?? string.Empty, message);
+        var path = repository.RelativePathOf(plugin, header)
+            ?? throw new InvalidOperationException($"Expected {plugin.Name}'s header to have a document.");
+        return new(header.FormKey, path, message);
     }
 
     // The same fields the editor shows a CheckError on, from the same builder, so compile and the
@@ -271,25 +273,23 @@ public sealed class PluginCompileService(
     }
 
     // ADR-0006. The generated deserializer skips an unrecognized property or file without
-    // throwing, so a successful parse proves nothing. The check runs both ways: a document the
-    // regeneration does not produce is content the parse dropped.
+    // throwing, so a successful parse proves nothing.
 
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
     // parses an external binary, never from Compile.
     private static async Task<string?> RefuseIfSourceDoesNotRoundTrip(
         CompiledTree tree, PluginAddress plugin, SourceRepository repository)
     {
-        var pluginName = plugin.Name;
         if (repository.DivergenceFrom(plugin, await tree.SerializeTreeAsync()) is not { } divergence) return null;
 
-        if (divergence.Kind == SourceDivergenceKind.Changed)
+        if (divergence.Kind != SourceDivergenceKind.Unproduced)
         {
-            var offender = divergence.IsHeader ? "the plugin header" : divergence.Path;
-            return $"{pluginName} does not round-trip through its own source: {offender} does not match " +
+            var offender = divergence.Kind == SourceDivergenceKind.HeaderChanged ? "the plugin header" : divergence.Path;
+            return $"{plugin.Name} does not round-trip through its own source: {offender} does not match " +
                 $"what the current codec would produce from it. {RegenerateTheSource}";
         }
 
-        return $"{pluginName} does not round-trip through its own source: {divergence.Path} is in the source, " +
+        return $"{plugin.Name} does not round-trip through its own source: {divergence.Path} is in the source, " +
             "but the current codec produces no such file from it, so nothing it holds reaches the plugin " +
             $"(a document left over from an earlier source layout, or a stray file). {RegenerateTheSource}";
     }
