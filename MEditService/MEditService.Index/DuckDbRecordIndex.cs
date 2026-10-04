@@ -269,8 +269,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     /// <summary>Wholesale rather than incremental because there is no smaller correct unit:
-    /// registering a plugin can move the winner of every FormKey it holds. Measured at ~75 ms for
-    /// both refs on a 48,000-record, 60-plugin fixture.</summary>
+    /// registering a plugin can move the winner of every FormKey it holds. Measured at ~75 ms
+    /// on a 48,000-record, 60-plugin fixture.</summary>
     public void UpdateWinners(IReadOnlyList<RegisteredPlugin> active)
     {
         using var tx = Connection.BeginTransaction();
@@ -329,7 +329,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // --- Working-tree changes ---
 
     /// <summary>The Indexer's landing of re-derived documents: one transaction for the batch, so a
-    /// throw partway cannot leave Effective and Head disagreeing. A null body is the document
+    /// throw partway cannot leave the rows half-projected. A null body is the document
     /// gone.</summary>
     internal void ProjectDocuments(PluginAddress key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
@@ -598,11 +598,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         _openedPlugins = opened;
 
     /// <summary>See <see cref="IRecordIndex.Reads"/>.</summary>
-    public IRecordReads Reads => _reads ??= new RelationReads(this, "records");
+    public IRecordReads Reads => _reads ??= new RelationReads(this);
 
-    // The one implementation of every IRecordReads member, parameterized by which relation its SQL
-    // names, so a read cannot be ref-aware on one path and not the other.
-    private sealed class RelationReads(DuckDbRecordIndex owner, string records) : IRecordReads
+    private sealed class RelationReads(DuckDbRecordIndex owner) : IRecordReads
     {
         public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => owner._openedPlugins();
 
@@ -614,16 +612,16 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         {
             using var connection = owner.OpenRead();
             owner.RequireSchemas(); // fails before any query runs, though OpenRead above has already opened the connection
-            var tableName = FindRecordType(connection, records, formKey);
-            return tableName == null ? null : owner.ReadDocument(connection, records, tableName, formKey, plugin: null, origin: null, winnerOnly: true);
+            var tableName = FindRecordType(connection, formKey);
+            return tableName == null ? null : owner.ReadDocument(connection, tableName, formKey, plugin: null, origin: null, winnerOnly: true);
         }
 
         public RecordDocument? GetDocument(string formKey, PluginAddress plugin)
         {
             using var connection = owner.OpenRead();
             owner.RequireSchemas();
-            var tableName = FindRecordType(connection, records, formKey);
-            return tableName == null ? null : owner.ReadDocument(connection, records, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
+            var tableName = FindRecordType(connection, formKey);
+            return tableName == null ? null : owner.ReadDocument(connection, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
         }
 
         // One query rather than two point queries per record. Rows are materialized before
@@ -636,7 +634,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
                 SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, record_type, parse_diagnosis
-                FROM {records}
+                FROM records
                 WHERE plugin = $1 AND origin = $2
                 """;
             AddParams(cmd, [plugin.Name, plugin.Origin]);
@@ -672,14 +670,14 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         {
             using var connection = owner.OpenRead();
             owner.RequireSchemas(); // fails before any query runs, though OpenRead above has already opened the connection
-            var tableName = FindRecordType(connection, records, formKey);
+            var tableName = FindRecordType(connection, formKey);
             if (tableName == null) return null;
             var schema = owner.RequireSchemas()[tableName];
             var resolve = LinkResolution.ForLinksOf(connection, formKey);
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
                 SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, "ref"
-                FROM {records}
+                FROM records
                 WHERE form_key = $1 AND record_type = $2
                 ORDER BY load_order_idx
                 """;
@@ -741,7 +739,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 """;
 
             using var countCmd = connection.CreateCommand();
-            countCmd.CommandText = $"SELECT COUNT(*) FROM {records} r{where}";
+            countCmd.CommandText = $"SELECT COUNT(*) FROM records r{where}";
             AddParams(countCmd, paramValues);
             var total = ExecuteCount(countCmd);
 
@@ -750,8 +748,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             var order = query.GroupOnly ? NavigatorSql.FormIdOrder("form_key") : "editor_id, form_key";
             using var dataCmd = connection.CreateCommand();
             dataCmd.CommandText = $"""
-                WITH RECURSIVE {NavigatorSql.AboveAFailure(records, holdings)}
-                SELECT {cols} FROM {records} r{where}
+                WITH RECURSIVE {NavigatorSql.AboveAFailure("records", holdings)}
+                SELECT {cols} FROM records r{where}
                 ORDER BY {order}, plugin, origin
                 LIMIT {query.Limit} OFFSET {query.Offset}
                 """;
@@ -794,7 +792,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
                 SELECT record_type, COUNT(*), BOOL_OR(parse_diagnosis IS NOT NULL)
-                FROM {records} r{where}
+                FROM records r{where}
                 GROUP BY record_type
                 """;
             AddParams(cmd, paramValues);
@@ -822,12 +820,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         // The types of the listed records with an unreadable record anywhere beneath them, walked up
         // the holdings from each unreadable record.
-        private HashSet<string> TypesHoldingAFailure(DuckDBConnection connection, PluginAddress plugin)
+        private static HashSet<string> TypesHoldingAFailure(DuckDBConnection connection, PluginAddress plugin)
         {
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
-                WITH RECURSIVE {NavigatorSql.AboveAFailure(records, "WHERE h.plugin = $1 AND h.origin = $2")}
-                SELECT DISTINCT r.record_type FROM {records} r
+                WITH RECURSIVE {NavigatorSql.AboveAFailure("records", "WHERE h.plugin = $1 AND h.origin = $2")}
+                SELECT DISTINCT r.record_type FROM records r
                 JOIN above_failure a ON a.form_key = r.form_key AND a.plugin = r.plugin AND a.origin = r.origin
                 WHERE r.plugin = $1 AND r.origin = $2 AND {NavigatorSql.NotHeld("r")}
                 """;
@@ -883,7 +881,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 null, null, $"form_key IN (SELECT form_key FROM {FilterMatches})", origin: null, recordTypes: types);
 
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"SELECT DISTINCT plugin, origin FROM {records}{where}";
+            cmd.CommandText = $"SELECT DISTINCT plugin, origin FROM records{where}";
             AddParams(cmd, paramValues);
             using var reader = cmd.ExecuteReader();
 
@@ -962,7 +960,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             // record occupies.
             using var cmd = connection.CreateCommand();
             cmd.CommandText =
-                $"SELECT DISTINCT form_key FROM {records} WHERE plugin = $1 AND origin = $2 AND record_type <> '{PluginHeader.RecordType}'";
+                $"SELECT DISTINCT form_key FROM records WHERE plugin = $1 AND origin = $2 AND record_type <> '{PluginHeader.RecordType}'";
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
             using var reader = cmd.ExecuteReader();
@@ -990,7 +988,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             using var connection = owner.OpenRead();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
-                WITH RECURSIVE {NavigatorSql.AboveAFailure(records, "WHERE h.plugin = $1 AND h.origin = $2")}
+                WITH RECURSIVE {NavigatorSql.AboveAFailure("records", "WHERE h.plugin = $1 AND h.origin = $2")}
                 SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y,
                        {FullNameOf("c")}, c.parse_diagnosis,
                        c.parse_diagnosis IS NOT NULL OR EXISTS (
@@ -999,12 +997,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                        ),
                        EXISTS (
                            SELECT 1 FROM ({NavigatorSql.CellChildren}) p
-                           JOIN {records} pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
+                           JOIN records pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
                            WHERE p.parent_cell = cl.cell_form_key AND p.plugin = cl.plugin AND p.origin = cl.origin
                              {InListingFilter("p")}
                        )
                 FROM cell_location cl
-                LEFT JOIN {records} c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
+                LEFT JOIN records c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
                 WHERE cl.plugin = $1 AND cl.origin = $2 AND {where}{InListingFilter("cl", "cell_form_key")}
                 ORDER BY {blockOrder}, {NavigatorSql.FormIdOrder("cl.cell_form_key")}
                 """;
@@ -1064,12 +1062,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                        json_extract_string(r.body, '$.Base'), r.parse_diagnosis IS NOT NULL, {FullNameOf("r")},
                        r.parse_diagnosis,
                        -- The base record's EditorID (plugins.md, Record). Its copy in the reference's own plugin, else the winning copy.
-                       (SELECT b.editor_id FROM {records} b
+                       (SELECT b.editor_id FROM records b
                         WHERE b.form_key = json_extract_string(r.body, '$.Base')
                         ORDER BY (b.plugin = r.plugin AND b.origin = r.origin) DESC, b.is_winner DESC, b.plugin, b.origin
                         LIMIT 1)
                 FROM ({NavigatorSql.CellChildren}) p
-                JOIN {records} r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
+                JOIN records r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
                 WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
                   AND r.record_type IN ({typeList}){InListingFilter("p")}
                 ORDER BY {NavigatorSql.FormIdOrder("p.form_key")}
@@ -1203,10 +1201,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         // Private: table-name dispatch is rejected from the seam; GetDocument and GetOverrideStack
         // resolve a FormKey's type themselves rather than being told it.
-        private static string? FindRecordType(DuckDBConnection connection, string records, string formKey)
+        private static string? FindRecordType(DuckDBConnection connection, string formKey)
         {
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"SELECT record_type FROM {records} WHERE form_key = $1 LIMIT 1";
+            cmd.CommandText = $"SELECT record_type FROM records WHERE form_key = $1 LIMIT 1";
             cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
             return cmd.ExecuteScalar() as string;
         }
@@ -1312,8 +1310,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return result;
         }
 
-        // Ref-invariant for the same reason its inverse is, so it ignores which relation the caller is
-        // positioned on.
         private static ContainerChildRow? GetContainerParent(DuckDBConnection connection, string plugin, string origin, string childFormKey)
         {
             using var cmd = connection.CreateCommand();
@@ -1332,7 +1328,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
     }
 
-    private RecordDocument? ReadDocument(DuckDBConnection connection, string records, string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
+    private RecordDocument? ReadDocument(DuckDBConnection connection, string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
     {
         var schema = RequireSchemas()[tableName];
         var conditions = new List<string> { "form_key = $1" };
@@ -1349,7 +1345,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"""
             SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis
-            FROM {records} WHERE {string.Join(" AND ", conditions)}
+            FROM records WHERE {string.Join(" AND ", conditions)}
             LIMIT 1
             """;
         AddParams(cmd, values);

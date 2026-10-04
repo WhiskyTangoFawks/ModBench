@@ -44,6 +44,20 @@ public sealed class WorkingTreeChangeMarkingTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     [Fact]
+    public void AnActiveFilter_NarrowsTheListingToTheFormKeysItNames()
+    {
+        using var index = Indexes.Reconciled(_fixture);
+        var reads = index.RequireReads();
+        var filterNarrowingToKeepMesTwoOverrideRowsOfTheFixturesThree = $"SELECT '{_keptNpc}' AS form_key";
+        index.SetFilter(filterNarrowingToKeepMesTwoOverrideRowsOfTheFixturesThree, "filter.sql");
+
+        var listing = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+
+        Assert.Equal(2, listing.Total);
+        Assert.All(listing.Items, i => Assert.Equal(_keptNpc, i.FormKey));
+    }
+
+    [Fact]
     public void AWorkingTreeChange_MarksOnlyTheEditedRecord()
     {
         using var index = Indexes.Reconciled(_fixture);

@@ -41,6 +41,7 @@ public sealed class RefreshByKeysTests : IDisposable
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
 
         Refresh();
+        Assert.True(Reads.StackEntry(_npc, _mod.KeyOf()).Require().HasWorkingTreeChange);
 
         _mod.Git("add", "-A");
         _mod.Git("commit", "-q", "-m", "committed outside Modbench");

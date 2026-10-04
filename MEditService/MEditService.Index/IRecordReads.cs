@@ -2,7 +2,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
-/// <summary>Every read the index answers, A record read
+/// <summary>Every read the index answers. A record read
 /// sees only the active plugins (ADR-0012); a plugin's own facts answer while the
 /// snapshot names it.</summary>
 public interface IRecordReads
