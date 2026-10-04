@@ -101,7 +101,7 @@ public sealed class ExternalChangeCheckTests : IDisposable
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked));
         Track((PluginName, tracked));
-        GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, "update-ref", "-d", SourceRepository.LastCompileRef(PluginName));
+        LastWriteRecord.Delete(ModFolder);
 
         Put(loadOrder);
 
@@ -252,7 +252,7 @@ public sealed class ExternalChangeCheckTests : IDisposable
         var old = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
         Track((PluginName, old));
-        SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash("the compiled binary"u8.ToArray()));
+        LastWriteRecord.Interrupt(ModFolder, PluginName, TrailerHash("the compiled binary"u8.ToArray()), () => { });
 
         Put(loadOrder);
 
@@ -265,8 +265,8 @@ public sealed class ExternalChangeCheckTests : IDisposable
         var old = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
         Track((PluginName, old));
-        SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash("the first compile"u8.ToArray()));
-        SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash("the second compile"u8.ToArray()));
+        LastWriteRecord.Interrupt(ModFolder, PluginName, TrailerHash("the first compile"u8.ToArray()), () => { });
+        LastWriteRecord.Interrupt(ModFolder, PluginName, TrailerHash("the second compile"u8.ToArray()), () => { });
 
         Put(loadOrder);
 
@@ -280,8 +280,8 @@ public sealed class ExternalChangeCheckTests : IDisposable
         var compiled = "the compiled binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
         Track((PluginName, old));
-        SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash(compiled));
-        File.WriteAllBytes(Path.Combine(ModFolder, PluginName), compiled);
+        LastWriteRecord.Interrupt(
+            ModFolder, PluginName, TrailerHash(compiled), () => File.WriteAllBytes(Path.Combine(ModFolder, PluginName), compiled));
 
         Put(loadOrder);
 

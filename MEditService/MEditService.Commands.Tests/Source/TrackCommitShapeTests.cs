@@ -38,8 +38,8 @@ public sealed class TrackCommitShapeTests : IDisposable
 
         await Track("First.esp", "Second.esp");
 
-        Assert.Equal([first], SourceRepository.ParkedCompileBinarySha256s(_modFolder, "First.esp"));
-        Assert.Equal([second], SourceRepository.ParkedCompileBinarySha256s(_modFolder, "Second.esp"));
+        Assert.Equal([first], LastWriteRecord.Of(_modFolder, "First.esp"));
+        Assert.Equal([second], LastWriteRecord.Of(_modFolder, "Second.esp"));
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Equal([Key("First.esp")], result.Landed);
         Assert.Empty(HeldBy("Second.esp"));
         Assert.NotEmpty(HeldBy("First.esp"));
-        Assert.Empty(SourceRepository.ParkedCompileBinarySha256s(_modFolder, "Second.esp"));
+        Assert.Empty(LastWriteRecord.Of(_modFolder, "Second.esp"));
     }
 
     [Fact]
