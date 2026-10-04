@@ -70,14 +70,16 @@ internal static class Indexes
     }
 
     /// <summary>The held load order arriving again (ADR-0013), answered once
-    /// <paramref name="announced"/> holds. Validation announces inside its write-gate hold, so taking
-    /// the gate waits out the rest of it.</summary>
+    /// <paramref name="announced"/> holds and the arrival has ended. An arrival that re-derived
+    /// ends with its status published, and one that only validated announces inside its write-gate
+    /// hold, so waiting out the status and then the gate covers both.</summary>
     internal static void NextSnapshotUntil(this Indexer index, Func<bool> announced, string what)
     {
         if (!Holders.TryGetValue(index, out var holder))
             throw new InvalidOperationException("Only an Indexer from Indexes.Open has a holder to deliver an arrival through.");
         holder.Apply(holder.Current);
         Waits.Reached(announced, what);
+        Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the arrival's status");
         using var validated = index.WriteGate.Enter();
     }
 
