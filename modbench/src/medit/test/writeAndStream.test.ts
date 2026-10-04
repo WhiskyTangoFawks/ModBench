@@ -8,7 +8,7 @@ vi.mock('vscode', () => ({
 import { applyRecordEdit } from '../../editor/applyRecordEdit';
 import { RecordDecorationProvider } from '../../editor/RecordDecorationProvider';
 import { PluginTreeProvider, RecordNode, RecordTypeNode } from '../../plugins/PluginTreeProvider';
-import { subscribeRecordPanelsToNotifications } from '../notificationWiring';
+import { subscribeRecordPanelsToNotifications } from '../../editor/notificationWiring';
 import { subscribeTreeToNotifications } from '../../plugins/treeNotifications';
 import { InMemoryMEditClient, type RecordSummary } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';

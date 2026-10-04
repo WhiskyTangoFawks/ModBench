@@ -61,7 +61,6 @@ function register(
     outputChannel: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
     reporterFor: () => reporter,
     ask: vi.fn(),
-    fieldFile: () => ({ folder: '', file: '' }),
   });
 }
 
@@ -78,6 +77,21 @@ describe('registerEditorCommands', () => {
     expect(registerCustomEditorProvider).toHaveBeenCalledWith(
       'modbench.record', expect.anything(), { webviewOptions: { retainContextWhenHidden: true } },
     );
+  });
+});
+
+describe('a record panel and the notifications', () => {
+  it('reads the record it shows when mEdit reports its rows changed', () => {
+    const postMessage = vi.fn();
+    const panel = { webview: { postMessage } } as unknown as vscode.WebviewPanel;
+    const tracker = new ActiveRecordTracker<vscode.WebviewPanel>();
+    vi.spyOn(tracker, 'formKeyOf').mockReturnValue('000801:A.esp');
+    const meditClient = new InMemoryMEditClient();
+    register(undefined, { recordPanels: new Set([panel]), tracker, meditClient });
+
+    meditClient.emit({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: ['000801:A.esp'], sequence: 1 });
+
+    expect(postMessage).toHaveBeenCalledWith({ type: 'loadRecord', formKey: '000801:A.esp' });
   });
 });
 

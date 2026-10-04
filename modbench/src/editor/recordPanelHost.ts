@@ -15,6 +15,8 @@ import { registerGridKeyCommands } from './gridKeyCommands';
 import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands,
 } from './recordLifecycleCommands';
+import { subscribeRecordPanelsToNotifications } from './notificationWiring';
+import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './extendedFieldFiles';
 import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
@@ -58,7 +60,6 @@ export interface EditorCommandDeps {
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
   // Where an extended-editor tab is written, answered at the composition root.
-  fieldFile: ExtendedFieldEditorDeps['fieldFile'];
 }
 // ADR-0015; editor.md, States, story 5.
 function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
@@ -157,6 +158,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   });
 
   return [
+    { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker, editsInFlight) },
     recordDecorationProvider,
     { dispose: () => { loadOrderStatusTracker.dispose(); } },
     vscode.window.registerFileDecorationProvider(recordDecorationProvider),
@@ -165,7 +167,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended editor's temp root and log.
     ...registerRecordPanelContextCommands({
-      ...writeDeps, fieldFile: deps.fieldFile, log: (m: string) => outputChannel.debug(m),
+      ...writeDeps, fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field), log: (m: string) => outputChannel.debug(m),
       editGateOf: address => editsInFlight.gateShowing(recordPanels, address),
       focusedCell: () => focusedCells.current(),
     }),

@@ -24,7 +24,7 @@ export interface OpenExtendedFieldEditorParams extends ExtendedFieldIdentity {
 }
 
 export interface ExtendedFieldEditorDeps {
-  // The composition root's answer for where a cell's tab is written: this view builds no path.
+  // Where a cell's tab is written: this view builds no path.
   fieldFile: (field: ExtendedFieldIdentity) => ExtendedFieldFile;
   // Runs once per save, not once per tab: a tab can be saved any number of times while open, and
   // each save is its own commit of the leaf.
