@@ -265,7 +265,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const line = present(downloadsLogLines[0], 'the one recorded Output line');
     expect(line).toBe('"foo.7z" was installed, but its Downloads status could not be updated: EISDIR: illegal operation on a directory');
     expect(report.reports).toEqual([]);
-    expect(report.dialogFailures).toEqual([]);
+    expect(report.shownFailures).toEqual([]);
     expect(installFromArchive).toHaveBeenCalledWith(
       expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
       { gameName: 'Fallout 4', modID: undefined, fileID: undefined, version: undefined });

@@ -87,6 +87,9 @@ export function getCellStyle(cellState: ConflictThis | undefined): React.CSSProp
   return { backgroundColor };
 }
 
+export const headerBackground = (cellState: ConflictThis | null | undefined): string | undefined =>
+  getCellStyle(cellState ?? undefined).backgroundColor;
+
 // xEdit's own words for each state.
 const STATE_NAME: Record<ConflictThis, string> = {
   Master: 'Master',

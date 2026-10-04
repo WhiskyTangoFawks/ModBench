@@ -8,12 +8,12 @@ import {
   headerCellContext, combineVscodeContexts, recordLabel,
 } from './recordUtils';
 import type { PathSegment } from './recordUtils';
-import { mono, fg, headerCell, getCellStyle, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
+import { mono, fg, headerCell, headerBackground, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
 import { elementsIn } from './presentation';
 import { readsAsFlags } from './modelValue';
 import { idleMembers } from './siblingsInUse';
 import type {
-  ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope,
+  ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
 import { columnKey, LABEL_COLUMN } from './columnKey';
 import { addElement, editField, focusCell, focusedCellContext, logWarning } from './nativeBridge';
@@ -28,8 +28,6 @@ import { useCellWrites } from './unconfirmedWrites';
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
 };
-
-const headerBg = (c: ConflictThis | null | undefined): string | undefined => getCellStyle(c ?? undefined).backgroundColor;
 
 // Where a row sits in the grid: `present` says which columns carry the object it is a member of, and
 // `editable` which columns can write it.
@@ -504,7 +502,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                     collapsed={collapsedColumns.has(col.key)}
                     onToggleCollapse={() => toggleColumnCollapse(col.key)}
                     onResize={width => resizeColumn(col.key, width)}
-                    style={{ backgroundColor: headerBg(col.override.conflictThis), ...columnStyle(col.key) }}
+                    style={{ backgroundColor: headerBackground(col.override.conflictThis), ...columnStyle(col.key) }}
                     // Copy… is offered on every column: copying from a read-only plugin is the
                     // ordinary case.
                     vscodeContext={combineVscodeContexts(

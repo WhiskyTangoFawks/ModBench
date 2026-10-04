@@ -9,20 +9,20 @@ import { ConflictTableView } from './ConflictTable';
 import { conflictTableHost } from './vscode';
 import { required } from './test/fixtures';
 import {
-  CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN, type ConflictColumn, type ConflictRow, type ConflictTable,
+  CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN, type ConflictCell, type ConflictColumn, type ConflictRow, type ConflictRowState, type ConflictTable,
 } from '../../src/wire/conflictTable';
 
-function show(table: ConflictTable): void {
-  act(() => { window.dispatchEvent(new MessageEvent('message', { data: { type: CONFLICT_TABLE_SHOWN, table } })); });
+function show(table: ConflictTable, notice?: string): void {
+  act(() => { window.dispatchEvent(new MessageEvent('message', { data: { type: CONFLICT_TABLE_SHOWN, table, notice } })); });
 }
 
-const modColumn = (name: string, opened = false): ConflictColumn => ({ name, origin: { kind: 'mod', name }, opened });
-const overwriteColumn: ConflictColumn = { name: 'Overwrite', origin: { kind: 'runtimeOutput' }, opened: false };
+const modColumn = (name: string, opened = false, state: ConflictColumn['state'] = null): ConflictColumn => ({ name, origin: { kind: 'mod', name }, opened, state });
+const overwriteColumn: ConflictColumn = { name: 'Overwrite', origin: { kind: 'runtimeOutput' }, opened: false, state: null };
 const columns: ConflictColumn[] = [modColumn('Low'), modColumn('Opened', true), overwriteColumn];
 const copyFile = (path: string): ConflictRow =>
-  ({ kind: 'file', name: path.split('/').at(-1) ?? path, path, cells: [{}, {}, null] });
+  ({ kind: 'file', name: path.split('/').at(-1) ?? path, path, cells: [{ state: null }, { state: null }, null], state: null });
 const folder = (path: string, rows: ConflictRow[]): ConflictRow =>
-  ({ kind: 'folder', name: path.split('/').at(-1) ?? path, path, rows });
+  ({ kind: 'folder', name: path.split('/').at(-1) ?? path, path, rows, state: null });
 
 const tree: ConflictRow[] = [
   folder('textures', [folder('textures/armor', [copyFile('textures/armor/a.dds')]), copyFile('textures/b.dds')]),
@@ -52,6 +52,17 @@ describe('the conflict table before and in place of a table', () => {
 
     expect(screen.getByText('No file order conflicts.')).toBeInTheDocument();
     expect(document.querySelector('table')).not.toBeInTheDocument();
+  });
+
+  it('shows the message line above the rows it keeps, until a table with none replaces it', () => {
+    show({ kind: 'table', columns, rows: tree }, 'Showing the last good read: disk gone');
+
+    expect(screen.getByText('Showing the last good read: disk gone')).toBeInTheDocument();
+    expect(rowNames()).toEqual(['▼textures', '▼armor', 'a.dds', 'b.dds', 'c.ini']);
+
+    show({ kind: 'table', columns, rows: tree });
+
+    expect(screen.queryByText('Showing the last good read: disk gone')).not.toBeInTheDocument();
   });
 });
 
@@ -165,5 +176,74 @@ describe('the conflict table\'s keys, a VS Code tree\'s', () => {
     expect(rowNames()).toEqual(['▼textures', '▼armor', 'a.dds', 'b.dds', 'c.ini']);
     press('ArrowRight');
     expect(focusedRow()).toBe('a.dds');
+  });
+});
+
+describe('the conflict table\'s colours, the record panel\'s', () => {
+  const cell = (state: ConflictCell['state'], unreadable?: string): ConflictCell => ({ state, ...(unreadable === undefined ? {} : { unreadable }) });
+  const styled = (element: Element | null | undefined): CSSStyleDeclaration => {
+    if (!(element instanceof HTMLElement)) throw new Error('not an element');
+    return element.style;
+  };
+  const cellsOf = (name: string): HTMLElement[] => Array.from(rowOf(name).querySelectorAll('td')).slice(1);
+
+  const coloured: ConflictRow[] = [
+    folder('f', [
+      { kind: 'file', name: 'a.dds', path: 'f/a.dds', state: 'Conflict', cells: [cell('Master'), cell('ConflictLoses'), cell('ConflictWins')] },
+      { kind: 'file', name: 'b.dds', path: 'f/b.dds', state: 'Override', cells: [cell('Master'), cell('IdenticalToMaster'), cell('Override')] },
+    ]),
+    { kind: 'file', name: 'c.ini', path: 'c.ini', state: null, cells: [cell(null, 'in use'), cell(null), null] },
+  ];
+  const folderOf = (state: ConflictRowState | null): ConflictRow[] => [{ kind: 'folder', name: 'f', path: 'f', rows: [copyFile('f/a.dds')], state }];
+
+  beforeEach(() => show({
+    kind: 'table',
+    columns: [modColumn('Low', false, 'Master'), modColumn('Opened', true, 'ConflictLoses'), { ...overwriteColumn, state: 'ConflictWins' }],
+    rows: coloured.map((row) => (row.kind === 'folder' ? { ...row, state: 'Conflict' } : row)),
+  }));
+
+  it('paints each cell as the record panel paints a field in that state, and a Master cell nothing', () => {
+    expect(cellsOf('a.dds').map((td) => td.style.backgroundColor)).toEqual([
+      '', 'var(--vscode-modbench-conflictLoses)', 'var(--vscode-modbench-conflictWins)',
+    ]);
+    expect(cellsOf('b.dds').map((td) => td.style.backgroundColor)).toEqual([
+      '', 'var(--vscode-modbench-conflictIdenticalToMaster)', 'var(--vscode-modbench-conflictOverride)',
+    ]);
+  });
+
+  it('paints each column\'s header with its column\'s worst state', () => {
+    const headers = Array.from(document.querySelectorAll('thead th')).slice(1);
+    expect(headers.map((th) => styled(th).backgroundColor)).toEqual([
+      '', 'var(--vscode-modbench-conflictLoses)', 'var(--vscode-modbench-conflictWins)',
+    ]);
+  });
+
+  it('paints each file row by its state, and a row of unknown state not at all', () => {
+    expect(styled(rowOf('a.dds')).backgroundColor).toBe('var(--vscode-modbench-conflictRowConflict)');
+    expect(styled(rowOf('b.dds')).backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
+    expect(styled(rowOf('c.ini')).backgroundColor).toBe('');
+  });
+
+  it('paints a collapsed folder with the worst state beneath it, and an expanded one not at all', () => {
+    expect(styled(rowOf('f')).backgroundColor).toBe('');
+
+    fireEvent.click(rowOf('f'));
+
+    expect(styled(rowOf('f')).backgroundColor).toBe('var(--vscode-modbench-conflictRowConflict)');
+  });
+
+  it('paints a collapsed folder of no known state not at all', () => {
+    show({ kind: 'table', columns, rows: folderOf(null) });
+
+    fireEvent.click(rowOf('f'));
+
+    expect(styled(rowOf('f')).backgroundColor).toBe('');
+  });
+
+  it('says why in the tooltip of a copy that could not be read, and gives it no colour', () => {
+    const [unreadable, unknown] = cellsOf('c.ini');
+    expect(unreadable?.title).toBe('in use');
+    expect(unreadable?.style.backgroundColor).toBe('');
+    expect(unknown?.title).toBe('');
   });
 });

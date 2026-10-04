@@ -5,10 +5,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { conflictTableHost } from './vscode';
 import { navigate, type NavRow } from './gridNavigation';
 import { ExpandArrow } from './ExpandArrow';
-import { baseCell, focusedRowStyle, headerCell } from './gridStyles';
+import { baseCell, focusedRowStyle, getCellStyle, headerBackground, headerCell, rowBackground } from './gridStyles';
 import {
   CONFLICT_TABLE_READY, parseConflictTableShown,
-  type ConflictColumn, type ConflictColumnContext, type ConflictRow, type ConflictTable,
+  type ConflictCell, type ConflictColumn, type ConflictColumnContext, type ConflictRow, type ConflictTable, type ConflictTableShown,
 } from '../../src/wire/conflictTable';
 
 const NOT_READ_YET: ConflictTable = { kind: 'table', columns: [], rows: [] };
@@ -23,6 +23,12 @@ function headerContext({ origin }: ConflictColumn): string | undefined {
   return JSON.stringify(context);
 }
 
+// A collapsed folder shows the worst state beneath it, and an expanded one none (mods-conflicts.md, Cells, story 1).
+const rowStyle = (row: ConflictRow, expanded: boolean): React.CSSProperties => {
+  const state = row.kind === 'folder' && expanded ? null : row.state;
+  return { backgroundColor: state === null ? undefined : rowBackground(state) };
+};
+
 const columnKey = ({ origin }: ConflictColumn): string => (origin.kind === 'mod' ? `mod/${origin.name}` : origin.kind);
 
 interface ShownRow { row: ConflictRow; depth: number; nav: NavRow }
@@ -36,7 +42,7 @@ function shownRows(rows: readonly ConflictRow[], collapsed: ReadonlySet<string>,
 }
 
 export function ConflictTableView() {
-  const [table, setTable] = useState<ConflictTable>(NOT_READ_YET);
+  const [{ table, notice }, setShown] = useState<Pick<ConflictTableShown, 'table' | 'notice'>>({ table: NOT_READ_YET });
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [focused, setFocused] = useState<string | undefined>(undefined);
   const scroller = useRef<HTMLDivElement>(null);
@@ -45,7 +51,7 @@ export function ConflictTableView() {
   useEffect(() => {
     const listener = (event: MessageEvent<unknown>) => {
       const shown = parseConflictTableShown(event.data);
-      if (shown) setTable(shown.table);
+      if (shown) setShown(shown);
     };
     window.addEventListener('message', listener);
     conflictTableHost.postMessage({ type: CONFLICT_TABLE_READY });
@@ -82,39 +88,47 @@ export function ConflictTableView() {
   }
 
   return (
-    <div ref={scroller} style={{ overflow: 'auto', height: '100vh' }}>
-      <table role="treegrid" tabIndex={0} onKeyDown={handleKey} style={{ borderCollapse: 'collapse' }}>
-        <thead>
-          <tr ref={headerRow}>
-            <th style={headerCell} />
-            {table.columns.map((column) => (
-              <th key={columnKey(column)} style={{ ...headerCell, ...columnStyle(column) }} data-vscode-context={headerContext(column)}>
-                {column.name}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(({ row, depth, nav }) => (
-            <tr
-              key={row.path}
-              aria-selected={nav.key === current}
-              aria-expanded={nav.expandable ? nav.expanded : undefined}
-              style={nav.key === current ? focusedRowStyle : undefined}
-              onClick={() => {
-                setFocused(row.path);
-                if (row.kind === 'folder') toggle(row.path);
-              }}
-            >
-              <td style={{ ...baseCell, paddingLeft: 8 + depth * 16 }}>
-                {row.kind === 'folder' && <ExpandArrow expanded={nav.expanded} />}
-                {row.name}
-              </td>
-              {table.columns.map((column) => <td key={columnKey(column)} style={{ ...baseCell, ...columnStyle(column) }} />)}
+    <>
+      {notice !== undefined && <p>{notice}</p>}
+      <div ref={scroller} style={{ overflow: 'auto', height: '100vh' }}>
+        <table role="treegrid" tabIndex={0} onKeyDown={handleKey} style={{ borderCollapse: 'collapse' }}>
+          <thead>
+            <tr ref={headerRow}>
+              <th style={headerCell} />
+              {table.columns.map((column) => (
+                <th key={columnKey(column)} style={{ ...headerCell, ...columnStyle(column), backgroundColor: headerBackground(column.state) }} data-vscode-context={headerContext(column)}>
+                  {column.name}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map(({ row, depth, nav }) => (
+              <tr
+                key={row.path}
+                aria-selected={nav.key === current}
+                aria-expanded={nav.expandable ? nav.expanded : undefined}
+                style={{ ...rowStyle(row, nav.expanded), ...(nav.key === current ? focusedRowStyle : undefined) }}
+                onClick={() => {
+                  setFocused(row.path);
+                  if (row.kind === 'folder') toggle(row.path);
+                }}
+              >
+                <td style={{ ...baseCell, paddingLeft: 8 + depth * 16 }}>
+                  {row.kind === 'folder' && <ExpandArrow expanded={nav.expanded} />}
+                  {row.name}
+                </td>
+                {table.columns.map((column, index) => {
+                  const cell: ConflictCell | null = row.kind === 'file' ? row.cells[index] ?? null : null;
+                  return (
+                    <td key={columnKey(column)} title={cell?.unreadable} style={{ ...baseCell, ...getCellStyle(cell?.state ?? undefined), ...columnStyle(column) }} />
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

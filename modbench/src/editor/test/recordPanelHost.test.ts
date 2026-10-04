@@ -32,7 +32,7 @@ import { FocusedCells } from '../focusedCells';
 import { InMemoryMEditClient, type NotificationEvent } from '../../client';
 import { noRecordWriteMarks } from '../../test/recordWriteMarks';
 
-const reporter = { report: vi.fn(), landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() };
+const reporter = { report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() };
 
 function register(
   focusedViewSelection: () => readonly unknown[] = () => [],

@@ -73,7 +73,7 @@ function makeDeps(tempRoot: string, overrides: Partial<ExtendedFieldEditorDeps> 
     fieldFile: fieldFileUnderWithEverySegmentEscaped(tempRoot),
     onCommit: vi.fn(),
     log: vi.fn(),
-    reporter: { report: vi.fn(), landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() },
+    reporter: { report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() },
     ...overrides,
   };
 }
