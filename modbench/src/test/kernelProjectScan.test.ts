@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 import { tsFiles } from './tsFiles';
-import { BELOW_THE_CORE, BOXES, BOXES_BY_BAND, CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, PROJECT_FOLDERS } from './boxes';
+import { BOXES, BOXES_BY_BAND, CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, PROJECT_FOLDERS, READ_MODEL_AND_REPOSITORY_BOXES, parseProject } from './boxes';
 
 const MODBENCH = join(__dirname, '..', '..');
 
@@ -18,15 +17,7 @@ const boxProject = (box: string): string => join('src', box, 'tsconfig.json');
 
 const PRODUCTION_PROJECTS = [...BOXES.map(boxProject), ROOT_PROJECT];
 
-function parsed(relativePath: string): ts.ParsedCommandLine {
-  const path = join(MODBENCH, relativePath);
-  const result = ts.getParsedCommandLineOfConfigFile(path, undefined, {
-    ...ts.sys,
-    onUnRecoverableConfigFileDiagnostic: (d) => { throw new Error(ts.flattenDiagnosticMessageText(d.messageText, ' ')); },
-  });
-  if (!result) throw new Error(`No parsed command line for ${relativePath}`);
-  return result;
-}
+const parsed = (relativePath: string): ts.ParsedCommandLine => parseProject(join(MODBENCH, relativePath));
 
 const fileNames = (relativePath: string): string[] =>
   parsed(relativePath).fileNames.map((f) => relative(MODBENCH, f));
@@ -58,10 +49,6 @@ describe('one composite project per box', () => {
     expect(PROJECT_FOLDERS.filter((folder) => !BOXES.includes(folder))).toEqual([]);
   });
 
-  it.each(BOXES)('%s has its own tsconfig', (box) => {
-    expect(existsSync(join(MODBENCH, boxProject(box)))).toBe(true);
-  });
-
   it.each(BOXES)('%s is composite', (box) => {
     expect(parsed(boxProject(box)).options.composite).toBe(true);
   });
@@ -74,7 +61,7 @@ describe('one composite project per box', () => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 
-  it.each(BELOW_THE_CORE)('%s sees the Node types and no others', (box) => {
+  it.each(READ_MODEL_AND_REPOSITORY_BOXES)('%s sees the Node types and no others', (box) => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 

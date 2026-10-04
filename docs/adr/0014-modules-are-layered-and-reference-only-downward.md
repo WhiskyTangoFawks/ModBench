@@ -1,6 +1,6 @@
 # Modules are layered and reference only downward
 
-Each module owns one responsibility and hides how it does it ([principles](../principles.md), *Orthogonality*). So modules sit in layers, and a module references only a lower layer of its column or its column's kernel, as [layers.d2](../architecture/layers.d2) draws. A lower layer reaches an upper one only through a port in the kernel or a watch. The build enforces the rule: a reference it forbids does not compile. A reference it permits is tactical, decided in the commit that adds it.
+Each module owns one responsibility and hides how it does it ([principles](../principles.md), *Orthogonality*). So modules sit in layers, and a module references only a lower layer of its column or its column's kernel, as [layers.d2](../architecture/layers.d2) draws. A lower layer reaches an upper one only through a port in the kernel or a watch. The gate enforces the rule: a reference it forbids fails the architecture gate every merge runs. A reference it permits is tactical, decided in the commit that adds it.
 
 ## Consequences
 

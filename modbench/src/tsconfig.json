@@ -3,8 +3,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "../out/projects/root",
-    // Activation, the composition root: it builds every box, registers it with VS Code and
-    // decides nothing, so it references every box (target-architecture.md).
+    // Activation, the composition root, references every box (target-architecture.md).
     "types": ["node", "vscode"]
   },
   "references": [

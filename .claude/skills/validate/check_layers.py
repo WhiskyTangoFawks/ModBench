@@ -62,7 +62,7 @@ def parse_arrows(path: Path):
 
 class Rule:
     """The layer rule: the bands, the band pairs a reference may join, the band pairs a
-    watch or push joins, and the same-band pairs named as exceptions."""
+    watch or push joins, and the box pairs named as exceptions."""
 
     def __init__(self, layers_path: Path):
         self.bands = []
@@ -176,7 +176,10 @@ def medit_projects(root: Path):
 def check_projects(root: Path, column: str, projects, boxes, rule: Rule):
     failures = []
     known = boxes.get(column, {})
-    rel = lambda p: str(p.relative_to(root))  # noqa: E731
+
+    def rel(path):
+        return str(path.relative_to(root))
+
     for path, name, refs in projects:
         if name not in known:
             failures.append(f"{rel(path)}: {name} is no box {ZOOM_OUT} draws in the {column} column")
@@ -186,8 +189,8 @@ def check_projects(root: Path, column: str, projects, boxes, rule: Rule):
                 failures.append(f"{rel(path)}: {name} -> {ref}: {ref} is no box {ZOOM_OUT} draws in the {column} column")
             elif not rule.permits(known[name], known[ref]):
                 failures.append(
-                    f"{rel(path)}: {name} -> {ref}: a reference points to a lower layer of its column "
-                    f"or its band's lib, or is a named exception ({LAYERS})"
+                    f"{rel(path)}: {name} -> {ref}: a reference points to a lower layer of its column or "
+                    f"its column's kernel, or its band's lib, or is a named exception ({LAYERS})"
                 )
     return failures
 

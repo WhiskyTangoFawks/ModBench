@@ -15,7 +15,7 @@ medit_drivers: "MEDIT · Drivers — its clients" {
 modbench_drivers: "MODBENCH · Drivers — the user, in VS Code's trees, panels and palette" {
   class: band; grid-rows: 1
   user: "The user\nclicks, checks, drags, types" {class: other}
-  activation: "Activation\nowns: wiring: it builds every box and registers it with VS Code\nhides: nothing; it decides nothing" {class: driving}
+  activation: "Activation\nowns: wiring\nhides: nothing; it decides nothing" {class: driving}
 }
 
 medit_driving: "MEDIT · Driving adapters — the API" {
@@ -47,13 +47,13 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
   deploy: "deploy commands\nowns: deploy and purge\nhides: the rules that refuse a deploy" {class: core}
 }
 
-medit_kernel: "MEDIT · Kernel — read by every box below the drivers; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
+medit_kernel: "MEDIT · Kernel — read by the core, the read model and the repositories; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
   class: band; grid-rows: 1
   loadorder: "Load order state\nowns: the load order Mod Management hands Editing: every plugin\nin the instance, what provides it, and the active ones in order\nhides: nothing" {class: kernel}
   codec: "Codec + schema\nowns: a record as text and as document, and what the schema\nsays of each record type\nhides: the game assemblies; Mutagen owns the typing" {class: kernel}
   ports: "Ports\nowns: the notification port and its payloads\nhides: nothing; the endpoints implement it" {class: kernel}
 }
-modbench_kernel: "MODBENCH · Kernel — pure; read by every box below the drivers; a kernel box references nothing" {
+modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model and the repositories; a kernel box references nothing" {
   class: band; grid-rows: 1
   loadorderfilecodec: "Load-order file codec\nowns: plugins.txt as text: parse and byte-faithful splice\nhides: the game's format, per release" {class: kernel}
   wire: "Wire\nowns: the generated API types; the webview message protocol\nhides: nothing; generated" {class: kernel}

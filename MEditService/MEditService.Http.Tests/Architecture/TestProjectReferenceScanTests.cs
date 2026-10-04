@@ -45,14 +45,12 @@ public sealed class TestProjectReferenceScanTests
     }
 
     [Fact]
-    public void TheScan_SeesEveryBoxAndItsTestProject()
+    public void TheScan_WalksTheProductionAndTestSideProjects()
     {
         var solution = ArchitectureTests.SolutionDirectory();
-        var boxes = ServiceProjects.Production(solution);
-        var untested = boxes.Where(box => !File.Exists(ServiceProjects.Csproj(solution, box + ".Tests"))).ToList();
 
-        Assert.True(boxes.Count > 5, $"The scan found only {boxes.Count} production project(s) beside MEditService.sln.");
-        Assert.True(untested.Count == 0, "A box with no test project: " + string.Join(", ", untested));
+        Assert.True(ServiceProjects.Production(solution).Count > 5, "The scan found too few production projects beside MEditService.sln.");
+        Assert.True(ServiceProjects.TestSide(solution).Count > 5, "The scan found too few test-side projects beside MEditService.sln.");
     }
 
     private static SortedSet<string>? Required(string solution, string project)

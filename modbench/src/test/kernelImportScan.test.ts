@@ -66,7 +66,7 @@ const isIn = (root: string, path: string): boolean => path === root || path.star
 
 const ADAPTER_INTERFACE = join(boxRoot('instanceAdapter'), 'instanceAdapter');
 
-function isAllowedDrivenSpecifier(spec: string, fromFile: string, box: string): boolean {
+function isAllowedBoxSpecifier(spec: string, fromFile: string, box: string): boolean {
   if (spec.startsWith('node:')) return true;
   if (spec === 'vscode') return DRIVING_BOXES.includes(box) || fromFile === ADAPTER_WATCH;
   if (!spec.startsWith('.')) return PACKAGE_IMPORTERS.has(box);
@@ -76,12 +76,12 @@ function isAllowedDrivenSpecifier(spec: string, fromFile: string, box: string): 
   return roots.some((root) => isIn(root, resolved));
 }
 
-function drivenOffenders(): Record<string, string[]> {
+function boxOffenders(): Record<string, string[]> {
   const found: Record<string, string[]> = {};
   for (const box of REFERENCING_BOXES) {
     for (const path of productionFiles(boxRoot(box))) {
       const bad = importSpecifiers(readFileSync(path, 'utf8'), path)
-        .filter((spec) => !isAllowedDrivenSpecifier(spec, path, box));
+        .filter((spec) => !isAllowedBoxSpecifier(spec, path, box));
       if (bad.length > 0) found[relative(SRC, path)] = bad;
     }
   }
@@ -173,72 +173,72 @@ describe('a box reaches only the boxes its project references', () => {
   });
 
   it('every production file imports only node: builtins, its own box and the boxes it references', () => {
-    expect(drivenOffenders()).toEqual({});
+    expect(boxOffenders()).toEqual({});
   });
 
   it('flags an import of a box the project does not reference', () => {
     const planted = join(boxRoot('instanceLoader'), 'planted.ts');
-    expect(isAllowedDrivenSpecifier('../modmanager/ModListProvider', planted, 'instanceLoader')).toBe(false);
-    expect(isAllowedDrivenSpecifier('../client/MEditClient', planted, 'instanceLoader')).toBe(false);
+    expect(isAllowedBoxSpecifier('../modmanager/ModListProvider', planted, 'instanceLoader')).toBe(false);
+    expect(isAllowedBoxSpecifier('../client/MEditClient', planted, 'instanceLoader')).toBe(false);
   });
 
   it('allows vscode below the views in the Instance adapter\'s watch alone', () => {
-    expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceLoader'), 'planted.ts'), 'instanceLoader')).toBe(false);
-    expect(isAllowedDrivenSpecifier('vscode', ADAPTER_WATCH, 'instanceAdapter')).toBe(true);
-    expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceAdapter'), 'instanceAdapter.ts'), 'instanceAdapter')).toBe(false);
-    expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceAdapter'), 'planted.ts'), 'instanceAdapter')).toBe(false);
+    expect(isAllowedBoxSpecifier('vscode', join(boxRoot('instanceLoader'), 'planted.ts'), 'instanceLoader')).toBe(false);
+    expect(isAllowedBoxSpecifier('vscode', ADAPTER_WATCH, 'instanceAdapter')).toBe(true);
+    expect(isAllowedBoxSpecifier('vscode', join(boxRoot('instanceAdapter'), 'instanceAdapter.ts'), 'instanceAdapter')).toBe(false);
+    expect(isAllowedBoxSpecifier('vscode', join(boxRoot('instanceAdapter'), 'planted.ts'), 'instanceAdapter')).toBe(false);
   });
 
   it('refuses vscode in the mEdit client and in every command box', () => {
     for (const box of CORE_BOXES) {
-      expect(isAllowedDrivenSpecifier('vscode', join(boxRoot(box), 'planted.ts'), box)).toBe(false);
+      expect(isAllowedBoxSpecifier('vscode', join(boxRoot(box), 'planted.ts'), box)).toBe(false);
     }
   });
 
   it('allows a package only in the client', () => {
-    expect(isAllowedDrivenSpecifier('openapi-fetch', join(boxRoot('client'), 'p.ts'), 'client')).toBe(true);
-    expect(isAllowedDrivenSpecifier('openapi-fetch', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
+    expect(isAllowedBoxSpecifier('openapi-fetch', join(boxRoot('client'), 'p.ts'), 'client')).toBe(true);
+    expect(isAllowedBoxSpecifier('openapi-fetch', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
   });
 
   it('refuses a codec and a table in every driving box', () => {
     for (const box of DRIVING_BOXES) {
-      expect(isAllowedDrivenSpecifier('../loadOrderFileCodec/pluginsText', join(boxRoot(box), 'p.ts'), box)).toBe(false);
-      expect(isAllowedDrivenSpecifier('../tables/gamePaths', join(boxRoot(box), 'p.ts'), box)).toBe(false);
+      expect(isAllowedBoxSpecifier('../loadOrderFileCodec/pluginsText', join(boxRoot(box), 'p.ts'), box)).toBe(false);
+      expect(isAllowedBoxSpecifier('../tables/gamePaths', join(boxRoot(box), 'p.ts'), box)).toBe(false);
     }
   });
 
   it('allows vscode in every driving box', () => {
     for (const box of DRIVING_BOXES) {
-      expect(isAllowedDrivenSpecifier('vscode', join(boxRoot(box), 'p.ts'), box)).toBe(true);
+      expect(isAllowedBoxSpecifier('vscode', join(boxRoot(box), 'p.ts'), box)).toBe(true);
     }
   });
 
   it('refuses one view reaching into another', () => {
-    expect(isAllowedDrivenSpecifier('../downloads/DownloadsProvider', join(boxRoot('mods'), 'p.ts'), 'mods')).toBe(false);
-    expect(isAllowedDrivenSpecifier('../plugins/PluginTreeProvider', join(boxRoot('editor'), 'p.ts'), 'editor')).toBe(false);
-    expect(isAllowedDrivenSpecifier('../mods/ModListProvider', join(boxRoot('plugins'), 'p.ts'), 'plugins')).toBe(false);
+    expect(isAllowedBoxSpecifier('../downloads/DownloadsProvider', join(boxRoot('mods'), 'p.ts'), 'mods')).toBe(false);
+    expect(isAllowedBoxSpecifier('../plugins/PluginTreeProvider', join(boxRoot('editor'), 'p.ts'), 'editor')).toBe(false);
+    expect(isAllowedBoxSpecifier('../mods/ModListProvider', join(boxRoot('plugins'), 'p.ts'), 'plugins')).toBe(false);
   });
 
   it('refuses every box but the Instance adapter anything of the adapter\'s beyond its interface', () => {
     for (const box of REFERENCING_BOXES.filter((b) => b !== 'instanceAdapter')) {
       const planted = join(boxRoot(box), 'p.ts');
-      expect(isAllowedDrivenSpecifier('../instanceAdapter/codecs/modlistText', planted, box)).toBe(false);
-      expect(isAllowedDrivenSpecifier('../instanceAdapter/layout', planted, box)).toBe(false);
+      expect(isAllowedBoxSpecifier('../instanceAdapter/codecs/modlistText', planted, box)).toBe(false);
+      expect(isAllowedBoxSpecifier('../instanceAdapter/layout', planted, box)).toBe(false);
     }
     const inAdapter = join(boxRoot('instanceAdapter'), 'p.ts');
-    expect(isAllowedDrivenSpecifier('./codecs/modlistText', inAdapter, 'instanceAdapter')).toBe(true);
+    expect(isAllowedBoxSpecifier('./codecs/modlistText', inAdapter, 'instanceAdapter')).toBe(true);
   });
 
   it('allows the boxes each one does reference', () => {
-    expect(isAllowedDrivenSpecifier('../instanceAdapter/instanceAdapter', join(boxRoot('instanceLoader'), 'p.ts'), 'instanceLoader')).toBe(true);
-    expect(isAllowedDrivenSpecifier(
+    expect(isAllowedBoxSpecifier('../instanceAdapter/instanceAdapter', join(boxRoot('instanceLoader'), 'p.ts'), 'instanceLoader')).toBe(true);
+    expect(isAllowedBoxSpecifier(
       '../loadOrderFileCodec/pluginsText', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter',
     )).toBe(true);
-    expect(isAllowedDrivenSpecifier('node:fs/promises', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter')).toBe(true);
-    expect(isAllowedDrivenSpecifier(
+    expect(isAllowedBoxSpecifier('node:fs/promises', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter')).toBe(true);
+    expect(isAllowedBoxSpecifier(
       '../instanceLoader/fileConflictIndex', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands',
     )).toBe(true);
-    expect(isAllowedDrivenSpecifier('../instanceLoader/instance', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
+    expect(isAllowedBoxSpecifier('../instanceLoader/instance', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
   });
 });
 

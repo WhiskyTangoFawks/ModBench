@@ -39,6 +39,7 @@ repositories -> data: {class: ref}
 
 data -> repositories: "watch" {class: signal}
 kernel -> readmodel: "watch" {class: signal}
+repositories -> readmodel: "watch" {class: signal}
 kernel -> driving: "push" {class: push}
 
 medit_kernel.ports -> medit_kernel.loadorder: "same band"
@@ -276,6 +277,18 @@ class TraceMessagesAgainstLayers(unittest.TestCase):
             )
             root = fixture(pathlib.Path(tmp), {'one': body})
             self.assertEqual(cl.run(root), [])
+
+    def test_an_actor_with_no_project_yet_still_fails_the_rule(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            body = self.trace(
+                self.actor('deployment', 'modbench_repositories.deployment'),
+                self.actor('client', 'modbench_repositories.client'),
+                "deployment -> client: a stray call {class: edit}\n",
+            )
+            root = fixture(pathlib.Path(tmp), {'one': body})
+            failures = cl.run(root)
+            self.assertEqual(len(failures), 1)
+            self.assertIn('deployment -> client', failures[0])
 
     def test_a_watch_runs_from_a_system_of_record_into_a_repository(self):
         with tempfile.TemporaryDirectory() as tmp:
