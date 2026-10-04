@@ -383,10 +383,6 @@ internal sealed class Store : IDisposable
     // concurrency is not.
     private readonly AsyncLocal<ProjectionScope?> _openProjection = new();
 
-    /// <summary>The scope handed out with no store to advance — an Indexer holding no index still
-    /// answers its callers.</summary>
-    internal static readonly IDisposable NoProjectionScope = new NoScope();
-
     internal IDisposable BeginProjection()
     {
         var scope = new ProjectionScope(EndProjection, _openProjection.Value);
@@ -468,11 +464,6 @@ internal sealed class Store : IDisposable
 
         // Idempotent: a second Dispose would otherwise re-announce and pop a scope it does not own.
         public void Dispose() => Interlocked.Exchange(ref _endProjection, null)?.Invoke(this);
-    }
-
-    private sealed class NoScope : IDisposable
-    {
-        public void Dispose() { }
     }
 
     public long CurrentSequence()
