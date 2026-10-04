@@ -152,12 +152,12 @@ describe('a mod\'s conflict table, open in a tab', () => {
       ],
     })));
 
-  it('is titled with the mod\'s name, and loads the conflict table\'s page', async () => {
+  it('is titled with the mod\'s name, and loads the conflict table\'s page and its icons', async () => {
     const panel = openTable(new FakeInstance(await shared()), 'High');
 
     expect(panel.title).toBe('Conflicts: High');
     expect(panel.webview.html).toContain('assets/conflicts.js');
-    expect(panel.webview.html).not.toContain('<link');
+    expect(panel.webview.html).toContain('assets/main.css');
   });
 
   it('shows the table, each cell and header in the state the which-copies answer gives, once the page is ready to hear it', async () => {
@@ -299,7 +299,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
       panel.webview.receive?.(ready);
       await posted(panel, 1);
 
-      expect(shown(panel)).toEqual([{ type: CONFLICT_TABLE_SHOWN, table: { kind: 'message', text: 'Failed to load: disk gone' } }]);
+      expect(shown(panel)).toEqual([{ type: CONFLICT_TABLE_SHOWN, table: { kind: 'error', reason: 'disk gone' } }]);
       expect(reporter.shownFailures).toEqual([{ severity: 'error', message: 'Failed to read the copies of "High"\'s conflicts.', detail: 'disk gone' }]);
       expect(reporter.reports).toEqual([]);
     });

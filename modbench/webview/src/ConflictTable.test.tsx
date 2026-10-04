@@ -54,6 +54,15 @@ describe('the conflict table before and in place of a table', () => {
     expect(document.querySelector('table')).not.toBeInTheDocument();
   });
 
+  it('shows a failed read as the error row: the error icon, "Failed to load:" and the reason, the reason again in its tooltip', () => {
+    show({ kind: 'error', reason: 'disk gone' });
+
+    const row = screen.getByText('Failed to load: disk gone');
+    expect(row).toHaveAttribute('title', 'disk gone');
+    expect(row.querySelector('.codicon.codicon-error')).not.toBeNull();
+    expect(document.querySelector('table')).not.toBeInTheDocument();
+  });
+
   it('shows the message line above the rows it keeps, until a table with none replaces it', () => {
     show({ kind: 'table', columns, rows: tree }, 'Showing the last good read: disk gone');
 

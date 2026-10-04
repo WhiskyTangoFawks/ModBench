@@ -64,6 +64,9 @@ export function ConflictTableView() {
   }, [focused]);
 
   if (table.kind === 'message') return <p>{table.text}</p>;
+  if (table.kind === 'error') {
+    return <p title={table.reason}><span className="codicon codicon-error" aria-hidden /> Failed to load: {table.reason}</p>;
+  }
 
   const rows = shownRows(table.rows, collapsed, null, 0);
   const navRows = rows.map(({ nav }) => nav);

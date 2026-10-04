@@ -11,6 +11,7 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, "../out/webview"),
     emptyOutDir: true,
+    cssCodeSplit: false,
     rollupOptions: {
       input: {
         main: resolve(__dirname, "src/index.html"),
@@ -19,7 +20,7 @@ export default defineConfig({
       output: {
         entryFileNames: "assets/[name].js",
         chunkFileNames: "assets/[name].js",
-        assetFileNames: "assets/[name][extname]",
+        assetFileNames: ({ name }) => (name === "style.css" ? "assets/main.css" : "assets/[name][extname]"),
       },
     },
   },

@@ -37,10 +37,11 @@ export type ConflictRow =
     readonly state: ConflictRowState | null;
   };
 
-/** The table, or the message shown in its place. */
+/** The table, the message shown in its place, or the error row of a first read that failed. */
 export type ConflictTable =
   | { readonly kind: 'table'; readonly columns: readonly ConflictColumn[]; readonly rows: readonly ConflictRow[] }
-  | { readonly kind: 'message'; readonly text: string };
+  | { readonly kind: 'message'; readonly text: string }
+  | { readonly kind: 'error'; readonly reason: string };
 
 export const CONFLICT_TABLE_SHOWN = 'conflictTableShown';
 // The webview's listener exists only once its script has run, so the host answers this rather
@@ -69,7 +70,7 @@ const isObject = (value: unknown): value is object => typeof value === 'object' 
 
 // Shallow: the table is the host's own build, trusted once the envelope checks out.
 function isConflictTable(value: unknown): value is ConflictTable {
-  return isObject(value) && (Reflect.get(value, 'kind') === 'table' || Reflect.get(value, 'kind') === 'message');
+  return isObject(value) && ['table', 'message', 'error'].includes(String(Reflect.get(value, 'kind')));
 }
 
 export function parseConflictTableShown(value: unknown): ConflictTableShown | undefined {
