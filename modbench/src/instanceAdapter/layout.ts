@@ -41,14 +41,11 @@ export function mo2FolderName(name: string): string {
   return DEVICE_NAMES.has(filtered) ? '' : simplified(filtered);
 }
 
-/** The folder under `mods/` a mod line names. `undefined` for a name that would reach outside
- *  `mods/`, such as one another tool wrote with a `/`: no path is built from it. */
+// Another tool can write a mod line with a `/`; a name that reaches outside `mods/` builds no path.
 const modFolderName = (modName: string): string | undefined =>
   (modName === '' || modName === '.' || modName === '..' || /[\\/]/.test(modName) ? undefined : modName);
 
-/** The folder under `mods/` MO2 gives a separator. `undefined` for a name MO2 never gives a
- *  folder, such as one another tool wrote with a `/`: such a separator has no folder, and no path
- *  is built from its name. */
+// Another tool can write a separator name MO2 never gives a folder; such a separator builds no path.
 const separatorFolderName = (separatorName: string): string | undefined =>
   mo2FolderName(separatorName) === separatorName ? separatorModName(separatorName) : undefined;
 
