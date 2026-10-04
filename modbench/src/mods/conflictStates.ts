@@ -9,7 +9,7 @@ export interface FileStates {
   readonly cells: readonly (ConflictCellState | null)[];
 }
 
-const CELL_SEVERITY: readonly ConflictCellState[] = ['Master', 'IdenticalToMaster', 'Override', 'ConflictWins', 'ConflictLoses'];
+const CELL_SEVERITY: readonly ConflictCellState[] = ['IdenticalToMaster', 'Master', 'Override', 'ConflictWins', 'ConflictLoses'];
 const ROW_SEVERITY: readonly ConflictRowState[] = ['NoConflict', 'Override', 'Conflict'];
 
 function worst<T>(severity: readonly T[], states: readonly (T | null)[]): T | null {

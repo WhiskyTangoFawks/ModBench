@@ -40,16 +40,23 @@ function rowsIn(files: readonly OriginFile[], prefix: string, fileRow: (file: Or
 const fileRowsIn = (rows: readonly ConflictRow[]): FileRow[] =>
   rows.flatMap((row) => (row.kind === 'folder' ? fileRowsIn(row.rows) : [row]));
 
-/** Empty until the first read lands, so "not read yet" never reads as "no conflicts". */
-export function conflictTable(
-  { value, sequence }: Pick<InstanceView, 'value' | 'sequence'>, name: string, copies: readonly FileCopies[],
-): ConflictTable {
-  if (sequence === 0) return { kind: 'table', columns: [], rows: [] };
+type Scope = { readonly shown: ConflictTable } | { readonly files: OriginFile[] };
+
+function scopeOf({ value, sequence }: Pick<InstanceView, 'value' | 'sequence'>, name: string): Scope {
+  if (sequence === 0) return { shown: { kind: 'table', columns: [], rows: [] } };
   const listed = value.mods.find((entry): entry is Mod => entry.kind === 'mod' && entry.name === name);
-  if (listed === undefined) return message(`"${name}" is gone from the mod list.`);
-  if (!listed.enabled) return message('Disabled: its files take no part in mod order.');
+  if (listed === undefined) return { shown: message(`"${name}" is gone from the mod list.`) };
+  if (!listed.enabled) return { shown: message('Disabled: its files take no part in mod order.') };
   const files = filesInConflict(value, name);
-  if (files.length === 0) return message('No file order conflicts.');
+  return files.length === 0 ? { shown: message('No file order conflicts.') } : { files };
+}
+
+/** Empty until the first read lands, so "not read yet" never reads as "no conflicts". */
+export function conflictTable(view: Pick<InstanceView, 'value' | 'sequence'>, name: string, copies: readonly FileCopies[]): ConflictTable {
+  const scope = scopeOf(view, name);
+  if ('shown' in scope) return scope.shown;
+  const { value } = view;
+  const { files } = scope;
 
   const origins: FileOrigin[] = [];
   for (const provider of files.flatMap((file) => providersOf(value, file))) {
@@ -82,8 +89,7 @@ export function conflictTable(
   return { kind: 'table', columns, rows };
 }
 
-/** The paths whose copies the table needs the answer for. */
 export function conflictPaths(view: Pick<InstanceView, 'value' | 'sequence'>, name: string): string[] {
-  const table = conflictTable(view, name, []);
-  return table.kind === 'table' ? fileRowsIn(table.rows).map(({ path }) => path) : [];
+  const scope = scopeOf(view, name);
+  return 'files' in scope ? scope.files.map(({ relativePath }) => relativePath) : [];
 }

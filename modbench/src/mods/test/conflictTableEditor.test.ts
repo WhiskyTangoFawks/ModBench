@@ -20,7 +20,8 @@ import { ModNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { file, indexedValueOf, mod } from './indexedValue';
-import { CONFLICT_TABLE_READY, parseConflictTableShown } from '../../wire/conflictTable';
+import { CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN, parseConflictTableShown } from '../../wire/conflictTable';
+import type { FileCopies, FileOrigin } from '../../instanceLoader/instance';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
@@ -138,8 +139,18 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
   });
 
-  const shownTables = (panel: FakePanel) => panel.webview.posted.flatMap((message) => parseConflictTableShown(message)?.table ?? []);
-  const flush = () => new Promise((resolve) => { setTimeout(resolve, 0); });
+  const shown = (panel: FakePanel) => panel.webview.posted.flatMap((message) => parseConflictTableShown(message) ?? []);
+  const shownTables = (panel: FakePanel) => shown(panel).map(({ table }) => table);
+  const posted = (panel: FakePanel, count: number) => vi.waitFor(() => expect(panel.webview.posted).toHaveLength(count));
+  const ready = { type: CONFLICT_TABLE_READY };
+  const unreadableHigh = (reason: string, origin: FileOrigin = { kind: 'mod', name: 'High' }) => (paths: readonly string[]) =>
+    Promise.resolve(paths.map((relativePath) => ({
+      relativePath,
+      copies: [
+        { origin, kind: 'unreadable' as const, reason },
+        { origin: { kind: 'mod' as const, name: 'Low' }, kind: 'read' as const, sameAs: 0 },
+      ],
+    })));
 
   it('is titled with the mod\'s name, and loads the conflict table\'s page', async () => {
     const panel = openTable(new FakeInstance(await shared()), 'High');
@@ -160,11 +171,8 @@ describe('a mod\'s conflict table, open in a tab', () => {
     })));
     const panel = openTable(instance, 'High');
     panel.webview.receive?.({ type: 'log' });
-    await flush();
-    expect(panel.webview.posted).toEqual([]);
-
-    panel.webview.receive?.({ type: CONFLICT_TABLE_READY });
-    await flush();
+    panel.webview.receive?.(ready);
+    await posted(panel, 1);
 
     expect(instance.askedForCopies).toEqual([['a.dds']]);
     expect(shownTables(panel)).toEqual([{
@@ -181,8 +189,8 @@ describe('a mod\'s conflict table, open in a tab', () => {
     const instance = new FakeInstance(instanceValueFixture(), 0);
     const panel = openTable(instance, 'High');
 
-    panel.webview.receive?.({ type: CONFLICT_TABLE_READY });
-    await flush();
+    panel.webview.receive?.(ready);
+    await posted(panel, 1);
 
     expect(shownTables(panel)).toEqual([{ kind: 'table', columns: [], rows: [] }]);
     expect(instance.askedForCopies.flat()).toEqual([]);
@@ -193,54 +201,50 @@ describe('a mod\'s conflict table, open in a tab', () => {
     const panel = openTable(instance, 'High');
 
     instance.publish(await indexedValueOf([mod('High')], { High: { files: [file('High', 'a.dds')] } }));
-    await flush();
+    await posted(panel, 1);
     panel.dispose?.();
     instance.publish(await indexedValueOf([mod('Low')], {}));
-    await flush();
 
     expect(shownTables(panel)).toEqual([{ kind: 'message', text: 'No file order conflicts.' }]);
+    expect(instance.askedForCopies).toHaveLength(1);
   });
 
   it('shows the answer of the newest value only, though an older one answers last', async () => {
     const instance = new FakeInstance(await shared());
     const answers: (() => void)[] = [];
-    instance.copies = (paths) => new Promise((resolve) => {
-      answers.push(() => resolve(paths.map((relativePath) => ({ relativePath, copies: [] }))));
-    });
+    const asked: Promise<unknown>[] = [];
+    instance.copies = (paths) => {
+      const answer = new Promise<FileCopies[]>((resolve) => {
+        answers.push(() => resolve(paths.map((relativePath) => ({ relativePath, copies: [] }))));
+      });
+      asked.push(answer);
+      return answer;
+    };
     const panel = openTable(instance, 'High');
-    panel.webview.receive?.({ type: CONFLICT_TABLE_READY });
+    panel.webview.receive?.(ready);
     instance.publish(await indexedValueOf([mod('High'), mod('Low')], {
       High: { files: [file('High', 'a.dds'), file('High', 'b.dds')] }, Low: { files: [file('Low', 'a.dds'), file('Low', 'b.dds')] },
     }));
 
     answers[1]?.();
-    await flush();
+    await posted(panel, 1);
     answers[0]?.();
-    await flush();
+    await asked[0];
 
     expect(shownTables(panel).map((table) => (table.kind === 'table' ? table.rows.length : -1))).toEqual([2]);
   });
 
   describe('a copy that cannot be read', () => {
-    const unreadable = (instance: FakeInstance) => {
-      instance.copies = (paths) => Promise.resolve(paths.map((relativePath) => ({
-        relativePath,
-        copies: [
-          { origin: { kind: 'mod', name: 'High' }, kind: 'unreadable', reason: 'in use' },
-          { origin: { kind: 'mod', name: 'Low' }, kind: 'read', sameAs: 0 },
-        ],
-      })));
-    };
-
     it('is one line in the Output, naming the copy and why, however often the disk changes', async () => {
       const instance = new FakeInstance(await shared());
-      unreadable(instance);
+      instance.copies = unreadableHigh('in use');
       const reporter = recordingReporter();
-      openTable(instance, 'High', reporter).webview.receive?.({ type: CONFLICT_TABLE_READY });
-      await flush();
+      const panel = openTable(instance, 'High', reporter);
+      panel.webview.receive?.(ready);
+      await posted(panel, 1);
 
       instance.publish(await shared());
-      await flush();
+      await posted(panel, 2);
 
       expect(reporter.shownFailures).toEqual([
         { severity: 'warning', message: 'Conflicts: "High"\'s copy of a.dds could not be read.', detail: 'in use' },
@@ -248,35 +252,103 @@ describe('a mod\'s conflict table, open in a tab', () => {
       expect(reporter.reports).toEqual([]);
     });
 
-    it('is said again when it recovers and fails again', async () => {
+    it('is said again when it recovers and fails again, and when its reason changes', async () => {
       const instance = new FakeInstance(await shared());
       const reporter = recordingReporter();
       const panel = openTable(instance, 'High', reporter);
-      unreadable(instance);
-      panel.webview.receive?.({ type: CONFLICT_TABLE_READY });
-      await flush();
-      instance.copies = () => Promise.resolve([]);
-      instance.publish(await shared());
-      await flush();
-      unreadable(instance);
+      const publishAs = async (copies: typeof instance.copies, count: number) => {
+        instance.copies = copies;
+        instance.publish(await shared());
+        await posted(panel, count);
+      };
+
+      await publishAs(unreadableHigh('in use'), 1);
+      await publishAs(() => Promise.resolve([]), 2);
+      await publishAs(unreadableHigh('in use'), 3);
+      await publishAs(unreadableHigh('access denied'), 4);
+
+      expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual(['in use', 'in use', 'access denied']);
+    });
+
+    it('is told apart by its origin: a mod named as Overwrite is not Overwrite', async () => {
+      const instance = new FakeInstance(await shared());
+      const reporter = recordingReporter();
+      const panel = openTable(instance, 'High', reporter);
+      const unreadable = (...origins: FileOrigin[]) => (paths: readonly string[]) => Promise.resolve(paths.map((relativePath) => ({
+        relativePath, copies: origins.map((origin) => ({ origin, kind: 'unreadable' as const, reason: 'in use' })),
+      })));
+      instance.copies = unreadable({ kind: 'mod', name: 'Overwrite' });
+      panel.webview.receive?.(ready);
+      await posted(panel, 1);
+      instance.copies = unreadable({ kind: 'mod', name: 'Overwrite' }, { kind: 'runtimeOutput' });
 
       instance.publish(await shared());
-      await flush();
+      await posted(panel, 2);
 
       expect(reporter.shownFailures).toHaveLength(2);
     });
   });
 
-  it('reports a which-copies request that failed, and shows nothing for it', async () => {
-    const instance = new FakeInstance(await shared());
-    instance.copies = () => Promise.reject(new Error('disk gone'));
-    const reporter = recordingReporter();
-    const panel = openTable(instance, 'High', reporter);
+  describe('a which-copies request that failed', () => {
+    it('is, before any table, the error row in place of it and a line in the Output, with no notification', async () => {
+      const instance = new FakeInstance(await shared());
+      instance.copies = () => Promise.reject(new Error('disk gone'));
+      const reporter = recordingReporter();
+      const panel = openTable(instance, 'High', reporter);
 
-    panel.webview.receive?.({ type: CONFLICT_TABLE_READY });
-    await flush();
+      panel.webview.receive?.(ready);
+      await posted(panel, 1);
 
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to read the copies of "High"\'s conflicts.', detail: 'disk gone' }]);
-    expect(panel.webview.posted).toEqual([]);
+      expect(shown(panel)).toEqual([{ type: CONFLICT_TABLE_SHOWN, table: { kind: 'message', text: 'Failed to load: disk gone' } }]);
+      expect(reporter.shownFailures).toEqual([{ severity: 'error', message: 'Failed to read the copies of "High"\'s conflicts.', detail: 'disk gone' }]);
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('is, after a table, the rows staying under the message line, which the next good read clears', async () => {
+      const instance = new FakeInstance(await shared());
+      const reporter = recordingReporter();
+      const panel = openTable(instance, 'High', reporter);
+      panel.webview.receive?.(ready);
+      await posted(panel, 1);
+      instance.copies = () => Promise.reject(new Error('disk gone'));
+
+      instance.publish(await shared());
+      await posted(panel, 2);
+      instance.copies = () => Promise.resolve([]);
+      instance.publish(await shared());
+      await posted(panel, 3);
+
+      const [first, failed, recovered] = shown(panel);
+      expect(failed).toEqual({ ...first, notice: 'Showing the last good read: disk gone' });
+      expect(recovered).toEqual(first);
+      expect(reporter.shownFailures).toHaveLength(1);
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('is not reported once a newer value has asked', async () => {
+      const instance = new FakeInstance(await shared());
+      const rejections: ((reason: Error) => void)[] = [];
+      const asked: Promise<unknown>[] = [];
+      instance.copies = (paths) => {
+        if (asked.length === 0) {
+          const late = new Promise<FileCopies[]>((_, reject) => { rejections.push(reject); });
+          asked.push(late);
+          return late;
+        }
+        asked.push(Promise.resolve([]));
+        return Promise.resolve(paths.map((relativePath) => ({ relativePath, copies: [] })));
+      };
+      const reporter = recordingReporter();
+      const panel = openTable(instance, 'High', reporter);
+      panel.webview.receive?.(ready);
+      instance.publish(await shared());
+      await posted(panel, 1);
+
+      rejections[0]?.(new Error('old'));
+      await asked[0]?.catch(() => undefined);
+
+      expect(reporter.shownFailures).toEqual([]);
+      expect(panel.webview.posted).toHaveLength(1);
+    });
   });
 });

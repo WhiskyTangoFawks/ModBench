@@ -214,6 +214,20 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
     expect(table.rows).toMatchObject([{ folder: 'f', state: 'Conflict' }, { file: 'c.dds', state: 'NoConflict' }]);
   });
 
+  it('ranks Master above IdenticalToMaster for a header, as xEdit\'s rollup does', async () => {
+    const value = await indexedValueOf([mod('High'), mod('Middle'), mod('Low')], {
+      High: { files: [file('High', 'a.dds'), file('High', 'b.dds')] },
+      Middle: { files: [file('Middle', 'a.dds'), file('Middle', 'b.dds')] },
+      Low: { files: [file('Low', 'b.dds')] },
+    });
+
+    const table = colours(conflictTable(read(value), 'Middle', [
+      winningFirstCopies('a.dds', { High: 0, Middle: 0 }), winningFirstCopies('b.dds', { High: 0, Middle: 0, Low: 0 }),
+    ]));
+
+    expect(table.columns).toEqual(['Master', 'Master', 'IdenticalToMaster']);
+  });
+
   it('shows an unreadable copy no state and says why, and its row no colour', async () => {
     const value = await indexedValueOf([mod('High'), mod('Low')], {
       High: { files: [file('High', 'a.dds')] }, Low: { files: [file('Low', 'a.dds')] },

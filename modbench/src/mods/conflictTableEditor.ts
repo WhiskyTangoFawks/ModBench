@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import type { Instance, InstanceView } from '../instanceLoader/instance';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import {
-  CONFLICT_TABLE_SHOWN, isConflictTableReady, modOfConflictColumn, type ConflictTableShown,
+  CONFLICT_TABLE_SHOWN, isConflictTableReady, modOfConflictColumn, type ConflictTable, type ConflictTableShown,
 } from '../wire/conflictTable';
 import { originLabel } from '../instanceLoader/fileConflictIndex';
 import { conflictPaths, conflictTable } from './conflictTable';
@@ -39,23 +39,34 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
     panel.title = `Conflicts: ${mod}`;
     let newest = 0;
     let told = new Set<string>();
+    let lastGood: ConflictTable | undefined;
+    const post = (table: ConflictTable, notice?: string) => {
+      const message: ConflictTableShown = notice === undefined
+        ? { type: CONFLICT_TABLE_SHOWN, table } : { type: CONFLICT_TABLE_SHOWN, table, notice };
+      void panel.webview.postMessage(message);
+    };
     const show = async (view: Pick<InstanceView, 'value' | 'sequence'>) => {
       const mine = ++newest;
       try {
         const copies = await this.instance.sameCopies(conflictPaths(view, mod));
         if (mine !== newest) return;
         const unreadable = copies.flatMap(({ relativePath, copies: each }) => each.flatMap((copy) =>
-          (copy.kind === 'unreadable' ? [{ key: `${originLabel(copy.origin)}/${relativePath}`, relativePath, copy }] : [])));
+          (copy.kind === 'unreadable' ? [{ key: JSON.stringify([copy.origin, relativePath, copy.reason]), relativePath, copy }] : [])));
         for (const { key, relativePath, copy } of unreadable) {
           if (!told.has(key)) {
             this.reporter.shownOnSurface('warning', `Conflicts: "${originLabel(copy.origin)}"'s copy of ${relativePath} could not be read.`, copy.reason);
           }
         }
         told = new Set(unreadable.map(({ key }) => key));
-        const message: ConflictTableShown = { type: CONFLICT_TABLE_SHOWN, table: conflictTable(view, mod, copies) };
-        void panel.webview.postMessage(message);
+        const table = conflictTable(view, mod, copies);
+        if (view.sequence > 0) lastGood = table;
+        post(table);
       } catch (err) {
-        this.reporter.report('error', `Failed to read the copies of "${mod}"'s conflicts.`, errorMessage(err));
+        if (mine !== newest) return;
+        const reason = errorMessage(err);
+        this.reporter.shownOnSurface('error', `Failed to read the copies of "${mod}"'s conflicts.`, reason);
+        if (lastGood === undefined) post({ kind: 'message', text: `Failed to load: ${reason}` });
+        else post(lastGood, `Showing the last good read: ${reason}`);
       }
     };
     const subscription = this.instance.subscribe((value, sequence) => void show({ value, sequence }));

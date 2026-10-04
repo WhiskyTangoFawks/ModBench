@@ -12,8 +12,8 @@ import {
   CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN, type ConflictCell, type ConflictColumn, type ConflictRow, type ConflictRowState, type ConflictTable,
 } from '../../src/wire/conflictTable';
 
-function show(table: ConflictTable): void {
-  act(() => { window.dispatchEvent(new MessageEvent('message', { data: { type: CONFLICT_TABLE_SHOWN, table } })); });
+function show(table: ConflictTable, notice?: string): void {
+  act(() => { window.dispatchEvent(new MessageEvent('message', { data: { type: CONFLICT_TABLE_SHOWN, table, notice } })); });
 }
 
 const modColumn = (name: string, opened = false, state: ConflictColumn['state'] = null): ConflictColumn => ({ name, origin: { kind: 'mod', name }, opened, state });
@@ -52,6 +52,17 @@ describe('the conflict table before and in place of a table', () => {
 
     expect(screen.getByText('No file order conflicts.')).toBeInTheDocument();
     expect(document.querySelector('table')).not.toBeInTheDocument();
+  });
+
+  it('shows the message line above the rows it keeps, until a table with none replaces it', () => {
+    show({ kind: 'table', columns, rows: tree }, 'Showing the last good read: disk gone');
+
+    expect(screen.getByText('Showing the last good read: disk gone')).toBeInTheDocument();
+    expect(rowNames()).toEqual(['▼textures', '▼armor', 'a.dds', 'b.dds', 'c.ini']);
+
+    show({ kind: 'table', columns, rows: tree });
+
+    expect(screen.queryByText('Showing the last good read: disk gone')).not.toBeInTheDocument();
   });
 });
 
