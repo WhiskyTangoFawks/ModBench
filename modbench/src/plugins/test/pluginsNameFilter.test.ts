@@ -1,17 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFile, uriFrom, DataTransferItem, DataTransfer,
-} from './vscodeMock';
-import { instanceValueFixture } from './mo2/instanceValueFixture';
-import { FakeInstance } from './mo2/fakeInstance';
-import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
+} from '../../test/vscodeMock';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import {
   filterBoxWindowMock, filterBoxCommandsMock, currentBoxOf, waitForMessage,
-} from '../drivingLib/test/nameFilterViewHarness';
-import type { InstanceValue } from '../instanceLoader/instance';
-import type { LoadOrderPlugin, LoadOrderPluginLine } from '../instanceLoader/loadOrderSnapshot';
+} from '../../drivingLib/test/nameFilterViewHarness';
+import type { InstanceValue } from '../../instanceLoader/instance';
+import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 
 const h = vi.hoisted(() => ({
   state: { commands: new Map<string, (...args: unknown[]) => unknown>(), boxes: [] },
@@ -25,11 +25,19 @@ vi.mock('vscode', () => ({
   commands: filterBoxCommandsMock(h.state),
 }));
 
-import { registerPluginsNameFilter } from '../toolbox';
-import { say } from '../editingTeardown';
-import { NO_PLUGINS_MESSAGE, PluginsTreeProvider, type PluginListSource } from '../plugins/PluginsTreeProvider';
-import { InMemoryMEditClient, type PluginMetadata } from '../client';
-import { syncMessageDouble } from './syncMessageDouble';
+import { registerPluginsNameFilter } from '../pluginsView';
+import { NO_PLUGINS_MESSAGE, PluginsTreeProvider, type PluginListSource } from '../PluginsTreeProvider';
+import { InMemoryMEditClient, type PluginMetadata } from '../../client';
+import { syncMessageDouble } from '../../test/syncMessageDouble';
+
+/** The line's other writer, the launch's step statement, as the root's `say` writes it: it holds
+ *  the line, and hands it back by restating the filter's readout. */
+function say(
+  session: { pluginsTreeView: { message?: string }; pluginsNameFilter: { refresh(): void } }, message: string | undefined,
+): void {
+  session.pluginsTreeView.message = message;
+  if (message === undefined) session.pluginsNameFilter.refresh();
+}
 
 class FakeSource implements PluginListSource {
   reorderPlugins(): Promise<void> { return Promise.resolve(); }

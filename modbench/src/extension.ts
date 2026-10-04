@@ -6,9 +6,8 @@ import * as cp from 'child_process';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { backendStatusText, wireBackendStatus } from './medit/backendStatus';
 import { HttpMEditClient, type BackendLifecycleOptions } from './client';
-import { announceConflictsComputed, subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
+import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
-import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
 import { createReferencedByView } from './editor/referencedByView';
 import { makeReporter } from './reporter';
@@ -30,9 +29,7 @@ import {
   conflictsComputedOver, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
 import type { OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
-import {
-  registerFilterCommands, makeShowRecordFilter, type FilterScripts,
-} from './plugins/recordFilterCommands';
+import { registerFilterCommands, type FilterScripts } from './plugins/recordFilterCommands';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
 import { registerRecordCreateCommand } from './plugins/createRecordCommand';
 import { createdRecordSelection } from './plugins/createdRecordSelection';
@@ -82,11 +79,6 @@ export function activate(context: vscode.ExtensionContext) {
   // CompileProblems replaces a plugin's own entries each time it compiles.
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
-  // The session-load scan's own collection — a sibling of the compile one, targeting plugin
-  // binaries, replaced wholesale per scan.
-  const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
-  context.subscriptions.push(loadDiagnostics);
-  session.loadDiagnostics = loadDiagnostics;
 
   // ADR-0002.
   const meditClient = new HttpMEditClient({ backend: backendOptions(attachPort, outputChannel), log });
@@ -97,16 +89,13 @@ export function activate(context: vscode.ExtensionContext) {
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const editsInFlight = new EditsInFlight(activeRecordTracker);
   const filterScripts = setupScriptsFolder(meditConfig());
-  const filterProvider = new FilterCodeLensProvider();
 
   // One subscription for the whole session; the mEdit client opens and closes its stream with the
   // backend.
   context.subscriptions.push(
-    { dispose: subscribeTreeToNotifications(meditClient, treeProvider, () => { void refreshMatchingPlugins(session); }) },
     { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker, editsInFlight) },
   );
 
-  session.showRecordFilter = makeShowRecordFilter(filterProvider, session);
   const focusedView = createFocusedView();
   const focusedCells = new FocusedCells<vscode.WebviewPanel>((cell) => {
     for (const [name, value] of Object.entries(focusedCellKeys(cell))) {
@@ -155,7 +144,6 @@ export function activate(context: vscode.ExtensionContext) {
     trash: moveToTrash,
     recordBrowser: treeProvider,
     pluginFacts: meditClient,
-    loadDiagnostics,
     setStatusText: (t) => { statusBarItem.text = t; },
     notifyConflictsComputed,
     extensionId: context.extension.id,
@@ -175,7 +163,6 @@ export function activate(context: vscode.ExtensionContext) {
     { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
     referencedBy,
     activeRecordSubscription,
-    vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerPluginRowCommands(pluginRowDeps),
     // The record filter scopes the Plugins tree's own rows — a Plugins-view concern (its module
     // lives under plugins/), so it is wired here rather than inside Editor's own registration.

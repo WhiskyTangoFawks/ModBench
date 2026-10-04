@@ -8,7 +8,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from '../notificationWiring';
+import { subscribeRecordPanelsToNotifications } from '../notificationWiring';
 import { InMemoryMEditClient, type NotificationEvent } from '../../client';
 
 function rowsChanged(keys: string[], overrides: Partial<NotificationEvent> = {}): NotificationEvent {
@@ -85,45 +85,5 @@ describe('subscribeRecordPanelsToNotifications', () => {
     client.emit(rowsChanged(['000001:Test.esp']));
 
     expect(panel.webview.postMessage).not.toHaveBeenCalled();
-  });
-});
-
-describe('subscribeTreeToNotifications', () => {
-  it('re-reads the records and the plugin facts a record filter\'s match reads on rows-changed', () => {
-    const client = new InMemoryMEditClient();
-    const tree = { refresh: vi.fn() };
-    const refreshPluginFacts = vi.fn();
-    subscribeTreeToNotifications(client, tree, refreshPluginFacts);
-
-    client.emit(rowsChanged(['000001:Test.esp']));
-
-    expect(tree.refresh).toHaveBeenCalledTimes(1);
-    expect(refreshPluginFacts).toHaveBeenCalledTimes(1);
-  });
-
-  it('re-reads the records and the plugin facts on plugin-changed', () => {
-    const client = new InMemoryMEditClient();
-    const tree = { refresh: vi.fn() };
-    const refreshPluginFacts = vi.fn();
-    subscribeTreeToNotifications(client, tree, refreshPluginFacts);
-
-    client.emit(pluginChanged());
-
-    expect(tree.refresh).toHaveBeenCalledTimes(1);
-    expect(refreshPluginFacts).toHaveBeenCalledTimes(1);
-  });
-
-  it('unsubscribing stops both subscriptions', () => {
-    const client = new InMemoryMEditClient();
-    const tree = { refresh: vi.fn() };
-    const refreshPluginFacts = vi.fn();
-    const unsubscribe = subscribeTreeToNotifications(client, tree, refreshPluginFacts);
-
-    unsubscribe();
-    client.emit(rowsChanged(['000001:Test.esp']));
-    client.emit(pluginChanged());
-
-    expect(tree.refresh).not.toHaveBeenCalled();
-    expect(refreshPluginFacts).not.toHaveBeenCalled();
   });
 });

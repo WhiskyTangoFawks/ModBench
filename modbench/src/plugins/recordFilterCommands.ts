@@ -27,11 +27,10 @@ export interface FilterCommandDeps {
   reporter: Reporter;
 }
 
-/** Where the record filter shows. Read at each write, because the Plugins view is built after
- *  the writer is. */
+/** Where the record filter shows. */
 export interface RecordFilterViews {
-  pluginsNameFilter?: { setBaseDescription(text: string | undefined): void };
-  pluginsTree?: { setRecordFilterSource(source: string | undefined): void };
+  pluginsNameFilter: { setBaseDescription(text: string | undefined): void };
+  pluginsTree: { setRecordFilterSource(source: string | undefined): void };
 }
 
 /** The record filter's single writer. Each surface names the filter by its source, never by its
@@ -42,8 +41,8 @@ export function makeShowRecordFilter(
   return (filter) => {
     void vscode.commands.executeCommand('setContext', 'modbench.record.filterActive', filter !== null);
     lens.setActiveSql(filter?.sql ?? null);
-    views.pluginsNameFilter?.setBaseDescription(filter === null ? undefined : `records: ${filter.source}`);
-    views.pluginsTree?.setRecordFilterSource(filter?.source);
+    views.pluginsNameFilter.setBaseDescription(filter === null ? undefined : `records: ${filter.source}`);
+    views.pluginsTree.setRecordFilterSource(filter?.source);
   };
 }
 

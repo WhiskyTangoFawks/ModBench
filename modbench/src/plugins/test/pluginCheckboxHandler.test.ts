@@ -2,15 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const { setPluginsParticipation } = vi.hoisted(() => ({ setPluginsParticipation: vi.fn() }));
 
-vi.mock('../pluginsCommands/plugins', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../pluginsCommands/plugins')>()),
+vi.mock('../../pluginsCommands/plugins', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../pluginsCommands/plugins')>()),
   setPluginsParticipation,
 }));
 
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, uriFile, uriFrom,
-} from './vscodeMock';
-import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
+} from '../../test/vscodeMock';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
@@ -19,14 +19,14 @@ vi.mock('vscode', () => ({
 }));
 
 import { onPluginCheckboxChanged } from '../pluginCheckboxHandler';
-import { PluginNode, PluginsTreeProvider } from '../plugins/PluginsTreeProvider';
-import { RecordNode } from '../plugins/PluginTreeProvider';
-import { recordingReporter } from './surfacingDoubles';
-import { recordSummaryFixture } from '../client/test/fixtures';
-import { FakeInstance } from './mo2/fakeInstance';
-import { instanceValueFixture } from './mo2/instanceValueFixture';
-import { expectInstanceOf } from './expectInstanceOf';
-import { accessTo } from './mo2/adapterOver';
+import { PluginNode, PluginsTreeProvider } from '../PluginsTreeProvider';
+import { RecordNode } from '../PluginTreeProvider';
+import { recordingReporter } from '../../test/surfacingDoubles';
+import { recordSummaryFixture } from '../../client/test/fixtures';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { expectInstanceOf } from '../../test/expectInstanceOf';
+import { accessTo } from '../../test/mo2/adapterOver';
 
 beforeEach(() => { vi.clearAllMocks(); });
 

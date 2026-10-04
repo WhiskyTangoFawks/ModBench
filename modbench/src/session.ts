@@ -28,8 +28,6 @@ export interface ExtensionSession {
   pluginRepositories?: Map<string, MinimalRepository>;
   /** The record filter's single writer: `makeShowRecordFilter`. */
   showRecordFilter?: (filter: RecordFilter | null) => void;
-  /** The malformed-plugin scan's Problems entries, replaced wholesale by each reconcile. */
-  loadDiagnostics?: vscode.DiagnosticCollection;
 }
 
 // plugins.md, States, story 2: progress lives in the loading view, never a notification. The

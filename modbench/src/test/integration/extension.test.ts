@@ -494,7 +494,8 @@ describe('modbench.record.open', () => {
 
 import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../plugins/PluginsTreeProvider';
 import { ImplicitMasterDecorationProvider } from '../../plugins/ImplicitMasterDecorationProvider';
-import { publishPluginWarnings } from '../../medit/loadDiagnostics';
+import { publishPluginWarnings } from '../../plugins/loadDiagnostics';
+import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 function nodeKind(node: unknown): unknown {
   const fields: { kind?: unknown } = typeof node === 'object' && node !== null ? node : {};
   return fields.kind;
@@ -538,7 +539,9 @@ describe('the locked row is greyed and carries no Problems badge', () => {
   after(() => collection.dispose());
 
   it('holds none of the diagnostics published on its plugin file', () => {
-    publishPluginWarnings(collection, () => dataFolder, [{ plugin: 'Fallout4.esm', origin: 'Data', text: 'malformed' }]);
+    publishPluginWarnings(
+      collection, (origin) => originFiles([{ origin: 'Data', path: path.join(dataFolder, 'Fallout4.esm') }], origin),
+      [{ plugin: 'Fallout4.esm', origin: 'Data', text: 'malformed' }]);
 
     const rowUri = present(node.resourceUri, 'the locked row\'s resourceUri');
     assert.deepStrictEqual(vscode.languages.getDiagnostics(rowUri), []);

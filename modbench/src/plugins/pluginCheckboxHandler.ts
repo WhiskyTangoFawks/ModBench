@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import type { PluginNode, PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
-import { forgetRefused, reportPluginsParticipation } from './plugins/pluginParticipationCommands';
-import { setPluginsParticipation, type PluginsAccess } from './pluginsCommands/plugins';
-import type { Reporter } from './ports/reporter';
+import type { PluginNode, PluginsTreeNode, PluginsTreeProvider } from './PluginsTreeProvider';
+import { forgetRefused, reportPluginsParticipation } from './pluginParticipationCommands';
+import { setPluginsParticipation, type PluginsAccess } from '../pluginsCommands/plugins';
+import type { Reporter } from '../ports/reporter';
 
 /** Every toggled box, however many and whichever state each asks for, is one call to
  *  `setPluginsParticipation`'s core: one splice, one report. The rows change as ADR-0015

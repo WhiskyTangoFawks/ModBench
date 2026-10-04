@@ -4,7 +4,7 @@ import { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, fakeUr
 vi.mock('vscode', () => ({ Diagnostic, Range, DiagnosticSeverity, Uri: { file: fakeUri } }));
 
 import { publishPluginWarnings } from '../loadDiagnostics';
-import type { OriginFolder } from '../../instanceLoader/loadOrderSnapshot';
+import { originFiles, type OriginFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 import type { PluginDiagnosisReport } from '../../client';
 import { present } from '../../ports/present';
 
@@ -16,13 +16,15 @@ function entriesAsFsPathAndDiagnosticsInInsertionOrder(collection: FakeDiagnosti
   return [...collection].map(([uri, diagnostics]) => [uri.fsPath, diagnostics] as const);
 }
 
-const originFolderFrom = (folders: Record<string, string>): OriginFolder => (origin) => folders[origin];
+// The instance value's rows, one plugin file in each origin's folder.
+const originFilesFrom = (folders: Record<string, string>): OriginFilesOf => (origin) => originFiles(
+  Object.entries(folders).map(([rowOrigin, folder]) => ({ origin: rowOrigin, path: `${folder}/Any.esp` })), origin);
 
 describe('publishPluginWarnings', () => {
   it('targets the plugin binary itself (pre-Track), carries the refusal wording verbatim, and warns rather than errors since a Malformed plugin still loads and plays', () => {
     const collection = new FakeDiagnosticCollection();
 
-    publishPluginWarnings(collection, originFolderFrom({ 'TS Mod': '/instance/mods/TS Mod' }), [
+    publishPluginWarnings(collection, originFilesFrom({ 'TS Mod': '/instance/mods/TS Mod' }), [
       report('TrueStorms.esp', 'TS Mod', 'REGN … — fixed-size-subrecord-short, repairable (lossless): …'),
     ]);
 
@@ -36,7 +38,7 @@ describe('publishPluginWarnings', () => {
   it('targets the overwrite folder for an overwrite-origin plugin, not the mods/overwrite path that does not exist', () => {
     const collection = new FakeDiagnosticCollection();
 
-    publishPluginWarnings(collection, originFolderFrom({ overwrite: '/instance/overwrite' }), [
+    publishPluginWarnings(collection, originFilesFrom({ overwrite: '/instance/overwrite' }), [
       report('Stray.esp', 'overwrite', 'bad'),
     ]);
 
@@ -47,7 +49,7 @@ describe('publishPluginWarnings', () => {
     const collection = new FakeDiagnosticCollection();
     const clear = vi.spyOn(collection, 'clear');
 
-    publishPluginWarnings(collection, originFolderFrom({}), [report('Ghost.esp', 'Gone', 'bad')]);
+    publishPluginWarnings(collection, originFilesFrom({}), [report('Ghost.esp', 'Gone', 'bad')]);
 
     expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)).toEqual([]);
     expect(clear).toHaveBeenCalledTimes(1);
@@ -56,10 +58,10 @@ describe('publishPluginWarnings', () => {
   it('replaces the previous scan wholesale — one scan answers for the whole load order', () => {
     const collection = new FakeDiagnosticCollection();
     const clear = vi.spyOn(collection, 'clear');
-    const originFolder = originFolderFrom({ M: '/i/mods/M' });
-    publishPluginWarnings(collection, originFolder, [report('A.esp', 'M', 'old')]);
+    const files = originFilesFrom({ M: '/i/mods/M' });
+    publishPluginWarnings(collection, files, [report('A.esp', 'M', 'old')]);
 
-    publishPluginWarnings(collection, originFolder, [report('B.esp', 'M', 'new')]);
+    publishPluginWarnings(collection, files, [report('B.esp', 'M', 'new')]);
 
     expect(clear).toHaveBeenCalledTimes(2);
     expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection).map(([path]) => path)).toEqual(['/i/mods/M/B.esp']);
@@ -68,7 +70,7 @@ describe('publishPluginWarnings', () => {
   it('groups several diagnoses on one plugin under one file entry', () => {
     const collection = new FakeDiagnosticCollection();
 
-    publishPluginWarnings(collection, originFolderFrom({ M: '/i/mods/M' }), [
+    publishPluginWarnings(collection, originFilesFrom({ M: '/i/mods/M' }), [
       report('A.esp', 'M', 'first'), report('A.esp', 'M', 'second'),
     ]);
 
