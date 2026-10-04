@@ -38,7 +38,7 @@ function copyPathsIn(value: CopiesIn): (origin: FileOrigin, relativePath: string
     let paths = byOrigin.get(key);
     if (paths === undefined) {
       const files = origin.kind === 'mod' ? value.filesByMod.get(origin.name) ?? [] : value.overwriteFiles;
-      paths = new Map(files.map((file) => [foldPath(file.relativePath), file.absolutePath]));
+      paths = new Map(files.map((file) => [foldPath(file.relativePath), file.sourcePath]));
       byOrigin.set(key, paths);
     }
     return present(paths.get(foldPath(relativePath)), `${key}'s copy of ${relativePath}`);

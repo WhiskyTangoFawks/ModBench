@@ -18,7 +18,6 @@ import { errorMessage } from '../ports/errorMessage';
  *  publishes it, never through the codec that parsed the file behind it. */
 export type { FileOrigin, InstalledFileId, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow } from './downloadRows';
-export type { ModFile } from './fileConflictIndex';
 export type { Copy, FileCopies } from './sameCopies';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, GameFolderLook } from '../instanceAdapter/instanceAdapter';
