@@ -32,6 +32,7 @@ import { installNameRefusal } from './install/install';
 import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
 import { exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
+import { registerCompareFileCommand } from './mods/compareFile';
 import { registerGoToModCommand } from './mods/goToMod';
 import { registerConflictTable } from './mods/conflictTableEditor';
 import { registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText } from './mods/modManagementCommands';
@@ -355,6 +356,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     rowFor: (origin) => modListProvider.rowFor(origin),
     reveal: (row) => modListView.reveal(row, { select: true, focus: true }),
   }));
+  own(registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => modListView.selection));
   ownAll(own, registerConflictTable(instance, deps.extensionUri, () => modListView.selection, reporterFor('mod.openConflicts')));
   own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
   own(vscode.commands.registerCommand('modbench.plugin.sync', runPluginSync));

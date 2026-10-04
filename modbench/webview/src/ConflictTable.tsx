@@ -8,7 +8,7 @@ import { ExpandArrow } from './ExpandArrow';
 import { baseCell, focusedRowStyle, getCellStyle, headerBackground, headerCell, rowBackground } from './gridStyles';
 import {
   CONFLICT_TABLE_READY, parseConflictTableShown,
-  type ConflictCell, type ConflictColumn, type ConflictColumnContext, type ConflictRow, type ConflictTable, type ConflictTableShown,
+  type ConflictCell, type ConflictCellContext, type ConflictColumn, type ConflictColumnContext, type ConflictRow, type ConflictTable, type ConflictTableShown,
 } from '../../src/wire/conflictTable';
 
 const NOT_READ_YET: ConflictTable = { kind: 'table', columns: [], rows: [] };
@@ -20,6 +20,12 @@ const columnStyle = (column: ConflictColumn): React.CSSProperties => (column.ope
 function headerContext({ origin }: ConflictColumn): string | undefined {
   if (origin.kind !== 'mod') return undefined;
   const context: ConflictColumnContext = { webviewSection: 'conflictColumn', mod: origin.name, preventDefaultContextMenuItems: true };
+  return JSON.stringify(context);
+}
+
+function cellContext({ origin }: ConflictColumn, path: string, cell: ConflictCell | null): string | undefined {
+  if (origin.kind !== 'mod' || cell === null || cell.winning === true) return undefined;
+  const context: ConflictCellContext = { webviewSection: 'conflictCell', mod: origin.name, path, preventDefaultContextMenuItems: true };
   return JSON.stringify(context);
 }
 
@@ -124,7 +130,7 @@ export function ConflictTableView() {
                 {table.columns.map((column, index) => {
                   const cell: ConflictCell | null = row.kind === 'file' ? row.cells[index] ?? null : null;
                   return (
-                    <td key={columnKey(column)} title={cell?.unreadable} style={{ ...baseCell, ...getCellStyle(cell?.state ?? undefined), ...columnStyle(column) }} />
+                    <td key={columnKey(column)} title={cell?.unreadable} data-vscode-context={cellContext(column, row.path, cell)} style={{ ...baseCell, ...getCellStyle(cell?.state ?? undefined), ...columnStyle(column) }} />
                   );
                 })}
               </tr>

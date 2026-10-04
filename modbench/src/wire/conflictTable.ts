@@ -23,6 +23,8 @@ export interface ConflictColumn {
 export interface ConflictCell {
   readonly state: ConflictCellState | null;
   readonly unreadable?: string;
+  /** The copy the game reads. */
+  readonly winning?: true;
 }
 
 /** A cell for each column, in column order; null where the column's mod has no copy. */
@@ -66,6 +68,13 @@ export interface ConflictColumnContext {
   readonly preventDefaultContextMenuItems: true;
 }
 
+export interface ConflictCellContext {
+  readonly webviewSection: 'conflictCell';
+  readonly mod: string;
+  readonly path: string;
+  readonly preventDefaultContextMenuItems: true;
+}
+
 const isObject = (value: unknown): value is object => typeof value === 'object' && value !== null;
 
 // Shallow: the table is the host's own build, trusted once the envelope checks out.
@@ -89,4 +98,12 @@ export function modOfConflictColumn(value: unknown): string | undefined {
   if (!isObject(value) || Reflect.get(value, 'webviewSection') !== 'conflictColumn') return undefined;
   const mod: unknown = Reflect.get(value, 'mod');
   return typeof mod === 'string' ? mod : undefined;
+}
+
+/** The mod and file a cell's context names. */
+export function copyOfConflictCell(value: unknown): { readonly mod: string; readonly path: string } | undefined {
+  if (!isObject(value) || Reflect.get(value, 'webviewSection') !== 'conflictCell') return undefined;
+  const mod: unknown = Reflect.get(value, 'mod');
+  const path: unknown = Reflect.get(value, 'path');
+  return typeof mod === 'string' && typeof path === 'string' ? { mod, path } : undefined;
 }

@@ -956,13 +956,19 @@ describe('package.json track\'s palette entry', () => {
 });
 
 describe('package.json conflict table menus follow mods-conflicts.md', () => {
-  const menu = (): MenuEntry[] => present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']")
-    .filter((e) => holds(e.when, { webviewId: 'modbench.conflicts', webviewSection: 'conflictColumn' })
-      || holds(e.when, { webviewId: 'modbench.conflicts' }));
+  const inTable = (section: string): MenuEntry[] => present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']")
+    .filter((e) => holds(e.when, { webviewId: 'modbench.conflicts', webviewSection: section }));
 
-  it('column header: open conflicts, and nothing else anywhere in the table', () => {
-    expect(placed(menu())).toEqual([['modbench.mod.openConflicts', '1_open']]);
-    expect(holds(present(menu()[0], 'the column header\'s open conflicts').when, { webviewId: 'modbench.conflicts' })).toBe(false);
+  it('column header: open conflicts, and nothing else', () => {
+    expect(placed(inTable('conflictColumn'))).toEqual([['modbench.mod.openConflicts', '1_open']]);
+  });
+
+  it('cell: compare file, and nothing else', () => {
+    expect(placed(inTable('conflictCell'))).toEqual([['modbench.mod.compareFile', '1_open']]);
+  });
+
+  it('nowhere else in the table', () => {
+    expect(inTable('conflictRow')).toEqual([]);
   });
 });
 
@@ -1299,6 +1305,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.openFolder', 'modbench.mod.singleOpenFolderRow'],
     ['modbench.mod.goToMod', 'modbench.mod.singleGoToModRow'],
     ['modbench.mod.openConflicts', 'modbench.mod.singleOpenConflictsRow'],
+    ['modbench.mod.compareFile', 'modbench.mod.singleGoToModRow'],
     ['modbench.mod.excludeFile', 'modbench.mod.holdsIncludedFile'],
     ['modbench.mod.includeFile', 'modbench.mod.holdsExcludedFile'],
   ] as const;

@@ -115,6 +115,21 @@ describe('a mod named as Overwrite is', () => {
   });
 });
 
+describe('the conflict table\'s cells', () => {
+  it('hand a menu their mod and file only where the copy is a mod\'s and not the winning one', () => {
+    const cell = (winning?: true): ConflictCell => ({ state: null, ...(winning && { winning }) });
+    show({
+      kind: 'table', columns,
+      rows: [{ kind: 'file', name: 'a.dds', path: 'a.dds', cells: [cell(), cell(true), null], state: null }],
+    });
+
+    const contexts = Array.from(rowOf('a.dds').querySelectorAll('td')).slice(1).map((td) => td.getAttribute('data-vscode-context'));
+    expect(contexts.map((context) => context && JSON.parse(context) as unknown)).toEqual([
+      { webviewSection: 'conflictCell', mod: 'Low', path: 'a.dds', preventDefaultContextMenuItems: true }, null, null,
+    ]);
+  });
+});
+
 describe('the conflict table\'s rows', () => {
   beforeEach(() => show({ kind: 'table', columns, rows: tree }));
 

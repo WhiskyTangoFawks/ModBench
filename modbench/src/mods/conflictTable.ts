@@ -67,14 +67,16 @@ export function conflictTable(view: Pick<InstanceView, 'value' | 'sequence'>, na
   const fileRow = (file: OriginFile, rowName: string): FileRow => {
     const fileCopies = copiesByPath.get(file.relativePath) ?? [];
     const states = fileStates(fileCopies);
+    const winner = value.files.get(file.relativePath)?.winnerOrigin;
     const cells = origins.map((origin): ConflictCell | null => {
       if (!providersOf(value, file).some((provider) => sameOrigin(provider, origin))) return null;
+      const winning = winner !== undefined && sameOrigin(winner, origin) ? { winning: true as const } : {};
       const index = fileCopies.findIndex((copy) => sameOrigin(copy.origin, origin));
       const copy = fileCopies[index];
-      if (copy === undefined) return { state: null };
+      if (copy === undefined) return { state: null, ...winning };
       return copy.kind === 'unreadable'
-        ? { state: null, unreadable: copy.reason }
-        : { state: states.cells[index] ?? null };
+        ? { state: null, unreadable: copy.reason, ...winning }
+        : { state: states.cells[index] ?? null, ...winning };
     });
     return { kind: 'file', name: rowName, path: file.relativePath, cells, state: states.row };
   };
