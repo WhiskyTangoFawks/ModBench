@@ -65,7 +65,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
         if (mine !== newest) return;
         const reason = errorMessage(err);
         this.reporter.shownOnSurface('error', `Failed to read the copies of "${mod}"'s conflicts.`, reason);
-        if (lastGood === undefined) post({ kind: 'message', text: `Failed to load: ${reason}` });
+        if (lastGood === undefined) post({ kind: 'error', reason });
         else post(lastGood, `Showing the last good read: ${reason}`);
       }
     };

@@ -54,6 +54,15 @@ describe('the conflict table before and in place of a table', () => {
     expect(document.querySelector('table')).not.toBeInTheDocument();
   });
 
+  it('shows a failed read as the error row: the error icon, "Failed to load:" and the reason, the reason again in its tooltip', () => {
+    show({ kind: 'error', reason: 'disk gone' });
+
+    const row = screen.getByText('Failed to load: disk gone');
+    expect(row).toHaveAttribute('title', 'disk gone');
+    expect(row.querySelector('.codicon.codicon-error')).not.toBeNull();
+    expect(document.querySelector('table')).not.toBeInTheDocument();
+  });
+
   it('shows the message line above the rows it keeps, until a table with none replaces it', () => {
     show({ kind: 'table', columns, rows: tree }, 'Showing the last good read: disk gone');
 
@@ -102,6 +111,27 @@ describe('a mod named as Overwrite is', () => {
       ['Low', JSON.stringify({ webviewSection: 'conflictColumn', mod: 'Low', preventDefaultContextMenuItems: true })],
       ['Overwrite', null],
       ['Overwrite', JSON.stringify({ webviewSection: 'conflictColumn', mod: 'Overwrite', preventDefaultContextMenuItems: true })],
+    ]);
+  });
+});
+
+describe('the conflict table\'s cells', () => {
+  const contextsOf = (cells: (ConflictCell | null)[]) => {
+    show({ kind: 'table', columns, rows: [{ kind: 'file', name: 'a.dds', path: 'a.dds', cells, state: null }] });
+    return Array.from(rowOf('a.dds').querySelectorAll('td')).slice(1)
+      .map((td) => td.getAttribute('data-vscode-context')).map((context) => context && JSON.parse(context) as unknown);
+  };
+  const cell = (winning?: true): ConflictCell => ({ state: null, ...(winning && { winning }) });
+
+  it('hand a menu their origin and file where the copy is not the winning one', () => {
+    expect(contextsOf([cell(), cell(true), null])).toEqual([
+      { webviewSection: 'conflictCell', origin: { kind: 'mod', name: 'Low' }, path: 'a.dds', preventDefaultContextMenuItems: true }, null, null,
+    ]);
+  });
+
+  it('hand a menu nothing from Overwrite\'s winning copy, nor from a column with no copy', () => {
+    expect(contextsOf([null, cell(), cell(true)])).toEqual([
+      null, { webviewSection: 'conflictCell', origin: { kind: 'mod', name: 'Opened' }, path: 'a.dds', preventDefaultContextMenuItems: true }, null,
     ]);
   });
 });

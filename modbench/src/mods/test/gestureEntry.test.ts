@@ -240,6 +240,17 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([], byRow).singleGoToModRow).toBe(false);
   });
 
+  it('compare file sees exactly one selected file row that loses its file order conflict', () => {
+    const copy = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false, excludedByName: false };
+    const origin = { kind: 'mod' as const, name: 'On' };
+    const losing = new FileNode(enabledMod, origin, copy, 'a.dds', true, true);
+    const winning = new FileNode(enabledMod, origin, copy, 'a.dds', true);
+    expect(modsKeyContext([losing], byRow).singleCompareFileRow).toBe(true);
+    expect(modsKeyContext([winning], byRow).singleCompareFileRow).toBe(false);
+    expect(modsKeyContext([losing, losing], byRow).singleCompareFileRow).toBe(false);
+    expect(modsKeyContext([enabledMod], byRow).singleCompareFileRow).toBe(false);
+  });
+
   it('open conflicts sees exactly one selected mod that has a file order conflict', () => {
     const facts = (fileOrderConflict: boolean) => ({ holdsPlugin: false, tracked: false, fileOrderConflict });
     const conflicting = new ModNode({ kind: 'mod', name: 'Shares', enabled: true }, facts(true));

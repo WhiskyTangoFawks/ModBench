@@ -484,7 +484,7 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
   });
 });
 
-describe('a file row\'s context, which the File menu\'s go to mod reads (mods.md, Menus and keys)', () => {
+describe('a file row\'s context, which the File menu\'s go to mod and compare file read (mods.md, Menus and keys)', () => {
   const flagsOf = async (providers: Parameters<FileConflictLookup['set']>[0]['providers'], rowOfMod: string) => {
     const files = new FileConflictLookup();
     files.set({ relativePath: 'a.dds', winner: '/w', winnerOrigin: providers[0] ?? RUNTIME_OUTPUT, providers });
@@ -499,8 +499,13 @@ describe('a file row\'s context, which the File menu\'s go to mod reads (mods.md
   };
 
   it('flags a file whose path another enabled copy provides, in a mod or Overwrite', async () => {
-    expect(await flagsOf([modOrigin('High'), modOrigin('Low')], 'Low')).toEqual(['file conflict included']);
+    expect(await flagsOf([modOrigin('High'), modOrigin('Low')], 'High')).toEqual(['file conflict included']);
     expect(await flagsOf([RUNTIME_OUTPUT, modOrigin('Low')], 'Overwrite')).toEqual(['file conflict included']);
+  });
+
+  it('flags a file that loses the conflict losing, as compare file reads it, and not the winning copy', async () => {
+    expect(await flagsOf([modOrigin('High'), modOrigin('Low')], 'Low')).toEqual(['file conflict losing included']);
+    expect(await flagsOf([modOrigin('High'), modOrigin('Low')], 'High')).toEqual(['file conflict included']);
   });
 
   it('flags no file that is the only copy, or whose mod does not provide it', async () => {

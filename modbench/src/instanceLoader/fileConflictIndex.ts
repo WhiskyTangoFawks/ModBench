@@ -39,6 +39,11 @@ export function inFileOrderConflict(entry: ConflictEntry | undefined, own: FileO
   return providers.length > 1 && providers.some((provider) => sameOrigin(provider, own));
 }
 
+/** Whether `own` provides the path, and another enabled copy or Overwrite's wins over it. */
+export function losesFileOrderConflict(entry: ConflictEntry | undefined, own: FileOrigin): boolean {
+  return entry !== undefined && inFileOrderConflict(entry, own) && !sameOrigin(entry.winnerOrigin, own);
+}
+
 /** Comparison keys only — never display, never written back to disk. Locale-independent,
  *  since a case-variant collision is a filesystem fact rather than a locale one. */
 export function foldPath(relativePath: string): string {

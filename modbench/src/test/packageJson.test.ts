@@ -956,13 +956,15 @@ describe('package.json track\'s palette entry', () => {
 });
 
 describe('package.json conflict table menus follow mods-conflicts.md', () => {
-  const menu = (): MenuEntry[] => present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']")
-    .filter((e) => holds(e.when, { webviewId: 'modbench.conflicts', webviewSection: 'conflictColumn' })
-      || holds(e.when, { webviewId: 'modbench.conflicts' }));
+  const inTable = (section: string): MenuEntry[] => present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']")
+    .filter((e) => holds(e.when, { webviewId: 'modbench.conflicts', webviewSection: section }));
 
-  it('column header: open conflicts, and nothing else anywhere in the table', () => {
-    expect(placed(menu())).toEqual([['modbench.mod.openConflicts', '1_open']]);
-    expect(holds(present(menu()[0], 'the column header\'s open conflicts').when, { webviewId: 'modbench.conflicts' })).toBe(false);
+  it('column header: open conflicts, and nothing else', () => {
+    expect(placed(inTable('conflictColumn'))).toEqual([['modbench.mod.openConflicts', '1_open']]);
+  });
+
+  it('cell: compare file, and nothing else', () => {
+    expect(placed(inTable('conflictCell'))).toEqual([['modbench.mod.compareFile', '1_open']]);
   });
 });
 
@@ -1255,6 +1257,14 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ]);
   });
 
+  it('File menu: compare file only on a file that loses its file order conflict, after open folder and before go to mod', () => {
+    expect(menuOn('file conflict losing')).toEqual([
+      ['modbench.mod.openFolder', '1_open'], ['modbench.mod.compareFile', '1_open'], ['modbench.mod.goToMod', '1_open'], ['modbench.copyValue', '5_copy'],
+    ]);
+    expect(menuOn('file conflict').map(([command]) => command)).not.toContain('modbench.mod.compareFile');
+    expect(menuOn('file').map(([command]) => command)).not.toContain('modbench.mod.compareFile');
+  });
+
   it.each([
     ['file included', 'modbench.mod.excludeFile'],
     ['file excluded', 'modbench.mod.includeFile'],
@@ -1299,6 +1309,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.openFolder', 'modbench.mod.singleOpenFolderRow'],
     ['modbench.mod.goToMod', 'modbench.mod.singleGoToModRow'],
     ['modbench.mod.openConflicts', 'modbench.mod.singleOpenConflictsRow'],
+    ['modbench.mod.compareFile', 'modbench.mod.singleCompareFileRow'],
     ['modbench.mod.excludeFile', 'modbench.mod.holdsIncludedFile'],
     ['modbench.mod.includeFile', 'modbench.mod.holdsExcludedFile'],
   ] as const;
