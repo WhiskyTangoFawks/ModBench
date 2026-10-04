@@ -392,20 +392,20 @@ describe('modbench.mod.sync syncs the instance value it is handed', () => {
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 
-async function readsAskedByTheNextTurn(instance: { refresh(): Promise<void> }, command: string): Promise<number> {
-  let reads = 0;
-  const refresh = instance.refresh.bind(instance);
-  instance.refresh = () => {
-    reads++;
-    return refresh();
-  };
+async function commandsRunByTheNextTurn(command: string): Promise<string[]> {
+  const run: string[] = [];
+  const execute = vscode.commands.executeCommand;
+  Reflect.set(vscode.commands, 'executeCommand', (id: string, ...args: unknown[]) => {
+    run.push(id);
+    return execute(id, ...args);
+  });
   try {
     await vscode.commands.executeCommand(command);
     await new Promise((turn) => setImmediate(turn));
   } finally {
-    instance.refresh = refresh;
+    Reflect.set(vscode.commands, 'executeCommand', execute);
   }
-  return reads;
+  return run.filter((id) => /^modbench\.(mod|plugin)\.(enable|disable)$/.test(id));
 }
 
 describe('modbench.record.open', () => {
@@ -929,8 +929,7 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
   it('VS Code\'s own Space on a focused mod row leaves its check box alone', async function () {
     if (!root) this.skip();
     await enabledAndSelected();
-    const instance = present(instanceExport(), "the activated extension's instance export");
-    assert.strictEqual(await readsAskedByTheNextTurn(instance, 'list.toggleExpand'), 0);
+    assert.deepStrictEqual(await commandsRunByTheNextTurn('list.toggleExpand'), []);
   });
 
   it('copies the selection of the view last selected in when Copy Value is run from the palette', async function () {
@@ -1001,8 +1000,7 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
   it('VS Code\'s own Space on a focused plugin row leaves its check box alone', async function () {
     if (!root) this.skip();
     await focusRow(0);
-    const instance = present(instanceExport(), "the activated extension's instance export");
-    assert.strictEqual(await readsAskedByTheNextTurn(instance, 'list.toggleExpand'), 0);
+    assert.deepStrictEqual(await commandsRunByTheNextTurn('list.toggleExpand'), []);
   });
 
   it('Space disables the selected plugin', async function () {
