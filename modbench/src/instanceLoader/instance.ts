@@ -261,6 +261,12 @@ export class Instance implements Subscription {
     return this.run();
   }
 
+  /** The value once the first read has landed: reads when none has, and holds the read it has. */
+  async landed(): Promise<InstanceValue> {
+    if (this.seq === 0) await this.refresh();
+    return this.value;
+  }
+
   /** For each file of the value it holds, by its path, which of its providers' copies are the
    *  same, or why a copy could not be read. */
   sameCopies(relativePaths: readonly string[]): Promise<FileCopies[]> {
