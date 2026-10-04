@@ -20,7 +20,7 @@ public sealed partial class SourceRepository
     {
         var carrying = ContainerDocument(plugin, identity, schemas)
             ?? throw new InvalidOperationException(
-                $"No readable document in {plugin.Name}'s tree carries {identity.FormKey}. Nothing was written.");
+                $"No readable document in {plugin.Name}'s tree carries {identity.FormKey}.");
 
         if (carrying.FormKey.Equals(identity.FormKey, StringComparison.Ordinal))
         {
@@ -31,8 +31,7 @@ public sealed partial class SourceRepository
 
         var ownerText = rekey.ChildOfOwner(carrying, identity.FormKey, newFormKey)
             ?? throw new InvalidOperationException(
-                $"{RelativePathOf(plugin, identity)} was found holding {identity.FormKey}, but its own text does not carry it. " +
-                "Nothing was written.");
+                $"{RelativePathOf(plugin, identity)} was found holding {identity.FormKey}, but its own text does not carry it.");
         return carrying with { Body = ownerText };
     }
 }
