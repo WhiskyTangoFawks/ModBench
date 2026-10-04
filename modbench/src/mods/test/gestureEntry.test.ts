@@ -229,6 +229,17 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([], byRow).singleRow).toBe(false);
   });
 
+  it('go to mod sees exactly one selected file that is in a file order conflict', () => {
+    const copy = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false };
+    const conflicting = new FileNode(enabledMod, { kind: 'mod', name: 'On' }, copy, 'a.dds', true);
+    const alone = new FileNode(enabledMod, { kind: 'mod', name: 'On' }, copy, 'a.dds');
+    expect(modsKeyContext([conflicting], byRow).singleGoToModRow).toBe(true);
+    expect(modsKeyContext([alone], byRow).singleGoToModRow).toBe(false);
+    expect(modsKeyContext([conflicting, alone], byRow).singleGoToModRow).toBe(false);
+    expect(modsKeyContext([enabledMod], byRow).singleGoToModRow).toBe(false);
+    expect(modsKeyContext([], byRow).singleGoToModRow).toBe(false);
+  });
+
   it('open folder sees exactly one selected row it takes: a mod, Overwrite, a file or a folder', () => {
     const file = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false };
     const folder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, { relativePath: 'x', path: '/instance/mods/On/x', excluded: false }, [file], [], 'x');

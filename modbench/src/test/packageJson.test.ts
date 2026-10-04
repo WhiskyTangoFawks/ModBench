@@ -1204,6 +1204,14 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     expect(menuOn('file')).toEqual([['modbench.mod.openFolder', '1_open'], ['modbench.copyValue', '5_copy']]);
   });
 
+  it('File menu: go to mod only on a file in a file order conflict, between open folder and copy value', () => {
+    expect(menuOn('file conflict')).toEqual([
+      ['modbench.mod.openFolder', '1_open'], ['modbench.mod.goToMod', '1_open'], ['modbench.copyValue', '5_copy'],
+    ]);
+    expect(menuOn('folder').map(([command]) => command)).not.toContain('modbench.mod.goToMod');
+  });
+
+
   it('Folder menu: open folder, then copy value, and no item of a mod\'s, a separator\'s or Overwrite\'s', () => {
     expect(menuOn('folder')).toEqual([['modbench.mod.openFolder', '1_open'], ['modbench.copyValue', '5_copy']]);
   });
@@ -1236,6 +1244,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.createEmpty', undefined],
     ['modbench.mod.install', undefined],
     ['modbench.mod.openFolder', 'modbench.mod.singleOpenFolderRow'],
+    ['modbench.mod.goToMod', 'modbench.mod.singleGoToModRow'],
   ] as const;
 
   it.each(MODS_PALETTE)('%s is in the palette only while the Mods view has focus and its selection holds: %s', (command, holds) => {

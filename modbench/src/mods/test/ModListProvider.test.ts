@@ -273,8 +273,53 @@ describe('a row\'s parent, which VS Code\'s reveal walks up through getParent an
     const lateSection = expectInstanceOf(roots.find((n) => labelOf(n) === 'Late Section'), SeparatorNode);
     const [earlyFix] = await provider.getChildren(lateSection);
 
-    expect(provider.getParent(present(earlyFix, 'Early Fix'))).toBe(lateSection);
+    expect(provider.getParent(present(earlyFix, 'Early Fix'))?.id).toBe(lateSection.id);
     expect(roots.map((n) => provider.getParent(n))).toEqual(roots.map(() => undefined));
+  });
+});
+
+describe('the row for an origin, which Go to mod reveals', () => {
+  const modOf = (name: string) => ({ kind: 'mod', name }) as const;
+
+  it('is a mod whose separator was never rendered, with that separator as its parent', () => {
+    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
+    const row = expectInstanceOf(provider.rowFor(modOf('Base Patch')), ModNode);
+
+    expect(row.mod.name).toBe('Base Patch');
+    expect(provider.getParent(row)).toMatchObject({ kind: 'separator', id: 'separator:Early Section' });
+  });
+
+  it('is a root mod with no parent', () => {
+    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
+
+    expect(provider.getParent(expectInstanceOf(provider.rowFor(modOf('Old Mod')), ModNode))).toBeUndefined();
+  });
+
+  it('is the Overwrite row for the run-time output', () => {
+    const provider = makeProvider([mod('A')]);
+
+    expect(provider.rowFor({ kind: 'runtimeOutput' })).toBeInstanceOf(OverwriteNode);
+  });
+
+  it('is nothing for a mod the list does not hold', () => {
+    expect(makeProvider([mod('A')]).rowFor(modOf('Gone'))).toBeUndefined();
+  });
+
+  it('is nothing for a mod the filter hides, and a root mod when grouping is off', () => {
+    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
+    provider.setFilter('old mod', false);
+
+    expect(provider.rowFor(modOf('Base Patch'))).toBeUndefined();
+    expect(provider.getParent(expectInstanceOf(provider.rowFor(modOf('Old Mod')), ModNode))).toBeUndefined();
+  });
+
+  it('under a grouping filter has the separator its filter shows for it as its parent', () => {
+    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
+    provider.setFilter('base', true);
+
+    expect(provider.getParent(expectInstanceOf(provider.rowFor(modOf('Base Patch')), ModNode)))
+      .toMatchObject({ id: 'separator:Early Section' });
+    expect(provider.rowFor(modOf('Old Mod'))).toBeUndefined();
   });
 });
 

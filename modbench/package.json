@@ -367,6 +367,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.mod.goToMod",
+        "title": "Go to Mod",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.mod.enable",
         "title": "Enable Mod",
         "category": "Modbench"
@@ -561,6 +566,10 @@
         {
           "command": "modbench.mod.openFolder",
           "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleOpenFolderRow"
+        },
+        {
+          "command": "modbench.mod.goToMod",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleGoToModRow"
         },
         {
           "command": "modbench.mod.enable",
@@ -1010,12 +1019,17 @@
         },
         {
           "command": "modbench.mod.openFolder",
-          "when": "view == modbench.modList && (viewItem == file || viewItem == folder)",
+          "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem == folder)",
           "group": "1_open@1"
         },
         {
+          "command": "modbench.mod.goToMod",
+          "when": "view == modbench.modList && viewItem =~ /\\bconflict\\b/",
+          "group": "1_open@2"
+        },
+        {
           "command": "modbench.copyValue",
-          "when": "view == modbench.modList && (viewItem == file || viewItem == folder)",
+          "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem == folder)",
           "group": "5_copy@1"
         },
         {

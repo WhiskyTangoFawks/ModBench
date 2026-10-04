@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
-import type { Mod, OriginFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
+import type { FileOrigin, Mod, OriginFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
 import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
-import { groupModlist, type ModlistTree } from './modlistTree';
+import { groupModlist, type ModlistGroup, type ModlistTree } from './modlistTree';
 import type { ModStatus, ModStatusResult } from '../instanceLoader/statusChecker';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
 import { setModsEnabled as setModsEnabledCommand, type ModlistAccess } from '../modlist/modlist';
-import { anyNamed, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode, type ChildrenShown } from './modFiles';
+import { anyNamed, goToModCandidates, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode, type ChildrenShown } from './modFiles';
 
 /** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
 export type SortDirection = 'losingAtTop' | 'winningAtTop';
@@ -241,7 +241,6 @@ export class ModListProvider
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private tree?: ModlistTree;
-  private readonly parents = new WeakMap<ModNode, SeparatorNode>();
   private cachedEntries?: ModlistEntry[];
   private modsHoldingPlugin = new Set<string>();
   private filterText = '';
@@ -550,7 +549,7 @@ export class ModListProvider
   }
 
   async getChildren(element?: ModlistNode): Promise<ModlistNode[]> {
-    if (element instanceof SeparatorNode) return this.separatorChildren(element);
+    if (element instanceof SeparatorNode) return element.mods.map((m) => this.modNode(m, element.shown));
     if (element instanceof ModNode) {
       return filesIn(element, modOrigin(element.mod.name), element.files, element.folders, undefined, this.within(element));
     }
@@ -590,19 +589,18 @@ export class ModListProvider
       const flat = [...ungrouped, ...groups.flatMap((g) => this.losingFirst(g.mods))];
       return { ungrouped: this.matchingModNodes(flat), separators: [] };
     }
-    if (!this.filterText) {
-      return {
-        ungrouped: ungrouped.map((m) => this.modNode(m)),
-        separators: groups.map((g) => this.separatorNode(g.separator, this.inViewOrder(g.mods))),
-      };
-    }
-    const separators: ModlistNode[] = [];
-    for (const g of groups) {
-      const shown = shownUnder('matching', this.matches, g.separator.name);
-      const mods = shown === 'all' ? g.mods : g.mods.filter(this.isFound);
-      if (shown === 'all' || mods.length > 0) separators.push(this.separatorNode(g.separator, this.inViewOrder(mods), shown));
-    }
-    return { ungrouped: this.matchingModNodes(ungrouped), separators };
+    return {
+      ungrouped: this.filterText ? this.matchingModNodes(ungrouped) : ungrouped.map((m) => this.modNode(m)),
+      separators: groups.flatMap((g) => this.groupRow(g) ?? []),
+    };
+  }
+
+  // A separator, with the mods the filter shows under it; none when it shows nothing.
+  private groupRow(group: ModlistGroup): SeparatorNode | undefined {
+    if (!this.filterText) return this.separatorNode(group.separator, this.inViewOrder(group.mods));
+    const shown = shownUnder('matching', this.matches, group.separator.name);
+    const mods = shown === 'all' ? group.mods : group.mods.filter(this.isFound);
+    return shown === 'all' || mods.length > 0 ? this.separatorNode(group.separator, this.inViewOrder(mods), shown) : undefined;
   }
 
   private writtenName(entry: ModlistEntry): ModlistEntry {
@@ -644,21 +642,25 @@ export class ModListProvider
     return row;
   }
 
-  private within(row: ModNode | OverwriteNode | FolderNode): { shown: ChildrenShown; matches: (name: string) => boolean } {
-    return { shown: row.shown, matches: this.matches };
-  }
-
-  private separatorChildren(element: SeparatorNode): ModlistNode[] {
-    return element.mods.map((m) => {
-      const row = this.modNode(m, element.shown);
-      this.parents.set(row, element);
-      return row;
-    });
+  private within(row: ModNode | OverwriteNode | FolderNode) {
+    const inConflict = (origin: FileOrigin, file: OriginFile) =>
+      goToModCandidates(this.instanceValue.files.get(file.relativePath), origin).length > 0;
+    return { shown: row.shown, matches: this.matches, inConflict };
   }
 
   getParent(element: ModlistNode): ModlistNode | undefined {
     if (element instanceof FolderNode || element instanceof FileNode) return element.parent;
-    return element instanceof ModNode ? this.parents.get(element) : undefined;
+    if (!(element instanceof ModNode) || (this.filterText && !this.groupingOn)) return undefined;
+    const group = this.ensureLoaded().groups.find((g) => g.mods.some((m) => m.name === element.mod.name));
+    return group && this.groupRow(group);
+  }
+
+  /** The row the tree shows for an origin: undefined when the list does not hold the mod or the
+   *  filter hides it. */
+  rowFor(origin: FileOrigin): ModNode | OverwriteNode | undefined {
+    if (origin.kind !== 'mod') return this.overwriteNode();
+    const mod = this.instanceValue.mods.find((entry): entry is Mod => entry.kind === 'mod' && entry.name === origin.name);
+    return mod && (!this.filterText || this.isFound(mod)) ? this.modNode(mod) : undefined;
   }
 
   // modlist.txt is winning-first. View order only.

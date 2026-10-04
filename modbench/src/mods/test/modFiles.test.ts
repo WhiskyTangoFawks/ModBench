@@ -15,6 +15,7 @@ vi.mock('vscode', () => ({
 
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { FolderNode } from '../modFiles';
+import { FileConflictLookup, RUNTIME_OUTPUT, modOrigin } from '../../instanceLoader/fileConflictIndex';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
@@ -301,7 +302,7 @@ describe('a file or folder row\'s parent, which VS Code\'s reveal walks up throu
 
     expect(provider.getParent(leaf)).toBe(folder);
     expect(provider.getParent(folder)).toBe(modRow);
-    expect(provider.getParent(modRow)).toBe(gear);
+    expect(provider.getParent(modRow)).toEqual(gear);
   });
 
   it('is Overwrite for a file at its root', async () => {
@@ -480,5 +481,30 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
 
     expect(row.collapsibleState).toBe(Expanded);
     expect(shown(await provider.getChildren(row))).toEqual(['folder empty']);
+  });
+});
+
+describe('a file row\'s context, which the File menu\'s go to mod reads (mods.md, Menus and keys)', () => {
+  const flagsOf = async (providers: Parameters<FileConflictLookup['set']>[0]['providers'], rowOfMod: string) => {
+    const files = new FileConflictLookup();
+    files.set({ relativePath: 'a.dds', winner: '/w', winnerOrigin: providers[0] ?? RUNTIME_OUTPUT, providers });
+    const value = instanceValueFixture({
+      mods: [mod('High'), mod('Low')], files,
+      filesByMod: new Map([['High', [file('a.dds')]], ['Low', [file('a.dds')]]]),
+      overwriteFiles: [file('a.dds')],
+    });
+    const provider = new ModListProvider({ instance: new FakeInstance(value), access: accessTo('/instance'), log: () => undefined });
+    const row = rowOfMod === 'Overwrite' ? await rootOf(provider, OverwriteNode, 'Overwrite') : await rootOf(provider, ModNode, rowOfMod);
+    return (await provider.getChildren(row)).map((child) => child.contextValue);
+  };
+
+  it('flags a file whose path another enabled copy provides, in a mod or Overwrite', async () => {
+    expect(await flagsOf([modOrigin('High'), modOrigin('Low')], 'Low')).toEqual(['file conflict']);
+    expect(await flagsOf([RUNTIME_OUTPUT, modOrigin('Low')], 'Overwrite')).toEqual(['file conflict']);
+  });
+
+  it('flags no file that is the only copy, or whose mod does not provide it', async () => {
+    expect(await flagsOf([modOrigin('High')], 'High')).toEqual(['file']);
+    expect(await flagsOf([modOrigin('High'), modOrigin('Other')], 'Low')).toEqual(['file']);
   });
 });
