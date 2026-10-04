@@ -3,7 +3,7 @@ import { errorMessage } from '../ports/errorMessage';
 
 type StatusSource = Pick<MEditClient, 'onStatusChanged'>;
 
-/** A crash-restart is a fresh backend holding no load order, so the reconcile runs again from
+/** A crash-restart is a fresh backend holding no load order, so editing is entered again from
  *  scratch — the same re-entry path a fresh launch takes, not a bespoke recovery. */
 export function enterEditingAcrossRestarts(
   client: StatusSource, enterEditing: () => Promise<void>, log: (msg: string) => void,

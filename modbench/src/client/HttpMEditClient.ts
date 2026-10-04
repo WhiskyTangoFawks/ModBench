@@ -4,6 +4,7 @@ import {
   toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
+import { bundledBackendPath, spawnPiped } from './bundledBackend';
 import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } from './backendLog';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
@@ -25,11 +26,10 @@ import type { SelectionOutcome } from '../ports/selectionOutcome';
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
 export interface HttpMEditClientDeps {
-  /** The process this client is the front of; nothing outside this module configures it. */
-  backend: BackendLifecycleOptions;
-  /** Where the spawned backend's output goes, at its own level; the backend is spawned at this
-   *  channel's level, read fresh at each spawn. */
-  backendLog?: BackendLogChannel;
+  /** The process this client is the front of. It spawns the bundled backend unless told otherwise. */
+  backend?: Omit<BackendLifecycleOptions, 'onOutput' | 'serilogLevelArgs' | 'log'>;
+  /** Where the spawned backend's output goes, and whose level it is spawned at. */
+  backendLog: BackendLogChannel;
   /** Overrides the production fetch (undici, unlimited timeouts) — a test scripts the backend's
    *  HTTP responses through this. */
   fetch?: (input: Request) => Promise<Response>;
@@ -38,12 +38,14 @@ export interface HttpMEditClientDeps {
   reconnectDelayMs?: number;
 }
 
-function withBackendLog(backend: BackendLifecycleOptions, channel: BackendLogChannel | undefined): BackendLifecycleOptions {
-  if (!channel) return backend;
+function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
   return {
-    ...backend,
-    onOutput: makeBackendLogForwarder(channel),
-    serilogLevelArgs: () => backendLogLevelArgs(channel.logLevel),
+    executablePath: bundledBackendPath(process.platform, __dirname),
+    spawn: spawnPiped,
+    ...deps.backend,
+    log: deps.log,
+    onOutput: makeBackendLogForwarder(deps.backendLog),
+    serilogLevelArgs: () => backendLogLevelArgs(deps.backendLog.logLevel),
   };
 }
 
@@ -65,7 +67,7 @@ export class HttpMEditClient implements MEditClient {
       log: deps.log,
       reconnectDelayMs: deps.reconnectDelayMs,
     });
-    this.lifecycle = new BackendLifecycle(withBackendLog(deps.backend, deps.backendLog));
+    this.lifecycle = new BackendLifecycle(backendOptions(deps));
     // The stream is open exactly while the backend is attached, so no module outside this one
     // starts or stops it.
     this.lifecycle.onStatusChanged((status) => {

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { HttpMEditClient, type HttpMEditClientDeps } from '../HttpMEditClient';
+import { Readable } from 'node:stream';
 import { isUnanswered } from '../MEditClient';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -11,6 +12,9 @@ function neverFetch(): (input: Request) => Promise<Response> {
   return () => new Promise<Response>(() => {});
 }
 
+const DEBUG_LEVEL = 2;
+const fakeLogChannel = () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), logLevel: 3 });
+
 function makeClient(
   fetch: (input: Request) => Promise<Response>,
   { health = 'up', ...deps }: { health?: 'up' | 'down' } & Pick<HttpMEditClientDeps, 'timeoutMs' | 'reconnectDelayMs'> = {},
@@ -20,7 +24,7 @@ function makeClient(
       attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
       checkHealth: () => Promise.resolve(health === 'up'),
     },
-    fetch, ...deps,
+    backendLog: fakeLogChannel(), fetch, ...deps,
   });
 }
 
@@ -820,8 +824,7 @@ describe('HttpMEditClient — read timeout, checked through getRecordTypes, stan
 
 describe('HttpMEditClient, the backend process it hides', () => {
   it('files the spawned backend\'s output in the log channel at its own level, and spawns it at the channel\'s level', async () => {
-    const { Readable } = await import('node:stream');
-    const channel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), logLevel: 2 };
+    const channel = { ...fakeLogChannel(), logLevel: DEBUG_LEVEL };
     const state = { healthy: false };
     const spawn = vi.fn(() => {
       state.healthy = true;

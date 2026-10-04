@@ -2,8 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
-import * as cp from 'child_process';
-import { HttpMEditClient, type BackendLifecycleOptions } from './client';
+import { HttpMEditClient } from './client';
 import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
@@ -79,7 +78,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(compileDiagnostics);
 
   // ADR-0002.
-  const meditClient = new HttpMEditClient({ backend: backendOptions(attachPort, outputChannel), backendLog: outputChannel, log });
+  const meditClient = new HttpMEditClient({ backend: { attachPort }, backendLog: outputChannel, log });
   activeClient = meditClient; // deactivate()'s only way to reach it
   const statusBar = createStatusBar(meditClient);
   context.subscriptions.push(statusBar);
@@ -272,18 +271,6 @@ function compileDeps(deps: PluginRowCommandDeps): CompileDeps {
   };
 }
 
-
-function backendOptions(attachPort: number | undefined, channel: vscode.LogOutputChannel): BackendLifecycleOptions {
-  // Bundled backend binary (see build:backend / .vscodeignore). __dirname is
-  // out/ at runtime; the published self-contained executable lives in backend/.
-  const backendExe = process.platform === 'win32' ? 'MEditService.Http.exe' : 'MEditService.Http';
-  return {
-    attachPort,
-    log: (msg) => channel.info(msg),
-    executablePath: path.join(__dirname, '..', 'backend', backendExe),
-    spawn: (exe, args) => cp.spawn(exe, args, { detached: false, stdio: ['ignore', 'pipe', 'pipe'] }),
-  };
-}
 
 function setupScriptsFolder(cfg: vscode.WorkspaceConfiguration): FilterScripts {
   const scriptsPathCfg: string = cfg.get('scriptsPath') ?? '';

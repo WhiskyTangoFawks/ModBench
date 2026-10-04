@@ -33,8 +33,7 @@ export function makeBackendLogForwarder(channel: LeveledChannel): (line: string,
   };
 }
 
-// `vscode.LogLevel`'s ordinals (Off=0, Trace=1 .. Error=5). Untyped as `number` so this file
-// needs no runtime `vscode` import, and so no VS Code test harness.
+// `vscode.LogLevel`'s ordinals (Off=0, Trace=1 .. Error=5).
 const SERILOG_LEVEL_NAMES: Record<number, string> = {
   1: 'Verbose', 2: 'Debug', 3: 'Information', 4: 'Warning', 5: 'Error',
 };
