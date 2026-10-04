@@ -177,31 +177,39 @@ internal sealed class WriteTargets(
     // per-child re-read would walk the whole tree again for every key drawn.
     public readonly record struct Allocator(
         PluginAddress Plugin, GameRelease Release, bool IsLight, bool EslFlagIsRemovable,
-        IReadOnlySet<string> Effective, IReadOnlySet<string> Head)
+        IReadOnlySet<string> Used)
     {
-        public bool HoldsAtEitherRef(string formKey) => Effective.Contains(formKey) || Head.Contains(formKey);
+        public bool Holds(string formKey) => Used.Contains(formKey);
 
-        internal IEnumerable<string> Taken => Effective.Concat(Head);
+        internal IEnumerable<string> Taken
+        {
+            get
+            {
+                var plugin = Plugin;
+                return Used.Where(key => IsNativeTo(key, plugin));
+            }
+        }
+
+        private static bool IsNativeTo(string formKey, PluginAddress plugin) =>
+            FormKey.TryFactory(formKey, out var parsed)
+            && parsed.ModKey.FileName.String.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase);
     }
 
-    // Both refs from the tree alone (ADR-0015): the working tree, plus HEAD, whose IDs a
-    // working-tree deletion has not freed until the plugin is compiled.
+    // From the tree alone (ADR-0015).
     internal Allocator AllocatorOver(SourceRepository repository, PluginAddress plugin) =>
         AllocatorOver(
             plugin,
             IsLightByRemovableFlag(repository, plugin),
-            repository.NativeFormKeysHeld(plugin),
-            repository.NativeFormKeysHeldAt(plugin, "HEAD"));
+            repository.FormKeysUsed(plugin));
 
     // A .esl extension also reads as light, and no header edit can un-flag that one.
     private Allocator AllocatorOver(
-        PluginAddress plugin, bool byRemovableFlag, IReadOnlySet<string> effective, IReadOnlySet<string> head) =>
+        PluginAddress plugin, bool byRemovableFlag, IReadOnlySet<string> used) =>
         new(plugin,
             loadOrder.Current.GameRelease,
             byRemovableFlag || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase),
             byRemovableFlag,
-            effective,
-            head);
+            used);
 
     // One allocator read per gesture, for the gestures that draw a single key. The embedded copy
     // draws several from one allocator and calls the overload below directly.
@@ -222,7 +230,7 @@ internal sealed class WriteTargets(
                 targetFormKey = "";
                 return notNative;
             }
-            if (allocator.HoldsAtEitherRef(requestedFormKey))
+            if (allocator.Holds(requestedFormKey))
             {
                 targetFormKey = "";
                 return RecordEditResult.Refused(
@@ -285,8 +293,7 @@ internal sealed class WriteTargets(
         return null;
     }
 
-    // Unions the working tree (committed plus uncompiled creates) and HEAD (natives the working tree
-    // deleted, whose IDs must not be reused before compile). Null means exhausted.
+    // Null means exhausted.
     private static string? NextFreeNativeFormId(Allocator allocator, bool isLight, IReadOnlySet<string>? taken = null)
     {
         var floor = PluginFlagPredicates.HighRangeFormIdFloor(allocator.Release);

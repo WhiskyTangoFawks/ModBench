@@ -202,7 +202,7 @@ public sealed class DeleteRecordHandlerTests
 
         Assert.Empty(result.Refused);
         Assert.Null(mod.Document(mod.Npc.ToString()));
-        Assert.True(mod.CommittedHolds(mod.Npc.ToString()));
+        Assert.True(mod.Uses(mod.Npc.ToString()));
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public sealed class DeleteRecordHandlerTests
     }
 
     [Fact]
-    public void DeleteRecords_OnANeverCommittedRecord_LeavesNothingAtEitherRef()
+    public void DeleteRecords_OnANeverCommittedRecord_LeavesNothingUsed()
     {
         using var mod = SourceEditFixture.Tracked();
         var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNew");
@@ -233,7 +233,7 @@ public sealed class DeleteRecordHandlerTests
 
         Assert.Empty(result.Refused);
         Assert.Null(mod.Document(newFormKey));
-        Assert.False(mod.CommittedHolds(newFormKey));
+        Assert.False(mod.Uses(newFormKey));
     }
 
     [Fact]

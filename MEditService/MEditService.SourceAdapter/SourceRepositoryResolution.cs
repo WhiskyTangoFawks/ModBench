@@ -277,10 +277,9 @@ public sealed partial class SourceRepository
 
     // Every read that finds a document by its text remembers it, so no put later in this operation
     // misses it by name and writes a second document beside it.
-    private List<string> RememberFoundByText(string pluginFileName, string formKey, List<string> documents)
+    private void RememberFoundByText(string pluginFileName, string formKey, List<string> documents)
     {
         if (documents.Count == 1) _foundByText[(pluginFileName, Canonical(formKey))] = documents[0];
-        return documents;
     }
 
     private string? RememberedFoundByText(string pluginFileName, string formKey) =>
@@ -291,52 +290,6 @@ public sealed partial class SourceRepository
 
     private static bool IsUnder(string directory, string path) =>
         path.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal);
-
-
-    /// <summary>True when another record's document in this plugin's tree carries
-    /// <paramref name="formKey"/>. The cheap half of <see cref="IdentityOf"/>, for a caller that
-    /// needs no name and will not pay the codec read one costs.</summary>
-    internal bool CarriesEmbedded(PluginAddress plugin, string formKey) =>
-        DocumentHolding(Path.Combine(_modFolder, RootFor(plugin.Name)), formKey) is not null;
-
-    /// <summary>True when this plugin's tree holds <paramref name="formKey"/> at the working tree or
-    /// at HEAD. Both, because a working-tree deletion does not free the ID until the next
-    /// compile.</summary>
-    public bool HoldsAtEitherRef(PluginAddress plugin, string formKey) =>
-        HoldsNow(plugin, formKey) || HoldsAtRef(plugin, formKey, "HEAD");
-
-    // Its own document is found as Locate finds it and has to declare the key; otherwise another
-    // record's document carries it inline, which the tree scan answers.
-    private bool HoldsNow(PluginAddress plugin, string formKey)
-    {
-        if (!FormKey.TryFactory(formKey, out var parsed)) return false;
-        var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
-        if (!Directory.Exists(sourceRoot)) return false;
-
-        // The header's document is the fixed root RecordData.json, and it declares a ModKey rather
-        // than the FormKey the tree files it under, so no name or text carries that key.
-        if (parsed.ToString().Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), StringComparison.OrdinalIgnoreCase))
-            return File.Exists(HeaderDocumentIn(_modFolder, plugin.Name));
-
-        var spelled = parsed.ToString();
-        return DocumentsNaming(sourceRoot, spelled).Any(document => Declares(document, parsed))
-               || RememberFoundByText(plugin.Name, spelled, DocumentsDeclaring(sourceRoot, spelled)).Count > 0
-               || CarriesEmbedded(plugin, spelled);
-    }
-
-    private static bool Declares(string documentPath, FormKey formKey) =>
-        ReadOrNull(documentPath) is { } text
-        && RootStringIn(text, "FormKey") is { } declared
-        && FormKey.TryFactory(declared, out var carried)
-        && carried == formKey;
-
-    // The committed set, read the same way the allocator reads it: a document's own FormKey, plus
-    // every child inlined in it.
-    private bool HoldsAtRef(PluginAddress plugin, string formKey, string gitRef) =>
-        ReadAll(plugin, gitRef).Any(document =>
-            document.FormKey.Equals(formKey, StringComparison.OrdinalIgnoreCase)
-            || FormKeysIn(System.Text.Encoding.UTF8.GetBytes(document.Body), _release)
-                .Any(key => key.InAnEmbedSlot && key.FormKey.Equals(formKey, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
     /// holds it. Only the repository reads block directories back (ADR-0014). A

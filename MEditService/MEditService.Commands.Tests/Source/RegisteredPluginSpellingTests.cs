@@ -28,8 +28,8 @@ public sealed class RegisteredPluginSpellingTests
 
         Assert.Empty(result.Refused);
         var repository = SourceRepository.Open(scratch.ModFolder, Release).Require();
-        Assert.NotEmpty(repository.NativeFormKeysHeldAt(scratch.Plugin, "HEAD"));
-        Assert.Empty(repository.NativeFormKeysHeldAt(new PluginAddress("Mixed.esp", Origin), "HEAD"));
+        Assert.NotEmpty(repository.FormKeysUsed(scratch.Plugin));
+        Assert.Empty(repository.FormKeysUsed(new PluginAddress("Mixed.esp", Origin)));
     }
 
     [Fact]

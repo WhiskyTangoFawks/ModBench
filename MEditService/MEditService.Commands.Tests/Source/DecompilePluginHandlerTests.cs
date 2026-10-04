@@ -57,7 +57,6 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Assert.Equal([Tracked("Second.esp")], result.Landed);
         Assert.Empty(result.Refused);
         Assert.Contains("SecondNpc", SourceTextOf("Second.esp"), StringComparison.Ordinal);
-        Assert.Empty(Repository.NativeFormKeysHeldAt(Tracked("Second.esp"), "HEAD"));
         Assert.Equal(headBefore, Head());
     }
 

@@ -27,7 +27,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         var formKey = child.FormKey;
         var ownFields = child with { Body = ContainerDocumentEdits.WithoutChildren(codec, child.Body, release, child.RecordType) };
 
-        if (destination.Repository.HoldsAtEitherRef(destination.Plugin, formKey))
+        if (destination.Repository.FormKeysUsed(destination.Plugin).Contains(formKey))
         {
             // Held only at Head has no document to replace, so no replacement is asked for.
             if (Identity(destination, formKey, release) is not { } existing)
@@ -177,7 +177,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         CopySource source, string worldspaceFormKey, SourceDocument cell, Destination destination, GameRelease release)
     {
         var cellFormKey = cell.FormKey;
-        if (destination.Repository.HoldsAtEitherRef(destination.Plugin, cellFormKey))
+        if (destination.Repository.FormKeysUsed(destination.Plugin).Contains(cellFormKey))
             return RefuseHeldOnlyAtHead(cellFormKey, destination.Plugin);
 
         if (Identity(destination, worldspaceFormKey, release) is null)
