@@ -1,13 +1,15 @@
 import * as vscode from 'vscode';
 import type { FileOrigin, Mod, OriginFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
-import { goToModCandidates, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
+import { goToModCandidates, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistGroup, type ModlistTree } from './modlistTree';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
-import { setModsEnabled as setModsEnabledCommand, type ModlistAccess } from '../modlist/modlist';
+import {
+  setModsEnabled as setModsEnabledCommand, type ModlistAccess, type OriginFileMark, type OriginFileRef,
+} from '../modlist/modlist';
 import { anyNamed, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode, type ChildrenShown } from './modFiles';
 import { modRowUri } from './modIndicators';
 
@@ -52,15 +54,19 @@ interface UnconfirmedRename {
 
 type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
 
+type FileRef = { readonly kind: 'file' } & OriginFileRef;
+
+type RowRef = EntryRef | FileRef;
+
 interface UnconfirmedShape {
   /** What the write changes: what its refusal forgets, and what its line names. */
-  readonly subjects: EntryRef[];
+  readonly subjects: RowRef[];
   /** The rows that carry the mark. */
-  readonly rows: readonly EntryRef[];
+  readonly rows: readonly RowRef[];
   readonly covered: (value: InstanceValue) => boolean;
   /** A value that shows the write's first step but not its last: the write in progress. */
   readonly partway?: (value: InstanceValue) => boolean;
-  readonly unmet: (subjects: readonly EntryRef[]) => string;
+  readonly unmet: (subjects: readonly RowRef[]) => string;
   marked: boolean;
   partwaySeen: boolean;
   differedOnce: boolean;
@@ -68,6 +74,20 @@ interface UnconfirmedShape {
 }
 
 const sameEntry = (a: EntryRef, b: EntryRef): boolean => a.kind === b.kind && a.name === b.name;
+
+const fileRef = (file: OriginFileRef): FileRef => ({ kind: 'file', ...file });
+
+function sameRow(a: RowRef, b: RowRef): boolean {
+  if (a.kind === 'file' || b.kind === 'file') {
+    return a.kind === 'file' && b.kind === 'file' && sameOrigin(a.origin, b.origin) && a.relativePath === b.relativePath;
+  }
+  return sameEntry(a, b);
+}
+
+function listsFile(value: InstanceValue, { origin, relativePath }: OriginFileRef): boolean {
+  const files = origin.kind === 'mod' ? value.filesByMod.get(origin.name) ?? [] : value.overwriteFiles;
+  return files.some((file) => file.relativePath === relativePath);
+}
 
 const isListed = (value: InstanceValue, ref: EntryRef): boolean => value.mods.some((entry) => sameEntry(entry, ref));
 
@@ -85,7 +105,13 @@ function travellingWith(entries: readonly ModlistEntry[], moved: readonly EntryR
   return travelling;
 }
 
-const quoted = (ref: EntryRef): string => (ref.kind === 'separator' ? `Separator "${ref.name}"` : `"${ref.name}"`);
+function quoted(ref: RowRef): string {
+  if (ref.kind === 'file') {
+    const where = ref.origin.kind === 'mod' ? `"${ref.origin.name}"` : OVERWRITE_LABEL;
+    return `"${ref.relativePath}" in ${where}`;
+  }
+  return ref.kind === 'separator' ? `Separator "${ref.name}"` : `"${ref.name}"`;
+}
 
 function markRow(row: vscode.TreeItem): void {
   row.iconPath = new vscode.ThemeIcon('sync~spin');
@@ -288,8 +314,8 @@ export class ModListProvider
   }
 
   private markShape(
-    subjects: readonly EntryRef[], covered: UnconfirmedShape['covered'], unmet: UnconfirmedShape['unmet'],
-    { carriers, partway }: { carriers?: readonly EntryRef[]; partway?: UnconfirmedShape['partway'] } = {},
+    subjects: readonly RowRef[], covered: UnconfirmedShape['covered'], unmet: UnconfirmedShape['unmet'],
+    { carriers, partway }: { carriers?: readonly RowRef[]; partway?: UnconfirmedShape['partway'] } = {},
   ): void {
     const own = [...subjects];
     const rows = carriers ?? own;
@@ -322,6 +348,19 @@ export class ModListProvider
     }
   }
 
+  /** Each file's row stays as it is, marked, until the disk lists no file at its path. */
+  markExclusions(files: readonly OriginFileRef[], mark: OriginFileMark): void {
+    const done = mark === 'Excluded' ? 'excluded' : 'included';
+    for (const file of files) {
+      this.markShape([fileRef(file)], (value) => !listsFile(value, file),
+        () => `${quoted(fileRef(file))} was ${done}, and the disk does not show it.`);
+    }
+  }
+
+  forgetUnconfirmedExclusions(files: readonly OriginFileRef[]): void {
+    this.forgetUnconfirmedShape(files.map(fileRef));
+  }
+
   private separatorHolding(index: number): EntryRef | undefined {
     return this.instanceValue.mods.slice(index).find((entry) => entry.kind === 'separator');
   }
@@ -351,11 +390,11 @@ export class ModListProvider
   }
 
   /** A refused or failed write shows the disk's shape at once, with no mark. */
-  forgetUnconfirmedShape(refs: readonly EntryRef[]): void {
+  forgetUnconfirmedShape(refs: readonly RowRef[]): void {
     if (refs.length === 0) return;
     let shown = false;
     for (const shape of this.unconfirmedShapes) {
-      const left = shape.subjects.filter((own) => !refs.some((ref) => sameEntry(ref, own)));
+      const left = shape.subjects.filter((own) => !refs.some((ref) => sameRow(ref, own)));
       shown ||= shape.marked && left.length < shape.subjects.length;
       shape.subjects.splice(0, shape.subjects.length, ...left);
       if (left.length === 0) this.dropShape(shape);
@@ -363,8 +402,15 @@ export class ModListProvider
     if (shown) this.render();
   }
 
-  private shapeMarked(ref: EntryRef): boolean {
-    return [...this.unconfirmedShapes].some((shape) => shape.marked && shape.rows.some((row) => sameEntry(row, ref)));
+  private shapeMarked(ref: RowRef): boolean {
+    return [...this.unconfirmedShapes].some((shape) => shape.marked && shape.rows.some((row) => sameRow(row, ref)));
+  }
+
+  private markedFiles(rows: (FolderNode | FileNode)[]): (FolderNode | FileNode)[] {
+    for (const row of rows) {
+      if (row instanceof FileNode && this.shapeMarked(fileRef({ origin: row.origin, relativePath: row.file.relativePath }))) markRow(row);
+    }
+    return rows;
   }
 
   private settleUnconfirmedRenames(value: InstanceValue): void {
@@ -526,13 +572,14 @@ export class ModListProvider
   async getChildren(element?: ModlistNode): Promise<ModlistNode[]> {
     if (element instanceof SeparatorNode) return element.mods.map((m) => this.modNode(m, element.shown));
     if (element instanceof ModNode) {
-      return filesIn(element, modOrigin(element.mod.name), element.files, element.folders, undefined, this.within(element));
+      return this.markedFiles(filesIn(element, modOrigin(element.mod.name), element.files, element.folders, undefined, this.within(element)));
     }
     if (element instanceof OverwriteNode) {
-      return filesIn(element, RUNTIME_OUTPUT, element.listed.files, element.listed.folders, undefined, this.within(element));
+      return this.markedFiles(filesIn(element, RUNTIME_OUTPUT, element.listed.files, element.listed.folders, undefined, this.within(element)));
     }
     if (element instanceof FolderNode) {
-      return filesIn(element, element.origin, element.files, element.folders, element.folder.relativePath, this.within(element));
+      return this.markedFiles(
+        filesIn(element, element.origin, element.files, element.folders, element.folder.relativePath, this.within(element)));
     }
     if (element) return [];
     await this.firstRead.settled; // never render before the Instance has actually read once

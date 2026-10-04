@@ -260,4 +260,19 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([enabledMod], () => false)).toMatchObject({ holdsEnabledMod: false, holdsDisabledMod: true });
     expect(modsKeyContext([group], byRow)).toMatchObject({ holdsEnabledMod: false, holdsDisabledMod: false });
   });
+
+  it('exclude sees a selected file the File menu offers it on, and include one it offers include on', () => {
+    const origin = { kind: 'mod', name: 'On' } as const;
+    const fileAt = (relativePath: string, excluded: boolean) =>
+      ({ relativePath, path: `/instance/mods/On/${relativePath}`, sourcePath: `/instance/mods/On/${relativePath}`, excluded });
+    const included = new FileNode(enabledMod, origin, fileAt('a.dds', false), 'a.dds');
+    const excluded = new FileNode(enabledMod, origin, fileAt('b.dds.mohidden', true), 'b.dds.mohidden');
+    const hidingFolder = new FolderNode(enabledMod, origin, { relativePath: 'x.mohidden', path: '/instance/mods/On/x.mohidden', excluded: true }, [], [], 'x.mohidden');
+    const byFolder = new FileNode(hidingFolder, origin, fileAt('x.mohidden/c.dds', true), 'c.dds');
+
+    expect(modsKeyContext([included, group], byRow)).toMatchObject({ holdsIncludedFile: true, holdsExcludedFile: false });
+    expect(modsKeyContext([excluded], byRow)).toMatchObject({ holdsIncludedFile: false, holdsExcludedFile: true });
+    expect(modsKeyContext([included, excluded], byRow)).toMatchObject({ holdsIncludedFile: true, holdsExcludedFile: true });
+    expect(modsKeyContext([byFolder, enabledMod], byRow)).toMatchObject({ holdsIncludedFile: false, holdsExcludedFile: false });
+  });
 });

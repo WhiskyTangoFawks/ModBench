@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Mod, OriginFile, ModlistEntry, OriginFolder } from '../../instanceLoader/instance';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
@@ -252,7 +252,7 @@ describe('a file or folder row\'s parts (mods.md, A row, File and folder)', () =
     const { folder, leaf } = await rowsOf();
 
     expect(folder.contextValue).toBe('folder');
-    expect(leaf.contextValue).toBe('file');
+    expect(leaf.contextValue).toBe('file included');
   });
 });
 
@@ -499,12 +499,114 @@ describe('a file row\'s context, which the File menu\'s go to mod reads (mods.md
   };
 
   it('flags a file whose path another enabled copy provides, in a mod or Overwrite', async () => {
-    expect(await flagsOf([modOrigin('High'), modOrigin('Low')], 'Low')).toEqual(['file conflict']);
-    expect(await flagsOf([RUNTIME_OUTPUT, modOrigin('Low')], 'Overwrite')).toEqual(['file conflict']);
+    expect(await flagsOf([modOrigin('High'), modOrigin('Low')], 'Low')).toEqual(['file conflict included']);
+    expect(await flagsOf([RUNTIME_OUTPUT, modOrigin('Low')], 'Overwrite')).toEqual(['file conflict included']);
   });
 
   it('flags no file that is the only copy, or whose mod does not provide it', async () => {
-    expect(await flagsOf([modOrigin('High')], 'High')).toEqual(['file']);
-    expect(await flagsOf([modOrigin('High'), modOrigin('Other')], 'Low')).toEqual(['file']);
+    expect(await flagsOf([modOrigin('High')], 'High')).toEqual(['file included']);
+    expect(await flagsOf([modOrigin('High'), modOrigin('Other')], 'Low')).toEqual(['file included']);
+  });
+});
+
+describe('a file row\'s context, which the File menu\'s exclude or include reads (mods.md, Menus and keys, story 7)', () => {
+  const flags = (row: ModlistNode): string[] => row.contextValue?.split(' ') ?? [];
+  const excludedFile = (relativePath: string): OriginFile => ({ ...file(relativePath), excluded: true });
+
+  it('flags a file the game may get included, and a file excluded by its own name excluded', async () => {
+    const provider = providerOver([mod('M')], { M: [file('a.dds'), excludedFile('b.dds.mohidden')] });
+    const row = await rootOf(provider, ModNode, 'M');
+
+    expect(flags(await childNamed(provider, row, 'a.dds'))).toEqual(['file', 'included']);
+    expect(flags(await childNamed(provider, row, 'b.dds.mohidden'))).toEqual(['file', 'excluded']);
+  });
+
+  it('flags neither on a file its folder excludes, whatever its own name', async () => {
+    const files = [excludedFile('Textures.mohidden/a.dds'), excludedFile('Textures.mohidden/b.dds.mohidden')];
+    const folder: OriginFolder = { relativePath: 'Textures.mohidden', path: '/instance/mods/Textures.mohidden', excluded: true };
+    const provider = providerOver([mod('M')], { M: files }, [], { byMod: { M: [folder] } });
+    const textures = await childNamed(provider, await rootOf(provider, ModNode, 'M'), 'Textures.mohidden');
+
+    for (const name of ['a.dds', 'b.dds.mohidden']) {
+      expect(flags(await childNamed(provider, textures, name))).toEqual(['file']);
+    }
+  });
+});
+
+describe('an excluded or included file while the disk has not confirmed it (common.md, Unconfirmed writes, story 2)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const valueHolding = (modFiles: OriginFile[], overwriteFiles: OriginFile[] = []) => instanceValueFixture({
+    mods: [mod('M')], filesByMod: new Map([['M', modFiles]]), foldersByMod: new Map([['M', []]]),
+    overwriteFiles, overwriteFolders: [],
+  });
+  const setUp = (modFiles: OriginFile[], overwriteFiles: OriginFile[] = []) => {
+    const instance = new FakeInstance(valueHolding(modFiles, overwriteFiles));
+    const logged: string[] = [];
+    const provider = new ModListProvider({ instance, access: accessTo('/instance'), log: (line) => logged.push(line) });
+    return { instance, logged, provider };
+  };
+  const spinningIn = async (provider: ModListProvider, origin: 'M' | 'Overwrite'): Promise<string[]> => {
+    const row = origin === 'M' ? await rootOf(provider, ModNode, 'M') : await rootOf(provider, OverwriteNode, 'Overwrite');
+    return (await provider.getChildren(row))
+      .filter((child) => child.iconPath instanceof ThemeIcon && child.iconPath.id === 'sync~spin').map(labelOf);
+  };
+  const inM = { origin: modOrigin('M'), relativePath: 'a.dds' };
+
+  it('keeps the row as it is, and marks it only after a delay', async () => {
+    const { provider } = setUp([file('a.dds')]);
+
+    provider.markExclusions([inM], 'Excluded');
+    expect(await spinningIn(provider, 'M')).toEqual([]);
+
+    vi.advanceTimersByTime(1000);
+    expect(await spinningIn(provider, 'M')).toEqual(['a.dds']);
+  });
+
+  it('marks only the copy in the origin it was written to, not one at the same path in another', async () => {
+    const { provider } = setUp([file('a.dds')], [file('a.dds')]);
+
+    provider.markExclusions([inM], 'Excluded');
+    vi.advanceTimersByTime(1000);
+
+    expect(await spinningIn(provider, 'Overwrite')).toEqual([]);
+  });
+
+  it('the mark goes silently once the disk lists no file at its path', async () => {
+    const { instance, logged, provider } = setUp([file('a.dds')]);
+    provider.markExclusions([inM], 'Excluded');
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueHolding([{ ...file('a.dds.mohidden'), excluded: true }]));
+
+    expect(await spinningIn(provider, 'M')).toEqual([]);
+    expect(logged).toEqual([]);
+  });
+
+  it('shows the disk\'s row unmarked, and logs one line naming the file and its mod, after a second value that still lists it', async () => {
+    const { instance, logged, provider } = setUp([file('a.dds')], [file('b.ini')]);
+    provider.markExclusions([inM, { origin: RUNTIME_OUTPUT, relativePath: 'b.ini' }], 'Excluded');
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueHolding([file('a.dds')], [file('b.ini')]));
+    expect(await spinningIn(provider, 'M')).toEqual(['a.dds']);
+    instance.publish(valueHolding([file('a.dds')], [file('b.ini')]));
+
+    expect(await spinningIn(provider, 'M')).toEqual([]);
+    expect(logged).toEqual([
+      '"a.dds" in "M" was excluded, and the disk does not show it.',
+      '"b.ini" in Overwrite was excluded, and the disk does not show it.',
+    ]);
+  });
+
+  it('a write forgotten never shows the mark', async () => {
+    const { provider } = setUp([file('a.dds')]);
+    provider.markExclusions([inM], 'Included');
+
+    provider.forgetUnconfirmedExclusions([inM]);
+    vi.advanceTimersByTime(1000);
+
+    expect(await spinningIn(provider, 'M')).toEqual([]);
   });
 });

@@ -412,6 +412,16 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.mod.excludeFile",
+        "title": "Exclude Mod File",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.mod.includeFile",
+        "title": "Include Mod File",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.mod.enable",
         "title": "Enable Mod",
         "category": "Modbench"
@@ -610,6 +620,14 @@
         {
           "command": "modbench.mod.goToMod",
           "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleGoToModRow"
+        },
+        {
+          "command": "modbench.mod.excludeFile",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsIncludedFile"
+        },
+        {
+          "command": "modbench.mod.includeFile",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsExcludedFile"
         },
         {
           "command": "modbench.mod.enable",
@@ -1066,6 +1084,16 @@
           "command": "modbench.mod.goToMod",
           "when": "view == modbench.modList && viewItem =~ /\\bconflict\\b/",
           "group": "1_open@2"
+        },
+        {
+          "command": "modbench.mod.excludeFile",
+          "when": "view == modbench.modList && viewItem =~ /\\bfile\\b/ && viewItem =~ /\\bincluded\\b/",
+          "group": "2_change@1"
+        },
+        {
+          "command": "modbench.mod.includeFile",
+          "when": "view == modbench.modList && viewItem =~ /\\bfile\\b/ && viewItem =~ /\\bexcluded\\b/",
+          "group": "2_change@1"
         },
         {
           "command": "modbench.copyValue",

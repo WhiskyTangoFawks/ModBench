@@ -26,20 +26,20 @@ vi.mock('vscode', () => ({
 }));
 
 const {
-  uninstallMods, deleteSeparators, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators,
+  uninstallMods, deleteSeparators, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators, markFiles,
 } = vi.hoisted(() => ({
   uninstallMods: vi.fn(), deleteSeparators: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
-  createEmptyMod: vi.fn(), setModsEnabled: vi.fn(), moveMods: vi.fn(), moveSeparators: vi.fn(),
+  createEmptyMod: vi.fn(), setModsEnabled: vi.fn(), moveMods: vi.fn(), moveSeparators: vi.fn(), markFiles: vi.fn(),
 }));
 
 vi.mock('../../modlist/modlist', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../modlist/modlist')>()),
   createEmptyMod, deleteSeparators, insertSeparator,
-  moveMods, moveSeparators, renameSeparator, uninstallMods, setModsEnabled,
+  moveMods, moveSeparators, renameSeparator, uninstallMods, setModsEnabled, markFiles,
 }));
 
 import {
-  registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands,
+  registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands, registerFileExclusionCommands,
   registerModMoveCommand,
   registerModListCoreCommands, registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
   modsCopyValueText,
@@ -1487,5 +1487,66 @@ describe('shape gestures mark what they change before the write', () => {
         [[{ kind: 'mod', name: 'New Mod' }]], [[{ kind: 'mod', name: 'Other Mod' }]],
       ]);
     });
+  });
+});
+
+describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected file, in the right-clicked row\'s direction', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const modRow = new ModNode({ kind: 'mod', name: 'M', enabled: true });
+  const origin = { kind: 'mod', name: 'M' } as const;
+  const fileRow = (relativePath: string, excluded: boolean) => new FileNode(
+    modRow, origin, { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded },
+    relativePath);
+  const included = fileRow('a.dds', false);
+  const excluded = fileRow('b.dds.mohidden', true);
+  const refOf = (row: FileNode) => ({ origin: row.origin, relativePath: row.file.relativePath });
+  const marks = { markExclusions: vi.fn(), forgetUnconfirmedExclusions: vi.fn() };
+
+  it('excludes every selected file, whatever its own state, marking before the write only those it changes', async () => {
+    const order: string[] = [];
+    marks.markExclusions.mockImplementation(() => order.push('mark'));
+    markFiles.mockImplementation(() => { order.push('write'); return Promise.resolve({ landed: [refOf(included), refOf(excluded)], refused: [] }); });
+
+    registerFileExclusionCommands(access, () => [], recordingReporter(), marks);
+    await invoke('modbench.mod.excludeFile', included, [included, excluded, modRow]);
+
+    expect(markFiles).toHaveBeenCalledWith(access, [refOf(included), refOf(excluded)], 'Excluded');
+    expect(marks.markExclusions.mock.calls).toEqual([[[refOf(included)], 'Excluded']]);
+    expect(order).toEqual(['mark', 'write']);
+  });
+
+  it('includes the view\'s selection from the palette, where no row is right-clicked', async () => {
+    markFiles.mockResolvedValue({ landed: [refOf(excluded)], refused: [] });
+
+    registerFileExclusionCommands(access, () => [excluded], recordingReporter(), marks);
+    await invoke('modbench.mod.includeFile');
+
+    expect(markFiles).toHaveBeenCalledWith(access, [refOf(excluded)], 'Included');
+    expect(marks.markExclusions.mock.calls).toEqual([[[refOf(excluded)], 'Included']]);
+  });
+
+  it('reports each refused file by its mod and path, once, and forgets its mark, while the rest land', async () => {
+    const gone = fileRow('c.dds', false);
+    markFiles.mockResolvedValue({ landed: [refOf(included)], refused: [{ item: refOf(gone), reason: '"c.dds" is gone from disk.' }] });
+    const reporter = recordingReporter();
+
+    registerFileExclusionCommands(access, () => [], reporter, marks);
+    await invoke('modbench.mod.excludeFile', included, [included, gone]);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not exclude 1 of 2 files.', detail: '"M/c.dds" ("c.dds" is gone from disk.)',
+    }]);
+    expect(marks.forgetUnconfirmedExclusions.mock.calls).toEqual([[[refOf(gone)]]]);
+  });
+
+  it('calls nothing and reports nothing over a selection with no file', async () => {
+    const reporter = recordingReporter();
+
+    registerFileExclusionCommands(access, () => [modRow], reporter, marks);
+    await invoke('modbench.mod.excludeFile');
+
+    expect(markFiles).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
   });
 });

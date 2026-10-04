@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
+import { originLabel, OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { ModListProvider, type ModlistNode, type SortDirection } from './ModListProvider';
 import {
@@ -14,6 +14,7 @@ import {
   createEmptyMod,
   deleteSeparators,
   insertSeparator,
+  markFiles,
   moveMods,
   moveSeparators,
   renameSeparator,
@@ -23,6 +24,8 @@ import {
   type ModlistAccess,
   type ModlistSelectionResult,
   type MovePlace,
+  type OriginFileMark,
+  type OriginFileRef,
 } from '../modlist/modlist';
 import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
 import { installNameRefusal } from '../install/install';
@@ -74,6 +77,31 @@ export function registerModEnableCommands(
   return [
     registerModsGesture('modbench.mod.enable', viewSelection, run(true)),
     registerModsGesture('modbench.mod.disable', viewSelection, run(false)),
+  ];
+}
+
+const fileLabel = ({ origin, relativePath }: OriginFileRef): string => `${originLabel(origin)}/${relativePath}`;
+
+// modbench.mod.excludeFile / modbench.mod.includeFile: the direction is the command's, so a mixed
+// selection takes the right-clicked row's (mods.md, Menus and keys, story 7).
+export function registerFileExclusionCommands(
+  access: ModlistAccess, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+  marks: Pick<ModListProvider, 'markExclusions' | 'forgetUnconfirmedExclusions'>,
+): vscode.Disposable[] {
+  const run = (mark: OriginFileMark) => async (entry: GestureEntry) => {
+    const rows = pluralArgument(entry, 'file');
+    if (rows.length === 0) return;
+    const shown = mark === 'Excluded' ? 'excluded' : 'included';
+    const refOf = (row: typeof rows[number]): OriginFileRef => ({ origin: row.origin, relativePath: row.file.relativePath });
+    marks.markExclusions(rows.filter((row) => row.exclusion !== shown).map(refOf), mark);
+    const outcome = await markFiles(access, rows.map(refOf), mark);
+    reporter.selectionOutcome(
+      `Could not ${mark === 'Excluded' ? 'exclude' : 'include'} ${outcome.refused.length} of ${rows.length} files.`, outcome, fileLabel);
+    marks.forgetUnconfirmedExclusions(outcome.refused.map(({ item }) => item));
+  };
+  return [
+    registerModsGesture('modbench.mod.excludeFile', viewSelection, run('Excluded')),
+    registerModsGesture('modbench.mod.includeFile', viewSelection, run('Included')),
   ];
 }
 

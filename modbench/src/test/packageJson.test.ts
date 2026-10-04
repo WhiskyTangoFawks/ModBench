@@ -1236,6 +1236,16 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ]);
   });
 
+  it.each([
+    ['file included', 'modbench.mod.excludeFile'],
+    ['file excluded', 'modbench.mod.includeFile'],
+  ])('File menu on a %s row: %s, between go to mod and copy value', (viewItem, command) => {
+    expect(menuOn(viewItem)).toEqual([['modbench.mod.openFolder', '1_open'], [command, '2_change'], ['modbench.copyValue', '5_copy']]);
+    expect(menuOn(`file conflict ${viewItem.split(' ')[1]}`)).toEqual([
+      ['modbench.mod.openFolder', '1_open'], ['modbench.mod.goToMod', '1_open'], [command, '2_change'], ['modbench.copyValue', '5_copy'],
+    ]);
+  });
+
   it('Folder menu: open folder, then copy value, and no item of a mod\'s, a separator\'s or Overwrite\'s', () => {
     expect(menuOn('folder')).toEqual([['modbench.mod.openFolder', '1_open'], ['modbench.copyValue', '5_copy']]);
   });
@@ -1269,6 +1279,8 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.install', undefined],
     ['modbench.mod.openFolder', 'modbench.mod.singleOpenFolderRow'],
     ['modbench.mod.goToMod', 'modbench.mod.singleGoToModRow'],
+    ['modbench.mod.excludeFile', 'modbench.mod.holdsIncludedFile'],
+    ['modbench.mod.includeFile', 'modbench.mod.holdsExcludedFile'],
   ] as const;
 
   it.each(MODS_PALETTE)('%s is in the palette only while the Mods view has focus and its selection holds: %s', (command, holds) => {

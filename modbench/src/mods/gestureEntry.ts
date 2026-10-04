@@ -92,10 +92,13 @@ export interface ModsKeyContext {
   readonly holdsEnabledMod: boolean;
   readonly holdsDisabledMod: boolean;
   readonly holdsUntrackedModWithPlugin: boolean;
+  readonly holdsIncludedFile: boolean;
+  readonly holdsExcludedFile: boolean;
 }
 
 export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (row: ModNode) => boolean): ModsKeyContext {
   const mods = selection.filter(isRowOf(['mod']));
+  const files = selection.filter(isRowOf(['file']));
   // No API names the focused row, and a file or folder in the selection may be it: the keys do
   // nothing on one (mods.md, Menus and keys, story 8).
   const keyed = selection.some(isRowOf(['folder', 'file'])) ? [] : selection;
@@ -112,6 +115,8 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
     holdsEnabledMod: mods.some(isEnabled),
     holdsDisabledMod: mods.some((row) => !isEnabled(row)),
     holdsUntrackedModWithPlugin: mods.some((row) => row.facts?.holdsPlugin === true && !row.facts.tracked),
+    holdsIncludedFile: files.some((row) => row.exclusion === 'included'),
+    holdsExcludedFile: files.some((row) => row.exclusion === 'excluded'),
   };
 }
 
