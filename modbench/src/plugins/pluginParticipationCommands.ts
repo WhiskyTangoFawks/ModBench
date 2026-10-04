@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
-import type { PluginNode, PluginsTreeNode, PluginsTreeProvider } from './PluginsTreeProvider';
-import { pluralArgument, registerPluginsGesture, type GestureEntry } from './gestureEntry';
+import type { PluginNode, PluginsTreeNode } from './PluginsTreeProvider';
+import { runWritingGesture } from '../drivingLib/writingGesture';
+import { PLUGINS_KEY_ARGS, pluralArgument, registerPluginsGesture, type GestureEntry } from './gestureEntry';
 import {
   setPluginsEnabled, type PluginParticipation, type PluginsAccess, type PluginsSelectionResult,
 } from '../pluginsCommands/plugins';
@@ -10,19 +11,17 @@ import type { Reporter } from '../ports/reporter';
 // modbench.plugin.enable / modbench.plugin.disable: the whole selection through the entry
 // (plugins.md, Menus and keys, story 3 — behaves as in Mods).
 export function registerPluginEnableCommands(
-  access: PluginsAccess, instance: Pick<Instance, 'value'>,
+  access: PluginsAccess, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly PluginsTreeNode[], reporter: Reporter,
-  marks: Pick<PluginsTreeProvider, 'isEnabled' | 'markUnconfirmed' | 'forgetUnconfirmed'>,
 ): vscode.Disposable[] {
   const run = (enabled: boolean) => async (entry: GestureEntry) => {
     const rows = pluralArgument(entry, 'plugin');
     if (rows.length === 0) return;
     const names = rows.map((n: PluginNode) => n.plugin.name);
-    const changing = rows.filter((row) => marks.isEnabled(row) !== enabled);
-    for (const row of changing) marks.markUnconfirmed(row, enabled);
-    const result = await setPluginsEnabled(access, instance.value.activeProfile, names, enabled);
-    reportPluginsParticipation(result, names.map((name) => ({ name, enabled })), reporter);
-    forgetRefused(result, changing, marks);
+    await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, async () => {
+      const result = await setPluginsEnabled(access, instance.value.activeProfile, names, enabled);
+      reportPluginsParticipation(result, names.map((name) => ({ name, enabled })), reporter);
+    });
   };
   return [
     registerPluginsGesture('modbench.plugin.enable', viewSelection, run(true)),
@@ -52,14 +51,4 @@ export function reportPluginsParticipation(
     `Could not ${verb} ${result.outcome.refused.length} of ${entries.length} plugins.`,
     result.outcome, (name) => name,
   );
-}
-
-/** A refused plugin, or a refused write, shows the disk's value at once, with no mark. */
-export function forgetRefused(
-  result: PluginsSelectionResult, rows: readonly PluginNode[], marks: Pick<PluginsTreeProvider, 'forgetUnconfirmed'>,
-): void {
-  const refusedNames = result.applied ? new Set(result.outcome.refused.map((r) => r.item)) : undefined;
-  for (const row of rows) {
-    if (refusedNames === undefined || refusedNames.has(row.plugin.name)) marks.forgetUnconfirmed(row);
-  }
 }

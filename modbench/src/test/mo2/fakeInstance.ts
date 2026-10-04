@@ -27,6 +27,11 @@ export class FakeInstance {
     this.sequence++;
     for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
   }
+  // Lands the value it holds, as the Instance's own read does once it ends.
+  refresh(): Promise<void> {
+    this.publish(this.value);
+    return Promise.resolve();
+  }
   readonly askedForCopies: (readonly string[])[] = [];
   copies: (relativePaths: readonly string[]) => Promise<FileCopies[]> = () => Promise.resolve([]);
   sameCopies(relativePaths: readonly string[]): Promise<FileCopies[]> {

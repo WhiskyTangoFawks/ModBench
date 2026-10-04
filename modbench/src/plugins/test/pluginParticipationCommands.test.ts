@@ -21,10 +21,14 @@ vi.mock('../../pluginsCommands/plugins', async (importOriginal) => ({
 
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({
-  commands: { registerCommand },
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
-}));
+vi.mock('vscode', async () => {
+  const { recordedWithProgress } = await import('../../test/recordedProgress');
+  return {
+    commands: { registerCommand },
+    window: { withProgress: recordedWithProgress },
+    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
+  };
+});
 
 import { registerPluginEnableCommands } from '../pluginParticipationCommands';
 import { PluginNode, ImplicitMasterNode } from '../PluginsTreeProvider';
@@ -32,14 +36,9 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import { accessTo } from '../../test/mo2/adapterOver';
+import { progressSteps } from '../../test/recordedProgress';
 
 const access = accessTo('/instance');
-
-const marks = {
-  isEnabled: (row: PluginNode) => row.plugin.enabled,
-  markUnconfirmed: vi.fn(),
-  forgetUnconfirmed: vi.fn(),
-};
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const handler = present(handlers.get(commandId), `command not registered: ${commandId}`);
@@ -49,10 +48,14 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 beforeEach(() => {
   handlers.clear();
   vi.clearAllMocks();
+  progressSteps.length = 0;
 });
 
 describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection, one command per direction', () => {
-  const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
+  const instance = {
+    value: instanceValueFixture({ activeProfile: 'Default' }),
+    refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
+  };
   const alpha = new PluginNode({ name: 'Alpha.esp', enabled: false }, 'SomeMod');
   const beta = new PluginNode({ name: 'Beta.esp', enabled: true }, 'SomeMod');
   const locked = new ImplicitMasterNode('Fallout4.esm', 'Data');
@@ -60,7 +63,7 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
   it('enable applies to every selected plugin, whatever its own current state', async () => {
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp', 'Beta.esp'], refused: [] } });
 
-    registerPluginEnableCommands(access, instance, () => [], recordingReporter(), marks);
+    registerPluginEnableCommands(access, instance, () => [], recordingReporter());
     await invoke('modbench.plugin.enable', alpha, [alpha, beta]);
 
     expect(setPluginsEnabled).toHaveBeenCalledWith(access, 'Default', ['Alpha.esp', 'Beta.esp'], true);
@@ -69,7 +72,7 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
   it('disable applies to every selected plugin, whatever its own current state', async () => {
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp', 'Beta.esp'], refused: [] } });
 
-    registerPluginEnableCommands(access, instance, () => [], recordingReporter(), marks);
+    registerPluginEnableCommands(access, instance, () => [], recordingReporter());
     await invoke('modbench.plugin.disable', beta, [alpha, beta]);
 
     expect(setPluginsEnabled).toHaveBeenCalledWith(access, 'Default', ['Alpha.esp', 'Beta.esp'], false);
@@ -78,7 +81,7 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
   it('a right-click outside the selection takes just that row, not the rest of the view selection', async () => {
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp'], refused: [] } });
 
-    registerPluginEnableCommands(access, instance, () => [beta], recordingReporter(), marks);
+    registerPluginEnableCommands(access, instance, () => [beta], recordingReporter());
     await invoke('modbench.plugin.enable', alpha, undefined);
 
     expect(setPluginsEnabled).toHaveBeenCalledWith(access, 'Default', ['Alpha.esp'], true);
@@ -87,7 +90,7 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
   it('falls back to the view selection from the palette, where no row is right-clicked', async () => {
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp'], refused: [] } });
 
-    registerPluginEnableCommands(access, instance, () => [alpha], recordingReporter(), marks);
+    registerPluginEnableCommands(access, instance, () => [alpha], recordingReporter());
     await invoke('modbench.plugin.enable');
 
     expect(setPluginsEnabled).toHaveBeenCalledWith(access, 'Default', ['Alpha.esp'], true);
@@ -96,7 +99,7 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
   it('drops a locked row from the selection it writes', async () => {
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp'], refused: [] } });
 
-    registerPluginEnableCommands(access, instance, () => [], recordingReporter(), marks);
+    registerPluginEnableCommands(access, instance, () => [], recordingReporter());
     await invoke('modbench.plugin.enable', alpha, [locked, alpha]);
 
     expect(setPluginsEnabled).toHaveBeenCalledWith(access, 'Default', ['Alpha.esp'], true);
@@ -105,7 +108,7 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
   it('calls nothing and reports nothing for an empty selection', async () => {
     const reporter = recordingReporter();
 
-    registerPluginEnableCommands(access, instance, () => [], reporter, marks);
+    registerPluginEnableCommands(access, instance, () => [], reporter);
     await invoke('modbench.plugin.enable');
 
     expect(setPluginsEnabled).not.toHaveBeenCalled();
@@ -116,7 +119,7 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp'], refused: [] } });
     const reporter = recordingReporter();
 
-    registerPluginEnableCommands(access, instance, () => [], reporter, marks);
+    registerPluginEnableCommands(access, instance, () => [], reporter);
     await invoke('modbench.plugin.enable', alpha);
 
     expect(reporter.reports).toEqual([]);
@@ -129,7 +132,7 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
     });
     const reporter = recordingReporter();
 
-    registerPluginEnableCommands(access, instance, () => [], reporter, marks);
+    registerPluginEnableCommands(access, instance, () => [], reporter);
     await invoke('modbench.plugin.enable', alpha, [alpha, beta]);
 
     expect(reporter.selectionOutcomeCalls).toEqual([{
@@ -145,49 +148,47 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
     setPluginsEnabled.mockResolvedValue({ applied: false, refusal: 'ENOENT' });
     const reporter = recordingReporter();
 
-    registerPluginEnableCommands(access, instance, () => [], reporter, marks);
+    registerPluginEnableCommands(access, instance, () => [], reporter);
     await invoke('modbench.plugin.disable', alpha);
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to disable plugins.', detail: 'ENOENT' }]);
   });
 });
 
-describe('the enable and disable entries and the unconfirmed marks (common.md, Unconfirmed writes)', () => {
-  const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
+describe('the enable and disable entries end when the read lands (common.md, A gesture that writes)', () => {
+  const instance = {
+    value: instanceValueFixture({ activeProfile: 'Default' }),
+    refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
+  };
   const alpha = new PluginNode({ name: 'Alpha.esp', enabled: false }, 'SomeMod');
-  const beta = new PluginNode({ name: 'Beta.esp', enabled: true }, 'OtherMod');
 
-  it('marks each plugin the gesture changes, by its row, before the write, and not one already in that state', async () => {
-    const order: string[] = [];
-    marks.markUnconfirmed.mockImplementation((row: PluginNode) => order.push(`mark ${row.plugin.name}`));
-    setPluginsEnabled.mockImplementation(() => { order.push('write'); return Promise.resolve({ applied: true, outcome: { landed: ['Alpha.esp', 'Beta.esp'], refused: [] } }); });
-
-    registerPluginEnableCommands(access, instance, () => [], recordingReporter(), marks);
-    await invoke('modbench.plugin.enable', alpha, [alpha, beta]);
-
-    expect(order).toEqual(['mark Alpha.esp', 'write']);
-    expect(marks.markUnconfirmed).toHaveBeenCalledWith(alpha, true);
-    expect(marks.forgetUnconfirmed).not.toHaveBeenCalled();
-  });
-
-  it('forgets the mark of a plugin refused by name, and keeps the one that landed', async () => {
-    setPluginsEnabled.mockResolvedValue({
-      applied: true, outcome: { landed: ['Alpha.esp'], refused: [{ item: 'Gamma.esp', reason: 'gone' }] },
+  it('shows the progress bar from the key until the read after the write lands', async () => {
+    setPluginsEnabled.mockImplementation(() => {
+      progressSteps.push('write plugins.txt');
+      return Promise.resolve({ applied: true, outcome: { landed: ['Alpha.esp'], refused: [] } });
     });
-    const gamma = new PluginNode({ name: 'Gamma.esp', enabled: false }, 'SomeMod');
 
-    registerPluginEnableCommands(access, instance, () => [], recordingReporter(), marks);
-    await invoke('modbench.plugin.enable', alpha, [alpha, gamma]);
-
-    expect(marks.forgetUnconfirmed.mock.calls).toEqual([[gamma]]);
-  });
-
-  it('forgets every mark when the whole write is refused', async () => {
-    setPluginsEnabled.mockResolvedValue({ applied: false, refusal: 'ENOENT' });
-
-    registerPluginEnableCommands(access, instance, () => [], recordingReporter(), marks);
+    registerPluginEnableCommands(access, instance, () => [], recordingReporter());
     await invoke('modbench.plugin.enable', alpha);
 
-    expect(marks.forgetUnconfirmed.mock.calls).toEqual([[alpha]]);
+    expect(progressSteps).toEqual([
+      'progress opens on modbench.pluginListTree',
+      'write plugins.txt',
+      'Instance loader: read every file again',
+      'progress closes',
+    ]);
+  });
+
+  it('still ends on the read when the whole write is refused', async () => {
+    setPluginsEnabled.mockResolvedValue({ applied: false, refusal: 'ENOENT' });
+
+    registerPluginEnableCommands(access, instance, () => [], recordingReporter());
+    await invoke('modbench.plugin.enable', alpha);
+
+    expect(progressSteps).toEqual([
+      'progress opens on modbench.pluginListTree',
+      'Instance loader: read every file again',
+      'progress closes',
+    ]);
   });
 });
