@@ -4,10 +4,6 @@
 import type {
   LoadOrderOutcome, LoadOrderSender, LoadOrderSnapshot, MEditClient,
 } from '../client';
-import type { GameFolder } from '../instanceAdapter/instanceAdapter';
-import {
-  loadOrderSnapshotOf, type LoadOrderPlugin, type LoadOrderPluginLine, type PluginAddress,
-} from '../instanceLoader/loadOrderSnapshot';
 
 /** The game the instance is for. */
 export interface InstanceGame {
@@ -17,11 +13,10 @@ export interface InstanceGame {
   readonly gameRelease: string | undefined;
 }
 
-/** The slice of the instance value a load order is built from. */
+/** The slice of the instance value put load order sends: the loader's snapshot, none while the
+ *  game folder is not found or its plugins cannot be listed. */
 export interface LoadOrderSource extends InstanceGame {
-  readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
-  readonly gameFolder: GameFolder;
-  readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
+  readonly loadOrderSnapshot: Omit<LoadOrderSnapshot, 'instanceRoot' | 'gameRelease'> | undefined;
 }
 
 /** Nothing is sent without a game folder found: there is no Data folder to key the load order on. */
@@ -33,21 +28,11 @@ export type PutLoadOrderResult =
 // rejects it visibly instead of quietly answering about the wrong game.
 const releaseOf = (game: InstanceGame): string => game.gameRelease ?? game.gameName;
 
-function snapshotOf(instanceRoot: string, value: LoadOrderSource): LoadOrderSnapshot | undefined {
-  const loaded = loadOrderSnapshotOf(value);
-  if (!loaded) return undefined;
-  return {
-    plugins: loaded.plugins, active: loaded.active, loadedWithNoLine: loaded.loadedWithNoLine,
-    gameDirectory: loaded.dataFolder, instanceRoot,
-    gameRelease: releaseOf(value),
-  };
-}
-
 export async function putLoadOrder(
   sender: Pick<LoadOrderSender, 'send'>, instanceRoot: string, value: LoadOrderSource,
 ): Promise<PutLoadOrderResult> {
-  const snapshot = snapshotOf(instanceRoot, value);
-  if (!snapshot) return { sent: false };
+  if (!value.loadOrderSnapshot) return { sent: false };
+  const snapshot: LoadOrderSnapshot = { ...value.loadOrderSnapshot, instanceRoot, gameRelease: releaseOf(value) };
   return { sent: true, snapshot, outcome: await sender.send(snapshot) };
 }
 

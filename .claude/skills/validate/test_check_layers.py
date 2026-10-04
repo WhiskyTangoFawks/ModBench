@@ -30,7 +30,6 @@ driving -> kernel: {class: ref}
 driving -> readmodel: {class: ref}
 driving -> repositories: {class: ref}
 core -> kernel: {class: ref}
-core -> readmodel: {class: ref}
 core -> repositories: {class: ref}
 readmodel -> kernel: {class: ref}
 readmodel -> repositories: {class: ref}
@@ -85,6 +84,7 @@ modbench_kernel: "MODBENCH · Kernel" {
 medit_readmodel: "MEDIT · Read model" {
   class: band; grid-rows: 1
   index: "Record index" {
+    queries: "Queries" {class: readmodel}
     indexer: "Indexer" {class: readmodel}
     store: "Store" {class: derived}
   }
@@ -156,6 +156,7 @@ class ModbenchProjectReferencesAgainstLayers(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = fixture(pathlib.Path(tmp))
             tsconfig(root, 'mods', ['modlist', 'instanceLoader'])
+            tsconfig(root, 'modlist', ['instanceAdapter'])
             self.assertEqual(cl.run(root), [])
 
     def test_a_reference_pointing_up_fails_naming_the_project_file_and_the_pair(self):
@@ -226,6 +227,20 @@ class MEditProjectReferencesAgainstLayers(unittest.TestCase):
             root = fixture(pathlib.Path(tmp))
             csproj(root, 'Commands.Tests', ['Commands', 'TestSupport'])
             csproj(root, 'TestSupport', ['Codec'])
+            self.assertEqual(cl.run(root), [])
+
+    def test_the_core_never_references_the_read_model(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = fixture(pathlib.Path(tmp))
+            csproj(root, 'Commands', ['Index'])
+            failures = cl.run(root)
+            self.assertEqual(len(failures), 1)
+            self.assertIn('commands -> index', failures[0])
+
+    def test_a_part_of_a_box_references_its_parent_and_its_siblings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = fixture(pathlib.Path(tmp))
+            csproj(root, 'Queries', ['Index', 'Codec'])
             self.assertEqual(cl.run(root), [])
 
     def test_a_reference_across_the_columns_fails(self):

@@ -7,6 +7,7 @@ import {
   createLoadOrderSender, InMemoryMEditClient, type LoadOrderOutcome, type LoadOrderPluginInput,
 } from '../client';
 import type { InstanceSubscriber, InstanceValue } from '../instanceLoader/instance';
+import { loadOrderSnapshotOf } from '../instanceLoader/loadOrderSnapshot';
 import { putLoadOrder, type LoadOrderSource } from '../instanceCommands/loadOrder';
 import { registerLoadOrderPut } from '../toolbox';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
@@ -18,17 +19,17 @@ const APPLIED: LoadOrderOutcome = {
 };
 
 function valueWith(name: string, overrides: Partial<InstanceValue> = {}): InstanceValue {
-  return instanceValueFixture({
-    gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
+  const derived = {
+    gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const,
     pluginsLoadedWithNoLine: [],
     plugins: [{ name, path: `/game/Data/${name}`, origin: 'Data', slot: 0, enabled: true, winning: true }],
     ...overrides,
-  });
+  };
+  return instanceValueFixture({ ...derived, loadOrderSnapshot: loadOrderSnapshotOf(derived) });
 }
 
 const sourceOf = (value: InstanceValue): LoadOrderSource => ({
-  plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameName, gameRelease: value.gameRelease,
-  pluginsLoadedWithNoLine: value.pluginsLoadedWithNoLine,
+  loadOrderSnapshot: value.loadOrderSnapshot, gameName: value.gameName, gameRelease: value.gameRelease,
 });
 
 function isPluginInputs(value: unknown): value is LoadOrderPluginInput[] {

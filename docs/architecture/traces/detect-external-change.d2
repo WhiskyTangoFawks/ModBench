@@ -7,6 +7,8 @@ instance.label: "the mod's folder"
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
+activation: @../target-architecture.modbench_drivers.activation
+activation.label: Activation
 instanceloader.label: Instance loader
 instancecommands: @../target-architecture.modbench_core.instancecommands
 instancecommands.label: instance commands
@@ -28,7 +30,8 @@ plugins.label: Plugins
 tools -> instance: bytes, at any time {class: outside}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
-instanceloader -> instancecommands: "put load order: the snapshot" {class: loadorder}
+instanceloader -> activation: value {class: loadorder}
+activation -> instancecommands: "put load order: the snapshot" {class: loadorder}
 instancecommands -> client: snapshot {class: loadorder}
 client -> http: snapshot {class: loadorder}
 http -> commands: put load order {class: loadorder}

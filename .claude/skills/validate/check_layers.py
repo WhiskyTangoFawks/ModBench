@@ -80,8 +80,10 @@ class Rule:
                 self.exceptions.add((a.src, a.dst))
 
     def permits(self, src_id: str, dst_id: str):
-        """A reference from one box to another: a named exception, a lower band of its column,
-        or its band's lib."""
+        """A reference from one box to another: a part of the same box, a named exception, a
+        lower band of its column, or its band's lib."""
+        if top2(src_id) == top2(dst_id):
+            return True
         if (top2(src_id), top2(dst_id)) in self.exceptions:
             return True
         if column_of(src_id) != column_of(dst_id):
@@ -93,8 +95,6 @@ class Rule:
     def joins(self, src_id: str, dst_id: str):
         """A trace message between two boxes: a reference either way, since a reply takes
         its request's class, a watch or push either way, or two parts of one box."""
-        if parent_of(src_id) is not None and parent_of(src_id) == parent_of(dst_id):
-            return True
         if self.permits(src_id, dst_id) or self.permits(dst_id, src_id):
             return True
         return column_of(src_id) == column_of(dst_id) and self.bands_channel(band_of(src_id), band_of(dst_id))
@@ -125,24 +125,21 @@ def reaches_its_bands_lib(src_id: str, dst_id: str):
     return s.split('.')[0] == d.split('.')[0] and d.split('.')[-1].endswith('lib')
 
 
-def parent_of(box_id: str):
-    parts = box_id.split('.')
-    return '.'.join(parts[:-1]) if len(parts) >= 3 else None
-
-
 def load_boxes(zoom_out: Path):
-    """Every box the zoom-out draws, by column and name: {'modbench': {'mods': 'modbench_driving.mods'}}."""
+    """Every box the zoom-out draws, a part of a box included, by column and name:
+    {'medit': {'index': 'medit_readmodel.index', 'queries': 'medit_readmodel.index.queries'}}."""
     boxes = {}
-    container = None
+    path = []
     for line in zoom_out.read_text().splitlines():
         m = CONTAINER_RE.match(line)
         if m:
-            container = (m.group('column'), m.group('band'))
+            path = [f'{m.group("column")}_{m.group("band")}']
             continue
         m = MEMBER_RE.match(line)
-        if m and container and len(m.group('indent')) == 2:
-            column, band = container
-            boxes.setdefault(column, {})[m.group('id')] = f'{column}_{band}.{m.group("id")}'
+        if m and path:
+            depth = len(m.group('indent')) // 2
+            path = path[:depth] + [m.group('id')]
+            boxes.setdefault(path[0].split('_', 1)[0], {})[m.group('id')] = '.'.join(path)
     return boxes
 
 

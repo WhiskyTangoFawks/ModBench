@@ -1,12 +1,11 @@
 // Every change to a profile's plugin order (ADR-0014; ADR-0015).
 
-import { foldPath } from '../instanceLoader/fileConflictIndex';
-import type { DataFolderPlugins } from '../instanceLoader/loadOrderSnapshot';
+import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { dropIndexIn, type Drop } from './dropIndex';
 import { refuse } from '../ports/refuse';
 import { applyOrThrow } from '../ports/applyOrThrow';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
-import type { DecidePluginOrder, InstanceAdapter, PluginOrderChange } from '../instanceAdapter/instanceAdapter';
+import type { DataFolderPlugins, DecidePluginOrder, InstanceAdapter, PluginOrderChange } from '../instanceAdapter/instanceAdapter';
 
 /** What a plugins command reaches the instance through. */
 export interface PluginsAccess {
@@ -102,12 +101,12 @@ function pluginLinesDelta(
   provided: ReadonlyMap<string, string>,
   inData: ReadonlySet<string>,
 ): PluginLinesDelta {
-  const listedFolded = new Set(listed.map(foldPath));
+  const listedFolded = new Set(listed.map(pluginKey));
   const added = [...provided]
     .filter(([folded]) => !listedFolded.has(folded))
     .map(([, real]) => real)
-    .sort((a, b) => foldPath(a).localeCompare(foldPath(b)));
-  const dropped = listed.filter((name) => !provided.has(foldPath(name)) && !inData.has(foldPath(name)));
+    .sort((a, b) => pluginKey(a).localeCompare(pluginKey(b)));
+  const dropped = listed.filter((name) => !provided.has(pluginKey(name)) && !inData.has(pluginKey(name)));
   return { added, dropped };
 }
 
@@ -125,7 +124,7 @@ export async function syncPlugins(
   }
   // The tree gives a plugin the game loads with no line a row of its own (plugins.md, The tree,
   // story 2), so a mod's plugin of that name earns no line.
-  const noLine = new Set((loadedWithNoLine ?? []).map(foldPath));
+  const noLine = new Set((loadedWithNoLine ?? []).map(pluginKey));
   const addable = new Map([...provided].filter(([folded]) => !noLine.has(folded)));
   const inDataNames = inData.names;
 

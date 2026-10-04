@@ -37,7 +37,7 @@ export type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'>;
 
 /** ADR-0013's snapshot. */
 export interface LoadOrderSnapshotValue {
-  readonly dataFolder: string;
+  readonly gameDirectory: string;
   readonly plugins: SnapshotPlugin[];
   readonly active: Pick<LoadOrderPlugin, 'name' | 'origin'>[];
   readonly loadedWithNoLine: Pick<LoadOrderPlugin, 'name' | 'origin'>[];
@@ -231,7 +231,7 @@ export function loadOrderSnapshotOf(value: {
     if (!sent.has(key)) sent.set(key, { name, path, origin });
   }
   return {
-    dataFolder,
+    gameDirectory: dataFolder,
     plugins: [...sent.values()],
     active: [...loadedWithNoLine, ...fromLines].map(({ name, origin }) => ({ name, origin })),
     loadedWithNoLine: loadedWithNoLine.map(({ name, origin }) => ({ name, origin })),

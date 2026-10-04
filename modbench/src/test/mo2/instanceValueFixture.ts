@@ -23,6 +23,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     gameFolder: GAME_FOLDER_NOT_FOUND,
     dataFolderPlugins: { kind: 'unresolved' },
     pluginsLoadedWithNoLine: undefined,
+    loadOrderSnapshot: undefined,
     overwriteFiles: [],
     overwriteFolders: [],
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map() },

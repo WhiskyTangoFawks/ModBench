@@ -4,7 +4,7 @@ Each module owns one responsibility and hides how it does it ([principles](../pr
 
 ## Consequences
 
-- **A write passes through the core; a read takes the shortest path down.** The core holds the rules that refuse a write, so nothing reaches a system of record around it. A read gains nothing from a layer that only passes it on. Commands, one per gesture, are the only writers. Queries are the only readers of the read model.
+- **A write passes through the core; a read takes the shortest path down.** The core holds the rules that refuse a write, so nothing reaches a system of record around it. A read gains nothing from a layer that only passes it on. Commands, one per gesture, are the only writers. Queries is the read model's face, and nothing else reads the Index.
 - **A composition root references every box below it and decides nothing.** Code with no obvious home is one box's, or its band's lib, or a stop: the architecture is missing a box.
 
 ## Alternatives rejected

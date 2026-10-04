@@ -32,10 +32,9 @@ modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fir
   drivinglib: "driving lib\nowns: code two or more of this layer's boxes share\nhides: nothing; it holds no state and no port" {class: driving}
 }
 
-medit_core: "MEDIT · Core — the write side and the read side; each references the kernel" {
+medit_core: "MEDIT · Core — the write side; it references the kernel and the repositories" {
   class: band; grid-rows: 1
   commands: "Commands\nowns: the write side: one handler per gesture\nhides: resolution under the load order; the external-change\ncheck" {class: core}
-  queries: "Queries\nowns: the read side: every answer the API gives, from the\nrecord index\nhides: the Index's reads" {class: core}
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
@@ -63,7 +62,8 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model 
 
 medit_readmodel: "MEDIT · Read model — the record index, a view over the repositories below it" {
   class: band; grid-rows: 1
-  index: "Record index — one deep module, rebuildable\nowns: the read model: every plugin's rows, read for the active\nplugins only\nhides: the Indexer and the Store; the reconcile" {
+  index: "Record index — one deep module, rebuildable\nowns: the read model: every plugin's rows, read for the active\nplugins only, and every answer the API draws from them\nhides: the Indexer and the Store; the reconcile" {
+    queries: "Queries\nthe face: every answer the API gives, the record filter, rebuild" {class: readmodel}
     indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: readmodel}
     store: "Store\nDuckDB: every plugin's rows" {class: derived}
   }

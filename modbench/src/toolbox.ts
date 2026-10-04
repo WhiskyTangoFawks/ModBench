@@ -17,7 +17,7 @@ import type { StatusBar } from './plugins/statusBar';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
-import { loadOrderSnapshotOf, originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
+import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { downloadsCopyValueText } from './downloads/keyContext';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
@@ -208,7 +208,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
     await instanceReady;
     // No game folder, or one whose plugins cannot be listed, means no snapshot to hand over. The
     // views and the Output already say so, without a notification (common.md, States, story 5).
-    if (!loadOrderSnapshotOf(instance.value)) {
+    if (!instance.value.loadOrderSnapshot) {
       exitEditing(session, client);
       return;
     }
@@ -287,8 +287,8 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   session.plugins = plugins;
   // The value's slice the load order is built from, under the names instance commands give it.
   const loadOrderSource = (): LoadOrderSource => {
-    const { plugins, gameFolder, gameName, gameRelease, pluginsLoadedWithNoLine } = instance.value;
-    return { plugins, gameFolder, gameName, gameRelease, pluginsLoadedWithNoLine };
+    const { loadOrderSnapshot, gameName, gameRelease } = instance.value;
+    return { loadOrderSnapshot, gameName, gameRelease };
   };
   const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
     outputChannel, loadOrderReporter, plugins.narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));

@@ -8,7 +8,6 @@
     { "path": "../tables" },
     { "path": "../ports" },
     { "path": "../instanceAdapter" },
-    { "path": "../instanceLoader" },
     { "path": "../client" }
   ],
   "include": ["**/*.ts"],

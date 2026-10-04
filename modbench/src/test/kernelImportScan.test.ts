@@ -235,9 +235,8 @@ describe('a box reaches only the boxes its project references', () => {
       '../loadOrderFileCodec/pluginsText', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter',
     )).toBe(true);
     expect(isAllowedBoxSpecifier('node:fs/promises', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter')).toBe(true);
-    expect(isAllowedBoxSpecifier(
-      '../instanceLoader/fileConflictIndex', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands',
-    )).toBe(true);
+    expect(isAllowedBoxSpecifier('../loadOrderFileCodec/pluginsText', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands')).toBe(true);
+    expect(isAllowedBoxSpecifier('../instanceLoader/fileConflictIndex', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands')).toBe(false);
     expect(isAllowedBoxSpecifier('../instanceLoader/instance', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
   });
 });

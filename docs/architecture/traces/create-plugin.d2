@@ -17,6 +17,8 @@ instance.label: "Instance\nplugins.txt · mods · Overwrite"
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
+activation: @../target-architecture.modbench_drivers.activation
+activation.label: Activation
 instanceloader.label: Instance loader
 pluginscommands: @../target-architecture.modbench_core.pluginscommands
 pluginscommands.label: plugins commands
@@ -33,7 +35,8 @@ http -> client: applied or refusal {class: edit}
 client -> plugins: applied or refusal {class: edit}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
-instanceloader -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
+instanceloader -> activation: value {class: loadorder}
+activation -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
 instanceloader."the next snapshot: index-load-order; in a tracked mod, detect-external-change"
 
 refused: "refused, before any write" {

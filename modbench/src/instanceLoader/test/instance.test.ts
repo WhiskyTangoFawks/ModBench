@@ -1158,12 +1158,29 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect(instance.value.pluginsLoadedWithNoLine).toEqual([{ name: 'DLCCoast.esm', origin: 'Consumer' }]);
   });
 
-  it('carries no answer while the game folder is not found', async () => {
+  it('carries the load order snapshot put load order sends, keyed on the game folder it was derived from', async () => {
+    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
+    const dataFolder = join(root, 'Game', 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await writeFile(join(root, 'mods', 'Consumer', 'DLCCoast.esm'), '');
+    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
+
+    await instance.refresh();
+
+    expect(instance.value.loadOrderSnapshot).toMatchObject({
+      gameDirectory: dataFolder,
+      loadedWithNoLine: [{ name: 'DLCCoast.esm', origin: 'Consumer' }],
+      active: expect.arrayContaining([{ name: 'DLCCoast.esm', origin: 'Consumer' }]),
+    });
+  });
+
+  it('carries no answer and no snapshot while the game folder is not found', async () => {
     const { instance } = await minimalInstanceWithoutCorpusMasters();
 
     await instance.refresh();
 
     expect(instance.value.pluginsLoadedWithNoLine).toBeUndefined();
+    expect(instance.value.loadOrderSnapshot).toBeUndefined();
   });
 });
 
