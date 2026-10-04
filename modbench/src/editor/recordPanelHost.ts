@@ -15,7 +15,7 @@ import { registerGridKeyCommands } from './gridKeyCommands';
 import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands,
 } from './recordLifecycleCommands';
-import { subscribeRecordPanelsToNotifications } from './notificationWiring';
+import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from './notificationWiring';
 import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
@@ -43,9 +43,7 @@ export interface EditorCommandDeps {
     | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'
     | 'getComparison' | 'subscribe' | 'onStatusChanged' | 'onReconnected' | 'getRecordOwner'>;
-  // Every open panel re-reads the way a completed reconcile makes it (the plugins mEdit cannot
-  // read changed).
-  refreshPanels: () => void;
+  // Where an extended-editor tab is written, answered at the composition root.
   fieldFile: ExtendedFieldEditorDeps['fieldFile'];
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
@@ -59,7 +57,6 @@ export interface EditorCommandDeps {
   // Kernel ports the composition root implements (target-architecture.d2, Ports).
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
-  // Where an extended-editor tab is written, answered at the composition root.
 }
 // ADR-0015; editor.md, States, story 5.
 function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
@@ -147,7 +144,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   const writeDeps = recordPanelWriteDeps(deps);
   // Lives for the activation, like the decoration provider above — disposed alongside it.
   const loadOrderStatusTracker = trackLoadOrderStatus(
-    meditClient, deps.refreshPanels);
+    meditClient, () => announceConflictsComputed(recordPanels, editsInFlight));
   // The picker and the panel's name are each panel's own, added per panel below.
   const routerDeps: SharedRecordPanelDeps = {
     ...writeDeps, meditClient, channel: outputChannel, conflictsComputed: () => loadOrderStatusTracker.current(),

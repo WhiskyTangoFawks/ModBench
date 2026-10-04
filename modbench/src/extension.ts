@@ -169,7 +169,6 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     ...registerEditorCommands({
       context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, recordBadgeSource: treeProvider, meditClient, outputChannel,
-      refreshPanels: () => announceConflictsComputed(recordPanels, editsInFlight),
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       focusedViewSelection: lastSelectedViewSelection(
