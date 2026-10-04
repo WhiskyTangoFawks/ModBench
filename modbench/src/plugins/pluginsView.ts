@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
 import type { MEditClient, RecordFilter } from '../client';
-import type { InstanceView } from '../instanceLoader/instance';
 import { originFiles } from '../instanceLoader/loadOrderSnapshot';
 import { messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
 import { reorderOver, type PluginsAccess } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
-import { PluginsTreeProvider, type PluginFactsClient, type PluginsTreeNode } from './PluginsTreeProvider';
+import { PluginsTreeProvider, type PluginFactsClient, type PluginsInstance, type PluginsTreeNode } from './PluginsTreeProvider';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import { publishPluginWarnings } from './loadDiagnostics';
 import { pluginsKeyContext } from './gestureEntry';
@@ -23,7 +22,7 @@ import type { StatusBar } from './statusBar';
 
 export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, slot, enabled and winning for every plugin. */
-  instance: InstanceView;
+  instance: PluginsInstance;
   access: PluginsAccess;
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: PluginTreeProvider;
@@ -98,11 +97,11 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     { dispose: unsubscribe },
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, lens),
     ...registerPluginEnableCommands(
-      access, instance, () => view.selection, reporterFor('pluginListTree.enableDisable'), tree),
+      access, instance, () => view.selection, reporterFor('pluginListTree.enableDisable')),
     ...registerPluginSortCommands(tree),
     registerRevealInExplorerCommand(tree, reporterFor('pluginListTree.revealInExplorer'), () => view.selection),
     view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
-      e, access, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), tree)),
+      e, access, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), instance)),
     // Grays an implicit master's row the way the reference tool grays COL_NAME for a forceLoaded
     // plugin — live against the tree's own locked row URIs so it never drifts from what is rendered.
     vscode.window.registerFileDecorationProvider(new ImplicitMasterDecorationProvider(() => tree.lockedRowUris())),

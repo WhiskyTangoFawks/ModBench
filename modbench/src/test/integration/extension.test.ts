@@ -410,6 +410,22 @@ async function checkBoxTogglesMarkedByTheNextTurn(
   return toggles;
 }
 
+async function readsAskedByTheNextTurn(instance: { refresh(): Promise<void> }, command: string): Promise<number> {
+  let reads = 0;
+  const refresh = instance.refresh.bind(instance);
+  instance.refresh = () => {
+    reads++;
+    return refresh();
+  };
+  try {
+    await vscode.commands.executeCommand(command);
+    await new Promise((turn) => setImmediate(turn));
+  } finally {
+    instance.refresh = refresh;
+  }
+  return reads;
+}
+
 describe('modbench.record.open', () => {
   const titled = (title: string) => openTabs().some(t => t.label === title);
 
@@ -1003,8 +1019,8 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
   it('VS Code\'s own Space on a focused plugin row leaves its check box alone', async function () {
     if (!root) this.skip();
     await focusRow(0);
-    const plugins = present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
-    assert.strictEqual(await checkBoxTogglesMarkedByTheNextTurn(plugins, 'list.toggleExpand'), 0);
+    const instance = present(instanceExport(), "the activated extension's instance export");
+    assert.strictEqual(await readsAskedByTheNextTurn(instance, 'list.toggleExpand'), 0);
   });
 
   it('Space disables the selected plugin', async function () {

@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
-import type { PluginNode, PluginsTreeNode, PluginsTreeProvider } from './PluginsTreeProvider';
-import { forgetRefused, reportPluginsParticipation } from './pluginParticipationCommands';
+import type { Instance } from '../instanceLoader/instance';
+import type { PluginNode, PluginsTreeNode } from './PluginsTreeProvider';
+import { PLUGINS_KEY_ARGS } from './gestureEntry';
+import { reportPluginsParticipation } from './pluginParticipationCommands';
+import { runWritingGesture } from '../drivingLib/writingGesture';
 import { setPluginsParticipation, type PluginsAccess } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 
@@ -9,16 +12,14 @@ import type { Reporter } from '../ports/reporter';
  *  says. */
 export async function onPluginCheckboxChanged(
   e: vscode.TreeCheckboxChangeEvent<PluginsTreeNode>,
-  access: PluginsAccess, profile: () => string, reporter: Reporter,
-  marks: Pick<PluginsTreeProvider, 'markUnconfirmed' | 'forgetUnconfirmed'>,
+  access: PluginsAccess, profile: () => string, reporter: Reporter, instance: Pick<Instance, 'refresh'>,
 ): Promise<void> {
-  const toggled = e.items
+  const entries = e.items
     .filter((item): item is [PluginNode, vscode.TreeItemCheckboxState] => item[0].kind === 'plugin')
-    .map(([node, state]) => ({ node, enabled: state === vscode.TreeItemCheckboxState.Checked }));
-  if (toggled.length === 0) return;
-  for (const { node, enabled } of toggled) marks.markUnconfirmed(node, enabled);
-  const entries = toggled.map(({ node, enabled }) => ({ name: node.plugin.name, enabled }));
-  const result = await setPluginsParticipation(access, profile(), entries);
-  reportPluginsParticipation(result, entries, reporter);
-  forgetRefused(result, toggled.map(({ node }) => node), marks);
+    .map(([node, state]) => ({ name: node.plugin.name, enabled: state === vscode.TreeItemCheckboxState.Checked }));
+  if (entries.length === 0) return;
+  await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, async () => {
+    const result = await setPluginsParticipation(access, profile(), entries);
+    reportPluginsParticipation(result, entries, reporter);
+  });
 }
