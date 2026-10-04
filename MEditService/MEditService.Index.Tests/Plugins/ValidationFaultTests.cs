@@ -5,8 +5,6 @@ using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Plugins;
 
@@ -43,12 +41,8 @@ public sealed class ValidationFaultTests : IDisposable
         return index;
     }
 
-    private void RewriteThePlugin()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-        mod.Npcs.AddNew("WrittenByAnotherTool");
-        mod.WriteToBinary(Plugin.Path);
-    }
+    private void RewriteThePlugin() =>
+        PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
 
     private bool Logged(LogLevel level, Func<LogEntry, bool> matches)
     {
