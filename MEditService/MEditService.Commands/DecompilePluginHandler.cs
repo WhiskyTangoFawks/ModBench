@@ -61,7 +61,7 @@ public sealed class DecompilePluginHandler
                 $"{key.Name} from '{key.Origin}' is not in the load order, so there is nothing to decompile.");
         }
 
-        if (SourceRepository.TrackedModFolderOf(loadOrder, key) is not { } modFolder
+        if (loadOrder.ModFolderOf(key) is not { } modFolder
             || SourceRepository.Open(modFolder, loadOrder.GameRelease) is not { } repository)
         {
             return Refuse(DecompileRefusal.NotInTrackedMod,

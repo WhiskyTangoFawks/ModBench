@@ -8,6 +8,18 @@ namespace MEditService.SourceAdapter;
 /// is named: half a tree compiles to a binary missing records.</summary>
 public sealed record PluginSourceFiles(IReadOnlyList<TreeFile> Files, string? Unreadable);
 
+public enum SourceDivergenceKind
+{
+    Unreadable,
+    HeaderChanged,
+    DocumentChanged,
+    Unproduced,
+}
+
+/// <summary>The first file where a plugin's source and what the whole-mod door writes for it differ,
+/// as the mod folder spells it.</summary>
+public sealed record SourceDivergence(SourceDivergenceKind Kind, string Path);
+
 /// <summary>A plugin's source as files rather than as documents, and the two questions asked of that
 /// same tree, at the working tree.</summary>
 public sealed partial class SourceRepository
@@ -46,6 +58,37 @@ public sealed partial class SourceRepository
             if (units > 1) colliding.Add(formKey.ToString());
         }
         return colliding;
+    }
+
+    /// <summary>Where the source and <paramref name="serialized"/>, the door's tree for the mod it
+    /// compiles to, first part ways; null when they match. An unreadable file outranks every other
+    /// answer.</summary>
+    public SourceDivergence? DivergenceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> serialized)
+    {
+        var source = FilesOf(plugin);
+        if (source.Unreadable is { } unreadable)
+            return new SourceDivergence(SourceDivergenceKind.Unreadable, unreadable);
+
+        var regenerated = PristineFilesOf(plugin.Name, serialized);
+        var held = source.Files.ToDictionary(file => file.RelativePath, file => file.Content, StringComparer.Ordinal);
+        var header = HeaderDocumentFor(plugin.Name);
+
+        foreach (var file in regenerated)
+        {
+            if (held.TryGetValue(file.RelativePath, out var content) && content.AsSpan().SequenceEqual(file.Content))
+                continue;
+
+            return new SourceDivergence(
+                file.RelativePath == header ? SourceDivergenceKind.HeaderChanged : SourceDivergenceKind.DocumentChanged,
+                file.RelativePath);
+        }
+
+        var written = regenerated.Select(file => file.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var unproduced = held.Keys
+            .Where(relativePath => !written.Contains(relativePath))
+            .Order(StringComparer.Ordinal)
+            .FirstOrDefault();
+        return unproduced is null ? null : new SourceDivergence(SourceDivergenceKind.Unproduced, unproduced);
     }
 
     /// <summary>The document holding <paramref name="identity"/>, relative to the mod folder — a

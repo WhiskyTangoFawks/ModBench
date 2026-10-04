@@ -89,7 +89,7 @@ public sealed class PluginCompileService(
                 $"{string.Join(", ", collidingFormKeys)}.");
         }
 
-        var roundTripRefusal = await RefuseIfSourceDoesNotRoundTrip(tree, plugin.Name, files);
+        var roundTripRefusal = await RefuseIfSourceDoesNotRoundTrip(tree, plugin, repository);
         if (roundTripRefusal != null)
             return CompileResult.Refused(roundTripRefusal);
 
@@ -139,7 +139,7 @@ public sealed class PluginCompileService(
         {
             logger.LogWarning(ex, "{Plugin} compiled, but its link check did not run", plugin.Name);
             return [PluginDiagnostic(
-                plugin, $"{plugin.Name} compiled, but its links could not be checked: {ex.Message}")];
+                plugin, repository, $"{plugin.Name} compiled, but its links could not be checked: {ex.Message}")];
         }
     }
 
@@ -191,7 +191,7 @@ public sealed class PluginCompileService(
 
         var diagnostics = answers.UnreadableFiles
             .Select(file => PluginDiagnostic(
-                plugin,
+                plugin, repository,
                 $"{file.FileName} is in the load order but could not be read, so no link into it was " +
                 $"checked: {file.Reason}"))
             .ToList();
@@ -204,7 +204,8 @@ public sealed class PluginCompileService(
             // Only records with something to report pay for their path, which keeps a container's
             // subtree scan off the common path.
             var identity = new RecordIdentity(record.Document.FormKey, record.RecordType, record.EditorId);
-            var relativePath = repository.RelativePathOf(plugin, identity) ?? string.Empty;
+            var relativePath = repository.RelativePathOf(plugin, identity)
+                ?? throw new InvalidOperationException($"Expected a document to hold {identity.FormKey}.");
             diagnostics.AddRange(errors.Select(
                 message => new CompileDiagnostic(record.Document.FormKey, relativePath, message)));
         }
@@ -213,10 +214,14 @@ public sealed class PluginCompileService(
 
     // A plugin-level problem is the header record's: it is the one source unit that stands for the
     // whole plugin, so the Problems entry lands on a file the author can open.
-    private static CompileDiagnostic PluginDiagnostic(PluginAddress plugin, string message) =>
-        new(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)),
-            SourceRepository.HeaderDocumentFor(plugin.Name),
-            message);
+    private static CompileDiagnostic PluginDiagnostic(PluginAddress plugin, SourceRepository repository, string message)
+    {
+        var header = new RecordIdentity(
+            PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), PluginHeader.RecordType, null);
+        var path = repository.RelativePathOf(plugin, header)
+            ?? throw new InvalidOperationException($"Expected {plugin.Name}'s header to have a document.");
+        return new(header.FormKey, path, message);
+    }
 
     // The same fields the editor shows a CheckError on, from the same builder, so compile and the
     // record panel cannot hold two definitions of what is broken.
@@ -269,43 +274,24 @@ public sealed class PluginCompileService(
     }
 
     // ADR-0006. The generated deserializer skips an unrecognized property or file without
-    // throwing, so a successful parse proves nothing. The check runs both ways: a document the
-    // regeneration does not produce is content the parse dropped.
+    // throwing, so a successful parse proves nothing.
 
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
     // parses an external binary, never from Compile.
     private static async Task<string?> RefuseIfSourceDoesNotRoundTrip(
-        CompiledTree tree, string pluginName, IReadOnlyList<TreeFile> sourceFiles)
+        CompiledTree tree, PluginAddress plugin, SourceRepository repository)
     {
-        var regeneratedFiles = SourceRepository.PristineFilesOf(pluginName, await tree.SerializeTreeAsync());
-        var headerDocument = SourceRepository.HeaderDocumentFor(pluginName);
-        var read = sourceFiles.ToDictionary(file => file.RelativePath, file => file.Content, StringComparer.Ordinal);
+        if (repository.DivergenceFrom(plugin, await tree.SerializeTreeAsync()) is not { } divergence) return null;
 
-        foreach (var file in regeneratedFiles)
+        if (divergence.Kind != SourceDivergenceKind.Unproduced)
         {
-            if (read.TryGetValue(file.RelativePath, out var content)
-                && content.AsSpan().SequenceEqual(file.Content))
-            {
-                continue;
-            }
-
-            var offender = file.RelativePath == headerDocument ? "the plugin header" : file.RelativePath;
-            return $"{pluginName} does not round-trip through its own source: {offender} does not match " +
+            var offender = divergence.Kind == SourceDivergenceKind.HeaderChanged ? "the plugin header" : divergence.Path;
+            return $"{plugin.Name} does not round-trip through its own source: {offender} does not match " +
                 $"what the current codec would produce from it. {RegenerateTheSource}";
         }
 
-        var regeneratedPaths = regeneratedFiles.Select(f => f.RelativePath).ToHashSet(StringComparer.Ordinal);
-        var unproduced = read.Keys
-            .Where(relativePath => !regeneratedPaths.Contains(relativePath))
-            .Order(StringComparer.Ordinal)
-            .FirstOrDefault();
-        if (unproduced != null)
-        {
-            return $"{pluginName} does not round-trip through its own source: {unproduced} is in the source, " +
-                "but the current codec produces no such file from it, so nothing it holds reaches the plugin " +
-                $"(a document left over from an earlier source layout, or a stray file). {RegenerateTheSource}";
-        }
-
-        return null;
+        return $"{plugin.Name} does not round-trip through its own source: {divergence.Path} is in the source, " +
+            "but the current codec produces no such file from it, so nothing it holds reaches the plugin " +
+            $"(a document left over from an earlier source layout, or a stray file). {RegenerateTheSource}";
     }
 }
