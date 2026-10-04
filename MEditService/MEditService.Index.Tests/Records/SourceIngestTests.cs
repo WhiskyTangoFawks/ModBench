@@ -194,7 +194,7 @@ public sealed class SourceIngestTests : IDisposable
     {
         using var index = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        var before = index.Projected().DocumentOf(_npc, Plugin);
+        var before = index.RequireReads().DocumentOf(_npc, Plugin);
         Assert.Equal(NpcEditorId, before.EditorId);
 
         _entry.HandEdit(before, NpcEditorId, "ExternallyRenamed");
@@ -202,7 +202,7 @@ public sealed class SourceIngestTests : IDisposable
         PluginBinaries.Touch(_entry.Path);
         Assert.True(index.Revalidate());
 
-        Assert.Equal("ExternallyRenamed", index.Projected().DocumentOf(_npc, Plugin).EditorId);
+        Assert.Equal("ExternallyRenamed", index.RequireReads().DocumentOf(_npc, Plugin).EditorId);
     }
 
     [Fact]
@@ -227,13 +227,13 @@ public sealed class SourceIngestTests : IDisposable
         var document = index.RequireReads().DocumentOf(_npc, Plugin);
         index.Edit(_entry, document, document.BodyOf().Replace("\"HeightMax\": 0.5", "\"HeightMax\": 0.75", StringComparison.Ordinal));
         const float editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt = 0.75f;
-        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.Projected().DocumentOf(_npc, Plugin)));
+        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.RequireReads().DocumentOf(_npc, Plugin)));
 
         File.WriteAllText(RootDocument, "{ this is not json");
 
         index.NextSnapshot();
 
-        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.Projected().DocumentOf(_npc, Plugin)));
+        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.RequireReads().DocumentOf(_npc, Plugin)));
 
         var failure = Assert.Single(index.Status.Failures);
         Assert.Equal(PluginName, failure.Name);

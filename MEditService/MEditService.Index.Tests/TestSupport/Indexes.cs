@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Index.Tests.TestSupport;
 
 /// <summary>The Index as the composition root builds it: the public constructor over the real
-/// adapter, reconciled over a fixture's plugins.</summary>
+/// adapter, subscribed to its holder and reconciled over a fixture's plugins.</summary>
 internal static class Indexes
 {
     // The Indexer keeps its holder to itself, and the next arrival is the holder's.
@@ -20,11 +20,14 @@ internal static class Indexes
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        TaskScheduler? refillScheduler = null)
     {
         var index = new Indexer(
-            holder, adapter ?? TestAdapters.Mutagen(), SharedSchemaReflector.Instance, loggerFactory, notifications, timeProvider);
+            holder, adapter ?? TestAdapters.Mutagen(), SharedSchemaReflector.Instance, loggerFactory, notifications, timeProvider,
+            refillScheduler);
         Holders.Add(index, holder);
+        index.Subscribe();
         return index;
     }
 
@@ -66,20 +69,20 @@ internal static class Indexes
     }
 
     /// <summary>The held load order arriving again (ADR-0013), which validates every
-    /// plugin (ADR-0003).</summary>
+    /// plugin (ADR-0003). It answers once the rows it changed are announced.</summary>
     internal static void NextSnapshot(this Indexer index)
     {
-        if (!Holders.TryGetValue(index, out var holder))
-            throw new InvalidOperationException("Only an Indexer from Indexes.Open has a holder to deliver an arrival through.");
-        index.Reconcile(holder.Current, holder.Apply(holder.Current));
+        if (!index.Revalidate()) throw new TimeoutException("The arrival announced no change.");
     }
 
     /// <summary>The next snapshot: true when it landed a change.</summary>
     internal static bool Revalidate(this Indexer index)
     {
+        if (!Holders.TryGetValue(index, out var holder))
+            throw new InvalidOperationException("Only an Indexer from Indexes.Open has a holder to deliver an arrival through.");
         var before = index.Sequence;
-        index.NextSnapshot();
-        return index.Sequence > before;
+        holder.Apply(holder.Current);
+        return index.AwaitSequenceAsync(before + 1, TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
     }
 
     /// <summary>The SQL door: the filter is arbitrary SQL yielding form_key, so what it

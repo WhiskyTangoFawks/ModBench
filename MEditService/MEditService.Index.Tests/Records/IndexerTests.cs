@@ -32,7 +32,7 @@ public sealed class IndexerTests
         SnapshotPlugins.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, plugins ?? fx.Plugins);
 
     private static void ReconcileInTheLoadOrderEndpointsOrder(Indexer indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
-        indexer.Reconcile(snapshot, holder.Apply(snapshot));
+        indexer.Receive(holder, snapshot);
 
     private static void ReDeriveByTouchingTheBytesThenValidating(Indexer indexer, LoadOrderEntry entry)
     {

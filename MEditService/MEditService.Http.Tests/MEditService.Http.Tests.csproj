@@ -33,6 +33,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\MEditService.Index.Tests\TestSupport\LoadOrderArrival.cs" Link="TestSupport\LoadOrderArrival.cs" />
+    <Compile Include="..\MEditService.Index.Tests\TestSupport\Waits.cs" Link="TestSupport\Waits.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- One test project per box: the drawn list plus the kernel, mirroring
          MEditService.Http's own ProjectReference list. -->
     <ProjectReference Include="..\MEditService.Http\MEditService.Http.csproj" />

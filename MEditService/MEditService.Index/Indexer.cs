@@ -201,11 +201,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0013's one verb, on the caller's thread, then every plugin validated
-    /// (ADR-0003). Every outcome becomes status data, published once
-    /// <paramref name="version"/> is answered; one that changes nothing publishes nothing.</summary>
-    public void Reconcile(LoadOrderSnapshot snapshot, long version) => Reconcile(() => (snapshot, version));
-
+    // ADR-0013's one verb, then every plugin validated (ADR-0003). Every outcome becomes status
+    // data, published once the version is answered; one that changes nothing publishes nothing.
     // The arrival is read once the exclusive right is held, so a refill reconciles the load order
     // held then, never one a newer arrival replaced while it waited. Null reconciles nothing.
     private void Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival)
