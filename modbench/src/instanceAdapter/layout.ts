@@ -3,7 +3,7 @@
 // `formatLiteralScan.test.ts` refuses a second speller.
 
 import { randomBytes } from 'node:crypto';
-import { join, posix, sep, win32 } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
@@ -122,9 +122,6 @@ export const downloadSidecarFile = (downloadsDir: string, name: string): string 
 
 /** A file inside `folder`, by the relative path a source tree names it with. */
 export const fileInFolder = (folder: string, relativePath: string): string => join(folder, relativePath);
-
-/** Whether `file` sits anywhere beneath `folder`. */
-export const isInFolder = (folder: string, file: string): boolean => file.startsWith(folder + sep);
 
 const GIT_DIR = '.git';
 export const PLUGIN_SOURCE_FOLDER = 'plugin-source';
