@@ -14,6 +14,15 @@ const conflictTable = (view: ReturnType<typeof read>, name: string, copies: read
 const shape = (rows: readonly ConflictRow[]): unknown[] => rows.map((row) =>
   (row.kind === 'folder' ? { folder: row.path, rows: shape(row.rows) } : { file: row.path, cells: row.cells.map((cell) => cell !== null) }));
 
+const SECOND_NS = 1_000_000_000n;
+const stamped = (sameAs: number, size: bigint, modifiedSeconds: bigint): Omit<Copy & { kind: 'read' }, 'origin'> =>
+  ({ kind: 'read', sameAs, size, modifiedNs: modifiedSeconds * SECOND_NS });
+
+const firstRowCells = (table: ConflictTable) => {
+  const row = table.kind === 'table' ? table.rows[0] : undefined;
+  return row?.kind === 'file' ? row.cells : [];
+};
+
 describe('the conflict table\'s columns, over a mod order listed winning-first', () => {
   it('has one column per enabled mod with a copy of a row\'s file, losing on the left, and outlines the opened mod\'s', async () => {
     const value = await indexedValueOf([mod('High'), mod('Off', false), mod('Middle'), mod('Low'), mod('Apart')], {
@@ -107,13 +116,13 @@ describe('the conflict table\'s rows', () => {
 });
 
 describe('the conflict table\'s Overwrite column', () => {
-  const overwriteCopy = (answer: number): FileCopies => ({
+  const overwriteCopies: FileCopies = {
     relativePath: 'a.dds',
     copies: [
-      { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: answer, size: 2_048n, modifiedNs: 1_600_000_000n * 1_000_000_000n },
-      { origin: { kind: 'mod', name: 'Opened' }, kind: 'read', sameAs: 0, size: 512n, modifiedNs: 0n },
+      { ...stamped(1, 2_048n, 1_600_000_000n), origin: { kind: 'runtimeOutput' } },
+      { ...stamped(0, 512n, 0n), origin: { kind: 'mod', name: 'Opened' } },
     ],
-  });
+  };
   const shared = () => indexedValueOf([mod('Opened')], { Opened: { files: [file('Opened', 'a.dds')] } }, { files: [file('overwrite', 'a.dds')] });
 
   it('keeps Overwrite\'s column apart from the column of a mod named Overwrite, which loses to it', async () => {
@@ -121,28 +130,31 @@ describe('the conflict table\'s Overwrite column', () => {
       Overwrite: { files: [file('mods/Overwrite', 'a.dds')] },
       Opened: { files: [file('Opened', 'a.dds')] },
     }, { files: [file('overwrite', 'a.dds')] });
+    const named = (origin: Copy['origin']) => ({ ...stamped(0, 1n, 0n), origin });
+    const copies = [{ relativePath: 'a.dds', copies: [
+      named({ kind: 'runtimeOutput' }), named({ kind: 'mod', name: 'Overwrite' }), named({ kind: 'mod', name: 'Opened' }),
+    ] }];
 
-    const table = conflictTable(read(value), 'Opened', []);
+    const table = conflictTable(read(value), 'Opened', copies);
 
     expect(table.kind === 'table' && table.columns).toMatchObject([
       { name: 'Opened', origin: { kind: 'mod', name: 'Opened' } },
       { name: 'Overwrite', origin: { kind: 'mod', name: 'Overwrite' } },
       { name: 'Overwrite', origin: { kind: 'runtimeOutput' } },
     ]);
+    expect(table.kind === 'table' && shape(table.rows)).toEqual([{ file: 'a.dds', cells: [true, true, true] }]);
   });
 
-  it('colours Overwrite\'s copy as the winning copy, and the copy it differs from as losing', async () => {
-    const table = colours(conflictTable(read(await shared()), 'Opened', [overwriteCopy(1)]));
+  it('colours Overwrite\'s copy, which wins, an Override over the master, and its column and row with it', async () => {
+    const table = colours(conflictTable(read(await shared()), 'Opened', [overwriteCopies]));
 
-    expect(table.rows).toEqual([{ file: 'a.dds', state: 'Override', cells: ['Master', 'Override'] }]);
+    expect(table).toEqual({ columns: ['Master', 'Override'], rows: [{ file: 'a.dds', state: 'Override', cells: ['Master', 'Override'] }] });
   });
 
   it('shows Overwrite\'s value and carries its size and date for the tooltip', async () => {
-    const table = conflictTable(read(await shared()), 'Opened', [overwriteCopy(1)], 'size');
-    const row = table.kind === 'table' ? table.rows[0] : undefined;
-    const cell = row?.kind === 'file' ? row.cells[1] : undefined;
+    const table = conflictTable(read(await shared()), 'Opened', [overwriteCopies], 'size');
 
-    expect(cell).toMatchObject({ value: '2 KB', size: 2_048, modified: 1_600_000_000_000, winning: true });
+    expect(firstRowCells(table)[1]).toMatchObject({ value: '2 KB', size: 2_048, modified: 1_600_000_000_000 });
   });
 });
 
@@ -307,9 +319,6 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
 
 
 describe('the conflict table\'s cell values', () => {
-  const SECOND_NS = 1_000_000_000n;
-  const stamped = (sameAs: number, size: bigint, modifiedSeconds: bigint): Omit<Copy & { kind: 'read' }, 'origin'> =>
-    ({ kind: 'read', sameAs, size, modifiedNs: modifiedSeconds * SECOND_NS });
   const copiesOf = (...stamps: Omit<Copy & { kind: 'read' }, 'origin'>[]): FileCopies[] => [{
     relativePath: 'a.dds',
     copies: stamps.map((stamp, index): Copy => ({ ...stamp, origin: { kind: 'mod', name: ['High', 'Middle', 'Low'][index] ?? '' } })),
@@ -317,9 +326,7 @@ describe('the conflict table\'s cell values', () => {
   const cellsOf = async (copies: FileCopies[], cellValue: ConflictCellValue) => {
     const value = await indexedValueOf([mod('High'), mod('Middle'), mod('Low')], Object.fromEntries(
       ['High', 'Middle', 'Low'].map((name) => [name, { files: [file(name, 'a.dds')] }])));
-    const table = conflictTable(read(value), 'Middle', copies, cellValue);
-    const row = table.kind === 'table' ? table.rows[0] : undefined;
-    return row?.kind === 'file' ? row.cells : [];
+    return firstRowCells(conflictTable(read(value), 'Middle', copies, cellValue));
   };
   const copies = copiesOf(stamped(2, 1_572_864n, 1_700_000_000n), stamped(1, 2_048n, 1_600_000_000n), stamped(0, 512n, 0n));
 
