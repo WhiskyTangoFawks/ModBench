@@ -29,8 +29,9 @@ export function trackLoadOrderStatus(
     failures = arrived;
     onFailuresChanged();
   });
-  // Mirrors reconcileNarrator's own detached() reset, on the same two signals (toolbox.ts): a
-  // crash-and-restart or a reattached stream starts the next process's reconcile from unsettled.
+  // Mirrors reconcileNarrator's own detached() reset, on the same two signals
+  // (plugins/indexStatus.ts): a crash-and-restart or a reattached stream starts the next process's
+  // reconcile from unsettled.
   const unsubscribeStatusChanged = client.onStatusChanged((status) => { if (status !== 'running') forget(); });
   const unsubscribeReconnected = client.onReconnected(forget);
   return {

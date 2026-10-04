@@ -24,7 +24,7 @@ import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerFilterCommands, type NameFilter } from './drivingLib/nameFilter';
 import { registerCopyValueCommand } from './drivingLib/copyValue';
 import type { FocusedView } from './drivingLib/focusedView';
-import { abandonSendWhenMEditGoes, enterEditingAcrossRestarts } from './medit/backendStatus';
+import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { pluginSyncOver } from './pluginsCommands/plugins';
 import { registerModSync } from './modSyncTrigger';
 import { modSyncOver } from './modlist/modlist';
@@ -268,7 +268,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   // send in flight through it.
   const sender = own(createLoadOrderSender(client));
   session.loadOrderSender = sender;
-  own({ dispose: abandonSendWhenMEditGoes(client, sender) });
   const loadOrderReporter = reporterFor('loadOrder');
   // commands.md, `refresh`: instance commands rebuild the index and send nothing; the gesture
   // itself asks the Instance loader to read every file again.

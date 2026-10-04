@@ -212,6 +212,43 @@ describe('createLoadOrderSender — arm and abandon', () => {
   });
 });
 
+describe('createLoadOrderSender — mEdit going away', () => {
+  function heldInFlight(client: InMemoryMEditClient): Promise<void> {
+    let started!: () => void;
+    const inFlight = new Promise<void>((resolve) => { started = resolve; });
+    client.setCommandHandler('putLoadOrder', (...args) => new Promise<LoadOrderOutcome>((resolve) => {
+      const signal = args[6]?.signal;
+      if (!signal) throw new Error('expected putLoadOrder to receive an abort signal');
+      started();
+      signal.addEventListener('abort', () => resolve(ABANDONED));
+    }));
+    return inFlight;
+  }
+
+  it.each(['disconnected', 'stopped'] as const)('answers the send in flight abandoned when mEdit is %s, never a killed backend as a network failure', async (status) => {
+    const client = attached();
+    const inFlight = heldInFlight(client);
+    const sender = createLoadOrderSender(client);
+
+    const sent = sender.send(snapshot('A.esp'));
+    await inFlight;
+    client.setStatus(status);
+
+    expect(await sent).toEqual(ABANDONED);
+  });
+
+  it('leaves the armed scope alone while mEdit starts and attaches, since a launch arms it before the start', () => {
+    const client = new InMemoryMEditClient();
+    const sender = createLoadOrderSender(client);
+    const { abandoned } = sender.arm();
+
+    client.setStatus('starting');
+    client.setStatus('running');
+
+    expect(abandoned()).toBe(false);
+  });
+});
+
 describe('createLoadOrderSender — dispose', () => {
   it('sends nothing after dispose and stops listening for the connect', async () => {
     const client = attached();

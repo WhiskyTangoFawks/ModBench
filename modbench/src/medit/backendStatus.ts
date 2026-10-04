@@ -1,15 +1,7 @@
-import type { LoadOrderSender, MEditClient } from '../client';
+import type { MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 
 type StatusSource = Pick<MEditClient, 'onStatusChanged'>;
-
-/** A send in flight when mEdit went reports abandoned, never a killed backend as a network
- *  failure. Returns the unsubscribe. */
-export function abandonSendWhenMEditGoes(client: StatusSource, sender: Pick<LoadOrderSender, 'abandon'>): () => void {
-  return client.onStatusChanged((status) => {
-    if (status === 'disconnected' || status === 'stopped') sender.abandon();
-  });
-}
 
 /** A crash-restart is a fresh backend holding no load order, so the reconcile runs again from
  *  scratch — the same re-entry path a fresh launch takes, not a bespoke recovery. */
