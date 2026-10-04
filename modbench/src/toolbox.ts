@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from './client';
-import { createLoadOrderSender, enterEditingAcrossRestarts, type LoadOrderSender } from './client';
-import type { ReconcileNarrator } from './plugins/reconcileNarrator';
-import { reportPutOutcome } from './medit/loadOrderOutcome';
+import { createLoadOrderSender } from './client';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { dataFolderFile } from './tables/gamePaths';
@@ -12,7 +10,6 @@ import { InactiveFileDecorationProvider } from './mods/inactiveFiles';
 import { ModIndicatorDecorations } from './mods/modIndicators';
 import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
 import { createPluginsView, type PluginsViewDeps } from './plugins/pluginsView';
-import type { PluginsViewProgress } from './plugins/pluginRowCommands';
 import type { StatusBar } from './plugins/statusBar';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
@@ -25,7 +22,7 @@ import { registerFilterCommands, type NameFilter } from './drivingLib/nameFilter
 import { registerCopyValueCommand } from './drivingLib/copyValue';
 import type { FocusedView } from './drivingLib/focusedView';
 import { pluginSyncOver } from './pluginsCommands/plugins';
-import { modSyncOnEachValue, pluginSyncOnEachValue } from './syncWiring';
+import { loadOrderPutOnEachValue, modSyncOnEachValue, pluginSyncOnEachValue } from './syncWiring';
 import { modSyncOver } from './modlist/modlist';
 import { installNameRefusal } from './install/install';
 import { exitEditing } from './editingTeardown';
@@ -43,12 +40,11 @@ import type { FolderCheck } from './folderContext';
 import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
 import { createDownloadsView } from './downloads/downloadsView';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
-import {
-  putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
-} from './instanceCommands/loadOrder';
+import { refresh } from './instanceCommands/loadOrder';
+import { editingFlow } from './instanceCommands/editing';
+import { editingView } from './plugins/editingView';
 import type { ExtensionSession, Own } from './session';
 import { pluginsCopyValueText, registerCreatePluginCommand } from './plugins/pluginListCommands';
-import { errorMessage } from './ports/errorMessage';
 
 // The port members every gesture, plugin sync and the launch in this file call.
 export type ToolboxClient = Pick<MEditClient,
@@ -111,115 +107,6 @@ export interface Toolbox extends vscode.Disposable {
   trackSelection: () => readonly unknown[];
 }
 
-export interface LoadOrderPuts {
-  /** The put when mEdit started, sent whatever the backend before it had: the backend just
-   *  attached holds no load order. Until it runs, no recompute puts. */
-  putOnMEditStarted(): Promise<void>;
-}
-
-// commands.md, put load order: put at every recompute and when mEdit started. Nothing is put while
-// detached; a stream reopen is a start, the process behind it perhaps another.
-export function registerLoadOrderPut(
-  own: Own,
-  instance: Pick<Instance, 'subscribe'>,
-  client: Pick<MEditClient, 'onStatusChanged' | 'onReconnected'>,
-  put: () => Promise<void>,
-  channel: { error(msg: string): void },
-): LoadOrderPuts {
-  let startPutRan = false;
-  const putLogged = (): void => {
-    void put().catch((e: unknown) => channel.error(`[loadOrder] handing mEdit the load order threw: ${errorMessage(e)}`));
-  };
-  own({ dispose: client.onStatusChanged((status) => {
-    if (status !== 'running') startPutRan = false;
-  }) });
-  own({ dispose: client.onReconnected(() => {
-    if (!startPutRan) return;
-    putLogged();
-  }) });
-  own(instance.subscribe(() => {
-    if (startPutRan) putLogged();
-  }));
-  return {
-    putOnMEditStarted: () => {
-      startPutRan = true;
-      return put();
-    },
-  };
-}
-
-// Put load order (ADR-0013). What the reconcile does is the narrator's to show; what the send
-// itself answered is reported here.
-async function handleLoadOrder(
-  outputChannel: vscode.LogOutputChannel, reporter: Reporter, narrator: ReconcileNarrator,
-  command: () => Promise<PutLoadOrderResult>,
-): Promise<void> {
-  const put = await command();
-  // A game folder not found, or one whose plugins cannot be listed, is told by the views and the
-  // Output already; a line per value would repeat it.
-  if (!put.sent) return;
-  const { plugins, active } = put.snapshot;
-  outputChannel.info(`[toolbox] handed mEdit the load order snapshot (${plugins.length} plugins, ${active.length} active)`);
-  reportPutOutcome(put.outcome, { error: (m) => reporter.report('error', m) });
-  if (put.outcome.outcome !== 'applied') return;
-  // The status the put waited for, heard here too: its ticks can be lost to a stream reopening.
-  narrator.hear(put.outcome.status);
-  await narrator.settled(put.outcome.status.version);
-}
-
-// `loadOrderSender.arm()` returns a pure check, since the client holds no VS Code type (ADR-0019),
-// so each call site logs explicitly instead.
-function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
-  outputChannel.info('[toolbox] the reconcile was abandoned before it landed; leaving the closed view alone');
-}
-
-interface EnterEditingDeps {
-  session: ExtensionSession;
-  progress: PluginsViewProgress;
-  instance: Instance;
-  sender: LoadOrderSender;
-  client: ToolboxClient;
-  outputChannel: vscode.LogOutputChannel;
-  reporter: Reporter;
-  revealLog: () => void;
-  /** What a connect runs once the Instance value it reads has landed. */
-  onConnect: () => Promise<void>;
-}
-
-// Owns its own progress indicator rather than leaving each caller to wrap it, and
-// reports its steps through `say`.
-function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
-  const { session, progress, instance, sender, client, outputChannel, reporter, revealLog, onConnect } = deps;
-  const enter = async (): Promise<void> => {
-    const { abandoned } = sender.arm();
-    // Overlaps with the backend starting below, same as the tree's own first-value wait: the
-    // reconcile must read a real Instance value, never the empty pre-first-read sentinel.
-    const instanceReady = instance.sequence > 0 ? Promise.resolve() : instance.refresh();
-    revealLog(); // the launch can take a while; let the user watch the step log
-    progress.say('Starting backend…');
-    outputChannel.info('[toolbox] entering editing: starting backend');
-    await client.start();
-    // Before the status gate, deliberately: a close stops the backend, so an abandoned launch
-    // would otherwise fail this check and report the stop it asked for as a startup failure.
-    if (abandoned()) { reportAbandoned(outputChannel); return; }
-    if (client.status !== 'running') {
-      exitEditing(session, client); // tear down the half-started backend
-      reporter.report('error', 'Backend failed to start — see the Modbench output for details.');
-      return;
-    }
-    await instanceReady;
-    // No game folder, or one whose plugins cannot be listed, means no snapshot to hand over. The
-    // views and the Output already say so, without a notification (common.md, States, story 5).
-    if (!instance.value.loadOrderSnapshot) {
-      exitEditing(session, client);
-      return;
-    }
-    await onConnect();
-  };
-  return () => progress.while(enter);
-}
-
-
 interface InstanceSide {
   instance: Instance;
   instanceRoot: string;
@@ -268,7 +155,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   // send in flight through it.
   const sender = own(createLoadOrderSender(client));
   session.loadOrderSender = sender;
-  const loadOrderReporter = reporterFor('loadOrder');
   // commands.md, `refresh`: instance commands rebuild the index and send nothing; the gesture
   // itself asks the Instance loader to read every file again.
   const refreshIndex = () => refresh(client, instanceRoot, instance.value);
@@ -282,12 +168,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   }));
   const { tree: pluginsTree, view: pluginListView, nameFilter: pluginsFilter } = plugins;
   session.plugins = plugins;
-  const loadOrderSource = (): LoadOrderSource => {
-    const { loadOrderSnapshot, gameName, gameRelease } = instance.value;
-    return { loadOrderSnapshot, gameName, gameRelease };
-  };
-  const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
-    outputChannel, loadOrderReporter, plugins.narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
   const { provider: modListProvider, view: modListView, nameFilter: modListFilter, modSync } = own(createModsView({
     instance, log: (line) => outputChannel.warn(`[modList] ${line}`), syncMods: modSyncOver(access), channel: outputChannel,
   }));
@@ -315,17 +195,17 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
       );
   };
   // commands.md, System commands, `modbench.instance.putLoadOrder`.
-  const loadOrderPuts = registerLoadOrderPut(
-    own, instance, client, putCurrentLoadOrder, outputChannel);
-  const { enter: enterEditing } = own(enterEditingAcrossRestarts(
-    client,
-    makeEnterEditing({
-      session, progress: plugins.progress, instance, sender, client, outputChannel, reporter: reporterFor('enterEditing'),
-      revealLog: () => outputChannel.show(true), onConnect: () => loadOrderPuts.putOnMEditStarted(),
-    }),
-    (msg) => outputChannel.error(`[toolbox] ${msg}`),
-  ));
-  own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putCurrentLoadOrder));
+  const view = editingView({
+    narrator: plugins.narrator, progress: plugins.progress, log: outputChannel, revealLog: () => outputChannel.show(true),
+    reportPut: (message) => reporterFor('loadOrder').report('error', message),
+    reportEntry: (message) => reporterFor('enterEditing').report('error', message),
+  });
+  const editing = own(editingFlow({
+    client, sender, instanceRoot, exitEditing: () => exitEditing(session, client),
+    around: view.around, tell: view.tell, log: (message) => outputChannel.error(message),
+  }));
+  own(loadOrderPutOnEachValue(instance, editing));
+  own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', (value: InstanceValue) => editing.put(value)));
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor }));
   ownAll(own, registerModContextCommands({
@@ -378,7 +258,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     refresh: refreshIndex, nextRefill: () => plugins.narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
-    instance, instanceRoot, firstRead, modListProvider, toolboxProvider, downloadsProvider, pluginsTree, enterEditing,
+    instance, instanceRoot, firstRead, modListProvider, toolboxProvider, downloadsProvider, pluginsTree, enterEditing: () => editing.enter(instance.landed()),
     originFiles: (origin) => originFiles(instance.value.plugins, origin),
     modListSelection: () => modListView.selection, pluginsSelection: () => pluginListView.selection,
     downloadsSelection: () => downloadsView.selection, trackSelection,
