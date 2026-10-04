@@ -11,12 +11,14 @@ import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
+import { SameCopies, type FileCopies } from './sameCopies';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
 export type { FileOrigin, InstalledFileId, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow } from './downloadRows';
+export type { Copy, FileCopies } from './sameCopies';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, GameFolderLook } from '../instanceAdapter/instanceAdapter';
 
@@ -192,8 +194,11 @@ export class Instance implements Subscription {
   // The mod folder links already told as skipped, so each is one Output line until it changes.
   private linksTold: ReadonlySet<string> = new Set();
 
+  private readonly copies: SameCopies;
+
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.adapter.names);
+    this.copies = new SameCopies(options.adapter);
     this.changes = options.adapter.subscribe(() => this.schedule());
     let focused = options.window.state.focused;
     this.focus = options.window.onDidChangeWindowState((state) => {
@@ -246,6 +251,12 @@ export class Instance implements Subscription {
   refresh(): Promise<string | undefined> {
     clearTimeout(this.timer); // a refresh mid-burst is the burst's recompute, not a second one
     return this.run();
+  }
+
+  /** For each file of the value it holds, by its path, which of its providers' copies are the
+   *  same, or why a copy could not be read. */
+  sameCopies(relativePaths: readonly string[]): Promise<FileCopies[]> {
+    return this.copies.of(this.current, relativePaths);
   }
 
   dispose(): void {

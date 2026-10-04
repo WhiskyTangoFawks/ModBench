@@ -9,9 +9,10 @@ import { parseMetaIni } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
 import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
-import { factsOf, get, isTracked, listDir } from './files';
+import { digestOf } from './contentDigest';
+import { factsOf, get, isTracked, listDir, stampOf } from './files';
 import {
-  type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter,
+  type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileRead, type GameFolder, type InstanceAdapter,
 } from './instanceAdapter';
 import {
   DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, isTempWrite, modDir, modlistFile,
@@ -61,6 +62,14 @@ async function readCreationClubList(gameFolder: GameFolder, gameRelease: string 
   if (file === undefined) return [];
   const text = await readOrAbsent<string | undefined>(() => get(file), undefined);
   return text === undefined ? [] : parsePlugins(text).map((entry) => entry.name);
+}
+
+async function answerOrReason<T>(read: () => Promise<T>): Promise<FileRead<T>> {
+  try {
+    return { kind: 'read', answer: await read() };
+  } catch (err) {
+    return { kind: 'unreadable', reason: errorMessage(err) };
+  }
 }
 
 // The tables key each release on the game's name as `gameName=` spells it.
@@ -136,5 +145,9 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
     originFiles: (origin) => originFilesIn(instanceRoot, origin),
 
     modTracked: (mod) => isTracked(modDir(instanceRoot, mod)),
+
+    fileStamp: (path) => answerOrReason(() => stampOf(path)),
+
+    contentDigest: (path) => answerOrReason(() => digestOf(path)),
   };
 }

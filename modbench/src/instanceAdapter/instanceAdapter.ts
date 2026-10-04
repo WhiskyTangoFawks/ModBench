@@ -306,6 +306,17 @@ export interface OriginFiles {
   readonly notes: readonly string[];
 }
 
+/** What the file system says of a file without a read of its bytes. A tool can keep a file's size
+ *  and date modified across a write, never the time of its change. */
+export interface FileStamp {
+  readonly size: bigint;
+  readonly modifiedNs: bigint;
+  readonly changedNs: bigint;
+}
+
+/** A read of one file that answers why it could not be read, rather than failing whatever asked. */
+export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
+
 /** How a message names the mod manager and the file it keeps mod order in. */
 export interface ManagerNames {
   readonly manager: string;
@@ -343,6 +354,11 @@ export interface InstanceAdapter {
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
   /** ADR-0007. */
   modTracked(mod: string): Promise<boolean>;
+  /** The stamp of an origin file, at the path it is read from. */
+  fileStamp(path: string): Promise<FileRead<FileStamp>>;
+  /** The content digest of an origin file, at the path it is read from: two files with one digest
+   *  hold the same bytes. */
+  contentDigest(path: string): Promise<FileRead<string>>;
 
   // Changes.
   /** Every change lands in one write, its folders with it. Naming an entry not there, or adding a

@@ -12,6 +12,7 @@ import {
 } from './layout';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
+import type { FileStamp } from './instanceAdapter';
 
 /** ADR-0007, answered without the backend. */
 export function isTracked(modFolder: string): Promise<boolean> {
@@ -83,6 +84,12 @@ export async function factsOf(path: string): Promise<PathFacts> {
   const kind: PathFacts['kind'] = info.isDirectory() ? 'directory' : info.isFile() ? 'file' : 'other';
   const realPath = await realpath(path);
   return { size: info.size, mtimeMs: info.mtimeMs, kind, realPath };
+}
+
+/** `path`'s stamp, following symlinks. */
+export async function stampOf(path: string): Promise<FileStamp> {
+  const info = await stat(path, { bigint: true });
+  return { size: info.size, modifiedNs: info.mtimeNs, changedNs: info.ctimeNs };
 }
 
 /** Reads `path` as text. Pass `ifMissing` to read a missing file as that text instead of
