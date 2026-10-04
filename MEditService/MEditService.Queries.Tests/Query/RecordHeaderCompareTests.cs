@@ -39,7 +39,7 @@ public sealed class RecordHeaderCompareTests
             new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),
             new LoadOrderEntry("Partial.esp", "Partial.esp", "Data", 1, Enabled: true, Winning: true));
         return (baseCell.FormKey,
-            new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier()));
+            new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance));
     }
 
     private static Dictionary<string, FieldDiff> Diffs(RecordQueryService service, FormKey cell) =>

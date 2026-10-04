@@ -32,7 +32,7 @@ public class MasterResolutionTests
         var holder = FakeLoadOrder.Of(GameRelease.Fallout4, registered);
         var status = new LoadOrderStatus(state, plugins.Length, plugins.Length, [], ConflictsComputed: state == LoadOrderState.Ready, []);
         var svc = new RecordQueryService(
-            new FakeIndex(new FakeReads(opened, []), status), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
+            new FakeIndex(new FakeReads(opened, []), status), holder, SharedSchemaReflector.Instance);
 
         return svc.GetPlugins();
     }

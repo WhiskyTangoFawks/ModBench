@@ -25,7 +25,7 @@ public sealed class CommittedOnlyReadPathTests
             [Plugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [], RecordCount: rows.Length, IsMedium: false),
         };
         var holder = FakeLoadOrder.Of(Release, new LoadOrderEntry(PluginName, PluginName, Origin, 0, Enabled: true, Winning: true));
-        return new(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
+        return new(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance);
     }
 
     private static (FormKey Npc01Key, RecordQueryService Service) TwoNpcs()
