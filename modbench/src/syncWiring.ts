@@ -1,6 +1,8 @@
-import type { Instance, InstanceValue } from './instanceLoader/instance';
-import type { ModSync } from './mods/modSync';
-import type { PluginSync } from './plugins/pluginSync';
+import type { Sync } from './drivingLib/syncFailureReport';
+import type { Instance, InstanceValue, ModSyncArguments, PluginSyncArguments } from './instanceLoader/instance';
+
+type ModSync = Pick<Sync<ModSyncArguments>, 'run'>;
+type PluginSync = Pick<Sync<PluginSyncArguments>, 'run'>;
 
 // Termination: a write re-enters through the Instance adapter's signal. The next value agrees with
 // disk, so the sync writes nothing and the loop stops; a sync that wrote unconditionally never would.
