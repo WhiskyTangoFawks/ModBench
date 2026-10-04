@@ -24,4 +24,4 @@ Where VS Code, git or Mutagen already does a job, Modbench uses it. The user alr
 Mutagen decides the data: the format, what a record holds, and how it is read and written. Modbench uses Mutagen's model as it is. The reference tool decides behaviour: what the user sees, what a gesture does and what it is called. MO2 is the reference for mod management and xEdit for records. VS Code decides interaction: how the user reaches a gesture through keys, menus, navigation and selection. Where a reference tool's habit reaches into the data, Mutagen decides.
 
 ## Never break the instance for its owner
-Modbench never breaks the instance so that the mod manager that made it can no longer read it. Modbench writes each file in place, in its owner's format, and a user switches between Modbench and the mod manager with no conversion.
+Modbench never breaks the instance for the mod manager that made it. Modbench writes each file in place, in its owner's format, and a user switches between Modbench and the mod manager with no conversion.
