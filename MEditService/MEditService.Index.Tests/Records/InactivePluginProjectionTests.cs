@@ -58,12 +58,13 @@ public sealed class InactivePluginProjectionTests : IDisposable
         Reconcile(active: false);
         _mod.HandEdit(document, "\"FixtureNpc\"", "\"RenamedByHand\"");
         _index.NextSnapshot();
-        var projected = _index.Sequence;
+        var control = _index.AdvanceDuring(() => Reconcile(active: true));
+        Reconcile(active: false);
 
         _holder.Apply(_holder.Current);
-        Reconcile(active: true);
+        var afterAnEqualSnapshot = _index.AdvanceDuring(() => Reconcile(active: true));
 
-        Assert.Equal(projected + 1, _index.Sequence);
+        Assert.Equal(control, afterAnEqualSnapshot);
     }
 
     [Fact]
@@ -78,11 +79,12 @@ public sealed class InactivePluginProjectionTests : IDisposable
     public void ASnapshotThatMovesNothing_ProjectsNothingForATrackedPluginThatIsNotActive()
     {
         Reconcile(active: false);
-        var settled = _index.Sequence;
+        var control = _index.AdvanceDuring(() => Reconcile(active: true));
+        Reconcile(active: false);
 
         _holder.Apply(_holder.Current);
-        Reconcile(active: true);
+        var afterAnEqualSnapshot = _index.AdvanceDuring(() => Reconcile(active: true));
 
-        Assert.Equal(settled + 1, _index.Sequence);
+        Assert.Equal(control, afterAnEqualSnapshot);
     }
 }

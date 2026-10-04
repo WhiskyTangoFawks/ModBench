@@ -99,7 +99,7 @@ public sealed class RefreshByKeysTests : IDisposable
         const string notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold = "{ this is not json";
         File.WriteAllText(_mod.SourceFileOf(Reads.DocumentOf(_npc, _mod.KeyOf())), notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold);
 
-        Refresh();
+        _index.NextSnapshotUntil(() => _index.Status.Failures.Count > 0, "the plugin's failure");
 
         Assert.Equal(before, Reads.DocumentOf(_npc, _mod.KeyOf()).Body);
     }

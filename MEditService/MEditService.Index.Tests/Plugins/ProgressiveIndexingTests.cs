@@ -172,7 +172,7 @@ public sealed class ProgressiveIndexingTests
         using var __ = gate;
         var order = new ConcurrentQueue<string>();
 
-        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        holder.Apply(LoadOrderArrival.Snapshot(fx.GameDirectory, null, GameRelease.Fallout4, fx.Plugins));
         await gate.WaitUntilParkedAsync();
 
         using var unloadAttempting = new ManualResetEventSlim();
@@ -187,7 +187,6 @@ public sealed class ProgressiveIndexingTests
         gate.Release();
         order.Enqueue("gate-released");
         await unload;
-        await load;
 
         Assert.Equal(["gate-released", "unload-done"], order);
         Assert.Throws<NoLoadOrderException>(() => manager.RequireReads());

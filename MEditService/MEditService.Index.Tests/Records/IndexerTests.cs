@@ -63,7 +63,7 @@ public sealed class IndexerTests
         Assert.Equal("B.esp", WinnerOf(indexer, npc));
 
         var b = fx.Plugins.Single(p => p.Name == "B.esp");
-        holder.Apply(Snapshot(fx, [.. fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Winning = false } : p)]));
+        indexer.Receive(holder, Snapshot(fx, [.. fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Winning = false } : p)]));
         ReDeriveByTouchingTheBytesThenValidating(indexer, b);
 
         Assert.Equal("A.esm", WinnerOf(indexer, npc));

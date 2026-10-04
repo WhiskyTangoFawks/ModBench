@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -231,7 +232,7 @@ public sealed class SourceIngestTests : IDisposable
 
         File.WriteAllText(RootDocument, "{ this is not json");
 
-        index.NextSnapshot();
+        index.NextSnapshotUntil(() => index.Status.Failures.Count > 0, "the plugin's failure");
 
         Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.RequireReads().DocumentOf(_npc, Plugin)));
 
@@ -276,10 +277,18 @@ public sealed class SourceIngestTests : IDisposable
     public void APluginWhoseBinaryCannotBeOpened_TakesARefreshOfItsSourceWithoutThrowing()
     {
         File.WriteAllText(_entry.Path, "this is not a plugin");
-        using var index = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
+        var partnerPath = Path.Combine(_fixture.GameDirectory, "Partner.esp");
+        PluginBinaries.Rewrite(partnerPath, mod => mod.Npcs.AddNew("PartnerNpc"));
+        using var index = Indexes.Reconciled(
+            _fixture.GameDirectory,
+            [.. _fixture.Plugins, new LoadOrderEntry("Partner.esp", partnerPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true)]);
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
+        PluginBinaries.Touch(partnerPath);
 
-        index.NextSnapshot();
+        Assert.True(index.Revalidate());
+
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
     }
 
     [Fact]

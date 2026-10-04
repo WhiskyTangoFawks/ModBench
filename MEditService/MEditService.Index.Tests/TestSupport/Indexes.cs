@@ -76,6 +76,16 @@ internal static class Indexes
         if (!index.Revalidate()) throw new TimeoutException("The arrival announced no change.");
     }
 
+    /// <summary>How far the sequence moved while <paramref name="arrival"/> was answered. An equal
+    /// snapshot sent before a measured arrival is proved silent by the two measurements of the same
+    /// arrival agreeing.</summary>
+    internal static long AdvanceDuring(this Indexer index, Action arrival)
+    {
+        var before = index.Sequence;
+        arrival();
+        return index.Sequence - before;
+    }
+
     /// <summary>The next snapshot: true when it landed a change.</summary>
     internal static bool Revalidate(this Indexer index)
     {
@@ -83,7 +93,20 @@ internal static class Indexes
             throw new InvalidOperationException("Only an Indexer from Indexes.Open has a holder to deliver an arrival through.");
         var before = index.Sequence;
         holder.Apply(holder.Current);
-        return index.AwaitSequenceAsync(before + 1, TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+        var landed = Waits.ReachedWithin(() => index.Sequence > before, TimeSpan.FromSeconds(10));
+        if (landed) index.AwaitValidation();
+        return landed;
+    }
+
+    /// <summary>The held load order arriving again, answered once <paramref name="announced"/> holds
+    /// and the validation that announced it has finished.</summary>
+    internal static void NextSnapshotUntil(this Indexer index, Func<bool> announced, string what)
+    {
+        if (!Holders.TryGetValue(index, out var holder))
+            throw new InvalidOperationException("Only an Indexer from Indexes.Open has a holder to deliver an arrival through.");
+        holder.Apply(holder.Current);
+        Waits.Reached(announced, what, TimeSpan.FromSeconds(30));
+        index.AwaitValidation();
     }
 
     /// <summary>The SQL door: the filter is arbitrary SQL yielding form_key, so what it

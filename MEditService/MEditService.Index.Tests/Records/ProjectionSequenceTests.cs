@@ -106,10 +106,13 @@ public sealed class ProjectionSequenceTests : IDisposable
     public void Validate_WithUnchangedBytes_DoesNotAdvanceTheSequence()
     {
         Reconcile(_fixture.Plugins);
-        var before = _index.Sequence;
+        var disabled = _fixture.Plugins.Select(p => p with { Enabled = false }).ToList();
+        var control = _index.AdvanceDuring(() => Reconcile(disabled));
+        Reconcile(_fixture.Plugins);
 
-        _index.NextSnapshot();
+        _holder.Apply(_holder.Current);
+        var afterAnEqualSnapshot = _index.AdvanceDuring(() => Reconcile(disabled));
 
-        Assert.Equal(before, _index.Sequence);
+        Assert.Equal(control, afterAnEqualSnapshot);
     }
 }

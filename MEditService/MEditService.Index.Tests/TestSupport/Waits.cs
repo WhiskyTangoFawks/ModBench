@@ -20,12 +20,18 @@ internal static class Waits
 
     internal static void Reached(Func<bool> condition, string what, TimeSpan timeout)
     {
+        if (!ReachedWithin(condition, timeout)) throw new TimeoutException($"Never reached {what}.");
+    }
+
+    internal static bool ReachedWithin(Func<bool> condition, TimeSpan timeout)
+    {
         var elapsed = Stopwatch.StartNew();
         while (!condition())
         {
-            if (elapsed.Elapsed > timeout) throw new TimeoutException($"Never reached {what}.");
+            if (elapsed.Elapsed > timeout) return false;
             Thread.Sleep(5);
         }
+        return true;
     }
 
     internal static async Task<bool> CompletesWithin(Task task, TimeSpan timeout) =>

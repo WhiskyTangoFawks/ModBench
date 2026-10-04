@@ -4,6 +4,7 @@ using MEditService.Codec.Schema;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.RealData;
@@ -20,8 +21,23 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     [Fact]
     public void AFreshlyIngestedRealPlugin_ValidatesCleanAndAdvancesNoSequence()
     {
-        Assert.False(fixture.FromSource.Revalidate());
-        Assert.Empty(fixture.FromSource.Status.Failures);
+        using var scratch = new ScratchDirectory("medit-source-parity-validates-");
+        var partnerPath = Path.Combine(scratch, "Partner.esp");
+        PluginBinaries.Rewrite(partnerPath, mod => mod.Npcs.AddNew("PartnerNpc"));
+        using var index = Indexes.Reconciled(
+            scratch,
+            [
+                new LoadOrderEntry(RealDataPlugin.PluginFileName, Path.Combine(fixture.ModFolder, RealDataPlugin.PluginFileName), SourceParityFixture.Origin, 0, Enabled: true, Winning: true),
+                new LoadOrderEntry("Partner.esp", partnerPath, "PartnerMod", 1, Enabled: true, Winning: true),
+            ],
+            Directory.CreateDirectory(Path.Combine(scratch, "instance")).FullName);
+        var before = index.Sequence;
+        PluginBinaries.Touch(partnerPath);
+
+        Assert.True(index.Revalidate());
+
+        Assert.Equal(before + 1, index.Sequence);
+        Assert.Empty(index.Status.Failures);
     }
 
     [Fact]

@@ -60,11 +60,14 @@ public sealed class ReconcileDiffTests
         var sequenceAfterFirst = index.Sequence;
         Assert.True(statusAfterFirst.ConflictsComputed);
 
-        holder.Apply(holder.Current);
         var swapped = fx.Plugins.Select(p => p with { Slot = p.Name == "A.esm" ? 1 : 0 }).ToList();
-        index.Reconcile(holder, fx.GameDirectory, swapped, GameRelease.Fallout4);
+        var control = index.AdvanceDuring(() => index.Reconcile(holder, fx.GameDirectory, swapped, GameRelease.Fallout4));
+        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        Assert.Equal(sequenceAfterFirst + 1, index.Sequence);
+        holder.Apply(holder.Current);
+        var afterAnEqualSnapshot = index.AdvanceDuring(() => index.Reconcile(holder, fx.GameDirectory, swapped, GameRelease.Fallout4));
+
+        Assert.Equal(control, afterAnEqualSnapshot);
         Assert.Equal(openedAfterFirst, opens.OpenedTotal);
         Assert.Equal(statusAfterFirst.IndexedPlugins, index.Status.IndexedPlugins);
         Assert.Equal(statusAfterFirst.State, index.Status.State);

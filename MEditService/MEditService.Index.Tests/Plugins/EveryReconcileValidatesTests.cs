@@ -158,6 +158,9 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     [Fact]
     public void AnEqualSnapshot_OfABinaryWhoseStampHolds_ReadsNothing()
     {
+        HandEditTracked("EditedBeforeTheBinaryIsHeld");
+        PublishedUntil(RowsChanged(_trackedNpc));
+
         using var held = new FileStream(_untracked.Path, FileMode.Open, FileAccess.Read, FileShare.None);
         Assert.Null(PluginBinaryHash.OfFile(_untracked.Path));
         HandEditTracked();

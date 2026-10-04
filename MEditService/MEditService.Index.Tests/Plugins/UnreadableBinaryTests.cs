@@ -95,7 +95,7 @@ public sealed class UnreadableBinaryTests : IDisposable
         UntrackedOverAnUnreadableBinary();
 
         WriteValidPlugin(_pluginPath);
-        Assert.True(_index.Revalidate());
+        _index.NextSnapshotUntil(() => _index.Status.Failures.All(f => f.Name != PluginName), "the status without the plugin's failure");
 
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == PluginName);
         Assert.Contains(_index.RequireReads().GetDocuments(_key), d => d.EditorId == "FreshlyAppearedNpc");
