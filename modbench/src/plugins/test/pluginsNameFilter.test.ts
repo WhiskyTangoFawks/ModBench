@@ -25,7 +25,7 @@ vi.mock('vscode', () => ({
   commands: filterBoxCommandsMock(h.state),
 }));
 
-import { registerPluginsNameFilter } from '../pluginsView';
+import { pluginsViewProgress, registerPluginsNameFilter } from '../pluginsView';
 import { NO_PLUGINS_MESSAGE, PluginsTreeProvider, type PluginListSource } from '../PluginsTreeProvider';
 import { InMemoryMEditClient, type PluginMetadata } from '../../client';
 import { syncMessageDouble } from '../../test/syncMessageDouble';
@@ -273,5 +273,69 @@ describe('the Plugins view, given a plugin sync that refused', () => {
     filter.clear();
     await waitForMessage(view, (m) => m === SYNC_MESSAGE, 'the sync message returning');
     expect(view.message).toBe(SYNC_MESSAGE);
+  });
+});
+
+describe('the Plugins view\'s message line, while a load holds it', () => {
+  async function heldView(instance: FakeInstance) {
+    const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
+    await provider.getChildren();
+    const view: { description?: string; message?: string } = {};
+    const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
+    return { provider, view, filter, progress: pluginsViewProgress(view, filter) };
+  }
+
+  it('keeps the load\'s message when a reconcile tick still matches nothing', async () => {
+    const { provider, view, filter, progress } = await heldView(new FakeInstance(valueOf([plugin('TestMod.esp')])));
+    filter.open();
+    currentBox().type('zzznomatch');
+    await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
+
+    progress.say('Starting backend…');
+    provider.applyIndexed([{ name: 'TestMod.esp', origin: 'SomeMod' }], []);
+    await flush();
+
+    expect(view.message).toBe('Starting backend…');
+  });
+
+  it('keeps the load\'s message when a fresh Instance value would otherwise have cleared it', async () => {
+    const instance = new FakeInstance(valueOf([plugin('TestMod.esp')]));
+    const { view, filter, progress } = await heldView(instance);
+    filter.open();
+    currentBox().type('zzznomatch');
+    await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
+
+    progress.say('Starting backend…');
+    instance.publish(valueOf([plugin('TestMod.esp'), plugin('zzznomatch.esp')]));
+    await flush();
+
+    expect(view.message).toBe('Starting backend…');
+  });
+
+  it('gives the line back to the game folder message once the load clears it', async () => {
+    const instance = new FakeInstance(notFoundValueOf([plugin('TestMod.esp')]));
+    const { view, progress } = await heldView(instance);
+
+    progress.say('Starting backend…');
+    instance.publish(notFoundValueOf([plugin('TestMod.esp')]));
+    await flush();
+    expect(view.message).toBe('Starting backend…');
+
+    progress.say(undefined);
+    await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message returning');
+  });
+
+  it('gives the line back to the empty-list message once the load clears it', async () => {
+    const instance = new FakeInstance(valueOf([plugin('TestMod.esp')]));
+    const { provider, view, progress } = await heldView(instance);
+
+    progress.say('Starting backend…');
+    instance.publish(valueOf([]));
+    await provider.getChildren();
+    await flush();
+    expect(view.message).toBe('Starting backend…');
+
+    progress.say(undefined);
+    await waitForMessage(view, (m) => m === NO_PLUGINS_MESSAGE, 'the empty-list message returning');
   });
 });

@@ -1,10 +1,8 @@
 import * as vscode from 'vscode';
-import type { MEditClient, PluginLoadFailure } from './client';
+import type { MEditClient } from './client';
 import { createLoadOrderSender, type LoadOrderSender } from './client';
-import {
-  createReconcileNarrator, subscribeNarratorToLoadOrderStatus, type ReconcileNarrator,
-} from './medit/reconcileNarrator';
-import { reportPutOutcome, settleReconciled, syncActiveFilter } from './medit/loadOrderOutcome';
+import type { ReconcileNarrator } from './plugins/reconcileNarrator';
+import { reportPutOutcome } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { dataFolderFile } from './tables/gamePaths';
@@ -12,8 +10,10 @@ import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
 import { InactiveFileDecorationProvider } from './mods/inactiveFiles';
 import { ModIndicatorDecorations } from './mods/modIndicators';
-import type { PluginFactsClient, PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
-import { createPluginsView } from './plugins/pluginsView';
+import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
+import { createPluginsView, type PluginsViewDeps } from './plugins/pluginsView';
+import type { PluginsViewProgress } from './plugins/pluginRowCommands';
+import type { StatusBar } from './plugins/statusBar';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
@@ -30,7 +30,7 @@ import { registerModSync } from './modSyncTrigger';
 import { modSyncOver } from './modlist/modlist';
 import { installNameRefusal } from './install/install';
 import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
-import { say, exitEditing } from './editingTeardown';
+import { exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
 import { registerGoToModCommand } from './mods/goToMod';
 import { registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
@@ -46,14 +46,14 @@ import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolb
 import {
   putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
 } from './instanceCommands/loadOrder';
-import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
+import type { ExtensionSession, Own } from './session';
 import { pluginsCopyValueText, registerCreatePluginCommand } from './plugins/pluginListCommands';
 import { errorMessage } from './ports/errorMessage';
 
 // The port members every gesture, plugin sync and the launch in this file call.
 export type ToolboxClient = Pick<MEditClient,
-  'putLoadOrder' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin' | 'getLightPluginsSupported'
-  | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected' | 'subscribe'>;
+  'putLoadOrder' | 'rebuildIndex' | 'createPlugin' | 'getLightPluginsSupported'
+  | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected'>;
 
 export interface ToolboxDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -63,9 +63,8 @@ export interface ToolboxDeps {
    *  owns the single instance every record surface reads through. */
   recordBrowser: PluginTreeProvider;
   /** The mEdit client's members the Plugins view reads. */
-  pluginFacts: PluginFactsClient;
-  /** The one status bar item, written from the reconcile's own outcome. */
-  setStatusText: (text: string) => void;
+  pluginFacts: PluginsViewDeps['client'];
+  statusBar: StatusBar;
   /** Fires on every completed reconcile and on a landed Track: every open record panel refetches
    *  its comparison, and every tracked mod's repo (re-)registers with `vscode.git`. */
   notifyConflictsComputed: () => void;
@@ -147,56 +146,6 @@ export function registerLoadOrderPut(
   };
 }
 
-interface ReconcileNarrationDeps {
-  session: ExtensionSession;
-  client: ToolboxClient;
-  /** The record browser a reconciled load order refreshes — a different provider from
-   *  `session.plugins`' tree, which `applyLoadOrderToTree` below owns. */
-  recordBrowser: PluginTreeProvider;
-  outputChannel: vscode.LogOutputChannel;
-  setStatusText: (text: string) => void;
-  notifyConflictsComputed: () => void;
-  reporter: Reporter;
-}
-
-function applySyncedFilterState(
-  client: Pick<MEditClient, 'getActiveFilter'>, session: ExtensionSession, outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter,
-): Promise<void> {
-  return syncActiveFilter(() => client.getActiveFilter(), {
-    log: (m) => outputChannel.info(`[toolbox] ${m}`),
-    warn: (m) => reporter.report('warning', m),
-    showRecordFilter: (filter) => session.plugins?.showRecordFilter(filter),
-  });
-}
-
-// plugins.md, States 2: the index status the stream carries drives the Plugins view, whoever
-// started the reconcile. mEdit going away, or a stream reopening onto another process, starts its
-// versions over.
-function narrateReconciles(own: Own, deps: ReconcileNarrationDeps): ReconcileNarrator {
-  const { session, client, recordBrowser, outputChannel, setStatusText, notifyConflictsComputed, reporter } = deps;
-  const narrator = createReconcileNarrator({
-    showProgress: (until) => void withPluginsViewProgress(session, () => until),
-    applyIndexed: (indexedPlugins, failures) => session.plugins?.tree.applyIndexed(indexedPlugins, failures),
-    applyRefused: (refusal) => session.plugins?.tree.applyRefused(refusal),
-    setStatusText,
-    settle: (status) => settleReconciled(status, {
-      log: (m) => outputChannel.info(`[toolbox] ${m}`),
-      warn: (m) => reporter.report('warning', m),
-      setStatusText,
-      refreshTree: () => recordBrowser.refresh(),
-      notifyConflictsComputed,
-      syncFilterState: () => applySyncedFilterState(client, session, outputChannel, reporter),
-      applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, reporter, totalPlugins),
-    }),
-    log: (m) => outputChannel.error(`[toolbox] ${m}`),
-  });
-  own({ dispose: subscribeNarratorToLoadOrderStatus(client, narrator) });
-  own({ dispose: client.onStatusChanged((status) => { if (status !== 'running') narrator.detached(); }) });
-  own({ dispose: client.onReconnected(() => narrator.detached()) });
-  return narrator;
-}
-
 // Put load order (ADR-0013). What the reconcile does is the narrator's to show; what the send
 // itself answered is reported here.
 async function handleLoadOrder(
@@ -216,37 +165,6 @@ async function handleLoadOrder(
   await narrator.settled(put.outcome.status.version);
 }
 
-// Rows gain chevrons here, and *finish* gaining them here. The tree reads the
-// backend's own plugin list itself; the failures `reportLoadOrderResult` already toasted ride
-// along rather than being re-derived.
-async function applyLoadOrderToTree(
-  session: ExtensionSession,
-  failures: PluginLoadFailure[],
-  outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter,
-  // Carried in only to be logged next to what reached the tree. Deliberately not `plugins.length`
-  // from the caller's snapshot: that omits the implicit masters the backend prepends, so every
-  // healthy reconcile would read as short.
-  totalPlugins: number,
-): Promise<void> {
-  const held = await session.plugins?.tree.applyReconciled(failures);
-  if (held === undefined) {
-    // Leaving every row a leaf is a safe *render* but not an honest one: the reconcile did land,
-    // so the tree would claim editing is unavailable with nothing on screen to say why (ADR-0019).
-    outputChannel.error('[toolbox] the reconciled load order did not reach the tree; plugin rows will not expand');
-    reporter.report(
-      'warning',
-      'The load order was reconciled, but the plugin list could not be read — plugin rows will not expand into records.',
-    );
-    return;
-  }
-  // Do not remove as logging noise: `held.length + failures.length` landing close to
-  // `totalPlugins` is what tells a stuck-tail reconcile here from one broken upstream.
-  outputChannel.info(
-    `[toolbox] applying reconciled load order to tree: ${held.length} in the load order, ${failures.length} failed, of ${totalPlugins} plugins`,
-  );
-}
-
 // `loadOrderSender.arm()` returns a pure check, since the client holds no VS Code type (ADR-0019),
 // so each call site logs explicitly instead.
 function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
@@ -255,6 +173,7 @@ function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
 
 interface EnterEditingDeps {
   session: ExtensionSession;
+  progress: PluginsViewProgress;
   instance: Instance;
   sender: LoadOrderSender;
   client: ToolboxClient;
@@ -268,14 +187,14 @@ interface EnterEditingDeps {
 // Owns its own progress indicator rather than leaving each caller to wrap it, and
 // reports its steps through `say`.
 function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
-  const { session, instance, sender, client, outputChannel, reporter, revealLog, onConnect } = deps;
+  const { session, progress, instance, sender, client, outputChannel, reporter, revealLog, onConnect } = deps;
   const enter = async (): Promise<void> => {
     const { abandoned } = sender.arm();
     // Overlaps with the backend starting below, same as the tree's own first-value wait: the
     // reconcile must read a real Instance value, never the empty pre-first-read sentinel.
     const instanceReady = instance.sequence > 0 ? Promise.resolve() : instance.refresh();
     revealLog(); // the launch can take a while; let the user watch the step log
-    say(session, 'Starting backend…');
+    progress.say('Starting backend…');
     outputChannel.info('[toolbox] entering editing: starting backend');
     await client.start();
     // Before the status gate, deliberately: a close stops the backend, so an abandoned launch
@@ -295,7 +214,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
     }
     await onConnect();
   };
-  return () => withPluginsViewProgress(session, enter);
+  return () => progress.while(enter);
 }
 
 
@@ -320,7 +239,7 @@ interface InstanceSide {
 function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): InstanceSide {
   const {
     outputChannel, session, client, recordBrowser, pluginFacts,
-    setStatusText, notifyConflictsComputed, reporterFor, ask, trash, extensionId,
+    statusBar, notifyConflictsComputed, reporterFor, ask, trash, extensionId,
   } = deps;
   // The flat log shim, for collaborators still taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
@@ -350,17 +269,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const sender = own(createLoadOrderSender(client));
   session.loadOrderSender = sender;
   const loadOrderReporter = reporterFor('loadOrder');
-  const narrator = narrateReconciles(own, {
-    session, client, recordBrowser, outputChannel, setStatusText, notifyConflictsComputed,
-    reporter: loadOrderReporter,
-  });
-  // The value's slice the load order is built from, under the names instance commands give it.
-  const loadOrderSource = (): LoadOrderSource => {
-    const { plugins, gameFolder, gameName, gameRelease, pluginsLoadedWithNoLine } = instance.value;
-    return { plugins, gameFolder, gameName, gameRelease, pluginsLoadedWithNoLine };
-  };
-  const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
-    outputChannel, loadOrderReporter, narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
   // commands.md, `refresh`: instance commands rebuild the index and send nothing; the gesture
   // itself asks the Instance loader to read every file again.
   const refreshIndex = () => refresh(client, instanceRoot, instance.value);
@@ -370,13 +278,20 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const runPluginSync = (value: InstanceValue) => syncPluginsOver(pluginSyncArguments(value));
   const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
   const plugins = own(createPluginsView({
-    instance, access, recordBrowser, client: pluginFacts, pluginSync, reporterFor,
+    instance, access, recordBrowser, client: pluginFacts, pluginSync, statusBar, notifyConflictsComputed, reporterFor,
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     // The tree states its own severity (ADR-0019); this routes it to the matching channel level.
     log: (level, msg) => outputChannel[level](msg),
   }));
   const { tree: pluginsTree, view: pluginListView, nameFilter: pluginsFilter } = plugins;
   session.plugins = plugins;
+  // The value's slice the load order is built from, under the names instance commands give it.
+  const loadOrderSource = (): LoadOrderSource => {
+    const { plugins, gameFolder, gameName, gameRelease, pluginsLoadedWithNoLine } = instance.value;
+    return { plugins, gameFolder, gameName, gameRelease, pluginsLoadedWithNoLine };
+  };
+  const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
+    outputChannel, loadOrderReporter, plugins.narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
   const runModSync = modSyncOver(access);
   const modSync = own(registerModSync(instance, runModSync, outputChannel));
   const { modListView, modListFilter } = createModListView(
@@ -408,7 +323,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const { enter: enterEditing } = own(enterEditingAcrossRestarts(
     client,
     makeEnterEditing({
-      session, instance, sender, client, outputChannel, reporter: reporterFor('enterEditing'),
+      session, progress: plugins.progress, instance, sender, client, outputChannel, reporter: reporterFor('enterEditing'),
       revealLog: () => outputChannel.show(true), onConnect: () => loadOrderPuts.putOnMEditStarted(),
     }),
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
@@ -466,7 +381,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     { id: 'modbench.modList', view: modListView }, { id: 'modbench.pluginListTree', view: pluginListView },
   ], 'modbench.mod.trackRowsIn');
   own(registerRefreshCommand({
-    refresh: refreshIndex, nextRefill: () => narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
+    refresh: refreshIndex, nextRefill: () => plugins.narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
     instance, instanceRoot, firstRead, modListProvider, toolboxProvider, downloadsProvider, pluginsTree, enterEditing,

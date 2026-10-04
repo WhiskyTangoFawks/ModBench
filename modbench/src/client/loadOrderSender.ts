@@ -1,4 +1,4 @@
-import type { LoadOrderOutcome, LoadOrderPluginInput, MEditClient, PluginAddress } from './MEditClient';
+import { isMEditGone, type LoadOrderOutcome, type LoadOrderPluginInput, type MEditClient, type PluginAddress } from './MEditClient';
 
 /** ADR-0013's snapshot, with the PUT's keys. */
 export interface LoadOrderSnapshot {
@@ -79,7 +79,18 @@ export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSen
     });
   };
 
-  const unsubscribeStatus = client.onStatusChanged(pump);
+  const abandon = (): void => {
+    armed?.abort();
+    armed = undefined;
+    dropWaiting();
+  };
+
+  // A send in flight when mEdit goes answers abandoned, never a killed backend as a network
+  // failure. Starting leaves the scope alone: a launch arms it before the start.
+  const unsubscribeStatus = client.onStatusChanged((status) => {
+    if (isMEditGone(status)) abandon();
+    pump();
+  });
 
   return {
     send(snapshot) {
@@ -91,11 +102,7 @@ export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSen
       });
     },
     arm,
-    abandon() {
-      armed?.abort();
-      armed = undefined;
-      dropWaiting();
-    },
+    abandon,
     dispose() {
       disposed = true;
       unsubscribeStatus();

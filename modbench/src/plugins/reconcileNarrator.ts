@@ -3,16 +3,14 @@ import {
   type PluginLoadFailure,
 } from '../client';
 import { errorMessage } from '../ports/errorMessage';
-import { makeReconcileProgressHandler, reportIndexRefusal } from './loadOrderProgress';
+import { makeReconcileProgressHandler } from './loadOrderProgress';
 
 export interface ReconcileNarratorDeps {
   /** Opens the Plugins view's progress, closed when `until` settles. */
   showProgress: (until: Promise<void>) => void;
   applyIndexed: (indexedPlugins: PluginAddress[], failures: PluginLoadFailure[]) => void;
-  /** plugins.md, States 4: the load order's own refusal, handed to the Plugins tree alongside the
-   *  status bar so every row names it too. */
+  /** plugins.md, States 4 and 6: the load order's own refusal. */
   applyRefused: (refusal: LoadOrderRefusal) => void;
-  setStatusText: (text: string) => void;
   /** A reconcile reached Ready: its whole hand-off to the views. */
   settle: (status: LoadOrderProgress) => Promise<void>;
   log: (msg: string) => void;
@@ -84,7 +82,6 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
       if (status.refusal.kind === 'failed' && status.version > settledVersion) {
         deps.log(`Indexing failed: ${status.refusal.message}`);
       }
-      reportIndexRefusal(status, deps);
       deps.applyRefused(status.refusal);
       markSettled(status.version);
       return;

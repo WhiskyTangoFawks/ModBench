@@ -21,7 +21,7 @@ function isClientFolder(relativePath: string): boolean {
   return relativePath.split(sep)[0] === CLIENT_DIR;
 }
 
-const GENERATED_TYPE_ONLY_EXCEPTIONS = [join('wire', 'messages.ts'), join('medit', 'pluginFailures.ts')];
+const GENERATED_TYPE_ONLY_EXCEPTIONS = [join('wire', 'messages.ts')];
 
 interface Offense { path: string; reason: string }
 
