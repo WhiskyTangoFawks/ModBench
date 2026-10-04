@@ -5,7 +5,6 @@
     "outDir": "../../out/projects/pluginsCommands"
   },
   "references": [
-    { "path": "../instanceLoader" },
     { "path": "../loadOrderFileCodec" },
     { "path": "../instanceAdapter" },
     { "path": "../ports" }

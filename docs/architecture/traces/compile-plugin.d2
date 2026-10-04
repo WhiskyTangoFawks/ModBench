@@ -2,19 +2,19 @@
 ...@../styles
 shape: sequence_diagram
 plugins: "Plugins · Editor" {class: driving}
-client: @../target-architecture.modbench_driven.client
+client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
 commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 source: @../target-architecture.medit_data.source
-sourceadapter: @../target-architecture.medit_driven.sourceadapter
+sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
-pluginadapter: @../target-architecture.medit_driven.pluginadapter
+pluginadapter: @../target-architecture.medit_repositories.pluginadapter
 pluginadapter.label: Plugin adapter
 plugin: @../target-architecture.medit_data.plugin
-indexer: @../target-architecture.medit_driven.index.indexer
+indexer: @../target-architecture.medit_readmodel.index.indexer
 indexer.label: Indexer
 
 plugins -> client: "compile: the plugins" {class: edit}
@@ -27,7 +27,7 @@ commands -> sourceadapter: "what Modbench last wrote" {class: compile}
 sourceadapter -> source: "what Modbench last wrote" {class: compile}
 commands -> pluginadapter: bytes {class: compile}
 pluginadapter -> plugin: "bytes · a localized plugin's strings" {class: compile}
-commands -> http: "applied, with the masters and the diagnostics, or refusal, per item" {class: edit}
+commands -> http: "applied, with the diagnostics, or refusal, per item" {class: edit}
 http -> client: "applied or refusal, per item" {class: edit}
 client -> plugins: the outcome {class: edit}
 indexer."the next snapshot: index-load-order"

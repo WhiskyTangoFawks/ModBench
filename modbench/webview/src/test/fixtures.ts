@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import { act } from '@testing-library/react';
-import { WEBVIEW_TO_EXTENSION, hasSection, type ExtensionToWebview, type WebviewToExtension } from '../messages';
+import { WEBVIEW_TO_EXTENSION, hasSection, type ExtensionToWebview, type WebviewToExtension } from '../../../src/wire/messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
 import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
 import { columnKey } from '../columnKey';

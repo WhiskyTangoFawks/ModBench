@@ -1,13 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { exitEditing, refreshMatchingPlugins, say } from '../editingTeardown';
+import { exitEditing } from '../editingTeardown';
 
-function makeSession(facts: { name: string; hasMatchingRecords: boolean }[] = []) {
-  return {
-    loadOrderSender: { abandon: vi.fn() },
-    pluginsTree: { refreshFacts: vi.fn().mockResolvedValue(facts) },
-    pluginsTreeView: { message: 'loading…' as string | undefined },
-    pluginsNameFilter: { refresh: vi.fn() },
-  };
+function makeSession() {
+  return { loadOrderSender: { abandon: vi.fn() } };
 }
 
 const makeClient = () => ({ stop: vi.fn().mockResolvedValue(undefined) });
@@ -23,49 +18,7 @@ describe('exitEditing', () => {
     expect(client.stop).toHaveBeenCalled();
   });
 
-  it('takes nothing away from the views', () => {
-    const session = makeSession();
-
-    exitEditing(session, makeClient());
-
-    expect(session.pluginsTreeView.message).toBe('loading…');
-    expect(session.pluginsNameFilter.refresh).not.toHaveBeenCalled();
-  });
-
   it('tolerates a session whose fields were never built', () => {
     expect(() => exitEditing({}, makeClient())).not.toThrow();
-  });
-});
-
-describe('refreshMatchingPlugins', () => {
-  it('re-reads the tree\'s own plugin facts', async () => {
-    const session = makeSession([
-      { name: 'Alpha.esp', hasMatchingRecords: true },
-      { name: 'Beta.esp', hasMatchingRecords: false },
-    ]);
-
-    await refreshMatchingPlugins(session);
-
-    expect(session.pluginsTree.refreshFacts).toHaveBeenCalled();
-  });
-
-  it('a workspace with no tree reads nothing', async () => {
-    await expect(refreshMatchingPlugins({})).resolves.toBeUndefined();
-  });
-});
-
-describe('say', () => {
-  it('a cleared message hands the readout back to the name filter', () => {
-    const session = makeSession();
-    say(session, undefined);
-    expect(session.pluginsTreeView.message).toBeUndefined();
-    expect(session.pluginsNameFilter.refresh).toHaveBeenCalled();
-  });
-
-  it('a live message takes the readout without poking the filter', () => {
-    const session = makeSession();
-    say(session, 'Indexing 3/100…');
-    expect(session.pluginsTreeView.message).toBe('Indexing 3/100…');
-    expect(session.pluginsNameFilter.refresh).not.toHaveBeenCalled();
   });
 });

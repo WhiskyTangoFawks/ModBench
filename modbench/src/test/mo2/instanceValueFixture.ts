@@ -12,6 +12,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     profiles: ['Default'],
     files: new FileConflictLookup(),
     filesByMod: new Map(),
+    foldersByMod: new Map(),
     plugins: [],
     downloads: { kind: 'listed', rows: [] },
     activeProfile: 'Default',
@@ -22,8 +23,9 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     gameFolder: GAME_FOLDER_NOT_FOUND,
     dataFolderPlugins: { kind: 'unresolved' },
     pluginsLoadedWithNoLine: undefined,
-    modStatuses: new Map(),
+    loadOrderSnapshot: undefined,
     overwriteFiles: [],
+    overwriteFolders: [],
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map() },
     ...overrides,
   };

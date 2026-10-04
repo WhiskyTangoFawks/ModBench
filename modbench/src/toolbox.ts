@@ -1,63 +1,59 @@
 import * as vscode from 'vscode';
-import type { MEditClient, PluginLoadFailure } from './client';
+import type { MEditClient } from './client';
 import { createLoadOrderSender, type LoadOrderSender } from './client';
-import {
-  createReconcileNarrator, subscribeNarratorToLoadOrderStatus, type ReconcileNarrator,
-} from './medit/reconcileNarrator';
-import { reportPutOutcome, settleReconciled, syncActiveFilter } from './medit/loadOrderOutcome';
+import type { ReconcileNarrator } from './plugins/reconcileNarrator';
+import { reportPutOutcome } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
-import { publishPluginWarnings } from './medit/loadDiagnostics';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
-import {
-  PluginsTreeProvider, type PluginFactsClient, type PluginListSource, type PluginsTreeNode,
-} from './plugins/PluginsTreeProvider';
+import { InactiveFileDecorationProvider } from './mods/inactiveFiles';
+import { ModIndicatorDecorations } from './mods/modIndicators';
+import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
+import { createPluginsView, type PluginsViewDeps } from './plugins/pluginsView';
+import type { PluginsViewProgress } from './plugins/pluginRowCommands';
+import type { StatusBar } from './plugins/statusBar';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
-import { loadOrderSnapshotOf, originFiles, originFolder, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
+import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { downloadsCopyValueText } from './downloads/keyContext';
-import { ImplicitMasterDecorationProvider } from './plugins/ImplicitMasterDecorationProvider';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
-import { messageLine, registerFilterCommands, registerNameFilter, type NameFilter } from './nameFilter';
+import { registerFilterCommands, type NameFilter } from './drivingLib/nameFilter';
+import { registerCopyValueCommand } from './drivingLib/copyValue';
+import type { FocusedView } from './drivingLib/focusedView';
 import { enterEditingAcrossRestarts } from './medit/backendStatus';
-import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
-import { pluginSyncOver, reorderOver, type PluginsAccess } from './pluginsCommands/plugins';
-import type { SyncMessage } from './syncFailureReport';
+import { pluginSyncOver } from './pluginsCommands/plugins';
 import { registerModSync } from './modSyncTrigger';
 import { modSyncOver } from './modlist/modlist';
 import { installNameRefusal } from './install/install';
 import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
-import { say, exitEditing } from './editingTeardown';
+import { exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
-import { registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
-import { createModListView, lastSelectedViewSelection, type FocusedView, nexusRowInLastSelectedView, registerDownloadsView } from './treeViews';
+import { registerGoToModCommand } from './mods/goToMod';
+import { registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
+import { createModListView, lastSelectedViewSelection, nexusRowInLastSelectedView } from './treeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { modRepositoryContext } from './modRepositories';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
 import type { FolderCheck } from './folderContext';
 import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
 import { logGameFolderNotFound } from './gameFolderNotFoundLog';
-import { logDownloadsFolderUnresolved } from './downloadsFolderUnresolvedLog';
+import { createDownloadsView } from './downloads/downloadsView';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import {
   putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
 } from './instanceCommands/loadOrder';
-import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
-import {
-  pluginsCopyValueText, registerRevealInExplorerCommand, registerCreatePluginCommand, registerPluginSortCommands,
-} from './plugins/pluginListCommands';
-import { registerPluginEnableCommands } from './plugins/pluginParticipationCommands';
-import { pluginsKeyContext } from './plugins/gestureEntry';
+import type { ExtensionSession, Own } from './session';
+import { pluginsCopyValueText, registerCreatePluginCommand } from './plugins/pluginListCommands';
 import { errorMessage } from './ports/errorMessage';
 
 // The port members every gesture, plugin sync and the launch in this file call.
 export type ToolboxClient = Pick<MEditClient,
-  'putLoadOrder' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin' | 'getLightPluginsSupported'
-  | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected' | 'subscribe'>;
+  'putLoadOrder' | 'rebuildIndex' | 'createPlugin' | 'getLightPluginsSupported'
+  | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected'>;
 
 export interface ToolboxDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -66,13 +62,9 @@ export interface ToolboxDeps {
   /** The record browser the Plugins tree's rows expand into. Built by the editing side, which
    *  owns the single instance every record surface reads through. */
   recordBrowser: PluginTreeProvider;
-  /** The two mEdit reads the tree's badges and chevrons come from. */
-  pluginFacts: PluginFactsClient;
-  /** The malformed-plugin scan's Problems-panel collection. Held on the session so the teardown
-   *  writers can clear both diagnosis surfaces together. */
-  loadDiagnostics: vscode.DiagnosticCollection;
-  /** The one status bar item, written from the reconcile's own outcome. */
-  setStatusText: (text: string) => void;
+  /** The mEdit client's members the Plugins view reads. */
+  pluginFacts: PluginsViewDeps['client'];
+  statusBar: StatusBar;
   /** Fires on every completed reconcile and on a landed Track: every open record panel refetches
    *  its comparison, and every tracked mod's repo (re-)registers with `vscode.git`. */
   notifyConflictsComputed: () => void;
@@ -154,181 +146,6 @@ export function registerLoadOrderPut(
   };
 }
 
-/** One surface's contribution to the catalog's one copy value id (commands.md, Every view): its
- *  own text for this invocation, or `undefined` to defer to the next adapter. */
-export interface CopyValueAdapter {
-  text: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined;
-  reporterTag: string;
-}
-
-// Adapters are tried in order, so no surface needs to know another exists. A palette call has no
-// argument, so the focused view stands for the key its own Ctrl+C passes.
-export function registerCopyValueCommand(
-  adapters: readonly CopyValueAdapter[], reporterFor: (tag: string) => Reporter,
-  focusedViewId: () => string | undefined, nothingToCopy: () => void,
-): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.copyValue',
-    async (clicked?: unknown, allSelected?: unknown[]) => {
-      const viewId = focusedViewId();
-      const invocation = clicked ?? (viewId === undefined ? undefined : { view: viewId });
-      for (const adapter of adapters) {
-        const text = adapter.text(invocation, allSelected);
-        if (text === undefined) continue;
-        if (!text) return;
-        try {
-          await vscode.env.clipboard.writeText(text);
-        } catch (err) {
-          reporterFor(adapter.reporterTag).report('error', 'Could not copy to the clipboard.', errorMessage(err));
-        }
-        return;
-      }
-      nothingToCopy();
-    });
-}
-
-
-
-interface PluginListDeps {
-  own: Own;
-  session: ExtensionSession;
-  outputChannel: vscode.LogOutputChannel;
-  reporterFor: (tag: string) => Reporter;
-  access: PluginsAccess;
-  /** The tree's only row input: name, origin, slot, enabled and winning for every plugin. */
-  instance: Instance;
-  /** The record browser that supplies a plugin row's children. */
-  recordBrowser: PluginTreeProvider;
-  /** Every plugin-keyed fact the tree's badges read. */
-  pluginFacts: PluginFactsClient;
-  /** The malformed-plugin scan's Problems-panel collection. */
-  loadDiagnostics: vscode.DiagnosticCollection;
-  /** Plugin sync's failure, for the view's message line. */
-  pluginSync: SyncMessage;
-}
-
-// The one Plugins tree (ADR-0017; target-architecture.d2, Plugins).
-function registerPluginListView(
-  deps: PluginListDeps,
-): { pluginsTree: PluginsTreeProvider; pluginListView: vscode.TreeView<PluginsTreeNode>; pluginsFilter: NameFilter } {
-  const { own, session, outputChannel, reporterFor, access, instance } = deps;
-  // The tree states its own severity (ADR-0019); this routes it to the matching channel level.
-  const log = (level: 'info' | 'warn' | 'error', msg: string) => outputChannel[level](msg);
-  const source: PluginListSource = { reorderPlugins: reorderOver(access, () => instance.value.activeProfile) };
-  const changedOutsideDiagnostics = own(vscode.languages.createDiagnosticCollection('modbench-changed-outside'));
-  const pluginsTree = own(new PluginsTreeProvider({
-    instance, source, log, reporter: reporterFor('pluginList'),
-    dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
-    records: deps.recordBrowser,
-    client: deps.pluginFacts,
-    publishDiagnoses: (reports) => publishPluginWarnings(
-      deps.loadDiagnostics, (origin) => originFolder(instance.value.plugins, origin), reports),
-    publishChangedOutside: (warnings) => publishPluginWarnings(
-      changedOutsideDiagnostics, (origin) => originFolder(instance.value.plugins, origin), warnings),
-  }));
-  session.pluginsTree = pluginsTree;
-  const pluginListView = own(vscode.window.createTreeView('modbench.pluginListTree', {
-    treeDataProvider: pluginsTree,
-    canSelectMany: true,
-    // A drag moves plugins.txt lines, which the same provider owns.
-    dragAndDropController: pluginsTree,
-    // commands.md, Chrome: Collapse All is on trees only, and this
-    // one is hierarchical — plugin → record type → record.
-    showCollapseAll: true,
-  }));
-  session.pluginsTreeView = pluginListView; // progress and message live here
-  const showKeyContext = () => {
-    for (const [name, value] of Object.entries(pluginsKeyContext(pluginListView.selection, (row) => pluginsTree.isEnabled(row)))) {
-      void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
-    }
-    void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', pluginsTree.anyCompilable());
-  };
-  showKeyContext();
-  own(pluginListView.onDidChangeSelection(showKeyContext));
-  own(pluginsTree.onDidChangeTreeData(showKeyContext));
-  const pluginsFilter = own(registerPluginsNameFilter(pluginListView, pluginsTree, deps.pluginSync));
-  session.pluginsNameFilter = pluginsFilter;
-  // Grays an implicit master's row the way the reference tool grays COL_NAME for a forceLoaded
-  // plugin — live against the tree's own locked row URIs so it never drifts from what is rendered.
-  own(vscode.window.registerFileDecorationProvider(
-    new ImplicitMasterDecorationProvider(() => pluginsTree.lockedRowUris()),
-  ));
-  own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
-    e, access, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), pluginsTree)));
-  own(registerRevealInExplorerCommand(pluginsTree, reporterFor('pluginListTree.revealInExplorer'), () => pluginListView.selection));
-  ownAll(own, registerPluginSortCommands(pluginsTree));
-  ownAll(own, registerPluginEnableCommands(
-    access, instance, () => pluginListView.selection, reporterFor('pluginListTree.enableDisable'), pluginsTree));
-  return { pluginsTree, pluginListView, pluginsFilter };
-}
-
-// The axis that narrows *which plugin rows* appear, composing with (never replacing) the record
-// filter's axis over which records appear under an expanded row.
-export function registerPluginsNameFilter(
-  view: { description?: string; message?: string }, provider: PluginsTreeProvider,
-  pluginSync: SyncMessage,
-): NameFilter {
-  return registerNameFilter({
-    view, object: 'modbench.plugin', placeholder: 'Filter plugins…',
-    setFilter: (text) => provider.setFilter(text),
-    hasRows: async () => (await provider.getChildren()).length > 0,
-    viewMessage: () => messageLine(provider.viewMessage(), pluginSync.message()),
-    standingMessage: () => provider.lastGoodReadMessage(),
-    onRowsChanged: provider.onDidChangeTreeData,
-    onViewMessageChanged: (listener) => pluginSync.onMessageChanged(listener),
-  });
-}
-
-
-interface ReconcileNarrationDeps {
-  session: ExtensionSession;
-  client: ToolboxClient;
-  /** The record browser a reconciled load order refreshes — a different provider from
-   *  `session.pluginsTree`, which `applyLoadOrderToTree` below owns. */
-  recordBrowser: PluginTreeProvider;
-  outputChannel: vscode.LogOutputChannel;
-  setStatusText: (text: string) => void;
-  notifyConflictsComputed: () => void;
-  reporter: Reporter;
-}
-
-function applySyncedFilterState(
-  client: Pick<MEditClient, 'getActiveFilter'>, session: ExtensionSession, outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter,
-): Promise<void> {
-  return syncActiveFilter(() => client.getActiveFilter(), {
-    log: (m) => outputChannel.info(`[toolbox] ${m}`),
-    warn: (m) => reporter.report('warning', m),
-    showRecordFilter: (filter) => session.showRecordFilter?.(filter),
-  });
-}
-
-// plugins.md, States 2: the index status the stream carries drives the Plugins view, whoever
-// started the reconcile. mEdit going away, or a stream reopening onto another process, starts its
-// versions over.
-function narrateReconciles(own: Own, deps: ReconcileNarrationDeps): ReconcileNarrator {
-  const { session, client, recordBrowser, outputChannel, setStatusText, notifyConflictsComputed, reporter } = deps;
-  const narrator = createReconcileNarrator({
-    showProgress: (until) => void withPluginsViewProgress(session, () => until),
-    applyIndexed: (indexedPlugins, failures) => session.pluginsTree?.applyIndexed(indexedPlugins, failures),
-    applyRefused: (refusal) => session.pluginsTree?.applyRefused(refusal),
-    setStatusText,
-    settle: (status) => settleReconciled(status, {
-      log: (m) => outputChannel.info(`[toolbox] ${m}`),
-      warn: (m) => reporter.report('warning', m),
-      setStatusText,
-      refreshTree: () => recordBrowser.refresh(),
-      notifyConflictsComputed,
-      syncFilterState: () => applySyncedFilterState(client, session, outputChannel, reporter),
-      applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, reporter, totalPlugins),
-    }),
-    log: (m) => outputChannel.error(`[toolbox] ${m}`),
-  });
-  own({ dispose: subscribeNarratorToLoadOrderStatus(client, narrator) });
-  own({ dispose: client.onStatusChanged((status) => { if (status !== 'running') narrator.detached(); }) });
-  own({ dispose: client.onReconnected(() => narrator.detached()) });
-  return narrator;
-}
-
 // Put load order (ADR-0013). What the reconcile does is the narrator's to show; what the send
 // itself answered is reported here.
 async function handleLoadOrder(
@@ -348,37 +165,6 @@ async function handleLoadOrder(
   await narrator.settled(put.outcome.status.version);
 }
 
-// Rows gain chevrons here, and *finish* gaining them here. The tree reads the
-// backend's own plugin list itself; the failures `reportLoadOrderResult` already toasted ride
-// along rather than being re-derived.
-async function applyLoadOrderToTree(
-  session: ExtensionSession,
-  failures: PluginLoadFailure[],
-  outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter,
-  // Carried in only to be logged next to what reached the tree. Deliberately not `plugins.length`
-  // from the caller's snapshot: that omits the implicit masters the backend prepends, so every
-  // healthy reconcile would read as short.
-  totalPlugins: number,
-): Promise<void> {
-  const held = await session.pluginsTree?.applyReconciled(failures);
-  if (held === undefined) {
-    // Leaving every row a leaf is a safe *render* but not an honest one: the reconcile did land,
-    // so the tree would claim editing is unavailable with nothing on screen to say why (ADR-0019).
-    outputChannel.error('[toolbox] the reconciled load order did not reach the tree; plugin rows will not expand');
-    reporter.report(
-      'warning',
-      'The load order was reconciled, but the plugin list could not be read — plugin rows will not expand into records.',
-    );
-    return;
-  }
-  // Do not remove as logging noise: `held.length + failures.length` landing close to
-  // `totalPlugins` is what tells a stuck-tail reconcile here from one broken upstream.
-  outputChannel.info(
-    `[toolbox] applying reconciled load order to tree: ${held.length} in the load order, ${failures.length} failed, of ${totalPlugins} plugins`,
-  );
-}
-
 // `loadOrderSender.arm()` returns a pure check, since the client holds no VS Code type (ADR-0019),
 // so each call site logs explicitly instead.
 function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
@@ -387,6 +173,7 @@ function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
 
 interface EnterEditingDeps {
   session: ExtensionSession;
+  progress: PluginsViewProgress;
   instance: Instance;
   sender: LoadOrderSender;
   client: ToolboxClient;
@@ -400,14 +187,14 @@ interface EnterEditingDeps {
 // Owns its own progress indicator rather than leaving each caller to wrap it, and
 // reports its steps through `say`.
 function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
-  const { session, instance, sender, client, outputChannel, reporter, revealLog, onConnect } = deps;
+  const { session, progress, instance, sender, client, outputChannel, reporter, revealLog, onConnect } = deps;
   const enter = async (): Promise<void> => {
     const { abandoned } = sender.arm();
     // Overlaps with the backend starting below, same as the tree's own first-value wait: the
     // reconcile must read a real Instance value, never the empty pre-first-read sentinel.
     const instanceReady = instance.sequence > 0 ? Promise.resolve() : instance.refresh();
     revealLog(); // the launch can take a while; let the user watch the step log
-    say(session, 'Starting backend…');
+    progress.say('Starting backend…');
     outputChannel.info('[toolbox] entering editing: starting backend');
     await client.start();
     // Before the status gate, deliberately: a close stops the backend, so an abandoned launch
@@ -421,13 +208,13 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
     await instanceReady;
     // No game folder, or one whose plugins cannot be listed, means no snapshot to hand over. The
     // views and the Output already say so, without a notification (common.md, States, story 5).
-    if (!loadOrderSnapshotOf(instance.value)) {
+    if (!instance.value.loadOrderSnapshot) {
       exitEditing(session, client);
       return;
     }
     await onConnect();
   };
-  return () => withPluginsViewProgress(session, enter);
+  return () => progress.while(enter);
 }
 
 
@@ -451,8 +238,8 @@ interface InstanceSide {
 
 function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): InstanceSide {
   const {
-    outputChannel, session, client, recordBrowser, pluginFacts, loadDiagnostics,
-    setStatusText, notifyConflictsComputed, reporterFor, ask, trash, extensionId,
+    outputChannel, session, client, recordBrowser, pluginFacts,
+    statusBar, notifyConflictsComputed, reporterFor, ask, trash, extensionId,
   } = deps;
   // The flat log shim, for collaborators still taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
@@ -465,7 +252,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   }));
   const firstRead = own(markFirstReadLanded(instance));
   own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
-  own(logDownloadsFolderUnresolved(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
   // The Instance adapter watches files only, so an edited setting is the root's to hand to the same
   // recompute Refresh's re-read runs, once per burst under the Toolbox's own settle.
   own(refreshOnGameDirectoryChange(vscode.workspace.onDidChangeConfiguration, () => instance.refresh()));
@@ -474,22 +260,15 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   // what keeps activation from being blocking here.
   void instance.refresh();
   const modListProvider = own(new ModListProvider({ instance, access, log: (line) => outputChannel.warn(`[modList] ${line}`) }));
+  own(vscode.window.registerFileDecorationProvider(own(new InactiveFileDecorationProvider(instance, vscode.workspace))));
+  for (const provider of own(new ModIndicatorDecorations(instance, vscode.workspace)).providers) {
+    own(vscode.window.registerFileDecorationProvider(provider));
+  }
   // Held on the session as well, because the teardown writers outside this file abandon the
   // send in flight through it.
   const sender = own(createLoadOrderSender(client));
   session.loadOrderSender = sender;
   const loadOrderReporter = reporterFor('loadOrder');
-  const narrator = narrateReconciles(own, {
-    session, client, recordBrowser, outputChannel, setStatusText, notifyConflictsComputed,
-    reporter: loadOrderReporter,
-  });
-  // The value's slice the load order is built from, under the names instance commands give it.
-  const loadOrderSource = (): LoadOrderSource => {
-    const { plugins, gameFolder, gameName, gameRelease, pluginsLoadedWithNoLine } = instance.value;
-    return { plugins, gameFolder, gameName, gameRelease, pluginsLoadedWithNoLine };
-  };
-  const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
-    outputChannel, loadOrderReporter, narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
   // commands.md, `refresh`: instance commands rebuild the index and send nothing; the gesture
   // itself asks the Instance loader to read every file again.
   const refreshIndex = () => refresh(client, instanceRoot, instance.value);
@@ -498,10 +277,20 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const syncPluginsOver = pluginSyncOver(access);
   const runPluginSync = (value: InstanceValue) => syncPluginsOver(pluginSyncArguments(value));
   const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
-  const { pluginsTree, pluginListView, pluginsFilter } = registerPluginListView({
-    own, session, outputChannel, reporterFor, access,
-    instance, recordBrowser, pluginFacts, loadDiagnostics, pluginSync,
-  });
+  const plugins = own(createPluginsView({
+    instance, access, recordBrowser, client: pluginFacts, pluginSync, statusBar, notifyConflictsComputed, reporterFor,
+    dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
+    // The tree states its own severity (ADR-0019); this routes it to the matching channel level.
+    log: (level, msg) => outputChannel[level](msg),
+  }));
+  const { tree: pluginsTree, view: pluginListView, nameFilter: pluginsFilter } = plugins;
+  session.plugins = plugins;
+  const loadOrderSource = (): LoadOrderSource => {
+    const { loadOrderSnapshot, gameName, gameRelease } = instance.value;
+    return { loadOrderSnapshot, gameName, gameRelease };
+  };
+  const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
+    outputChannel, loadOrderReporter, plugins.narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
   const runModSync = modSyncOver(access);
   const modSync = own(registerModSync(instance, runModSync, outputChannel));
   const { modListView, modListFilter } = createModListView(
@@ -533,7 +322,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const { enter: enterEditing } = own(enterEditingAcrossRestarts(
     client,
     makeEnterEditing({
-      session, instance, sender, client, outputChannel, reporter: reporterFor('enterEditing'),
+      session, progress: plugins.progress, instance, sender, client, outputChannel, reporter: reporterFor('enterEditing'),
       revealLog: () => outputChannel.show(true), onConnect: () => loadOrderPuts.putOnMEditStarted(),
     }),
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
@@ -549,6 +338,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     log: (line) => outputChannel.warn(`[modList] ${line}`), marks: modListProvider,
   }));
   ownAll(own, registerModEnableCommands(access, instance, () => modListView.selection, reporterFor('mod.enableDisable'), modListProvider));
+  ownAll(own, registerFileExclusionCommands(access, () => modListView.selection, reporterFor('mod.excludeFile'), modListProvider));
   own(registerModMoveCommand(
     access, instance,
     { selection: () => modListView.selection, direction: () => modListProvider.viewDirection() },
@@ -556,16 +346,22 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   ownAll(own, registerSeparatorCommands(access, instance, reporterFor('separator'), ask, trash, () => modListView.selection, modListProvider));
   own(registerCreateEmptyModCommand(access, instance, reporterFor('mod.createEmpty'), modListProvider));
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => modListView.selection));
+  own(registerGoToModCommand(instance, reporterFor('mod.goToMod'), {
+    selection: () => modListView.selection,
+    rowFor: (origin) => modListProvider.rowFor(origin),
+    reveal: (row) => modListView.reveal(row, { select: true, focus: true }),
+  }));
   own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
   own(vscode.commands.registerCommand('modbench.plugin.sync', runPluginSync));
-  const { downloadsProvider, downloadsView, downloadsFilter, installDownloaded } = registerDownloadsView({
-    own, access, instance, reporter: reporterFor('downloadList'), ask, trash,
+  const { provider: downloadsProvider, view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
+    access, instance, reporter: reporterFor('downloadList'), ask, trash,
     install: {
       nameNewMod: (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)),
       warnIfFomod,
       log: (line) => outputChannel.warn(`[downloads] ${line}`),
     },
-  });
+    logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
+  }));
   ownAll(own, registerModInstallCommands({ access, instance, runModAction, promptModName, warnIfFomod, installDownloaded }));
   own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), nexusRowInLastSelectedView(own, [
     { id: 'modbench.modList', view: modListView }, { id: 'modbench.downloads', view: downloadsView },
@@ -584,7 +380,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     { id: 'modbench.modList', view: modListView }, { id: 'modbench.pluginListTree', view: pluginListView },
   ], 'modbench.mod.trackRowsIn');
   own(registerRefreshCommand({
-    refresh: refreshIndex, nextRefill: () => narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
+    refresh: refreshIndex, nextRefill: () => plugins.narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
     instance, instanceRoot, firstRead, modListProvider, toolboxProvider, downloadsProvider, pluginsTree, enterEditing,

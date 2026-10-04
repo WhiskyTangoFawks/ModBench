@@ -9,7 +9,8 @@ import { parseMetaIni } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
 import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
-import { digestOf, factsOf, get, isTracked, listDir, stampOf } from './files';
+import { digestOf } from './contentDigest';
+import { factsOf, get, isTracked, listDir, stampOf } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileRead, type GameFolder, type InstanceAdapter,
 } from './instanceAdapter';

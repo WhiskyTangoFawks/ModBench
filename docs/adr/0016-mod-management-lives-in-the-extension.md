@@ -4,5 +4,5 @@ Record editing is split across the extension and the C# service. Mod Management 
 
 ## Alternatives rejected
 
-- **Mod management in the C# backend.** Nothing to reuse from the Mutagen and DuckDB core, and a hardlink P/Invoke is strictly harder than Node's native call.
-- **A separate C# mod-manager service.** A second process, HTTP API and OpenAPI client for pure file work.
+- Mod management in the C# backend. Nothing to reuse from the Mutagen and DuckDB core, and a hardlink P/Invoke is strictly harder than Node's native call.
+- A separate C# mod-manager service. A second process, HTTP API and OpenAPI client for pure file work.

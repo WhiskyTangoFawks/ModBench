@@ -4,21 +4,23 @@ shape: sequence_diagram
 tools: "the mod manager · another tool · the user" {class: other}
 instance: @../target-architecture.modbench_data.instance
 instance.label: "the mod's folder"
-instanceadapter: @../target-architecture.modbench_driven.instanceadapter
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
-instanceloader: @../target-architecture.modbench_driven.instanceloader
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
+activation: @../target-architecture.modbench_drivers.activation
+activation.label: Activation
 instancecommands: @../target-architecture.modbench_core.instancecommands
 instancecommands.label: instance commands
-client: @../target-architecture.modbench_driven.client
+client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
 commands: @../target-architecture.medit_core.commands
 commands.label: Commands
-pluginadapter: @../target-architecture.medit_driven.pluginadapter
+pluginadapter: @../target-architecture.medit_repositories.pluginadapter
 pluginadapter.label: Plugin adapter
-sourceadapter: @../target-architecture.medit_driven.sourceadapter
+sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 port: @../target-architecture.medit_kernel.ports
 port.label: Ports
@@ -28,7 +30,8 @@ plugins.label: Plugins
 tools -> instance: bytes, at any time {class: outside}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
-instanceloader -> instancecommands: "put load order: the snapshot" {class: loadorder}
+instanceloader -> activation: value {class: loadorder}
+activation -> instancecommands: "put load order: the snapshot" {class: loadorder}
 instancecommands -> client: snapshot {class: loadorder}
 client -> http: snapshot {class: loadorder}
 http -> commands: put load order {class: loadorder}

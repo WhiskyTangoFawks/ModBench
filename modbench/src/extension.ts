@@ -4,34 +4,32 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as cp from 'child_process';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
-import { backendStatusText, wireBackendStatus } from './medit/backendStatus';
 import { HttpMEditClient, type BackendLifecycleOptions } from './client';
-import { announceConflictsComputed, subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
+import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
-import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
 import { createReferencedByView } from './editor/referencedByView';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
-import { createFocusedView, lastSelectedViewSelection } from './treeViews';
+import { lastSelectedViewSelection } from './treeViews';
+import { createFocusedView } from './drivingLib/focusedView';
 import { moveToTrash } from './trash';
 import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './medit/extendedFieldFiles';
 import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './editor';
-import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
+import { exitEditing } from './editingTeardown';
 import { createToolbox } from './toolbox';
-import { registerNameFilter } from './nameFilter';
-import { withPluginsViewProgress, type ExtensionSession } from './session';
+import { registerNameFilter } from './drivingLib/nameFilter';
+import type { ExtensionSession } from './session';
+import { createStatusBar } from './plugins/statusBar';
 import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText, type FocusedCellContext } from './editor/focusedCells';
 import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 import {
   registerTrackCommand, registerDecompileCommand, registerCompileCommand, CompileProblems, type CompileDeps, type TrackDeps,
-  conflictsComputedOver, refreshSourceControlFor,
+  conflictsComputedOver, refreshSourceControlFor, type PluginsViewProgress,
 } from './plugins/pluginRowCommands';
 import type { OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
-import {
-  registerFilterCommands, makeShowRecordFilter, type FilterScripts,
-} from './plugins/recordFilterCommands';
+import { registerFilterCommands, type FilterScripts } from './plugins/recordFilterCommands';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
 import { registerRecordCreateCommand } from './plugins/createRecordCommand';
 import { createdRecordSelection } from './plugins/createdRecordSelection';
@@ -75,37 +73,29 @@ export function activate(context: vscode.ExtensionContext) {
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
 
-  const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  context.subscriptions.push(statusBarItem);
   // Compile's diagnostics — one collection for every tracked mod's source files, in which
   // CompileProblems replaces a plugin's own entries each time it compiles.
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
-  // The session-load scan's own collection — a sibling of the compile one, targeting plugin
-  // binaries, replaced wholesale per scan.
-  const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
-  context.subscriptions.push(loadDiagnostics);
-  session.loadDiagnostics = loadDiagnostics;
 
   // ADR-0002.
   const meditClient = new HttpMEditClient({ backend: backendOptions(attachPort, outputChannel), log });
   activeClient = meditClient; // deactivate()'s only way to reach it
+  const statusBar = createStatusBar(meditClient);
+  context.subscriptions.push(statusBar);
   const treeProvider = new PluginTreeProvider(meditClient, log);
   const recordPanels = new Set<vscode.WebviewPanel>();
   // The Referenced By view's input — which record panel is active and what FormKey it shows.
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const editsInFlight = new EditsInFlight(activeRecordTracker);
   const filterScripts = setupScriptsFolder(meditConfig());
-  const filterProvider = new FilterCodeLensProvider();
 
   // One subscription for the whole session; the mEdit client opens and closes its stream with the
   // backend.
   context.subscriptions.push(
-    { dispose: subscribeTreeToNotifications(meditClient, treeProvider, () => { void refreshMatchingPlugins(session); }) },
     { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker, editsInFlight) },
   );
 
-  session.showRecordFilter = makeShowRecordFilter(filterProvider, session);
   const focusedView = createFocusedView();
   const focusedCells = new FocusedCells<vscode.WebviewPanel>((cell) => {
     for (const [name, value] of Object.entries(focusedCellKeys(cell))) {
@@ -154,8 +144,7 @@ export function activate(context: vscode.ExtensionContext) {
     trash: moveToTrash,
     recordBrowser: treeProvider,
     pluginFacts: meditClient,
-    loadDiagnostics,
-    setStatusText: (t) => { statusBarItem.text = t; },
+    statusBar,
     notifyConflictsComputed,
     extensionId: context.extension.id,
     // Copy value's Referenced By and grid adapters (commands.md, Every view) — the Toolbox owns
@@ -167,21 +156,20 @@ export function activate(context: vscode.ExtensionContext) {
   });
   const recordViews = [
     { id: REFERENCED_BY_VIEW, view: referencedByTreeView },
-    ...(session.pluginsTreeView ? [{ id: 'modbench.pluginListTree', view: session.pluginsTreeView }] : []),
+    ...(session.plugins ? [{ id: 'modbench.pluginListTree', view: session.plugins.view }] : []),
   ];
   context.subscriptions.push(
     toolbox,
     { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
     referencedBy,
     activeRecordSubscription,
-    vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerPluginRowCommands(pluginRowDeps),
     // The record filter scopes the Plugins tree's own rows — a Plugins-view concern (its module
     // lives under plugins/), so it is wired here rather than inside Editor's own registration.
     ...registerFilterCommands({
       scripts: filterScripts, client: meditClient, treeProvider,
-      refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
-      showRecordFilter: (filter) => session.showRecordFilter?.(filter),
+      refreshMatchingPlugins: () => { void session.plugins?.tree.refreshFacts(); },
+      showRecordFilter: (filter) => session.plugins?.showRecordFilter(filter),
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
@@ -193,25 +181,14 @@ export function activate(context: vscode.ExtensionContext) {
         (disposable) => { context.subscriptions.push(disposable); return disposable; }, recordViews, 'modbench.record.selectionIn'),
       viewSelections: new Map(recordViews.map(({ id, view }) => [id, () => view.selection])),
       recordMarks: {
-        deleting: (records, editorIds) => session.pluginsTree?.recordMarks.deleting(records, editorIds) ?? UNMARKED,
+        deleting: (records, editorIds) => session.plugins?.tree.recordMarks.deleting(records, editorIds) ?? UNMARKED,
         copying: (items, mode, replacing, editorIds) =>
-          session.pluginsTree?.recordMarks.copying(items, mode, replacing, editorIds) ?? UNMARKED,
+          session.plugins?.tree.recordMarks.copying(items, mode, replacing, editorIds) ?? UNMARKED,
       },
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),
   );
-
-  statusBarItem.text = backendStatusText(meditClient.status);
-  statusBarItem.show();
-  context.subscriptions.push({
-    dispose: wireBackendStatus(meditClient, {
-      setStatusText: (t) => { statusBarItem.text = t; },
-      abandonReconcile: () => session.loadOrderSender?.abandon(),
-      refreshTree: () => { void refreshMatchingPlugins(session); },
-      setUnreachable: (reason) => session.pluginsTree?.applyBackendUnreachable(reason),
-    }),
-  });
 
   wireAutoLaunch(session, meditClient, context, outputChannel, toolbox.enterEditing);
 
@@ -222,7 +199,7 @@ export function activate(context: vscode.ExtensionContext) {
     folder: toolbox.folder, instanceRead: toolbox.instanceRead,
     modListProvider: toolbox.modListProvider, downloadsProvider: toolbox.downloadsProvider,
     pluginsTree: toolbox.pluginsTree,
-    pluginListView: session.pluginsTreeView,
+    pluginListView: session.plugins?.view,
     outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session, meditClient),
     client: meditClient, instance: toolbox.instance,
     // The record tab in focus reporting its focused cell, as its webview's `focusCell` does.
@@ -247,9 +224,10 @@ interface PluginRowCommandDeps {
 // editor's own commands (delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
   const { session, client, outputChannel, conflictsComputed, instancePlugins, instanceMods, trackSelection } = deps;
+  const progress = pluginsProgress(session);
   return [
     registerTrackCommand({
-      progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
+      progress,
       client, reporter: makeReporter(outputChannel, 'mod.track'), onTracked: conflictsComputed,
       plugins: instancePlugins,
       mods: instanceMods,
@@ -257,28 +235,36 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
     }, trackSelection),
     registerDecompileCommand({
       client,
-      progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
+      progress,
       reporter: makeReporter(outputChannel, 'plugin.decompile'),
       ask: askQuestion,
-    }, () => session.pluginsTreeView?.selection ?? []),
-    registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),
+    }, () => session.plugins?.view.selection ?? []),
+    registerCompileCommand(compileDeps(deps), () => session.plugins?.view.selection ?? []),
     registerRecordCreateCommand({
       client, reporter: makeReporter(outputChannel, 'record.create'),
-      marks: { creating: (row) => session.pluginsTree?.recordMarks.creating(row) ?? UNMARKED },
+      marks: { creating: (row) => session.plugins?.tree.recordMarks.creating(row) ?? UNMARKED },
       createdRecords: createdRecordSelection({
         client, reporter: makeReporter(outputChannel, 'record.create'),
-        rowOf: (group, formKey) => session.pluginsTree?.recordRow(group, formKey) ?? Promise.resolve(undefined),
-        view: { reveal: (row, options) => session.pluginsTreeView?.reveal(row, options) ?? Promise.resolve() },
+        rowOf: (group, formKey) => session.plugins?.tree.recordRow(group, formKey) ?? Promise.resolve(undefined),
+        view: { reveal: (row, options) => session.plugins?.view.reveal(row, options) ?? Promise.resolve() },
       }),
-    }, () => session.pluginsTreeView?.selection ?? []),
+    }, () => session.plugins?.view.selection ?? []),
   ];
+}
+
+// Outside an instance there is no Plugins view to show the work.
+function pluginsProgress(session: ExtensionSession): PluginsViewProgress {
+  return {
+    while: (work) => session.plugins?.progress.while(work) ?? work(),
+    say: (message) => session.plugins?.progress.say(message),
+  };
 }
 
 function compileDeps(deps: PluginRowCommandDeps): CompileDeps {
   const { session, client, outputChannel, compileProblems, originFiles } = deps;
   return {
     client,
-    progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
+    progress: pluginsProgress(session),
     reporter: makeReporter(outputChannel, 'plugin.compile'),
     problems: compileProblems,
     originFiles,

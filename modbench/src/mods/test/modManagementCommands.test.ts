@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom } from '../../test/vscodeMock';
 
 interface InputBoxOptionsDoubleOfJustPromptAndValidateInput {
   prompt?: string;
@@ -22,24 +22,24 @@ vi.mock('vscode', () => ({
   window: { showOpenDialog, showInputBox, showQuickPick },
   env: { openExternal },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  Uri: { file: uriFile, parse: (s: string) => ({ toString: () => s }) },
+  Uri: { file: uriFile, from: uriFrom, parse: (s: string) => ({ toString: () => s }) },
 }));
 
 const {
-  uninstallMods, deleteSeparators, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators,
+  uninstallMods, deleteSeparators, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators, markFiles,
 } = vi.hoisted(() => ({
   uninstallMods: vi.fn(), deleteSeparators: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
-  createEmptyMod: vi.fn(), setModsEnabled: vi.fn(), moveMods: vi.fn(), moveSeparators: vi.fn(),
+  createEmptyMod: vi.fn(), setModsEnabled: vi.fn(), moveMods: vi.fn(), moveSeparators: vi.fn(), markFiles: vi.fn(),
 }));
 
 vi.mock('../../modlist/modlist', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../modlist/modlist')>()),
   createEmptyMod, deleteSeparators, insertSeparator,
-  moveMods, moveSeparators, renameSeparator, uninstallMods, setModsEnabled,
+  moveMods, moveSeparators, renameSeparator, uninstallMods, setModsEnabled, markFiles,
 }));
 
 import {
-  registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands,
+  registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands, registerFileExclusionCommands,
   registerModMoveCommand,
   registerModListCoreCommands, registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
   modsCopyValueText,
@@ -47,6 +47,7 @@ import {
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { MODS_KEY_ARGS } from '../gestureEntry';
+import { FileNode, FolderNode } from '../modFiles';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -1043,7 +1044,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
   });
 });
 
-describe('open folder: one command for a mod and for the Overwrite row', () => {
+describe('open folder: one command for a mod, the Overwrite row, a file and a folder', () => {
   beforeEach(() => vi.clearAllMocks());
 
   const instance = {
@@ -1111,6 +1112,40 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
     await invoke('modbench.mod.openFolder');
 
     expect(revealed()).toEqual([]);
+  });
+
+  const myMod = new ModNode({ kind: 'mod', name: 'My Mod', enabled: true });
+  const linked = { relativePath: 'textures/a.dds', path: '/instance/mods/My Mod/textures/a.dds', sourcePath: '/elsewhere/a.dds', excluded: false, excludedByName: false };
+  const folder = new FolderNode(myMod, { kind: 'mod', name: 'My Mod' },
+    { relativePath: 'textures', path: '/instance/mods/My Mod/textures', excluded: false }, [linked], [], 'textures');
+  const leaf = new FileNode(folder, folder.origin, linked, 'a.dds');
+
+  it('reveals a file where it sits in its mod, a link too, clicked or the one selected from the palette', async () => {
+    registerOpenFolderCommand(instance, recordingReporter(), () => [leaf]);
+    await invoke('modbench.mod.openFolder', leaf);
+    await invoke('modbench.mod.openFolder');
+
+    expect(revealed()).toEqual(['/instance/mods/My Mod/textures/a.dds', '/instance/mods/My Mod/textures/a.dds']);
+  });
+
+  it('reveals a folder where the value says it sits, clicked or the one selected from the palette', async () => {
+    registerOpenFolderCommand(instance, recordingReporter(), () => [folder]);
+    await invoke('modbench.mod.openFolder', folder);
+    await invoke('modbench.mod.openFolder');
+
+    expect(revealed()).toEqual(['/instance/mods/My Mod/textures', '/instance/mods/My Mod/textures']);
+  });
+
+  it('names the file by its path in its mod when its reveal fails', async () => {
+    executeCommand.mockRejectedValueOnce(new Error('no explorer'));
+    const reporter = recordingReporter();
+
+    registerOpenFolderCommand(instance, reporter, () => []);
+    await invoke('modbench.mod.openFolder', leaf);
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to open the folder of "textures/a.dds".', detail: 'no explorer' },
+    ]);
   });
 
   it('reports a reveal that fails', async () => {
@@ -1182,7 +1217,7 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
   });
 });
 
-describe('modsCopyValueText, copying each selected mod\'s or separator\'s name, one per line', () => {
+describe('modsCopyValueText, one line for each selected row copy value takes', () => {
   const alpha = new ModNode({ kind: 'mod', name: 'Alpha', enabled: true });
   const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
   const beta = new ModNode({ kind: 'mod', name: 'Beta', enabled: true });
@@ -1225,6 +1260,18 @@ describe('modsCopyValueText, copying each selected mod\'s or separator\'s name, 
   it('copies the view\'s selection for the Mods key\'s own args', () => {
     const viewSelection = (): ModlistNode[] => [alpha, groupA, new OverwriteNode([], 'MO2')];
     expect(modsCopyValueText(viewSelection)(MODS_KEY_ARGS, undefined)).toBe('Alpha\nGroup A');
+  });
+
+  it('copies each selected file\'s and folder\'s path in its mod beside the mods\' names, from a click and from the key', () => {
+    const armour = new ModNode({ kind: 'mod', name: 'Armour', enabled: true });
+    const file = { relativePath: 'textures/armour/a.dds', path: '/instance/mods/Armour/textures/armour/a.dds', sourcePath: '/instance/mods/Armour/textures/armour/a.dds', excluded: false, excludedByName: false };
+    const folder = new FolderNode(armour, { kind: 'mod', name: 'Armour' }, { relativePath: 'textures', path: '/instance/mods/Armour/textures', excluded: false }, [file], [], 'textures');
+    const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
+    const selection = [alpha, folder, leaf];
+
+    expect(modsCopyValueText(noSelection)(leaf, undefined)).toBe('textures/armour/a.dds');
+    expect(modsCopyValueText(noSelection)(folder, selection)).toBe('Alpha\ntextures\ntextures/armour/a.dds');
+    expect(modsCopyValueText(() => [leaf, folder])(MODS_KEY_ARGS, undefined)).toBe('textures/armour/a.dds\ntextures');
   });
 
   it('owns the Mods key\'s invocation with nothing to copy when nothing is selected', () => {
@@ -1440,5 +1487,103 @@ describe('shape gestures mark what they change before the write', () => {
         [[{ kind: 'mod', name: 'New Mod' }]], [[{ kind: 'mod', name: 'Other Mod' }]],
       ]);
     });
+  });
+});
+
+describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected file, in the right-clicked row\'s direction', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const modRow = new ModNode({ kind: 'mod', name: 'M', enabled: true });
+  const origin = { kind: 'mod', name: 'M' } as const;
+  const fileRow = (relativePath: string, excluded: boolean) => new FileNode(
+    modRow, origin, { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded, excludedByName: excluded },
+    relativePath);
+  const included = fileRow('a.dds', false);
+  const excluded = fileRow('b.dds.mohidden', true);
+  const refOf = (row: FileNode) => ({ origin: row.origin, relativePath: row.file.relativePath });
+  const marks = { markExclusions: vi.fn(), forgetUnconfirmedExclusions: vi.fn(), exclusionLandedAt: vi.fn() };
+
+  it('excludes each selected file its own name leaves included, marking each before the write, and leaves the rest alone', async () => {
+    const order: string[] = [];
+    marks.markExclusions.mockImplementation(() => order.push('mark'));
+    markFiles.mockImplementation(() => { order.push('write'); return Promise.resolve({ landed: [], refused: [] }); });
+    const reporter = recordingReporter();
+
+    registerFileExclusionCommands(access, () => [], reporter, marks);
+    await invoke('modbench.mod.excludeFile', included, [included, excluded, modRow]);
+
+    expect(markFiles).toHaveBeenCalledWith(access, [refOf(included)], 'Excluded', expect.any(Function));
+    expect(marks.markExclusions.mock.calls).toEqual([[[refOf(included)], 'Excluded']]);
+    expect(order).toEqual(['mark', 'write']);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('includes the view\'s selection from the palette, where no row is right-clicked', async () => {
+    markFiles.mockResolvedValue({ landed: [], refused: [] });
+
+    registerFileExclusionCommands(access, () => [excluded], recordingReporter(), marks);
+    await invoke('modbench.mod.includeFile');
+
+    expect(markFiles).toHaveBeenCalledWith(access, [refOf(excluded)], 'Included', expect.any(Function));
+    expect(marks.markExclusions.mock.calls).toEqual([[[refOf(excluded)], 'Included']]);
+  });
+
+  it('tells the marks where each file is the moment it is written, before the rest of the batch', async () => {
+    const other = fileRow('c.dds', false);
+    const first = { ...refOf(included), markedPath: 'a.dds.mohidden' };
+    let toldMidBatch: unknown[] = [];
+    markFiles.mockImplementation((_access: unknown, _files: unknown, _mark: unknown, landedOne: (file: typeof first) => void) => {
+      landedOne(first);
+      toldMidBatch = [...marks.exclusionLandedAt.mock.calls];
+      return Promise.resolve({ landed: [first], refused: [] });
+    });
+
+    registerFileExclusionCommands(access, () => [], recordingReporter(), marks);
+    await invoke('modbench.mod.excludeFile', included, [included, other]);
+
+    expect(toldMidBatch).toEqual([[first]]);
+  });
+
+  it('reports each refused file by its mod and path, once, out of the files it wrote, and forgets its mark, while the rest land', async () => {
+    const gone = fileRow('c.dds', false);
+    markFiles.mockResolvedValue({ landed: [], refused: [{ item: refOf(gone), reason: '"c.dds" is gone from disk.' }] });
+    const reporter = recordingReporter();
+
+    registerFileExclusionCommands(access, () => [], reporter, marks);
+    await invoke('modbench.mod.excludeFile', included, [included, excluded, gone]);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not exclude 1 of 2 files.', detail: '"M/c.dds" ("c.dds" is gone from disk.)',
+    }]);
+    expect(marks.forgetUnconfirmedExclusions.mock.calls).toEqual([[[refOf(gone)]]]);
+  });
+
+  it.each([
+    ['excludeFile', 'Excluded', included, 'x.mohidden/c.dds'], ['includeFile', 'Included', excluded, 'x.mohidden/d.dds.mohidden'],
+  ] as const)('%s takes a file its folder excludes by its own name, leaving alone the one already so', async (verb, mark, clicked, changed) => {
+    const hidingFolder = new FolderNode(
+      modRow, origin, { relativePath: 'x.mohidden', path: '/instance/mods/M/x.mohidden', excluded: true }, [], [], 'x.mohidden');
+    const inFolder = (relativePath: string, excludedByName: boolean) => new FileNode(hidingFolder, origin,
+      { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded: true, excludedByName },
+      relativePath);
+    markFiles.mockResolvedValue({ landed: [], refused: [] });
+    const reporter = recordingReporter();
+
+    registerFileExclusionCommands(access, () => [], reporter, marks);
+    await invoke(`modbench.mod.${verb}`, clicked, [clicked, inFolder('x.mohidden/c.dds', false), inFolder('x.mohidden/d.dds.mohidden', true)]);
+
+    expect(markFiles).toHaveBeenCalledWith(access, [refOf(clicked), { origin, relativePath: changed }], mark, expect.any(Function));
+    expect(marks.markExclusions).toHaveBeenCalledWith([refOf(clicked), { origin, relativePath: changed }], mark);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('calls nothing and reports nothing over a selection with no file', async () => {
+    const reporter = recordingReporter();
+
+    registerFileExclusionCommands(access, () => [modRow], reporter, marks);
+    await invoke('modbench.mod.excludeFile');
+
+    expect(markFiles).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
   });
 });

@@ -5,7 +5,7 @@ import { present } from '../ports/present';
 import { FOLDER_KEY, INSTANCE_READ_KEY } from '../folderContext';
 import { IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom,
 } from './vscodeMock';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
@@ -18,7 +18,7 @@ const placed = (entries: readonly MenuEntry[]): [string, string][] =>
 
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString,
-  Uri: { file: uriFile },
+  Uri: { file: uriFile, from: uriFrom },
 }));
 
 import { ModNode, NO_MODS_MESSAGE, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
@@ -28,6 +28,8 @@ import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
 import { DECOMPILE_PLUGIN_TITLE } from '../plugins/externalChangeNotice';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
+import { GREY_INACTIVE_FILES_SETTING } from '../mods/inactiveFiles';
+import { indicatorSetting, MOD_INDICATORS } from '../mods/modIndicators';
 
 interface ViewsWelcomeEntry { view: string; contents: string; when?: string; }
 interface ViewEntry { id: string; name: string; when?: string; }
@@ -35,7 +37,8 @@ interface MenuEntry { command: string; when: string; group?: string; icon?: stri
 interface CommandEntry { command: string; title: string; category: string; icon?: string; }
 interface KeybindingEntry { command: string; key: string; when: string; mac?: string; args?: unknown; }
 interface ViewsContainerEntry { id: string; }
-interface SettingEntry { description?: string; }
+interface SettingEntry { description?: string; type?: unknown; default?: unknown; }
+interface ColorEntry { id: string; }
 
 interface PackageManifest {
   activationEvents: string[];
@@ -47,6 +50,7 @@ interface PackageManifest {
     commands: CommandEntry[];
     keybindings: KeybindingEntry[];
     configuration: { properties: Record<string, SettingEntry> };
+    colors: ColorEntry[];
   };
 }
 
@@ -87,6 +91,9 @@ function isViewsContainerEntry(v: unknown): v is ViewsContainerEntry {
 function isSettingEntry(v: unknown): v is SettingEntry {
   return isRecord(v) && isOptionalString(v.description);
 }
+function isColorEntry(v: unknown): v is ColorEntry {
+  return isRecord(v) && isString(v.id);
+}
 
 function parsePackageManifest(raw: unknown): PackageManifest {
   if (!isRecord(raw) || !isArrayOf(raw.activationEvents, isString)) {
@@ -94,7 +101,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   }
   const { contributes } = raw;
   if (!isRecord(contributes)) throw new Error('Expected package.json to have a contributes object.');
-  const { viewsWelcome, views, viewsContainers, menus, commands, keybindings, configuration } = contributes;
+  const { viewsWelcome, views, viewsContainers, menus, commands, keybindings, configuration, colors } = contributes;
   if (!isArrayOf(viewsWelcome, isViewsWelcomeEntry)) {
     throw new Error('Expected contributes.viewsWelcome to be an array of { view, contents, when? }.');
   }
@@ -116,12 +123,13 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   if (!isRecord(configuration) || !isRecordOf(configuration.properties, isSettingEntry)) {
     throw new Error('Expected contributes.configuration.properties to be a map of { description? }.');
   }
+  if (!isArrayOf(colors, isColorEntry)) throw new Error('Expected contributes.colors to be an array of { id }.');
   const { properties } = configuration;
   return {
     activationEvents: raw.activationEvents,
     contributes: {
       viewsWelcome, views, viewsContainers: { panel: viewsContainers.panel }, menus, commands, keybindings,
-      configuration: { properties },
+      configuration: { properties }, colors,
     },
   };
 }
@@ -466,6 +474,31 @@ describe('package.json title-bar rubric', () => {
     const sidebar = sidebarIds.map((v) => v.id);
     expect(sidebar).toContain('modbench.modList');
     expect(sidebar).toContain('modbench.pluginListTree');
+  });
+});
+
+describe('package.json contributes the Mods view\'s indicators and grey as settings (mods.md, Indicators)', () => {
+  const { properties } = pkg.contributes.configuration;
+
+  it('the grey of a file the game does not get: a switch, on by default, under the key the grey reads', () => {
+    expect(properties[GREY_INACTIVE_FILES_SETTING]).toMatchObject({ type: 'boolean', default: true });
+  });
+
+  it('a switch for each indicator\'s badge and colour, under the keys they read, defaulting as the table says', () => {
+    const switches = Object.fromEntries(MOD_INDICATORS.flatMap(({ id }) => (['badge', 'colour'] as const)
+      .map((part) => [`${id} ${part}`, properties[indicatorSetting(id, part)]?.type === 'boolean' && properties[indicatorSetting(id, part)]?.default]))) as unknown;
+
+    expect(switches).toEqual({
+      'overwritesLooseFiles badge': false, 'overwritesLooseFiles colour': false,
+      'overwrittenLooseFiles badge': true, 'overwrittenLooseFiles colour': false,
+      'redundant badge': true, 'redundant colour': false,
+      'containsExcludedFiles badge': false, 'containsExcludedFiles colour': false,
+    });
+  });
+
+  it('a theme colour for each indicator', () => {
+    const contributed = pkg.contributes.colors.map((colour) => colour.id);
+    expect(MOD_INDICATORS.filter(({ colour }) => !contributed.includes(colour)).map(({ id }) => id)).toEqual([]);
   });
 });
 
@@ -1190,6 +1223,33 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     expect(placed(rowMenu('viewItem == overwrite'))).toEqual([['modbench.mod.openFolder', '1_open']]);
   });
 
+  const menuOn = (viewItem: string): [string, string][] =>
+    placed(inModsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.modList', viewItem })));
+
+  it('File menu: open folder, then copy value, and no item of a mod\'s, a separator\'s or Overwrite\'s', () => {
+    expect(menuOn('file')).toEqual([['modbench.mod.openFolder', '1_open'], ['modbench.copyValue', '5_copy']]);
+  });
+
+  it('File menu: go to mod only on a file in a file order conflict, between open folder and copy value', () => {
+    expect(menuOn('file conflict')).toEqual([
+      ['modbench.mod.openFolder', '1_open'], ['modbench.mod.goToMod', '1_open'], ['modbench.copyValue', '5_copy'],
+    ]);
+  });
+
+  it.each([
+    ['file included', 'modbench.mod.excludeFile'],
+    ['file excluded', 'modbench.mod.includeFile'],
+  ])('File menu on a %s row: %s, after open folder and any go to mod, before copy value', (viewItem, command) => {
+    expect(menuOn(viewItem)).toEqual([['modbench.mod.openFolder', '1_open'], [command, '2_change'], ['modbench.copyValue', '5_copy']]);
+    expect(menuOn(`file conflict ${viewItem.split(' ')[1]}`)).toEqual([
+      ['modbench.mod.openFolder', '1_open'], ['modbench.mod.goToMod', '1_open'], [command, '2_change'], ['modbench.copyValue', '5_copy'],
+    ]);
+  });
+
+  it('Folder menu: open folder, then copy value, and no item of a mod\'s, a separator\'s or Overwrite\'s', () => {
+    expect(menuOn('folder')).toEqual([['modbench.mod.openFolder', '1_open'], ['modbench.copyValue', '5_copy']]);
+  });
+
   const ONE_SEPARATOR = 'modbench.mod.selectionKind == separator && modbench.mod.singleRow';
   const ON_THE_TREE = `focusedView == modbench.modList && listFocus && !inputFocus && ${IN_AN_INSTANCE}`;
 
@@ -1217,7 +1277,10 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.uninstall', 'modbench.mod.selectionKind == mod'],
     ['modbench.mod.createEmpty', undefined],
     ['modbench.mod.install', undefined],
-    ['modbench.mod.openFolder', 'modbench.mod.singleFolder'],
+    ['modbench.mod.openFolder', 'modbench.mod.singleOpenFolderRow'],
+    ['modbench.mod.goToMod', 'modbench.mod.singleGoToModRow'],
+    ['modbench.mod.excludeFile', 'modbench.mod.holdsIncludedFile'],
+    ['modbench.mod.includeFile', 'modbench.mod.holdsExcludedFile'],
   ] as const;
 
   it.each(MODS_PALETTE)('%s is in the palette only while the Mods view has focus and its selection holds: %s', (command, holds) => {

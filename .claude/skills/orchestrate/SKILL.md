@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Your goal is the delivery of the epic. The executor's goal is its ticket. Deferral belongs to the user. Work inside your goal gets done in this run. A defect the run finds is inside your goal. Root CLAUDE.md's chain of authority decides what reaches the user.
 
-Resolve before you route. A stop, break or question an executor or reviewer raises is a claim until you have worked it through the chain yourself: the principles, the ADRs the work touches, the spec, and CONTEXT.md's words, as they stand on `main`. A caption item covers every need its box's purpose covers, in words other than the claim's. What the chain answers goes back to the lane as the answer, with the texts quoted. Two things reach the user: two documents at one level that disagree, and a need no document speaks to, each with your attempt quoted.
+Resolve before you route. A stop, break or question an executor or reviewer raises is a claim until you have worked it through the chain yourself: the principles, the ADRs the work touches, the spec, and CONTEXT.md's words, as they stand on `main`. What the chain answers goes back to the lane as the answer, with the texts quoted. Two things reach the user: two documents at one level that disagree, and a need no document speaks to, each with your attempt quoted.
 
 Read tickets, reports and the chain's documents; leave source to the executors. Every source file you open is context you will not have later in the run- spend your context wisely.
 
@@ -22,7 +22,7 @@ The run never waits. A tactical question is decided, and a strategic one parks i
 
 The stack is an epic's `ready-for-agent` sub-issues with their blocking edges. Edges decide what can start. Boxes decide what can run beside what.
 
-A box is a module `docs/architecture/target-architecture.d2` draws, and its folder is the unit the kernel scans hold: a folder under `modbench/src/`, or an `MEditService.*` project. Read each ticket once, with its comments and its epic's comments, and name the boxes it touches, and what tier model it needs based on the complexity. Cut the stack into lanes so that tickets touching one box share a lane. Work is serial within a lane and parallel across lanes. Run 3 lanes at most.
+A box is a module `docs/architecture/target-architecture.d2` draws, and its folder is the unit the kernel scans hold: a folder under `modbench/src/`, or an `MEditService.*` project. Read each ticket once, with its comments and its epic's comments, and name the boxes it touches and the tier it runs on: the one its Notes name, else Sonnet. Raise a ticket's tier only when its text leaves a judgement the chain does not answer, and say why in its lane line. A ticket you would raise for size alone is too coarse: park it for the user to split rather than spend the larger tier on it. Cut the stack into lanes so that tickets touching one box share a lane. Work is serial within a lane and parallel across lanes. Run 3 lanes at most.
 
 Three things sit outside that rule:
 

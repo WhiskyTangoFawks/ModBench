@@ -21,14 +21,13 @@ const EDITOR_DIR = 'editor';
 const GENERATED_DIR = 'generated';
 const WIRE_DIR = 'wire';
 
-const WIRES_EVERY_CONTEXT = ['toolbox.ts', 'toolboxClientCalls.ts', 'extension.ts'];
+const WIRES_EVERY_CONTEXT = ['toolbox.ts', 'extension.ts'];
 const SHARED_ACTIVATION_STATE = ['session.ts'];
 const MEDIT_PATH_FALSE_POSITIVE = ['workspaceConfig.ts'];
-const CHECKBOX_HANDLER_WIRING = ['pluginCheckboxHandler.ts'];
 const CLIENT_CALLERS = ['instanceCommands'];
 
 const COMPOSITION_ROOT =
-  [...WIRES_EVERY_CONTEXT, ...SHARED_ACTIVATION_STATE, ...MEDIT_PATH_FALSE_POSITIVE, ...CHECKBOX_HANDLER_WIRING];
+  [...WIRES_EVERY_CONTEXT, ...SHARED_ACTIVATION_STATE, ...MEDIT_PATH_FALSE_POSITIVE];
 
 function isTestSupport(relativePath: string): boolean {
   return relativePath.split(sep).some((seg) => seg === 'test' || seg === 'integration') || relativePath.includes('.test.');
@@ -124,9 +123,8 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(isExcluded(join('mods', 'modList.ts'))).toBe(false);
   });
 
-  it('the composition-root allowlist is exactly these six files', () => {
-    expect(COMPOSITION_ROOT.sort()).toEqual(
-      ['extension.ts', 'pluginCheckboxHandler.ts', 'session.ts', 'toolbox.ts', 'toolboxClientCalls.ts', 'workspaceConfig.ts']);
+  it('the composition-root allowlist is exactly these files', () => {
+    expect(COMPOSITION_ROOT.sort()).toEqual(['extension.ts', 'session.ts', 'toolbox.ts', 'workspaceConfig.ts']);
   });
 
   describe('a plant in each MO2-side directory is caught, and the same plant inside an excluded one is not', () => {
@@ -271,17 +269,17 @@ describe('the Plugins view\'s failure prefix stays a decoration', () => {
   });
 });
 
-describe('composition-root modules import from neither context', () => {
-  it('the name filter imports from neither context', () => {
-    const imports = importsOf(read('nameFilter.ts'));
+describe('the driving lib\'s name filter imports from neither context', () => {
+  it('imports nothing but vscode', () => {
+    const imports = importsOf(read(join('drivingLib', 'nameFilter.ts')));
     expect(imports.filter((s) => s.includes('medit') || s.includes('mods') || s.includes('downloads'))).toEqual([]);
     expect(imports).toEqual(['vscode']);
   });
+});
 
+describe('composition-root modules import from neither context', () => {
   it('the editing teardown module imports from neither context', () => {
-    const imports = importsOf(read('editingTeardown.ts'));
-    expect(imports.filter((s) => s.includes('medit') || s.includes('mods') || s.includes('downloads'))).toEqual([]);
-    expect(imports).toEqual(['vscode']);
+    expect(importsOf(read('editingTeardown.ts'))).toEqual([]);
   });
 
 });

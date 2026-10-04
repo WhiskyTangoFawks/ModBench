@@ -4,7 +4,7 @@ import { noGestureResultUse } from '../../eslint-rules/noGestureResultUse.mjs';
 
 const MESSAGE =
   "An entry point may fire a gesture and use no result. A gesture that needs another box's work "
-  + 'calls that box through a reference the reference view draws.';
+  + 'calls that box through a project reference.';
 
 function lint(code: string): Linter.LintMessage[] {
   const linter = new Linter();

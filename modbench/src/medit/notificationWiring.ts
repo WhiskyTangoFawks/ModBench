@@ -2,18 +2,6 @@ import type * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
 
-// Each rows-changed event (ADR-0015) re-reads the whole tree, which has no per-row
-// identity to check it against. The plugin facts too, as a changed record can start or stop
-// matching the record filter.
-export function subscribeTreeToNotifications(
-  client: Pick<MEditClient, 'subscribe'>, tree: { refresh(): void }, refreshPluginFacts: () => void,
-): () => void {
-  const reread = () => { tree.refresh(); refreshPluginFacts(); };
-  const unsubscribeRows = client.subscribe('rows-changed', reread);
-  const unsubscribePlugin = client.subscribe('plugin-changed', reread);
-  return () => { unsubscribeRows(); unsubscribePlugin(); };
-}
-
 // A FormKey spans its override chain, so matching it is enough. `heldReads` holds a panel's reads
 // until its edit is answered; on reconnect, one waiting on a missed report reads once mEdit holds it.
 export function subscribeRecordPanelsToNotifications<Panel extends { webview: Pick<vscode.Webview, 'postMessage'> }>(

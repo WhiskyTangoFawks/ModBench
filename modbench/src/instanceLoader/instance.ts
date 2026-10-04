@@ -1,23 +1,22 @@
 // The instance value (ADR-0015).
 
-import { buildFileConflictIndex, FileConflictLookup, modFileOf, type FileWinners, type ModFile } from './fileConflictIndex';
+import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
-  buildLoadOrderRows, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine,
-  type PluginAddress,
+  buildLoadOrderRows, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin,
+  type LoadOrderPluginLine, type LoadOrderSnapshotValue, type PluginAddress,
 } from './loadOrderSnapshot';
 import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type ManagerNames, type ModlistEntry, type OriginFiles, type Subscription,
+  type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
-import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { SameCopies, type FileCopies } from './sameCopies';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
-export type { FileOrigin, InstalledFileId, Mod, ModlistEntry, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
+export type { FileOrigin, InstalledFileId, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow } from './downloadRows';
 export type { ModFile } from './fileConflictIndex';
 export type { Copy, FileCopies } from './sameCopies';
@@ -62,7 +61,9 @@ export interface InstanceValue {
   /** The winning enabled provider of every relative path, and its contenders. */
   readonly files: FileWinners;
   /** Each listed mod's own files, a disabled mod's too. */
-  readonly filesByMod: ReadonlyMap<string, readonly ModFile[]>;
+  readonly filesByMod: ReadonlyMap<string, readonly OriginFile[]>;
+  /** Each listed mod's folders, a disabled mod's too. */
+  readonly foldersByMod: ReadonlyMap<string, readonly OriginFolder[]>;
   /** Every plugin file, with origin, slot, enabled and winning. A listed
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
    *  undefined — when the game folder is not found. */
@@ -90,10 +91,13 @@ export interface InstanceValue {
   /** The plugins the game loads with no line, in the order it loads them; undefined while the
    *  game folder's plugins cannot be listed. */
   readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
-  /** Each mod's conflict/override status, keyed by mod name: the Mods tree's badges. */
-  readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
+  /** ADR-0013's snapshot; undefined while the game folder is not found or its plugins cannot be
+   *  listed, so nothing silently wrong is sent. */
+  readonly loadOrderSnapshot: LoadOrderSnapshotValue | undefined;
   /** Overwrite's own files, recursive; none when the folder is absent or empty. */
-  readonly overwriteFiles: readonly ModFile[];
+  readonly overwriteFiles: readonly OriginFile[];
+  /** Overwrite's folders, as `overwriteFiles` holds its files. */
+  readonly overwriteFolders: readonly OriginFolder[];
   /** The paths this generation's rows name. */
   readonly paths: InstancePaths;
 }
@@ -150,6 +154,7 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   profiles: [],
   files: new FileConflictLookup(),
   filesByMod: new Map(),
+  foldersByMod: new Map(),
   plugins: [],
   downloads: { kind: 'listed', rows: [] },
   activeProfile: '',
@@ -161,8 +166,9 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   gameFolder: { kind: 'notFound', looked: [], setting: GAME_FOLDER_SETTING },
   dataFolderPlugins: { kind: 'unresolved' },
   pluginsLoadedWithNoLine: undefined,
-  modStatuses: new Map(),
+  loadOrderSnapshot: undefined,
   overwriteFiles: [],
+  overwriteFolders: [],
   paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() },
 });
 
@@ -390,6 +396,7 @@ export class Instance implements Subscription {
     for (const note of runtimeOutput.notes) log(`[instance] ${runtimeOutput.origin}: ${note}`);
     const { gameFolder, dataFolderPlugins, creationClub } = game;
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder);
+    const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins);
     const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.files
       ? await this.readInstalledInto(entries, modFolders?.all ?? [])
       : undefined;
@@ -400,6 +407,7 @@ export class Instance implements Subscription {
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,
+      foldersByMod: index.foldersByMod,
       plugins,
       downloads: downloadsOutcome.kind === 'unresolved'
         ? { kind: 'unresolved', reason: downloadsOutcome.reason }
@@ -414,9 +422,10 @@ export class Instance implements Subscription {
       nexusSlug: nexusSlugFor(gameRelease, gameName),
       gameFolder,
       dataFolderPlugins,
-      pluginsLoadedWithNoLine: pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins),
-      modStatuses: computeModStatuses(entries, index),
-      overwriteFiles: runtimeOutput.files.map(modFileOf),
+      pluginsLoadedWithNoLine,
+      loadOrderSnapshot: loadOrderSnapshotOf({ plugins, gameFolder, pluginsLoadedWithNoLine }),
+      overwriteFiles: runtimeOutput.files,
+      overwriteFolders: runtimeOutput.folders,
       paths: pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders),
     };
   }

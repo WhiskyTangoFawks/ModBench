@@ -8,7 +8,7 @@ Each story cites its source. A story with no source is owned here.
 
 A native tree view, `modbench.toolbox`, first in the `modbench` container and open by default (commands.md, Where surfaces live). It is a readout, not a list: each row is one fact about the instance, and a row's click is that fact's gesture. So the list rules in common do not apply to it: it has no name filter, no sort direction, no Collapse All, and selecting several rows means nothing.
 
-As a user, I want every row to read the instance value and nothing else, so the Toolbox never disagrees with the views below it. *ADR-0015*
+As a user, I want every row to read the instance value and nothing else, so the Toolbox never disagrees with the views below it. Source: ADR-0015
 
 ## Rows
 
@@ -37,22 +37,22 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 
 ### Switch profile
 
-As a user, I want a pick of the instance's profiles, the active one marked. Choosing one switches to it; Esc switches nothing. *catalog `switch`*
+As a user, I want a pick of the instance's profiles, the active one marked. Choosing one switches to it; Esc switches nothing. Source: catalog `switch`
 
 ### Refresh
 
-As a user, I want no confirmation, and the view's progress bar while it runs. *Confirm what destroys: refresh deletes only derived state, and rebuilds it*
+As a user, I want no confirmation, and the view's progress bar while it runs. Source: Confirm what destroys: refresh deletes only derived state, and rebuilds it
 
 ## Reporting
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. A refresh refused because another window holds the index to say "This instance's index is open in another Modbench window", and to name the instance. Modbench cannot name the other window. *catalog `refresh`; Never silently wrong*
+1. A refresh refused because another window holds the index to say "This instance's index is open in another Modbench window", and to name the instance. Modbench cannot name the other window. Source: catalog `refresh`; Never silently wrong
 2. A failed refresh to say why.
 
 ## Test seam
 
-- **The view, given an instance value:** the rows and their parts, and the states, with no VS Code UI and no disk.
-- **The pickers:** switch profile's items, the marked one, and what Esc yields.
-- **Menus and keys:** the placement above, checked against the extension manifest.
+- The view, given an instance value: the rows and their parts, and the states, with no VS Code UI and no disk.
+- The pickers: switch profile's items, the marked one, and what Esc yields.
+- Menus and keys: the placement above, checked against the extension manifest.
 

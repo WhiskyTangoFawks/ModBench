@@ -3,8 +3,8 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
-  entryNotFound, newModNameRefusal, type DecideModOrder, type EntryRef, type InstanceAdapter, type ModFolder, type ModlistEntry,
-  type ModOrderChange, type MovePlace, type OrderEnd, type SeparatorsPlace,
+  entryNotFound, goneFromDisk, newModNameRefusal, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
+  type ModFolder, type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 
 /** What a modlist command reaches the instance through. */
@@ -62,7 +62,7 @@ export function setModsEnabled(
     found.map((mod) => ({ kind: 'enable', mod, enabled })));
 }
 
-export type { MovePlace, OrderEnd, SeparatorsPlace } from '../instanceAdapter/instanceAdapter';
+export type { MovePlace, OrderEnd, OriginFileMark, SeparatorsPlace } from '../instanceAdapter/instanceAdapter';
 
 /** `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
  *  order, at the `end` of the place. A separator or mod that has gone refuses the whole move. */
@@ -79,6 +79,45 @@ export function moveSeparators(
 ): Promise<ModlistSelectionResult> {
   return changeSelection(access, profile, 'separator', separatorNames, (found) =>
     [{ kind: 'moveSeparators', separators: found, place, end }]);
+}
+
+/** A file of a mod or Overwrite, by its path in it. */
+export interface OriginFileRef {
+  readonly origin: FileOrigin;
+  readonly relativePath: string;
+}
+
+/** A file marked, and the path it has in its origin once marked. */
+export interface MarkedFile extends OriginFileRef {
+  readonly markedPath: string;
+}
+
+export interface FilesMarked extends SelectionOutcome<OriginFileRef> {
+  readonly landed: readonly MarkedFile[];
+}
+
+/** `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own, and handed
+ *  to `landedOne` before the next is. */
+export async function markFiles(
+  access: ModlistAccess, files: readonly OriginFileRef[], mark: OriginFileMark, landedOne: (file: MarkedFile) => void = () => {},
+): Promise<FilesMarked> {
+  const landed: MarkedFile[] = [];
+  const refused: ItemRefusal<OriginFileRef>[] = [];
+  for (const file of files) {
+    try {
+      const marked = await access.adapter.markOriginFile(file.origin, file.relativePath, mark);
+      if (marked.gone) refused.push({ item: file, reason: goneFromDisk(file.relativePath) });
+      else if ('refusal' in marked) refused.push({ item: file, reason: marked.refusal });
+      else {
+        const done = { ...file, markedPath: marked.relativePath };
+        landed.push(done);
+        landedOne(done);
+      }
+    } catch (err) {
+      refused.push({ item: file, reason: errorMessage(err) });
+    }
+  }
+  return { landed, refused };
 }
 
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';

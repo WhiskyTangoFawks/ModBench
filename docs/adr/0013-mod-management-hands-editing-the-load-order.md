@@ -4,11 +4,11 @@ Modbench's data is two layers. The file layer is the mods and their files, resol
 
 ## Consequences
 
-- **Mod Management reads no plugin binary and writes no record.** A plugin's masters come from Editing, so two views never disagree over them.
+- Mod Management interprets no plugin binary and writes no record. A plugin's masters come from Editing, so two views never disagree over them.
 
 ## Alternatives rejected
 
-- **A bulk load verb plus a verb per loadout gesture:** reread for a mod-order change, participation for enable and disable, load and unload for unlisted plugins. Every future gesture would need its own endpoint and its own drift story.
-- **Each plugin with its slot, enabled and winning facts, and Editing derives which plugins are active**. One list carried two events, so Editing diffed it to learn which had happened. It kept a registered state between indexed and active. It re-derived a rule over Mod Management's own files.
-- **Editing reads the plugins the game loads with no line, through Mutagen.** Deciding the active plugins then spans both sides, and Mod Management waits on Editing before it can send. The game's masters are a short per-release list.
-- **Editing reads `modlist.txt` and `plugins.txt` itself.** Self-validating like the record index, but puts the mod manager's formats and mod order inside Editing, and `plugins.txt` alone cannot say which mod's file a name means.
+- A bulk load verb plus a verb per loadout gesture: reread for a mod-order change, participation for enable and disable, load and unload for unlisted plugins. Every future gesture would need its own endpoint and its own drift story.
+- Each plugin with its slot, enabled and winning facts, and Editing derives which plugins are active. One list carried two events, so Editing diffed it to learn which had happened. It kept a registered state between indexed and active. It re-derived a rule over Mod Management's own files.
+- Editing reads the plugins the game loads with no line, through Mutagen. Deciding the active plugins then spans both sides, and Mod Management waits on Editing before it can send. The game's masters are a short per-release list.
+- Editing reads `modlist.txt` and `plugins.txt` itself. Self-validating like the record index, but puts the mod manager's formats and mod order inside Editing, and `plugins.txt` alone cannot say which mod's file a name means.

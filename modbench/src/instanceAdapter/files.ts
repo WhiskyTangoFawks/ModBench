@@ -2,12 +2,11 @@
 // `instanceadapter` box). A command splices a file's text through its own codec and puts the
 // result through here.
 
-import { createHash } from 'node:crypto';
-import { constants, createReadStream, type Dirent } from 'node:fs';
+import { constants, type Dirent } from 'node:fs';
 import {
   access, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
 } from 'node:fs/promises';
-import { basename, dirname, join, relative, sep } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import {
   isTempWriteOf, modGitDir, tempWritePath,
 } from './layout';
@@ -91,14 +90,6 @@ export async function factsOf(path: string): Promise<PathFacts> {
 export async function stampOf(path: string): Promise<FileStamp> {
   const info = await stat(path, { bigint: true });
   return { size: info.size, modifiedNs: info.mtimeNs, changedNs: info.ctimeNs };
-}
-
-/** The SHA-256 of `path`'s bytes, streamed: a texture or an archive runs to gigabytes. */
-export async function digestOf(path: string): Promise<string> {
-  const hash = createHash('sha256');
-  const bytes: AsyncIterable<Buffer> = createReadStream(path);
-  for await (const chunk of bytes) hash.update(chunk);
-  return hash.digest('hex');
 }
 
 /** Reads `path` as text. Pass `ifMissing` to read a missing file as that text instead of
@@ -242,18 +233,4 @@ export function putIfChanged(
     await writeAtomic(path, after);
     return { wrote: true };
   });
-}
-
-/** Every file under `root`, as forward-slash relative paths. */
-export async function listRelativeFiles(root: string): Promise<string[]> {
-  const out: string[] = [];
-  async function walk(dir: string): Promise<void> {
-    for (const dirent of await listDir(dir)) {
-      const abs = join(dir, dirent.name);
-      if (dirent.isDirectory()) await walk(abs);
-      else if (dirent.isFile()) out.push(relative(root, abs).split(sep).join('/'));
-    }
-  }
-  await walk(root);
-  return out;
 }

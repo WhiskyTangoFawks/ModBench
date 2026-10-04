@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
-import { OVERWRITE_NODE_KIND, type ModlistNode, type ModNode, type SeparatorNode } from './ModListProvider';
+import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
+import type { ModlistNode, ModNode, OverwriteNode, SeparatorNode } from './ModListProvider';
+import type { FileNode, FolderNode } from './modFiles';
 
 /** The rows a Mods gesture's Argument is taken from. */
 export interface GestureEntry {
@@ -44,19 +46,23 @@ export function registerModsGesture(
     run(modsGestureEntry(clicked, selected, viewSelection), option));
 }
 
-type ArgumentRow = ModNode | SeparatorNode;
+type ArgumentRow = ModNode | SeparatorNode | OverwriteNode | FolderNode | FileNode;
 type ArgumentKind = ArgumentRow['kind'];
-type RowOf<K extends ArgumentKind> = Extract<ArgumentRow, { kind: K }>;
+export type RowOf<K extends ArgumentKind> = Extract<ArgumentRow, { kind: K }>;
 
-const isOf = <K extends ArgumentKind>(kinds: readonly K[]) =>
-  (row: ModlistNode): row is RowOf<K> => kinds.some((kind) => kind === row.kind);
+export const isRowOf = <K extends ArgumentKind>(kinds: readonly K[]) =>
+  (row: unknown): row is RowOf<K> => isRow(row) && kinds.some((kind) => kind === row.kind);
 
 /** The Argument of a gesture the catalog calls singular: the right-clicked or focused row, when
  *  the gesture takes its kind. */
 export function singularArgument<K extends ArgumentKind>(entry: GestureEntry, ...kinds: K[]): RowOf<K> | undefined {
   const anchor = entry.clicked ?? entry.focused;
-  return anchor !== undefined && isOf(kinds)(anchor) ? anchor : undefined;
+  return anchor !== undefined && isRowOf(kinds)(anchor) ? anchor : undefined;
 }
+
+const OPEN_FOLDER_KINDS = ['mod', OVERWRITE_ORIGIN, 'folder', 'file'] as const;
+
+export const openFolderArgument = (entry: GestureEntry) => singularArgument(entry, ...OPEN_FOLDER_KINDS);
 
 /** Move's own Argument: one kind at a time, so a mixed selection narrows to the right-clicked or
  *  focused row's kind. For the catalog's own plural (commands.md, Argument: "the whole
@@ -64,13 +70,13 @@ export function singularArgument<K extends ArgumentKind>(entry: GestureEntry, ..
 export function pluralArgument<K extends ArgumentKind>(entry: GestureEntry, ...kinds: K[]): RowOf<K>[] {
   const anchor = entry.clicked ?? entry.focused;
   const taken = anchor === undefined ? kinds : kinds.filter((kind) => kind === anchor.kind);
-  return entry.selection.filter(isOf(taken));
+  return entry.selection.filter(isRowOf(taken));
 }
 
 /** The catalog's own plural Argument (commands.md, Argument: "the whole selection"), of the kinds
  *  given: no narrowing to the anchor row's kind, so a mixed selection keeps every kind. */
 export function selectionArgument<K extends ArgumentKind>(entry: GestureEntry, ...kinds: K[]): RowOf<K>[] {
-  return entry.selection.filter(isOf(kinds));
+  return entry.selection.filter(isRowOf(kinds));
 }
 
 /** What the Mods keys' and palette entries' `when` clauses read off the selection, since neither
@@ -79,27 +85,38 @@ export interface ModsKeyContext {
   readonly selectionToggle?: 'enable' | 'disable';
   readonly selectionKind?: ArgumentKind;
   readonly singleRow: boolean;
-  /** One row, and it has a folder: a mod, or Overwrite. */
-  readonly singleFolder: boolean;
+  /** One row, and open folder takes it. */
+  readonly singleOpenFolderRow: boolean;
+  /** One row, and a file in a file order conflict. */
+  readonly singleGoToModRow: boolean;
   readonly holdsEnabledMod: boolean;
   readonly holdsDisabledMod: boolean;
   readonly holdsUntrackedModWithPlugin: boolean;
+  readonly holdsIncludedFile: boolean;
+  readonly holdsExcludedFile: boolean;
 }
 
 export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (row: ModNode) => boolean): ModsKeyContext {
-  const mods = selection.filter(isOf(['mod']));
-  const [firstMod] = mods;
-  const kinds = new Set(selection.filter(isOf(['mod', 'separator'])).map((row) => row.kind));
+  const mods = selection.filter(isRowOf(['mod']));
+  const files = selection.filter(isRowOf(['file']));
+  // No API names the focused row, and a file or folder in the selection may be it: the keys do
+  // nothing on one (mods.md, Menus and keys, story 8).
+  const keyed = selection.some(isRowOf(['folder', 'file'])) ? [] : selection;
+  const [firstMod] = keyed.filter(isRowOf(['mod']));
+  const kinds = new Set(keyed.filter(isRowOf(['mod', 'separator'])).map((row) => row.kind));
   const [onlyKind] = kinds;
   const [onlyRow] = selection.length === 1 ? selection : [];
   return {
     selectionToggle: firstMod && toggleOf(isEnabled(firstMod)),
     selectionKind: kinds.size === 1 ? onlyKind : undefined,
     singleRow: onlyRow !== undefined,
-    singleFolder: onlyRow?.kind === 'mod' || onlyRow?.kind === OVERWRITE_NODE_KIND,
+    singleOpenFolderRow: openFolderArgument({ focused: onlyRow, selection }) !== undefined,
+    singleGoToModRow: onlyRow?.kind === 'file' && onlyRow.inConflict,
     holdsEnabledMod: mods.some(isEnabled),
     holdsDisabledMod: mods.some((row) => !isEnabled(row)),
     holdsUntrackedModWithPlugin: mods.some((row) => row.facts?.holdsPlugin === true && !row.facts.tracked),
+    holdsIncludedFile: files.some((row) => row.exclusion === 'included'),
+    holdsExcludedFile: files.some((row) => row.exclusion === 'excluded'),
   };
 }
 

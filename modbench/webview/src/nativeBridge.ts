@@ -2,7 +2,7 @@ import { vscode } from './vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseExtensionToWebview,
   type ArrayParentContext, type ExtensionToWebview, type RecordEditEnvelope, type RecordLoadAnswer, type WebviewToExtension,
-} from './messages';
+} from '../../src/wire/messages';
 
 // The webview's bridge to native VS Code surfaces: a new native-surface gesture extends the
 // request/reply mechanism below rather than reinventing it.

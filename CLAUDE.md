@@ -4,7 +4,7 @@ Modding IDE for Bethesda plugins: VS Code extension (`modbench/`) + local C# ser
 
 ## Status: pre-alpha, unreleased, zero users
 
-**No backwards compatibility** — no migrations, no shims, no "existing users" reasoning, no deprecation periods. Rename and delete freely. When an old form has no live consumer, remove it and its tests.
+No backwards compatibility: no migrations, no shims, no "existing users" reasoning, no deprecation periods. Rename and delete freely. When an old form has no live consumer, remove it and its tests.
 
 ## Tools
 
@@ -26,7 +26,7 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 ## Resources
 - `docs/architecture/` is the spec. `target-architecture.md` says how to read the diagrams. A view's spec is its surface in `surfaces/`. A trace in `traces/` is a diagram of how data flows, and holds no contract.
 - `docs/adr/` holds the decisions the code only cites. `ls docs/adr` is the index and the file names are the titles; `grep -rn ADR-00nn` finds everything one governs. Read one when a comment, spec or CLAUDE.md line names it, and when a design looks wrong and you are about to route around it.
-- `references/` = grep-only local clones, never modified. Load-bearing two: Mutagen (`docs/Big-Cheat-Sheet.md`) and TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` = sorted,  `wbArray` = unsorted); also `modorganizer/` (MO2 C++), `SFRecordCompareEngine/`, `vscode-docs`. Gitignored, so **absent from every `git worktree`** — read it at the main checkout's absolute path; a relative grep from a worktree silently matches nothing.
+- `references/` = grep-only local clones, never modified. Load-bearing two: Mutagen (`docs/Big-Cheat-Sheet.md`) and TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` = sorted,  `wbArray` = unsorted); also `modorganizer/` (MO2 C++), `SFRecordCompareEngine/`, `vscode-docs`. Gitignored, so absent from every `git worktree`: read it at the main checkout's absolute path; a relative grep from a worktree silently matches nothing.
 
 ## The chain of authority
 
@@ -37,7 +37,9 @@ principle > ADR > spec (`docs/architecture/`) > code. The higher level wins. An 
 - Strategy is the maintainer's; tactics are yours. Code that disagrees with a document is a defect: fix it. Everything the list below does not name is tactical: decide it, and give the reason in the commit message.
 - Stop and ask when the work does one of these:
   - It adds or changes a gesture, an entry point, or a state, row or status that a view shows and no spec draws.
-  - It needs a module, arrow or port that `docs/architecture/` does not draw, other than a band's lib, or an interface item that a box's caption does not list.
+  - It needs a module or port that `docs/architecture/` does not draw, other than a band's lib.
+  - It needs a reference that `layers.d2` forbids.
+  - It adds a public member that exposes what its box's caption hides, or does what another box owns.
   - It meets two documents at one level that disagree.
 - A copy of another box's code is never the way around a stop; ADR-0014 rejects it.
 - Report every break: two documents in the chain that disagree about the work. Build to the higher one. A break report and a stop quote the texts at stake, name their levels and say what you built; the maintainer decides every change to their documents.

@@ -7,7 +7,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
-import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW, type WebviewToExtension } from './messages';
+import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW, type WebviewToExtension } from '../../src/wire/messages';
 import {
   at, compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, lastToldElement, member,
   panelClient, required,
@@ -238,7 +238,7 @@ describe('RecordPanel — struct row conflict color follows collapse state', () 
     fireEvent.click(within(required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row")).getByText('▼'));
     await waitFor(() => expect(screen.queryByText('X1')).not.toBeInTheDocument());
     const structRow = required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row");
-    expect(structRow.style.backgroundColor).toBe('var(--vscode-modbench-conflict-rowOverride)');
+    expect(structRow.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
   });
 
   it('expanded: the struct row loses its own background, and only the differing child is tinted', async () => {
@@ -249,7 +249,7 @@ describe('RecordPanel — struct row conflict color follows collapse state', () 
     const x1Row = required(screen.getByText('X1').closest('tr'), "X1's row");
     const x2Row = required(screen.getByText('X2').closest('tr'), "X2's row");
     expect(structRow.style.backgroundColor).toBe('');
-    expect(x1Row.style.backgroundColor).toBe('var(--vscode-modbench-conflict-rowOverride)');
+    expect(x1Row.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
     expect(x2Row.style.backgroundColor).toBe('');
   });
 
@@ -265,7 +265,7 @@ describe('RecordPanel — struct row conflict color follows collapse state', () 
     await waitFor(() => expect(screen.queryByText('X1')).not.toBeInTheDocument());
 
     const structRow = required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row");
-    expect(structRow.style.backgroundColor).toBe('var(--vscode-modbench-conflict-rowOverride)');
+    expect(structRow.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
   });
 });
 

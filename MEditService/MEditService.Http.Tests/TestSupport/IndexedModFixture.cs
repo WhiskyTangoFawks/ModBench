@@ -39,9 +39,7 @@ public sealed class IndexedModFixture : IDisposable
     public FormKey OtherNpc { get; }
 
     private IndexedModFixture(
-        bool track, string pluginName, bool isLight = false, bool persistent = false,
-        INotificationPublisher? notifications = null, SourcePreset preset = SourcePreset.Edits,
-        Action<string>? beforeTrack = null)
+        bool track, string pluginName, bool isLight = false, INotificationPublisher? notifications = null)
     {
         var holder = new LoadOrderHolder();
         ActualPluginName = pluginName;
@@ -69,34 +67,22 @@ public sealed class IndexedModFixture : IDisposable
         Holder = Index.Reconcile(holder,
             GameDirectory,
             [Entry],
-            GameRelease.Fallout4,
-            persistent ? InstanceRoot : null);
+            GameRelease.Fallout4);
 
         if (track)
         {
-            beforeTrack?.Invoke(ModFolder);
             new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(Holder.Current, ModFolderOrigin, preset)
+                .TrackModAsync(Holder.Current, ModFolderOrigin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
     }
 
     public static IndexedModFixture Tracked() => new(track: true, PluginName);
 
-    /// <summary>Tracked under the Everything preset, so assets alongside the plugin are git-tracked
-    /// too. <paramref name="beforeTrack"/> writes any asset files into the mod folder before Track's
-    /// own initial commit picks them up.</summary>
-    public static IndexedModFixture TrackedEverything(Action<string>? beforeTrack = null) =>
-        new(track: true, PluginName, preset: SourcePreset.Everything, beforeTrack: beforeTrack);
-
     /// <summary>Tracked, with every projection the index publishes recorded: what a snapshot's
     /// validation reaches the front end as (ADR-0014).</summary>
     public static IndexedModFixture Tracked(INotificationPublisher notifications) =>
         new(track: true, PluginName, notifications: notifications);
-
-    /// <summary>Tracked, over a persistent index file keyed on <see cref="InstanceRoot"/>, so a second
-    /// Index over the same instance starts warm — the shape a restart has.</summary>
-    public static IndexedModFixture TrackedPersistent() => new(track: true, PluginName, persistent: true);
 
     /// <summary>The load order snapshot this fixture's one plugin is, for a caller reconciling a
     /// second Index over the same instance.</summary>
@@ -107,8 +93,6 @@ public sealed class IndexedModFixture : IDisposable
         new(track: true, pluginName, isLight: true);
 
     public static IndexedModFixture Untracked() => new(track: false, PluginName);
-
-    public static IndexedModFixture TrackedAs(string pluginName) => new(track: true, pluginName);
 
     public const string NpcEditorId = "FixtureNpc";
     public const string RaceEditorId = "FixtureRace";

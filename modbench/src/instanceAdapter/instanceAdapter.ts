@@ -246,6 +246,13 @@ export interface Written {
 
 export type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
+/** A mark on a file of an origin, with the path it has once marked, or why it was refused before
+ *  anything changed. */
+export type OriginFileMarked =
+  | { readonly gone: true }
+  | { readonly gone: false; readonly wrote: boolean; readonly relativePath: string }
+  | { readonly gone: false; readonly refusal: string };
+
 /** The refusal of a new mod whose name a folder already holds: one wording for create and install. */
 export const modNameTakenRefusal = (name: string): string =>
   `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
@@ -261,7 +268,7 @@ export async function newModNameRefusal(adapter: Pick<InstanceAdapter, 'entryFol
 /** Whether the game gets a file of a mod or of Overwrite. */
 export type OriginFileMark = 'Excluded' | 'Included';
 
-/** The refusal of a mark on a downloaded file that is gone. */
+/** The refusal of a mark on a file that is gone. */
 export const goneFromDisk = (name: string): string => `"${name}" is gone from disk.`;
 
 /** What a subscriber disposes of to hear no more. */
@@ -272,19 +279,30 @@ export interface Subscription {
 /** Where a file's contents come from: a mod, or the files the game wrote at run time. */
 export type FileOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
 
-/** One file of an origin, by the relative path the origin's own tree names it with, and where it
- *  is read from. */
-export interface OriginFile {
+/** A folder in an origin, by the relative path the origin's own tree names it with, where it
+ *  sits, and whether the mod manager keeps it from the game, by its own mark or a folder's above
+ *  it. */
+export interface OriginFolder {
   readonly relativePath: string;
   readonly path: string;
+  readonly excluded: boolean;
+}
+
+/** A file in an origin, as a folder is, and where it is read from: a link's target.
+ *  `excludedByName` holds when its own name carries the mark, whatever its folder's. */
+export interface OriginFile extends OriginFolder {
+  readonly sourcePath: string;
+  readonly excludedByName: boolean;
 }
 
 /** An origin's files: the origin they take, the folder they are in (none for a name that gives
- *  it none), and each file. `notes` names each entry the listing skipped, one line apiece. */
+ *  it none), each file, and each folder below it. `notes` names each entry the listing skipped,
+ *  one line apiece. */
 export interface OriginFiles {
   readonly origin: string;
   readonly folder: string | undefined;
   readonly files: readonly OriginFile[];
+  readonly folders: readonly OriginFolder[];
   readonly notes: readonly string[];
 }
 
@@ -361,10 +379,10 @@ export interface InstanceAdapter {
   // Put and rename in mods/.
   /** Refuses a folder already there, whatever it holds, matched as the manager matches names. */
   createModFolder(mod: string): Promise<void>;
-  /** Marks a file or folder by its path in the origin's tree; a mark already true changes nothing.
-   *  Refuses a path outside the origin, an include its folder overrides, and a mark that would
-   *  replace a file. */
-  markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<Marked>;
+  /** Marks a file or folder by its own name; a mark already true changes nothing. Refuses an
+   *  include on an unmarked name a folder excludes, and a mark replacing a file. Rejects a path
+   *  outside the origin. */
+  markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<OriginFileMarked>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** Makes the folder of a mod that is new. Refuses a folder already there, whatever it holds,

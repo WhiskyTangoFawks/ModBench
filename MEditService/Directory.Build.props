@@ -36,7 +36,7 @@
 
   <!-- RS0030 is at error for every project (.editorconfig); no folder carries its own severity.
        BannedSymbols.txt (time, blocking waits) binds unconditionally. BannedSymbols.Mutagen.txt
-       (the live-object namespaces) binds only the eight projects named above.
+       (the live-object namespaces) binds only the projects named above.
        BannedSymbols.SyncOverAsync.txt binds every production box and no test project. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0">

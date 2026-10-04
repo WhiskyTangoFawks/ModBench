@@ -7,19 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Pinned to 0.53.x: 0.54.0 reintroduces a binary round-trip defect confined to the lazy
+    <!-- Pinned to 0.53.x: 0.54.0 reintroduces a binary round-trip defect in the lazy
          binary-overlay reader (Fallout4ModBinaryOverlay / ModFactory.ImportGetter) — an
          alphabetized ObjectTemplate_Registration.AllRecordTypes splits every on-disk
          OBTF/FULL/OBTS template in two on read, and the write serializes the inflated list
-         (FO4 weapon ObjectTemplates). Confirmed still failing
-         BinaryRoundTripGateTests.LazyOverlayReloadAndRewrite_ProducesByteIdenticalOutput
-         (MEditService.Tests/RealData) as of this pin. The production save path
-         (PluginWriter.SaveAsync, .SaveAsync_ReloadAndResave_ProducesByteIdenticalOutput in the same
-         file) goes through ModFactory.ImportSetter's genuine deep parse instead and does NOT reach
-         this defect — so a green save-path test is not evidence 0.54.0 is safe; the overlay test is
-         the one that gates a bump. LoadOrder's own read/indexing path uses the same
-         ModFactory.ImportGetter overlay this bug lives in, so this isn't a defect confined to an
-         unused code path. Move the pin forward only once the regression is confirmed fixed upstream. -->
+         (FO4 weapon ObjectTemplates). This adapter's reads go through that overlay. No
+         test gates a bump: move the pin forward only once the regression is confirmed fixed
+         upstream. -->
     <PackageReference Include="Mutagen.Bethesda.Fallout4" Version="0.53.1" />
     <PackageReference Include="Roslynator.Analyzers" Version="4.15.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

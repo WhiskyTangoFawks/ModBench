@@ -2,6 +2,7 @@
 // so its identity and every watcher armed on it survive the release.
 
 import { basename } from 'node:path';
+import { ARCHIVE_EXTENSIONS } from './archiveExtensions';
 import { detectRoot } from './detectRoot';
 import { extractArchive, type Runner } from './extractArchive';
 import { markDownloadInstalled } from './installedMark';
@@ -26,9 +27,7 @@ export interface InstallMeta {
   installedFiles?: readonly InstalledFileId[];
 }
 
-/** The archive extensions install can extract — its one export about which files it takes.
- *  Every picker and the Downloads view read this list, compared case-insensitively. */
-export const ARCHIVE_EXTENSIONS = ['zip', '7z', 'rar'] as const;
+export { ARCHIVE_EXTENSIONS };
 
 const archiveExtensionPattern = new RegExp(String.raw`\.(${ARCHIVE_EXTENSIONS.join('|')})$`, 'i');
 

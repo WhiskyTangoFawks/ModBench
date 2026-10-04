@@ -3,18 +3,21 @@
 shape: sequence_diagram
 surfaces: "Mods · Plugins · Toolbox · Downloads" {class: driving}
 cmds: "modlist · plugins · instance · downloads commands" {class: core}
-instanceloader: @../target-architecture.modbench_driven.instanceloader
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
-client: @../target-architecture.modbench_driven.client
+activation: @../target-architecture.modbench_drivers.activation
+activation.label: Activation
+client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
-instanceadapter: @../target-architecture.modbench_driven.instanceadapter
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 instance: @../target-architecture.modbench_data.instance
 instance.label: "Instance\nmod order · plugins.txt · the mod manager's configuration · mods · downloaded files"
 views: "every view" {class: driving}
 
 surfaces -> cmds: "the gesture: its Argument and Options" {class: loadorder}
-instanceloader -> cmds: "a system command: the value" {class: loadorder}
+instanceloader -> activation: value {class: loadorder}
+activation -> cmds: "a system command: the value" {class: loadorder}
 cmds -> client: "for a move: their masters" {class: query}
 client -> cmds: the masters {class: query}
 cmds -> instanceadapter: "the change: lines, folders and file names" {class: loadorder}
@@ -23,10 +26,12 @@ uninstall: "an uninstall, from a downloaded file" {
 }
 instanceadapter -> instance: bytes {class: loadorder}
 cmds -> surfaces: "applied or refusal, per item" {class: loadorder}
+surfaces -> instanceloader: refresh {class: loadorder}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> views: value {class: loadorder}
-instanceloader -> cmds: "put load order: the snapshot" {class: loadorder}
+instanceloader -> activation: value {class: loadorder}
+activation -> cmds: "put load order: the snapshot" {class: loadorder}
 cmds."the rest is index-load-order"
 
 refused: "refused, before any write" {

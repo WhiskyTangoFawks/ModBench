@@ -59,4 +59,18 @@ public sealed class ColorAlphaConflictTests
         Assert.Equal(ConflictThis.IdenticalToMaster, OverrideState(
             Column("refr", "Primitive"), """{"Color":"#00102030"}""", """{"Color":"#102030"}"""));
     }
+
+    [Fact]
+    public void AColorHoldingNoAlphaOnlyUnderTheUnionLeafItsStructNames_ThatDiffersOnlyInThatAlpha_IsIdenticalToMaster()
+    {
+        var tint = new FieldMetadata("Tint", ColorReading.ApiType, false, [], [], HoldsAlpha: true);
+        var union = new FieldMetadata("Data", "struct", false, [], [], Fields:
+        [
+            new FieldMetadata(LoquiUnions.UnionTypeDiscriminator, "enum", false, [], [new EnumMember("WithAlpha"), new EnumMember("WithoutAlpha")], IsDiscriminator: true),
+            tint with { Variants = new Dictionary<string, FieldMetadata> { ["WithoutAlpha"] = tint with { HoldsAlpha = false } } },
+        ]);
+
+        Assert.Equal(ConflictThis.IdenticalToMaster, OverrideState(union,
+            """{"MutagenObjectType":"WithoutAlpha","Tint":"#00102030"}""", """{"MutagenObjectType":"WithoutAlpha","Tint":"#102030"}"""));
+    }
 }

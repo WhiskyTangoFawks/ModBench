@@ -51,6 +51,51 @@
           "default": "",
           "scope": "resource",
           "description": "The game directory (the folder containing the game executable and Data/). A Steam install or a stock game folder. Leave blank to fall back to ModOrganizer.ini's gamePath, then Steam auto-detect."
+        },
+        "modbench.mods.greyInactiveFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "Grey a file the game does not get, in the Mods view and the Explorer: another copy wins its path, it is excluded, or its mod is disabled."
+        },
+        "modbench.mods.indicators.overwritesLooseFiles.badge": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwrites loose files: badge a mod's row in the Mods view when a file of the mod wins over another copy."
+        },
+        "modbench.mods.indicators.overwritesLooseFiles.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwrites loose files: colour a mod's name in the Mods view when a file of the mod wins over another copy."
+        },
+        "modbench.mods.indicators.overwrittenLooseFiles.badge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Overwritten loose files: badge a mod's row in the Mods view when a file of the mod loses to another copy, and the mod is not Redundant."
+        },
+        "modbench.mods.indicators.overwrittenLooseFiles.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwritten loose files: colour a mod's name in the Mods view when a file of the mod loses to another copy, and the mod is not Redundant."
+        },
+        "modbench.mods.indicators.redundant.badge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Redundant: badge a mod's row in the Mods view when the mod has a file the game could get, and every such file loses to another copy."
+        },
+        "modbench.mods.indicators.redundant.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Redundant: colour a mod's name in the Mods view when the mod has a file the game could get, and every such file loses to another copy."
+        },
+        "modbench.mods.indicators.containsExcludedFiles.badge": {
+          "type": "boolean",
+          "default": false,
+          "description": "Contains excluded files: badge a mod's row in the Mods view when the mod has an excluded file."
+        },
+        "modbench.mods.indicators.containsExcludedFiles.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Contains excluded files: colour a mod's name in the Mods view when the mod has an excluded file."
         }
       }
     },
@@ -362,6 +407,21 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.mod.goToMod",
+        "title": "Go to Mod",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.mod.excludeFile",
+        "title": "Exclude Mod File",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.mod.includeFile",
+        "title": "Include Mod File",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.mod.enable",
         "title": "Enable Mod",
         "category": "Modbench"
@@ -555,7 +615,19 @@
         },
         {
           "command": "modbench.mod.openFolder",
-          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleFolder"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleOpenFolderRow"
+        },
+        {
+          "command": "modbench.mod.goToMod",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleGoToModRow"
+        },
+        {
+          "command": "modbench.mod.excludeFile",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsIncludedFile"
+        },
+        {
+          "command": "modbench.mod.includeFile",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsExcludedFile"
         },
         {
           "command": "modbench.mod.enable",
@@ -1004,6 +1076,31 @@
           "group": "1_open@1"
         },
         {
+          "command": "modbench.mod.openFolder",
+          "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem == folder)",
+          "group": "1_open@1"
+        },
+        {
+          "command": "modbench.mod.goToMod",
+          "when": "view == modbench.modList && viewItem =~ /\\bconflict\\b/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "modbench.mod.excludeFile",
+          "when": "view == modbench.modList && viewItem =~ /\\bfile\\b/ && viewItem =~ /\\bincluded\\b/",
+          "group": "2_change@1"
+        },
+        {
+          "command": "modbench.mod.includeFile",
+          "when": "view == modbench.modList && viewItem =~ /\\bfile\\b/ && viewItem =~ /\\bexcluded\\b/",
+          "group": "2_change@1"
+        },
+        {
+          "command": "modbench.copyValue",
+          "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem == folder)",
+          "group": "5_copy@1"
+        },
+        {
           "command": "modbench.mod.install",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
           "group": "downloadActions@1"
@@ -1326,7 +1423,47 @@
     ],
     "colors": [
       {
-        "id": "modbench.conflict.rowOverride",
+        "id": "modbench.modOverwritesLooseFiles",
+        "description": "The name of a mod in the Mods view that carries Overwrites loose files.",
+        "defaults": {
+          "dark": "charts.green",
+          "light": "charts.green",
+          "highContrast": "charts.green",
+          "highContrastLight": "charts.green"
+        }
+      },
+      {
+        "id": "modbench.modOverwrittenLooseFiles",
+        "description": "The name of a mod in the Mods view that carries Overwritten loose files.",
+        "defaults": {
+          "dark": "charts.red",
+          "light": "charts.red",
+          "highContrast": "charts.red",
+          "highContrastLight": "charts.red"
+        }
+      },
+      {
+        "id": "modbench.modRedundant",
+        "description": "The name of a mod in the Mods view that carries Redundant.",
+        "defaults": {
+          "dark": "disabledForeground",
+          "light": "disabledForeground",
+          "highContrast": "disabledForeground",
+          "highContrastLight": "disabledForeground"
+        }
+      },
+      {
+        "id": "modbench.modContainsExcludedFiles",
+        "description": "The name of a mod in the Mods view that carries Contains excluded files.",
+        "defaults": {
+          "dark": "charts.yellow",
+          "light": "charts.yellow",
+          "highContrast": "charts.yellow",
+          "highContrastLight": "charts.yellow"
+        }
+      },
+      {
+        "id": "modbench.conflictRowOverride",
         "description": "A record field row where copies change the field and none disagrees with another.",
         "defaults": {
           "dark": "#4CAF5033",
@@ -1336,7 +1473,7 @@
         }
       },
       {
-        "id": "modbench.conflict.rowConflict",
+        "id": "modbench.conflictRowConflict",
         "description": "A record field row where copies disagree on the field.",
         "defaults": {
           "dark": "#FF980033",
@@ -1346,7 +1483,7 @@
         }
       },
       {
-        "id": "modbench.conflict.identicalToMaster",
+        "id": "modbench.conflictIdenticalToMaster",
         "description": "A record field cell whose copy is unchanged from the master.",
         "defaults": {
           "dark": "#9696962E",
@@ -1356,7 +1493,7 @@
         }
       },
       {
-        "id": "modbench.conflict.override",
+        "id": "modbench.conflictOverride",
         "description": "A record field cell changed from the master, with no other copy disagreeing.",
         "defaults": {
           "dark": "#4CAF502E",
@@ -1366,7 +1503,7 @@
         }
       },
       {
-        "id": "modbench.conflict.conflictWins",
+        "id": "modbench.conflictWins",
         "description": "A record field cell that disagrees with another copy and wins.",
         "defaults": {
           "dark": "#FF98002E",
@@ -1376,7 +1513,7 @@
         }
       },
       {
-        "id": "modbench.conflict.conflictLoses",
+        "id": "modbench.conflictLoses",
         "description": "A record field cell that disagrees with another copy and loses.",
         "defaults": {
           "dark": "#F443362E",
@@ -1386,7 +1523,7 @@
         }
       },
       {
-        "id": "modbench.conflict.conflictLosesText",
+        "id": "modbench.conflictLosesText",
         "description": "The text of a record field cell that disagrees with another copy and loses.",
         "defaults": {
           "dark": "#F44336",

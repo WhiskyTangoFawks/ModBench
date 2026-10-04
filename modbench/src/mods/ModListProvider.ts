@@ -1,29 +1,25 @@
 import * as vscode from 'vscode';
-import type { FileOrigin, Mod, ModFile, ModlistEntry, Separator } from '../instanceLoader/instance';
-import { modOrigin } from '../instanceLoader/fileConflictIndex';
+import type { FileOrigin, Mod, OriginFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
+import { goToModCandidates, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
-import { groupModlist, type ModlistTree } from './modlistTree';
-import type { ModStatus, ModStatusResult } from '../instanceLoader/statusChecker';
+import { groupModlist, type ModlistGroup, type ModlistTree } from './modlistTree';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
-import { setModsEnabled as setModsEnabledCommand, type ModlistAccess } from '../modlist/modlist';
-import { filesIn, FileNode, FolderNode } from './modFiles';
+import {
+  setModsEnabled as setModsEnabledCommand, type MarkedFile, type ModlistAccess, type OriginFileMark, type OriginFileRef,
+} from '../modlist/modlist';
+import {
+  anyNamed, expanderOver, fileLabel, fileRowUri, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode, FILE_MARKS,
+  type ChildrenShown,
+} from './modFiles';
+import { modRowUri } from './modIndicators';
 
 /** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
 export type SortDirection = 'losingAtTop' | 'winningAtTop';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
-
-/** The pinned Overwrite row's kind and `contextValue`, which package.json's `when` clauses match
- *  on: the row stands for the mod manager's folder, so it is named as the value names it. */
-export const OVERWRITE_NODE_KIND = OVERWRITE_ORIGIN;
-
-const RUNTIME_OUTPUT: FileOrigin = { kind: 'runtimeOutput' };
-
-const expanderOver = (files: readonly ModFile[]): vscode.TreeItemCollapsibleState =>
-  (files.length === 0 ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed);
 
 // `DataTransferItem.value` is `any` — handleDrag, below, is this provider's only writer of it.
 function isDraggedRows(value: unknown): value is DraggedRows {
@@ -61,15 +57,19 @@ interface UnconfirmedRename {
 
 type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
 
+type FileRef = { readonly kind: 'file' } & OriginFileRef;
+
+type RowRef = EntryRef | FileRef;
+
 interface UnconfirmedShape {
   /** What the write changes: what its refusal forgets, and what its line names. */
-  readonly subjects: EntryRef[];
+  readonly subjects: RowRef[];
   /** The rows that carry the mark. */
-  readonly rows: readonly EntryRef[];
+  readonly rows: readonly RowRef[];
   readonly covered: (value: InstanceValue) => boolean;
   /** A value that shows the write's first step but not its last: the write in progress. */
   readonly partway?: (value: InstanceValue) => boolean;
-  readonly unmet: (subjects: readonly EntryRef[]) => string;
+  readonly unmet: (subjects: readonly RowRef[], value: InstanceValue) => string;
   marked: boolean;
   partwaySeen: boolean;
   differedOnce: boolean;
@@ -77,6 +77,22 @@ interface UnconfirmedShape {
 }
 
 const sameEntry = (a: EntryRef, b: EntryRef): boolean => a.kind === b.kind && a.name === b.name;
+
+const fileRef = (file: OriginFileRef): FileRef => ({ kind: 'file', ...file });
+
+function sameRow(a: RowRef, b: RowRef): boolean {
+  if (a.kind === 'file' || b.kind === 'file') {
+    return a.kind === 'file' && b.kind === 'file' && sameOrigin(a.origin, b.origin) && a.relativePath === b.relativePath;
+  }
+  return sameEntry(a, b);
+}
+
+function fileAt(value: InstanceValue, origin: FileOrigin, relativePath: string): OriginFile | undefined {
+  const files = origin.kind === 'mod' ? value.filesByMod.get(origin.name) ?? [] : value.overwriteFiles;
+  return files.find((file) => file.relativePath === relativePath);
+}
+
+const fileKey = ({ origin, relativePath }: OriginFileRef): string => fileRowUri(origin, relativePath).path;
 
 const isListed = (value: InstanceValue, ref: EntryRef): boolean => value.mods.some((entry) => sameEntry(entry, ref));
 
@@ -94,7 +110,10 @@ function travellingWith(entries: readonly ModlistEntry[], moved: readonly EntryR
   return travelling;
 }
 
-const quoted = (ref: EntryRef): string => (ref.kind === 'separator' ? `Separator "${ref.name}"` : `"${ref.name}"`);
+function quoted(ref: RowRef): string {
+  if (ref.kind === 'file') return `"${fileLabel(ref)}"`;
+  return ref.kind === 'separator' ? `Separator "${ref.name}"` : `"${ref.name}"`;
+}
 
 function markRow(row: vscode.TreeItem): void {
   row.iconPath = new vscode.ThemeIcon('sync~spin');
@@ -104,25 +123,6 @@ function markRow(row: vscode.TreeItem): void {
 function whatTheDiskShows(shown: boolean | undefined, on: string, off: string): string {
   if (shown === undefined) return 'it is gone from the disk';
   return `the disk now shows it ${shown ? on : off}`;
-}
-
-function statusIconId(status?: ModStatusResult): string {
-  switch (status?.status.kind) {
-    case 'conflicts':
-    case 'overrides':
-      return 'warning';
-    case 'ok':
-    case undefined:
-      return 'package';
-  }
-}
-
-function statusLabel(status: ModStatus): string {
-  switch (status.kind) {
-    case 'conflicts': return `⚠ ${status.count} conflicts`;
-    case 'overrides': return `⚠ Overrides ${status.count}`;
-    case 'ok': return '';
-  }
 }
 
 // Selection and expansion follow a row across a change on disk, and a mod and a separator may
@@ -155,41 +155,32 @@ export class SeparatorNode extends vscode.TreeItem {
   constructor(
     public readonly separator: Separator,
     public readonly mods: Mod[],
-    shown: 'allMods' | 'matchingMods' = 'allMods',
+    public readonly shown: ChildrenShown = 'all',
   ) {
-    super(separator.name, separatorExpander(mods, shown));
+    super(separator.name, expanderOver(mods, shown));
     this.id = rowIdentity(this.kind, separator.name);
     this.contextValue = 'separator';
   }
 }
 
-function separatorExpander(mods: readonly Mod[], shown: 'allMods' | 'matchingMods'): vscode.TreeItemCollapsibleState {
-  if (mods.length === 0) return vscode.TreeItemCollapsibleState.None;
-  return shown === 'matchingMods' ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
-}
-
-/** A non-'ok' status overlays a badge onto the icon, description, and tooltip. */
 export class ModNode extends vscode.TreeItem {
   readonly kind = 'mod' as const;
   readonly nexusModId: string | undefined;
   constructor(
-    public readonly mod: Mod, status?: ModStatusResult, public readonly facts?: ModFacts,
-    public readonly files: readonly ModFile[] = [],
+    public readonly mod: Mod, public readonly facts?: ModFacts,
+    public readonly files: readonly OriginFile[] = [],
+    public readonly folders: readonly OriginFolder[] = [],
+    public readonly shown: ChildrenShown = 'all',
   ) {
-    super(mod.name, expanderOver(files));
+    super(mod.name, expanderOver([...files, ...folders], shown));
     this.id = rowIdentity(this.kind, mod.name);
+    this.resourceUri = modRowUri(mod.name);
     this.nexusModId = mod.nexusId;
-    const baseTooltip = [mod.name, mod.version, mod.nexusId, mod.archiveFilename]
+    this.description = mod.version ?? '';
+    this.tooltip = [mod.name, mod.version, mod.nexusId, mod.archiveFilename]
       .filter((s): s is string => !!s)
       .join(' · ');
-    this.description = mod.version ?? '';
-    this.tooltip = baseTooltip;
-    this.iconPath = new vscode.ThemeIcon(statusIconId(status));
-    if (status && status.status.kind !== 'ok') {
-      const label = statusLabel(status.status);
-      this.description = [this.description, label].filter(Boolean).join(' ');
-      this.tooltip = [baseTooltip, label, ...status.conflictLines].filter(Boolean).join('\n');
-    }
+    this.iconPath = new vscode.ThemeIcon('package');
     this.contextValue = modContextValue(mod, facts);
     this.checkboxState = mod.enabled
       ? vscode.TreeItemCheckboxState.Checked
@@ -205,17 +196,30 @@ export function modOfRow(value: unknown): string | undefined {
 /** Pinned row over the instance's `overwrite/` folder. Not a modlist.txt entry, so it has no
  *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
 export class OverwriteNode extends vscode.TreeItem {
-  readonly kind = OVERWRITE_NODE_KIND;
-  constructor(public readonly files: readonly ModFile[], manager: string) {
-    super('Overwrite', expanderOver(files));
+  readonly kind = OVERWRITE_ORIGIN;
+  readonly listed: { readonly files: readonly OriginFile[]; readonly folders: readonly OriginFolder[] };
+  readonly shown: ChildrenShown;
+  constructor(
+    public readonly files: readonly OriginFile[], manager: string, public readonly folders: readonly OriginFolder[] = [],
+    found?: { readonly files: readonly OriginFile[]; readonly folders: readonly OriginFolder[] },
+  ) {
+    const listed = found ?? { files, folders };
+    const shown = found ? 'matching' : 'all';
+    super(OVERWRITE_LABEL, expanderOver([...listed.files, ...listed.folders], shown));
+    this.listed = listed;
+    this.shown = shown;
     this.id = this.kind;
-    this.contextValue = OVERWRITE_NODE_KIND;
+    this.contextValue = OVERWRITE_ORIGIN;
     const fileCount = files.length;
     if (fileCount > 0) this.description = fileCount.toLocaleString();
     this.iconPath = fileCount > 0
       ? new vscode.ThemeIcon('folder', new vscode.ThemeColor('charts.red'))
       : new vscode.ThemeIcon('folder');
     this.tooltip = `The files tools wrote while ${manager} ran them, which win over every mod.`;
+  }
+
+  lists(): boolean {
+    return this.listed.files.length + this.listed.folders.length > 0;
   }
 }
 
@@ -240,7 +244,6 @@ export class ModListProvider
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private tree?: ModlistTree;
-  private readonly parents = new WeakMap<ModNode, SeparatorNode>();
   private cachedEntries?: ModlistEntry[];
   private modsHoldingPlugin = new Set<string>();
   private filterText = '';
@@ -252,6 +255,7 @@ export class ModListProvider
   private readonly unconfirmed = new Map<string, UnconfirmedWrite>();
   private readonly unconfirmedRenames = new Map<string, UnconfirmedRename>();
   private readonly unconfirmedShapes = new Set<UnconfirmedShape>();
+  private readonly exclusionLandings = new Map<string, string>();
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
@@ -301,7 +305,7 @@ export class ModListProvider
           shape.differedOnce = true;
           continue;
         }
-        this.log(shape.unmet(shape.subjects));
+        this.log(shape.unmet(shape.subjects, value));
       }
       this.dropShape(shape);
     }
@@ -313,8 +317,8 @@ export class ModListProvider
   }
 
   private markShape(
-    subjects: readonly EntryRef[], covered: UnconfirmedShape['covered'], unmet: UnconfirmedShape['unmet'],
-    { carriers, partway }: { carriers?: readonly EntryRef[]; partway?: UnconfirmedShape['partway'] } = {},
+    subjects: readonly RowRef[], covered: UnconfirmedShape['covered'], unmet: UnconfirmedShape['unmet'],
+    { carriers, partway }: { carriers?: readonly RowRef[]; partway?: UnconfirmedShape['partway'] } = {},
   ): void {
     const own = [...subjects];
     const rows = carriers ?? own;
@@ -347,6 +351,35 @@ export class ModListProvider
     }
   }
 
+  /** Each file's row stays as it is, marked, until the disk shows the file's own name marked where
+   *  the write put it, its own path until the write says. */
+  markExclusions(files: readonly OriginFileRef[], mark: OriginFileMark): void {
+    const { state } = FILE_MARKS[mark];
+    for (const file of files) {
+      const key = fileKey(file);
+      this.exclusionLandings.delete(key);
+      const landed = (value: InstanceValue) => fileAt(value, file.origin, this.exclusionLandings.get(key) ?? file.relativePath);
+      this.markShape([fileRef(file)], (value) => {
+        const covered = landed(value)?.excludedByName === (mark === 'Excluded');
+        if (covered) this.exclusionLandings.delete(key);
+        return covered;
+      }, (_, value) => {
+        const shown = landed(value) === undefined ? 'it is gone from the disk' : 'the disk does not show it';
+        this.exclusionLandings.delete(key);
+        return `${quoted(fileRef(file))} was ${state}, and ${shown}.`;
+      });
+    }
+  }
+
+  exclusionLandedAt(file: MarkedFile): void {
+    this.exclusionLandings.set(fileKey(file), file.markedPath);
+  }
+
+  forgetUnconfirmedExclusions(files: readonly OriginFileRef[]): void {
+    for (const file of files) this.exclusionLandings.delete(fileKey(file));
+    this.forgetUnconfirmedShape(files.map(fileRef));
+  }
+
   private separatorHolding(index: number): EntryRef | undefined {
     return this.instanceValue.mods.slice(index).find((entry) => entry.kind === 'separator');
   }
@@ -376,11 +409,11 @@ export class ModListProvider
   }
 
   /** A refused or failed write shows the disk's shape at once, with no mark. */
-  forgetUnconfirmedShape(refs: readonly EntryRef[]): void {
+  forgetUnconfirmedShape(refs: readonly RowRef[]): void {
     if (refs.length === 0) return;
     let shown = false;
     for (const shape of this.unconfirmedShapes) {
-      const left = shape.subjects.filter((own) => !refs.some((ref) => sameEntry(ref, own)));
+      const left = shape.subjects.filter((own) => !refs.some((ref) => sameRow(ref, own)));
       shown ||= shape.marked && left.length < shape.subjects.length;
       shape.subjects.splice(0, shape.subjects.length, ...left);
       if (left.length === 0) this.dropShape(shape);
@@ -388,8 +421,15 @@ export class ModListProvider
     if (shown) this.render();
   }
 
-  private shapeMarked(ref: EntryRef): boolean {
-    return [...this.unconfirmedShapes].some((shape) => shape.marked && shape.rows.some((row) => sameEntry(row, ref)));
+  private shapeMarked(ref: RowRef): boolean {
+    return [...this.unconfirmedShapes].some((shape) => shape.marked && shape.rows.some((row) => sameRow(row, ref)));
+  }
+
+  private withFileMarks(rows: (FolderNode | FileNode)[]): (FolderNode | FileNode)[] {
+    for (const row of rows) {
+      if (row instanceof FileNode && this.shapeMarked(fileRef(row.ref))) markRow(row);
+    }
+    return rows;
   }
 
   private settleUnconfirmedRenames(value: InstanceValue): void {
@@ -461,6 +501,7 @@ export class ModListProvider
     this.unconfirmedRenames.clear();
     for (const shape of this.unconfirmedShapes) clearTimeout(shape.timer);
     this.unconfirmedShapes.clear();
+    this.exclusionLandings.clear();
   }
 
   dispose(): void {
@@ -549,10 +590,17 @@ export class ModListProvider
   }
 
   async getChildren(element?: ModlistNode): Promise<ModlistNode[]> {
-    if (element instanceof SeparatorNode) return this.separatorChildren(element);
-    if (element instanceof ModNode) return filesIn(element, modOrigin(element.mod.name), element.files);
-    if (element instanceof OverwriteNode) return filesIn(element, RUNTIME_OUTPUT, element.files);
-    if (element instanceof FolderNode) return filesIn(element, element.origin, element.files, element.path);
+    if (element instanceof SeparatorNode) return element.mods.map((m) => this.modNode(m, element.shown));
+    if (element instanceof ModNode) {
+      return this.withFileMarks(filesIn(element, modOrigin(element.mod.name), element.files, element.folders, undefined, this.within(element)));
+    }
+    if (element instanceof OverwriteNode) {
+      return this.withFileMarks(filesIn(element, RUNTIME_OUTPUT, element.listed.files, element.listed.folders, undefined, this.within(element)));
+    }
+    if (element instanceof FolderNode) {
+      return this.withFileMarks(
+        filesIn(element, element.origin, element.files, element.folders, element.folder.relativePath, this.within(element)));
+    }
     if (element) return [];
     await this.firstRead.settled; // never render before the Instance has actually read once
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
@@ -581,26 +629,19 @@ export class ModListProvider
     const groups = [...tree.groups].reverse();
     if (this.filterText && !this.groupingOn) {
       const flat = [...ungrouped, ...groups.flatMap((g) => this.losingFirst(g.mods))];
-      return { ungrouped: flat.filter((m) => this.matches(m.name)).map(this.toModNode), separators: [] };
+      return { ungrouped: this.matchingModNodes(flat), separators: [] };
     }
-    if (!this.filterText) {
-      return {
-        ungrouped: ungrouped.map(this.toModNode),
-        separators: groups.map((g) => this.separatorNode(g.separator, this.inViewOrder(g.mods))),
-      };
-    }
-    const separators: ModlistNode[] = [];
-    for (const g of groups) {
-      if (this.matches(g.separator.name)) {
-        separators.push(this.separatorNode(g.separator, this.inViewOrder(g.mods)));
-        continue;
-      }
-      const matchingMods = g.mods.filter((m) => this.matches(m.name));
-      if (matchingMods.length > 0) {
-        separators.push(this.separatorNode(g.separator, this.inViewOrder(matchingMods), 'matchingMods'));
-      }
-    }
-    return { ungrouped: ungrouped.filter((m) => this.matches(m.name)).map(this.toModNode), separators };
+    return {
+      ungrouped: this.filterText ? this.matchingModNodes(ungrouped) : ungrouped.map((m) => this.modNode(m)),
+      separators: groups.flatMap((g) => this.groupRow(g) ?? []),
+    };
+  }
+
+  private groupRow(group: ModlistGroup): SeparatorNode | undefined {
+    if (!this.filterText) return this.separatorNode(group.separator, this.inViewOrder(group.mods));
+    const shown = shownUnder('matching', this.matches, group.separator.name);
+    const mods = shown === 'all' ? group.mods : group.mods.filter(this.isFound);
+    return shown === 'all' || mods.length > 0 ? this.separatorNode(group.separator, this.inViewOrder(mods), shown) : undefined;
   }
 
   private writtenName(entry: ModlistEntry): ModlistEntry {
@@ -609,36 +650,67 @@ export class ModListProvider
     return renamed === undefined ? entry : { ...entry, name: renamed[0] };
   }
 
-  private separatorNode(separator: Separator, mods: Mod[], shown?: 'allMods' | 'matchingMods'): SeparatorNode {
+  private separatorNode(separator: Separator, mods: Mod[], shown?: ChildrenShown): SeparatorNode {
     const row = new SeparatorNode(separator, mods, shown);
     if (this.unconfirmedRenames.get(separator.name)?.marked || this.shapeMarked(separator)) markRow(row);
     return row;
   }
 
   private overwriteNode(): OverwriteNode {
-    return new OverwriteNode(this.instanceValue.overwriteFiles, this.instanceValue.managerNames.manager);
+    const { overwriteFiles, managerNames, overwriteFolders } = this.instanceValue;
+    if (!this.filterText) return new OverwriteNode(overwriteFiles, managerNames.manager, overwriteFolders);
+    const found = narrowToMatches(overwriteFiles, overwriteFolders, this.matches);
+    return new OverwriteNode(overwriteFiles, managerNames.manager, overwriteFolders, found);
   }
 
-  private toModNode = (m: Mod): ModNode => {
+  private isFound = (m: Mod): boolean => this.matches(m.name)
+    || anyNamed(this.instanceValue.filesByMod.get(m.name) ?? [], this.instanceValue.foldersByMod.get(m.name) ?? [], this.matches);
+
+  private matchingModNodes(mods: readonly Mod[]): ModNode[] {
+    return mods.filter(this.isFound).map((m) => this.modNode(m, 'matching'));
+  }
+
+  private modNode(m: Mod, parentShown: ChildrenShown = 'all'): ModNode {
     const write = this.unconfirmed.get(m.name);
-    const row = new ModNode({ ...m, enabled: write?.enabled ?? m.enabled }, this.instanceValue.modStatuses.get(m.name), {
+    const files = this.instanceValue.filesByMod.get(m.name) ?? [];
+    const folders = this.instanceValue.foldersByMod.get(m.name) ?? [];
+    const shown = shownUnder(parentShown, this.matches, m.name);
+    const found = shown === 'matching' ? narrowToMatches(files, folders, this.matches) : { files, folders };
+    const row = new ModNode({ ...m, enabled: write?.enabled ?? m.enabled }, {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked: this.instanceValue.trackedMods.has(m.name),
-    }, this.instanceValue.filesByMod.get(m.name));
+    }, found.files, found.folders, shown);
     if (write?.marked || this.shapeMarked(m)) markRow(row);
     return row;
-  };
+  }
 
-  private separatorChildren(element: SeparatorNode): ModlistNode[] {
-    return element.mods.map((m) => {
-      const row = this.toModNode(m);
-      this.parents.set(row, element);
-      return row;
-    });
+  private within(row: ModNode | OverwriteNode | FolderNode) {
+    const inConflict = (origin: FileOrigin, file: OriginFile) =>
+      goToModCandidates(this.instanceValue.files.get(file.relativePath), origin).length > 0;
+    return { shown: row.shown, matches: this.matches, inConflict };
   }
 
   getParent(element: ModlistNode): ModlistNode | undefined {
     if (element instanceof FolderNode || element instanceof FileNode) return element.parent;
-    return element instanceof ModNode ? this.parents.get(element) : undefined;
+    const group = element instanceof ModNode ? this.groupHolding(element.mod.name) : undefined;
+    return group && this.groupRow(group);
+  }
+
+  /** The row the tree shows for an origin, or undefined when it shows none. */
+  rowFor(origin: FileOrigin): ModNode | OverwriteNode | undefined {
+    if (origin.kind !== 'mod') return this.overwriteNode();
+    const mod = this.instanceValue.mods.find((entry): entry is Mod => entry.kind === 'mod' && entry.name === origin.name);
+    return mod && this.showsMod(mod) ? this.modNode(mod) : undefined;
+  }
+
+  private groupHolding(modName: string): ModlistGroup | undefined {
+    if (this.filterText && !this.groupingOn) return undefined;
+    return this.ensureLoaded().groups.find((g) => g.mods.some((m) => m.name === modName));
+  }
+
+  private showsMod(mod: Mod): boolean {
+    if (!this.filterText) return true;
+    const group = this.groupHolding(mod.name);
+    return group ? this.groupRow(group)?.mods.some((m) => m.name === mod.name) === true : this.isFound(mod);
   }
 
   // modlist.txt is winning-first. View order only.
@@ -650,9 +722,7 @@ export class ModListProvider
     return this.direction === 'winningAtTop' ? [...mods] : this.losingFirst(mods);
   }
 
-  private matches(name: string): boolean {
-    return name.toLowerCase().includes(this.filterLower);
-  }
+  private matches = (name: string): boolean => name.toLowerCase().includes(this.filterLower);
 
   // The check box is an entry point to the same command a context menu click or key reaches
   // (mods.md, Menus and keys): one mod through the same `setModsEnabled`.

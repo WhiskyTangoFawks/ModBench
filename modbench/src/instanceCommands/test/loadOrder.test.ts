@@ -9,25 +9,19 @@ const READY_STATUS: LoadOrderProgress = {
 };
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };
 
-const PLUGIN = {
-  name: 'TestMod.esp', path: '/instance/mods/TestMod/TestMod.esp', origin: 'TestMod',
-  slot: 0, enabled: true, winning: true,
-};
-const LINE_WITHOUT_A_FILE = {
-  name: 'Gone.esp', path: undefined, origin: 'Gone', slot: 1, enabled: true, winning: true,
-};
+const PLUGIN = { name: 'TestMod.esp', path: '/instance/mods/TestMod/TestMod.esp', origin: 'TestMod' };
+const MASTER = { name: 'Master.esm', path: '/game/Data/Master.esm', origin: 'Data' };
+const SENT_PLUGINS = [MASTER, PLUGIN];
+const SENT_ACTIVE = [{ name: 'Master.esm', origin: 'Data' }, { name: PLUGIN.name, origin: PLUGIN.origin }];
+const SENT_LOADED_WITH_NO_LINE = [{ name: 'Master.esm', origin: 'Data' }];
 
 const VALUE: LoadOrderSource = {
   gameName: 'Fallout 4',
   gameRelease: 'Fallout4',
-  gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
-  plugins: [PLUGIN, LINE_WITHOUT_A_FILE],
-  pluginsLoadedWithNoLine: [{ name: 'Master.esm', origin: 'Data' }],
+  loadOrderSnapshot: {
+    plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, dataFolder: '/game/Data',
+  },
 };
-const MASTER = { name: 'Master.esm', path: '/game/Data/Master.esm', origin: 'Data' };
-const SENT_PLUGINS = [MASTER, { name: PLUGIN.name, path: PLUGIN.path, origin: PLUGIN.origin }];
-const SENT_ACTIVE = [{ name: 'Master.esm', origin: 'Data' }, { name: PLUGIN.name, origin: PLUGIN.origin }];
-const SENT_LOADED_WITH_NO_LINE = [{ name: 'Master.esm', origin: 'Data' }];
 
 function attachedClient(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
@@ -37,7 +31,7 @@ function attachedClient(): InMemoryMEditClient {
 }
 
 describe('put load order', () => {
-  it('hands the mEdit client the snapshot of the value it was given', async () => {
+  it('hands the mEdit client the snapshot the value carries, keyed by the instance and its release', async () => {
     const client = attachedClient();
 
     const result = await putLoadOrder(createLoadOrderSender(client), '/instance', VALUE);
@@ -71,19 +65,10 @@ describe('put load order', () => {
     expect(client.calls.filter((c) => c.method === 'putLoadOrder').map((c) => c.args[5])).toEqual(['Morrowind']);
   });
 
-  it('sends nothing while the game folder\'s plugins cannot be listed, since without the game\'s masters the snapshot would be wrong and mEdit keeps what it holds', async () => {
+  it('sends nothing while the value carries no snapshot, which is the loader\'s answer to a game folder not found or not listable', async () => {
     const client = attachedClient();
 
-    const result = await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, pluginsLoadedWithNoLine: undefined });
-
-    expect(client.calls).toEqual([]);
-    expect(result).toEqual({ sent: false });
-  });
-
-  it('sends nothing while the game directory is unresolved', async () => {
-    const client = attachedClient();
-
-    const result = await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, gameFolder: { kind: 'notFound', looked: [], setting: 'modbench.mods.gameDirectory' } });
+    const result = await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, loadOrderSnapshot: undefined });
 
     expect(client.calls).toEqual([]);
     expect(result).toEqual({ sent: false });

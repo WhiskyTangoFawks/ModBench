@@ -19,6 +19,10 @@ export type { RecordEditEnvelope } from '../wire/messages';
  *  it answers, disconnected when it has gone, stopped when the extension took it down. */
 export type BackendStatus = 'starting' | 'running' | 'disconnected' | 'stopped';
 
+export function isMEditGone(status: BackendStatus): status is 'disconnected' | 'stopped' {
+  return status === 'disconnected' || status === 'stopped';
+}
+
 /** A write verb's outright refusal — non-2xx, a thrown request, or write-gate contention.
  *  `message` is the ready-to-show toast (common.md, Reporting); a 200 typed refusal lives on the
  *  success arm. */

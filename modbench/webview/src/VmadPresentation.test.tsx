@@ -8,7 +8,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { RecordPanel } from './RecordPanel';
 import type { CompareResult, FieldDiff, FieldMetadata } from './types';
 import { vscode } from './vscode';
-import { EXTENSION_TO_WEBVIEW } from './messages';
+import { EXTENSION_TO_WEBVIEW } from '../../src/wire/messages';
 import {
   compareOverride, compareResultFixture, diffNode, fieldMeta, leafMeta as field, lastPostedEnvelope, panelClient,
   lastToldElement,

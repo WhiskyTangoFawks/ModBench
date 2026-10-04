@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Reads docs/architecture/layers.d2, checks target-architecture-references.d2's reference
-arrows against it, then checks every trace message against the reference view. Prints the
-file and the arrow for each mismatch. Exit 0 on a clean pass, 1 otherwise."""
+"""Reads docs/architecture/layers.d2 and the boxes docs/architecture/target-architecture.d2
+draws, then checks every project reference on both sides and every trace message against the
+layer rule. Prints the file and the pair for each mismatch. Exit 0 on a clean pass, 1 otherwise."""
 import re
 import sys
 from pathlib import Path
@@ -11,15 +11,17 @@ ARROW_RE = re.compile(
     r'(?P<label>"[^"]*"|[^{]*)?\s*(\{(?P<attrs>[^}]*)\})?\s*$'
 )
 CLASS_RE = re.compile(r'class:\s*(\w+)')
+BAND_RE = re.compile(r'^(?P<id>\w+):\s*"[^"]*"\s*\{class:\s*band\}')
+CONTAINER_RE = re.compile(r'^(?P<column>\w+)_(?P<band>\w+):\s*"')
+MEMBER_RE = re.compile(r'^(?P<indent> +)(?P<id>\w+):\s*"')
 IMPORT_RE = re.compile(r'^(?P<alias>\w+):\s*@\.\./target-architecture\.(?P<id>[\w.]+)$')
 WILDCARD_RE = re.compile(r'^(?P<alias>\w+):\s*"[^"]*"\s*\{class:\s*(?P<band>\w+)\}$')
+TS_REFERENCE_RE = re.compile(r'"path":\s*"([^"]+)"')
+CS_REFERENCE_RE = re.compile(r'<ProjectReference\s+Include="([^"]+)"')
 
-# docs/architecture/target-architecture.md "The layers", drivers to systems of record.
-BANDS = ("drivers", "driving", "core", "kernel", "driven", "data")
-
-# target-architecture.md's reading guide names the composition roots; Modbench's, the activation
-# file, is prose, never drawn, so only mEdit's is ever a trace actor.
-COMPOSITION_ROOTS = {"medit_driving.http"}
+ROOT_BOX = 'activation'
+LAYERS = 'docs/architecture/layers.d2'
+ZOOM_OUT = 'docs/architecture/target-architecture.d2'
 
 
 class Arrow:
@@ -58,20 +60,59 @@ def parse_arrows(path: Path):
     return arrows
 
 
+class Rule:
+    """The layer rule: the bands, the band pairs a reference may join, the band pairs a
+    watch or push joins, and the box pairs named as exceptions."""
+
+    def __init__(self, layers_path: Path):
+        self.bands = []
+        self.references = set()
+        self.channels = set()
+        self.exceptions = set()
+        for line in layers_path.read_text().splitlines():
+            m = BAND_RE.match(line.strip())
+            if m:
+                self.bands.append(m.group('id'))
+        for a in parse_arrows(layers_path):
+            if a.src in self.bands and a.dst in self.bands:
+                (self.references if a.cls == 'ref' else self.channels).add((a.src, a.dst))
+            else:
+                self.exceptions.add((a.src, a.dst))
+
+    def permits(self, src_id: str, dst_id: str):
+        """A reference from one box to another: a part of the same box, a named exception, a
+        lower band of its column, or its band's lib."""
+        if top2(src_id) == top2(dst_id):
+            return True
+        if (top2(src_id), top2(dst_id)) in self.exceptions:
+            return True
+        if column_of(src_id) != column_of(dst_id):
+            return False
+        if (band_of(src_id), band_of(dst_id)) in self.references:
+            return True
+        return reaches_its_bands_lib(src_id, dst_id)
+
+    def joins(self, src_id: str, dst_id: str):
+        """A trace message between two boxes: a reference either way, since a reply takes
+        its request's class, a watch or push either way, or two parts of one box."""
+        if self.permits(src_id, dst_id) or self.permits(dst_id, src_id):
+            return True
+        return column_of(src_id) == column_of(dst_id) and self.bands_channel(band_of(src_id), band_of(dst_id))
+
+    def bands_join(self, src_band: str, dst_band: str):
+        pair, back = (src_band, dst_band), (dst_band, src_band)
+        return pair in self.references or back in self.references or self.bands_channel(src_band, dst_band)
+
+    def bands_channel(self, src_band: str, dst_band: str):
+        return (src_band, dst_band) in self.channels or (dst_band, src_band) in self.channels
+
+
 def band_of(box_id: str):
-    top = box_id.split('.')[0]
-    for band in BANDS:
-        if top.endswith('_' + band):
-            return band
-    return None
+    return box_id.split('.')[0].split('_', 1)[1]
 
 
 def column_of(box_id: str):
-    band = band_of(box_id)
-    if band is None:
-        return None
-    top = box_id.split('.')[0]
-    return top[: -(len(band) + 1)]
+    return box_id.split('.')[0].split('_', 1)[0]
 
 
 def top2(box_id: str):
@@ -84,68 +125,71 @@ def reaches_its_bands_lib(src_id: str, dst_id: str):
     return s.split('.')[0] == d.split('.')[0] and d.split('.')[-1].endswith('lib')
 
 
-def parent_of(box_id: str):
-    parts = box_id.split('.')
-    return '.'.join(parts[:-1]) if len(parts) >= 3 else None
+def load_boxes(zoom_out: Path):
+    """Every box the zoom-out draws, a part of a box included, by column and name:
+    {'medit': {'index': 'medit_readmodel.index', 'queries': 'medit_readmodel.index.queries'}}."""
+    boxes = {}
+    column, path = None, []
+    for line in zoom_out.read_text().splitlines():
+        m = CONTAINER_RE.match(line)
+        if m:
+            column, path = m.group('column'), [f'{m.group("column")}_{m.group("band")}']
+            continue
+        m = MEMBER_RE.match(line)
+        if m and column:
+            depth = len(m.group('indent')) // 2
+            path = path[:depth] + [m.group('id')]
+            boxes.setdefault(column, {})[m.group('id')] = '.'.join(path)
+    return boxes
 
 
-def load_layers(layers_path: Path):
-    """Band-to-band permitted directions (class: ref, bare band ids) and same-band exceptions
-    (a dotted zoom-out id on either end) that layers.d2 draws."""
-    permitted = set()
-    exceptions = set()
-    for a in parse_arrows(layers_path):
-        if a.src in BANDS and a.dst in BANDS:
-            if a.cls == 'ref':
-                permitted.add((a.src, a.dst))
-        else:
-            exceptions.add((a.src, a.dst))
-    return permitted, exceptions
+def modbench_projects(root: Path):
+    """(project file, box name, [referenced box names]) for the composition root and every box
+    folder under modbench/src that holds a tsconfig; a test folder is no box."""
+    src = root / 'modbench' / 'src'
+    projects = []
+    for path in sorted(src.glob('*/tsconfig.json')) + [src / 'tsconfig.json']:
+        if not path.exists() or path.parent.name == 'test':
+            continue
+        name = ROOT_BOX if path.parent == src else path.parent.name.lower()
+        refs = [Path(p).name.lower() for p in TS_REFERENCE_RE.findall(path.read_text())]
+        projects.append((path, name, refs))
+    return projects
 
 
-def check_reference_view(ref_path: Path, permitted, exceptions):
-    """Every class:ref arrow must point to a lower band, or its column's kernel, or be one of
-    the layers file's own named same-band exceptions."""
+def medit_projects(root: Path):
+    """(project file, box name, [referenced box names]) for every production csproj."""
+    projects = []
+    for path in sorted((root / 'MEditService').glob('MEditService.*/MEditService.*.csproj')):
+        segments = path.stem.split('.')
+        if any(s in ('Tests', 'TestSupport') for s in segments):
+            continue
+        name = segments[-1].lower()
+        refs = [Path(p.replace('\\', '/')).stem.split('.')[-1].lower() for p in CS_REFERENCE_RE.findall(path.read_text())]
+        projects.append((path, name, refs))
+    return projects
+
+
+def check_projects(root: Path, column: str, projects, boxes, rule: Rule):
     failures = []
-    for a in parse_arrows(ref_path):
-        if a.cls != 'ref':
+    known = boxes.get(column, {})
+
+    def rel(path):
+        return str(path.relative_to(root))
+
+    for path, name, refs in projects:
+        if name not in known:
+            failures.append(f"{rel(path)}: {name} is no box {ZOOM_OUT} draws in the {column} column")
             continue
-        src_band, dst_band = band_of(a.src), band_of(a.dst)
-        if src_band is None or dst_band is None:
-            failures.append(f"{a.where()}: unrecognized layer (docs/architecture/layers.d2)")
-            continue
-        if (src_band, dst_band) in permitted:
-            continue
-        if dst_band == 'kernel' and column_of(a.src) == column_of(a.dst):
-            continue
-        if (a.src, a.dst) in exceptions:
-            continue
-        if reaches_its_bands_lib(a.src, a.dst):
-            continue
-        failures.append(
-            f"{a.where()}: reference must point to a lower layer or its column's kernel, and "
-            f"is not a named same-band exception (docs/architecture/layers.d2)"
-        )
+        for ref in refs:
+            if ref not in known:
+                failures.append(f"{rel(path)}: {name} -> {ref}: {ref} is no box {ZOOM_OUT} draws in the {column} column")
+            elif not rule.permits(known[name], known[ref]):
+                failures.append(
+                    f"{rel(path)}: {name} -> {ref}: a reference points to a lower layer of its column or "
+                    f"its column's kernel, or its band's lib, or is a named exception ({LAYERS})"
+                )
     return failures
-
-
-def load_reference_view(ref_path: Path):
-    """The reference view's class:ref and class:store pairs, either direction, and every box
-    in it grouped by band, for a trace's wildcard actor to resolve against."""
-    ref_pairs = set()
-    store_pairs = set()
-    boxes_by_band = {}
-    for a in parse_arrows(ref_path):
-        s, d = top2(a.src), top2(a.dst)
-        if a.cls == 'ref':
-            ref_pairs.add(frozenset((s, d)))
-        elif a.cls == 'store':
-            store_pairs.add(frozenset((s, d)))
-        for box in (s, d):
-            band = band_of(box)
-            if band:
-                boxes_by_band.setdefault(band, set()).add(box)
-    return ref_pairs, store_pairs, boxes_by_band
 
 
 def parse_trace_actors(path: Path):
@@ -164,53 +208,18 @@ def parse_trace_actors(path: Path):
     return actors
 
 
-def _members(band, boxes_by_band):
-    """Every box of the band but the composition roots: a composition root reaches everything by
-    definition, so as a member it would let the set pass anything."""
-    return [('real', box) for box in sorted(boxes_by_band.get(band, ())) if box not in COMPOSITION_ROOTS]
-
-
-def message_allowed(src, dst, msg_class, ref_pairs, store_pairs, boxes_by_band):
-    """The six allowed pairs for a trace message between two actors."""
+def message_allowed(src, dst, msg_class, rule: Rule):
     if msg_class == 'outside':
         return True
-
-    src_kind, src_val = src
-    dst_kind, dst_val = dst
-
-    if src_kind == 'wildcard':
-        return any(message_allowed(m, dst, msg_class, ref_pairs, store_pairs, boxes_by_band)
-                   for m in _members(src_val, boxes_by_band))
-    if dst_kind == 'wildcard':
-        return any(message_allowed(src, m, msg_class, ref_pairs, store_pairs, boxes_by_band)
-                   for m in _members(dst_val, boxes_by_band))
-
-    src_id, dst_id = src_val, dst_val
-    src_parent, dst_parent = parent_of(src_id), parent_of(dst_id)
-    if src_parent is not None and src_parent == dst_parent:
-        return True
-
-    s2, d2 = top2(src_id), top2(dst_id)
-    if s2 in COMPOSITION_ROOTS or d2 in COMPOSITION_ROOTS:
-        return True
-
-    pair = frozenset((s2, d2))
-    if pair in ref_pairs or pair in store_pairs:
-        return True
-    if reaches_its_bands_lib(s2, d2) or reaches_its_bands_lib(d2, s2):
-        return True
-
-    src_band, dst_band = band_of(src_id), band_of(dst_id)
-    src_col, dst_col = column_of(src_id), column_of(dst_id)
-    if src_band in ('core', 'driven') and dst_band == 'kernel' and src_col == dst_col:
-        return True
-    if dst_band in ('core', 'driven') and src_band == 'kernel' and src_col == dst_col:
-        return True
-
-    return False
+    (src_kind, src_val), (dst_kind, dst_val) = src, dst
+    if src_kind == 'real' and dst_kind == 'real':
+        return rule.joins(src_val, dst_val)
+    src_band = src_val if src_kind == 'wildcard' else band_of(src_val)
+    dst_band = dst_val if dst_kind == 'wildcard' else band_of(dst_val)
+    return rule.bands_join(src_band, dst_band)
 
 
-def check_traces(traces_dir: Path, ref_pairs, store_pairs, boxes_by_band):
+def check_traces(traces_dir: Path, rule: Rule):
     failures = []
     for path in sorted(traces_dir.glob('*.d2')):
         actors = parse_trace_actors(path)
@@ -218,25 +227,19 @@ def check_traces(traces_dir: Path, ref_pairs, store_pairs, boxes_by_band):
             if a.src not in actors or a.dst not in actors:
                 failures.append(f"{a.where()}: undeclared actor in this trace")
                 continue
-            if not message_allowed(
-                actors[a.src], actors[a.dst], a.cls, ref_pairs, store_pairs, boxes_by_band
-            ):
-                failures.append(
-                    f"{a.where()}: no allowed pair covers this message "
-                    f"(docs/architecture/target-architecture-references.d2)"
-                )
+            if not message_allowed(actors[a.src], actors[a.dst], a.cls, rule):
+                failures.append(f"{a.where()}: no layer rule joins these two boxes ({LAYERS})")
     return failures
 
 
 def run(root: Path):
-    layers_path = root / 'docs' / 'architecture' / 'layers.d2'
-    ref_path = root / 'docs' / 'architecture' / 'target-architecture-references.d2'
+    rule = Rule(root / LAYERS)
+    boxes = load_boxes(root / ZOOM_OUT)
+    failures = check_projects(root, 'modbench', modbench_projects(root), boxes, rule)
+    failures += check_projects(root, 'medit', medit_projects(root), boxes, rule)
     traces_dir = root / 'docs' / 'architecture' / 'traces'
-
-    permitted, exceptions = load_layers(layers_path)
-    failures = check_reference_view(ref_path, permitted, exceptions)
-    ref_pairs, store_pairs, boxes_by_band = load_reference_view(ref_path)
-    failures += check_traces(traces_dir, ref_pairs, store_pairs, boxes_by_band)
+    if traces_dir.is_dir():
+        failures += check_traces(traces_dir, rule)
     return failures
 
 
@@ -247,9 +250,9 @@ def main(argv=None):
     for failure in failures:
         print(failure)
     if failures:
-        print("--- DIAGRAM LAYER CHECK FAILED ---")
+        print("--- LAYER CHECK FAILED ---")
         return 1
-    print("=== Diagrams match docs/architecture/layers.d2 ===")
+    print(f"=== Projects and traces match {LAYERS} ===")
     return 0
 
 

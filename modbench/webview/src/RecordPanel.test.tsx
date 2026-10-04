@@ -7,7 +7,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
@@ -545,7 +545,7 @@ describe('RecordPanel — conflict color coding', () => {
     await waitFor(() => screen.getByText('Name'));
     const row = screen.getByText('Name').closest('tr');
     if (!row) throw new Error('expected a tr ancestor of the Name row');
-    expect(row.style.backgroundColor).toBe('var(--vscode-modbench-conflict-rowOverride)');
+    expect(row.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
   });
 
   it('applies orange row background to a field whose own conflictAll is Conflict', async () => {
@@ -554,7 +554,7 @@ describe('RecordPanel — conflict color coding', () => {
     await waitFor(() => screen.getByText('Name'));
     const row = screen.getByText('Name').closest('tr');
     if (!row) throw new Error('expected a tr ancestor of the Name row');
-    expect(row.style.backgroundColor).toBe('var(--vscode-modbench-conflict-rowConflict)');
+    expect(row.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowConflict)');
   });
 
   it('colors only the field that actually differs — an agreeing sibling row gets no background', async () => {
@@ -565,7 +565,7 @@ describe('RecordPanel — conflict color coding', () => {
     const levelRow = screen.getByText('Level').closest('tr');
     if (!nameRow) throw new Error('expected a tr ancestor of the Name row');
     if (!levelRow) throw new Error('expected a tr ancestor of the Level row');
-    expect(nameRow.style.backgroundColor).toBe('var(--vscode-modbench-conflict-rowOverride)');
+    expect(nameRow.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
     expect(levelRow.style.backgroundColor).toBe('');
   });
 
@@ -575,7 +575,7 @@ describe('RecordPanel — conflict color coding', () => {
     await waitFor(() => screen.getByText('Override Name'));
     const cell = screen.getByText('Override Name').closest('td');
     if (!cell) throw new Error('expected a td ancestor of the Override Name cell');
-    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflict-conflictWins)');
+    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflictWins)');
   });
 
   it('applies green cell background when cellStates is Override', async () => {
@@ -584,7 +584,7 @@ describe('RecordPanel — conflict color coding', () => {
     await waitFor(() => screen.getByText('Override Name'));
     const cell = screen.getByText('Override Name').closest('td');
     if (!cell) throw new Error('expected a td ancestor of the Override Name cell');
-    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflict-override)');
+    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflictOverride)');
   });
 
   it('column header background reflects CompareOverride.conflictThis', async () => {
@@ -593,7 +593,7 @@ describe('RecordPanel — conflict color coding', () => {
     await waitFor(() => screen.getByText('Override Name'));
     const header = screen.getByText('MyMod.esp').closest('th');
     if (!header) throw new Error('expected a th ancestor of the MyMod.esp header cell');
-    expect(header.style.backgroundColor).toBe('var(--vscode-modbench-conflict-conflictWins)');
+    expect(header.style.backgroundColor).toBe('var(--vscode-modbench-conflictWins)');
   });
 });
 
@@ -626,15 +626,15 @@ describe('RecordPanel — conflict cell tooltips and colours', () => {
   it('paints a losing cell red, in red text, and names it', async () => {
     renderPanel(threeWayResult);
     const cell = await cellOf('B');
-    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflict-conflictLoses)');
-    expect(cell.style.color).toBe('var(--vscode-modbench-conflict-conflictLosesText)');
+    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflictLoses)');
+    expect(cell.style.color).toBe('var(--vscode-modbench-conflictLosesText)');
     expect(cell.title).toBe('Conflict loser');
   });
 
   it('paints an unchanged copy grey and names it', async () => {
     renderPanel(threeWayResult);
     const cell = (await screen.findAllByText('A'))[1]?.closest('td');
-    expect(cell?.style.backgroundColor).toBe('var(--vscode-modbench-conflict-identicalToMaster)');
+    expect(cell?.style.backgroundColor).toBe('var(--vscode-modbench-conflictIdenticalToMaster)');
     expect(cell?.title).toBe('Identical to Master');
   });
 
@@ -787,7 +787,7 @@ describe('RecordPanel — struct sub-rows', () => {
     await waitFor(() => screen.getByText('15'));
     const cell = screen.getByText('15').closest('td');
     if (!cell) throw new Error('expected a td ancestor of the child row\'s 15 cell');
-    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflict-override)');
+    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflictOverride)');
   });
 });
 

@@ -4,6 +4,7 @@ import type {
   NotificationEvent,
 } from '../client';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView, type PluginEntry } from '../instanceLoader/instance';
+import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
 import { headerFormKeyFor } from './formKeyIdentity';
@@ -182,9 +183,6 @@ export class ImplicitMasterNode extends vscode.TreeItem {
     if (path !== undefined) this.resourceUri = lockedRowUri(path);
   }
 }
-
-/** CONTEXT.md, Sort direction: which end of the load order the view shows at the top. */
-export type SortDirection = 'losingAtTop' | 'winningAtTop';
 
 const LOSING_END: PluginsDrop = { kind: 'losingEnd' };
 const WINNING_END: PluginsDrop = { kind: 'winningEnd' };

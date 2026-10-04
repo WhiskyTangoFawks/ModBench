@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
-import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode, type SortDirection } from './ModListProvider';
+import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
+import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
+import { ModListProvider, type ModlistNode, type SortDirection } from './ModListProvider';
 import {
-  isModsKeyArgs, modsGestureEntry, pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry,
+  isModsKeyArgs, isRowOf, modsGestureEntry, openFolderArgument, pluralArgument, registerModsGesture, selectionArgument,
+  singularArgument, type GestureEntry, type RowOf,
 } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
@@ -11,6 +14,7 @@ import {
   createEmptyMod,
   deleteSeparators,
   insertSeparator,
+  markFiles,
   moveMods,
   moveSeparators,
   renameSeparator,
@@ -20,7 +24,9 @@ import {
   type ModlistAccess,
   type ModlistSelectionResult,
   type MovePlace,
+  type OriginFileMark,
 } from '../modlist/modlist';
+import { FILE_MARKS, fileLabel } from './modFiles';
 import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
 import { installNameRefusal } from '../install/install';
 import { errorMessage } from '../ports/errorMessage';
@@ -71,6 +77,28 @@ export function registerModEnableCommands(
   return [
     registerModsGesture('modbench.mod.enable', viewSelection, run(true)),
     registerModsGesture('modbench.mod.disable', viewSelection, run(false)),
+  ];
+}
+
+// modbench.mod.excludeFile / modbench.mod.includeFile: the direction is the command's, so a mixed
+// selection takes the right-clicked row's (mods.md, Menus and keys, story 7).
+export function registerFileExclusionCommands(
+  access: ModlistAccess, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+  marks: Pick<ModListProvider, 'markExclusions' | 'exclusionLandedAt' | 'forgetUnconfirmedExclusions'>,
+): vscode.Disposable[] {
+  const run = (mark: OriginFileMark) => async (entry: GestureEntry) => {
+    const rows = pluralArgument(entry, 'file');
+    if (rows.length === 0) return;
+    const { verb, state } = FILE_MARKS[mark];
+    const changing = rows.filter((row) => row.exclusion !== state).map((row) => row.ref);
+    marks.markExclusions(changing, mark);
+    const outcome = await markFiles(access, changing, mark, (file) => marks.exclusionLandedAt(file));
+    reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${changing.length} files.`, outcome, fileLabel);
+    marks.forgetUnconfirmedExclusions(outcome.refused.map(({ item }) => item));
+  };
+  return [
+    registerModsGesture('modbench.mod.excludeFile', viewSelection, run('Excluded')),
+    registerModsGesture('modbench.mod.includeFile', viewSelection, run('Included')),
   ];
 }
 
@@ -295,13 +323,14 @@ export function registerCreateEmptyModCommand(
   });
 }
 
-/** A mod row opens the mod's folder, and the Overwrite row the overwrite folder. */
+/** A mod row opens the mod's folder, the Overwrite row the overwrite folder, and a file or folder
+ *  row shows itself where it sits. */
 export function registerOpenFolderCommand(
   instance: Pick<Instance, 'value'>, reporter: Reporter, viewSelection: () => readonly ModlistNode[],
 ): vscode.Disposable {
   return registerModsGesture('modbench.mod.openFolder', viewSelection, async (entry) => {
-    const anchor = entry.clicked ?? entry.focused;
-    if (!(anchor instanceof ModNode || anchor instanceof OverwriteNode)) return;
+    const anchor = openFolderArgument(entry);
+    if (anchor === undefined) return;
     const target = folderOf(instance, anchor);
     await reportFailure(reporter, `Failed to open the folder of "${target.name}".`, async () => {
       if (target.folder === undefined) throw new Error('No folder holds it.');
@@ -318,14 +347,19 @@ export async function reportFailure(reporter: Reporter, failMessage: string, act
   }
 }
 
-// The value's own folder for a mod row, never a path joined here: the Instance adapter owns every
+// The value's own path for each row, never a path joined here: the Instance adapter owns every
 // path function, and the value carries its answer.
 function folderOf(
-  instance: Pick<Instance, 'value'>, node: ModNode | OverwriteNode,
+  instance: Pick<Instance, 'value'>, node: NonNullable<ReturnType<typeof openFolderArgument>>,
 ): { name: string; folder: vscode.Uri | undefined } {
   const { overwriteDir, modDirs } = instance.value.paths;
-  const [name, folder] = node.kind === OVERWRITE_NODE_KIND ? ['Overwrite', overwriteDir] : [node.mod.name, modDirs.get(node.mod.name)];
-  return { name, folder: folder === undefined ? undefined : vscode.Uri.file(folder) };
+  const uriOf = (path: string | undefined) => (path === undefined ? undefined : vscode.Uri.file(path));
+  switch (node.kind) {
+    case OVERWRITE_ORIGIN: return { name: OVERWRITE_LABEL, folder: uriOf(overwriteDir) };
+    case 'mod': return { name: node.mod.name, folder: uriOf(modDirs.get(node.mod.name)) };
+    case 'folder': return { name: node.folder.relativePath, folder: uriOf(node.folder.path) };
+    case 'file': return { name: node.file.relativePath, folder: uriOf(node.file.path) };
+  }
 }
 
 /** The Argument of view on Nexus. Each surface's row adapts itself to it, so a mod row and a
@@ -348,23 +382,30 @@ export function registerViewOnNexusCommand(
   });
 }
 
-function isModlistEntryNode(node: unknown): node is ModNode | SeparatorNode {
-  return node instanceof ModNode || node instanceof SeparatorNode;
+const COPY_KINDS = ['mod', 'separator', 'folder', 'file'] as const;
+
+const isCopyRow = isRowOf(COPY_KINDS);
+
+function copyValueOf(row: RowOf<typeof COPY_KINDS[number]>): string {
+  switch (row.kind) {
+    case 'mod': return row.mod.name;
+    case 'separator': return row.separator.name;
+    case 'folder': return row.folder.relativePath;
+    case 'file': return row.file.relativePath;
+  }
 }
 
-function copyValueRowNames(rows: readonly (ModNode | SeparatorNode)[]): string {
-  return rows.map((row) => (row.kind === 'mod' ? row.mod.name : row.separator.name)).join('\n');
-}
+const copyValueLines = (entry: GestureEntry): string => selectionArgument(entry, ...COPY_KINDS).map(copyValueOf).join('\n');
 
-/** Mods' own text for the catalog's one copy value id. `undefined` unless `clicked` is a mod or
- *  separator row or the Mods key's args, so the palette and another view's key defer. */
+/** Mods' own text for the catalog's one copy value id. `undefined` unless `clicked` is a row copy
+ *  value takes or the Mods key's args, so the palette and another view's key defer. */
 export function modsCopyValueText(
   viewSelection: () => readonly ModlistNode[],
 ): (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined {
   return (clicked, allSelected) => {
-    if (isModsKeyArgs(clicked)) return copyValueRowNames(selectionArgument({ selection: viewSelection() }, 'mod', 'separator'));
-    if (!isModlistEntryNode(clicked)) return undefined;
-    const selected = allSelected?.length ? allSelected.filter(isModlistEntryNode) : undefined;
-    return copyValueRowNames(selectionArgument(modsGestureEntry(clicked, selected, viewSelection), 'mod', 'separator'));
+    if (isModsKeyArgs(clicked)) return copyValueLines({ selection: viewSelection() });
+    if (!isCopyRow(clicked)) return undefined;
+    const selected = allSelected?.length ? allSelected.filter(isCopyRow) : undefined;
+    return copyValueLines(modsGestureEntry(clicked, selected, viewSelection));
   };
 }

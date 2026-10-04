@@ -4,7 +4,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { vscode } from './vscode';
 import { focusedCellContext, pickFormKey, requestRecordLoad } from './nativeBridge';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 
 function postedRequestId(): string {
   const call = vi.mocked(vscode.postMessage).mock.calls.at(-1)?.[0];

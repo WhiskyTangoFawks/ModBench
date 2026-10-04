@@ -1,13 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 import { tsFiles } from './tsFiles';
-import { CORE_BOXES, DRIVEN_BOXES, DRIVING_BOXES, KERNEL_BOXES, REFERENCING_BOXES } from './boxes';
+import { BOXES, BOXES_BY_BAND, CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, PROJECT_FOLDERS, READ_MODEL_AND_REPOSITORY_BOXES, parseProject } from './boxes';
 
 const MODBENCH = join(__dirname, '..', '..');
-
-const BOXES = [...KERNEL_BOXES, ...Object.keys(REFERENCING_BOXES)];
 
 const ROOT_SOLUTION = 'tsconfig.json';
 const ROOT_PROJECT = join('src', 'tsconfig.json');
@@ -20,15 +17,7 @@ const boxProject = (box: string): string => join('src', box, 'tsconfig.json');
 
 const PRODUCTION_PROJECTS = [...BOXES.map(boxProject), ROOT_PROJECT];
 
-function parsed(relativePath: string): ts.ParsedCommandLine {
-  const path = join(MODBENCH, relativePath);
-  const result = ts.getParsedCommandLineOfConfigFile(path, undefined, {
-    ...ts.sys,
-    onUnRecoverableConfigFileDiagnostic: (d) => { throw new Error(ts.flattenDiagnosticMessageText(d.messageText, ' ')); },
-  });
-  if (!result) throw new Error(`No parsed command line for ${relativePath}`);
-  return result;
-}
+const parsed = (relativePath: string): ts.ParsedCommandLine => parseProject(join(MODBENCH, relativePath));
 
 const fileNames = (relativePath: string): string[] =>
   parsed(relativePath).fileNames.map((f) => relative(MODBENCH, f));
@@ -36,7 +25,7 @@ const fileNames = (relativePath: string): string[] =>
 const referencePaths = (relativePath: string): string[] =>
   (parsed(relativePath).projectReferences ?? []).map((r) => relative(MODBENCH, r.path)).sort();
 
-const LIBS = [DRIVEN_BOXES, CORE_BOXES, DRIVING_BOXES].flatMap((band) => Object.keys(band)
+const LIBS = Object.values(BOXES_BY_BAND).flatMap((band) => band
   .filter((box) => box.endsWith('Lib'))
   .map((lib) => ({ lib, band, users: BOXES.filter((box) => referencePaths(boxProject(box)).includes(join('src', lib))) })));
 
@@ -52,8 +41,12 @@ const productionFilesOnDisk = (): string[] =>
     .map((f) => relative(MODBENCH, f));
 
 describe('one composite project per box', () => {
-  it.each(BOXES)('%s has its own tsconfig', (box) => {
-    expect(existsSync(join(MODBENCH, boxProject(box)))).toBe(true);
+  it('reads a real body of boxes off the zoom-out', () => {
+    expect(BOXES.length).toBeGreaterThan(10);
+  });
+
+  it('every project folder on disk is a box the zoom-out draws', () => {
+    expect(PROJECT_FOLDERS.filter((folder) => !BOXES.includes(folder))).toEqual([]);
   });
 
   it.each(BOXES)('%s is composite', (box) => {
@@ -68,19 +61,19 @@ describe('one composite project per box', () => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 
-  it.each(Object.keys(DRIVEN_BOXES))('%s sees the Node types and no others', (box) => {
+  it.each(READ_MODEL_AND_REPOSITORY_BOXES)('%s sees the Node types and no others', (box) => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 
-  it.each(Object.keys(CORE_BOXES))('%s sees the Node types and no others', (box) => {
+  it.each(CORE_BOXES)('%s sees the Node types and no others', (box) => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 
-  it.each(Object.keys(DRIVING_BOXES))('%s sees the Node and VS Code types', (box) => {
+  it.each(DRIVING_BOXES)('%s sees the Node and VS Code types', (box) => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node', 'vscode']);
   });
 
-  it.each(Object.keys(DRIVING_BOXES))('%s references neither the codecs nor the tables', (box) => {
+  it.each(DRIVING_BOXES)('%s references neither the codecs nor the tables', (box) => {
     const references = referencePaths(boxProject(box));
     expect(references).not.toContain(join('src', 'loadOrderFileCodec'));
     expect(references).not.toContain(join('src', 'tables'));
@@ -88,16 +81,12 @@ describe('one composite project per box', () => {
 
   it.each(LIBS)('$lib is used by two or more boxes of its band, and by no other box', ({ users, band }) => {
     expect(users.length).toBeGreaterThanOrEqual(2);
-    expect(users.filter((box) => !(box in band))).toEqual([]);
+    expect(users.filter((box) => !band.includes(box))).toEqual([]);
   });
 
   it.each(LIBS)('$lib references only boxes every box using it references', ({ lib, users }) => {
     const reachedByEveryUser = (reference: string) => users.every((box) => referencePaths(boxProject(box)).includes(reference));
     expect(referencePaths(boxProject(lib)).filter((reference) => !reachedByEveryUser(reference))).toEqual([]);
-  });
-
-  it.each(Object.entries(REFERENCING_BOXES))('%s references exactly the boxes the diagram draws', (box, references) => {
-    expect(referencePaths(boxProject(box))).toEqual(references.map((r) => join('src', r)).sort());
   });
 
   it.each(BOXES)('%s emits outside src, so no build output lands beside a source file', (box) => {

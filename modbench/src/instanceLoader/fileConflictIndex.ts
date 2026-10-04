@@ -1,18 +1,17 @@
 // The effective merged mod view — the merge a VFS performs over the Mod override order.
 
-import type { FileOrigin, InstanceAdapter, ModlistEntry, OriginFile } from '../instanceAdapter/instanceAdapter';
+import type { FileOrigin, InstanceAdapter, ModlistEntry, OriginFile, OriginFolder } from '../instanceAdapter/instanceAdapter';
 
 export const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
 
-const OVERWRITE: FileOrigin = { kind: 'runtimeOutput' };
+export const RUNTIME_OUTPUT: FileOrigin = { kind: 'runtimeOutput' };
 
-/** One file of an origin: the path its own tree names it with, and where it is read from. */
-export interface ModFile {
-  readonly relativePath: string;
-  readonly absolutePath: string;
-}
+export const OVERWRITE_LABEL = 'Overwrite';
 
-export const modFileOf = (file: OriginFile): ModFile => ({ relativePath: file.relativePath, absolutePath: file.path });
+export const originLabel = (origin: FileOrigin): string => (origin.kind === 'mod' ? origin.name : OVERWRITE_LABEL);
+
+export const sameOrigin = (a: FileOrigin, b: FileOrigin): boolean =>
+  a.kind === 'mod' ? b.kind === 'mod' && a.name === b.name : a.kind === b.kind;
 
 export interface ConflictEntry {
   /** The winner's own on-disk casing: Proton/Wine folds case over case-sensitive ext4, so
@@ -23,6 +22,15 @@ export interface ConflictEntry {
   winnerOrigin: FileOrigin;
   /** Every provider of this relative path, winning-most first. */
   providers: FileOrigin[];
+}
+
+/** The winning copy when `own` loses, and the copies `own` wins over, winning-first, when it
+ *  wins. None unless another enabled copy provides the path. */
+export function goToModCandidates(entry: ConflictEntry | undefined, own: FileOrigin): FileOrigin[] {
+  const providers = entry?.providers ?? [];
+  const at = providers.findIndex((provider) => sameOrigin(provider, own));
+  if (at === -1) return [];
+  return at === 0 ? providers.slice(1) : providers.slice(0, 1);
 }
 
 /** Comparison keys only — never display, never written back to disk. Locale-independent,
@@ -70,7 +78,9 @@ export interface FileConflictIndex {
   files: FileConflictLookup;
   /** Each listed mod's own files, a disabled mod's too, so callers don't need a second
    *  filesystem walk. */
-  filesByMod: Map<string, ModFile[]>;
+  filesByMod: Map<string, readonly OriginFile[]>;
+  /** Each listed mod's folders, as `filesByMod` holds its files. */
+  foldersByMod: Map<string, readonly OriginFolder[]>;
 }
 
 // Plugins live at a mod's root, so a nested file sharing a plugin's basename must not match.
@@ -92,13 +102,25 @@ export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, strin
   return new Map(modWinners);
 }
 
-// A mod's own files as the adapter lists them; each entry the listing skipped is one Output line.
-async function modFiles(
+// A mod's own files and folders as the adapter lists them; each entry the listing skipped is one
+// Output line.
+async function modListing(
   adapter: Pick<InstanceAdapter, 'originFiles'>, modName: string, log: (msg: string) => void,
-): Promise<ModFile[]> {
-  const { files, notes } = await adapter.originFiles(modOrigin(modName));
+): Promise<{ files: readonly OriginFile[]; folders: readonly OriginFolder[] }> {
+  const { files, folders, notes } = await adapter.originFiles(modOrigin(modName));
   for (const note of notes) log(`[fileConflictIndex] ${modName}: ${note}`);
-  return files.map(modFileOf);
+  return { files, folders };
+}
+
+// A later provider loses to the earlier, winning one. A case variant of a path its mod already
+// provides is one more name for that mod's copy, never a second provider.
+function provideAsMod(files: FileConflictLookup, file: OriginFile, origin: FileOrigin): void {
+  const existing = files.get(file.relativePath);
+  if (!existing) {
+    files.set({ relativePath: file.relativePath, winner: file.sourcePath, winnerOrigin: origin, providers: [origin] });
+  } else if (!existing.providers.some((provider) => sameOrigin(provider, origin))) {
+    existing.providers.push(origin);
+  }
 }
 
 export async function buildFileConflictIndex(
@@ -108,47 +130,38 @@ export async function buildFileConflictIndex(
   log: (msg: string) => void,
 ): Promise<FileConflictIndex> {
   const files = new FileConflictLookup();
-  const filesByMod = new Map<string, ModFile[]>();
+  const filesByMod = new Map<string, readonly OriginFile[]>();
+  const foldersByMod = new Map<string, readonly OriginFolder[]>();
 
   const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');
 
   // Every mod's listing is independent, so run them concurrently; only the merge below needs the
   // override order, and only among enabled mods.
   const listed = await Promise.all(
-    mods.map(async (mod) => ({ mod, files: await modFiles(adapter, mod.name, log) })),
+    mods.map(async (mod) => ({ mod, ...await modListing(adapter, mod.name, log) })),
   );
 
   // Mod order is winning-first, so the FIRST enabled provider wins and later ones only
   // register as contenders (CONTEXT.md, "Override order").
-  for (const { mod, files: ownFiles } of listed) {
+  for (const { mod, files: ownFiles, folders } of listed) {
     filesByMod.set(mod.name, ownFiles);
+    foldersByMod.set(mod.name, folders);
     if (!mod.enabled) continue;
 
-    for (const file of ownFiles) {
-      const existing = files.get(file.relativePath);
-      if (existing) {
-        existing.providers.push(modOrigin(mod.name)); // loses to the earlier (winning) provider
-      } else {
-        files.set({
-          relativePath: file.relativePath,
-          winner: file.absolutePath,
-          winnerOrigin: modOrigin(mod.name),
-          providers: [modOrigin(mod.name)],
-        });
-      }
-    }
+    for (const file of ownFiles.filter((own) => !own.excluded)) provideAsMod(files, file, modOrigin(mod.name));
   }
 
   // The run-time output wins over every mod.
-  for (const file of overwriteFiles) {
+  for (const file of overwriteFiles.filter((own) => !own.excluded)) {
     const existing = files.get(file.relativePath);
+    if (existing && sameOrigin(existing.winnerOrigin, RUNTIME_OUTPUT)) continue;
     files.set({
       relativePath: file.relativePath,
-      winner: file.path,
-      winnerOrigin: OVERWRITE,
-      providers: [OVERWRITE, ...(existing?.providers ?? [])],
+      winner: file.sourcePath,
+      winnerOrigin: RUNTIME_OUTPUT,
+      providers: [RUNTIME_OUTPUT, ...(existing?.providers ?? [])],
     });
   }
 
-  return { files, filesByMod };
+  return { files, filesByMod, foldersByMod };
 }

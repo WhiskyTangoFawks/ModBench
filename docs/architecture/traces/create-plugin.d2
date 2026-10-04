@@ -3,21 +3,23 @@
 shape: sequence_diagram
 plugins: @../target-architecture.modbench_driving.plugins
 plugins.label: Plugins
-client: @../target-architecture.modbench_driven.client
+client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
 commands: @../target-architecture.medit_core.commands
 commands.label: Commands
-pluginadapter: @../target-architecture.medit_driven.pluginadapter
+pluginadapter: @../target-architecture.medit_repositories.pluginadapter
 pluginadapter.label: Plugin adapter
 plugin: @../target-architecture.medit_data.plugin
 instance: @../target-architecture.modbench_data.instance
 instance.label: "Instance\nplugins.txt · mods · Overwrite"
-instanceadapter: @../target-architecture.modbench_driven.instanceadapter
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
-instanceloader: @../target-architecture.modbench_driven.instanceloader
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
+activation: @../target-architecture.modbench_drivers.activation
+activation.label: Activation
 pluginscommands: @../target-architecture.modbench_core.pluginscommands
 pluginscommands.label: plugins commands
 
@@ -33,7 +35,8 @@ http -> client: applied or refusal {class: edit}
 client -> plugins: applied or refusal {class: edit}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
-instanceloader -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
+instanceloader -> activation: value {class: loadorder}
+activation -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
 instanceloader."the next snapshot: index-load-order; in a tracked mod, detect-external-change"
 
 refused: "refused, before any write" {

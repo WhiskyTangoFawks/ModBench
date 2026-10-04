@@ -37,6 +37,8 @@ Break the work into **tracer bullet** tickets. A tracer bullet makes a set of th
 
 </vertical-slice-rules>
 
+Cut for Sonnet. A ticket is scoped and specified so that Sonnet lands it: its spec lines name the behaviour, its Notes say where the code stands, and every decision the executor meets is one the chain of authority already answers. When a slice needs a judgement anyway, because the spec leaves a choice open or the change spans boxes whose interaction the ticket cannot pin down, Notes says `Tier: Opus` and gives the reason in one sentence. Opus is for complexity a ticket cannot specify away. A slice that would need Opus for its size alone is split instead. A ticket that names no tier runs on Sonnet.
+
 Every pointer in the epic's scope lands in exactly one ticket. A slice that needs behaviour no spec line draws has found a gap in the spec: name it to the user, and leave it out.
 
 Give each ticket its **blocking edges** — the other tickets that must complete before it can start. A ticket with no blockers can start immediately.

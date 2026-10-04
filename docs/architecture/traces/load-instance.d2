@@ -3,14 +3,16 @@
 shape: sequence_diagram
 instance: @../target-architecture.modbench_data.instance
 instance.label: "Instance\nthe mod manager's files · plugins.txt · mods · Overwrite · downloaded files"
-instanceadapter: @../target-architecture.modbench_driven.instanceadapter
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
-instanceloader: @../target-architecture.modbench_driven.instanceloader
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "Toolbox · Mods · Plugins · Downloads" {class: driving}
+activation: @../target-architecture.modbench_drivers.activation
+activation.label: Activation
 instancecommands: @../target-architecture.modbench_core.instancecommands
 instancecommands.label: instance commands
-client: @../target-architecture.modbench_driven.client
+client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 toolbox: @../target-architecture.modbench_driving.toolbox
 toolbox.label: Toolbox
@@ -21,7 +23,8 @@ instanceloader -> instanceadapter: "get: the instance's files" {class: loadorder
 instanceadapter -> instanceloader: "parsed: the game, the profile, the mods and their meta, the load order, the downloaded files, the game folder's plugins and Creation Club list, the manager's names" {class: loadorder}
 instanceloader."the value, replaced whole"
 instanceloader -> views: "value · the last read's failure, if any" {class: loadorder}
-instanceloader -> instancecommands: "put load order: the snapshot" {class: loadorder}
+instanceloader -> activation: value {class: loadorder}
+activation -> instancecommands: "put load order: the snapshot" {class: loadorder}
 instancecommands -> client: "snapshot: the game release · every plugin and what provides it · the active plugins" {class: loadorder}
 
 refresh: "refresh, from the Toolbox" {

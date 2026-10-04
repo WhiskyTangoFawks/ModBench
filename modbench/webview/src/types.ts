@@ -47,8 +47,7 @@ export type RecordDetail = Omit<Schemas['RecordDetail'], 'fields'> & { fields: F
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 export type CompareOverride = Omit<Schemas['CompareOverride'], 'fields'> & { fields: FieldValue[] };
 
-// Lives in messages.ts so it can cross to the extension host.
-export type { PathHop, PathSegment, RecordEditEnvelope } from './messages';
+export type { PathHop, PathSegment, RecordEditEnvelope } from '../../src/wire/messages';
 
 export type FieldDiff = Omit<Schemas['FieldDiff'], 'children'> & {
   children?: FieldDiff[] | null;

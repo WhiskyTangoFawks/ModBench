@@ -12,4 +12,4 @@ The cost is accepted: it is less user-friendly than a purpose-built application.
 
 ## Alternatives rejected
 
-- **A standalone desktop application.** Every item above is rebuilt from scratch. People have tried to replace the ten-year-old tooling before and failed on exactly that.
+- A standalone desktop application: every item above is rebuilt from scratch. People have tried to replace the ten-year-old tooling before and failed on exactly that.

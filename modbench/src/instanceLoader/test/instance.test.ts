@@ -308,6 +308,7 @@ describe('Instance — the value', () => {
     expect(entry?.providers).toEqual([{ kind: 'mod', name: NONO }, { kind: 'mod', name: 'Unofficial Fallout 4 Patch' }]);
     expect(instance.value.filesByMod.get('Harder VATS')?.map((f) => f.relativePath)).toEqual(['textures/shared.dds']);
     expect(instance.value.filesByMod.get('Tracked Patch Mod')?.map((f) => f.relativePath)).toEqual(['Tracked Patch Mod.esp']);
+    expect(instance.value.foldersByMod.get('Harder VATS')?.map((f) => f.relativePath)).toEqual(['textures']);
   });
 
   it('carries every plugin — listed, unlisted and Data-folder — with origin, slot, enabled and winning', async () => {
@@ -1022,7 +1023,7 @@ async function minimalInstanceWithoutCorpusMasters(): Promise<{
 }
 
 describe('Instance — Overwrite\'s files', () => {
-  it('carries each file under the overwrite/ folder, recursive, by the path in it and where it is read from', async () => {
+  it('carries each file and folder under the overwrite/ folder, recursive, by the path in it and where it sits', async () => {
     const { root, instance } = await minimalInstanceWithoutCorpusMasters();
     await instance.refresh();
     expect(instance.value.overwriteFiles).toEqual([]);
@@ -1031,9 +1032,9 @@ describe('Instance — Overwrite\'s files', () => {
     await writeFile(join(root, 'overwrite', 'F4SE', 'plugin.log'), 'x');
     await instance.refresh();
 
-    expect(instance.value.overwriteFiles).toEqual([
-      { relativePath: 'F4SE/plugin.log', absolutePath: join(root, 'overwrite', 'F4SE', 'plugin.log') },
-    ]);
+    const log = join(root, 'overwrite', 'F4SE', 'plugin.log');
+    expect(instance.value.overwriteFiles).toEqual([{ relativePath: 'F4SE/plugin.log', path: log, sourcePath: log, excluded: false, excludedByName: false }]);
+    expect(instance.value.overwriteFolders).toEqual([{ relativePath: 'F4SE', path: join(root, 'overwrite', 'F4SE'), excluded: false }]);
   });
 });
 
@@ -1157,12 +1158,29 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect(instance.value.pluginsLoadedWithNoLine).toEqual([{ name: 'DLCCoast.esm', origin: 'Consumer' }]);
   });
 
-  it('carries no answer while the game folder is not found', async () => {
+  it('carries the load order snapshot put load order sends, keyed on the game folder it was derived from', async () => {
+    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
+    const dataFolder = join(root, 'Game', 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await writeFile(join(root, 'mods', 'Consumer', 'DLCCoast.esm'), '');
+    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
+
+    await instance.refresh();
+
+    expect(instance.value.loadOrderSnapshot).toMatchObject({
+      dataFolder,
+      loadedWithNoLine: [{ name: 'DLCCoast.esm', origin: 'Consumer' }],
+    });
+    expect(instance.value.loadOrderSnapshot?.active).toContainEqual({ name: 'DLCCoast.esm', origin: 'Consumer' });
+  });
+
+  it('carries no answer and no snapshot while the game folder is not found', async () => {
     const { instance } = await minimalInstanceWithoutCorpusMasters();
 
     await instance.refresh();
 
     expect(instance.value.pluginsLoadedWithNoLine).toBeUndefined();
+    expect(instance.value.loadOrderSnapshot).toBeUndefined();
   });
 });
 
