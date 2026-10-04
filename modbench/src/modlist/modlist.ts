@@ -96,8 +96,11 @@ export interface FilesMarked extends SelectionOutcome<OriginFileRef> {
   readonly landed: readonly MarkedFile[];
 }
 
-/** `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own. */
-export async function markFiles(access: ModlistAccess, files: readonly OriginFileRef[], mark: OriginFileMark): Promise<FilesMarked> {
+/** `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own, and handed
+ *  to `landedOne` before the next is. */
+export async function markFiles(
+  access: ModlistAccess, files: readonly OriginFileRef[], mark: OriginFileMark, landedOne: (file: MarkedFile) => void = () => {},
+): Promise<FilesMarked> {
   const landed: MarkedFile[] = [];
   const refused: ItemRefusal<OriginFileRef>[] = [];
   for (const file of files) {
@@ -105,7 +108,11 @@ export async function markFiles(access: ModlistAccess, files: readonly OriginFil
       const marked = await access.adapter.markOriginFile(file.origin, file.relativePath, mark);
       if (marked.gone) refused.push({ item: file, reason: goneFromDisk(file.relativePath) });
       else if ('refusal' in marked) refused.push({ item: file, reason: marked.refusal });
-      else landed.push({ ...file, markedPath: marked.relativePath });
+      else {
+        const done = { ...file, markedPath: marked.relativePath };
+        landed.push(done);
+        landedOne(done);
+      }
     } catch (err) {
       refused.push({ item: file, reason: errorMessage(err) });
     }

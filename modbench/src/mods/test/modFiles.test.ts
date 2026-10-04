@@ -581,7 +581,7 @@ describe('an excluded or included file while the disk has not confirmed it (comm
     provider.markExclusions([inM], 'Excluded');
     vi.advanceTimersByTime(1000);
 
-    provider.exclusionsLandedAt([{ ...inM, markedPath: 'a.dds.mohidden' }]);
+    provider.exclusionLandedAt({ ...inM, markedPath: 'a.dds.mohidden' });
     instance.publish(valueHolding([markedFile('a.dds.mohidden')]));
     instance.publish(valueHolding([markedFile('a.dds.mohidden')]));
 
@@ -594,17 +594,29 @@ describe('an excluded or included file while the disk has not confirmed it (comm
     provider.markExclusions([inM], 'Excluded');
     vi.advanceTimersByTime(1000);
 
-    provider.exclusionsLandedAt([{ ...inM, markedPath: 'a.dds' }]);
+    provider.exclusionLandedAt({ ...inM, markedPath: 'a.dds' });
     instance.publish(valueHolding([markedFile('a.dds')]));
 
     expect(await spinningIn(provider, 'M')).toEqual([]);
     expect(logged).toEqual([]);
   });
 
+  it('settles a file written early in a batch, though the disk is read twice before the batch ends', () => {
+    const { instance, logged, provider } = setUp([file('a.dds'), file('b.dds')]);
+    const inMb = { origin: modOrigin('M'), relativePath: 'b.dds' };
+    provider.markExclusions([inM, inMb], 'Excluded');
+
+    provider.exclusionLandedAt({ ...inM, markedPath: 'a.dds.mohidden' });
+    instance.publish(valueHolding([markedFile('a.dds.mohidden'), file('b.dds')]));
+    instance.publish(valueHolding([markedFile('a.dds.mohidden'), file('b.dds')]));
+
+    expect(logged).not.toContainEqual(expect.stringContaining('a.dds'));
+  });
+
   it('logs one line when the file is gone from the disk where the write put it', () => {
     const { instance, logged, provider } = setUp([file('a.dds')]);
     provider.markExclusions([inM], 'Excluded');
-    provider.exclusionsLandedAt([{ ...inM, markedPath: 'a.dds.mohidden' }]);
+    provider.exclusionLandedAt({ ...inM, markedPath: 'a.dds.mohidden' });
 
     instance.publish(valueHolding([]));
     instance.publish(valueHolding([]));

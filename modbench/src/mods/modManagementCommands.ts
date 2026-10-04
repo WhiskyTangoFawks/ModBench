@@ -80,12 +80,11 @@ export function registerModEnableCommands(
   ];
 }
 
-
 // modbench.mod.excludeFile / modbench.mod.includeFile: the direction is the command's, so a mixed
 // selection takes the right-clicked row's (mods.md, Menus and keys, story 7).
 export function registerFileExclusionCommands(
   access: ModlistAccess, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
-  marks: Pick<ModListProvider, 'markExclusions' | 'exclusionsLandedAt' | 'forgetUnconfirmedExclusions'>,
+  marks: Pick<ModListProvider, 'markExclusions' | 'exclusionLandedAt' | 'forgetUnconfirmedExclusions'>,
 ): vscode.Disposable[] {
   const run = (mark: OriginFileMark) => async (entry: GestureEntry) => {
     const rows = pluralArgument(entry, 'file');
@@ -93,9 +92,8 @@ export function registerFileExclusionCommands(
     const { verb, state } = FILE_MARKS[mark];
     const changing = rows.filter((row) => row.exclusion !== state).map((row) => row.ref);
     marks.markExclusions(changing, mark);
-    const outcome = await markFiles(access, changing, mark);
-    marks.exclusionsLandedAt(outcome.landed);
-    reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${rows.length} files.`, outcome, fileLabel);
+    const outcome = await markFiles(access, changing, mark, (file) => marks.exclusionLandedAt(file));
+    reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${changing.length} files.`, outcome, fileLabel);
     marks.forgetUnconfirmedExclusions(outcome.refused.map(({ item }) => item));
   };
   return [

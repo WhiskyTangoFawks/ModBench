@@ -3,6 +3,7 @@ import { fakeVscodeModule } from './fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
+import { existsSync } from 'node:fs';
 import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -217,6 +218,17 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
     ], 'Included');
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
+  });
+
+  it('answers where each file is the moment it is marked, before it marks the next', async () => {
+    const answered: [string, boolean][] = [];
+    const nextUnmarked = join(dir, 'overwrite', 'F4SE', 'Plugins', 'SomePlugin.log');
+
+    await markFiles(accessTo(dir), [inMod, inOverwrite], 'Excluded', ({ markedPath }) => {
+      answered.push([markedPath, existsSync(nextUnmarked)]);
+    });
+
+    expect(answered).toEqual([['textures/dummy.dds.mohidden', true], ['F4SE/Plugins/SomePlugin.log.mohidden', false]]);
   });
 
   it('refuses a file gone from disk by name, and an include its folder leaves undone with the instance\'s reason, while the rest land', async () => {

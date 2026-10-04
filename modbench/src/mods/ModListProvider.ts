@@ -371,8 +371,8 @@ export class ModListProvider
     }
   }
 
-  exclusionsLandedAt(files: readonly MarkedFile[]): void {
-    for (const file of files) this.exclusionLandings.set(fileKey(file), file.markedPath);
+  exclusionLandedAt(file: MarkedFile): void {
+    this.exclusionLandings.set(fileKey(file), file.markedPath);
   }
 
   forgetUnconfirmedExclusions(files: readonly OriginFileRef[]): void {

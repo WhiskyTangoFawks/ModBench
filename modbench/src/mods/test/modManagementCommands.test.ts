@@ -1501,7 +1501,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
   const included = fileRow('a.dds', false);
   const excluded = fileRow('b.dds.mohidden', true);
   const refOf = (row: FileNode) => ({ origin: row.origin, relativePath: row.file.relativePath });
-  const marks = { markExclusions: vi.fn(), forgetUnconfirmedExclusions: vi.fn(), exclusionsLandedAt: vi.fn() };
+  const marks = { markExclusions: vi.fn(), forgetUnconfirmedExclusions: vi.fn(), exclusionLandedAt: vi.fn() };
 
   it('excludes each selected file its own name leaves included, marking each before the write, and leaves the rest alone', async () => {
     const order: string[] = [];
@@ -1512,7 +1512,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     registerFileExclusionCommands(access, () => [], reporter, marks);
     await invoke('modbench.mod.excludeFile', included, [included, excluded, modRow]);
 
-    expect(markFiles).toHaveBeenCalledWith(access, [refOf(included)], 'Excluded');
+    expect(markFiles).toHaveBeenCalledWith(access, [refOf(included)], 'Excluded', expect.any(Function));
     expect(marks.markExclusions.mock.calls).toEqual([[[refOf(included)], 'Excluded']]);
     expect(order).toEqual(['mark', 'write']);
     expect(reporter.reports).toEqual([]);
@@ -1524,27 +1524,33 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     registerFileExclusionCommands(access, () => [excluded], recordingReporter(), marks);
     await invoke('modbench.mod.includeFile');
 
-    expect(markFiles).toHaveBeenCalledWith(access, [refOf(excluded)], 'Included');
+    expect(markFiles).toHaveBeenCalledWith(access, [refOf(excluded)], 'Included', expect.any(Function));
     expect(marks.markExclusions.mock.calls).toEqual([[[refOf(excluded)], 'Included']]);
   });
 
-  it('tells the marks where each landed file is now', async () => {
-    const landed = [{ ...refOf(included), markedPath: 'a.dds.mohidden' }];
-    markFiles.mockResolvedValue({ landed, refused: [] });
+  it('tells the marks where each file is the moment it is written, before the rest of the batch', async () => {
+    const other = fileRow('c.dds', false);
+    const first = { ...refOf(included), markedPath: 'a.dds.mohidden' };
+    let toldMidBatch: unknown[] = [];
+    markFiles.mockImplementation((_access: unknown, _files: unknown, _mark: unknown, landedOne: (file: typeof first) => void) => {
+      landedOne(first);
+      toldMidBatch = [...marks.exclusionLandedAt.mock.calls];
+      return Promise.resolve({ landed: [first], refused: [] });
+    });
 
     registerFileExclusionCommands(access, () => [], recordingReporter(), marks);
-    await invoke('modbench.mod.excludeFile', included);
+    await invoke('modbench.mod.excludeFile', included, [included, other]);
 
-    expect(marks.exclusionsLandedAt.mock.calls).toEqual([[landed]]);
+    expect(toldMidBatch).toEqual([[first]]);
   });
 
-  it('reports each refused file by its mod and path, once, and forgets its mark, while the rest land', async () => {
+  it('reports each refused file by its mod and path, once, out of the files it wrote, and forgets its mark, while the rest land', async () => {
     const gone = fileRow('c.dds', false);
     markFiles.mockResolvedValue({ landed: [], refused: [{ item: refOf(gone), reason: '"c.dds" is gone from disk.' }] });
     const reporter = recordingReporter();
 
     registerFileExclusionCommands(access, () => [], reporter, marks);
-    await invoke('modbench.mod.excludeFile', included, [included, gone]);
+    await invoke('modbench.mod.excludeFile', included, [included, excluded, gone]);
 
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Could not exclude 1 of 2 files.', detail: '"M/c.dds" ("c.dds" is gone from disk.)',
@@ -1566,7 +1572,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     registerFileExclusionCommands(access, () => [], reporter, marks);
     await invoke(`modbench.mod.${verb}`, clicked, [clicked, inFolder('x.mohidden/c.dds', false), inFolder('x.mohidden/d.dds.mohidden', true)]);
 
-    expect(markFiles).toHaveBeenCalledWith(access, [refOf(clicked), { origin, relativePath: changed }], mark);
+    expect(markFiles).toHaveBeenCalledWith(access, [refOf(clicked), { origin, relativePath: changed }], mark, expect.any(Function));
     expect(marks.markExclusions).toHaveBeenCalledWith([refOf(clicked), { origin, relativePath: changed }], mark);
     expect(reporter.reports).toEqual([]);
   });
