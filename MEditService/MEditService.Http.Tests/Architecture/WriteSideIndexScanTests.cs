@@ -99,6 +99,7 @@ public sealed class WriteSideIndexScanTests
         [.. typeof(Indexer).Assembly.GetExportedTypes().Select(SourceName)
             .Except(typeof(IRecordQueryService).Assembly.GetExportedTypes().Select(SourceName), StringComparer.Ordinal)
             .Append("MEditService.Index")
+            .Append(@"Index\.[A-Z]\w*")
             .Distinct(StringComparer.Ordinal)];
 
     private static IEnumerable<Type> SignatureTypes(Type type) =>

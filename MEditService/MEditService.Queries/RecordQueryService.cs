@@ -182,11 +182,8 @@ public sealed class RecordQueryService(
 
     public void ClearFilter() => _index.ClearFilter();
 
-    public RebuildOutcome RebuildStore(GameRelease gameRelease, string instanceRoot)
-    {
-        var rebuild = _index.RebuildStore(gameRelease, instanceRoot);
-        return new RebuildOutcome(rebuild.Refill, rebuild.Refusal?.Message);
-    }
+    public string? RebuildStore(GameRelease gameRelease, string instanceRoot) =>
+        _index.RebuildStore(gameRelease, instanceRoot).Refusal;
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,

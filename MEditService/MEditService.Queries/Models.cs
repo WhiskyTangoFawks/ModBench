@@ -123,7 +123,3 @@ public record CreatableRecordType(string Type, string DisplayName);
 /// is the value observed at the moment of that answer, not necessarily equal to the awaited
 /// bound.</summary>
 public record SequenceAwaitResponse(bool Reached, long Sequence);
-
-/// <summary>What asking for a rebuild came to (ADR-0019): the refill that follows the drop, and
-/// the refusal the front end shows when another window holds this instance's index (ADR-0010).</summary>
-public sealed record RebuildOutcome(Task Refill, string? Refusal = null);

@@ -164,11 +164,10 @@ public static class IndexEndpoints
         try
         {
             // Answered once the store is empty again; the refill reports through the index status.
-            // 423 Locked (ADR-0010), beside a failed reconcile's 500 and a superseded
-            // snapshot's 409.
-            if (svc.RebuildStore(gameRelease, req.InstanceRoot).Refusal is not { } refusal) return Results.NoContent();
-            logger.LogWarning("Refused to rebuild: {Message}", refusal);
-            return Results.Problem(refusal, statusCode: 423);
+            // A refusal is 423 Locked (ADR-0010).
+            return svc.RebuildStore(gameRelease, req.InstanceRoot) is { } refusal
+                ? Results.Problem(refusal, statusCode: 423)
+                : Results.NoContent();
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

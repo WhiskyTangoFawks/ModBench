@@ -320,7 +320,7 @@ public sealed class RecordQueryServiceTests
             [
                 new Index.RecordSummary(
                     "000800:Test.esp", PluginName, 3, IsWinner: true, "FromFake", "Data", Index.WorkingTreeState.Modified,
-                    HasContainerChildren: true, ParseDiagnosis: "bad", HasParseFailure: true, FullName: "Full"),
+                    HasContainerChildren: true, ParseDiagnosis: "bad", HasParseFailure: false, FullName: "Full"),
                 new Index.RecordSummary("000801:Test.esp", PluginName, 0, false, null, "Data", Index.WorkingTreeState.Added),
             ], 7);
 
@@ -331,7 +331,7 @@ public sealed class RecordQueryServiceTests
             [
                 new RecordSummary(
                     "000800:Test.esp", PluginName, 3, true, "FromFake", "Data", WorkingTreeState.Modified,
-                    true, "bad", true, "Full"),
+                    true, "bad", false, "Full"),
                 new RecordSummary("000801:Test.esp", PluginName, 0, false, null, "Data", WorkingTreeState.Added),
             ],
             result.Items);
@@ -1096,9 +1096,9 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public async Task RebuildStore_ForwardsGameReleaseAndInstanceRootToTheIndex()
+    public void RebuildStore_ForwardsGameReleaseAndInstanceRootToTheIndex()
     {
-        await _svc.RebuildStore(Release, @"C:\Instance").Refill;
+        _svc.RebuildStore(Release, @"C:\Instance");
 
         Assert.Equal(Release, _manager.LastRebuildRelease);
         Assert.Equal(@"C:\Instance", _manager.LastRebuildInstanceRoot);
@@ -1109,6 +1109,21 @@ public sealed class RecordQueryServiceTests
     {
         _manager.RefusalToRebuild = "held by another window";
 
-        Assert.Equal("held by another window", _svc.RebuildStore(Release, @"C:\Instance").Refusal);
+        Assert.Equal("held by another window", _svc.RebuildStore(Release, @"C:\Instance"));
+    }
+
+    [Fact]
+    public void GetRecords_MapsEveryWorkingTreeStateTheIndexHas()
+    {
+        var states = Enum.GetValues<Index.WorkingTreeState>();
+        _reads.SearchResult = new Index.PagedResult<Index.RecordSummary>(
+            [.. states.Select((state, i) => new Index.RecordSummary($"00080{i}:Test.esp", PluginName, 0, true, null, "Data", state))],
+            states.Length);
+
+        var result = _svc.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 10, offset: 0);
+
+        Assert.Equal(
+            states.Select(state => state.ToString()),
+            result.Items.Select(row => row.WorkingTreeState.ToString()));
     }
 }

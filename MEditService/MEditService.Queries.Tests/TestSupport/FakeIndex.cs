@@ -116,7 +116,7 @@ internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null)
     {
         LastRebuildRelease = gameRelease;
         LastRebuildInstanceRoot = instanceRoot;
-        return new StoreRebuild(Task.CompletedTask, RefusalToRebuild is { } message ? new IndexRefusal(message) : null);
+        return new StoreRebuild(Task.CompletedTask, RefusalToRebuild);
     }
 
     /// <summary>A whole fixture, opened: the index and the load order it was built against.</summary>

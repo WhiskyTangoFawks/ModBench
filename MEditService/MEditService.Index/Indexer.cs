@@ -1082,8 +1082,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
     }
 
     /// <summary>ADR-0010: drops the index file, floors its sequence at what this process
-    /// handed out, and returns the refill against the load order held, run off the caller's thread.
-    /// </summary>
+    /// handed out, and returns the refill against the load order held, run off the caller's thread,
+    /// or the refusal when another window holds the file.</summary>
     public StoreRebuild RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         var previousSequence = Sequence;
@@ -1095,7 +1095,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
         catch (IndexHeldElsewhereException ex)
         {
-            return new StoreRebuild(Task.CompletedTask, new IndexRefusal(ex.Message));
+            _logger.LogWarning(ex, "Refused to rebuild: the index at {Path} is held by another window", ex.IndexPath);
+            return new StoreRebuild(Task.CompletedTask, ex.Message);
         }
 
         return new StoreRebuild(Task.Factory.StartNew(
