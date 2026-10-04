@@ -1084,15 +1084,22 @@ public sealed class Indexer : IQueryIndex, IDisposable
     /// <summary>ADR-0010: drops the index file, floors its sequence at what this process
     /// handed out, and returns the refill against the load order held, run off the caller's thread.
     /// </summary>
-    public Task RebuildStore(GameRelease gameRelease, string instanceRoot)
+    public StoreRebuild RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         var previousSequence = Sequence;
         Close();
-        // Released before the reconcile below opens the same file for its own scope.
-        _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence).Dispose();
+        try
+        {
+            // Released before the reconcile below opens the same file for its own scope.
+            _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence).Dispose();
+        }
+        catch (IndexHeldElsewhereException ex)
+        {
+            return new StoreRebuild(Task.CompletedTask, new IndexRefusal(ex.Message));
+        }
 
-        return Task.Factory.StartNew(
-            ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, _refillScheduler);
+        return new StoreRebuild(Task.Factory.StartNew(
+            ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, _refillScheduler));
     }
 
     /// <summary>Reconciles every arrival of the load order, changed or not, on a thread of its own

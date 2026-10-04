@@ -71,7 +71,7 @@ public sealed class RecordQueryService(
             RecordTypes: recordTypes, Plugin: pluginFilter, Origin: originFilter, Search: search,
             SearchFormKey: FormKeyOfFormId(search, reads), Limit: limit, Offset: offset,
             GroupOnly: search is null, Unfiltered: unfiltered);
-        return reads.Search(query);
+        return reads.Search(query).ToQuery();
     }
 
     private string? FormKeyOfFormId(string? search, IRecordReads reads) =>
@@ -182,12 +182,15 @@ public sealed class RecordQueryService(
 
     public void ClearFilter() => _index.ClearFilter();
 
-    public Task RebuildStore(GameRelease gameRelease, string instanceRoot) =>
-        _index.RebuildStore(gameRelease, instanceRoot);
+    public RebuildOutcome RebuildStore(GameRelease gameRelease, string instanceRoot)
+    {
+        var rebuild = _index.RebuildStore(gameRelease, instanceRoot);
+        return new RebuildOutcome(rebuild.Refill, rebuild.Refusal?.Message);
+    }
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,
-            document.Fields, Origin: document.Plugin.Origin, RecordType: document.RecordType,
+            [.. document.Fields.Select(IndexRowMapping.ToQuery)], Origin: document.Plugin.Origin, RecordType: document.RecordType,
             IsPartialForm: document.IsPartialForm,
             ParseDiagnosis: document.ParseDiagnosis);
 

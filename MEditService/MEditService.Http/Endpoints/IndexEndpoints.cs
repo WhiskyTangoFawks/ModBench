@@ -1,4 +1,3 @@
-using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.Queries;
@@ -165,15 +164,11 @@ public static class IndexEndpoints
         try
         {
             // Answered once the store is empty again; the refill reports through the index status.
-            _ = svc.RebuildStore(gameRelease, req.InstanceRoot);
-            return Results.NoContent();
-        }
-        catch (IndexHeldElsewhereException ex)
-        {
             // 423 Locked (ADR-0010), beside a failed reconcile's 500 and a superseded
             // snapshot's 409.
-            logger.LogWarning(ex, "Refused to rebuild: the index at {Path} is held by another window", ex.IndexPath);
-            return Results.Problem(ex.Message, statusCode: 423);
+            if (svc.RebuildStore(gameRelease, req.InstanceRoot).Refusal is not { } refusal) return Results.NoContent();
+            logger.LogWarning("Refused to rebuild: {Message}", refusal);
+            return Results.Problem(refusal, statusCode: 423);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

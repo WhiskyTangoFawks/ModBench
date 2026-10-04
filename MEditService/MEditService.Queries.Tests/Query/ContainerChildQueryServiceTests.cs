@@ -11,7 +11,7 @@ public class ContainerChildQueryServiceTests
 {
     private sealed class StubReader(
         IReadOnlyList<ContainerChildRow> containerChildren,
-        IReadOnlyDictionary<string, IReadOnlyList<RecordSummary>>? searchByType = null) : IRecordReads
+        IReadOnlyDictionary<string, IReadOnlyList<Index.RecordSummary>>? searchByType = null) : IRecordReads
     {
         public string? LastGetContainerChildrenOrigin { get; private set; }
         public readonly List<string?> SearchedRecordTypes = [];
@@ -22,7 +22,7 @@ public class ContainerChildQueryServiceTests
             return containerChildren;
         }
 
-        public PagedResult<RecordSummary> Search(RecordQuery query)
+        public Index.PagedResult<Index.RecordSummary> Search(RecordQuery query)
         {
             var type = query.RecordTypes?.SingleOrDefault();
             SearchedRecordTypes.Add(type);
@@ -49,7 +49,7 @@ public class ContainerChildQueryServiceTests
         public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) => [];
         public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin) => [];
         public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();
-        public CellChildRecords GetCellChildRecords(PluginAddress plugin, string fk) => new([], []);
+        public Index.CellChildRecords GetCellChildRecords(PluginAddress plugin, string fk) => new([], []);
         public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;
         public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
         public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
@@ -65,15 +65,15 @@ public class ContainerChildQueryServiceTests
                 new ContainerChildRow("scen1:M.esp", "qust1:M.esp", "Quest", "Scenes", 0),
                 new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
             ],
-            new Dictionary<string, IReadOnlyList<RecordSummary>>
+            new Dictionary<string, IReadOnlyList<Index.RecordSummary>>
             {
                 ["dial"] =
                 [
-                    new RecordSummary("dial1:M.esp", "M.esp", 0, true, "TopicA", "Data"),
-                    new RecordSummary("dial2:M.esp", "M.esp", 0, true, "TopicB", "Data"),
+                    new Index.RecordSummary("dial1:M.esp", "M.esp", 0, true, "TopicA", "Data"),
+                    new Index.RecordSummary("dial2:M.esp", "M.esp", 0, true, "TopicB", "Data"),
                 ],
-                ["dlbr"] = [new RecordSummary("dlbr1:M.esp", "M.esp", 0, true, "BranchA", "Data")],
-                ["scen"] = [new RecordSummary("scen1:M.esp", "M.esp", 0, true, "SceneA", "Data")],
+                ["dlbr"] = [new Index.RecordSummary("dlbr1:M.esp", "M.esp", 0, true, "BranchA", "Data")],
+                ["scen"] = [new Index.RecordSummary("scen1:M.esp", "M.esp", 0, true, "SceneA", "Data")],
             });
         var svc = new ContainerChildQueryService(new StubIndex(reader));
 
@@ -93,12 +93,12 @@ public class ContainerChildQueryServiceTests
                 new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
                 new ContainerChildRow("dial2:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 1),
             ],
-            new Dictionary<string, IReadOnlyList<RecordSummary>>
+            new Dictionary<string, IReadOnlyList<Index.RecordSummary>>
             {
                 ["dial"] =
                 [
-                    new RecordSummary("dial1:M.esp", "M.esp", 0, true, "TopicA", "Data", HasContainerChildren: true),
-                    new RecordSummary("dial2:M.esp", "M.esp", 0, true, "TopicB", "Data", HasContainerChildren: false),
+                    new Index.RecordSummary("dial1:M.esp", "M.esp", 0, true, "TopicA", "Data", HasContainerChildren: true),
+                    new Index.RecordSummary("dial2:M.esp", "M.esp", 0, true, "TopicB", "Data", HasContainerChildren: false),
                 ],
             });
         var svc = new ContainerChildQueryService(new StubIndex(reader));
@@ -117,12 +117,12 @@ public class ContainerChildQueryServiceTests
                 new ContainerChildRow("info2:M.esp", "dial1:M.esp", "DialogTopic", "Responses", 1),
                 new ContainerChildRow("info1:M.esp", "dial1:M.esp", "DialogTopic", "Responses", 0),
             ],
-            new Dictionary<string, IReadOnlyList<RecordSummary>>
+            new Dictionary<string, IReadOnlyList<Index.RecordSummary>>
             {
                 ["info"] =
                 [
-                    new RecordSummary("info1:M.esp", "M.esp", 0, true, null, "Data"),
-                    new RecordSummary("info2:M.esp", "M.esp", 0, true, null, "Data"),
+                    new Index.RecordSummary("info1:M.esp", "M.esp", 0, true, null, "Data"),
+                    new Index.RecordSummary("info2:M.esp", "M.esp", 0, true, null, "Data"),
                 ],
             });
         var svc = new ContainerChildQueryService(new StubIndex(reader));
@@ -152,9 +152,9 @@ public class ContainerChildQueryServiceTests
                 new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
                 new ContainerChildRow("dial-missing:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 1),
             ],
-            new Dictionary<string, IReadOnlyList<RecordSummary>>
+            new Dictionary<string, IReadOnlyList<Index.RecordSummary>>
             {
-                ["dial"] = [new RecordSummary("dial1:M.esp", "M.esp", 0, true, "TopicA", "Data")],
+                ["dial"] = [new Index.RecordSummary("dial1:M.esp", "M.esp", 0, true, "TopicA", "Data")],
             });
         var entries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(entries)));

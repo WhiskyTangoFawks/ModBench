@@ -1,4 +1,3 @@
-using MEditService.Index;
 using MEditService.Ports;
 using Mutagen.Bethesda;
 
@@ -36,5 +35,5 @@ public interface IRecordQueryService
     (string Sql, string Source)? GetFilter();
     void SetFilter(string sql, string source);
     void ClearFilter();
-    Task RebuildStore(GameRelease gameRelease, string instanceRoot);
+    RebuildOutcome RebuildStore(GameRelease gameRelease, string instanceRoot);
 }

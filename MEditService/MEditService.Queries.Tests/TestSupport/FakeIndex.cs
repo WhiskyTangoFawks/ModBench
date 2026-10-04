@@ -43,9 +43,9 @@ internal sealed class FakeReads(
     // Queries'. This answers with exactly what the test configured, recording the query asked of it
     // so a test can assert on the RecordQuery RecordQueryService built.
     public RecordQuery? LastSearch { get; private set; }
-    public PagedResult<RecordSummary> SearchResult { get; set; } = new([], 0);
+    public Index.PagedResult<Index.RecordSummary> SearchResult { get; set; } = new([], 0);
 
-    public PagedResult<RecordSummary> Search(RecordQuery query)
+    public Index.PagedResult<Index.RecordSummary> Search(RecordQuery query)
     {
         LastSearch = query;
         return SearchResult;
@@ -86,7 +86,7 @@ internal sealed class FakeReads(
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) => [];
     public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin) => [];
     public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();
-    public CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey) => new([], []);
+    public Index.CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey) => new([], []);
     public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;
     public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
     public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey) => [];
@@ -110,11 +110,13 @@ internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null)
 
     public void ClearFilter() => ActiveFilter = null;
 
-    public Task RebuildStore(GameRelease gameRelease, string instanceRoot)
+    public string? RefusalToRebuild { get; set; }
+
+    public StoreRebuild RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         LastRebuildRelease = gameRelease;
         LastRebuildInstanceRoot = instanceRoot;
-        return Task.CompletedTask;
+        return new StoreRebuild(Task.CompletedTask, RefusalToRebuild is { } message ? new IndexRefusal(message) : null);
     }
 
     /// <summary>A whole fixture, opened: the index and the load order it was built against.</summary>
@@ -137,7 +139,7 @@ internal sealed class StubIndex(IRecordReads? reads) : IQueryIndex
     public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw ReadsOnly();
     public void SetFilter(string sql, string source) => throw ReadsOnly();
     public void ClearFilter() => throw ReadsOnly();
-    public Task RebuildStore(GameRelease gameRelease, string instanceRoot) => throw ReadsOnly();
+    public StoreRebuild RebuildStore(GameRelease gameRelease, string instanceRoot) => throw ReadsOnly();
 
     private NotSupportedException ReadsOnly() => new($"{GetType().Name} answers reads only.");
 }

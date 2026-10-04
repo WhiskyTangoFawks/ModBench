@@ -34,5 +34,5 @@ public interface IQueryIndex
 
     void ClearFilter();
 
-    Task RebuildStore(GameRelease gameRelease, string instanceRoot);
+    StoreRebuild RebuildStore(GameRelease gameRelease, string instanceRoot);
 }
