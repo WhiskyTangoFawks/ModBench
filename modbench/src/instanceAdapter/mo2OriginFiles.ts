@@ -23,12 +23,12 @@ export function mo2OriginFiles({ instanceRoot }: Mo2Context): Mo2OriginFiles {
         if (mark === 'Included' && !ownMark && relativePath.split('/').slice(0, -1).some(isExcludedName)) {
           return { gone: false, refusal: `"${relativePath}" has no suffix of its own to remove, and its folder excludes it.` };
         }
-        if (ownMark === (mark === 'Excluded')) return { gone: false, wrote: false };
+        if (ownMark === (mark === 'Excluded')) return { gone: false, wrote: false, relativePath };
         const renamed = mark === 'Excluded' ? excludedName : includedName;
         const to = renamed(from);
         if (await exists(to)) return { gone: false, refusal: `"${renamed(relativePath)}" is already there.` };
         await rename(from, to);
-        return { gone: false, wrote: true };
+        return { gone: false, wrote: true, relativePath: renamed(relativePath) };
       });
     },
   };

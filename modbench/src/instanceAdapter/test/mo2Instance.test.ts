@@ -838,11 +838,11 @@ describe('the MO2 Instance adapter', () => {
     ])('renames %s file with the suffix, and back', async (_, origin, folder) => {
       await put(join(root, folder, 'Textures', 'a.dds'), 'pixels');
 
-      expect(await adapter.markOriginFile(origin, 'Textures/a.dds', 'Excluded')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markOriginFile(origin, 'Textures/a.dds', 'Excluded')).toEqual({ gone: false, wrote: true, relativePath: 'Textures/a.dds.mohidden' });
       expect(await isThere(join(root, folder, 'Textures', 'a.dds'))).toBe(false);
       expect(await text(root, join(folder, 'Textures', 'a.dds.mohidden'))).toBe('pixels');
 
-      expect(await adapter.markOriginFile(origin, 'Textures/a.dds.mohidden', 'Included')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markOriginFile(origin, 'Textures/a.dds.mohidden', 'Included')).toEqual({ gone: false, wrote: true, relativePath: 'Textures/a.dds' });
       expect(await text(root, join(folder, 'Textures', 'a.dds'))).toBe('pixels');
       expect(await isThere(join(root, folder, 'Textures', 'a.dds.mohidden'))).toBe(false);
     });
@@ -850,7 +850,7 @@ describe('the MO2 Instance adapter', () => {
     it('renames a folder, which excludes everything in it', async () => {
       await put(join(root, 'mods', 'Harder VATS', 'Textures', 'a.dds'));
 
-      expect(await adapter.markOriginFile(modOrigin, 'Textures', 'Excluded')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markOriginFile(modOrigin, 'Textures', 'Excluded')).toEqual({ gone: false, wrote: true, relativePath: 'Textures.mohidden' });
 
       expect(await isThere(join(root, 'mods', 'Harder VATS', 'Textures'))).toBe(false);
       expect(await isThere(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'))).toBe(true);
@@ -870,7 +870,7 @@ describe('the MO2 Instance adapter', () => {
     it('includes a file with its own suffix inside an excluded folder, removing its own suffix alone', async () => {
       await put(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds.mohidden'), 'pixels');
 
-      expect(await adapter.markOriginFile(modOrigin, 'Textures.mohidden/a.dds.mohidden', 'Included')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markOriginFile(modOrigin, 'Textures.mohidden/a.dds.mohidden', 'Included')).toEqual({ gone: false, wrote: true, relativePath: 'Textures.mohidden/a.dds' });
 
       expect(await text(root, join('mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'))).toBe('pixels');
     });
@@ -878,7 +878,7 @@ describe('the MO2 Instance adapter', () => {
     it('excludes a file inside an excluded folder by its own name', async () => {
       await put(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'), 'pixels');
 
-      expect(await adapter.markOriginFile(modOrigin, 'Textures.mohidden/a.dds', 'Excluded')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markOriginFile(modOrigin, 'Textures.mohidden/a.dds', 'Excluded')).toEqual({ gone: false, wrote: true, relativePath: 'Textures.mohidden/a.dds.mohidden' });
 
       expect(await text(root, join('mods', 'Harder VATS', 'Textures.mohidden', 'a.dds.mohidden'))).toBe('pixels');
     });
@@ -886,7 +886,7 @@ describe('the MO2 Instance adapter', () => {
     it('includes a file whose suffix is in capitals', async () => {
       await put(join(root, 'mods', 'Harder VATS', 'a.dds.MOHIDDEN'), 'pixels');
 
-      expect(await adapter.markOriginFile(modOrigin, 'a.dds.MOHIDDEN', 'Included')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markOriginFile(modOrigin, 'a.dds.MOHIDDEN', 'Included')).toEqual({ gone: false, wrote: true, relativePath: 'a.dds' });
 
       expect(await text(root, join('mods', 'Harder VATS', 'a.dds'))).toBe('pixels');
     });
@@ -896,8 +896,8 @@ describe('the MO2 Instance adapter', () => {
       await put(join(root, 'mods', 'Harder VATS', 'b.dds'));
       const before = await snapshotTree(root);
 
-      expect(await adapter.markOriginFile(modOrigin, 'a.dds.MOHIDDEN', 'Excluded')).toEqual({ gone: false, wrote: false });
-      expect(await adapter.markOriginFile(modOrigin, 'b.dds', 'Included')).toEqual({ gone: false, wrote: false });
+      expect(await adapter.markOriginFile(modOrigin, 'a.dds.MOHIDDEN', 'Excluded')).toEqual({ gone: false, wrote: false, relativePath: 'a.dds.MOHIDDEN' });
+      expect(await adapter.markOriginFile(modOrigin, 'b.dds', 'Included')).toEqual({ gone: false, wrote: false, relativePath: 'b.dds' });
 
       assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
@@ -924,7 +924,7 @@ describe('the MO2 Instance adapter', () => {
       await put(join(root, 'mods', 'overwrite', 'a.esp'));
       await put(join(root, 'overwrite', 'a.esp'));
 
-      expect(await adapter.markOriginFile({ kind: 'mod', name: 'overwrite' }, 'a.esp', 'Excluded')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markOriginFile({ kind: 'mod', name: 'overwrite' }, 'a.esp', 'Excluded')).toEqual({ gone: false, wrote: true, relativePath: 'a.esp.mohidden' });
 
       expect(await isThere(join(root, 'mods', 'overwrite', 'a.esp.mohidden'))).toBe(true);
       expect(await isThere(join(root, 'overwrite', 'a.esp'))).toBe(true);

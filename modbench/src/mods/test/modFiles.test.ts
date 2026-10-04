@@ -574,15 +574,42 @@ describe('an excluded or included file while the disk has not confirmed it (comm
     expect(await spinningIn(provider, 'Overwrite')).toEqual([]);
   });
 
-  it('the mark goes silently once the disk lists no file at its path', async () => {
+  const markedFile = (relativePath: string): OriginFile => ({ ...file(relativePath), excluded: true, excludedByName: true });
+
+  it('the mark goes silently once the disk shows the file marked where the write put it', async () => {
     const { instance, logged, provider } = setUp([file('a.dds')]);
     provider.markExclusions([inM], 'Excluded');
     vi.advanceTimersByTime(1000);
 
-    instance.publish(valueHolding([{ ...file('a.dds.mohidden'), excluded: true }]));
+    provider.exclusionsLandedAt([{ ...inM, markedPath: 'a.dds.mohidden' }]);
+    instance.publish(valueHolding([markedFile('a.dds.mohidden')]));
+    instance.publish(valueHolding([markedFile('a.dds.mohidden')]));
 
     expect(await spinningIn(provider, 'M')).toEqual([]);
     expect(logged).toEqual([]);
+  });
+
+  it('the mark goes silently for a manager that marks a file where it is', async () => {
+    const { instance, logged, provider } = setUp([file('a.dds')]);
+    provider.markExclusions([inM], 'Excluded');
+    vi.advanceTimersByTime(1000);
+
+    provider.exclusionsLandedAt([{ ...inM, markedPath: 'a.dds' }]);
+    instance.publish(valueHolding([markedFile('a.dds')]));
+
+    expect(await spinningIn(provider, 'M')).toEqual([]);
+    expect(logged).toEqual([]);
+  });
+
+  it('logs one line when the file is gone from the disk where the write put it', () => {
+    const { instance, logged, provider } = setUp([file('a.dds')]);
+    provider.markExclusions([inM], 'Excluded');
+    provider.exclusionsLandedAt([{ ...inM, markedPath: 'a.dds.mohidden' }]);
+
+    instance.publish(valueHolding([]));
+    instance.publish(valueHolding([]));
+
+    expect(logged).toEqual(['"M/a.dds" was excluded, and it is gone from the disk.']);
   });
 
   it('shows the disk\'s row unmarked, and logs one line naming the file and its mod, after a second value that still lists it', async () => {
@@ -596,8 +623,8 @@ describe('an excluded or included file while the disk has not confirmed it (comm
 
     expect(await spinningIn(provider, 'M')).toEqual([]);
     expect(logged).toEqual([
-      '"a.dds" in "M" was excluded, and the disk does not show it.',
-      '"b.ini" in Overwrite was excluded, and the disk does not show it.',
+      '"M/a.dds" was excluded, and the disk does not show it.',
+      '"Overwrite/b.ini" was excluded, and the disk does not show it.',
     ]);
   });
 

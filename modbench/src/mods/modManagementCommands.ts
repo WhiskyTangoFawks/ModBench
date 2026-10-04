@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { originLabel, OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
+import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { ModListProvider, type ModlistNode, type SortDirection } from './ModListProvider';
 import {
@@ -25,8 +25,8 @@ import {
   type ModlistSelectionResult,
   type MovePlace,
   type OriginFileMark,
-  type OriginFileRef,
 } from '../modlist/modlist';
+import { FILE_MARKS, fileLabel } from './modFiles';
 import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
 import { installNameRefusal } from '../install/install';
 import { errorMessage } from '../ports/errorMessage';
@@ -80,25 +80,21 @@ export function registerModEnableCommands(
   ];
 }
 
-const fileLabel = ({ origin, relativePath }: OriginFileRef): string => `${originLabel(origin)}/${relativePath}`;
-
-const FILE_MARKS = {
-  Excluded: { verb: 'exclude', state: 'excluded' },
-  Included: { verb: 'include', state: 'included' },
-} as const;
 
 // modbench.mod.excludeFile / modbench.mod.includeFile: the direction is the command's, so a mixed
 // selection takes the right-clicked row's (mods.md, Menus and keys, story 7).
 export function registerFileExclusionCommands(
   access: ModlistAccess, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
-  marks: Pick<ModListProvider, 'markExclusions' | 'forgetUnconfirmedExclusions'>,
+  marks: Pick<ModListProvider, 'markExclusions' | 'exclusionsLandedAt' | 'forgetUnconfirmedExclusions'>,
 ): vscode.Disposable[] {
   const run = (mark: OriginFileMark) => async (entry: GestureEntry) => {
     const rows = pluralArgument(entry, 'file');
     if (rows.length === 0) return;
     const { verb, state } = FILE_MARKS[mark];
-    marks.markExclusions(rows.filter((row) => row.exclusion !== state).map((row) => row.ref), mark);
-    const outcome = await markFiles(access, rows.map((row) => row.ref), mark);
+    const changing = rows.filter((row) => row.exclusion !== state).map((row) => row.ref);
+    marks.markExclusions(changing, mark);
+    const outcome = await markFiles(access, changing, mark);
+    marks.exclusionsLandedAt(outcome.landed);
     reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${rows.length} files.`, outcome, fileLabel);
     marks.forgetUnconfirmedExclusions(outcome.refused.map(({ item }) => item));
   };

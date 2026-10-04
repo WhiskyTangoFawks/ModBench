@@ -246,8 +246,12 @@ export interface Written {
 
 export type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
-/** A mark on a file of an origin, or why it was refused before anything changed. */
-export type OriginFileMarked = Marked | { readonly gone: false; readonly refusal: string };
+/** A mark on a file of an origin, with the path it has once marked, or why it was refused before
+ *  anything changed. */
+export type OriginFileMarked =
+  | { readonly gone: true }
+  | { readonly gone: false; readonly wrote: boolean; readonly relativePath: string }
+  | { readonly gone: false; readonly refusal: string };
 
 /** The refusal of a new mod whose name a folder already holds: one wording for create and install. */
 export const modNameTakenRefusal = (name: string): string =>

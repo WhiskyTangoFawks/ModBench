@@ -1239,7 +1239,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   it.each([
     ['file included', 'modbench.mod.excludeFile'],
     ['file excluded', 'modbench.mod.includeFile'],
-  ])('File menu on a %s row: %s, between go to mod and copy value', (viewItem, command) => {
+  ])('File menu on a %s row: %s, after open folder and any go to mod, before copy value', (viewItem, command) => {
     expect(menuOn(viewItem)).toEqual([['modbench.mod.openFolder', '1_open'], [command, '2_change'], ['modbench.copyValue', '5_copy']]);
     expect(menuOn(`file conflict ${viewItem.split(' ')[1]}`)).toEqual([
       ['modbench.mod.openFolder', '1_open'], ['modbench.mod.goToMod', '1_open'], [command, '2_change'], ['modbench.copyValue', '5_copy'],

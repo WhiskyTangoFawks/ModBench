@@ -8,9 +8,12 @@ import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
 import {
-  setModsEnabled as setModsEnabledCommand, type ModlistAccess, type OriginFileMark, type OriginFileRef,
+  setModsEnabled as setModsEnabledCommand, type MarkedFile, type ModlistAccess, type OriginFileMark, type OriginFileRef,
 } from '../modlist/modlist';
-import { anyNamed, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode, type ChildrenShown } from './modFiles';
+import {
+  anyNamed, expanderOver, fileLabel, fileRowUri, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode, FILE_MARKS,
+  type ChildrenShown,
+} from './modFiles';
 import { modRowUri } from './modIndicators';
 
 /** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
@@ -66,7 +69,7 @@ interface UnconfirmedShape {
   readonly covered: (value: InstanceValue) => boolean;
   /** A value that shows the write's first step but not its last: the write in progress. */
   readonly partway?: (value: InstanceValue) => boolean;
-  readonly unmet: (subjects: readonly RowRef[]) => string;
+  readonly unmet: (subjects: readonly RowRef[], value: InstanceValue) => string;
   marked: boolean;
   partwaySeen: boolean;
   differedOnce: boolean;
@@ -84,10 +87,12 @@ function sameRow(a: RowRef, b: RowRef): boolean {
   return sameEntry(a, b);
 }
 
-function listsFile(value: InstanceValue, { origin, relativePath }: OriginFileRef): boolean {
+function fileAt(value: InstanceValue, origin: FileOrigin, relativePath: string): OriginFile | undefined {
   const files = origin.kind === 'mod' ? value.filesByMod.get(origin.name) ?? [] : value.overwriteFiles;
-  return files.some((file) => file.relativePath === relativePath);
+  return files.find((file) => file.relativePath === relativePath);
 }
+
+const fileKey = ({ origin, relativePath }: OriginFileRef): string => fileRowUri(origin, relativePath).path;
 
 const isListed = (value: InstanceValue, ref: EntryRef): boolean => value.mods.some((entry) => sameEntry(entry, ref));
 
@@ -106,10 +111,7 @@ function travellingWith(entries: readonly ModlistEntry[], moved: readonly EntryR
 }
 
 function quoted(ref: RowRef): string {
-  if (ref.kind === 'file') {
-    const where = ref.origin.kind === 'mod' ? `"${ref.origin.name}"` : OVERWRITE_LABEL;
-    return `"${ref.relativePath}" in ${where}`;
-  }
+  if (ref.kind === 'file') return `"${fileLabel(ref)}"`;
   return ref.kind === 'separator' ? `Separator "${ref.name}"` : `"${ref.name}"`;
 }
 
@@ -253,6 +255,7 @@ export class ModListProvider
   private readonly unconfirmed = new Map<string, UnconfirmedWrite>();
   private readonly unconfirmedRenames = new Map<string, UnconfirmedRename>();
   private readonly unconfirmedShapes = new Set<UnconfirmedShape>();
+  private readonly exclusionLandings = new Map<string, string>();
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
@@ -302,7 +305,7 @@ export class ModListProvider
           shape.differedOnce = true;
           continue;
         }
-        this.log(shape.unmet(shape.subjects));
+        this.log(shape.unmet(shape.subjects, value));
       }
       this.dropShape(shape);
     }
@@ -348,16 +351,32 @@ export class ModListProvider
     }
   }
 
-  /** Each file's row stays as it is, marked, until the disk lists no file at its path. */
+  /** Each file's row stays as it is, marked, until the disk shows the file's own name marked where
+   *  the write put it, its own path until the write says. */
   markExclusions(files: readonly OriginFileRef[], mark: OriginFileMark): void {
-    const done = mark === 'Excluded' ? 'excluded' : 'included';
+    const { state } = FILE_MARKS[mark];
     for (const file of files) {
-      this.markShape([fileRef(file)], (value) => !listsFile(value, file),
-        () => `${quoted(fileRef(file))} was ${done}, and the disk does not show it.`);
+      const key = fileKey(file);
+      this.exclusionLandings.delete(key);
+      const landed = (value: InstanceValue) => fileAt(value, file.origin, this.exclusionLandings.get(key) ?? file.relativePath);
+      this.markShape([fileRef(file)], (value) => {
+        const covered = landed(value)?.excludedByName === (mark === 'Excluded');
+        if (covered) this.exclusionLandings.delete(key);
+        return covered;
+      }, (_, value) => {
+        const shown = landed(value) === undefined ? 'it is gone from the disk' : 'the disk does not show it';
+        this.exclusionLandings.delete(key);
+        return `${quoted(fileRef(file))} was ${state}, and ${shown}.`;
+      });
     }
   }
 
+  exclusionsLandedAt(files: readonly MarkedFile[]): void {
+    for (const file of files) this.exclusionLandings.set(fileKey(file), file.markedPath);
+  }
+
   forgetUnconfirmedExclusions(files: readonly OriginFileRef[]): void {
+    for (const file of files) this.exclusionLandings.delete(fileKey(file));
     this.forgetUnconfirmedShape(files.map(fileRef));
   }
 
@@ -482,6 +501,7 @@ export class ModListProvider
     this.unconfirmedRenames.clear();
     for (const shape of this.unconfirmedShapes) clearTimeout(shape.timer);
     this.unconfirmedShapes.clear();
+    this.exclusionLandings.clear();
   }
 
   dispose(): void {

@@ -2,8 +2,9 @@
 
 import * as vscode from 'vscode';
 import type { FileOrigin, OriginFile, OriginFolder } from '../instanceLoader/instance';
+import { originLabel } from '../instanceLoader/fileConflictIndex';
 import type { ModlistNode } from './ModListProvider';
-import type { OriginFileRef } from '../modlist/modlist';
+import type { OriginFileMark, OriginFileRef } from '../modlist/modlist';
 
 // Not `file:`: VS Code badges and tints a row whose resourceUri carries a diagnostic or another
 // provider's file decoration, and a file row draws neither. The file icon theme reads the name
@@ -79,9 +80,18 @@ export class FolderNode extends vscode.TreeItem {
   }
 }
 
+/** Each mark's verb, and the state of a file whose own name carries it. */
+export const FILE_MARKS = {
+  Excluded: { verb: 'exclude', state: 'excluded' },
+  Included: { verb: 'include', state: 'included' },
+} as const satisfies Record<OriginFileMark, { verb: string; state: string }>;
+
 /** The file's own name, as the reference tool reads it to offer one of the pair: excluded offers
  *  include, and included offers exclude, whatever its folder. */
-export type FileExclusion = 'excluded' | 'included';
+export type FileExclusion = (typeof FILE_MARKS)[OriginFileMark]['state'];
+
+/** How a message names a file: its mod or Overwrite, and its path there. */
+export const fileLabel = ({ origin, relativePath }: OriginFileRef): string => `${originLabel(origin)}/${relativePath}`;
 
 export class FileNode extends vscode.TreeItem {
   readonly kind = 'file' as const;
@@ -95,7 +105,7 @@ export class FileNode extends vscode.TreeItem {
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
     fileRow(this, parent, origin, name, file.relativePath);
-    this.exclusion = file.excludedByName ? 'excluded' : 'included';
+    this.exclusion = FILE_MARKS[file.excludedByName ? 'Excluded' : 'Included'].state;
     this.contextValue = ['file', inConflict && 'conflict', this.exclusion].filter(Boolean).join(' ');
     this.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file.path), { preview: true }] };
   }
