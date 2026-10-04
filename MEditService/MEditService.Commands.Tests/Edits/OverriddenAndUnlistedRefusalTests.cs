@@ -33,7 +33,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
 
         mod.EditHandler.Set(mod.OverriddenPlugin, mod.OverriddenNpc.ToString(), "HeightMax", Json("0.75"));
 
-        Assert.Empty(mod.GitStatus(mod.OverriddenPlugin));
+        Assert.Empty(mod.ChangedFormKeys(mod.OverriddenPlugin));
         var document = mod.Document(mod.OverriddenPlugin, mod.OverriddenNpc.ToString());
         Assert.NotNull(document);
         Assert.Equal(OverriddenAndUnlistedFixture.OverriddenNpcEditorId, document.EditorId);
@@ -72,7 +72,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
         var result = mod.EditHandler.Set(mod.UnlistedPlugin, mod.UnlistedNpc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
-        Assert.Empty(mod.GitStatus(mod.UnlistedPlugin));
+        Assert.Empty(mod.ChangedFormKeys(mod.UnlistedPlugin));
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
             .Set(mod.WinningPlugin, mod.WinningNpc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
-        Assert.Empty(mod.GitStatus(mod.WinningPlugin));
+        Assert.Empty(mod.ChangedFormKeys(mod.WinningPlugin));
     }
 
     [Fact]

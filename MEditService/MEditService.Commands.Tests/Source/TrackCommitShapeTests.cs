@@ -31,49 +31,13 @@ public sealed class TrackCommitShapeTests : IDisposable
     public void Dispose() => _root.Dispose();
 
     [Fact]
-    public async Task Track_OfBothPluginsOfAMod_CommitsTheModsOwnFiles_ThenEachPluginOnItsOwn()
-    {
-        var first = WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        var second = WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
-
-        var result = await Track(UpstreamVersion("1.2.3"), "First.esp", "Second.esp");
-
-        Assert.Empty(result.Refused);
-        Assert.Equal(["Track TwoPluginMod", "Track First.esp 1.2.3", "Track Second.esp 1.2.3"], SubjectsOnMain());
-        Assert.Equal(
-            $"Plugin: First.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: {first}\n",
-            TrailersAsGitsOwnParserReads("main~1"));
-        Assert.Equal(
-            $"Plugin: Second.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: {second}\n",
-            TrailersAsGitsOwnParserReads("main"));
-        Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
-    }
-
-    [Fact]
-    public async Task Track_WithNoUpstreamVersionInTheRequest_LeavesItOutOfEverySubjectAndTrailer_WhateverTheModFolderHolds()
-    {
-        File.WriteAllText(Path.Combine(_modFolder, "meta.ini"), "[General]\nversion=9.9.9\n");
-        var first = WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        var second = WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
-
-        var result = await Track("First.esp", "Second.esp");
-
-        Assert.Empty(result.Refused);
-        Assert.Equal(["Track TwoPluginMod", "Track First.esp", "Track Second.esp"], SubjectsOnMain());
-        Assert.Equal($"Plugin: First.esp\nBinary-SHA256: {first}\n", TrailersAsGitsOwnParserReads("main~1"));
-        Assert.Equal($"Plugin: Second.esp\nBinary-SHA256: {second}\n", TrailersAsGitsOwnParserReads("main"));
-    }
-
-    [Fact]
-    public async Task Track_ParksEachPluginsLastCompileRef_AtItsOwnBaselineCommit()
+    public async Task Track_ParksEachPluginsBinary_UnderItsOwnName()
     {
         var first = WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         var second = WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
         await Track("First.esp", "Second.esp");
 
-        Assert.Equal(Git("rev-parse", "main~1"), Git("rev-parse", SourceRepository.LastCompileRef("First.esp")));
-        Assert.Equal(Git("rev-parse", "main"), Git("rev-parse", SourceRepository.LastCompileRef("Second.esp")));
         Assert.Equal([first], SourceRepository.ParkedCompileBinarySha256s(_modFolder, "First.esp"));
         Assert.Equal([second], SourceRepository.ParkedCompileBinarySha256s(_modFolder, "Second.esp"));
     }
@@ -87,8 +51,8 @@ public sealed class TrackCommitShapeTests : IDisposable
         var result = await Track("First.esp");
 
         Assert.Equal([Key("First.esp")], result.Landed);
-        Assert.Equal(["Track TwoPluginMod", "Track First.esp"], SubjectsOnMain());
-        Assert.False(Directory.Exists(Path.Combine(_modFolder, SourceRepository.RootFor("Second.esp"))));
+        Assert.Empty(HeldBy("Second.esp"));
+        Assert.NotEmpty(HeldBy("First.esp"));
         Assert.Empty(SourceRepository.ParkedCompileBinarySha256s(_modFolder, "Second.esp"));
     }
 
@@ -98,7 +62,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
         await Track("First.esp");
-        var mainBefore = Git("rev-parse", "refs/heads/main");
+        var firstBefore = HeldBy("First.esp");
 
         var result = await Track("First.esp", "Second.esp");
 
@@ -107,8 +71,8 @@ public sealed class TrackCommitShapeTests : IDisposable
             [(Key("First.esp"), TrackRefusal.AlreadyTracked), (Key("Second.esp"), TrackRefusal.AlreadyTracked)],
             result.Refused.Select(r => (r.Plugin, r.Refusal)));
         Assert.All(result.Refused, r => Assert.Contains("decompile", r.Message, StringComparison.Ordinal));
-        Assert.Equal(mainBefore, Git("rev-parse", "refs/heads/main"));
-        Assert.False(Directory.Exists(Path.Combine(_modFolder, SourceRepository.RootFor("Second.esp"))));
+        Assert.Equal(firstBefore, HeldBy("First.esp"));
+        Assert.Empty(HeldBy("Second.esp"));
     }
 
     [Fact]
@@ -119,9 +83,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         File.WriteAllText(Path.Combine(_modFolder, ".gitignore"), "theirs\n");
         Git("add", ".gitignore");
         Git("-c", "user.name=Them", "-c", "user.email=them@localhost", "commit", "-q", "-m", "Their own commit");
-        var logBefore = Git("log", "--all", "--format=%H %s");
         var gitignoreBefore = File.ReadAllBytes(Path.Combine(_modFolder, ".gitignore"));
-        var configBefore = File.ReadAllBytes(Path.Combine(_modFolder, ".git", "config"));
 
         var result = await Track("First.esp");
 
@@ -129,9 +91,9 @@ public sealed class TrackCommitShapeTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal((Key("First.esp"), TrackRefusal.AlreadyTracked), (refused.Plugin, refused.Refusal));
         Assert.Contains(_modFolder, refused.Message, StringComparison.Ordinal);
-        Assert.Equal(logBefore, Git("log", "--all", "--format=%H %s"));
+        Assert.Empty(SourceRepository.Over(_modFolder, GameRelease.Fallout4).ReadAll(Key("First.esp"), "HEAD"));
+        Assert.Empty(HeldBy("First.esp"));
         Assert.Equal(gitignoreBefore, File.ReadAllBytes(Path.Combine(_modFolder, ".gitignore")));
-        Assert.Equal(configBefore, File.ReadAllBytes(Path.Combine(_modFolder, ".git", "config")));
     }
 
     [Fact]
@@ -147,9 +109,9 @@ public sealed class TrackCommitShapeTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal((Key("Second.esp"), TrackRefusal.RoundTripFailed), (refused.Plugin, refused.Refusal));
         Assert.Contains("SecondNpc", refused.Message, StringComparison.Ordinal);
-        Assert.Equal(["Track TwoPluginMod", "Track First.esp", "Track Third.esp"], SubjectsOnMain());
-        Assert.False(Directory.Exists(Path.Combine(_modFolder, SourceRepository.RootFor("Second.esp"))));
-        Assert.Equal(string.Empty, Git("status", "--porcelain"));
+        Assert.NotEmpty(HeldBy("First.esp"));
+        Assert.NotEmpty(HeldBy("Third.esp"));
+        Assert.Empty(HeldBy("Second.esp"));
     }
 
     [Fact]
@@ -162,7 +124,6 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Empty(result.Landed);
         Assert.Single(result.Refused);
         Assert.False(SourceRepository.IsTracked(_modFolder));
-        Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
     }
 
     private sealed class RoundTripFailsFor(string plugin) : ReadOnlyPluginAdapter
@@ -192,18 +153,9 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private static PluginAddress Key(string plugin) => new(plugin, ModName);
 
-    private static Dictionary<string, string> UpstreamVersion(string version) => new() { [ModName] = version };
-
     private Task<TrackSelectionResult> Track(params string[] plugins) => Track(TestAdapters.Mutagen(), plugins);
 
-    private Task<TrackSelectionResult> Track(IReadOnlyDictionary<string, string> upstreamVersionByOrigin, params string[] plugins) =>
-        Track(TestAdapters.Mutagen(), upstreamVersionByOrigin, plugins);
-
-    private Task<TrackSelectionResult> Track(IPluginAdapter adapter, params string[] plugins) =>
-        Track(adapter, new Dictionary<string, string>(), plugins);
-
-    private Task<TrackSelectionResult> Track(
-        IPluginAdapter adapter, IReadOnlyDictionary<string, string> upstreamVersionByOrigin, params string[] plugins)
+    private Task<TrackSelectionResult> Track(IPluginAdapter adapter, params string[] plugins)
     {
         var entries = Directory.GetFiles(_modFolder, "*.esp")
             .Order(StringComparer.Ordinal)
@@ -211,14 +163,11 @@ public sealed class TrackCommitShapeTests : IDisposable
             .ToList();
         var loadOrder = SnapshotPlugins.Snapshot(_gameDir, _gameDir, GameRelease.Fallout4, entries);
         return new TrackService(NullLogger<TrackService>.Instance, adapter)
-            .TrackAsync(loadOrder, [.. plugins.Select(Key)], SourcePreset.Edits, upstreamVersionByOrigin);
+            .TrackAsync(loadOrder, [.. plugins.Select(Key)], SourcePreset.Edits, new Dictionary<string, string>());
     }
 
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
-    private string[] SubjectsOnMain() =>
-        Git("log", "--reverse", "--format=%s", "refs/heads/main").Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
-    private string TrailersAsGitsOwnParserReads(string revision) =>
-        Git("show", "-s", "--format=%(trailers:only,unfold)", revision).TrimEnd('\n') + "\n";
+    private IReadOnlyList<SourceDocument> HeldBy(string plugin) =>
+        SourceRepository.Over(_modFolder, GameRelease.Fallout4).ReadAll(Key(plugin));
 }

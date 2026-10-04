@@ -1,6 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -11,7 +10,7 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>Two tracked mods sharing one plugin filename (ADR-0012), one winning and one overridden;
 /// a winning plugin plugins.txt does not list; and a plain winning destination. No index anywhere
 /// in it.</summary>
-public sealed class OverriddenAndUnlistedFixture : IDisposable
+public sealed class OverriddenAndUnlistedFixture : IDisposable, ITrackedPlugins
 {
     public const string PluginName = "Shared.esp";
     public const string WinningOrigin = "WinningMod";
@@ -123,11 +122,6 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable
         UnlistedOrigin => UnlistedModFolder,
         _ => SourceModFolder,
     };
-
-    public SourceDocument? Document(PluginAddress plugin, string formKey) =>
-        TrackedTree.Document(ModFolderOf(plugin), plugin, formKey);
-
-    public IReadOnlyList<string> GitStatus(PluginAddress plugin) => TrackedTree.GitStatus(ModFolderOf(plugin));
 
     /// <summary>The bytes on disk for a tracked plugin's own binary — what a refused compile's
     /// "writes nothing" claim is checked against.</summary>

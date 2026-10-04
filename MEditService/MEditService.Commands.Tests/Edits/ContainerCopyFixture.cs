@@ -13,7 +13,7 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>Two mod folders, because one cannot ask whether a copy crosses plugins. The source
 /// defaults untracked, so its records come through the Plugin adapter; no index anywhere in
 /// it.</summary>
-public sealed class ContainerCopyFixture : IDisposable
+public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
 {
     public const string SourcePluginName = "ContainerSource.esm";
     public const string SourceOrigin = "ContainerSourceMod";
@@ -281,12 +281,7 @@ public sealed class ContainerCopyFixture : IDisposable
     public static ContainerCopyFixture CreateWithDestinationLoadingFirst() =>
         new(destinationLoadsFirst: true, trackSource: false);
 
-    /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
-    public SourceDocument? Document(PluginAddress plugin, string formKey) =>
-        TrackedTree.Document(
-            plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder, plugin, formKey);
-
-    public IReadOnlyList<string> DestinationGitStatus() => TrackedTree.GitStatus(DestinationModFolder);
+    public string ModFolderOf(PluginAddress plugin) => plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder;
 
     /// <summary>Where the destination's tree puts a cell it holds — the block directories the mint
     /// wrote, read back the one way the write side reads them.</summary>
@@ -304,22 +299,6 @@ public sealed class ContainerCopyFixture : IDisposable
         block.SubBlocks.Add(subBlock);
         mod.Cells.Records.Add(block);
     }
-
-    public string DestinationSourceRoot => Path.Combine(DestinationModFolder, SourceRepository.RootFor(DestinationPluginName));
-
-    public string DestinationSourceFileContaining(string editorId) =>
-        SourceFileContaining(DestinationPlugin, editorId);
-
-    /// <summary>Any document in a tracked plugin's tree carrying an EditorID: a container's own
-    /// RecordData.json, a flat record's file, or the file that inlines an embedded child.</summary>
-    public string SourceFileContaining(PluginAddress plugin, string editorId) =>
-        Directory
-            .EnumerateFiles(
-                Path.Combine(
-                    plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder,
-                    SourceRepository.RootFor(plugin.Name)),
-                "*.json", SearchOption.AllDirectories)
-            .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
 
     public void Dispose()
     {

@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -56,13 +57,7 @@ public sealed class DeleteRecordHandlerTests
     public void DeleteRecords_WhenAnotherToolLeftTwoDocumentsClaimingOneRecord_RefusesThatRecord_AndLandsTheRest()
     {
         using var mod = SourceEditFixture.Tracked();
-        var computed = mod.NpcSourceFile;
-        string Renamed(string editorId) => Path.Combine(
-            Path.GetDirectoryName(computed).Require(),
-            Path.GetFileName(computed).Replace(SourceEditFixture.NpcEditorId, editorId, StringComparison.Ordinal));
-        var npcFile = Renamed("RenamedByAnotherTool");
-        File.Move(computed, npcFile);
-        File.Copy(npcFile, Renamed("CopiedByAnotherTool"));
+        TreeTampering.Duplicate(mod.ModFolder, mod.Plugin, mod.NpcIdentity);
         var otherNpc = new RecordAt(mod.Plugin, mod.OtherNpc.ToString());
         var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
         var keyword = new RecordAt(mod.Plugin, mod.Keyword.ToString());
@@ -74,18 +69,17 @@ public sealed class DeleteRecordHandlerTests
         Assert.Equal(npc, refused.Record);
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
         Assert.Contains(mod.Npc.ToString(), refused.Message, StringComparison.Ordinal);
-        Assert.True(File.Exists(npcFile), "the refused record's document must survive");
+        Assert.Throws<AmbiguousSourceUnitException>(() => TrackedTree.Document(mod.ModFolder, mod.Plugin, mod.Npc.ToString()));
     }
 
     [Fact]
     public void DeleteRecords_WhenAContainersRemovalFailsPartway_PutsItsWholeTreeBack_RefusesIt_AndLandsTheRest()
     {
         using var mod = WorldspaceWithALockedCell(out var npcAt, out var worldAt, out var otherNpcAt);
-        var worldDirectory = Path.GetDirectoryName(DocumentCarrying(mod, "\"LockedWorld\"")).Require();
-        var cellDirectory = Path.GetDirectoryName(DocumentCarrying(mod, "\"LockedCell\"")).Require();
-        var before = FilesUnder(worldDirectory);
+        var worldDirectory = DirectoryOf(mod, "\"LockedWorld\"");
+        var before = TreeTampering.FilesUnder(worldDirectory);
 
-        var result = DeleteWhileLocked(mod, cellDirectory, [npcAt, worldAt, otherNpcAt]);
+        var result = DeleteWhileLocked(mod, DirectoryOf(mod, "\"LockedCell\""), [npcAt, worldAt, otherNpcAt]);
 
         Assert.Equal([npcAt, otherNpcAt], result.Applied);
         Assert.Empty(DocumentsCarrying(mod, "\"FirstNpc\""));
@@ -94,32 +88,32 @@ public sealed class DeleteRecordHandlerTests
         Assert.Equal(worldAt, refused.Record);
         Assert.Equal(RecordEditRefusal.SourceWriteFailed, refused.Refusal);
         Assert.Contains(worldAt.FormKey, refused.Message, StringComparison.Ordinal);
-        Assert.Equal(before, FilesUnder(worldDirectory));
+        Assert.Equal(before, TreeTampering.FilesUnder(worldDirectory));
     }
 
     [Fact]
     public void DeleteRecords_WhenAContainersRemovalFailsPartway_NeverWritesTheDocumentsItDidNotRemove()
     {
         using var mod = WorldspaceWithALockedCell(out _, out var worldAt, out _);
-        var standing = DocumentCarrying(mod, "\"LockedCell\"");
-        var writtenAt = File.GetLastWriteTimeUtc(standing);
+        var standing = IdentityCarrying(mod, "\"LockedCell\"");
+        var writtenAt = TreeTampering.LastWrittenAt(mod.ModFolder, mod.Plugin, standing);
 
-        var result = DeleteWhileLocked(mod, Path.GetDirectoryName(standing).Require(), [worldAt]);
+        var result = DeleteWhileLocked(mod, DirectoryOf(mod, "\"LockedCell\""), [worldAt]);
 
         Assert.Equal(worldAt, Assert.Single(result.Refused).Record);
-        Assert.Equal(writtenAt, File.GetLastWriteTimeUtc(standing));
+        Assert.Equal(writtenAt, TreeTampering.LastWrittenAt(mod.ModFolder, mod.Plugin, standing));
     }
 
     [Fact]
     public void DeleteRecords_WhenAPathCannotBePutBack_PutsBackTheRest_AndRefusesWithTheCauseAndThatPath()
     {
         using var mod = WorldspaceWithALockedCell(out _, out var worldAt, out _);
-        var cellDirectory = Path.GetDirectoryName(DocumentCarrying(mod, "\"LockedCell\"")).Require();
-        var freeBlock = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(DocumentCarrying(mod, "\"FreeCell\"")))).Require();
+        var cellDirectory = DirectoryOf(mod, "\"LockedCell\"");
+        var freeBlock = TreeTampering.BlockDirectoryOf(mod.ModFolder, mod.Plugin, IdentityCarrying(mod, "\"FreeCell\""));
         var notes = Directory.CreateDirectory(Path.Combine(freeBlock, "Notes")).FullName;
         File.WriteAllText(Path.Combine(notes, "note.txt"), "another tool's");
         var link = Directory.CreateSymbolicLink(Path.Combine(cellDirectory, "NotesLink"), notes).FullName;
-        var before = FilesUnder(freeBlock);
+        var before = TreeTampering.FilesUnder(freeBlock);
 
         var result = DeleteWhileLocked(mod, cellDirectory, [worldAt]);
 
@@ -128,7 +122,7 @@ public sealed class DeleteRecordHandlerTests
         Assert.Contains(
             $"{Path.GetRelativePath(mod.ModFolder, link)} could not be put back", refused.Message, StringComparison.Ordinal);
         Assert.Single(DocumentsCarrying(mod, "\"LockedWorld\""));
-        Assert.Equal(before, FilesUnder(freeBlock));
+        Assert.Equal(before, TreeTampering.FilesUnder(freeBlock));
     }
 
     private static SourceModFixture WorldspaceWithALockedCell(out RecordAt npc, out RecordAt worldspace, out RecordAt otherNpc)
@@ -172,18 +166,18 @@ public sealed class DeleteRecordHandlerTests
         return block;
     }
 
-    private static string DocumentCarrying(SourceModFixture mod, string text) => DocumentsCarrying(mod, text).Single();
+    private static RecordIdentity IdentityCarrying(SourceModFixture mod, string text)
+    {
+        var document = DocumentsCarrying(mod, text).Single();
+        return new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
+    }
 
-    private static List<string> DocumentsCarrying(SourceModFixture mod, string text) =>
-        [.. Directory.EnumerateFiles(
-                Path.Combine(mod.ModFolder, SourceRepository.RootFor(mod.Plugin.Name)), "*.json", SearchOption.AllDirectories)
-            .Where(file => File.ReadAllText(file).Contains(text, StringComparison.Ordinal))];
+    private static string DirectoryOf(SourceModFixture mod, string text) =>
+        TreeTampering.DirectoryOf(mod.ModFolder, mod.Plugin, IdentityCarrying(mod, text));
 
-    private static SortedDictionary<string, string> FilesUnder(string directory) =>
-        Directory.Exists(directory)
-            ? new(Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
-                .ToDictionary(file => Path.GetRelativePath(directory, file), File.ReadAllText), StringComparer.Ordinal)
-            : new(StringComparer.Ordinal);
+    private static List<SourceDocument> DocumentsCarrying(SourceModFixture mod, string text) =>
+        [.. SourceRepository.Over(mod.ModFolder, GameRelease.Fallout4).ReadAll(mod.Plugin)
+            .Where(document => document.Body.Contains(text, StringComparison.Ordinal))];
 
     [Fact]
     public void DeleteRecords_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
@@ -195,22 +189,18 @@ public sealed class DeleteRecordHandlerTests
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
-        Assert.True(File.Exists(mod.NpcSourceFile), "an unrelated sibling record's file must survive");
-        Assert.True(
-            Directory.Exists(Path.Combine(mod.ModFolder, "plugin-source", mod.ActualPluginName)),
-            "the plugin's own tracked source tree must survive");
+        Assert.NotNull(mod.Document(mod.Npc.ToString()));
         Assert.NotNull(mod.Document(headerFormKey));
     }
 
     [Fact]
-    public void DeleteRecords_RemovesTheSourceFile_GoneFromTheTree_StillAtHead()
+    public void DeleteRecords_RemovesTheRecord_GoneFromTheTree_StillAtHead()
     {
         using var mod = SourceEditFixture.Tracked();
 
         var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
         Assert.Empty(result.Refused);
-        Assert.False(File.Exists(mod.NpcSourceFile));
         Assert.Null(mod.Document(mod.Npc.ToString()));
         Assert.NotNull(
             mod.CommittedDocument(mod.Npc.ToString(), "npc_", SourceEditFixture.NpcEditorId));

@@ -1,5 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -67,14 +68,12 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        var worldspacesDir = Path.Combine(_fixture.DestinationSourceRoot, "Worldspaces");
-        var worldspaceDir = Assert.Single(Directory.EnumerateDirectories(worldspacesDir));
-        var newBlockDir = Assert.Single(Directory.EnumerateDirectories(worldspaceDir), d =>
-            Path.GetFileName(d)
-                .Equals($"{ContainerCopyFixture.OtherBlockX}, {ContainerCopyFixture.OtherBlockY}", StringComparison.Ordinal));
-        Assert.Single(Directory.EnumerateDirectories(newBlockDir), d =>
-            Path.GetFileName(d)
-                .Equals($"{ContainerCopyFixture.OtherSubX}, {ContainerCopyFixture.OtherSubY}", StringComparison.Ordinal));
+        Assert.Equal(
+            new CellPlacement(
+                _fixture.Worldspace.ToString(),
+                ContainerCopyFixture.OtherBlockX, ContainerCopyFixture.OtherBlockY,
+                ContainerCopyFixture.OtherSubX, ContainerCopyFixture.OtherSubY, IsInterior: false),
+            _fixture.DestinationCellPlacement(_fixture.OtherBlockCell.ToString(), editorId: null));
 
         var compiled = await ImportCompiled();
         var worldspace = compiled.Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace);
@@ -102,12 +101,12 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        var worldspaceDir = Assert.Single(
-            Directory.EnumerateDirectories(Path.Combine(_fixture.DestinationSourceRoot, "Worldspaces")));
-        var blockDir = Assert.Single(Directory.EnumerateDirectories(worldspaceDir), d =>
-            Path.GetFileName(d)
-                .Equals($"{ContainerCopyFixture.ExteriorBlockX}, {ContainerCopyFixture.ExteriorBlockY}", StringComparison.Ordinal));
-        Assert.Equal(2, Directory.EnumerateDirectories(blockDir).Count());
+        Assert.Equal(
+            new CellPlacement(
+                _fixture.Worldspace.ToString(),
+                ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY,
+                ContainerCopyFixture.SameBlockOtherSubX, ContainerCopyFixture.SameBlockOtherSubY, IsInterior: false),
+            _fixture.DestinationCellPlacement(_fixture.SameBlockCell.ToString(), editorId: null));
 
         var compiled = await ImportCompiled();
         var block = compiled.Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace)
@@ -126,27 +125,17 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         Assert.True(service.CopyAsOverride(
             _fixture.SourcePlugin, _fixture.ExteriorCell.ToString(), _fixture.DestinationPlugin).Applied);
 
-        var before = Directory
-            .EnumerateFiles(_fixture.DestinationSourceRoot, "*", SearchOption.AllDirectories)
-            .ToDictionary(f => f, File.ReadAllBytes);
+        var before = TrackedTree.Records(_fixture.DestinationModFolder, _fixture.DestinationPlugin);
 
         var result = service.CopyAsOverride(
             _fixture.SourcePlugin, _fixture.SameSubBlockCell.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        var after = Directory
-            .EnumerateFiles(_fixture.DestinationSourceRoot, "*", SearchOption.AllDirectories)
-            .ToDictionary(f => f, File.ReadAllBytes);
-        foreach (var (path, bytes) in before)
-        {
-            Assert.True(after.ContainsKey(path), $"{path} disappeared");
-            Assert.True(bytes.AsSpan().SequenceEqual(after[path]), $"{path} changed bytes");
-        }
-
-        var added = after.Keys.Except(before.Keys).ToList();
-        var newCellFile = Assert.Single(added);
-        Assert.Contains(ContainerCopyFixture.SameSubBlockCellEditorId, File.ReadAllText(newCellFile), StringComparison.Ordinal);
+        var after = TrackedTree.Records(_fixture.DestinationModFolder, _fixture.DestinationPlugin);
+        Assert.All(before, document => Assert.Contains(document, after));
+        var newCell = Assert.Single(after.Except(before));
+        Assert.Contains(ContainerCopyFixture.SameSubBlockCellEditorId, newCell, StringComparison.Ordinal);
 
         var subBlock = (await ImportCompiled()).Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace)
             .SubCells.Single(

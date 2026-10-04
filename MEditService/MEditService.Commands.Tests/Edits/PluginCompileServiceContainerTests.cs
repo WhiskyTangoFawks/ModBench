@@ -150,10 +150,10 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
             var a = AllCells(mod).Single(c => c.FormKey == _cellA);
             var b = AllCells(mod).Single(c => c.FormKey == _cellB);
 
-            Assert.Equal(["A_Persist"], a.Persistent.Select(r => r.EditorID.Require()).Order().ToArray());
-            Assert.Equal(["A_Temp"], a.Temporary.Select(r => r.EditorID.Require()).Order().ToArray());
-            Assert.Equal(["B_Persist"], b.Persistent.Select(r => r.EditorID.Require()).Order().ToArray());
-            Assert.Equal(["B_Temp"], b.Temporary.Select(r => r.EditorID.Require()).Order().ToArray());
+            Assert.Equal(["A_Persist"], [.. a.Persistent.Select(r => r.EditorID.Require()).Order()]);
+            Assert.Equal(["A_Temp"], [.. a.Temporary.Select(r => r.EditorID.Require()).Order()]);
+            Assert.Equal(["B_Persist"], [.. b.Persistent.Select(r => r.EditorID.Require()).Order()]);
+            Assert.Equal(["B_Temp"], [.. b.Temporary.Select(r => r.EditorID.Require()).Order()]);
         }
     }
 
@@ -167,7 +167,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
             Assert.NotNull(worldspace.TopCell);
             Assert.Equal(_topCell, worldspace.TopCell.Require().FormKey);
-            Assert.Equal(["Top_Temp"], worldspace.TopCell.Temporary.Select(r => r.EditorID.Require()).ToArray());
+            Assert.Equal(["Top_Temp"], [.. worldspace.TopCell.Temporary.Select(r => r.EditorID.Require())]);
 
             var writtenBlock = Assert.Single(worldspace.SubCells);
             Assert.Equal(0, writtenBlock.BlockNumberX);
@@ -179,7 +179,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
             var cell = Assert.Single(writtenSubBlock.Items);
             Assert.Equal(_exteriorCell, cell.FormKey);
             Assert.Equal(new P2Int(3, -4), cell.Grid.Require().Point);
-            Assert.Equal(["Ext_Temp"], cell.Temporary.Select(r => r.EditorID.Require()).ToArray());
+            Assert.Equal(["Ext_Temp"], [.. cell.Temporary.Select(r => r.EditorID.Require())]);
         }
     }
 
@@ -192,22 +192,22 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
             var a = mod.Quests.Single(q => q.FormKey == _questA);
             var b = mod.Quests.Single(q => q.FormKey == _questB);
 
-            Assert.Equal(["TopicA"], a.DialogTopics.Select(t => t.EditorID.Require()).Order().ToArray());
-            Assert.Equal(["TopicB"], b.DialogTopics.Select(t => t.EditorID.Require()).Order().ToArray());
-            Assert.Equal(["SceneA"], a.Scenes.Select(s => s.EditorID.Require()).Order().ToArray());
+            Assert.Equal(["TopicA"], [.. a.DialogTopics.Select(t => t.EditorID.Require()).Order()]);
+            Assert.Equal(["TopicB"], [.. b.DialogTopics.Select(t => t.EditorID.Require()).Order()]);
+            Assert.Equal(["SceneA"], [.. a.Scenes.Select(s => s.EditorID.Require()).Order()]);
             Assert.Empty(b.Scenes);
 
             Assert.Equal(
                 ["ResponseA"],
-                a.DialogTopics.Single().Responses.Select(r => r.EditorID.Require()).Order().ToArray());
+                [.. a.DialogTopics.Single().Responses.Select(r => r.EditorID.Require()).Order()]);
             Assert.Equal(
                 ["ResponseB"],
-                b.DialogTopics.Single().Responses.Select(r => r.EditorID.Require()).Order().ToArray());
+                [.. b.DialogTopics.Single().Responses.Select(r => r.EditorID.Require()).Order()]);
         }
     }
 
     [Fact]
-    public async Task Compile_ForAnEmbeddedChildWithASemanticError_NamesTheContainersOwnSourceFile()
+    public async Task Compile_ForAnEmbeddedChildWithASemanticError_NamesTheContainersOwnDocument()
     {
         var result = await CompileService().CompileAsync(_plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
@@ -215,10 +215,10 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         var diagnostic = Assert.Single(
             result.Diagnostics.Where(d => d.FormKey == _cellATemporaryRef.ToString()).Take(1));
 
-        var full = Path.Combine(_modFolder, diagnostic.SourceRelativePath);
-        Assert.True(File.Exists(full), $"'{diagnostic.SourceRelativePath}' is not a file in the tree.");
-        Assert.Equal("RecordData.json", Path.GetFileName(full));
-        Assert.Contains("\"CellA\"", File.ReadAllText(full), StringComparison.Ordinal);
+        var cell = TrackedTree.DocumentCarrying(_modFolder, _plugin, "CellA");
+        Assert.Equal(
+            TreeTampering.FileOf(_modFolder, _plugin, new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId)),
+            Path.Combine(_modFolder, diagnostic.SourceRelativePath));
     }
 
     [Fact]
@@ -235,7 +235,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
             var questC = mod.Quests.Single(q => q.FormKey == _questC);
             Assert.Equal(
                 [TopicC1EditorId, TopicC3EditorId],
-                questC.DialogTopics.Select(t => t.EditorID.Require()).ToArray());
+                [.. questC.DialogTopics.Select(t => t.EditorID.Require())]);
         }
     }
 

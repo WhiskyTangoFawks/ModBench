@@ -21,6 +21,15 @@ public sealed class UnreadableCopySourceTests : IDisposable
     }
 
     [Fact]
+    public void CopyAsOverride_OfAReadableRecord_ChangesTheDestinationByThatRecord()
+    {
+        var result = _mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, _mod.FlatNpc.ToString(), _mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal([_mod.FlatNpc.ToString()], _mod.ChangedFormKeys(_mod.DestinationPlugin));
+    }
+
+    [Fact]
     public void CopyAsOverride_OfARecordWhoseTrackedDocumentIsNoJsonDocument_IsRefused_AndWritesNothing()
     {
         MakeNoJsonDocument(_mod.FlatNpc);
@@ -29,7 +38,7 @@ public sealed class UnreadableCopySourceTests : IDisposable
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains($"{ContainerCopyFixture.SourcePluginName}'s document for {_mod.FlatNpc} is no record document", result.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.DestinationGitStatus());
+        Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
 
     [Fact]
@@ -40,8 +49,8 @@ public sealed class UnreadableCopySourceTests : IDisposable
         var result = _mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, _mod.ExteriorCell.ToString(), _mod.DestinationPlugin);
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.Contains("RecordData.json' is filed as a record", result.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.DestinationGitStatus());
+        Assert.Contains("' is filed as a record", result.Message, StringComparison.Ordinal);
+        Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
 
     [Fact]
@@ -52,7 +61,7 @@ public sealed class UnreadableCopySourceTests : IDisposable
         var result = _mod.CopyHandler.CopyAsNew(_mod.SourcePlugin, _mod.ExteriorTemporaryRef.ToString(), _mod.DestinationPlugin);
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.Contains("RecordData.json' is filed as a record", result.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.DestinationGitStatus());
+        Assert.Contains("' is filed as a record", result.Message, StringComparison.Ordinal);
+        Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
 }

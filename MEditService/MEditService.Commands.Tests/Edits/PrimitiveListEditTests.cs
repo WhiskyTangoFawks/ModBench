@@ -323,8 +323,7 @@ public sealed class PrimitiveListEditTests : IDisposable
         public string SceneCollectionBody() => Body(SceneCollection);
 
         public string RaceSourceText() =>
-            File.ReadAllText(SourceDocumentPath.Of(
-                _modFolder, PluginName, "race", Race.ToString(), RaceEditorId, GameRelease.Fallout4));
+            Body(Race);
 
         private string Body(FormKey formKey) =>
             (TrackedTree.Document(_modFolder, Plugin, formKey.ToString())

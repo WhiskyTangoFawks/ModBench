@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -17,59 +18,25 @@ public sealed class EditRecordHandlerTests : IDisposable
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     [Fact]
-    public void EditingEditorId_MovesTheSourceFileToItsNewName()
+    public void EditingEditorId_LandsTheNewNameOnTheRecord()
     {
-        var oldRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId);
-        Assert.True(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
-
         var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\""));
 
         Assert.True(result.Applied, result.Message);
-        Assert.False(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
-        var newRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc");
-        var moved = Path.Combine(_mod.ModFolder, newRelative);
-        Assert.True(File.Exists(moved));
-        Assert.DoesNotContain("[", Path.GetFileName(newRelative), StringComparison.Ordinal);
-        Assert.Contains("\"EditorID\": \"RenamedNpc\"", File.ReadAllText(moved), StringComparison.Ordinal);
-        var document = _mod.Document(_mod.Npc.ToString());
-        Assert.NotNull(document);
+        var document = _mod.Document(_mod.Npc.ToString()).Require();
         Assert.Equal("RenamedNpc", document.EditorId);
+        Assert.Contains("\"EditorID\": \"RenamedNpc\"", document.Body, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void EditingEditorId_ShowsAsARenameOnceStaged_NotADeleteAndAdd()
+    public void EditField_OnATrackedPlugin_LeavesTheRecordChangedSinceTheLastCommit()
     {
-        var oldRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId)
-            .Replace('\\', '/');
-
-        Assert.True(_mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\"")).Applied);
-
-        var newRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc").Replace('\\', '/');
-
-        Assert.Contains($"D {oldRelative}", _mod.GitStatus());
-
-        var git = Path.Combine(_mod.ModFolder, ".git");
-        GitProbe.Run(git, _mod.ModFolder, "add", "-A");
-        var stagedMinimalNpcRenameNeedsGitsFiftyPercentSimilarityFloor = GitProbe.Run(git, _mod.ModFolder, "diff", "--cached", "-M", "--name-status")
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(l => l.Trim())
-            .ToList();
-
-        var rename = Assert.Single(stagedMinimalNpcRenameNeedsGitsFiftyPercentSimilarityFloor, l => l.StartsWith('R'));
-        Assert.Contains(oldRelative, rename, StringComparison.Ordinal);
-        Assert.Contains(newRelative, rename, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void EditField_OnATrackedPlugin_LeavesTheRecordsSourceFileDirtyInTheSourceControlPanel()
-    {
-        Assert.Empty(_mod.GitStatus());
+        Assert.Empty(_mod.ChangedFormKeys());
 
         var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
-        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId).Replace('\\', '/');
-        Assert.Equal([$"M {relative}"], _mod.GitStatus());
+        Assert.Equal([_mod.Npc.ToString()], _mod.ChangedFormKeys());
     }
 
     [Fact]
@@ -78,21 +45,18 @@ public sealed class EditRecordHandlerTests : IDisposable
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var reparsed = codec.DeserializeFile(_mod.NpcSourceFile, GameRelease.Fallout4, "npc_");
+        var reparsed = codec.DeserializeFromBytes(
+            Encoding.UTF8.GetBytes(_mod.Document(_mod.Npc.ToString()).Require().Body), GameRelease.Fallout4, "npc_");
         Assert.Equal(_mod.Npc, reparsed.FormKey);
         Assert.Equal(0.75f, ((Mutagen.Bethesda.Fallout4.INpcGetter)reparsed).HeightMax);
     }
 
     [Fact]
-    public void EditField_ChangesOnlyTheEditedRecordsFile()
+    public void EditField_ChangesOnlyTheEditedRecord()
     {
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        var status = _mod.GitStatus();
-        Assert.Single(status);
-        Assert.DoesNotContain(
-            _mod.RelativeSourcePath(_mod.OtherNpc, "npc_", SourceEditFixture.OtherNpcEditorId).Replace('\\', '/'),
-            status[0], StringComparison.Ordinal);
+        Assert.DoesNotContain(_mod.OtherNpc.ToString(), Assert.Single(_mod.ChangedFormKeys()), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -100,9 +64,8 @@ public sealed class EditRecordHandlerTests : IDisposable
     {
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId);
-        Assert.Contains("0.75", File.ReadAllText(Path.Combine(_mod.ModFolder, relative)), StringComparison.Ordinal);
-        Assert.DoesNotContain("0.75", _mod.GitShowHead(relative), StringComparison.Ordinal);
+        Assert.Contains("0.75", _mod.Document(_mod.Npc.ToString()).Require().Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("0.75", _mod.CommittedDocument(_mod.Npc.ToString(), "npc_", SourceEditFixture.NpcEditorId).Require().Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -111,8 +74,7 @@ public sealed class EditRecordHandlerTests : IDisposable
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMin", Json("0.5"));
 
-        var text = File.ReadAllText(Path.Combine(
-            _mod.ModFolder, _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId)));
+        var text = _mod.Document(_mod.Npc.ToString()).Require().Body;
         Assert.Contains("0.75", text, StringComparison.Ordinal);
         Assert.Contains("0.5", text, StringComparison.Ordinal);
     }
@@ -124,7 +86,7 @@ public sealed class EditRecordHandlerTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
-        Assert.Empty(_mod.GitStatus());
+        Assert.Empty(_mod.ChangedFormKeys());
     }
 
     [Fact]
@@ -134,7 +96,7 @@ public sealed class EditRecordHandlerTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
-        Assert.Empty(_mod.GitStatus());
+        Assert.Empty(_mod.ChangedFormKeys());
     }
 
     [Fact]
@@ -149,7 +111,7 @@ public sealed class EditRecordHandlerTests : IDisposable
         Assert.Contains(
             "Unable to cast object of type 'System.String' to type 'System.Int64'",
             result.Message, StringComparison.Ordinal);
-        Assert.Equal(corrupted, File.ReadAllText(_mod.NpcSourceFile));
+        Assert.Equal(corrupted, _mod.Document(_mod.Npc.ToString()).Require().Body);
     }
 
     [Fact]
@@ -161,14 +123,14 @@ public sealed class EditRecordHandlerTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.Equal(corrupted, File.ReadAllText(_mod.NpcSourceFile));
+        Assert.Equal(corrupted, _mod.Document(_mod.Npc.ToString()).Require().Body);
     }
 
     private string Corrupt(string replacingEditorIdMember)
     {
-        var corrupted = File.ReadAllText(_mod.NpcSourceFile)
+        var corrupted = _mod.Document(_mod.Npc.ToString()).Require().Body
             .Replace("\"EditorID\"", replacingEditorIdMember, StringComparison.Ordinal);
-        File.WriteAllText(_mod.NpcSourceFile, corrupted);
+        _mod.Overwrite(_mod.NpcIdentity, corrupted);
         return corrupted;
     }
 
@@ -176,31 +138,35 @@ public sealed class EditRecordHandlerTests : IDisposable
     public void EditField_OfADocumentThatIsNotJson_RefusesAsUnreadable_AndWritesNothing()
     {
         const string garbage = "this is not a document";
-        File.WriteAllText(_mod.NpcSourceFile, garbage);
+        _mod.Overwrite(_mod.NpcIdentity, garbage);
+        var unreadableBefore = Unreadable();
 
         var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains($"'{garbage}' is an invalid JSON literal", result.Message, StringComparison.Ordinal);
-        Assert.Equal(garbage, File.ReadAllText(_mod.NpcSourceFile));
+        Assert.NotNull(unreadableBefore);
+        Assert.Equal(unreadableBefore, Unreadable());
     }
+
+    private string? Unreadable() => _mod.Repository.Require().UnreadableDocumentFor(_mod.Plugin, _mod.Npc.ToString());
 
     [Fact]
     public void EditEditorId_OfADocumentThatIsNotJson_RefusesAsUnreadable_AndRenamesNothing()
     {
-        File.WriteAllText(_mod.NpcSourceFile, "this is not a document");
+        _mod.Overwrite(_mod.NpcIdentity, "this is not a document");
 
         var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\""));
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.True(File.Exists(_mod.NpcSourceFile));
+        Assert.NotNull(Unreadable());
     }
 
     [Fact]
-    public void EditField_WhenTheRecordsFileHasGoneFromTheTree_Refuses()
+    public void EditField_WhenTheRecordHasGoneFromTheTree_Refuses()
     {
-        File.Delete(_mod.NpcSourceFile);
+        _mod.Remove(_mod.NpcIdentity);
 
         var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 

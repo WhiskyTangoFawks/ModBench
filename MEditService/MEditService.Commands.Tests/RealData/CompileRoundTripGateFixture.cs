@@ -59,14 +59,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
             (Npc, Topic, RenamedResponse) = (npc.FormKey, topic.FormKey, response.FormKey);
             TopicResponses = [.. topic.Responses.Select(r => r.FormKey)];
             RenamedResponseEditorId = response.EditorID + "Renamed";
-            EditedDocuments =
-            [
-                .. new[]
-                {
-                    SourceDocumentPath.Of(ModFolder, CutDownPluginFixture.PluginFileName, "npc_", Npc.ToString(), npc.EditorID, GameRelease.Fallout4),
-                    SourceDocumentPath.Of(ModFolder, CutDownPluginFixture.PluginFileName, "qust", quest.FormKey.ToString(), quest.EditorID, GameRelease.Fallout4),
-                }.Select(path => Path.GetRelativePath(ModFolder, path)).Order(StringComparer.Ordinal),
-            ];
+            EditedDocuments = [.. new[] { Npc.ToString(), quest.FormKey.ToString() }.Order(StringComparer.Ordinal)];
         }
 
         var edit = TestEditService.EditHandler(Holder);
