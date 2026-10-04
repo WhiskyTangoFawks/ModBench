@@ -4,7 +4,8 @@ import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, T
 vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, Uri: { from: uriFrom } }));
 
 import { dropMove } from '../moveDrop';
-import { ModNode, OverwriteNode, SeparatorNode, type SortDirection } from '../ModListProvider';
+import { ModNode, OverwriteNode, SeparatorNode } from '../ModListProvider';
+import type { SortDirection } from '../../drivingLib/sortDirectionToggle';
 import type { Mod } from '../../instanceLoader/instance';
 
 const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true });

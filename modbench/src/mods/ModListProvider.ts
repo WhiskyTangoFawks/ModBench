@@ -13,9 +13,7 @@ import {
 } from './modFiles';
 import { modRowUri } from './modIndicators';
 import { filesInConflict } from './conflictTable';
-
-/** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
-export type SortDirection = 'losingAtTop' | 'winningAtTop';
+import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 

@@ -46,11 +46,11 @@ vi.mock('../../modlist/modlist', async (importOriginal) => ({
 import {
   registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands, registerFileExclusionCommands,
   registerModMoveCommand,
-  registerModListCoreCommands, registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
+  registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
   modsCopyValueText,
-  type NexusModRow,
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
+import type { NexusModRow } from '../../drivingLib/lastSelectedView';
 import { MODS_KEY_ARGS } from '../gestureEntry';
 import { FileNode, FolderNode } from '../modFiles';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
@@ -72,34 +72,6 @@ const access = accessTo('/instance');
 const instanceThatReads = {
   refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
 };
-
-describe('the sort direction', () => {
-  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
-
-  const directionKeys = () => executeCommand.mock.calls
-    .filter((c) => c[0] === 'setContext' && (c as unknown[])[1] === 'modbench.mod.winningAtTop')
-    .map((c) => (c as unknown[])[2]);
-
-  it('starts losing at the top, and the title-bar icon agrees, since a context key outlives an extension host restart and the provider\'s direction does not', () => {
-    const setViewDirection = vi.fn();
-    registerModListCoreCommands({ setViewDirection });
-
-    expect(setViewDirection).not.toHaveBeenCalled();
-    expect(directionKeys()).toEqual([false]);
-  });
-
-  it('each title-bar icon sets its own direction, whatever the view last showed', async () => {
-    const setViewDirection = vi.fn();
-    registerModListCoreCommands({ setViewDirection });
-
-    await invoke('modbench.mod.sortLosingAtTop');
-    await invoke('modbench.mod.sortWinningAtTop');
-    await invoke('modbench.mod.sortWinningAtTop');
-
-    expect(setViewDirection.mock.calls).toEqual([['losingAtTop'], ['winningAtTop'], ['winningAtTop']]);
-    expect(directionKeys()).toEqual([false, false, true, true]);
-  });
-});
 
 describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words', () => {
   beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
