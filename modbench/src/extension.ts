@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import { HttpMEditClient } from './client';
-import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
 import { createReferencedByView } from './editor/referencedByView';
@@ -13,7 +12,7 @@ import { lastSelectedViewSelection } from './treeViews';
 import { createFocusedView } from './drivingLib/focusedView';
 import { moveToTrash } from './trash';
 import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './medit/extendedFieldFiles';
-import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './editor';
+import { registerEditorCommands, announceConflictsComputed, ActiveRecordTracker, EditsInFlight } from './editor';
 import { exitEditing } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { registerNameFilter } from './drivingLib/nameFilter';
@@ -88,12 +87,6 @@ export function activate(context: vscode.ExtensionContext) {
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const editsInFlight = new EditsInFlight(activeRecordTracker);
   const filterScripts = setupScriptsFolder(meditConfig());
-
-  // One subscription for the whole session; the mEdit client opens and closes its stream with the
-  // backend.
-  context.subscriptions.push(
-    { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker, editsInFlight) },
-  );
 
   const focusedView = createFocusedView();
   const focusedCells = new FocusedCells<vscode.WebviewPanel>((cell) => {
@@ -176,7 +169,6 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     ...registerEditorCommands({
       context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, recordBadgeSource: treeProvider, meditClient, outputChannel,
-      refreshPanels: () => announceConflictsComputed(recordPanels, editsInFlight),
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       focusedViewSelection: lastSelectedViewSelection(

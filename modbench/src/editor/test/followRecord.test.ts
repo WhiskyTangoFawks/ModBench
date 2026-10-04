@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EditsInFlight } from '../../editor/followRecord';
+import { EditsInFlight } from '../followRecord';
 import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from '../notificationWiring';
 import { InMemoryMEditClient } from '../../client';
 
