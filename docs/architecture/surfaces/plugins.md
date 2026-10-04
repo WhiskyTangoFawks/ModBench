@@ -14,15 +14,15 @@ The view's description shows the name filter's term and the record filter's sour
 
 As a user, I want:
 
-1. One row for each line of the active profile's `plugins.txt`, in its order. *MO2*
-2. The plugins the game loads with no line at the losing end, before every line. *MO2; ADR-0013*
-3. An overridden plugin, and a plugin in a disabled mod, not to be a row. Each stays indexed. *MO2; ADR-0012*
-4. A disabled plugin to show no expander, because it is not active. *ADR-0012*
-5. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"), sorted by name, the worldspaces and cells among the rest. *xEdit sorts its navigator by name*
-6. Beneath a group, its records, in FormID order. A container record holds its children directly, as xEdit folds a record's child group into the record: a worldspace holds its persistent cell and its blocks, a block its sub-blocks, a sub-block its cells, a cell its persistent and temporary child records, its landscape and navmeshes among the temporary ones, a quest its dialog topics, dialog branches and scenes, and a dialog topic its responses. Interior cells sit in blocks and sub-blocks as exterior ones do. *xEdit*
-7. A row with nothing beneath it to show no expander, and an empty group of a cell's child records not to be a row. *xEdit*
+1. One row for each line of the active profile's `plugins.txt`, in its order. Source: MO2
+2. The plugins the game loads with no line at the losing end, before every line. Source: MO2; ADR-0013
+3. An overridden plugin, and a plugin in a disabled mod, not to be a row. Each stays indexed. Source: MO2; ADR-0012
+4. A disabled plugin to show no expander, because it is not active. Source: ADR-0012
+5. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"), sorted by name, the worldspaces and cells among the rest. Source: xEdit sorts its navigator by name
+6. Beneath a group, its records, in FormID order. A container record holds its children directly, as xEdit folds a record's child group into the record: a worldspace holds its persistent cell and its blocks, a block its sub-blocks, a sub-block its cells, a cell its persistent and temporary child records, its landscape and navmeshes among the temporary ones, a quest its dialog topics, dialog branches and scenes, and a dialog topic its responses. Interior cells sit in blocks and sub-blocks as exterior ones do. Source: xEdit
+7. A row with nothing beneath it to show no expander, and an empty group of a cell's child records not to be a row. Source: xEdit
 8. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what is on screen.
-9. Every row collapsed each time the extension activates, so the view opens clean. *as in Mods*
+9. Every row collapsed each time the extension activates, so the view opens clean. Source: as in Mods
 
 ## A row
 
@@ -47,12 +47,12 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 | Changed outside Modbench | it is tracked, and its bytes differ from what Modbench last wrote, or either cannot be read | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 
-- A master issue never disables the plugin or cascades to its dependants. The check box stays as I set it. *xedit.md, divergence 28*
+- A master issue never disables the plugin or cascades to its dependants. The check box stays as I set it. Source: xedit.md, divergence 28
 - Before the snapshot is indexed, a plugin shows no master status. That means not yet checked, not no issues.
 - A later snapshot keeps the last statuses until the new ones land.
 - A plugin that failed to read stays failed until its bytes change or I refresh.
-- A malformed plugin's reasons are also in the Problems panel, on the plugin file. *commands.md, Surfaces and their templates*
-- A plugin that changed outside Modbench is also a warning in the Problems panel, on the plugin file, while its bytes differ from what Modbench last wrote. *ADR-0003*
+- A malformed plugin's reasons are also in the Problems panel, on the plugin file. Source: commands.md, Surfaces and their templates
+- A plugin that changed outside Modbench is also a warning in the Problems panel, on the plugin file, while its bytes differ from what Modbench last wrote. Source: ADR-0003
 
 ### A plugin the game loads with no line
 
@@ -84,7 +84,7 @@ A `plugins.txt` line that names one is not a second row.
 | Badge | `M` modified and `A` added, in git's colours, while its plugin source has working-tree changes | ADR-0007; VS Code's source control badges |
 | Identity | the row's kind, the plugin as (origin, filename), and the FormKey | ADR-0012 |
 
-A block and a sub-block take xEdit's labels, "Block x, y" and "Sub-Block x, y". An exterior cell without an EditorID takes its grid position. A placed reference without an EditorID takes its base record's. *xEdit*
+A block and a sub-block take xEdit's labels, "Block x, y" and "Sub-Block x, y". An exterior cell without an EditorID takes its grid position. A placed reference without an EditorID takes its base record's. Source: xEdit
 
 ### Rows that stand in for records
 
@@ -97,9 +97,9 @@ A block and a sub-block take xEdit's labels, "Block x, y" and "Sub-Block x, y". 
 
 As a user, I want:
 
-1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the plugin rows. The plugins the game loads with no line stay at the losing end. The groups and records beneath keep their order. *common, A view, story 7; MO2's priority sort*
-2. The name filter to match plugin rows. *common, The name filter*
-3. The record filter to narrow the records to the FormKeys a SQL query returns. Its title-bar slot becomes a clear icon while it is active. It is its own filter, beside the name filter. It narrows the groups' counts too, and applies again after every change to the index. It never narrows the Editor or Referenced By. *catalog `filter` under Record; Chrome*
+1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the plugin rows. The plugins the game loads with no line stay at the losing end. The groups and records beneath keep their order. Source: common, A view, story 7; MO2's priority sort
+2. The name filter to match plugin rows. Source: common, The name filter
+3. The record filter to narrow the records to the FormKeys a SQL query returns. Its title-bar slot becomes a clear icon while it is active. It is its own filter, beside the name filter. It narrows the groups' counts too, and applies again after every change to the index. It never narrows the Editor or Referenced By. Source: catalog `filter` under Record; Chrome
 4. A plugin with no record left under the record filter hidden while the record filter is active. A later snapshot keeps the rows the record filter hides until the new ones land.
 
 ## States
@@ -108,9 +108,9 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 
 1. With no `plugins.txt` lines, and no plugin the game loads without one, a message saying so, in the view's message line.
 2. While mEdit starts and indexes, the view's progress bar under its title, and every plugin row already there. A row whose plugin is not indexed yet expands to "Still indexing…", never to an error. No notification.
-3. While mEdit is unreachable, the rows and their statuses to stay. A row expands to the error row with the reason, and the status bar says mEdit is down. The tree never changes shape. *ADR-0002*
-4. When another window holds the instance's index, every row to expand to the error row naming that, never to "Still indexing…" for ever. *Never silently wrong*
-5. When the record filter matches nothing, a message saying so, naming its source. *common, The name filter, story 6*
+3. While mEdit is unreachable, the rows and their statuses to stay. A row expands to the error row with the reason, and the status bar says mEdit is down. The tree never changes shape. Source: ADR-0002
+4. When another window holds the instance's index, every row to expand to the error row naming that, never to "Still indexing…" for ever. Source: Never silently wrong
+5. When the record filter matches nothing, a message saying so, naming its source. Source: common, The name filter, story 6
 6. When indexing the snapshot fails, the view's message line to name the failure, with one line in the Output. A row whose plugin was not reached expands to the error row naming the failure, never to "Still indexing…" for ever. The plugins read before the failure keep their records, and the next change to the instance tries again.
 
 ## Menus and keys
@@ -129,11 +129,11 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 
 As a user, I want:
 
-1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's Argument in the catalog says. *catalog Argument*
-2. A click on a record to open it in the record panel, and a click on an enabled plugin row to open its header, which is a record. A click on a disabled plugin row only selects it. *catalog `open`*
-3. Enable or disable over a mixed selection to behave as in Mods (Menus and keys, story 2). *mods.md*
-4. The gestures that edit a plugin's records absent on an untracked plugin and on a plugin that is not active: create record and delete, and the plugin as a copy destination. Track or decompile is on its row. *No dead entries*
-5. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its file name. *catalog `copy value`; [editor-fields.md](editor-fields.md)*
+1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's Argument in the catalog says. Source: catalog Argument
+2. A click on a record to open it in the record panel, and a click on an enabled plugin row to open its header, which is a record. A click on a disabled plugin row only selects it. Source: catalog `open`
+3. Enable or disable over a mixed selection to behave as in Mods (Menus and keys, story 2). Source: mods.md
+4. The gestures that edit a plugin's records absent on an untracked plugin and on a plugin that is not active: create record and delete, and the plugin as a copy destination. Track or decompile is on its row. Source: No dead entries
+5. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its file name. Source: catalog `copy value`; [editor-fields.md](editor-fields.md)
 
 ## Drag and drop
 
@@ -141,9 +141,9 @@ As a user, I want:
 
 1. To drag plugin rows, one or several. They move as one block in their `plugins.txt` order.
 2. A drop on a plugin row to place the block directly above it, as shown; on a plugin the game loads with no line, at the losing end of `plugins.txt`; below the last row, at the bottom of the view, as shown.
-3. A drop that would put a master after a plugin that depends on it, or a blueprint plugin before a plugin that is not one, refused, naming the plugin and the master. A drop whose masters mEdit cannot say yet lands; the Master issues row flags it once mEdit reads the plugin. *xedit.md, divergence 28*
-4. A drop where the block cannot go to change nothing and say nothing: on a record, a group, or a row being dragged. *mods.md, Drag and drop, story 5*
-5. Records, groups and the rows of plugins the game loads with no line not to drag, and nothing from outside the view to drop here. *xedit.md: Drag a record onto a reference field*
+3. A drop that would put a master after a plugin that depends on it, or a blueprint plugin before a plugin that is not one, refused, naming the plugin and the master. A drop whose masters mEdit cannot say yet lands; the Master issues row flags it once mEdit reads the plugin. Source: xedit.md, divergence 28
+4. A drop where the block cannot go to change nothing and say nothing: on a record, a group, or a row being dragged. Source: mods.md, Drag and drop, story 5
+5. Records, groups and the rows of plugins the game loads with no line not to drag, and nothing from outside the view to drop here. Source: xedit.md: Drag a record onto a reference field
 
 ## Pickers, prompts and confirmations
 
@@ -152,25 +152,25 @@ As a user, I want:
 As a user, I want:
 
 1. A prompt for the name. It refuses an empty name, a name that does not end `.esp`, `.esm` or `.esl`, and `.esl` when the game has no light plugins.
-2. Then a pick of where the plugin lives: the enabled mods first, then Overwrite. *catalog `create`, place Option*
-3. A place that already holds a plugin of that name left out of the pick. The same name in another place is not checked. *No dead entries*
-4. Esc at either step to create nothing. *Esc changes nothing*
-5. The new plugin to appear at the winning end of the list, disabled. *catalog `plugin sync`*
+2. Then a pick of where the plugin lives: the enabled mods first, then Overwrite. Source: catalog `create`, place Option
+3. A place that already holds a plugin of that name left out of the pick. The same name in another place is not checked. Source: No dead entries
+4. Esc at either step to create nothing. Source: Esc changes nothing
+5. The new plugin to appear at the winning end of the list, disabled. Source: catalog `plugin sync`
 6. The new plugin empty: a header with no records and no masters, flagged by its extension: `.esm` a master, `.esl` a light plugin.
 
 ### Track
 
 As a user, I want:
 
-1. No prompt. While it runs, the view's message line names the mod and the phase. *catalog `track`*
-2. The repository to track `plugin-source/` and `.gitignore`, and nothing else. *ADR-0006*
+1. No prompt. While it runs, the view's message line names the mod and the phase. Source: catalog `track`
+2. The repository to track `plugin-source/` and `.gitignore`, and nothing else. Source: ADR-0006
 3. One commit, `Track <mod>`, holding the source of every plugin that tracked.
 4. Each file's line endings kept as written.
 5. A track that refuses every plugin to leave no repository. A refused plugin writes nothing, and the rest go on.
 
 ### Decompile
 
-As a user, I want one confirmation for the selection, naming the plugins and saying that decompile replaces their source in the working tree from their bytes. *catalog `decompile`; Confirm what destroys*
+As a user, I want one confirmation for the selection, naming the plugins and saying that decompile replaces their source in the working tree from their bytes. Source: catalog `decompile`; Confirm what destroys
 
 ### Compile
 
@@ -178,59 +178,59 @@ As a user, I want:
 
 1. `compile` to build from the working tree, without asking: a tracked plugin's plugin source is the truth, and compile builds the plugin from it.
 2. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
-3. From the palette with no plugin, a pick of the tracked plugins. *No dead entries*
+3. From the palette with no plugin, a pick of the tracked plugins. Source: No dead entries
 4. A light plugin whose records fall outside the light range refused, naming the records and the remedies: clear the light flag, rename the plugin off `.esl`, or change the records' FormIDs.
-5. An interrupted compile to leave the old binary or the new one, and neither to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Compiling again fixes it. This is an exception to *A failed gesture writes nothing*.
+5. An interrupted compile to leave the old binary or the new one, and neither to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Compiling again fixes it. This is an exception to A failed gesture writes nothing.
 
 ### Create record
 
 As a user, I want:
 
-1. On a group, a new record of that type with no prompt, and on a plugin a pick of the record type first. The pick lists the types the game can create. The new record is selected and opens in the record panel. *catalog `create` under Record, record type Option; xEdit selects what it adds*
+1. On a group, a new record of that type with no prompt, and on a plugin a pick of the record type first. The pick lists the types the game can create. The new record is selected and opens in the record panel. Source: catalog `create` under Record, record type Option; xEdit selects what it adds
 2. The new record to take the next free FormKey that neither the working tree nor the last commit uses, and no EditorID, as xEdit adds one.
 3. When no FormKey is free, a refusal naming the remedies: clear the light flag, or change a record's FormID.
-4. No create record on a group of a type the game cannot create. *No dead entries*
-5. On a container record, a pick of the types it can hold. The pick is skipped when it can hold one type. The new record lands inside the container. *xEdit; Mutagen's data*
-6. A placed reference created on a cell to land in its temporary child records, or in its persistent ones when the cell is persistent. In an exterior cell's temporary child records, it starts at the centre of the cell. *xEdit*
-7. A cell created on a plugin or on the Cell group to be an interior cell. It takes its block and sub-block from its FormID. *xEdit*
-8. On a worldspace, a prompt for the new cell's grid position as `x, y`. The prompt refuses anything but two whole numbers. The new cell lands in the block and sub-block its position falls in. *xEdit*
-9. A position where the worldspace already has a cell, in this plugin or a master, refused, naming the cell. When a master holds the cell, the refusal points at copy as override. *xedit.md, divergence 27*
+4. No create record on a group of a type the game cannot create. Source: No dead entries
+5. On a container record, a pick of the types it can hold. The pick is skipped when it can hold one type. The new record lands inside the container. Source: xEdit; Mutagen's data
+6. A placed reference created on a cell to land in its temporary child records, or in its persistent ones when the cell is persistent. In an exterior cell's temporary child records, it starts at the centre of the cell. Source: xEdit
+7. A cell created on a plugin or on the Cell group to be an interior cell. It takes its block and sub-block from its FormID. Source: xEdit
+8. On a worldspace, a prompt for the new cell's grid position as `x, y`. The prompt refuses anything but two whole numbers. The new cell lands in the block and sub-block its position falls in. Source: xEdit
+9. A position where the worldspace already has a cell, in this plugin or a master, refused, naming the cell. When a master holds the cell, the refusal points at copy as override. Source: xedit.md, divergence 27
 
 ### Copy
 
 As a user, I want:
 
-1. A pick of the mode, then a pick of the destination: the plugins I can edit, each with its load index. A destination that already holds a copy asks whether to replace it. Esc on either copies nothing. *catalog `copy`*
+1. A pick of the mode, then a pick of the destination: the plugins I can edit, each with its load index. A destination that already holds a copy asks whether to replace it. Esc on either copies nothing. Source: catalog `copy`
 2. A copy as new to take the next free FormKey. A reference to itself follows it.
 3. A copy as override into a plugin that loads before the source refused: that is an underride. A cell or a worldspace copied as new refused.
-4. Deep copy as override in the mode pick when a selected record has child records. It copies each such record with its fields and all its child records, at any depth. A selected record with no child records copies as an override. Override and new copy each record without its child records. While it runs, the Plugins view's progress bar, from whichever view it started. *xEdit; No dead entries*
-5. Deep copy as override into a destination that holds any of the record's child records to ask whether to replace them, once for the selection. Replace overwrites each child record the destination holds, and keeps its copy of the record itself. A child record the destination holds and the source lacks stays. Declining leaves those destinations as they are. *xEdit; Confirm what destroys; xedit.md, divergence 26*
-6. A worldspace deep copy as override that fails part way to say so, naming the cells that landed and the cell that failed, and not to roll back. Discarding the working-tree changes is the recovery. This is an exception to *A failed gesture writes nothing* and to *A selection is one gesture, and each item lands on its own*.
-7. A container the destination lacks copied in as an override, in every mode. *xEdit*
+4. Deep copy as override in the mode pick when a selected record has child records. It copies each such record with its fields and all its child records, at any depth. A selected record with no child records copies as an override. Override and new copy each record without its child records. While it runs, the Plugins view's progress bar, from whichever view it started. Source: xEdit; No dead entries
+5. Deep copy as override into a destination that holds any of the record's child records to ask whether to replace them, once for the selection. Replace overwrites each child record the destination holds, and keeps its copy of the record itself. A child record the destination holds and the source lacks stays. Declining leaves those destinations as they are. Source: xEdit; Confirm what destroys; xedit.md, divergence 26
+6. A worldspace deep copy as override that fails part way to say so, naming the cells that landed and the cell that failed, and not to roll back. Discarding the working-tree changes is the recovery. This is an exception to A failed gesture writes nothing and to A selection is one gesture, and each item lands on its own.
+7. A container the destination lacks copied in as an override, in every mode. Source: xEdit
 
 ### Delete
 
-As a user, I want one confirmation listing everything selected, saying the records leave their plugin source as working-tree changes I can review. A deleted record's referrers are left as they are, and compile reports them. *catalog `delete`; Confirm what destroys*
+As a user, I want one confirmation listing everything selected, saying the records leave their plugin source as working-tree changes I can review. A deleted record's referrers are left as they are, and compile reports them. Source: catalog `delete`; Confirm what destroys
 
 ### Record filter
 
-As a user, I want a pick of the workspace's `.sql` files, then "New filter…", which opens an untitled SQL document; and on any SQL document, a code lens that applies it as the filter, or reads that it is active and clears it. A query that returns no FormKey column is refused, and one that cannot run is refused with the database's reason. *catalog `filter`, query Option*
+As a user, I want a pick of the workspace's `.sql` files, then "New filter…", which opens an untitled SQL document; and on any SQL document, a code lens that applies it as the filter, or reads that it is active and clears it. A query that returns no FormKey column is refused, and one that cannot run is refused with the database's reason. Source: catalog `filter`, query Option
 
 ## Reporting
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. When mEdit cannot read active plugins, one notification naming them, beside each row's status: my picture of my records would otherwise be wrong. *ADR-0019*
+1. When mEdit cannot read active plugins, one notification naming them, beside each row's status: my picture of my records would otherwise be wrong. Source: ADR-0019
 2. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being the result, with a line in the Output. When a folder cannot be listed, or the game folder is not found, `plugins.txt` untouched, and the reason in the view's message line and the Output.
 3. Every message to name a gesture that exists and a view by its name.
-4. A notification for each tracked mod whose plugins changed outside Modbench, naming the mod and the plugins. It offers nothing to do. It comes once in a session for each new state of a plugin's bytes. *ADR-0003*
+4. A notification for each tracked mod whose plugins changed outside Modbench, naming the mod and the plugins. It offers nothing to do. It comes once in a session for each new state of a plugin's bytes. Source: ADR-0003
 5. A warning, once in a session, for each untracked plugin in a tracked mod, naming it and pointing at decompile.
 
 ## Test seam
 
-- **The view, given an instance value and mEdit's answers:** the rows at every level, each row's parts, the order, and the states, with no VS Code UI and no disk.
-- **A gesture's entry:** given the right-clicked row, the focused row and the selection, the Argument the command receives.
-- **A drop:** given what is dragged and the target, the move's Argument and target, or the refusal.
-- **The pickers and prompts:** their items, prefill, refusals, and what Esc yields.
-- **Menus and keys:** the placement above, checked against the extension manifest.
+- The view, given an instance value and mEdit's answers: the rows at every level, each row's parts, the order, and the states, with no VS Code UI and no disk.
+- A gesture's entry: given the right-clicked row, the focused row and the selection, the Argument the command receives.
+- A drop: given what is dragged and the target, the move's Argument and target, or the refusal.
+- The pickers and prompts: their items, prefill, refusals, and what Esc yields.
+- Menus and keys: the placement above, checked against the extension manifest.
 

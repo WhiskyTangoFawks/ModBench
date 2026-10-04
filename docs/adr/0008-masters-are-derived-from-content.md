@@ -4,8 +4,8 @@ A recorded divergence from [ADR-0018](0018-xedit-is-the-reference-for-record-edi
 
 ## Consequences
 
-- **Nothing edits a master list directly, not a gesture and not a script.** A reference to another plugin's record makes that plugin a master at the next compile, and a master nothing references leaves.
+- Nothing edits a master list directly, not a gesture and not a script. A reference to another plugin's record makes that plugin a master at the next compile, and a master nothing references leaves.
 
 ## Alternatives rejected
 
-- **Add Masters as a user action**, for the real pattern of declaring an otherwise-unused plugin as a master purely to pin load order. That is a load-order concern, Mod Management's job, expressed invisibly inside an Editing object, per plugin, unauditable from `plugins.txt`, and it silently breaks when the referenced plugin updates. The supported way is Mod Management's own load-order surface.
+- Add Masters as a user action, for the real pattern of declaring an otherwise-unused plugin as a master purely to pin load order. That is a load-order concern, Mod Management's job, expressed invisibly inside an Editing object, per plugin, unauditable from `plugins.txt`, and it silently breaks when the referenced plugin updates. The supported way is Mod Management's own load-order surface.
