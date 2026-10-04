@@ -204,7 +204,8 @@ public sealed class PluginCompileService(
             // Only records with something to report pay for their path, which keeps a container's
             // subtree scan off the common path.
             var identity = new RecordIdentity(record.Document.FormKey, record.RecordType, record.EditorId);
-            var relativePath = repository.RelativePathOf(plugin, identity) ?? string.Empty;
+            var relativePath = repository.RelativePathOf(plugin, identity)
+                ?? throw new InvalidOperationException($"Expected a document to hold {identity.FormKey}.");
             diagnostics.AddRange(errors.Select(
                 message => new CompileDiagnostic(record.Document.FormKey, relativePath, message)));
         }
