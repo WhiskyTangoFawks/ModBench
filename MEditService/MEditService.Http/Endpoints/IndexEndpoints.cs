@@ -40,7 +40,8 @@ public static class IndexEndpoints
             .Produces<FilterResponse>()
             .ProducesProblem(503);
 
-        // 0 with no index held, the same "absence is a state" answer GetLoadOrderStatus gives.
+        // The read side's sequence (ADR-0015). 0 with no index held, the same "absence is a state" answer
+        // GetLoadOrderStatus gives.
         app.MapGet("/load-order/sequence", GetSequence)
             .WithName("GetSequence")
             .WithTags(LoadOrderTag)
