@@ -34,6 +34,7 @@ import { installNameRefusal } from './install/install';
 import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
+import { registerGoToModCommand } from './mods/goToMod';
 import { registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
 import { createModListView, lastSelectedViewSelection, type FocusedView, nexusRowInLastSelectedView, registerDownloadsView } from './treeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
@@ -558,6 +559,11 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   ownAll(own, registerSeparatorCommands(access, instance, reporterFor('separator'), ask, trash, () => modListView.selection, modListProvider));
   own(registerCreateEmptyModCommand(access, instance, reporterFor('mod.createEmpty'), modListProvider));
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => modListView.selection));
+  own(registerGoToModCommand(instance, reporterFor('mod.goToMod'), {
+    selection: () => modListView.selection,
+    rowFor: (origin) => modListProvider.rowFor(origin),
+    reveal: (row) => modListView.reveal(row, { select: true, focus: true }),
+  }));
   own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
   own(vscode.commands.registerCommand('modbench.plugin.sync', runPluginSync));
   const { downloadsProvider, downloadsView, downloadsFilter, installDownloaded } = registerDownloadsView({

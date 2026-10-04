@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFile, OriginFolder } from '../instanceLoader/instance';
-import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
+import { modOrigin, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import { fileRowUri } from './modFiles';
 
 /** Why the game does not get a file: another copy wins its path, it is excluded, or its mod is
@@ -12,9 +12,6 @@ export type InactiveReason = 'loses' | 'excluded' | 'modDisabled';
 
 /** The setting that switches the grey, on by default (mods.md, Indicators). */
 export const GREY_INACTIVE_FILES_SETTING = 'modbench.mods.greyInactiveFiles';
-
-const sameOrigin = (a: FileOrigin, b: FileOrigin): boolean =>
-  a.kind === 'mod' ? b.kind === 'mod' && a.name === b.name : a.kind === b.kind;
 
 type FilesValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod' | 'foldersByMod' | 'overwriteFiles' | 'overwriteFolders'>;
 

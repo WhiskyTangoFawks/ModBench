@@ -87,6 +87,8 @@ export interface ModsKeyContext {
   readonly singleRow: boolean;
   /** One row, and open folder takes it. */
   readonly singleOpenFolderRow: boolean;
+  /** One row, and a file in a file order conflict. */
+  readonly singleGoToModRow: boolean;
   readonly holdsEnabledMod: boolean;
   readonly holdsDisabledMod: boolean;
   readonly holdsUntrackedModWithPlugin: boolean;
@@ -106,6 +108,7 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
     selectionKind: kinds.size === 1 ? onlyKind : undefined,
     singleRow: onlyRow !== undefined,
     singleOpenFolderRow: openFolderArgument({ focused: onlyRow, selection }) !== undefined,
+    singleGoToModRow: onlyRow?.kind === 'file' && onlyRow.inConflict,
     holdsEnabledMod: mods.some(isEnabled),
     holdsDisabledMod: mods.some((row) => !isEnabled(row)),
     holdsUntrackedModWithPlugin: mods.some((row) => row.facts?.holdsPlugin === true && !row.facts.tracked),

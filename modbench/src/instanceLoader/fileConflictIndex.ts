@@ -6,6 +6,13 @@ export const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
 
 export const RUNTIME_OUTPUT: FileOrigin = { kind: 'runtimeOutput' };
 
+export const OVERWRITE_LABEL = 'Overwrite';
+
+export const originLabel = (origin: FileOrigin): string => (origin.kind === 'mod' ? origin.name : OVERWRITE_LABEL);
+
+export const sameOrigin = (a: FileOrigin, b: FileOrigin): boolean =>
+  a.kind === 'mod' ? b.kind === 'mod' && a.name === b.name : a.kind === b.kind;
+
 export interface ConflictEntry {
   /** The winner's own on-disk casing: Proton/Wine folds case over case-sensitive ext4, so
    *  case-variant paths resolve to one entry, kept at that casing rather than a folded one. */
@@ -15,6 +22,15 @@ export interface ConflictEntry {
   winnerOrigin: FileOrigin;
   /** Every provider of this relative path, winning-most first. */
   providers: FileOrigin[];
+}
+
+/** The winning copy when `own` loses, and the copies `own` wins over, winning-first, when it
+ *  wins. None unless another enabled copy provides the path. */
+export function goToModCandidates(entry: ConflictEntry | undefined, own: FileOrigin): FileOrigin[] {
+  const providers = entry?.providers ?? [];
+  const at = providers.findIndex((provider) => sameOrigin(provider, own));
+  if (at === -1) return [];
+  return at === 0 ? providers.slice(1) : providers.slice(0, 1);
 }
 
 /** Comparison keys only — never display, never written back to disk. Locale-independent,

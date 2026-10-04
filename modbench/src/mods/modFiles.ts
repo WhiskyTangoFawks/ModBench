@@ -85,10 +85,11 @@ export class FileNode extends vscode.TreeItem {
     public readonly origin: FileOrigin,
     public readonly file: OriginFile,
     name: string,
+    public readonly inConflict = false,
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
     fileRow(this, parent, origin, name, file.relativePath);
-    this.contextValue = 'file';
+    this.contextValue = inConflict ? 'file conflict' : 'file';
     this.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file.path), { preview: true }] };
   }
 }
@@ -115,7 +116,7 @@ function byLevel<T extends { readonly relativePath: string }>(entries: readonly 
  *  those under it, and `path` is its own path in its mod, none for the mod or Overwrite itself. */
 export function filesIn(
   parent: ModlistNode, origin: FileOrigin, files: readonly OriginFile[], folders: readonly OriginFolder[], path?: string,
-  filter?: { shown: ChildrenShown; matches: NameMatch },
+  filter?: { shown: ChildrenShown; matches: NameMatch; inConflict: (origin: FileOrigin, file: OriginFile) => boolean },
 ): (FolderNode | FileNode)[] {
   const prefix = path === undefined ? '' : `${path}/`;
   const ownFiles = byLevel(files, prefix);
@@ -125,6 +126,6 @@ export function filesIn(
       parent, origin, folder, ownFiles.below.get(name) ?? [], ownFolders.below.get(name) ?? [], name,
       filter ? shownUnder(filter.shown, filter.matches, name) : 'all',
     )),
-    ...[...ownFiles.here].sort(byName).map(([name, file]) => new FileNode(parent, origin, file, name)),
+    ...[...ownFiles.here].sort(byName).map(([name, file]) => new FileNode(parent, origin, file, name, filter?.inConflict(origin, file))),
   ];
 }
