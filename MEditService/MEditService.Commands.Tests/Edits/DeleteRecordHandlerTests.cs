@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -56,13 +57,7 @@ public sealed class DeleteRecordHandlerTests
     public void DeleteRecords_WhenAnotherToolLeftTwoDocumentsClaimingOneRecord_RefusesThatRecord_AndLandsTheRest()
     {
         using var mod = SourceEditFixture.Tracked();
-        var computed = mod.NpcSourceFile;
-        string Renamed(string editorId) => Path.Combine(
-            Path.GetDirectoryName(computed).Require(),
-            Path.GetFileName(computed).Replace(SourceEditFixture.NpcEditorId, editorId, StringComparison.Ordinal));
-        var npcFile = Renamed("RenamedByAnotherTool");
-        File.Move(computed, npcFile);
-        File.Copy(npcFile, Renamed("CopiedByAnotherTool"));
+        TreeTampering.Duplicate(mod.ModFolder, mod.Plugin, mod.NpcIdentity);
         var otherNpc = new RecordAt(mod.Plugin, mod.OtherNpc.ToString());
         var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
         var keyword = new RecordAt(mod.Plugin, mod.Keyword.ToString());
@@ -74,7 +69,7 @@ public sealed class DeleteRecordHandlerTests
         Assert.Equal(npc, refused.Record);
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
         Assert.Contains(mod.Npc.ToString(), refused.Message, StringComparison.Ordinal);
-        Assert.True(File.Exists(npcFile), "the refused record's document must survive");
+        Assert.Throws<AmbiguousSourceUnitException>(() => TrackedTree.Document(mod.ModFolder, mod.Plugin, mod.Npc.ToString()));
     }
 
     [Fact]
@@ -172,12 +167,16 @@ public sealed class DeleteRecordHandlerTests
         return block;
     }
 
-    private static string DocumentCarrying(SourceModFixture mod, string text) => DocumentsCarrying(mod, text).Single();
+    private static string DocumentCarrying(SourceModFixture mod, string text)
+    {
+        var document = DocumentsCarrying(mod, text).Single();
+        return TreeTampering.FileOf(
+            mod.ModFolder, mod.Plugin, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
+    }
 
-    private static List<string> DocumentsCarrying(SourceModFixture mod, string text) =>
-        [.. Directory.EnumerateFiles(
-                Path.Combine(mod.ModFolder, SourceRepository.RootFor(mod.Plugin.Name)), "*.json", SearchOption.AllDirectories)
-            .Where(file => File.ReadAllText(file).Contains(text, StringComparison.Ordinal))];
+    private static List<SourceDocument> DocumentsCarrying(SourceModFixture mod, string text) =>
+        [.. SourceRepository.Over(mod.ModFolder, GameRelease.Fallout4).ReadAll(mod.Plugin)
+            .Where(document => document.Body.Contains(text, StringComparison.Ordinal))];
 
     private static SortedDictionary<string, string> FilesUnder(string directory) =>
         Directory.Exists(directory)
@@ -195,22 +194,18 @@ public sealed class DeleteRecordHandlerTests
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
-        Assert.True(File.Exists(mod.NpcSourceFile), "an unrelated sibling record's file must survive");
-        Assert.True(
-            Directory.Exists(Path.Combine(mod.ModFolder, "plugin-source", mod.ActualPluginName)),
-            "the plugin's own tracked source tree must survive");
+        Assert.NotNull(mod.Document(mod.Npc.ToString()));
         Assert.NotNull(mod.Document(headerFormKey));
     }
 
     [Fact]
-    public void DeleteRecords_RemovesTheSourceFile_GoneFromTheTree_StillAtHead()
+    public void DeleteRecords_RemovesTheRecord_GoneFromTheTree_StillAtHead()
     {
         using var mod = SourceEditFixture.Tracked();
 
         var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
         Assert.Empty(result.Refused);
-        Assert.False(File.Exists(mod.NpcSourceFile));
         Assert.Null(mod.Document(mod.Npc.ToString()));
         Assert.NotNull(
             mod.CommittedDocument(mod.Npc.ToString(), "npc_", SourceEditFixture.NpcEditorId));

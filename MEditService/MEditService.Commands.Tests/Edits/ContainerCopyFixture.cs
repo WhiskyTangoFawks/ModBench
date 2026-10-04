@@ -283,10 +283,11 @@ public sealed class ContainerCopyFixture : IDisposable
 
     /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
     public SourceDocument? Document(PluginAddress plugin, string formKey) =>
-        TrackedTree.Document(
-            plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder, plugin, formKey);
+        TrackedTree.Document(ModFolder(plugin), plugin, formKey);
 
-    public IReadOnlyList<string> DestinationGitStatus() => TrackedTree.GitStatus(DestinationModFolder);
+    private string ModFolder(PluginAddress plugin) => plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder;
+
+    public IReadOnlyList<string> DestinationChangedFormKeys() => TrackedTree.ChangedFormKeys(DestinationModFolder, DestinationPlugin);
 
     /// <summary>Where the destination's tree puts a cell it holds — the block directories the mint
     /// wrote, read back the one way the write side reads them.</summary>
@@ -305,21 +306,16 @@ public sealed class ContainerCopyFixture : IDisposable
         mod.Cells.Records.Add(block);
     }
 
-    public string DestinationSourceRoot => Path.Combine(DestinationModFolder, SourceRepository.RootFor(DestinationPluginName));
+    public SourceDocument DestinationDocumentCarrying(string editorId) =>
+        DocumentCarrying(DestinationPlugin, editorId);
 
-    public string DestinationSourceFileContaining(string editorId) =>
-        SourceFileContaining(DestinationPlugin, editorId);
+    /// <summary>The one document in a tracked plugin's tree carrying an EditorID: a record's own, or
+    /// its owner's when it is embedded.</summary>
+    public SourceDocument DocumentCarrying(PluginAddress plugin, string editorId) =>
+        TrackedTree.DocumentCarrying(ModFolder(plugin), plugin, editorId);
 
-    /// <summary>Any document in a tracked plugin's tree carrying an EditorID: a container's own
-    /// RecordData.json, a flat record's file, or the file that inlines an embedded child.</summary>
-    public string SourceFileContaining(PluginAddress plugin, string editorId) =>
-        Directory
-            .EnumerateFiles(
-                Path.Combine(
-                    plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder,
-                    SourceRepository.RootFor(plugin.Name)),
-                "*.json", SearchOption.AllDirectories)
-            .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
+    public void Overwrite(PluginAddress plugin, SourceDocument document) =>
+        TrackedTree.Overwrite(ModFolder(plugin), plugin, document);
 
     public void Dispose()
     {

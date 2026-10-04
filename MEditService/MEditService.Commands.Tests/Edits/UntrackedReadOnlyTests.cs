@@ -1,3 +1,4 @@
+using Mutagen.Bethesda;
 using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -40,8 +41,7 @@ public sealed class UntrackedReadOnlyTests
 
         mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        Assert.False(Directory.Exists(Path.Combine(mod.ModFolder, SourceRepository.RootFor(SourceEditFixture.PluginName))));
-        Assert.False(File.Exists(mod.NpcSourceFile));
+        Assert.Empty(SourceRepository.Over(mod.ModFolder, GameRelease.Fallout4).ReadAll(mod.Plugin));
     }
 
     [Fact]

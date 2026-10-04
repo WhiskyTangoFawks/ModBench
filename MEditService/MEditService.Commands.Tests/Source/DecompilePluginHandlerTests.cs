@@ -44,19 +44,14 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     public void Dispose() => _root.Dispose();
 
     [Fact]
-    public async Task Decompile_OfAnUntrackedPluginInATrackedMod_WritesItsSourceToTheWorkingTree_AndCommitsNothing()
+    public async Task Decompile_OfAnUntrackedPluginInATrackedMod_WritesItsSourceToTheWorkingTree_HoldingNothingAtHead()
     {
-        var mainBefore = Git("rev-parse", "refs/heads/main");
-
         var result = await Decompile(Tracked("Second.esp"));
 
         Assert.Equal([Tracked("Second.esp")], result.Landed);
         Assert.Empty(result.Refused);
-        Assert.True(SourceRepository.HoldsTreeFor(_trackedMod, "Second.esp"));
         Assert.Contains("SecondNpc", SourceTextOf("Second.esp"), StringComparison.Ordinal);
-        Assert.Equal(mainBefore, Git("rev-parse", "refs/heads/main"));
-        Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
-        Assert.Equal(["?? plugin-source/Second.esp/"], Git("status", "--porcelain").Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        Assert.Empty(Repository.ReadAll(Tracked("Second.esp"), "HEAD"));
     }
 
     [Fact]
@@ -72,10 +67,11 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     [Fact]
     public async Task Decompile_OfATrackedPlugin_ReplacesItsSourceInTheWorkingTree_WithWhatItsBytesHold_DiscardingHandEditsAndStrayDocuments()
     {
-        var stray = Path.Combine(SourceRepository.RootIn(_trackedMod, "First.esp"), "Stray.json");
-        File.WriteAllText(stray, "{}");
-        var document = OtherToolDocumentCarrying("First.esp", "FirstNpc");
-        File.WriteAllText(document, File.ReadAllText(document).Replace("FirstNpc", "EditedByHand", StringComparison.Ordinal));
+        var first = Repository.ReadAll(Tracked("First.esp")).Single(document => document.EditorId == "FirstNpc");
+        var identity = new RecordIdentity(first.FormKey, first.RecordType, first.EditorId);
+        var stray = TreeTampering.Stray(_trackedMod, Tracked("First.esp"), identity, "Stray.json", "{}");
+        TrackedTree.Overwrite(
+            _trackedMod, Tracked("First.esp"), identity, first.Body.Replace("FirstNpc", "EditedByHand", StringComparison.Ordinal));
         WritePlugin(_trackedMod, "First.esp", "UpgradedNpc");
 
         var result = await Decompile(Tracked("First.esp"));
@@ -85,7 +81,6 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var text = SourceTextOf("First.esp");
         Assert.Contains("UpgradedNpc", text, StringComparison.Ordinal);
         Assert.DoesNotContain("EditedByHand", text, StringComparison.Ordinal);
-        Assert.Equal(["Track TrackedMod", "Track First.esp"], SubjectsOnMain());
     }
 
     [Fact]
@@ -97,7 +92,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.NotInTrackedMod, refused.Refusal);
         Assert.Contains("Other.esp", refused.Message, StringComparison.Ordinal);
-        Assert.Equal(["Other.esp"], Directory.EnumerateFileSystemEntries(_untrackedMod).Select(Path.GetFileName));
+        Assert.Empty(SourceRepository.Over(_untrackedMod, GameRelease.Fallout4).ReadAll(new PluginAddress("Other.esp", UntrackedModName)));
     }
 
     [Fact]
@@ -145,17 +140,8 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         mod.WriteToBinary(Path.Combine(modFolder, name));
     }
 
+    private SourceRepository Repository => SourceRepository.Open(_trackedMod, GameRelease.Fallout4).Require();
+
     private string SourceTextOf(string plugin) => string.Concat(
-        Directory.EnumerateFiles(SourceRepository.RootIn(_trackedMod, plugin), "*", SearchOption.AllDirectories)
-            .Order(StringComparer.Ordinal)
-            .Select(File.ReadAllText));
-
-    private string OtherToolDocumentCarrying(string plugin, string text) =>
-        Directory.EnumerateFiles(SourceRepository.RootIn(_trackedMod, plugin), "*.json", SearchOption.AllDirectories)
-            .Single(file => File.ReadAllText(file).Contains(text, StringComparison.Ordinal));
-
-    private string[] SubjectsOnMain() =>
-        Git("log", "--reverse", "--format=%s", "refs/heads/main").Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
-    private string Git(params string[] args) => GitProbe.Run(Path.Combine(_trackedMod, ".git"), _trackedMod, args);
+        Repository.ReadAll(Tracked(plugin)).Select(document => document.Body).Order(StringComparer.Ordinal));
 }

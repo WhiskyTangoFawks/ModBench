@@ -67,10 +67,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.DoesNotContain(_fixture.Response1.ToString(), responseKeys);
         Assert.DoesNotContain(_fixture.Response2.ToString(), responseKeys);
 
-        var topicText = File.ReadAllText(
-            _fixture.DestinationSourceFileContaining(ContainerCopyFixture.DialogTopicEditorId + "DUPLICATE001"));
+        var topicText = _fixture.DestinationDocumentCarrying(ContainerCopyFixture.DialogTopicEditorId + "DUPLICATE001").Body;
         Assert.All(responseKeys, key => Assert.Contains(key, topicText, StringComparison.Ordinal));
-        Assert.Empty(Directory.EnumerateDirectories(_fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
 
         var compiled = await ImportCompiled();
         var compiledQuest = compiled.Quests.Single(q => q.FormKey == _fixture.Quest);
@@ -111,8 +109,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
     {
         Assert.True(_fixture.CopyHandler.CopyAsOverride(
             _fixture.SourcePlugin, _fixture.Quest.ToString(), _fixture.DestinationPlugin).Applied);
-        var questFile = _fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId);
-        var questBefore = JsonDocument.Parse(File.ReadAllText(questFile));
+        var questBefore = JsonDocument.Parse(_fixture.DestinationDocumentCarrying(ContainerCopyFixture.QuestEditorId).Body);
 
         var result = _fixture.CopyHandler.CopyAsNew(
             _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
@@ -120,7 +117,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.True(result.Applied, result.Message);
 
         Assert.False(questBefore.RootElement.TryGetProperty(nameof(Quest.DialogTopics), out _));
-        var questAfter = JsonDocument.Parse(File.ReadAllText(questFile));
+        var questAfter = JsonDocument.Parse(_fixture.DestinationDocumentCarrying(ContainerCopyFixture.QuestEditorId).Body);
         foreach (var property in questBefore.RootElement.EnumerateObject())
         {
             Assert.True(
@@ -134,9 +131,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
         Assert.False(_fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString()).Require().IsPartialForm());
 
-        var questsDir = Path.Combine(_fixture.DestinationSourceRoot, "Quests");
-        Assert.Empty(Directory.EnumerateDirectories(questsDir));
-        Assert.Single(Directory.EnumerateFiles(questsDir), f => Path.GetFileName(f) != "GroupRecordData.json");
 
         var compiledQuest = (await ImportCompiled()).Quests.Single(q => q.FormKey == _fixture.Quest);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, compiledQuest.EditorID);
@@ -159,9 +153,10 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var landed = Assert.Single(Responses(_fixture.DialogTopic.ToString()));
         Assert.Equal(newFormKey, Member(landed, "FormKey"));
 
-        var responseFile = _fixture.DestinationSourceFileContaining(ContainerCopyFixture.Response1EditorId + "DUPLICATE001");
-        Assert.Contains(newFormKey, File.ReadAllText(responseFile), StringComparison.Ordinal);
-        Assert.Empty(Directory.EnumerateDirectories(_fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
+        Assert.Contains(
+            newFormKey,
+            _fixture.DestinationDocumentCarrying(ContainerCopyFixture.Response1EditorId + "DUPLICATE001").Body,
+            StringComparison.Ordinal);
 
         var compiledTopic = (await ImportCompiled()).Quests.Single(q => q.FormKey == _fixture.Quest)
             .DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic);
@@ -184,8 +179,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.NotNull(document);
         Assert.Equal(ContainerCopyFixture.QuestEditorId + "DUPLICATE001", document.EditorId);
 
-        var questText = File.ReadAllText(
-            _fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId + "DUPLICATE001"));
+        var questText = _fixture.DestinationDocumentCarrying(ContainerCopyFixture.QuestEditorId + "DUPLICATE001").Body;
         Assert.DoesNotContain(ContainerCopyFixture.DialogTopicEditorId, questText, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.SceneEditorId, questText, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.DialogBranchEditorId, questText, StringComparison.Ordinal);

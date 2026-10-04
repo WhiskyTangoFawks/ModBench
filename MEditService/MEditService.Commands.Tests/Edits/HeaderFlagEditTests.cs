@@ -97,7 +97,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.SyntheticMemberIndirectWrite, result.Refusal);
         Assert.Contains("IsSmallMaster", result.Message, StringComparison.Ordinal);
-        Assert.Empty(_fixture.GitStatus());
+        Assert.Empty(_fixture.ChangedFormKeys());
     }
 
     [Fact]

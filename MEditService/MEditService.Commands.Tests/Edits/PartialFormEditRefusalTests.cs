@@ -75,11 +75,11 @@ public sealed class PartialFormEditRefusalTests : IDisposable
     [Fact]
     public void EditField_NonHeaderFieldOnPartialFormRecord_WritesNothing()
     {
-        var before = File.ReadAllText(SourcePath());
+        var before = CellBody();
 
         Service().Set(Plugin, PartialCell.ToString(), "WaterHeight", Json("50.0"));
 
-        Assert.Equal(before, File.ReadAllText(SourcePath()));
+        Assert.Equal(before, CellBody());
     }
 
     [Fact]
@@ -106,9 +106,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
         Assert.True(result.Applied);
     }
 
-    private string SourcePath() =>
-        Directory.EnumerateFiles(_modFolder, "RecordData.json", SearchOption.AllDirectories)
-            .Single(p => p.Contains("PartialCell", StringComparison.Ordinal));
+    private string CellBody() => TrackedTree.Document(_modFolder, Plugin, PartialCell.ToString()).Require().Body;
 
     private static System.Text.Json.JsonElement Json(string json) =>
         System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);

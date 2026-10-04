@@ -1,3 +1,4 @@
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -33,17 +34,21 @@ public sealed class CopyRecordHandlerTests
     {
         using var mod = CopyFixture.Create(trackSource: true);
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
-        LeaveTextTheCodecWouldRespell(mod.SourceFileFor(mod.SourcePlugin, mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId));
-        var before = TreeSnapshot.Of(mod.SourceModFolder);
+        LeaveTextTheCodecWouldRespell(mod);
+        var before = TrackedTree.Records(mod.SourceModFolder, mod.SourcePlugin);
 
         var result = mod.CopyHandler.Copy([npc], CopyMode.Override, [mod.SourcePlugin], replace);
 
         Assert.Equal([new CopyItem(npc, mod.SourcePlugin)], result.Applied.Select(landed => landed.Item));
         Assert.Empty(result.Refused);
-        Assert.Equal(before, TreeSnapshot.Of(mod.SourceModFolder));
+        Assert.Equal(before, TrackedTree.Records(mod.SourceModFolder, mod.SourcePlugin));
     }
 
-    private static void LeaveTextTheCodecWouldRespell(string document) => File.AppendAllText(document, "\n\n");
+    private static void LeaveTextTheCodecWouldRespell(CopyFixture mod)
+    {
+        var npc = mod.Document(mod.SourcePlugin, mod.SourceNpc.ToString()).Require();
+        mod.Overwrite(mod.SourcePlugin, npc with { Body = npc.Body + "\n\n" });
+    }
 
     [Fact]
     public void ARecordAndADestinationNamedTwice_AreCopiedOnce()

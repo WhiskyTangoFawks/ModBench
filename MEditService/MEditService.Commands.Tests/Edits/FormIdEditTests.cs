@@ -48,13 +48,13 @@ public sealed class FormIdEditTests
     public void EditingTheFormId_ToTheOneItHas_WritesNothing_AndAnswersNoNewFormKey()
     {
         using var mod = SourceEditFixture.Tracked();
-        var before = TreeSnapshot.Of(mod.ModFolder);
+        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), mod.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(result.NewFormKey);
-        Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
+        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class FormIdEditTests
     {
         using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
-        var before = TreeSnapshot.Of(mod.ModFolder);
+        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, headerFormKey, FreeFormKey);
 
@@ -70,7 +70,7 @@ public sealed class FormIdEditTests
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         Assert.Equal("FormKey", result.Path);
         Assert.Equal("'FormKey' is read-only: a plugin header's FormID names the plugin itself, not a record in it.", result.Message);
-        Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
+        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Theory]
@@ -80,27 +80,27 @@ public sealed class FormIdEditTests
     public void EditingTheFormId_ToAValueThatIsNoFormKey_RefusesAsTheCodecsRejection_NamingTheField(string json)
     {
         using var mod = SourceEditFixture.Tracked();
-        var before = TreeSnapshot.Of(mod.ModFolder);
+        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "FormKey", JsonDocument.Parse(json).RootElement);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
         Assert.Equal("FormKey", result.Path);
-        Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
+        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
     public void EditingTheFormId_ToOneAnotherRecordHolds_RefusesItAsTaken()
     {
         using var mod = SourceEditFixture.Tracked();
-        var before = TreeSnapshot.Of(mod.ModFolder);
+        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), mod.OtherNpc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
-        Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
+        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class FormIdEditTests
     public void EditingTheFormId_OfAnOverride_Refuses_NamingItsMaster()
     {
         using var two = TwoModReferenceFixture.Create(trackReferencer: true);
-        var before = TreeSnapshot.Of(two.ReferencerModFolder);
+        var before = TrackedTree.Records(two.ReferencerModFolder, two.ReferencerPlugin);
 
         var result = two.EditHandler.SetFormId(two.ReferencerPlugin, two.Npc.ToString(), "000F00:Winner.esp");
 
@@ -137,7 +137,7 @@ public sealed class FormIdEditTests
         Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
         Assert.Equal("FormKey", result.Path);
         Assert.Contains("Base.esm", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TreeSnapshot.Of(two.ReferencerModFolder));
+        Assert.Equal(before, TrackedTree.Records(two.ReferencerModFolder, two.ReferencerPlugin));
     }
 
     [Theory]
@@ -146,14 +146,19 @@ public sealed class FormIdEditTests
     public void EditingTheFormId_LeavesAReferencerInAnotherMod_AsItWas_TrackedOrNot(bool trackReferencer)
     {
         using var two = TwoModReferenceFixture.Create(trackReferencer);
-        var before = TreeSnapshot.Of(two.ReferencerModFolder);
+        var before = ReferencerState(two);
 
         var result = two.EditHandler.SetFormId(two.TargetPlugin, two.TargetRace.ToString(), "000F00:Base.esm");
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(two.Document(two.TargetPlugin, result.NewFormKey.Require()));
-        Assert.Equal(before, TreeSnapshot.Of(two.ReferencerModFolder));
+        Assert.Equal(before, ReferencerState(two));
     }
+
+    private static IReadOnlyList<string> ReferencerState(TwoModReferenceFixture two) =>
+        SourceRepository.IsTracked(two.ReferencerModFolder)
+            ? TrackedTree.Records(two.ReferencerModFolder, two.ReferencerPlugin)
+            : [Convert.ToHexString(File.ReadAllBytes(Path.Combine(two.ReferencerModFolder, two.ReferencerPlugin.Name)))];
 
     [Fact]
     public void EditingTheFormId_ChangesOnlyTheFormKey_LeavingItsOwnLinkAndItsPluginsOtherRecordsAsTheyWere()

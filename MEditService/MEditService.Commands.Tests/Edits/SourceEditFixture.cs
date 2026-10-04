@@ -98,53 +98,17 @@ public sealed class SourceEditFixture : IDisposable
     public void ChangeOutsideModbench() =>
         File.WriteAllBytes(Path.Combine(ModFolder, ActualPluginName), "changed-by-xedit"u8.ToArray());
 
-    public string SourceFileFor(FormKey formKey, string recordType, string? editorId) =>
-        Path.Combine(ModFolder, RelativeSourcePath(formKey, recordType, editorId));
+    public RecordIdentity NpcIdentity => new(Npc.ToString(), "npc_", NpcEditorId);
 
-    public string NpcSourceFile => SourceFileFor(Npc, "npc_", NpcEditorId);
+    /// <summary>The FormKeys whose document differs from the last commit.</summary>
+    public IReadOnlyList<string> ChangedFormKeys() => TrackedTree.ChangedFormKeys(ModFolder, Plugin);
 
-    public string RelativeSourcePath(FormKey formKey, string recordType, string? editorId) =>
-        Path.GetRelativePath(ModFolder, SourceDocumentPath.Of(
-            ModFolder, ActualPluginName, recordType, formKey.ToString(), editorId, GameRelease.Fallout4));
+    public void Overwrite(RecordIdentity identity, string body) =>
+        TrackedTree.Overwrite(ModFolder, Plugin, identity, body);
 
-    public IReadOnlyList<string> GitStatus() =>
-        GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, "status", "--porcelain")
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(l => UnquotePorcelainLine(l.Trim()))
-            .ToList();
-
-    public string GitShowHead(string relativePath) =>
-        GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, "show", $"HEAD:{relativePath.Replace('\\', '/')}");
+    public void Remove(RecordIdentity identity) => TrackedTree.Remove(ModFolder, Plugin, identity);
 
     public void Dispose() => TryDelete(InstanceRoot);
-
-    // Unavoidable, not defensive: plain porcelain v1 C-quotes any path containing a space
-    // unconditionally — core.quotePath governs only bytes above 0x80 — and these names all have one.
-    private static string UnquotePorcelainLine(string line)
-    {
-        var space = line.IndexOf(' ', StringComparison.Ordinal);
-        if (space < 0) return line;
-        var status = line[..space];
-        var rest = line[(space + 1)..].TrimStart();
-        if (rest.Length < 2 || rest[0] != '"' || rest[^1] != '"') return line;
-
-        var inner = rest[1..^1];
-        var unquoted = new System.Text.StringBuilder(inner.Length);
-        for (var i = 0; i < inner.Length; i++)
-        {
-            if (inner[i] != '\\' || i + 1 >= inner.Length) { unquoted.Append(inner[i]); continue; }
-            var next = inner[++i];
-            unquoted.Append(next switch
-            {
-                '"' => '"',
-                '\\' => '\\',
-                't' => '\t',
-                'n' => '\n',
-                _ => next,
-            });
-        }
-        return $"{status} {unquoted}";
-    }
 
     // A tracked mod folder holds a .git tree whose object files are read-only on some filesystems,
     // and a test failing on cleanup would mask the real assertion that already ran.

@@ -207,7 +207,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_ForAnEmbeddedChildWithASemanticError_NamesTheContainersOwnSourceFile()
+    public async Task Compile_ForAnEmbeddedChildWithASemanticError_NamesTheContainersOwnDocument()
     {
         var result = await CompileService().CompileAsync(_plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
@@ -215,10 +215,10 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         var diagnostic = Assert.Single(
             result.Diagnostics.Where(d => d.FormKey == _cellATemporaryRef.ToString()).Take(1));
 
-        var full = Path.Combine(_modFolder, diagnostic.SourceRelativePath);
-        Assert.True(File.Exists(full), $"'{diagnostic.SourceRelativePath}' is not a file in the tree.");
-        Assert.Equal("RecordData.json", Path.GetFileName(full));
-        Assert.Contains("\"CellA\"", File.ReadAllText(full), StringComparison.Ordinal);
+        var cell = TrackedTree.DocumentCarrying(_modFolder, _plugin, "CellA");
+        Assert.Equal(
+            TreeTampering.FileOf(_modFolder, _plugin, new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId)),
+            Path.Combine(_modFolder, diagnostic.SourceRelativePath));
     }
 
     [Fact]

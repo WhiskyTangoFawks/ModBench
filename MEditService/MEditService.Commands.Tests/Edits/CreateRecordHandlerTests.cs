@@ -3,10 +3,8 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -72,9 +70,6 @@ public sealed class CreateRecordHandlerTests
         var newFormKey = result.NewFormKey;
         Assert.EndsWith(":" + SourceEditFixture.PluginName, newFormKey, StringComparison.Ordinal);
 
-        var sourceFile = Path.Combine(mod.ModFolder, mod.RelativeSourcePath(
-            FormKey.Factory(newFormKey), "npc_", "BrandNewNpc"));
-        Assert.True(File.Exists(sourceFile));
         var document = mod.Document(newFormKey);
         Assert.NotNull(document);
         Assert.Equal("BrandNewNpc", document.EditorId);
@@ -91,16 +86,11 @@ public sealed class CreateRecordHandlerTests
         var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AfterTheGap");
         Assert.True(created.Applied, created.Message);
 
-        var npcsDir = Path.Combine(mod.ModFolder, SourceRepository.RootFor(SourceEditFixture.PluginName), "Npcs");
-        var names = Directory.GetFiles(npcsDir)
-            .Select(f => Path.GetFileName(f) ?? throw new InvalidOperationException("Expected a file path to have a file name."))
-            .Where(n => !string.Equals(n, "GroupRecordData.json", StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal)
-            .ToList();
+        var npcs = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
-        Assert.Equal(2, names.Count);
-        Assert.Contains(names, n => n.StartsWith("UntouchedNpc", StringComparison.Ordinal));
-        Assert.Contains(names, n => n.StartsWith("AfterTheGap", StringComparison.Ordinal));
+        Assert.DoesNotContain(npcs, n => n.Contains(SourceEditFixture.NpcEditorId, StringComparison.Ordinal));
+        Assert.Contains(npcs, n => n.Contains("\"EditorID\": \"UntouchedNpc\"", StringComparison.Ordinal));
+        Assert.Contains(npcs, n => n.Contains("\"EditorID\": \"AfterTheGap\"", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -138,9 +128,7 @@ public sealed class CreateRecordHandlerTests
 
     private static void Commit(SourceEditFixture mod)
     {
-        var git = Path.Combine(mod.ModFolder, ".git");
-        GitProbe.Run(git, mod.ModFolder, "add", "-A");
-        GitProbe.Run(git, mod.ModFolder, "commit", "-q", "-m", "seed");
+        TrackedTree.Commit(mod.ModFolder);
     }
 
     private static uint LocalId(string formKey) =>

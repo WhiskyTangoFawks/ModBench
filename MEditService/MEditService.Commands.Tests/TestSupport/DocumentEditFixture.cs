@@ -1,3 +1,4 @@
+using Mutagen.Bethesda.Plugins;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
@@ -26,7 +27,7 @@ internal sealed class DocumentEditFixture : IDisposable
 
     internal DocumentEditFixture()
     {
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits, []);
+        TrackedTemplates.WriteTracked(_modFolder, new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4));
         _repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 

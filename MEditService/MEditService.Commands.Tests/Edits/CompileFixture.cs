@@ -102,25 +102,11 @@ public sealed class CompileFixture : IDisposable
     public void Remove(FormKey formKey, string recordType, string? editorId) =>
         Repository.Remove(Plugin, new RecordIdentity(formKey.ToString(), recordType, editorId));
 
-    public string SourceFileFor(FormKey formKey, string recordType, string? editorId) =>
-        SourceDocumentPath.Of(ModFolder, PluginName, recordType, formKey.ToString(), editorId, Release);
+    public RecordIdentity NpcIdentity => new(Npc.ToString(), NpcRecordType, NpcEditorId);
 
-    public string NpcSourceFile => SourceFileFor(Npc, NpcRecordType, NpcEditorId);
+    public SourceDocument Document(string formKey) => TrackedTree.Document(ModFolder, Plugin, formKey).Require();
 
-    private string RunGit(params string[] args) => GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, args);
-
-    /// <summary>Commits the working tree as it stands, so a compile at a ref reads blobs the files on
-    /// disk need not still match.</summary>
-    public void CommitWorkingTree(string message)
-    {
-        RunGit("add", "-A");
-        RunGit("commit", "-q", "-m", message);
-    }
-
-    /// <summary>Raw porcelain lines: every caller here compares one listing to another, and none
-    /// reads a path out of one.</summary>
-    public IReadOnlyList<string> GitStatus() =>
-        [.. RunGit("status", "--porcelain").Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim())];
+    public void Overwrite(RecordIdentity identity, string body) => TrackedTree.Overwrite(ModFolder, Plugin, identity, body);
 
     public void Dispose()
     {

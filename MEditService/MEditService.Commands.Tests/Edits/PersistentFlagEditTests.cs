@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -184,13 +185,12 @@ public sealed class PersistentFlagEditTests : IDisposable
     [Fact]
     public void AMoveIntoAnotherCellWhoseDocumentCannotBeWritten_LeavesTheSourceTreeUnchanged()
     {
-        var worldspace = SourceDocumentPath.Of(_mod.ModFolder, _mod.Plugin.Name, "wrld", _keys["World"].ToString(), "World", GameRelease.Fallout4);
-        Directory.CreateDirectory(worldspace + ".tmp");
-        var before = TreeSnapshot.Of(_mod.ModFolder);
+        TreeTampering.BlockWrite(_mod.ModFolder, _mod.Plugin, new RecordIdentity(_keys["World"].ToString(), "wrld", "World"));
+        var before = TrackedTree.Records(_mod.ModFolder, _mod.Plugin);
 
         var thrown = Assert.Throws<IOException>(() => SetFlags("OutsideTemp", Persistent));
 
-        Assert.Equal(before, TreeSnapshot.Of(_mod.ModFolder));
+        Assert.Equal(before, TrackedTree.Records(_mod.ModFolder, _mod.Plugin));
         Assert.Contains("back as it was — nothing to review or revert", thrown.Message, StringComparison.Ordinal);
     }
 

@@ -1,4 +1,7 @@
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.SourceAdapter;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.RealData;
 
@@ -9,7 +12,8 @@ public sealed class TrackedCutDownFixture : IDisposable
 
     public TrackedCutDownFixture() => CutDownPluginFixture.TrackedInto(ModFolder);
 
-    public string SourceRoot => CutDownPluginFixture.SourceRootIn(ModFolder);
+    public IReadOnlyList<SourceDocument> Documents() =>
+        SourceRepository.Open(ModFolder, GameRelease.Fallout4).Require().ReadAll(CutDownPluginFixture.Plugin);
 
     public Dictionary<string, byte[]> ReadSourceTree() => CutDownPluginFixture.ReadSourceTree(ModFolder);
 

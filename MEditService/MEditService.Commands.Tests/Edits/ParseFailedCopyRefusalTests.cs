@@ -29,7 +29,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains(Diagnosis, result.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.DestinationGitStatus());
+        Assert.Empty(_mod.DestinationChangedFormKeys());
         Assert.Null(_mod.DestinationDocument(UnreadablePerk));
     }
 
@@ -41,7 +41,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains(Diagnosis, result.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.DestinationGitStatus());
+        Assert.Empty(_mod.DestinationChangedFormKeys());
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             throw new InvalidOperationException($"{SourcePluginName} holds no perk the codec can read.");
         }
 
-        public IReadOnlyList<string> DestinationGitStatus() => TrackedTree.GitStatus(_destinationModFolder);
+        public IReadOnlyList<string> DestinationChangedFormKeys() => TrackedTree.ChangedFormKeys(_destinationModFolder, DestinationPlugin);
 
         public void Dispose()
         {
@@ -158,13 +158,16 @@ public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
     [Fact]
     public void CopyRecordAsNewRecord_OfADialogTopicWithAnUnreadableResponse_IsRefused_AndWritesNothing()
     {
-        var questFile = _mod.SourceFileContaining(_mod.SourcePlugin, ContainerCopyFixture.Response2EditorId);
-        File.WriteAllText(
-            questFile,
-            File.ReadAllText(questFile).Replace(
-                $"\"EditorID\": \"{ContainerCopyFixture.Response2EditorId}\"",
-                $"\"MajorRecordFlagsRaw\": \"notanumber\",\n\"EditorID\": \"{ContainerCopyFixture.Response2EditorId}\"",
-                StringComparison.Ordinal));
+        var quest = _mod.DocumentCarrying(_mod.SourcePlugin, ContainerCopyFixture.Response2EditorId);
+        _mod.Overwrite(
+            _mod.SourcePlugin,
+            quest with
+            {
+                Body = quest.Body.Replace(
+                    $"\"EditorID\": \"{ContainerCopyFixture.Response2EditorId}\"",
+                    $"\"MajorRecordFlagsRaw\": \"notanumber\",\n\"EditorID\": \"{ContainerCopyFixture.Response2EditorId}\"",
+                    StringComparison.Ordinal),
+            });
 
         var result = _mod.CopyHandler.CopyAsNew(
             _mod.SourcePlugin, _mod.DialogTopic.ToString(), _mod.DestinationPlugin);
@@ -172,7 +175,7 @@ public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains("Unable to cast", result.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.DestinationGitStatus());
+        Assert.Empty(_mod.DestinationChangedFormKeys());
         Assert.Null(_mod.Document(_mod.DestinationPlugin, _mod.Quest.ToString()));
     }
 }

@@ -127,7 +127,7 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable
     public SourceDocument? Document(PluginAddress plugin, string formKey) =>
         TrackedTree.Document(ModFolderOf(plugin), plugin, formKey);
 
-    public IReadOnlyList<string> GitStatus(PluginAddress plugin) => TrackedTree.GitStatus(ModFolderOf(plugin));
+    public IReadOnlyList<string> ChangedFormKeys(PluginAddress plugin) => TrackedTree.ChangedFormKeys(ModFolderOf(plugin), plugin);
 
     /// <summary>The bytes on disk for a tracked plugin's own binary — what a refused compile's
     /// "writes nothing" claim is checked against.</summary>

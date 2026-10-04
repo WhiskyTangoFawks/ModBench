@@ -1,5 +1,6 @@
+using MEditService.Codec.Serialization;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.Commands.Edits;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -30,12 +31,6 @@ public sealed class PluginCompileServiceTests : IDisposable
             new ModPath(ModKey.FromFileName(CompileFixture.PluginName), pluginPath), GameRelease.Fallout4);
         return ((IFallout4ModGetter)overlay, overlay);
     }
-
-    private List<string> NpcFiles() =>
-        [.. Directory.GetFiles(Path.Combine(_mod.ModFolder, SourceRepository.RootFor(CompileFixture.PluginName), "Npcs"))
-            .Select(Path.GetFileName)
-            .Select(n => n.Require())
-            .Order(StringComparer.Ordinal)];
 
     [Fact]
     public async Task Compile_AfterAnEdit_WritesABinaryThatReparsesWithTheChangeLanded()
@@ -87,22 +82,18 @@ public sealed class PluginCompileServiceTests : IDisposable
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = result.Diagnostics.First(d => d.FormKey == _mod.Race.ToString());
-        Assert.StartsWith(
-            SourceRepository.RootFor(CompileFixture.PluginName), diagnostic.SourceRelativePath, StringComparison.Ordinal);
-        var full = Path.Combine(_mod.ModFolder, diagnostic.SourceRelativePath);
-        Assert.True(File.Exists(full), $"'{diagnostic.SourceRelativePath}' is not a file in the tree.");
-        Assert.Contains(_mod.Race.ToString(), File.ReadAllText(full), StringComparison.Ordinal);
+        var race = _mod.Document(_mod.Race.ToString());
+        Assert.Equal(
+            TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, new RecordIdentity(race.FormKey, race.RecordType, race.EditorId)),
+            Path.Combine(_mod.ModFolder, diagnostic.SourceRelativePath));
     }
 
     [Fact]
     public async Task Compile_AfterDeletingTheFirstOfTwoSameTypeRecords_Succeeds_AndTheBinaryReflectsTheDelete()
     {
-        var survivorNameBefore = NpcFiles()
-            .Single(n => n.StartsWith(CompileFixture.OtherNpcEditorId, StringComparison.Ordinal));
-
         _mod.Remove(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId);
 
-        Assert.Equal([survivorNameBefore], NpcFiles());
+        Assert.NotNull(_mod.Document(_mod.OtherNpc.ToString()));
 
         var (mod, handle) = await CompileAndReimport();
         using (handle)
@@ -117,7 +108,8 @@ public sealed class PluginCompileServiceTests : IDisposable
     public async Task Compile_AfterChangingTheFormIdOfTheFirstOfTwo_Succeeds_WithBothRecordsPresent()
     {
         var moved = _mod.ChangeFormId(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, MovedNpcId);
-        Assert.Equal(2, NpcFiles().Count);
+        Assert.Equal(moved.ToString(), _mod.Document(moved.ToString()).FormKey);
+        Assert.NotNull(_mod.Document(_mod.OtherNpc.ToString()));
 
         var (mod, handle) = await CompileAndReimport();
         using (handle)
@@ -152,15 +144,12 @@ public sealed class PluginCompileServiceTests : IDisposable
     [Fact]
     public async Task Compile_OfATreeHoldingADocumentTheCodecDoesNotProduce_RefusesNamingItAndDecompile()
     {
-        var stray = Path.Combine(
-            _mod.ModFolder, SourceRepository.RootFor(CompileFixture.PluginName), "Npcs", "GroupRecordData.json");
-        Assert.False(File.Exists(stray));
-        File.WriteAllText(stray, "{}");
+        var stray = TreeTampering.Stray(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity, "GroupRecordData.json", "{}");
 
         var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
-        Assert.Contains(Path.Combine("Npcs", "GroupRecordData.json"), result.RefusalReason, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(_mod.ModFolder, stray), result.RefusalReason, StringComparison.Ordinal);
         Assert.Contains("Run \"Modbench: Decompile Plugin\" to regenerate the source.", result.RefusalReason, StringComparison.Ordinal);
         Assert.DoesNotContain("Track", result.RefusalReason, StringComparison.Ordinal);
     }

@@ -10,7 +10,6 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
-using Mutagen.Bethesda.Serialization.Newtonsoft;
 using Mutagen.Bethesda.Strings;
 using Noggog.WorkEngine;
 
@@ -73,7 +72,7 @@ public sealed class TrackServiceTests
     }
 
     [Fact]
-    public async Task TrackAsync_RealLoadOrder_WritesTheSourceTreeWithoutCarriageReturns_AndTracksTheModFolder()
+    public async Task TrackAsync_RealLoadOrder_TracksTheModFolder_HoldingEachRecordWithoutCarriageReturns()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-");
         using var gameDir = new ScratchDirectory("medit-trackservice-game-");
@@ -92,33 +91,20 @@ public sealed class TrackServiceTests
 
         Assert.True(SourceRepository.IsTracked(modFolder));
 
-        var sourceRoot = Path.Combine(modFolder, SourceRepository.RootFor("Fixture.esp"));
-        var rootHeader = Path.Combine(sourceRoot, "RecordData.json");
-        Assert.True(File.Exists(rootHeader), $"expected {rootHeader}");
-
-        var sourceFile1 = SourceDocumentPath.Of(
-            modFolder, "Fixture.esp", "npc_", npc1.FormKey.ToString(), "FirstNpc", GameRelease.Fallout4);
-        var sourceFile2 = SourceDocumentPath.Of(
-            modFolder, "Fixture.esp", "npc_", npc2.FormKey.ToString(), "SecondNpc", GameRelease.Fallout4);
-        Assert.True(File.Exists(sourceFile1), $"expected {sourceFile1}");
-        Assert.True(File.Exists(sourceFile2), $"expected {sourceFile2}");
+        var plugin = new PluginAddress("Fixture.esp", "FixtureMod");
+        var first = TrackedTree.Document(modFolder, plugin, npc1.FormKey.ToString()).Require();
+        var second = TrackedTree.Document(modFolder, plugin, npc2.FormKey.ToString()).Require();
+        Assert.Equal("FirstNpc", first.EditorId);
+        Assert.Equal("SecondNpc", second.EditorId);
 
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var roundTripped = codec.DeserializeFile(sourceFile1, GameRelease.Fallout4, "npc_");
+        var roundTripped = codec.DeserializeFromBytes(System.Text.Encoding.UTF8.GetBytes(first.Body), GameRelease.Fallout4, "npc_");
         Assert.Equal(npc1.FormKey, roundTripped.FormKey);
 
-        var deserializedMod = await DeserializeWithoutExtraMetaBecauseItsOverloadCollidesAsSerializesDoes(sourceRoot);
-        Assert.Equal(2, deserializedMod.Npcs.Count);
-        Assert.Contains(deserializedMod.Npcs, n => n.FormKey == npc1.FormKey && n.EditorID == "FirstNpc");
-        Assert.Contains(deserializedMod.Npcs, n => n.FormKey == npc2.FormKey && n.EditorID == "SecondNpc");
-
         Assert.DoesNotContain(
-            Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories),
-            file => File.ReadAllBytes(file).Contains((byte)'\r'));
+            SourceRepository.Open(modFolder, GameRelease.Fallout4).Require().ReadAll(plugin),
+            document => document.Body.Contains('\r'));
     }
-
-    private static Task<IFallout4Mod> DeserializeWithoutExtraMetaBecauseItsOverloadCollidesAsSerializesDoes(string sourceRoot) =>
-        MutagenJsonConverter.Instance.Deserialize(sourceRoot);
 
     [Fact]
     public async Task TrackAsync_OfAPluginInAModWithARepository_RefusesBeforeParsingIt()
@@ -128,15 +114,11 @@ public sealed class TrackServiceTests
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("SomeNpc");
-        mod.WriteToBinary(pluginPath);
+        TrackedTemplates.WriteTracked(modFolder, mod);
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
-
-        var anyTreeFileSoTheSourceRootIsCommitted =
-            new TreeFile("plugin-source/Fixture.esp/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray());
-        PluginBaselines.Track(modFolder, SourcePreset.Edits, [anyTreeFileSoTheSourceRootIsCommitted]);
 
         byte[] notAPluginSoAnyDeepParseFails = [0x00, 0x01, 0x02, 0x03];
         File.WriteAllBytes(pluginPath, notAPluginSoAnyDeepParseFails);
@@ -168,7 +150,8 @@ public sealed class TrackServiceTests
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.DataDirectoryOrigin, result.Refusal);
-        Assert.Empty(Directory.EnumerateDirectories(gameDir, ".git", SearchOption.AllDirectories));
+        Assert.False(SourceRepository.IsTracked(gameDir));
+        Assert.False(SourceRepository.HoldsAnotherRepository(gameDir));
     }
 
     [Fact]
@@ -194,7 +177,8 @@ public sealed class TrackServiceTests
         Assert.Equal(TrackRefusal.OverwriteOrigin, result.Refusal);
         Assert.Contains("Stray.esp", result.Message, StringComparison.Ordinal);
         Assert.Contains("Overwrite", result.Message, StringComparison.Ordinal);
-        Assert.Empty(Directory.EnumerateDirectories(overwriteDir, ".git", SearchOption.AllDirectories));
+        Assert.False(SourceRepository.IsTracked(overwriteDir));
+        Assert.False(SourceRepository.HoldsAnotherRepository(overwriteDir));
     }
 
     [Fact]
@@ -228,7 +212,8 @@ public sealed class TrackServiceTests
         var refused = Assert.Single(result.Refused);
         Assert.Equal((new PluginAddress("Stray.esp", PluginOrigin.Overwrite), TrackRefusal.OverwriteOrigin), (refused.Plugin, refused.Refusal));
         Assert.True(SourceRepository.IsTracked(modFolder));
-        Assert.Empty(Directory.EnumerateDirectories(overwriteDir, ".git", SearchOption.AllDirectories));
+        Assert.False(SourceRepository.IsTracked(overwriteDir));
+        Assert.False(SourceRepository.HoldsAnotherRepository(overwriteDir));
     }
 
     [Fact]
@@ -326,7 +311,6 @@ public sealed class TrackServiceTests
         Assert.Contains(npc.FormKey.ToString(), result.Message);
         Assert.Contains("OriginalName", result.Message);
         Assert.False(SourceRepository.IsTracked(modFolder));
-        Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")));
     }
 
     [Fact]
@@ -528,10 +512,7 @@ public sealed class TrackServiceTests
 
         Assert.True(SourceRepository.IsTracked(modFolder));
 
-        var sourceFile = SourceDocumentPath.Of(
-            modFolder, "Fixture.esp", "Door", door.FormKey.ToString(), "MainDoor", GameRelease.Fallout4);
-        Assert.True(File.Exists(sourceFile), $"expected {sourceFile}");
-        var sourceText = await File.ReadAllTextAsync(sourceFile);
+        var sourceText = TrackedTree.Document(modFolder, new PluginAddress("Fixture.esp", "FixtureMod"), door.FormKey.ToString()).Require().Body;
         Assert.Contains("The Big Door", sourceText);
     }
 

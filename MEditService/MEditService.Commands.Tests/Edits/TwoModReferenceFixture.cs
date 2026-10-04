@@ -95,12 +95,6 @@ public sealed class TwoModReferenceFixture : IDisposable
     public SourceDocument? Document(PluginAddress plugin, string formKey) =>
         TrackedTree.Document(ModFolderOf(plugin), plugin, formKey);
 
-    /// <summary>Asked of the layout rather than the repository: a leaf name is what a FormID edit moves,
-    /// and a test naming it ahead of the write is naming the file that must survive a refusal.</summary>
-    public string SourceFileFor(PluginAddress plugin, FormKey formKey, string recordType, string? editorId) =>
-        SourceDocumentPath.Of(
-            ModFolderOf(plugin), plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
-
     public void Dispose()
     {
         TryDelete(TargetModFolder);

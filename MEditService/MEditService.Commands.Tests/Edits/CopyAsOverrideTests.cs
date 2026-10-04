@@ -1,3 +1,4 @@
+using MEditService.TestSupport;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 
@@ -16,9 +17,6 @@ public sealed class CopyAsOverrideTests
         Assert.True(result.Applied, result.Message);
         Assert.Null(result.NewFormKey);
 
-        var sourceFile = mod.SourceFileFor(mod.DestinationPlugin, mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId);
-        Assert.True(File.Exists(sourceFile));
-
         var document = mod.Document(mod.DestinationPlugin, mod.SourceNpc.ToString());
         Assert.NotNull(document);
         Assert.Equal(CopyFixture.SourceNpcEditorId, document.EditorId);
@@ -27,19 +25,17 @@ public sealed class CopyAsOverrideTests
     }
 
     [Fact]
-    public void CopyRecordAsOverride_FromATrackedSource_ReadsItsCurrentFileBytes()
+    public void CopyRecordAsOverride_FromATrackedSource_ReadsItsCurrentDocument()
     {
         using var mod = CopyFixture.Create(trackSource: true);
-        var sourceFile = mod.SourceFileFor(mod.SourcePlugin, mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId);
-        var mutatedText = File.ReadAllText(sourceFile).Replace(CopyFixture.SourceNpcEditorId, "MutatedOnDisk");
-        File.WriteAllText(sourceFile, mutatedText);
+        var original = mod.Document(mod.SourcePlugin, mod.SourceNpc.ToString()).Require();
+        mod.Overwrite(mod.SourcePlugin, original with { Body = original.Body.Replace(CopyFixture.SourceNpcEditorId, "MutatedOnDisk") });
 
         var result = mod.CopyHandler.CopyAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var destinationFile = mod.SourceFileFor(mod.DestinationPlugin, mod.SourceNpc, "npc_", "MutatedOnDisk");
-        Assert.True(File.Exists(destinationFile));
-        Assert.Contains("MutatedOnDisk", File.ReadAllText(destinationFile), StringComparison.Ordinal);
+        Assert.Contains(
+            "MutatedOnDisk", mod.Document(mod.DestinationPlugin, mod.SourceNpc.ToString()).Require().Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -54,10 +50,8 @@ public sealed class CopyAsOverrideTests
             tracked.SourcePlugin, tracked.SourceNpc.ToString(), tracked.DestinationPlugin).Applied);
 
         Assert.Equal(
-            File.ReadAllBytes(
-                tracked.SourceFileFor(tracked.DestinationPlugin, tracked.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId)),
-            File.ReadAllBytes(
-                untracked.SourceFileFor(untracked.DestinationPlugin, untracked.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId)));
+            tracked.Document(tracked.DestinationPlugin, tracked.SourceNpc.ToString()).Require().Body,
+            untracked.Document(untracked.DestinationPlugin, untracked.SourceNpc.ToString()).Require().Body);
     }
 
     [Theory]

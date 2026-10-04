@@ -16,7 +16,6 @@ public sealed class RegisteredPluginSpellingTests
 {
     private const string Origin = "SpellingMod";
     private const string PluginName = "Mixed.ESP";
-    private const string RootAModKeyWouldSpellWithALowercaseExtension = "plugin-source/Mixed.esp/";
     private const GameRelease Release = GameRelease.Fallout4;
 
     [Fact]
@@ -28,10 +27,9 @@ public sealed class RegisteredPluginSpellingTests
             .TrackModAsync(scratch.LoadOrder, Origin, SourcePreset.Edits);
 
         Assert.Empty(result.Refused);
-        var pathsInGitsCaseSensitiveIndex = GitProbe.Run(scratch.GitDirectory, scratch.ModFolder, "ls-files").Split('\n');
-        Assert.Contains("plugin-source/Mixed.ESP/RecordData.json", pathsInGitsCaseSensitiveIndex);
-        Assert.DoesNotContain(
-            pathsInGitsCaseSensitiveIndex, path => path.StartsWith(RootAModKeyWouldSpellWithALowercaseExtension, StringComparison.Ordinal));
+        var repository = SourceRepository.Open(scratch.ModFolder, Release).Require();
+        Assert.NotEmpty(repository.ReadAll(scratch.Plugin, "HEAD"));
+        Assert.Empty(repository.ReadAll(new PluginAddress("Mixed.esp", Origin), "HEAD"));
     }
 
     [Fact]
@@ -66,8 +64,6 @@ public sealed class RegisteredPluginSpellingTests
                 [new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
         }
 
-        internal string GitDirectory => Path.Combine(ModFolder, ".git");
-
         private string PluginPath => Path.Combine(ModFolder, PluginName);
 
         internal void TrackWithoutTheTrackDoor()
@@ -77,8 +73,8 @@ public sealed class RegisteredPluginSpellingTests
                 PluginStrings.In(ModFolder)).GetAwaiter().GetResult();
             var pristineFiles = SourceRepository.PristineFilesOf(PluginName, treeFiles);
 
-            PluginBaselines.Track(
-                ModFolder, SourcePreset.Edits, pristineFiles);
+            SourceRepository.Track(
+                ModFolder, SourcePreset.Edits, [(pristineFiles, new BaselineTrailers(PluginName, null, null))]);
         }
 
         public void Dispose()

@@ -65,15 +65,11 @@ public sealed class SourceContainerFixture : IDisposable
 
     private readonly string _instanceRoot;
 
-    public string SourceRoot => Path.Combine(ModFolder, SourceRepository.RootFor(PluginName));
+    public SourceDocument DocumentCarrying(string editorId) => TrackedTree.DocumentCarrying(ModFolder, Plugin, editorId);
 
-    /// <summary>Any document in the tree carrying an EditorID: a container's own RecordData.json, or
-    /// the file that inlines an embedded child.</summary>
-    public string SourceFileContaining(string editorId) =>
-        Directory.EnumerateFiles(SourceRoot, "*.json", SearchOption.AllDirectories)
-            .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
+    public void Overwrite(SourceDocument document) => TrackedTree.Overwrite(ModFolder, Plugin, document);
 
-    public IReadOnlyList<string> GitStatus() => TrackedTree.GitStatus(ModFolder);
+    public IReadOnlyList<string> ChangedFormKeys() => TrackedTree.ChangedFormKeys(ModFolder, Plugin);
 
     public void Dispose()
     {

@@ -12,13 +12,13 @@ public sealed class CorruptLinkTargetEditTests : IDisposable
     [Fact]
     public void PointingAFormLinkAtARecordWhoseContainerDocumentIsCorrupt_Lands()
     {
-        var cellFile = _mod.SourceFileContaining(_mod.SourcePlugin, ContainerCopyFixture.PersistentRefEditorId);
-        File.WriteAllText(
-            cellFile,
-            File.ReadAllText(cellFile).Replace(
+        var cell = _mod.DocumentCarrying(_mod.SourcePlugin, ContainerCopyFixture.PersistentRefEditorId);
+        _mod.Overwrite(
+            _mod.SourcePlugin,
+            cell with { Body = cell.Body.Replace(
                 $"\"EditorID\": \"{ContainerCopyFixture.PersistentRefEditorId}\"",
                 $"\"MajorRecordFlagsRaw\": notanumber,\n\"EditorID\": \"{ContainerCopyFixture.PersistentRefEditorId}\"",
-                StringComparison.Ordinal));
+                StringComparison.Ordinal) });
 
         var result = _mod.EditHandler.Set(
             _mod.SourcePlugin, _mod.FlatNpc.ToString(), "Keywords",

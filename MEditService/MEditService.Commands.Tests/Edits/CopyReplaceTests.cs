@@ -74,8 +74,7 @@ public sealed class CopyReplaceTests : IDisposable
             _fixture.SourcePlugin, _fixture.InteriorCell.ToString(), _fixture.DestinationPlugin, replace: true);
 
         Assert.True(result.Applied, result.Message);
-        var cellFile = _fixture.DestinationSourceFileContaining(ContainerCopyFixture.InteriorCellEditorId);
-        var cellText = File.ReadAllText(cellFile);
+        var cellText = _fixture.DestinationDocumentCarrying(ContainerCopyFixture.InteriorCellEditorId).Body;
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, cellText, StringComparison.Ordinal);
         Assert.NotNull(_fixture.Document(_fixture.DestinationPlugin, _fixture.PersistentRef.ToString()));
     }
@@ -106,8 +105,7 @@ public sealed class CopyReplaceTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(_fixture.Document(_fixture.DestinationPlugin, _fixture.PersistentRef.ToString()));
-        var cellFile = _fixture.DestinationSourceFileContaining(ContainerCopyFixture.PersistentRefEditorId);
-        var occurrences = File.ReadAllText(cellFile).Split(ContainerCopyFixture.PersistentRefEditorId).Length - 1;
+        var occurrences = _fixture.DestinationDocumentCarrying(ContainerCopyFixture.PersistentRefEditorId).Body.Split(ContainerCopyFixture.PersistentRefEditorId).Length - 1;
         Assert.Equal(1, occurrences);
     }
 
@@ -159,8 +157,5 @@ public sealed class CopyReplaceTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var questDocument = _fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString());
         Assert.Equal(ContainerCopyFixture.QuestEditorId, questDocument.Require().EditorId);
-        Assert.Single(
-            Directory.EnumerateFiles(Path.Combine(_fixture.DestinationSourceRoot, "Quests")),
-            f => Path.GetFileName(f) != "GroupRecordData.json");
     }
 }

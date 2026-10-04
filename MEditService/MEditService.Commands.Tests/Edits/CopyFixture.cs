@@ -95,15 +95,13 @@ public sealed class CopyFixture : IDisposable
     public SourceDocument? CommittedDocument(PluginAddress plugin, RecordIdentity identity) =>
         TrackedTree.CommittedDocument(ModFolderOf(plugin), plugin, identity);
 
-    public IReadOnlyList<string> DestinationGitStatus() => TrackedTree.GitStatus(DestinationModFolder);
+    public IReadOnlyList<string> DestinationChangedFormKeys() => TrackedTree.ChangedFormKeys(DestinationModFolder, DestinationPlugin);
 
     /// <summary>Commits the destination's working tree, so what it holds now is what HEAD holds —
     /// the state a later working-tree deletion does not free.</summary>
     public void CommitDestination()
     {
-        var gitDir = Path.Combine(DestinationModFolder, ".git");
-        GitProbe.Run(gitDir, DestinationModFolder, "add", "-A");
-        GitProbe.Run(gitDir, DestinationModFolder, "commit", "-m", "fixture");
+        TrackedTree.Commit(DestinationModFolder);
     }
 
     /// <summary>The source plugin's own bytes, so "a copy, not a move" is asserted against the file
@@ -115,12 +113,8 @@ public sealed class CopyFixture : IDisposable
 
     public static CopyFixture Create(bool trackSource = false) => new(trackSource);
 
-    // Asked of the repository, matching TwoModFixture's own reason: computing the path needs an
-    // order index this fixture has no reason to track.
-    public string SourceFileFor(PluginAddress plugin, FormKey formKey, string recordType, string? editorId) =>
-        SourceDocumentPath.Of(
-            plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder,
-            plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
+    public void Overwrite(PluginAddress plugin, SourceDocument document) =>
+        TrackedTree.Overwrite(ModFolderOf(plugin), plugin, document);
 
     public void Dispose()
     {

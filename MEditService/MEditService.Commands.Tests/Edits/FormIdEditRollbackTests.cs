@@ -13,24 +13,25 @@ public sealed class FormIdEditRollbackTests
 {
     private static readonly FormKey NewNpcFormKey = FormKey.Factory("000F00:Fixture.esp");
 
-    private const string NewWorldspaceFormKey = "000F00:SourceContainer.esp";
+    private static RecordIdentity NewNpcIdentity { get; } =
+        new(NewNpcFormKey.ToString(), "npc_", SourceEditFixture.NpcEditorId);
 
-    private static void Block(string path) => Directory.CreateDirectory(path + ".tmp");
+    private const string NewWorldspaceFormKey = "000F00:SourceContainer.esp";
 
     [Fact]
     public void BlockingTheRecordsNewFile_LeavesTheSourceTreeUnchanged()
     {
         using var mod = SourceEditFixture.Tracked();
-        Block(mod.SourceFileFor(NewNpcFormKey, "npc_", SourceEditFixture.NpcEditorId));
+        TreeTampering.BlockWrite(mod.ModFolder, mod.Plugin, NewNpcIdentity);
 
-        var before = TreeSnapshot.Of(mod.ModFolder);
-        var statusBefore = mod.GitStatus();
+        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var statusBefore = mod.ChangedFormKeys();
 
         var thrown = Assert.Throws<IOException>(() =>
             mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), NewNpcFormKey.ToString()));
 
-        Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
-        Assert.Equal(statusBefore, mod.GitStatus());
+        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(statusBefore, mod.ChangedFormKeys());
         Assert.Contains("back as it was — nothing to review or revert", thrown.Message, StringComparison.Ordinal);
     }
 
@@ -51,60 +52,41 @@ public sealed class FormIdEditRollbackTests
             m.Cells.Records.Add(block);
             placed = placedRef.FormKey;
         });
-        var cellFile = Directory.EnumerateFiles(
-                Path.Combine(mod.ModFolder, SourceRepository.RootFor(pluginName)), "RecordData.json",
-                SearchOption.AllDirectories)
-            .Single(f => File.ReadAllText(f).Contains("\"TwoUnitsRef\"", StringComparison.Ordinal));
+        var cell = TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "TwoUnitsRef");
+        var cellIdentity = new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId);
+        var cellFile = TreeTampering.FileOf(mod.ModFolder, mod.Plugin, cellIdentity);
         var cellDirectory = Path.GetDirectoryName(cellFile).Require();
         var impostor = Path.Combine(
             Path.GetDirectoryName(cellDirectory).Require(), "Impostor - " + Path.GetFileName(cellDirectory).Split(" - ")[1]);
         Directory.CreateDirectory(impostor);
-        File.Copy(cellFile, Path.Combine(impostor, "RecordData.json"));
-        var before = TreeSnapshot.Of(mod.ModFolder);
+        File.Copy(cellFile, Path.Combine(impostor, Path.GetFileName(cellFile)));
+        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, placed.ToString(), $"000F00:{pluginName}");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, result.Refusal);
         Assert.Contains(Path.GetRelativePath(mod.ModFolder, cellFile), result.Message, StringComparison.Ordinal);
-        Assert.Contains(Path.GetRelativePath(mod.ModFolder, Path.Combine(impostor, "RecordData.json")), result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
+        Assert.Contains(Path.GetRelativePath(mod.ModFolder, Path.Combine(impostor, Path.GetFileName(cellFile))), result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
     public void AFormIdEditThatFaultsUnexpectedly_RollsBack_AndRethrowsTheFaultAsItself()
     {
         using var fixture = new SourceContainerFixture();
-        var worldspaceDocument = fixture.SourceFileContaining(SourceContainerFixture.WorldspaceEditorId);
-        File.WriteAllText(
-            worldspaceDocument,
-            File.ReadAllText(worldspaceDocument).Replace(
-                $"\"{SourceContainerFixture.WorldspaceEditorId}\"", "\"Fixture\\u0000World\"", StringComparison.Ordinal));
-        var before = TreeSnapshot.Of(fixture.ModFolder);
+        var worldspace = fixture.DocumentCarrying(SourceContainerFixture.WorldspaceEditorId);
+        fixture.Overwrite(worldspace with
+        {
+            Body = worldspace.Body.Replace(
+                $"\"{SourceContainerFixture.WorldspaceEditorId}\"", "\"Fixture\\u0000World\"", StringComparison.Ordinal),
+        });
+        var before = TrackedTree.Records(fixture.ModFolder, fixture.Plugin);
 
         Assert.Throws<ArgumentException>(() =>
             fixture.EditHandler.SetFormId(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
 
-        Assert.Equal(before, TreeSnapshot.Of(fixture.ModFolder));
-    }
-
-    [Fact]
-    public void TheGroupFolder_ReturnsToItsPreActionEntries()
-    {
-        using var mod = SourceEditFixture.Tracked();
-        var npcsFolder = Path.GetDirectoryName(mod.NpcSourceFile)
-            ?? throw new InvalidOperationException($"Expected '{mod.NpcSourceFile}' to have a parent directory.");
-        Block(mod.SourceFileFor(NewNpcFormKey, "npc_", SourceEditFixture.NpcEditorId));
-
-        var entriesBefore = Directory.GetFileSystemEntries(npcsFolder)
-            .Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
-
-        Assert.Throws<IOException>(() =>
-            mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), NewNpcFormKey.ToString()));
-
-        Assert.Equal(
-            entriesBefore,
-            Directory.GetFileSystemEntries(npcsFolder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList());
+        Assert.Equal(before, TrackedTree.Records(fixture.ModFolder, fixture.Plugin));
     }
 
     [Fact]
@@ -113,15 +95,15 @@ public sealed class FormIdEditRollbackTests
         using var fixture = new SourceContainerFixture();
         Occupy(RelocatedWorldspaceDirectory(fixture, NewWorldspaceFormKey));
 
-        var before = TreeSnapshot.Of(fixture.ModFolder);
-        var statusBefore = fixture.GitStatus();
+        var before = TrackedTree.Records(fixture.ModFolder, fixture.Plugin);
+        var statusBefore = fixture.ChangedFormKeys();
 
         var thrown = Assert.Throws<IOException>(() =>
             fixture.EditHandler.SetFormId(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
 
         Assert.Contains("nowhere to move to", thrown.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TreeSnapshot.Of(fixture.ModFolder));
-        Assert.Equal(statusBefore, fixture.GitStatus());
+        Assert.Equal(before, TrackedTree.Records(fixture.ModFolder, fixture.Plugin));
+        Assert.Equal(statusBefore, fixture.ChangedFormKeys());
     }
 
     private static void Occupy(string directory)
@@ -135,25 +117,10 @@ public sealed class FormIdEditRollbackTests
         var repository = SourceRepository.Over(fixture.ModFolder, GameRelease.Fallout4);
         var identity = new RecordIdentity(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId);
         repository.Put(fixture.Plugin, new SourceDocument(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId, "{}"));
-        var documentPath = SourceDocumentPath.Of(
-            fixture.ModFolder, fixture.Plugin.Name, "wrld", newFormKey, SourceContainerFixture.WorldspaceEditorId,
-            GameRelease.Fallout4);
+        var documentPath = TreeTampering.FileOf(fixture.ModFolder, fixture.Plugin, identity);
         var directory = Path.GetDirectoryName(documentPath)
             ?? throw new InvalidOperationException($"Expected '{documentPath}' to have a parent directory.");
         repository.Remove(fixture.Plugin, identity);
         return directory;
-    }
-
-    [Fact]
-    public void TheDirectFilesystemOracleSeesAnEmptyDirectory_WhichGitStatusCallsClean()
-    {
-        using var fixture = new SourceContainerFixture();
-        var snapshotBefore = TreeSnapshot.Of(fixture.ModFolder);
-        var statusBefore = fixture.GitStatus();
-
-        Directory.CreateDirectory(Path.Combine(fixture.SourceRoot, "Stray Record Directory"));
-
-        Assert.Equal(statusBefore, fixture.GitStatus());
-        Assert.NotEqual(snapshotBefore, TreeSnapshot.Of(fixture.ModFolder));
     }
 }

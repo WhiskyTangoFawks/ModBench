@@ -60,7 +60,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task CreatePlugin_IntoATrackedMod_LeavesItsRepositoryAsItWas()
+    public async Task CreatePlugin_IntoATrackedMod_LeavesItsTrackedSourceAsItWas()
     {
         var folder = ModFolder("TrackedMod");
         await Create("First.esp", folder, "TrackedMod");
@@ -72,12 +72,14 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var tracked = await TestEditService.TrackHandler(_holder)
             .TrackAsync([new PluginAddress("First.esp", "TrackedMod")], SourcePreset.Edits, new Dictionary<string, string>());
         Assert.True(tracked.AllApplied);
-        var repository = TreeSnapshot.Of(Path.Combine(folder, ".git"));
+        var first = new PluginAddress("First.esp", "TrackedMod");
+        var firstBefore = TrackedTree.Records(folder, first);
 
         var result = await Create("Second.esp", folder, "TrackedMod");
 
         Assert.True(result.Applied);
-        Assert.Equal(repository, TreeSnapshot.Of(Path.Combine(folder, ".git")));
+        Assert.Equal(firstBefore, TrackedTree.Records(folder, first));
+        Assert.Empty(SourceRepository.Open(folder, GameRelease.Fallout4).Require().ReadAll(new PluginAddress("Second.esp", "TrackedMod")));
     }
 
     [Fact]
