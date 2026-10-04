@@ -27,12 +27,12 @@ describe('the Instance value puts the load order at each recompute', () => {
       check();
     });
     const flow = editingFlow({
-      client, sender: createLoadOrderSender(client), instanceRoot: '/instance', landed: () => Promise.resolve(instance.value),
+      client, sender: createLoadOrderSender(client), instanceRoot: '/instance',
       exitEditing: () => undefined, around: (entry) => entry(), log: () => undefined,
       tell: (what) => { told.push(what); heard.splice(0).forEach((listener) => listener()); return Promise.resolve(); },
     });
     const subscription = loadOrderPutOnEachValue(instance, flow);
-    await flow.enter();
+    await flow.enter(Promise.resolve(instance.value));
 
     instance.publish(valueWith('B.esp'));
     await toldTwice;

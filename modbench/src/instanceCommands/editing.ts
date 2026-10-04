@@ -16,8 +16,6 @@ export interface EditingDeps {
   client: Pick<MEditClient, 'status' | 'start' | 'onStatusChanged' | 'onReconnected'>;
   sender: Pick<LoadOrderSender, 'arm' | 'send'>;
   instanceRoot: string;
-  /** The instance value once its first read has landed. */
-  landed: () => Promise<LoadOrderSource>;
   exitEditing: () => void;
   around: (entry: () => Promise<void>) => Promise<void>;
   tell: (told: Told) => Promise<void>;
@@ -25,15 +23,17 @@ export interface EditingDeps {
 }
 
 export interface EditingFlow {
-  enter(): Promise<void>;
+  /** The source arrives as a promise so the backend starts while the first read lands. */
+  enter(source: Promise<LoadOrderSource>): Promise<void>;
   put(source: LoadOrderSource): Promise<void>;
   onRecompute(source: LoadOrderSource): void;
   dispose(): void;
 }
 
 export function editingFlow(deps: EditingDeps): EditingFlow {
-  const { client, sender, instanceRoot, landed, exitEditing, around, tell, log } = deps;
+  const { client, sender, instanceRoot, exitEditing, around, tell, log } = deps;
   let startPutRan = false;
+  let held!: Promise<LoadOrderSource>;
 
   const put = async (source: LoadOrderSource): Promise<void> => {
     await tell({ kind: 'put', put: await putLoadOrder(sender, instanceRoot, source) });
@@ -45,7 +45,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
 
   const enterOnce = async (): Promise<void> => {
     const { abandoned } = sender.arm();
-    const source = landed();
+    const source = held;
     await client.start();
     // A close stops the backend, so an abandoned launch would fail the status gate below and
     // report the stop it asked for as a startup failure.
@@ -64,15 +64,21 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     if (status !== 'running') startPutRan = false;
   });
   const reconnectSubscription = client.onReconnected(() => {
-    if (startPutRan) void landed().then(putTold);
+    if (startPutRan) void held.then(putTold);
   });
   const entry = enterEditingAcrossRestarts(
     client, () => around(enterOnce), (message) => log(`[instanceCommands] ${message}`));
 
   return {
-    enter: entry.enter,
+    enter: (source) => {
+      held = source;
+      return entry.enter();
+    },
     put,
-    onRecompute: (source) => { if (startPutRan) putTold(source); },
+    onRecompute: (source) => {
+      held = Promise.resolve(source);
+      if (startPutRan) putTold(source);
+    },
     dispose: () => {
       statusSubscription();
       reconnectSubscription();

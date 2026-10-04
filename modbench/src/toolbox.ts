@@ -42,7 +42,7 @@ import { createDownloadsView } from './downloads/downloadsView';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import { refresh } from './instanceCommands/loadOrder';
 import { editingFlow } from './instanceCommands/editing';
-import { editingView } from './toolbox/editingView';
+import { editingView } from './plugins/editingView';
 import type { ExtensionSession, Own } from './session';
 import { pluginsCopyValueText, registerCreatePluginCommand } from './plugins/pluginListCommands';
 
@@ -201,7 +201,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     reportEntry: (message) => reporterFor('enterEditing').report('error', message),
   });
   const editing = own(editingFlow({
-    client, sender, instanceRoot, landed: () => instance.landed(), exitEditing: () => exitEditing(session, client),
+    client, sender, instanceRoot, exitEditing: () => exitEditing(session, client),
     around: view.around, tell: view.tell, log: (message) => outputChannel.error(message),
   }));
   own(loadOrderPutOnEachValue(instance, editing));
@@ -258,7 +258,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     refresh: refreshIndex, nextRefill: () => plugins.narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
-    instance, instanceRoot, firstRead, modListProvider, toolboxProvider, downloadsProvider, pluginsTree, enterEditing: () => editing.enter(),
+    instance, instanceRoot, firstRead, modListProvider, toolboxProvider, downloadsProvider, pluginsTree, enterEditing: () => editing.enter(instance.landed()),
     originFiles: (origin) => originFiles(instance.value.plugins, origin),
     modListSelection: () => modListView.selection, pluginsSelection: () => pluginListView.selection,
     downloadsSelection: () => downloadsView.selection, trackSelection,

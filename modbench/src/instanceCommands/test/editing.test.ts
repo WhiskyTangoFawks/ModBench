@@ -31,7 +31,6 @@ function wired(status: 'running' | 'starting', first: LoadOrderSource) {
   const sender = createLoadOrderSender(client);
   let held = first;
   let sendFails = false;
-  const landed = vi.fn(() => Promise.resolve(held));
   const exitEditing = vi.fn();
   const told: Told[] = [];
   const tellListeners: (() => void)[] = [];
@@ -44,11 +43,12 @@ function wired(status: 'running' | 'starting', first: LoadOrderSource) {
     const check = (): void => { if (told.length >= count) resolve(); else tellListeners.push(check); };
     check();
   });
-  const flow = editingFlow({
-    client, instanceRoot: '/instance', landed, exitEditing, tell, log: () => undefined,
+  const editing = editingFlow({
+    client, instanceRoot: '/instance', exitEditing, tell, log: () => undefined,
     sender: { arm: () => sender.arm(), send: (snapshot) => (sendFails ? Promise.reject(new Error('boom')) : sender.send(snapshot)) },
     around: (entry) => entry(),
   });
+  const flow = { ...editing, enter: () => editing.enter(Promise.resolve(held)) };
   const putPluginNames = (): string[] => client.calls
     .filter((c) => c.method === 'putLoadOrder')
     .map((c) => {
@@ -58,19 +58,26 @@ function wired(status: 'running' | 'starting', first: LoadOrderSource) {
     });
   const land = (value: LoadOrderSource): void => { held = value; flow.onRecompute(value); };
   return {
-    client, flow, sender, landed, exitEditing, told, toldCount, putPluginNames, land,
+    client, flow, editing, sender, exitEditing, told, toldCount, putPluginNames, land,
     failSends: () => { sendFails = true; },
   };
 }
 
 describe('entering editing', () => {
-  it('reads the instance value while the backend starts, then puts the load order it carries', async () => {
-    const { client, flow, landed, told, putPluginNames } = wired('running', valueWith('A.esp'));
-    const start = vi.spyOn(client, 'start');
+  it('starts the backend while the first read lands, then puts the load order it carries', async () => {
+    const { client, editing, told, putPluginNames } = wired('running', valueWith('A.esp'));
+    let land!: (value: LoadOrderSource) => void;
+    const firstRead = new Promise<LoadOrderSource>((resolve) => { land = resolve; });
+    const started = new Promise<void>((resolve) => {
+      client.start = () => { resolve(); return Promise.resolve(); };
+    });
 
-    await flow.enter();
+    const entering = editing.enter(firstRead);
+    await started;
+    expect(putPluginNames()).toEqual([]);
+    land(valueWith('A.esp'));
+    await entering;
 
-    expect(landed.mock.invocationCallOrder[0]).toBeLessThan(start.mock.invocationCallOrder[0] ?? 0);
     expect(putPluginNames()).toEqual(['A.esp']);
     expect(told.map((t) => t.kind)).toEqual(['put']);
   });
@@ -106,15 +113,29 @@ describe('entering editing', () => {
     expect(putPluginNames()).toEqual([]);
   });
 
-  it('enters again when the backend restarts after a crash', async () => {
-    const { client, flow, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
+  it('enters again with the last value handed it when the backend restarts after a crash', async () => {
+    const { client, flow, land, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
     await flow.enter();
+    land(valueWith('B.esp'));
+    await toldCount(2);
 
     client.setStatus('disconnected');
     client.setStatus('running');
+    await toldCount(3);
+
+    expect(putPluginNames()).toEqual(['A.esp', 'B.esp', 'B.esp']);
+  });
+
+  it('enters again with a value that landed while the backend was gone', async () => {
+    const { client, flow, land, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
+    await flow.enter();
+
+    client.setStatus('disconnected');
+    land(valueWith('B.esp'));
+    client.setStatus('running');
     await toldCount(2);
 
-    expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
+    expect(putPluginNames()).toEqual(['A.esp', 'B.esp']);
   });
 
   it('enters no more once disposed', async () => {
@@ -207,14 +228,16 @@ describe('the load order is put at every recompute', () => {
     expect(putPluginNames()).toEqual(['A.esp', 'C.esp']);
   });
 
-  it('puts on a stream reopen, with no value landing after it', async () => {
-    const { client, flow, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
+  it('puts the last value handed in on a stream reopen, with no value landing after it', async () => {
+    const { client, flow, land, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
     await flow.enter();
-
-    client.reconnected();
+    land(valueWith('B.esp'));
     await toldCount(2);
 
-    expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
+    client.reconnected();
+    await toldCount(3);
+
+    expect(putPluginNames()).toEqual(['A.esp', 'B.esp', 'B.esp']);
   });
 
   it('puts nothing on a stream reopen before mEdit started', async () => {

@@ -11,6 +11,7 @@
     { "path": "../client" },
     { "path": "../drivingLib" },
     { "path": "../instanceLoader" },
+    { "path": "../instanceCommands" },
     { "path": "../pluginsCommands" },
     { "path": "../ports" }
   ],
