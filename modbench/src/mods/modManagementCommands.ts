@@ -3,7 +3,7 @@ import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { ModListProvider, type ModlistNode, type SortDirection } from './ModListProvider';
 import {
-  isModsKeyArgs, isRowOf, MODS_KEY_ARGS, modsGestureEntry, openFolderArgument, pluralArgument, registerModsGesture, selectionArgument,
+  isModsKeyArgs, isRowOf, modsGestureEntry, runModsWriting, openFolderArgument, pluralArgument, registerModsGesture, selectionArgument,
   singularArgument, type GestureEntry, type RowOf,
 } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
@@ -31,11 +31,7 @@ import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMove
 import { installNameRefusal } from '../install/install';
 import { errorMessage } from '../ports/errorMessage';
 import { reportFailure } from '../drivingLib/reportFailure';
-import { runWritingGesture } from '../drivingLib/writingGesture';
 import { applyOrThrow } from '../ports/applyOrThrow';
-
-const runWriting = (instance: Pick<Instance, 'refresh'>, command: () => Promise<void>) =>
-  runWritingGesture(MODS_KEY_ARGS.view, instance, command);
 
 /** The Mods tree's view direction writes no instance file, so it lives with the view it flips. It
  *  starts losing at the top on each activation, and the context key, which outlives an extension
@@ -62,7 +58,7 @@ export function registerModEnableCommands(
     const modNames = pluralArgument(entry, 'mod').map((n) => n.mod.name);
     if (modNames.length === 0) return;
     const verb = enabled ? 'enable' : 'disable';
-    return runWriting(instance, async () => {
+    return runModsWriting(instance, async () => {
       const result = await setModsEnabled(access, instance.value.activeProfile, modNames, enabled);
       if (!result.applied) {
         reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
@@ -91,7 +87,7 @@ export function registerFileExclusionCommands(
     const { verb, state } = FILE_MARKS[mark];
     const changing = rows.filter((row) => row.exclusion !== state).map((row) => row.ref);
     if (changing.length === 0) return;
-    return runWriting(instance, async () => {
+    return runModsWriting(instance, async () => {
       const outcome = await markFiles(access, changing, mark);
       reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${changing.length} files.`, outcome, fileLabel);
     });
@@ -137,7 +133,7 @@ export function registerModMoveCommand(
     if (modNames.length > 0 && separatorNames.length === 0) {
       const target = given ?? await pick(modsMovePick(entries, direction, modNames), 'Move to…');
       if (!target) return;
-      await runWriting(instance, async () =>
+      await runModsWriting(instance, async () =>
         report('mod', modNames, await moveMods(access, activeProfile, modNames, target.place, target.end)));
     } else if (separatorNames.length > 0 && modNames.length === 0) {
       const target = given ?? await pick(separatorsMovePick(entries, direction, separatorNames), 'Move above…');
@@ -147,7 +143,7 @@ export function registerModMoveCommand(
         reporter.report('error', 'Failed to move separators.', SEPARATOR_PLACES);
         return;
       }
-      await runWriting(instance, async () =>
+      await runModsWriting(instance, async () =>
         report('separator', separatorNames, await moveSeparators(access, activeProfile, separatorNames, place, end)));
     }
   });
@@ -183,7 +179,7 @@ export function registerModContextCommands(
         const mods = pluralArgument(entry, 'mod').map((n) => ({ name: n.mod.name, archiveFilename: n.mod.archiveFilename }));
         if (mods.length === 0) return;
         if (!(await confirmUninstall(mods.map((m) => m.name), ask))) return;
-        await runWriting(instance, async () => {
+        await runModsWriting(instance, async () => {
           const result = await uninstallMods(access, instance.value.activeProfile, mods, trash);
           if (!result.applied) {
             reporter.report('error', 'Failed to uninstall mods.', result.refusal);
@@ -229,7 +225,7 @@ export function registerSeparatorCommands(
           prompt: 'Rename separator', value: oldName, validateInput: separatorNamePrompt(access, instance, oldName),
         });
         if (!newName || newName === oldName) return;
-        await runWriting(instance, () => reportFailure(reporter, 'Failed to rename separator.', async () => {
+        await runModsWriting(instance, () => reportFailure(reporter, 'Failed to rename separator.', async () => {
           applyOrThrow(await renameSeparator(access, instance.value.activeProfile, oldName, newName));
         }));
       }),
@@ -241,7 +237,7 @@ export function registerSeparatorCommands(
         });
         if (!name) return;
         const anchor = node.kind === 'mod' ? node.mod : node.separator;
-        await runWriting(instance, () => reportFailure(reporter, 'Failed to add separator.', async () => {
+        await runModsWriting(instance, () => reportFailure(reporter, 'Failed to add separator.', async () => {
           applyOrThrow(await insertSeparator(
             access, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name }));
         }));
@@ -250,7 +246,7 @@ export function registerSeparatorCommands(
         const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
         if (names.length === 0) return;
         if (!(await confirmSeparatorDelete(names, ask))) return;
-        await runWriting(instance, async () => {
+        await runModsWriting(instance, async () => {
           const result = await deleteSeparators(access, instance.value.activeProfile, names, trash);
           if (!result.applied) {
             reporter.report('error', 'Failed to delete separators.', result.refusal);
@@ -278,7 +274,7 @@ export function registerCreateEmptyModCommand(
       validateInput: (value) => installNameRefusal(access, value),
     });
     if (!name) return;
-    await runWriting(instance, async () => {
+    await runModsWriting(instance, async () => {
       try {
         const outcome = await createEmptyMod(access, instance.value.activeProfile, name);
         applyOrThrow(outcome);

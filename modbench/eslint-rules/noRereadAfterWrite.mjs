@@ -12,6 +12,7 @@ export const WRITES = new Set([
     'createPlugin', 'track', 'createRecord', 'deleteRecords', 'copyRecords', 'editRecord',
     'setModsEnabled', 'markFiles', 'moveMods', 'moveSeparators', 'uninstallMods', 'renameSeparator', 'insertSeparator',
     'deleteSeparators', 'createEmptyMod', 'installFromArchive', 'installFromFolder',
+    'excludeDownloads', 'includeDownloads', 'deleteDownloads',
 ]);
 
 export const VIEW_REREADS = new Set([

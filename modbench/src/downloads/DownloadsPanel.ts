@@ -7,7 +7,8 @@ import {
   defaultModName, installFromArchive, type InstallAccess, type InstallChoice, type InstallTarget,
 } from '../install/install';
 import type { DownloadNode, DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
-import { selectedFiles, singleSelectedFile } from './keyContext';
+import { DOWNLOADS_KEY_ARGS, selectedFiles, singleSelectedFile } from './keyContext';
+import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { DownloadFile, Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -91,7 +92,7 @@ async function resolveTarget(
 // The row holds the archive's path and its own mod id, file id and version, so the view re-reads
 // no sidecar; install is called for what it is, and install marks the download installed.
 export async function installDownloadedFile(
-  row: DownloadFile, access: InstallAccess, instance: Pick<Instance, 'value'>, reporter: Reporter,
+  row: DownloadFile, access: InstallAccess, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
   deps: DownloadInstallDeps,
 ): Promise<boolean> {
   const { name } = row;
@@ -106,12 +107,14 @@ export async function installDownloadedFile(
     }
     const target = await resolveTarget(choice, row.path, deps.nameNewMod);
     if (!target) return false;
-    const outcome = await installFromArchive(access, target, row.path, {
-      gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,
+    await runWritingGesture(DOWNLOADS_KEY_ARGS.view, instance, async () => {
+      const outcome = await installFromArchive(access, target, row.path, {
+        gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,
+      });
+      applyOrThrow(outcome);
+      deps.warnIfFomod(target.name, outcome.isFomod);
+      downloadRefusal = outcome.downloadRefusal;
     });
-    applyOrThrow(outcome);
-    deps.warnIfFomod(target.name, outcome.isFomod);
-    downloadRefusal = outcome.downloadRefusal;
   } catch (err) {
     // ADR-0019.
     reporter.report('error', `Failed to install "${name}".`, errorMessage(err));
@@ -153,15 +156,16 @@ const NOTHING_CHANGED: SelectionOutcome<string> = { landed: [], refused: [] };
 // A `.meta` left behind is not a failure (downloads.md, Reporting story 2): the delete already
 // applied, so this is an Output-only line, never a notification.
 async function deleteSelection(
-  access: DownloadsAccess, rows: readonly DownloadFile[], reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
-  log: (line: string) => void, marks: DownloadMarks,
+  access: DownloadsAccess, instance: Pick<Instance, 'refresh'>, rows: readonly DownloadFile[], reporter: Reporter,
+  ask: AskQuestion, trash: MoveToTrash, log: (line: string) => void,
 ): Promise<SelectionOutcome<DeletedDownload>> {
   if (rows.length === 0 || !(await confirmDelete(rows.map((row) => row.name), ask))) return { landed: [], refused: [] };
-  for (const row of rows) marks.markUnconfirmedDelete(row.name);
-  const outcome = await deleteDownloads(access, rows, trash);
+  let outcome: SelectionOutcome<DeletedDownload> = { landed: [], refused: [] };
+  await runWritingGesture(DOWNLOADS_KEY_ARGS.view, instance, async () => {
+    outcome = await deleteDownloads(access, rows, trash);
+  });
   reporter.selectionOutcome(
     `Could not delete ${outcome.refused.length} of ${rows.length} downloaded files.`, outcome, (item) => item.name);
-  for (const { item } of outcome.refused) marks.forgetUnconfirmedDelete(item.name);
   for (const item of outcome.landed) {
     if (item.metaLeftBehind !== undefined) {
       log(`"${item.name}" was deleted, but its ".meta" could not be moved to the trash and was left behind: ${item.metaLeftBehind}`);
@@ -170,38 +174,21 @@ async function deleteSelection(
   return outcome;
 }
 
-// No confirmation, unlike delete: exclude and include are reversible, and a file already at rest
-// writes nothing (downloadsCommands/downloads.ts), so there is nothing destructive to confirm.
-export type DownloadMarks = Pick<
-  DownloadsProvider, 'markUnconfirmed' | 'forgetUnconfirmed' | 'markUnconfirmedDelete' | 'forgetUnconfirmedDelete'
->;
-
-async function excludeSelection(
-  access: DownloadsAccess, rows: readonly DownloadFile[], reporter: Reporter, marks: DownloadMarks,
-): Promise<SelectionOutcome<string>> {
-  return changeExcluded(access, rows, true, excludeDownloads, reporter, marks);
-}
-
-async function includeSelection(
-  access: DownloadsAccess, rows: readonly DownloadFile[], reporter: Reporter, marks: DownloadMarks,
-): Promise<SelectionOutcome<string>> {
-  return changeExcluded(access, rows, false, includeDownloads, reporter, marks);
-}
-
-// A row already in the state asked for writes nothing, so it is never marked.
+// No confirmation, unlike delete: exclude and include are reversible. A row already in the state
+// asked for writes nothing, so a selection of those opens no bar.
 async function changeExcluded(
-  access: DownloadsAccess, rows: readonly DownloadFile[], excluded: boolean,
+  access: DownloadsAccess, instance: Pick<Instance, 'refresh'>, rows: readonly DownloadFile[], excluded: boolean,
   write: (access: DownloadsAccess, names: readonly string[]) => Promise<SelectionOutcome<string>>,
-  reporter: Reporter, marks: DownloadMarks,
+  reporter: Reporter,
 ): Promise<SelectionOutcome<string>> {
-  if (rows.length === 0) return NOTHING_CHANGED;
-  const changing = rows.filter((row) => row.excluded !== excluded).map((row) => row.name);
-  for (const name of changing) marks.markUnconfirmed(name, excluded);
-  const outcome = await write(access, rows.map((row) => row.name));
+  if (!rows.some((row) => row.excluded !== excluded)) return NOTHING_CHANGED;
+  let outcome = NOTHING_CHANGED;
+  await runWritingGesture(DOWNLOADS_KEY_ARGS.view, instance, async () => {
+    outcome = await write(access, rows.map((row) => row.name));
+  });
   reporter.selectionOutcome(
     `Could not ${excluded ? 'exclude' : 'include'} ${outcome.refused.length} of ${rows.length} downloaded files.`,
     outcome, (name) => name);
-  for (const { item } of outcome.refused) marks.forgetUnconfirmed(item);
   return outcome;
 }
 
@@ -240,8 +227,8 @@ function selectionRows(clicked: DownloadNode | undefined, selected: DownloadNode
  *  tool's Hide All). `viewSelection` backs the Delete key and the palette, which get no row
  *  argument. */
 export function registerDownloadsMultiRowCommands(
-  access: DownloadsAccess, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
-  log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[], marks: DownloadMarks,
+  access: DownloadsAccess, instance: Pick<Instance, 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
   const rows = (clicked?: DownloadNode, selected?: DownloadNode[]) => {
     const explicit = selectionRows(clicked, selected);
@@ -249,11 +236,11 @@ export function registerDownloadsMultiRowCommands(
   };
   return [
     vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      deleteSelection(access, rows(clicked, selected), reporter, ask, trash, log, marks)),
+      deleteSelection(access, instance, rows(clicked, selected), reporter, ask, trash, log)),
     vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      excludeSelection(access, rows(clicked, selected), reporter, marks)),
+      changeExcluded(access, instance, rows(clicked, selected), true, excludeDownloads, reporter)),
     vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      includeSelection(access, rows(clicked, selected), reporter, marks)),
+      changeExcluded(access, instance, rows(clicked, selected), false, includeDownloads, reporter)),
   ];
 }
 
