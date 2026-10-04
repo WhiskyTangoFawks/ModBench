@@ -59,6 +59,7 @@ public sealed class ValidateThroughGitTests : IDisposable
 
         Assert.False(PluginFailed);
         Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
+        Assert.DoesNotContain(announced, Announcements.PluginChanged(_mod));
     }
 
     [Fact]
@@ -70,6 +71,7 @@ public sealed class ValidateThroughGitTests : IDisposable
         var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(Reads));
 
         Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
+        Assert.DoesNotContain(announced, Announcements.PluginChanged(_mod));
     }
 
     [Fact]

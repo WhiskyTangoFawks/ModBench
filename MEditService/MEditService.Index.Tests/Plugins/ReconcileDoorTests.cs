@@ -175,6 +175,28 @@ public sealed class ReconcileDoorTests
     }
 
     [Fact]
+    public void AnArrivalsStatus_IsPublishedBeforeItsVersionIsAnswered()
+    {
+        var holder = new LoadOrderHolder();
+        using var fx = new PluginFixtureBuilder("status-before-version").WithPlugin("A.esp").Build();
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = Indexes.Open(holder, notifications: new SlowStatuses(notifications));
+
+        var version = index.Receive(holder, LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
+
+        Assert.Contains(StatusesPublished(notifications), n => n.Status.Version == version);
+    }
+
+    private sealed class SlowStatuses(INotificationPublisher inner) : INotificationPublisher
+    {
+        public void Publish(Notification notification)
+        {
+            if (notification is LoadOrderStatusNotification) Thread.Sleep(300);
+            inner.Publish(notification);
+        }
+    }
+
+    [Fact]
     public void AnAppliedLoadOrder_IsReconciledOffTheAppliersThread_UntilTheStatusAnswersItsVersion()
     {
         var holder = new LoadOrderHolder();

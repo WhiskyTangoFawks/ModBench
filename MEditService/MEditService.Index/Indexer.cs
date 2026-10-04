@@ -238,8 +238,9 @@ public sealed class Indexer : IQueryIndex, IDisposable
         {
             changed |= version > _version;
             _version = Math.Max(_version, version);
+            _validating = false;
+            if (changed) PublishStatus();
         }
-        if (changed) PublishStatus();
     }
 
     // A superseded reconcile throws OperationCanceledException, leaving its work for its
@@ -271,7 +272,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
             var token = BeginReconcile();
             var (held, index) = EnsureScope(snapshot);
             var reconciled = ReconcileProgressively(held, index, snapshot, token) || refusalCleared;
-            return ValidateHeld(holdsStatus: reconciled, token) || reconciled;
+            return ValidateHeld(token) || reconciled;
         }
         catch (OperationCanceledException ex)
         {
@@ -422,6 +423,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         lock (_lock)
         {
             _conflictsComputed = false;
+            _validating = true;
             _plannedCount = resolved.Count;
             _activeCount = snapshot.Active.Count;
         }
@@ -822,15 +824,14 @@ public sealed class Indexer : IQueryIndex, IDisposable
         $"Could not validate this plugin's {(holdsTree ? "source tree" : "binary")} ({reason}). Still showing " +
         "what was last read from it.";
 
-    // ADR-0003: the status answering the version is published once the plugins are validated. While
-    // they are, a reconcile that changed the status still reads Reconciling. True when validation
-    // failed outright and became status data.
-    private bool ValidateHeld(bool holdsStatus, CancellationToken token)
+    // ADR-0003: the status answering the version is published once the plugins are validated, and a
+    // reconcile that changed the status reads Reconciling until then. True when validation failed
+    // outright and became status data.
+    private bool ValidateHeld(CancellationToken token)
     {
         lock (_lock)
         {
             if (_disposed || _heldPlugins is null) return false;
-            _validating = holdsStatus;
         }
         try
         {
@@ -850,10 +851,6 @@ public sealed class Indexer : IQueryIndex, IDisposable
             _logger.LogError(ex, "Validating the index failed unexpectedly");
             lock (_lock) _failureMessage = ex.Message;
             return true;
-        }
-        finally
-        {
-            lock (_lock) _validating = false;
         }
     }
 
@@ -1159,6 +1156,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         _indexed.Clear();
         _failedReads.Clear();
         _conflictsComputed = false;
+        _validating = false;
         _plannedCount = 0;
         _activeCount = 0;
         _heldElsewhereMessage = null;
