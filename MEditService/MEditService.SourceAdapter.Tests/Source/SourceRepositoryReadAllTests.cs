@@ -97,7 +97,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     }
 
     [Fact]
-    public void FormKeysUsed_AKeyTheWorkingTreeDeleted_StaysUsedUntilCompiled()
+    public void FormKeysUsed_AKeyTheWorkingTreeDeleted_StaysUsedWhileTheCommitHoldsIt()
     {
         var repository = Tracked();
         repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId));

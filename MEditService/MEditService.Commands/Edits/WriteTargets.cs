@@ -177,23 +177,7 @@ internal sealed class WriteTargets(
     // per-child re-read would walk the whole tree again for every key drawn.
     public readonly record struct Allocator(
         PluginAddress Plugin, GameRelease Release, bool IsLight, bool EslFlagIsRemovable,
-        IReadOnlySet<string> Used)
-    {
-        public bool Holds(string formKey) => Used.Contains(formKey);
-
-        internal IEnumerable<string> Taken
-        {
-            get
-            {
-                var plugin = Plugin;
-                return Used.Where(key => IsNativeTo(key, plugin));
-            }
-        }
-
-        private static bool IsNativeTo(string formKey, PluginAddress plugin) =>
-            FormKey.TryFactory(formKey, out var parsed)
-            && parsed.ModKey.FileName.String.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase);
-    }
+        IReadOnlySet<string> Used);
 
     // From the tree alone (ADR-0015).
     internal Allocator AllocatorOver(SourceRepository repository, PluginAddress plugin) =>
@@ -230,7 +214,7 @@ internal sealed class WriteTargets(
                 targetFormKey = "";
                 return notNative;
             }
-            if (allocator.Holds(requestedFormKey))
+            if (allocator.Used.Contains(requestedFormKey))
             {
                 targetFormKey = "";
                 return RecordEditResult.Refused(
@@ -266,6 +250,10 @@ internal sealed class WriteTargets(
         return header?.Body is { } body && HeaderDocument.IsLight(Encoding.UTF8.GetBytes(body));
     }
 
+    private static bool IsNativeTo(string formKey, PluginAddress plugin) =>
+        FormKey.TryFactory(formKey, out var parsed)
+        && parsed.ModKey.FileName.String.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase);
+
     // A foreign ModKey would land a record inside this plugin's tree while claiming another origin,
     // indistinguishable from a corrupt override; xEdit never offers one either. Range is checked
     // after ownership.
@@ -273,7 +261,7 @@ internal sealed class WriteTargets(
     {
         var parsed = FormKey.Factory(requestedFormKey);
         var requestedOwner = parsed.ModKey.FileName.String;
-        if (!requestedOwner.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
+        if (!IsNativeTo(requestedFormKey, plugin))
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.NotNativeRecord,
@@ -297,7 +285,8 @@ internal sealed class WriteTargets(
     private static string? NextFreeNativeFormId(Allocator allocator, bool isLight, IReadOnlySet<string>? taken = null)
     {
         var floor = PluginFlagPredicates.HighRangeFormIdFloor(allocator.Release);
-        var highest = allocator.Taken
+        var highest = allocator.Used
+            .Where(key => IsNativeTo(key, allocator.Plugin))
             .Concat(taken ?? Enumerable.Empty<string>())
             .Select(LocalId)
             .DefaultIfEmpty(0u)

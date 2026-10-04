@@ -103,6 +103,8 @@ public sealed class CreateRecordHandlerTests
 
         Assert.NotNull(result.NewFormKey);
         Assert.Contains(result.NewFormKey, mod.ChangedFormKeys());
+        Commit(mod);
+        Assert.DoesNotContain(result.NewFormKey, mod.ChangedFormKeys());
     }
 
     [Fact]

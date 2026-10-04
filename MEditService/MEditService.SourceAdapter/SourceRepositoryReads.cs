@@ -42,7 +42,7 @@ public sealed partial class SourceRepository
     public IReadOnlySet<string> EditorIdsHeld(PluginAddress plugin) => EditorIds(ReadAll(plugin));
 
     /// <summary>Every FormKey the plugin's source uses, committed or not: a record's own, an embedded
-    /// child's and the header's synthetic one. A deletion frees none until the plugin is compiled.</summary>
+    /// child's and the header's synthetic one. A deletion frees its key once committed.</summary>
     public IReadOnlySet<string> FormKeysUsed(PluginAddress plugin)
     {
         var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
