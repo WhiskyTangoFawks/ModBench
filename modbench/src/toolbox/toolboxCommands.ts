@@ -5,9 +5,11 @@ import type { RefreshResult } from '../instanceCommands/loadOrder';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 
+const TOOLBOX_VIEW = 'modbench.toolbox';
+
 export interface ToolboxCommandDeps {
   access: ProfileAccess;
-  /** The profiles and the active one, from the instance value (ADR-0015). */
+  /** The profiles and the active one, from the instance value (ADR-0015); `refresh` ends each gesture. */
   instance: Pick<Instance, 'value' | 'refresh'>;
   /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
   extensionId: string;
@@ -27,7 +29,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
         { placeHolder: 'Switch profile' },
       );
       if (!picked || picked.label === active) return;
-      await runWritingGesture('modbench.toolbox', instance, async () => {
+      await runWritingGesture(TOOLBOX_VIEW, instance, async () => {
         const outcome = await switchProfile(access, picked.label, profiles);
         if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
       });
@@ -68,5 +70,5 @@ export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposa
     await refill.ended;
   };
   return vscode.commands.registerCommand('modbench.instance.refresh', () =>
-    runWritingGesture('modbench.toolbox', deps.instance, run));
+    runWritingGesture(TOOLBOX_VIEW, deps.instance, run));
 }

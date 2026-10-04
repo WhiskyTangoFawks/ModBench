@@ -29,6 +29,7 @@ import {
   conflictsComputedOver, refreshSourceControlFor, type PluginsViewProgress,
 } from './plugins/pluginRowCommands';
 import type { OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
+import type { Instance } from './instanceLoader/instance';
 import { registerFilterCommands, type FilterScripts } from './plugins/recordFilterCommands';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
 import { registerRecordCreateCommand } from './plugins/createRecordCommand';
@@ -131,6 +132,7 @@ export function activate(context: vscode.ExtensionContext) {
   const pluginRowDeps: PluginRowCommandDeps = {
     session, client: meditClient, outputChannel, compileProblems: new CompileProblems(compileDiagnostics),
     conflictsComputed,
+    instance: { refresh: () => toolbox.instance?.refresh() ?? Promise.resolve() },
     originFiles: (origin) => toolbox.originFiles(origin),
     instancePlugins: () => toolbox.instance?.value.plugins ?? [],
     instanceMods: () => toolbox.instance?.value.mods ?? [],
@@ -215,6 +217,7 @@ interface PluginRowCommandDeps {
   outputChannel: vscode.LogOutputChannel;
   compileProblems: CompileProblems;
   conflictsComputed: () => Promise<void>;
+  instance: Pick<Instance, 'refresh'>;
   originFiles: OriginFilesOf;
   instancePlugins: TrackDeps['plugins'];
   instanceMods: TrackDeps['mods'];
@@ -224,11 +227,11 @@ interface PluginRowCommandDeps {
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, outputChannel, conflictsComputed, instancePlugins, instanceMods, trackSelection } = deps;
+  const { session, client, outputChannel, conflictsComputed, instance, instancePlugins, instanceMods, trackSelection } = deps;
   const progress = pluginsProgress(session);
   return [
     registerTrackCommand({
-      progress,
+      progress, instance,
       client, reporter: makeReporter(outputChannel, 'mod.track'), onTracked: conflictsComputed,
       plugins: instancePlugins,
       mods: instanceMods,
@@ -236,7 +239,7 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
     }, trackSelection),
     registerDecompileCommand({
       client,
-      progress,
+      instance,
       reporter: makeReporter(outputChannel, 'plugin.decompile'),
       ask: askQuestion,
     }, () => session.plugins?.view.selection ?? []),
@@ -262,10 +265,10 @@ function pluginsProgress(session: ExtensionSession): PluginsViewProgress {
 }
 
 function compileDeps(deps: PluginRowCommandDeps): CompileDeps {
-  const { session, client, outputChannel, compileProblems, originFiles } = deps;
+  const { client, outputChannel, compileProblems, instance, originFiles } = deps;
   return {
     client,
-    progress: pluginsProgress(session),
+    instance,
     reporter: makeReporter(outputChannel, 'plugin.compile'),
     problems: compileProblems,
     originFiles,

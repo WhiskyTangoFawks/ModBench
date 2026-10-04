@@ -3,14 +3,15 @@ import {
   isRefused, type MEditClient, type CompileDiagnostic, type CompileOutcome, type PluginAddress, type UpstreamVersionByOrigin,
 } from '../client';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
-import type { InstanceValue } from '../instanceLoader/instance';
+import type { Instance, InstanceValue } from '../instanceLoader/instance';
+import { runWritingGesture } from '../drivingLib/writingGesture';
 import {
   trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey,
 } from './trackedRepositories';
 import { trackProgressMessage } from './trackProgress';
 import { PluginNode, type PluginsTreeNode } from './PluginsTreeProvider';
 import {
-  compilableSelected, pluginsGestureEntry, selectionArgument, type GestureEntry,
+  compilableSelected, pluginsGestureEntry, selectionArgument, PLUGINS_KEY_ARGS, type GestureEntry,
 } from './gestureEntry';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
@@ -62,7 +63,8 @@ function pickTrackPreset(placeholder: string): Promise<PresetOption | undefined>
 }
 
 export interface TrackDeps {
-  progress: PluginsViewProgress;
+  progress: Pick<PluginsViewProgress, 'say'>;
+  instance: Pick<Instance, 'refresh'>;
   client: Pick<MEditClient, 'track'>;
   reporter: Reporter;
   onTracked: () => Promise<void>;
@@ -95,7 +97,7 @@ const PROVIDES_NO_PLUGIN = 'it provides no plugin';
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost, so this
 // runs under the Plugins-view progress indicator.
 async function trackMods(deps: TrackDeps, mods: readonly string[]): Promise<void> {
-  const { progress, client, reporter, onTracked } = deps;
+  const { progress, instance, client, reporter, onTracked } = deps;
   const instancePlugins = deps.plugins();
   const pluginsOf = (mod: string): PluginAddress[] =>
     instancePlugins.filter((p) => p.origin === mod).map(({ name, origin }) => ({ name, origin }));
@@ -113,16 +115,19 @@ async function trackMods(deps: TrackDeps, mods: readonly string[]): Promise<void
   const choice = await pickTrackPreset(`Track ${what}`);
   if (!choice) return;
 
-  await progress.while(async () => {
-    progress.say(trackProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
-    const result = await client.track(addressed, choice.label, upstreamVersionByOrigin, {
-      onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? firstMod, status)); },
-    });
-    if (isRefused(result)) { reporter.report('error', result.message); return; }
-    // The row turns tracked when the `.git` the track made reaches the Instance adapter's watch.
-    if (result.landed.length > 0) await onTracked();
-    const refused = reportRefused(reporter, mods, pluginless, { total: addressed.length, outcome: result });
-    if (!refused && result.landed.length > 0) reporter.landed(`Tracked ${what}.`);
+  await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, async () => {
+    try {
+      progress.say(trackProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
+      const result = await client.track(addressed, choice.label, upstreamVersionByOrigin, {
+        onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? firstMod, status)); },
+      });
+      if (isRefused(result)) { reporter.report('error', result.message); return; }
+      if (result.landed.length > 0) await onTracked();
+      const refused = reportRefused(reporter, mods, pluginless, { total: addressed.length, outcome: result });
+      if (!refused && result.landed.length > 0) reporter.landed(`Tracked ${what}.`);
+    } finally {
+      progress.say(undefined);
+    }
   });
 }
 
@@ -153,11 +158,11 @@ function reportRefused(
   return true;
 }
 
-/** What decompile needs: the call, the view's progress bar, its one confirmation, and how the user
+/** What decompile needs: the call, the Instance loader's refresh, its one confirmation, and how the user
  *  is told. */
 export interface DecompileDeps {
   client: Pick<MEditClient, 'decompile'>;
-  progress: PluginsViewProgress;
+  instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
   ask: AskQuestion;
 }
@@ -176,7 +181,7 @@ export function registerDecompileCommand(
         : selectionArgument(pluginsGestureEntry(clicked, selected, viewSelection), 'plugin')
           .map((node) => ({ name: node.plugin.name, origin: node.origin }));
       if (plugins.length === 0 || !(await confirmDecompile(deps.ask, plugins))) return;
-      await deps.progress.while(async () => {
+      await runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
         const outcome = await deps.client.decompile(plugins);
         if (isRefused(outcome)) { deps.reporter.report('error', outcome.message); return; }
         reportDecompiled(deps.reporter, outcome, plugins.length);
@@ -209,11 +214,11 @@ function reportDecompiled(reporter: Reporter, outcome: SelectionOutcome<PluginAd
   reporter.landed(more.length === 0 ? `Decompiled "${only.name}".` : `Decompiled ${outcome.landed.length} plugins.`);
 }
 
-/** What compile needs: the tracked plugins for the palette's pick, the compile itself, the view's
- *  progress bar, where the diagnostics go, and how the user is told. */
+/** What compile needs: the tracked plugins for the palette's pick, the compile itself, the
+ *  Instance loader's refresh, where the diagnostics go, and how the user is told. */
 export interface CompileDeps {
   client: Pick<MEditClient, 'getPlugins' | 'compile'>;
-  progress: PluginsViewProgress;
+  instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
   problems: CompileProblems;
   originFiles: OriginFilesOf;
@@ -267,12 +272,11 @@ async function pickCompilable(deps: CompileDeps, entry: GestureEntry): Promise<P
   return choice && [{ name: choice.label, origin: choice.description }];
 }
 
-// The compile itself, under the view's progress bar, reported once when it lands. Nothing re-reads
-// `GET /plugins` after it: a compiled binary changes only bytes on disk, which the index's own
-// mirror watch re-reads.
+// Reported once when it lands. Nothing re-reads `GET /plugins` after it: a compiled binary changes
+// only bytes on disk, which the index's own mirror watch re-reads.
 async function compilePlugins(deps: CompileDeps, plugins: readonly PluginAddress[]): Promise<void> {
   if (plugins.length === 0) return;
-  await deps.progress.while(async () => {
+  await runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
     const outcome = await deps.client.compile(plugins);
     if (isRefused(outcome)) { deps.reporter.report('error', outcome.message); return; }
     publishLanded(deps, outcome);

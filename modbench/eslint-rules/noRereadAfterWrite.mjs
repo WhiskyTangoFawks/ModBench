@@ -2,9 +2,9 @@
 /** @import { CallExpression, Identifier, Node, Program } from 'estree' */
 
 export const REREAD_AFTER_WRITE_MESSAGE =
-    'A write writes its file and returns. A view changes only when the watch reads the file back: the '
-    + "Instance loader's next value for the instance's files, mEdit's published rows for plugin source. "
-    + 'A write path never refreshes or invalidates a view, landed or failed (ADR-0015).';
+    "A write writes its file and returns. A view changes only when a read lands: the Instance loader's, which "
+    + "runWritingGesture asks for once the command ends, or mEdit's published rows for plugin source. "
+    + 'A write path never refreshes or invalidates a view itself, landed or failed (ADR-0015).';
 
 // Every call that writes a system of record from a view's gesture, by the name it is called under.
 export const WRITES = new Set([

@@ -1,16 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 
-const { steps } = vi.hoisted(() => ({ steps: [] as string[] }));
+vi.mock('vscode', async () => {
+  const { recordedWithProgress } = await import('../../test/recordedProgress');
+  return { window: { withProgress: recordedWithProgress } };
+});
 
-vi.mock('vscode', () => ({
-  window: {
-    withProgress: vi.fn(async (options: { location: { viewId: string } }, task: () => Promise<unknown>) => {
-      steps.push(`progress opens on ${options.location.viewId}`);
-      try { return await task(); } finally { steps.push('progress closes'); }
-    }),
-  },
-}));
-
+import { progressSteps as steps } from '../../test/recordedProgress';
 import { runWritingGesture } from '../writingGesture';
 
 function instanceThatReads() {

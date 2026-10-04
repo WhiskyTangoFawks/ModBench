@@ -1,15 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { handlers, registerCommand, executeCommand, showQuickPick, withProgress, progressSteps } = vi.hoisted(() => {
+const { handlers, registerCommand, executeCommand, showQuickPick } = vi.hoisted(() => {
   const handlers = new Map<string, () => Promise<void> | void>();
-  const progressSteps: string[] = [];
   return {
     handlers,
-    progressSteps,
-    withProgress: vi.fn(async (options: { location: { viewId: string } }, task: () => Promise<unknown>) => {
-      progressSteps.push(`progress opens on ${options.location.viewId}`);
-      try { return await task(); } finally { progressSteps.push('progress closes'); }
-    }),
     registerCommand: vi.fn((command: string, handler: () => Promise<void> | void) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
@@ -19,10 +13,15 @@ const { handlers, registerCommand, executeCommand, showQuickPick, withProgress, 
   };
 });
 
-vi.mock('vscode', () => ({
-  commands: { registerCommand, executeCommand },
-  window: { showQuickPick, withProgress },
-}));
+vi.mock('vscode', async () => {
+  const { recordedWithProgress } = await import('../../test/recordedProgress');
+  return {
+    commands: { registerCommand, executeCommand },
+    window: { showQuickPick, withProgress: recordedWithProgress },
+  };
+});
+
+import { progressSteps } from '../../test/recordedProgress';
 
 const { switchProfile } = vi.hoisted(() => ({ switchProfile: vi.fn() }));
 
@@ -120,11 +119,26 @@ describe('Switch profile', () => {
     switchProfile.mockImplementationOnce(() => { progressSteps.push('write'); return Promise.resolve({ applied: true }); });
     showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
 
-    const { run } = register();
+    const { reporter, run } = register();
     await run('modbench.profile.switch');
 
     expect(progressSteps).toEqual([
       'progress opens on modbench.toolbox', 'write', 'Instance loader: read every file again', 'progress closes',
+    ]);
+    expect(reporter.reports).toEqual([]);
+    expect(reporter.landings).toEqual([]);
+    expect(executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('reads again after a refused switch, since the disk is what the view shows', async () => {
+    showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
+    switchProfile.mockResolvedValueOnce({ applied: false, refusal: 'read-only' });
+
+    const { run } = register();
+    await run('modbench.profile.switch');
+
+    expect(progressSteps).toEqual([
+      'progress opens on modbench.toolbox', 'Instance loader: read every file again', 'progress closes',
     ]);
   });
 
