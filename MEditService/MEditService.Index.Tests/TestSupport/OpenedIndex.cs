@@ -26,5 +26,13 @@ internal sealed class OpenedIndex(IQueryIndex index, LoadOrderHolder holder, IDi
 
     public StoreRebuild RebuildStore(GameRelease gameRelease, string instanceRoot) => index.RebuildStore(gameRelease, instanceRoot);
 
+    /// <summary>Returns once a write in flight has finished: setting the filter again passes the write
+    /// gate every write passes, and a validation announces inside its hold.</summary>
+    internal void Settled()
+    {
+        if (ActiveFilter is var (sql, source)) SetFilter(sql, source);
+        else ClearFilter();
+    }
+
     public void Dispose() => container.Dispose();
 }

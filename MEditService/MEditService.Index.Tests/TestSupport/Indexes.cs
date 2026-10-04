@@ -13,13 +13,13 @@ namespace MEditService.Index.Tests.TestSupport;
 /// subscribed to its holder and reconciled over a fixture's plugins.</summary>
 internal static class Indexes
 {
-    internal static OpenedIndex Open(
+    /// <summary>The registration over the real adapter, before anything has resolved the index.</summary>
+    internal static ServiceProvider Container(
         LoadOrderHolder holder,
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        TimeProvider? timeProvider = null,
-        TaskScheduler? refillScheduler = null)
+        TimeProvider? timeProvider = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(holder);
@@ -28,9 +28,18 @@ internal static class Indexes
         services.AddSingleton(loggerFactory ?? NullLoggerFactory.Instance);
         services.AddSingleton(timeProvider ?? TimeProvider.System);
         if (notifications is not null) services.AddSingleton(notifications);
-        if (refillScheduler is not null) services.AddSingleton(refillScheduler);
         services.AddRecordIndex();
-        var container = services.BuildServiceProvider();
+        return services.BuildServiceProvider();
+    }
+
+    internal static OpenedIndex Open(
+        LoadOrderHolder holder,
+        IPluginAdapter? adapter = null,
+        ILoggerFactory? loggerFactory = null,
+        INotificationPublisher? notifications = null,
+        TimeProvider? timeProvider = null)
+    {
+        var container = Container(holder, adapter, loggerFactory, notifications, timeProvider);
         return new OpenedIndex(container.GetRequiredService<IQueryIndex>(), holder, container);
     }
 
@@ -72,8 +81,18 @@ internal static class Indexes
     }
 
     /// <summary>The held load order arriving again (ADR-0013), answered once
-    /// <paramref name="announced"/> holds and the arrival's status is out.</summary>
+    /// <paramref name="announced"/> holds, the arrival's status is out when it re-derived, and its
+    /// validation has ended, which only the write gate shows when nothing was re-derived.</summary>
     internal static void NextSnapshotUntil(this OpenedIndex index, Func<bool> announced, string what)
+    {
+        index.NextSnapshotUnsettledUntil(announced, what);
+        index.Settled();
+    }
+
+    /// <summary>As <see cref="NextSnapshotUntil"/>, for a test that holds a filter whose write is
+    /// still to land, or whose re-application fails: passing the gate would change what it asserts.
+    /// </summary>
+    internal static void NextSnapshotUnsettledUntil(this OpenedIndex index, Func<bool> announced, string what)
     {
         index.Holder.Apply(index.Holder.Current);
         Waits.Reached(announced, what);
@@ -86,6 +105,12 @@ internal static class Indexes
     {
         var before = index.Sequence;
         index.NextSnapshotUntil(() => index.Sequence > before, "the sequence moving");
+    }
+
+    internal static void NextSnapshotUnsettled(this OpenedIndex index)
+    {
+        var before = index.Sequence;
+        index.NextSnapshotUnsettledUntil(() => index.Sequence > before, "the sequence moving");
     }
 
     /// <summary>The SQL door: the filter is arbitrary SQL yielding form_key, so what it

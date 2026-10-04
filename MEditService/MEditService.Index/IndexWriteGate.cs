@@ -11,7 +11,7 @@ internal sealed class IndexWriteGate
 
     /// <summary>Long enough that no legitimate write hits it (a whole-plugin re-derivation is tens of
     /// seconds on a large plugin), short enough that a stuck one is reported rather than hung on.</summary>
-    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(2);
+    public static readonly TimeSpan HoldLimit = TimeSpan.FromMinutes(2);
 
     private readonly Lock _gate = new();
 
@@ -19,7 +19,7 @@ internal sealed class IndexWriteGate
     /// caller's answer is the same (do not write), and a boolean would let one forget.</summary>
     public Holding Enter()
     {
-        if (!_gate.TryEnter(DefaultTimeout)) throw new IndexWriteGateTimeoutException(DefaultTimeout);
+        if (!_gate.TryEnter(HoldLimit)) throw new IndexWriteGateTimeoutException(HoldLimit);
         return new Holding(_gate);
     }
 
@@ -31,8 +31,7 @@ internal sealed class IndexWriteGate
 }
 
 /// <summary>A projection waited out the gate: busy, not broken. No caller offers a retry: a record
-/// gesture never takes the gate (ADR-0015), and a snapshot's validation logs it
-/// (ADR-0015).</summary>
+/// gesture never takes the gate (ADR-0015).</summary>
 internal sealed class IndexWriteGateTimeoutException : TimeoutException
 {
     private const string DefaultMessage = "Another write to the record index is still in progress.";

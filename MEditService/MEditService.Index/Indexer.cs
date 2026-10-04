@@ -25,8 +25,6 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     private readonly INotificationPublisher? _notifications;
     private readonly SchemaReflector _schemaReflector;
     private readonly TimeProvider _timeProvider;
-    // Where a rebuild's refill runs; a test holds it back to order it against a reconcile.
-    private readonly TaskScheduler _refillScheduler;
     // ADR-0013. The Indexer keeps no view of its own.
     private readonly LoadOrderHolder _holder;
     private HeldPlugins? _heldPlugins;
@@ -57,16 +55,13 @@ internal sealed class Indexer : IQueryIndex, IDisposable
         SchemaReflector schemaReflector,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        TimeProvider? timeProvider = null,
-        TaskScheduler? refillScheduler = null)
+        TimeProvider? timeProvider = null)
     {
         _holder = holder;
-        WriteGate = new IndexWriteGate();
         _adapter = adapter;
         _schemaReflector = schemaReflector;
         _notifications = notifications;
         _timeProvider = timeProvider ?? TimeProvider.System;
-        _refillScheduler = refillScheduler ?? TaskScheduler.Default;
         _logger = loggerFactory?.CreateLogger<Indexer>() ?? NullLogger<Indexer>.Instance;
         _indexFactory = new DuckDbRecordIndexFactory(
             schemaReflector, new TableDdlBuilder(schemaReflector), notifications,
@@ -108,7 +103,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     /// <summary>One per Indexer, never replaced — a reconcile swaps the store underneath it, which
     /// is when the ordering matters most. By construction the outer of the two locks: taking
     /// <c>_lock</c> first and then waiting here would deadlock.</summary>
-    public IndexWriteGate WriteGate { get; }
+    private readonly IndexWriteGate _writeGate = new();
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
@@ -749,7 +744,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     {
         // Outside _lock, as every mutation door here is: validate refreshes rows through the index's
         // own verbs, and the gate is reentrant so the rebuild below can take it again.
-        using var _ = WriteGate.Enter();
+        using var _ = _writeGate.Enter();
 
         var (held, index) = RequireScopeCore();
         // One advance for everything this validate re-derives.
@@ -876,7 +871,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     {
         // Taken before anything reaches _lock. IndexWriteGate is a Lock, thread-affine, so nothing
         // under this scope may await — the thread that exits must be the one that entered.
-        using var _ = WriteGate.Enter();
+        using var _ = _writeGate.Enter();
 
         var (metadata, index, gameRelease, dataFolderPath) = RequireHeldPlugin(key);
         // ADR-0015: a whole plugin re-derived is one projection, so it is one advance
@@ -901,7 +896,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     {
         // Outside _lock, always. It takes the gate for itself rather than trusting its caller; the
         // reentrant gate makes that free.
-        using var _ = WriteGate.Enter();
+        using var _ = _writeGate.Enter();
 
         var (metadata, index, gameRelease, _) = RequireHeldPlugin(key);
         using var projection = index.BeginProjection();
@@ -985,7 +980,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     private void UnindexGonePlugin(PluginAddress key)
     {
         // Gated like its sibling above. Outside _lock, never inside it.
-        using var _ = WriteGate.Enter();
+        using var _ = _writeGate.Enter();
 
         IRecordIndex index;
         lock (_lock)
@@ -1031,7 +1026,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
         // ReapplyFilter is deliberately not gated: every call site is already inside a gated write,
         // or inside the reconcile, which holds the exclusive lock instead. Gating there would newly
         // make a reconcile wait on an edit.
-        using var _ = WriteGate.Enter();
+        using var _ = _writeGate.Enter();
 
         lock (_lock)
         {
@@ -1089,7 +1084,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
         }
 
         return new StoreRebuild(Task.Factory.StartNew(
-            ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, _refillScheduler));
+            ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default));
     }
 
     /// <summary>Reconciles every arrival of the load order, changed or not, on a thread of its own

@@ -251,12 +251,20 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NotANumber");
 
-            manager.NextSnapshot();
+            manager.NextSnapshotUnsettled();
 
-            Assert.Contains(entries, e =>
-                e.Level == LogLevel.Warning
-                && e.Message.Contains("re-materialize the active filter", StringComparison.Ordinal)
-                && e.Message.Contains("NotANumber", StringComparison.Ordinal));
+            Waits.Reached(
+                () =>
+                {
+                    lock (entries)
+                    {
+                        return entries.Exists(e =>
+                            e.Level == LogLevel.Warning
+                            && e.Message.Contains("re-materialize the active filter", StringComparison.Ordinal)
+                            && e.Message.Contains("NotANumber", StringComparison.Ordinal));
+                    }
+                },
+                "the filter re-application's warning");
             Assert.Contains(
                 manager.RequireReads().GetDocuments(new PluginAddress("Plugin.esp", "Data")),
                 d => d.EditorId == "NotANumber");

@@ -95,12 +95,14 @@ public sealed class WriteSideIndexScanTests
     private const string EndpointRoot = "MEditService.Http/Endpoints";
 
     private static string[] IndexTypesAnEndpointCannotNameByTheirOwnWord() =>
-        [.. typeof(IQueryIndex).Assembly.GetExportedTypes().Select(SourceName)
+        [.. typeof(IQueryIndex).Assembly.GetExportedTypes().Concat(InternalTypesOfTheIndex()).Select(SourceName)
             .Except(typeof(IRecordQueryService).Assembly.GetExportedTypes().Select(SourceName), StringComparer.Ordinal)
-            .Concat(["Indexer", "IndexWriteGate", "FormKeyResolutionCache"])
             .Append("MEditService.Index")
             .Append(@"Index\.[A-Z]\w*")
             .Distinct(StringComparer.Ordinal)];
+
+    private static IEnumerable<Type> InternalTypesOfTheIndex() =>
+        typeof(IQueryIndex).Assembly.GetTypes().Where(t => !t.IsVisible && !t.IsNested && char.IsLetter(t.Name[0]));
 
     private static IEnumerable<Type> SignatureTypes(Type type) =>
         type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)

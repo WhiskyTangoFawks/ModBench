@@ -8,8 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Index;
 
-/// <summary>The record index's one registration: the host takes the index as <see cref="IQueryIndex"/>.
-/// A TaskScheduler in the container runs a rebuild's refill.</summary>
+/// <summary>The record index's one registration: the host takes the index as <see cref="IQueryIndex"/>.</summary>
 public static class RecordIndexServices
 {
     public static IServiceCollection AddRecordIndex(this IServiceCollection services)
@@ -22,8 +21,7 @@ public static class RecordIndexServices
                 sp.GetRequiredService<SchemaReflector>(),
                 sp.GetRequiredService<ILoggerFactory>(),
                 sp.GetService<INotificationPublisher>(),
-                sp.GetRequiredService<TimeProvider>(),
-                sp.GetService<TaskScheduler>());
+                sp.GetRequiredService<TimeProvider>());
             index.Subscribe();
             return index;
         });

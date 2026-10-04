@@ -4,8 +4,6 @@ using MEditService.Ports;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Records;
@@ -19,14 +17,7 @@ public sealed class RecordIndexRegistrationTests
         using var fixture = new PluginFixtureBuilder("registration-startup")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .Build();
-        var services = new ServiceCollection();
-        services.AddSingleton(holder);
-        services.AddSingleton(TestAdapters.Mutagen());
-        services.AddSingleton(SharedSchemaReflector.Instance);
-        services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
-        services.AddSingleton(TimeProvider.System);
-        services.AddRecordIndex();
-        await using var provider = services.BuildServiceProvider();
+        await using var provider = Indexes.Container(holder);
         foreach (var hosted in provider.GetServices<IHostedService>()) await hosted.StartAsync(CancellationToken.None);
 
         var version = holder.Apply(LoadOrderArrival.Snapshot(fixture.DataFolder, null, GameRelease.Fallout4, fixture.Plugins));
