@@ -31,7 +31,7 @@ describe('conflict theme colours', () => {
   });
 
   it('the panel paints each contributed colour under the variable VS Code names it', () => {
-    const vscodeVariables = contributedColours().map(({ id }) => {
+    const vscodeVariables = contributedColours().filter(({ id }) => id.startsWith('modbench.conflict')).map(({ id }) => {
       const [namespace, ...rest] = id.split('.');
       return `var(--vscode-${namespace}-${rest.join('.')})`;
     });

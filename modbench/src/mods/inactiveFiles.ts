@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFile, OriginFolder } from '../instanceLoader/instance';
 import { modOrigin, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import { fileRowUri } from './modFiles';
+import type { WorkspaceSettings } from './workspaceSettings';
 
 /** Why the game does not get a file: another copy wins its path, it is excluded, or its mod is
  *  disabled. A folder never loses: the game merges folders. */
@@ -48,12 +49,6 @@ export function inactiveFiles(value: FilesValue): ReadonlyMap<string, InactiveRe
   return reasons;
 }
 
-/** The slice of VS Code's workspace the grey's setting is read through. */
-export interface GreySetting {
-  getConfiguration(): { get(key: string): unknown };
-  readonly onDidChangeConfiguration: vscode.Event<{ affectsConfiguration(section: string): boolean }>;
-}
-
 /** VS Code never re-queries a decoration provider on its own, so this one fires on every new
  *  instance value (ADR-0003) and on every change to its setting. */
 export class InactiveFileDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
@@ -62,7 +57,7 @@ export class InactiveFileDecorationProvider implements vscode.FileDecorationProv
   private reasons: ReadonlyMap<string, InactiveReason> | undefined;
   private readonly subscriptions: readonly vscode.Disposable[];
 
-  constructor(private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>, private readonly setting: GreySetting) {
+  constructor(private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>, private readonly setting: WorkspaceSettings) {
     this.subscriptions = [
       instance.subscribe(() => {
         this.reasons = undefined;

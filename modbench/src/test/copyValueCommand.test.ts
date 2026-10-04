@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon } from './vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFrom } from './vscodeMock';
 
 const { registerCommand, writeText } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, _handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn() })),
@@ -10,6 +10,7 @@ const { registerCommand, writeText } = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
+  Uri: { from: uriFrom },
   commands: { registerCommand },
   env: { clipboard: { writeText } },
 }));

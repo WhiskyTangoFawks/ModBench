@@ -56,6 +56,46 @@
           "type": "boolean",
           "default": true,
           "description": "Grey a file the game does not get, in the Mods view and the Explorer: another copy wins its path, it is excluded, or its mod is disabled."
+        },
+        "modbench.mods.indicators.overwritesLooseFiles.badge": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwrites loose files: badge a mod's row in the Mods view when a file of the mod wins over another copy."
+        },
+        "modbench.mods.indicators.overwritesLooseFiles.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwrites loose files: colour a mod's name in the Mods view when a file of the mod wins over another copy."
+        },
+        "modbench.mods.indicators.overwrittenLooseFiles.badge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Overwritten loose files: badge a mod's row in the Mods view when a file of the mod loses to another copy, and the mod is not Redundant."
+        },
+        "modbench.mods.indicators.overwrittenLooseFiles.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwritten loose files: colour a mod's name in the Mods view when a file of the mod loses to another copy, and the mod is not Redundant."
+        },
+        "modbench.mods.indicators.redundant.badge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Redundant: badge a mod's row in the Mods view when the mod has a file the game could get, and every such file loses to another copy."
+        },
+        "modbench.mods.indicators.redundant.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Redundant: colour a mod's name in the Mods view when the mod has a file the game could get, and every such file loses to another copy."
+        },
+        "modbench.mods.indicators.containsExcludedFiles.badge": {
+          "type": "boolean",
+          "default": false,
+          "description": "Contains excluded files: badge a mod's row in the Mods view when the mod has an excluded file."
+        },
+        "modbench.mods.indicators.containsExcludedFiles.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Contains excluded files: colour a mod's name in the Mods view when the mod has an excluded file."
         }
       }
     },
@@ -1354,6 +1394,46 @@
       }
     ],
     "colors": [
+      {
+        "id": "modbench.modOverwritesLooseFiles",
+        "description": "The name of a mod in the Mods view that carries Overwrites loose files.",
+        "defaults": {
+          "dark": "charts.green",
+          "light": "charts.green",
+          "highContrast": "charts.green",
+          "highContrastLight": "charts.green"
+        }
+      },
+      {
+        "id": "modbench.modOverwrittenLooseFiles",
+        "description": "The name of a mod in the Mods view that carries Overwritten loose files.",
+        "defaults": {
+          "dark": "charts.red",
+          "light": "charts.red",
+          "highContrast": "charts.red",
+          "highContrastLight": "charts.red"
+        }
+      },
+      {
+        "id": "modbench.modRedundant",
+        "description": "The name of a mod in the Mods view that carries Redundant.",
+        "defaults": {
+          "dark": "disabledForeground",
+          "light": "disabledForeground",
+          "highContrast": "disabledForeground",
+          "highContrastLight": "disabledForeground"
+        }
+      },
+      {
+        "id": "modbench.modContainsExcludedFiles",
+        "description": "The name of a mod in the Mods view that carries Contains excluded files.",
+        "defaults": {
+          "dark": "charts.yellow",
+          "light": "charts.yellow",
+          "highContrast": "charts.yellow",
+          "highContrastLight": "charts.yellow"
+        }
+      },
       {
         "id": "modbench.conflictRowOverride",
         "description": "A record field row where copies change the field and none disagrees with another.",

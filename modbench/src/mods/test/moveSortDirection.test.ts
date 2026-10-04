@@ -5,7 +5,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  uriFile, DataTransferItem, DataTransfer, FakeCancellationToken,
+  uriFile, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
 } from '../../test/vscodeMock';
 
 const { registerCommand, executeCommand, showQuickPick } = vi.hoisted(() => {
@@ -23,7 +23,7 @@ vi.mock('vscode', () => ({
   commands: { registerCommand, executeCommand },
   window: { showQuickPick },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFile }, DataTransferItem, DataTransfer,
+  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
 }));
 
 import { Instance } from '../../instanceLoader/instance';

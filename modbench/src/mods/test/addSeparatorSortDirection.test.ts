@@ -4,7 +4,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { CORPUS_FIXTURE, cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  uriFile, DataTransferItem, DataTransfer,
+  uriFile, uriFrom, DataTransferItem, DataTransfer,
 } from '../../test/vscodeMock';
 
 const { registerCommand, showInputBox } = vi.hoisted(() => ({
@@ -17,7 +17,7 @@ vi.mock('vscode', () => ({
   commands: { registerCommand },
   window: { showInputBox },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFile }, DataTransferItem, DataTransfer,
+  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
 }));
 
 import { ModListProvider, type ModlistNode, type SortDirection } from '../ModListProvider';

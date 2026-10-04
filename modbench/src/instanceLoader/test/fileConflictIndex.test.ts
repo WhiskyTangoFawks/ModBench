@@ -2,9 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import type { Mod, Separator, ModlistEntry } from '../instance';
 import {
-  buildFileConflictIndex, modOrigin, rootLevelWinners, foldPath, goToModCandidates, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, modOrigin, rootLevelWinners, goToModCandidates, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
-import { computeModStatuses } from '../statusChecker';
 import type { InstanceAdapter, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../loadOrderSnapshot';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -103,12 +102,6 @@ describe('buildFileConflictIndex — Overwrite is the winning-most provider', ()
     expect(index.filesByMod.has(OVERWRITE_ORIGIN)).toBe(false);
   });
 
-  it('badges a mod whose file Overwrite wins as conflicting, never as overriding', async () => {
-    const entries = [mod('ModA'), mod('ModB')];
-    const index = await buildFileConflictIndex(entries, [overwriteCopy], fixture, () => {});
-    expect(computeModStatuses(entries, index).get('ModA')?.status).toEqual({ kind: 'conflicts', count: 1 });
-  });
-
   it('tells Overwrite from a mod folder named overwrite: that mod loses to Overwrite', async () => {
     const entries = [mod(OVERWRITE_ORIGIN)];
     const sharing = { relativePath: 'a.dds', path: '/instance/overwrite/a.dds', sourcePath: '/instance/overwrite/a.dds', excluded: false };
@@ -118,7 +111,6 @@ describe('buildFileConflictIndex — Overwrite is the winning-most provider', ()
     expect(index.files.get('a.dds')?.winner).toBe(sharing.path);
     expect(index.files.get('a.dds')?.winnerOrigin).toEqual({ kind: 'runtimeOutput' });
     expect(index.files.get('a.dds')?.providers).toEqual([{ kind: 'runtimeOutput' }, modOrigin(OVERWRITE_ORIGIN)]);
-    expect(computeModStatuses(entries, index).get(OVERWRITE_ORIGIN)?.status).toEqual({ kind: 'conflicts', count: 1 });
   });
 });
 
@@ -139,6 +131,25 @@ describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine 
 
     const flipped = await buildFileConflictIndex([mod('ModB'), mod('ModA')], [], caseFixture, () => {});
     expect(flipped.files.get('textures/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModB'));
+  });
+
+  it('names a mod or Overwrite once among a path\'s providers, though it ships two case variants of it', async () => {
+    const variant = (root: string, relativePath: string) => ({ relativePath, path: `${root}/${relativePath}`, sourcePath: `${root}/${relativePath}`, excluded: false });
+    const index = await buildFileConflictIndex(
+      [mod('ModA'), mod('ModB')],
+      [variant('/overwrite', 'Textures/Foo.dds'), variant('/overwrite', 'textures/foo.dds')],
+      { originFiles: (origin) => Promise.resolve({
+        origin: origin.kind === 'mod' ? origin.name : 'overwrite', folder: '/mods', folders: [], notes: [],
+        files: origin.kind === 'mod' && origin.name === 'ModA'
+          ? [variant('/mods/ModA', 'Textures/Foo.dds'), variant('/mods/ModA', 'textures/foo.dds')]
+          : [variant('/mods/ModB', 'textures/foo.dds')],
+      }) },
+      () => {},
+    );
+
+    expect(index.files.get('textures/foo.dds')).toMatchObject({
+      winner: '/overwrite/Textures/Foo.dds', providers: [{ kind: 'runtimeOutput' }, modOrigin('ModA'), modOrigin('ModB')],
+    });
   });
 
   it('keeps the winner\'s own original casing in relativePath and winner, regardless of lookup casing', async () => {
@@ -198,8 +209,6 @@ const litrProfile = 'Life in the Ruins';
 describe.skipIf(litrInstance === '')('buildFileConflictIndex — real LitR instance (opt-in), proving the override-order direction against a real MO2 instance rather than synthetic fixtures', () => {
   const fixName = 'Pipboy Arm Fix for Grafs Assaultron Armor';
   const baseName = "Graf's Assaultron Armor";
-  const ESL_ANOTHER_ENABLED_MOD_ALSO_SHIPS = 1;
-  const sameLineIgnoringCasing = (line: string, expected: string): boolean => foldPath(line) === foldPath(expected);
   const contested = [
     'meshes/graf/assaultronarmor/assaultronarmorarmlheavyf.nif',
     'meshes/graf/assaultronarmor/assaultronarmorarmlheavym.nif',
@@ -207,7 +216,7 @@ describe.skipIf(litrInstance === '')('buildFileConflictIndex — real LitR insta
     'meshes/graf/assaultronarmor/assaultronarmorarmlmediumm.nif',
   ];
 
-  it('a fix patch positioned above the mod it fixes wins the meshes they both ship, a real conflict that is an oracle independent of this codebase\'s own logic — index and badge agree', async () => {
+  it('a fix patch positioned above the mod it fixes wins the meshes they both ship, a real conflict that is an oracle independent of this codebase\'s own logic', async () => {
     const litr = adapterOver(litrInstance);
     const entries = await litr.modOrder(litrProfile);
     const fixEntry = entries.find((e) => e.kind === 'mod' && e.name === fixName);
@@ -223,17 +232,6 @@ describe.skipIf(litrInstance === '')('buildFileConflictIndex — real LitR insta
       const entry = index.files.get(relativePath);
       expect(entry?.providers).toEqual([modOrigin(fixName), modOrigin(baseName)]);
       expect(entry?.winnerOrigin).toEqual(modOrigin(fixName));
-    }
-
-    const statuses = computeModStatuses([fixEntry, baseEntry], index);
-    expect(statuses.get(fixName)?.status).toEqual({ kind: 'overrides', count: contested.length });
-    expect(statuses.get(baseName)?.status).toEqual({ kind: 'conflicts', count: contested.length + ESL_ANOTHER_ENABLED_MOD_ALSO_SHIPS });
-    for (const relativePath of contested) {
-      expect(
-        statuses
-          .get(baseName)
-          ?.conflictLines.some((line) => sameLineIgnoringCasing(line, `${relativePath} → winner: "${fixName}"`)),
-      ).toBe(true);
     }
   });
 });

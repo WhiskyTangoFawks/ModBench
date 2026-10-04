@@ -3,13 +3,13 @@ import type { FileOrigin, Mod, OriginFile, ModlistEntry, OriginFolder, Separator
 import { goToModCandidates, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistGroup, type ModlistTree } from './modlistTree';
-import type { ModStatus, ModStatusResult } from '../instanceLoader/statusChecker';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
 import { setModsEnabled as setModsEnabledCommand, type ModlistAccess } from '../modlist/modlist';
 import { anyNamed, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode, type ChildrenShown } from './modFiles';
+import { modRowUri } from './modIndicators';
 
 /** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
 export type SortDirection = 'losingAtTop' | 'winningAtTop';
@@ -97,25 +97,6 @@ function whatTheDiskShows(shown: boolean | undefined, on: string, off: string): 
   return `the disk now shows it ${shown ? on : off}`;
 }
 
-function statusIconId(status?: ModStatusResult): string {
-  switch (status?.status.kind) {
-    case 'conflicts':
-    case 'overrides':
-      return 'warning';
-    case 'ok':
-    case undefined:
-      return 'package';
-  }
-}
-
-function statusLabel(status: ModStatus): string {
-  switch (status.kind) {
-    case 'conflicts': return `⚠ ${status.count} conflicts`;
-    case 'overrides': return `⚠ Overrides ${status.count}`;
-    case 'ok': return '';
-  }
-}
-
 // Selection and expansion follow a row across a change on disk, and a mod and a separator may
 // share a name.
 function rowIdentity(kind: 'mod' | 'separator', name: string): string {
@@ -154,30 +135,24 @@ export class SeparatorNode extends vscode.TreeItem {
   }
 }
 
-/** A non-'ok' status overlays a badge onto the icon, description, and tooltip. */
 export class ModNode extends vscode.TreeItem {
   readonly kind = 'mod' as const;
   readonly nexusModId: string | undefined;
   constructor(
-    public readonly mod: Mod, status?: ModStatusResult, public readonly facts?: ModFacts,
+    public readonly mod: Mod, public readonly facts?: ModFacts,
     public readonly files: readonly OriginFile[] = [],
     public readonly folders: readonly OriginFolder[] = [],
     public readonly shown: ChildrenShown = 'all',
   ) {
     super(mod.name, expanderOver([...files, ...folders], shown));
     this.id = rowIdentity(this.kind, mod.name);
+    this.resourceUri = modRowUri(mod.name);
     this.nexusModId = mod.nexusId;
-    const baseTooltip = [mod.name, mod.version, mod.nexusId, mod.archiveFilename]
+    this.description = mod.version ?? '';
+    this.tooltip = [mod.name, mod.version, mod.nexusId, mod.archiveFilename]
       .filter((s): s is string => !!s)
       .join(' · ');
-    this.description = mod.version ?? '';
-    this.tooltip = baseTooltip;
-    this.iconPath = new vscode.ThemeIcon(statusIconId(status));
-    if (status && status.status.kind !== 'ok') {
-      const label = statusLabel(status.status);
-      this.description = [this.description, label].filter(Boolean).join(' ');
-      this.tooltip = [baseTooltip, label, ...status.conflictLines].filter(Boolean).join('\n');
-    }
+    this.iconPath = new vscode.ThemeIcon('package');
     this.contextValue = modContextValue(mod, facts);
     this.checkboxState = mod.enabled
       ? vscode.TreeItemCheckboxState.Checked
@@ -634,7 +609,7 @@ export class ModListProvider
     const folders = this.instanceValue.foldersByMod.get(m.name) ?? [];
     const shown = shownUnder(parentShown, this.matches, m.name);
     const found = shown === 'matching' ? narrowToMatches(files, folders, this.matches) : { files, folders };
-    const row = new ModNode({ ...m, enabled: write?.enabled ?? m.enabled }, this.instanceValue.modStatuses.get(m.name), {
+    const row = new ModNode({ ...m, enabled: write?.enabled ?? m.enabled }, {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked: this.instanceValue.trackedMods.has(m.name),
     }, found.files, found.folders, shown);
     if (write?.marked || this.shapeMarked(m)) markRow(row);

@@ -112,6 +112,17 @@ async function modListing(
   return { files, folders };
 }
 
+// A later provider loses to the earlier, winning one. A case variant of a path its mod already
+// provides is one more name for that mod's copy, never a second provider.
+function provideAsMod(files: FileConflictLookup, file: OriginFile, origin: FileOrigin): void {
+  const existing = files.get(file.relativePath);
+  if (!existing) {
+    files.set({ relativePath: file.relativePath, winner: file.sourcePath, winnerOrigin: origin, providers: [origin] });
+  } else if (!existing.providers.some((provider) => sameOrigin(provider, origin))) {
+    existing.providers.push(origin);
+  }
+}
+
 export async function buildFileConflictIndex(
   entries: readonly ModlistEntry[],
   overwriteFiles: readonly OriginFile[],
@@ -137,24 +148,13 @@ export async function buildFileConflictIndex(
     foldersByMod.set(mod.name, folders);
     if (!mod.enabled) continue;
 
-    for (const file of ownFiles.filter((own) => !own.excluded)) {
-      const existing = files.get(file.relativePath);
-      if (existing) {
-        existing.providers.push(modOrigin(mod.name)); // loses to the earlier (winning) provider
-      } else {
-        files.set({
-          relativePath: file.relativePath,
-          winner: file.sourcePath,
-          winnerOrigin: modOrigin(mod.name),
-          providers: [modOrigin(mod.name)],
-        });
-      }
-    }
+    for (const file of ownFiles.filter((own) => !own.excluded)) provideAsMod(files, file, modOrigin(mod.name));
   }
 
   // The run-time output wins over every mod.
   for (const file of overwriteFiles.filter((own) => !own.excluded)) {
     const existing = files.get(file.relativePath);
+    if (existing && sameOrigin(existing.winnerOrigin, RUNTIME_OUTPUT)) continue;
     files.set({
       relativePath: file.relativePath,
       winner: file.sourcePath,

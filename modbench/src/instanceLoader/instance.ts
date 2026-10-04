@@ -11,7 +11,6 @@ import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
-import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
@@ -89,8 +88,6 @@ export interface InstanceValue {
   /** The plugins the game loads with no line, in the order it loads them; undefined while the
    *  game folder's plugins cannot be listed. */
   readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
-  /** Each mod's conflict/override status, keyed by mod name: the Mods tree's badges. */
-  readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
   /** Overwrite's own files, recursive; none when the folder is absent or empty. */
   readonly overwriteFiles: readonly OriginFile[];
   /** Overwrite's folders, as `overwriteFiles` holds its files. */
@@ -163,7 +160,6 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   gameFolder: { kind: 'notFound', looked: [], setting: GAME_FOLDER_SETTING },
   dataFolderPlugins: { kind: 'unresolved' },
   pluginsLoadedWithNoLine: undefined,
-  modStatuses: new Map(),
   overwriteFiles: [],
   overwriteFolders: [],
   paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() },
@@ -410,7 +406,6 @@ export class Instance implements Subscription {
       gameFolder,
       dataFolderPlugins,
       pluginsLoadedWithNoLine: pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins),
-      modStatuses: computeModStatuses(entries, index),
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
       paths: pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders),

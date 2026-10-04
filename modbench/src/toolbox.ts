@@ -12,6 +12,7 @@ import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
 import { InactiveFileDecorationProvider } from './mods/inactiveFiles';
+import { ModIndicatorDecorations } from './mods/modIndicators';
 import {
   PluginsTreeProvider, type PluginFactsClient, type PluginListSource, type PluginsTreeNode,
 } from './plugins/PluginsTreeProvider';
@@ -477,6 +478,9 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   void instance.refresh();
   const modListProvider = own(new ModListProvider({ instance, access, log: (line) => outputChannel.warn(`[modList] ${line}`) }));
   own(vscode.window.registerFileDecorationProvider(own(new InactiveFileDecorationProvider(instance, vscode.workspace))));
+  for (const provider of own(new ModIndicatorDecorations(instance, vscode.workspace)).providers) {
+    own(vscode.window.registerFileDecorationProvider(provider));
+  }
   // Held on the session as well, because the teardown writers outside this file abandon the
   // send in flight through it.
   const sender = own(createLoadOrderSender(client));
