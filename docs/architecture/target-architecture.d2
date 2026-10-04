@@ -1,5 +1,5 @@
 # The zoom-out. Row = layer, column = process; each mEdit layer sits beside its Modbench
-# twin and means the same thing. A module box carries three lines: its name, its interface,
+# twin and means the same thing. A module box carries three lines: its name, what it owns,
 # what it hides. A cylinder is a store and carries what it holds. No arrows here: references
 # are target-architecture-references.d2, and every data flow is a trace in traces/.
 ...@styles
@@ -19,62 +19,62 @@ modbench_drivers: "MODBENCH · Drivers — the user, in VS Code's trees, panels 
 
 medit_driving: "MEDIT · Driving adapters — the API" {
   class: band; grid-rows: 1
-  http: "HTTP endpoints\ninterface: one endpoint per command and query; the notification\nstream\nhides: the SSE adapter of the notification port; the composition\nroot of mEdit" {class: driving}
+  http: "HTTP endpoints\nowns: the API: one endpoint per command and query, the\nnotification stream, and mEdit's composition root\nhides: the wire: status codes and SSE" {class: driving}
 }
 modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fire a command" {
   class: band; grid-rows: 1
-  toolbox: "Toolbox\ninterface: game, profile, refresh, settings\nhides: nothing" {class: driving}
-  mods: "Mods\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, install, open folder, view on Nexus,\nopen conflicts, compare file, go to mod, exclude, include\nhides: the tree: separators, sort direction, the overwrite row,\neach mod's files, indicators; the conflict table: its states\nand cell values" {class: driving}
-  plugins: "Plugins\ninterface: rows and children in one tree; the status bar; the plugin\ngestures\nhides: the join of the instance value and the client by (origin,\nfilename); the external-change notice" {class: driving}
-  downloads: "Downloads\ninterface: install, upgrade, exclude, include, delete\nhides: the target pick: candidates by Nexus id, always confirmed" {class: driving}
-  editor: "Editor\ninterface: open record · active record\nhides: the record panel's host · Referenced By" {class: driving}
-  drivinglib: "driving lib\ninterface: code two or more of this layer's boxes share\nhides: nothing; it holds no state and no port" {class: driving}
+  toolbox: "Toolbox\nowns: the view of the instance: its game, profile and settings\nhides: nothing" {class: driving}
+  mods: "Mods\nowns: the Mods tree and the conflict table\nhides: how each row and cell is built from the instance value" {class: driving}
+  plugins: "Plugins\nowns: the Plugins tree, the records beneath each plugin, and\nthe status bar\nhides: the join of the instance value and mEdit's answers by\n(origin, filename)" {class: driving}
+  downloads: "Downloads\nowns: the Downloads tree\nhides: how a downloaded file finds the mod it upgrades" {class: driving}
+  editor: "Editor\nowns: the record panel and Referenced By\nhides: the webview host" {class: driving}
+  drivinglib: "driving lib\nowns: code two or more of this layer's boxes share\nhides: nothing; it holds no state and no port" {class: driving}
 }
 
-medit_core: "MEDIT · Core — the write side and the read side; each references Access and the kernel" {
+medit_core: "MEDIT · Core — the write side and the read side; each references the kernel" {
   class: band; grid-rows: 1
-  commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\ncreate plugin, track, decompile, compile, put load order; each\nanswers applied or refusal, per item over a selection\nhides: resolution under the load order; the external-change\ncheck" {class: core}
-  queries: "Queries\ninterface: compare, references, children, the plugin list,\nthe malformed-plugin diagnosis, the record\ntypes a game can create; set and clear the record filter · rebuild\nthe index\nhides: the Index's reads" {class: core}
+  commands: "Commands\nowns: the write side: one handler per gesture\nhides: resolution under the load order; the external-change\ncheck" {class: core}
+  queries: "Queries\nowns: the read side: every answer the API gives, from the\nrecord index\nhides: the Index's reads" {class: core}
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
-  modlist: "modlist commands\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, exclude, include, mod sync\nhides: an uninstall's mark on its downloaded file" {class: core}
-  pluginscommands: "plugins commands\ninterface: enable, disable, move, plugin sync\nhides: the plugin-order rules: masters above dependants,\nblueprint plugins last" {class: core}
-  instancecommands: "instance commands\ninterface: switch profile · put load order · refresh: rebuild the\nindex\nhides: nothing; the Instance adapter writes the profile" {class: core}
-  downloadscommands: "downloads commands\ninterface: exclude, include, delete\nhides: nothing; the Instance adapter writes a downloaded\nfile's metadata" {class: core}
-  install: "install\ninterface: new mod, upgrade\nhides: extraction straight into mods/; a new install that fails\nremoves its folder; an upgrade replaces the folder's\ncontents in place around .git, .gitignore and plugin-source/; the\ninstalled mark on the downloaded file" {class: core}
-  deploy: "deploy commands\ninterface: deploy, purge, with the winners as an argument\nhides: the rules that refuse a deploy" {class: core}
+  modlist: "modlist commands\nowns: the gestures on mods and separators in mod order\nhides: an uninstall's mark on its downloaded file" {class: core}
+  pluginscommands: "plugins commands\nowns: the gestures on plugins in plugin order\nhides: the plugin-order rules" {class: core}
+  instancecommands: "instance commands\nowns: the gestures on the instance itself: profile, load order,\nrefresh\nhides: nothing" {class: core}
+  downloadscommands: "downloads commands\nowns: the gestures on a downloaded file\nhides: nothing" {class: core}
+  install: "install\nowns: putting a mod's files into the instance: a new mod or an\nupgrade\nhides: extraction and what an upgrade keeps" {class: core}
+  deploy: "deploy commands\nowns: deploy and purge\nhides: the rules that refuse a deploy" {class: core}
 }
 
 medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
   class: band; grid-rows: 1
-  loadorder: "Load order state\ninterface: the game release; every plugin in the instance, with its\npath and what provides it: a mod and its folder, the game, or no\nmod; the active plugins, in load order; the plugins loaded with no\nline\nhides: nothing" {class: kernel}
-  codec: "Codec + schema\ninterface: text to document and back; which fields are\nreferences, children and an element's key; which record types can\nbe created\nhides: the game assemblies; Mutagen owns the typing" {class: kernel}
-  ports: "Ports\ninterface: notification: publish: rows changed · plugin changed\n· index status · track progress · external change, per\nmod · untracked plugins in a tracked mod\nhides: nothing; the interface and its payloads; the endpoints\nimplement it" {class: kernel}
+  loadorder: "Load order state\nowns: the load order Mod Management hands Editing: every plugin\nin the instance, what provides it, and the active ones in order\nhides: nothing" {class: kernel}
+  codec: "Codec + schema\nowns: a record as text and as document, and what the schema\nsays of each record type\nhides: the game assemblies; Mutagen owns the typing" {class: kernel}
+  ports: "Ports\nowns: the notification port and its payloads\nhides: nothing; the endpoints implement it" {class: kernel}
 }
 modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven adapter; a kernel box references nothing" {
   class: band; grid-rows: 1
-  loadorderfilecodec: "Load-order file codec\ninterface: parse and byte-faithful splice of plugins.txt; the\nline mechanics that splice rests on: line ranges with their\nEOLs, the pinned BOM, entry-index insertion\nhides: the game's format, per release" {class: kernel}
-  wire: "Wire\ninterface: the generated API types; the webview message protocol\nhides: nothing; generated" {class: kernel}
-  tables: "per-release tables\ninterface: game paths · load-order file destination ·\nthe game's masters\nhides: every game name" {class: kernel}
-  ports: "Ports\ninterface: report a failure by severity; ask one modal question\nand get the answer; a selection's outcome: what landed and each\nrefusal; the invariant lookup and the errno read; move a file to\nthe system trash\nhides: nothing; the types and the severity table (ADR-0019); the\ncomposition root implements them over the window API" {class: kernel}
+  loadorderfilecodec: "Load-order file codec\nowns: plugins.txt as text: parse and byte-faithful splice\nhides: the game's format, per release" {class: kernel}
+  wire: "Wire\nowns: the generated API types; the webview message protocol\nhides: nothing; generated" {class: kernel}
+  tables: "per-release tables\nowns: what differs per game release: paths, the load-order\nfile's destination, the game's masters\nhides: every game name" {class: kernel}
+  ports: "Ports\nowns: how the core reaches the extension host: failures\n(ADR-0019), questions, a selection's outcome, the system trash\nhides: nothing; the composition root implements it" {class: kernel}
 }
 
 medit_driven: "MEDIT · Driven adapters — the record index is a view over the two beside it" {
   class: band; grid-rows: 1
-  index: "Record index — one deep module, rebuildable\ninterface: reads, of the active plugins only · set and clear the\nrecord filter · rebuild · the sequence and its await\nhides: the Indexer and the Store; the reconcile" {
+  index: "Record index — one deep module, rebuildable\nowns: the read model: every plugin's rows, read for the active\nplugins only\nhides: the Indexer and the Store; the reconcile" {
     indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: driven}
     store: "Store\nDuckDB: every plugin's rows" {class: derived}
   }
-  sourceadapter: "Source adapter\ninterface: a plugin's records: get, put, remove, rekey; the records\nchanged since the last commit; the FormKeys a plugin's source\nuses; track a mod; the binary Modbench last wrote\nhides: layout and git" {class: driven}
-  pluginadapter: "Plugin adapter\ninterface: Mutagen read and write; a file's hash\nhides: the game assemblies; the stamp that skips an unchanged\nfile" {class: driven}
+  sourceadapter: "Source adapter\nowns: a tracked plugin's source tree\nhides: layout and git" {class: driven}
+  pluginadapter: "Plugin adapter\nowns: a plugin file, read and written through Mutagen\nhides: the game assemblies; when a file is re-read" {class: driven}
 }
 modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {
   class: band; grid-rows: 1
-  instanceloader: "Instance loader\ninterface: current value and the last read's failure · subscribe ·\nrefresh · sequence · which copies of a file are the same\nhides: the debounce; which file wins each path; which plugins are\nactive; a downloaded file's status; a read failure keeps the last\nvalue; sizes before contents, and the answers it remembers" {class: driven}
-  instanceadapter: "Instance adapter — a repository; MO2 is one implementation\ninterface: parsed reads: the game and where it is, the profile,\nthe mods in order, the load order, each mod's meta, the\ndownloaded files, the game folder's plugins and its Creation Club\nlist, the manager's name and its mod-order file's name, a\nfile's content digest; changes: enable or disable mods and\nplugins; move mods,\nseparators and plugins in their order; add or drop an entry in\nmod order or plugin order; a downloaded file's metadata, a mod's meta, the\nselected profile; get, put, rename in mods/ and\nOverwrite; subscribe: the instance changed\nhides: layout — the directory structure and every path function;\nthe watch; the manager's file formats, their splices and locks;\nwhole-file writes; how it finds the game folder" {class: driven}
-  deployment: "deployment\ninterface: write, remove\nhides: the deployment model and what it writes into the game\nfolder" {class: driven}
-  client: "mEdit client\ninterface: commands, one per handler, each applied or refusal ·\nqueries · subscribe by kind · put load order · start, stop,\nstatus\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}
+  instanceloader: "Instance loader\nowns: the instance value, recomputed whole on every change\nhides: the recompute: which file wins each path, which plugins\nare active" {class: driven}
+  instanceadapter: "Instance adapter — a repository; MO2 is one implementation\nowns: the instance, read and written in the manager's formats,\nand the one watch\nhides: layout; the manager's file formats; how it finds the\ngame folder" {class: driven}
+  deployment: "deployment\nowns: making the game see the instance's winners\nhides: the deployment model and what it writes into the game\nfolder" {class: driven}
+  client: "mEdit client\nowns: Modbench's one reach to mEdit: commands, queries,\nnotifications\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}
 }
 
 medit_data: "MEDIT · Systems of record" {

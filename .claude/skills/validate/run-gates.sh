@@ -153,6 +153,7 @@ if $DOCS; then
     || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
   fi
   if ! $FRONTEND; then
+    [[ -x "$ROOT/modbench/node_modules/.bin/vitest" ]] || (cd "$ROOT/modbench" && npm ci >/dev/null 2>&1)
     (cd "$ROOT/modbench" && npm run test:unit -- src/test/packageJson.test.ts) \
     || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
   fi
