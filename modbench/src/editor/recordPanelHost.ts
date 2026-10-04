@@ -16,7 +16,6 @@ import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands,
 } from './recordLifecycleCommands';
 import { subscribeRecordPanelsToNotifications } from './notificationWiring';
-import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './extendedFieldFiles';
 import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
@@ -47,6 +46,7 @@ export interface EditorCommandDeps {
   // Every open panel re-reads the way a completed reconcile makes it (the plugins mEdit cannot
   // read changed).
   refreshPanels: () => void;
+  fieldFile: ExtendedFieldEditorDeps['fieldFile'];
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
   // Each view's own selection, which that view's keys act on.
@@ -167,7 +167,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended editor's temp root and log.
     ...registerRecordPanelContextCommands({
-      ...writeDeps, fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field), log: (m: string) => outputChannel.debug(m),
+      ...writeDeps, fieldFile: deps.fieldFile, log: (m: string) => outputChannel.debug(m),
       editGateOf: address => editsInFlight.gateShowing(recordPanels, address),
       focusedCell: () => focusedCells.current(),
     }),

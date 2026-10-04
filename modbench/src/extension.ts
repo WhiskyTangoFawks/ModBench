@@ -11,6 +11,7 @@ import { askQuestion } from './dialog';
 import { lastSelectedViewSelection } from './treeViews';
 import { createFocusedView } from './drivingLib/focusedView';
 import { moveToTrash } from './trash';
+import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './medit/extendedFieldFiles';
 import { registerEditorCommands, announceConflictsComputed, ActiveRecordTracker, EditsInFlight } from './editor';
 import { exitEditing } from './editingTeardown';
 import { createToolbox } from './toolbox';
@@ -176,6 +177,7 @@ export function activate(context: vscode.ExtensionContext) {
       viewSelections: new Map(recordViews.map(({ id, view }) => [id, () => view.selection])),
       recordWrite,
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
+      fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),
   );
 
