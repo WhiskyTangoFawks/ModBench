@@ -43,7 +43,7 @@ public sealed class RecordQueryServiceTests
     private static (FakeIndex Manager, RecordQueryService Service) Build(FakeFixtureData fixture)
     {
         var (manager, holder) = FakeIndex.From(fixture);
-        return (manager, new RecordQueryService(manager, holder, SharedSchemaReflector.Instance, new ConflictClassifier()));
+        return (manager, new RecordQueryService(manager, holder, SharedSchemaReflector.Instance));
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class RecordQueryServiceTests
             Release,
             new LoadOrderEntry(PluginName, PluginName, tracked.Origin, 0, Enabled: true, Winning: true),
             new LoadOrderEntry(PluginName, PluginName, untracked.Origin, 1, Enabled: true, Winning: false));
-        var svc = new RecordQueryService(new FakeIndex(reads), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
+        var svc = new RecordQueryService(new FakeIndex(reads), holder, SharedSchemaReflector.Instance);
 
         var plugins = svc.GetPlugins();
 
@@ -314,14 +314,27 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public void GetRecords_ReturnsExactlyWhatReadsSearchProvides()
+    public void GetRecords_AnswersEveryRowFactTheIndexSearchProvides_InQueriesOwnTypes()
     {
-        _reads.SearchResult = new PagedResult<RecordSummary>(
-            [new RecordSummary("000800:Test.esp", PluginName, 0, IsWinner: true, "FromFake", "Data")], 1);
+        _reads.SearchResult = new Index.PagedResult<Index.RecordSummary>(
+            [
+                new Index.RecordSummary(
+                    "000800:Test.esp", PluginName, 3, IsWinner: true, "FromFake", "Data", Index.WorkingTreeState.Modified,
+                    HasContainerChildren: true, ParseDiagnosis: "bad", HasParseFailure: false, FullName: "Full"),
+                new Index.RecordSummary("000801:Test.esp", PluginName, 0, false, null, "Data", Index.WorkingTreeState.Added),
+            ], 7);
 
         var result = _svc.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 10, offset: 0);
 
-        Assert.Same(_reads.SearchResult, result);
+        Assert.Equal(7, result.Total);
+        Assert.Equal(
+            [
+                new RecordSummary(
+                    "000800:Test.esp", PluginName, 3, true, "FromFake", "Data", WorkingTreeState.Modified,
+                    true, "bad", false, "Full"),
+                new RecordSummary("000801:Test.esp", PluginName, 0, false, null, "Data", WorkingTreeState.Added),
+            ],
+            result.Items);
     }
 
     [Fact]
@@ -350,7 +363,7 @@ public sealed class RecordQueryServiceTests
         var compare = _svc.GetCompare(_npc01Key.ToString());
 
         Assert.NotNull(compare);
-        Assert.Single(compare.Overrides);
+        Assert.Equal(ConflictThis.OnlyOne, Assert.Single(compare.Overrides).ConflictThis);
         Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
         Assert.NotEmpty(compare.Diffs);
     }
@@ -907,14 +920,14 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetCreatableRecordTypes_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance);
 
         Assert.Throws<NoLoadOrderException>(() => unloaded.GetCreatableRecordTypes());
     }
 
     private static RecordQueryService ServiceIn(GameRelease release) => new(
         new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), [])),
-        FakeLoadOrder.Of(release), SharedSchemaReflector.Instance, new ConflictClassifier());
+        FakeLoadOrder.Of(release), SharedSchemaReflector.Instance);
 
     [Fact]
     public void GetLightPluginsSupported_AReleaseWithLightPlugins_IsTrue()
@@ -933,7 +946,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetLightPluginsSupported_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance);
 
         Assert.Throws<NoLoadOrderException>(() => unloaded.GetLightPluginsSupported());
     }
@@ -966,7 +979,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPlugins_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance);
         var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetPlugins());
         Assert.Contains("No load order", ex.Message);
     }
@@ -974,7 +987,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetRecords_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance);
         var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetRecords(["npc_"], null, null, 10, 0));
         Assert.Contains("No load order", ex.Message);
     }
@@ -1044,7 +1057,7 @@ public sealed class RecordQueryServiceTests
     public void GetFilter_WithNoLoadOrder_RefusesRatherThanAnsweringUnfiltered()
     {
         var svc = new RecordQueryService(
-            new StubIndex(reads: null), new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+            new StubIndex(reads: null), new LoadOrderHolder(), SharedSchemaReflector.Instance);
 
         Assert.Throws<NoLoadOrderException>(() => svc.GetFilter());
     }
@@ -1083,11 +1096,34 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public async Task RebuildStore_ForwardsGameReleaseAndInstanceRootToTheIndex()
+    public void RebuildStore_ForwardsGameReleaseAndInstanceRootToTheIndex()
     {
-        await _svc.RebuildStore(Release, @"C:\Instance");
+        _svc.RebuildStore(Release, @"C:\Instance");
 
         Assert.Equal(Release, _manager.LastRebuildRelease);
         Assert.Equal(@"C:\Instance", _manager.LastRebuildInstanceRoot);
+    }
+
+    [Fact]
+    public void RebuildStore_ReportsTheRefusalAsData_WhenTheIndexIsHeldElsewhere()
+    {
+        _manager.RefusalToRebuild = "held by another window";
+
+        Assert.Equal("held by another window", _svc.RebuildStore(Release, @"C:\Instance"));
+    }
+
+    [Fact]
+    public void GetRecords_MapsEveryWorkingTreeStateTheIndexHas()
+    {
+        var states = Enum.GetValues<Index.WorkingTreeState>();
+        _reads.SearchResult = new Index.PagedResult<Index.RecordSummary>(
+            [.. states.Select((state, i) => new Index.RecordSummary($"00080{i}:Test.esp", PluginName, 0, true, null, "Data", state))],
+            states.Length);
+
+        var result = _svc.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 10, offset: 0);
+
+        Assert.Equal(
+            states.Select(state => state.ToString()),
+            result.Items.Select(row => row.WorkingTreeState.ToString()));
     }
 }

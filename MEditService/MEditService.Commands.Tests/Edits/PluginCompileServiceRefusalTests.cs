@@ -1,6 +1,7 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -34,31 +35,9 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_WithTwoSourceFilesClaimingTheSameFormKey_RefusesNamingTheFormKey()
+    public async Task Compile_WithTwoDocumentsClaimingTheSameFormKey_RefusesNamingTheFormKey()
     {
-        var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
-        var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", CompileFixture.NpcEditorId);
-        Directory.CreateDirectory(Path.GetDirectoryName(collidingPath) ?? throw new InvalidOperationException($"Expected '{collidingPath}' to have a parent directory."));
-        File.WriteAllText(collidingPath, npcSourceText);
-
-        var result = await CompileService().CompileAsync(_mod.Plugin);
-
-        Assert.False(result.Succeeded);
-        Assert.Contains(_mod.Npc.ToString(), result.RefusalReason);
-        Assert.Empty(result.Diagnostics);
-        Assert.Empty(result.Masters);
-    }
-
-    [Fact]
-    public async Task Compile_WithTwoFilesInOneGroupFolderClaimingTheSameFormKey_RefusesNamingTheFormKey()
-    {
-        var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
-        var npcSourceFile = _mod.NpcSourceFile;
-        var duplicatePath = Path.Combine(
-            Path.GetDirectoryName(npcSourceFile) ?? throw new InvalidOperationException($"Expected '{npcSourceFile}' to have a parent directory."),
-            $"CopyOfFixtureNpc - {_mod.Npc.ID:X6}_{CompileFixture.PluginName}.json");
-        Assert.NotEqual(_mod.NpcSourceFile, duplicatePath);
-        File.WriteAllText(duplicatePath, npcSourceText);
+        TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
         var result = await CompileService().CompileAsync(_mod.Plugin);
 
@@ -67,21 +46,21 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_WithASourceFileItCannotRead_RefusesNamingTheFile()
+    public async Task Compile_WithADocumentItCannotRead_RefusesNamingTheFile()
     {
-        using var held = new FileStream(_mod.NpcSourceFile, FileMode.Open, FileAccess.Read, FileShare.None);
+        var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
+        using var held = TreeTampering.HoldOpen(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
         var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
-        Assert.Contains(
-            Path.GetRelativePath(_mod.ModFolder, _mod.NpcSourceFile), result.RefusalReason, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(_mod.ModFolder, file), result.RefusalReason, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Compile_WithUnparsableSourceFile_RefusesPointingAtDecompile()
     {
-        File.WriteAllText(_mod.NpcSourceFile, "{ not valid json");
+        _mod.Overwrite(_mod.NpcIdentity, "{ not valid json");
 
         var result = await CompileService().CompileAsync(_mod.Plugin);
 
@@ -95,9 +74,9 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     [Fact]
     public async Task Compile_WithSourceFieldRenamedToOneTheCodecDoesNotRead_RefusesNamingTheFileAndDecompile()
     {
-        var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
+        var npcSourceText = _mod.Document(_mod.Npc.ToString()).Require().Body;
         Assert.Contains("\"Race\"", npcSourceText);
-        File.WriteAllText(_mod.NpcSourceFile, npcSourceText.Replace("\"Race\"", "\"RaceOld\""));
+        _mod.Overwrite(_mod.NpcIdentity, npcSourceText.Replace("\"Race\"", "\"RaceOld\""));
 
         var result = await CompileService().CompileAsync(_mod.Plugin);
 

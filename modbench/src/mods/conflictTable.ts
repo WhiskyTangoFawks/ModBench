@@ -1,10 +1,50 @@
 // mods-conflicts.md: one mod's file order conflicts, as a table.
 
-import type { FileCopies, FileOrigin, InstanceValue, InstanceView, Mod, OriginFile } from '../instanceLoader/instance';
+import type { Copy, FileCopies, FileOrigin, InstanceValue, InstanceView, Mod, OriginFile } from '../instanceLoader/instance';
 import { inFileOrderConflict, modOrigin, originLabel, sameOrigin } from '../instanceLoader/fileConflictIndex';
-import type { ConflictCell, ConflictColumn, ConflictRow, ConflictTable } from '../wire/conflictTable';
+import type { ConflictCell, ConflictCellValue, ConflictColumn, ConflictRow, ConflictTable } from '../wire/conflictTable';
 import { byLevel, byName } from './fileTree';
 import { fileStates, worstCell, worstRow } from './conflictStates';
+
+type ReadCopy = Extract<Copy, { kind: 'read' }>;
+
+const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+
+function sizeText(bytes: number): string {
+  let unit = 0;
+  let amount = bytes;
+  while (amount >= 1024 && unit < UNITS.length - 1) {
+    amount /= 1024;
+    unit++;
+  }
+  return `${Math.round(amount * 10) / 10} ${UNITS[unit]}`;
+}
+
+const letterOf = (index: number): string =>
+  (index < 26 ? '' : letterOf(Math.floor(index / 26) - 1)) + String.fromCharCode(65 + (index % 26));
+
+// Copies are winning-most first, so the master is the last. A is reserved for its contents: with
+// the master unreadable, the letters start at B.
+function contentLetters(copies: readonly Copy[]): ReadonlyMap<number, string> {
+  const letters = new Map<number, string>();
+  const master = copies.at(-1);
+  if (master?.kind === 'read') letters.set(master.sameAs, letterOf(0));
+  let next = 1;
+  for (const copy of [...copies].reverse()) {
+    if (copy.kind === 'read' && !letters.has(copy.sameAs)) letters.set(copy.sameAs, letterOf(next++));
+  }
+  return letters;
+}
+
+const twoDigits = (n: number): string => String(n).padStart(2, '0');
+const localDay = (date: Date): string => `${date.getFullYear()}-${twoDigits(date.getMonth() + 1)}-${twoDigits(date.getDate())}`;
+
+const modifiedMs = (copy: ReadCopy): number => Number(copy.modifiedNs / 1_000_000n);
+
+function valueOf(copy: ReadCopy, cellValue: ConflictCellValue, letters: ReadonlyMap<number, string>): string {
+  if (cellValue === 'contents') return letters.get(copy.sameAs) ?? '';
+  return cellValue === 'size' ? sizeText(Number(copy.size)) : localDay(new Date(modifiedMs(copy)));
+}
 
 const message = (text: string): ConflictTable => ({ kind: 'message', text });
 
@@ -52,7 +92,7 @@ function scopeOf({ value, sequence }: Pick<InstanceView, 'value' | 'sequence'>, 
 }
 
 /** Empty until the first read lands, so "not read yet" never reads as "no conflicts". */
-export function conflictTable(view: Pick<InstanceView, 'value' | 'sequence'>, name: string, copies: readonly FileCopies[]): ConflictTable {
+export function conflictTable(view: Pick<InstanceView, 'value' | 'sequence'>, name: string, copies: readonly FileCopies[], cellValue: ConflictCellValue): ConflictTable {
   const scope = scopeOf(view, name);
   if ('shown' in scope) return scope.shown;
   const { value } = view;
@@ -67,6 +107,7 @@ export function conflictTable(view: Pick<InstanceView, 'value' | 'sequence'>, na
   const fileRow = (file: OriginFile, rowName: string): FileRow => {
     const fileCopies = copiesByPath.get(file.relativePath) ?? [];
     const states = fileStates(fileCopies);
+    const letters = contentLetters(fileCopies);
     const winner = value.files.get(file.relativePath)?.winnerOrigin;
     const cells = origins.map((origin): ConflictCell | null => {
       if (!providersOf(value, file).some((provider) => sameOrigin(provider, origin))) return null;
@@ -76,7 +117,7 @@ export function conflictTable(view: Pick<InstanceView, 'value' | 'sequence'>, na
       if (copy === undefined) return { state: null, ...winning };
       return copy.kind === 'unreadable'
         ? { state: null, unreadable: copy.reason, ...winning }
-        : { state: states.cells[index] ?? null, ...winning };
+        : { state: states.cells[index] ?? null, ...stampOf(copy, cellValue, letters), ...winning };
     });
     return { kind: 'file', name: rowName, path: file.relativePath, cells, state: states.row };
   };
@@ -89,6 +130,10 @@ export function conflictTable(view: Pick<InstanceView, 'value' | 'sequence'>, na
     state: worstCell(cellRows.map(({ cells }) => cells[index]?.state ?? null)),
   }));
   return { kind: 'table', columns, rows };
+}
+
+function stampOf(copy: ReadCopy, cellValue: ConflictCellValue, letters: ReadonlyMap<number, string>) {
+  return { value: valueOf(copy, cellValue, letters), size: Number(copy.size), modified: modifiedMs(copy) };
 }
 
 export function conflictPaths(view: Pick<InstanceView, 'value' | 'sequence'>, name: string): string[] {

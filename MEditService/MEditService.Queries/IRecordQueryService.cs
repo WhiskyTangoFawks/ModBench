@@ -1,4 +1,3 @@
-using MEditService.Index;
 using MEditService.Ports;
 using Mutagen.Bethesda;
 
@@ -36,5 +35,7 @@ public interface IRecordQueryService
     (string Sql, string Source)? GetFilter();
     void SetFilter(string sql, string source);
     void ClearFilter();
-    Task RebuildStore(GameRelease gameRelease, string instanceRoot);
+    // The refusal (ADR-0010, ADR-0019) when another window holds this instance's index; null when it
+    // rebuilt.
+    string? RebuildStore(GameRelease gameRelease, string instanceRoot);
 }

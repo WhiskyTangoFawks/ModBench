@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
@@ -10,12 +11,12 @@ public sealed class RecordQueryService(
     IQueryIndex index,
     LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
-    ConflictClassifier conflictClassifier) : IRecordQueryService
+    ILogger<RecordQueryService>? logger = null) : IRecordQueryService
 {
     private readonly IQueryIndex _index = index;
     private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
-    private readonly ConflictClassifier _conflictClassifier = conflictClassifier;
+    private readonly ConflictClassifier _conflictClassifier = new ConflictClassifier(logger);
 
     public IReadOnlyList<PluginRow> GetPlugins()
     {
@@ -70,7 +71,7 @@ public sealed class RecordQueryService(
             RecordTypes: recordTypes, Plugin: pluginFilter, Origin: originFilter, Search: search,
             SearchFormKey: FormKeyOfFormId(search, reads), Limit: limit, Offset: offset,
             GroupOnly: search is null, Unfiltered: unfiltered);
-        return reads.Search(query);
+        return reads.Search(query).ToQuery();
     }
 
     private string? FormKeyOfFormId(string? search, IRecordReads reads) =>
@@ -181,12 +182,12 @@ public sealed class RecordQueryService(
 
     public void ClearFilter() => _index.ClearFilter();
 
-    public Task RebuildStore(GameRelease gameRelease, string instanceRoot) =>
-        _index.RebuildStore(gameRelease, instanceRoot);
+    public string? RebuildStore(GameRelease gameRelease, string instanceRoot) =>
+        _index.RebuildStore(gameRelease, instanceRoot).Refusal;
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,
-            document.Fields, Origin: document.Plugin.Origin, RecordType: document.RecordType,
+            [.. document.Fields.Select(IndexRowMapping.ToQuery)], Origin: document.Plugin.Origin, RecordType: document.RecordType,
             IsPartialForm: document.IsPartialForm,
             ParseDiagnosis: document.ParseDiagnosis);
 

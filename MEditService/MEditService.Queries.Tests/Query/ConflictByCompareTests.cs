@@ -1,16 +1,14 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Index;
-using Mutagen.Bethesda;
+using MEditService.Queries.Tests.TestSupport;
 
 namespace MEditService.Queries.Tests.Query;
 
-public class ConflictClassifierTests
+public class ConflictByCompareTests
 {
-    private static readonly ConflictClassifier Classifier = new ConflictClassifier();
-
-    private static ClassifyResult Classify(IReadOnlyList<RecordDetail> records) =>
-        Classifier.Classify(records, GameRelease.Fallout4);
+    private static IReadOnlyDictionary<string, RecordLookupEntry> Lookups(params (string formKey, string type, string editorId)[] entries) =>
+        entries.ToDictionary(e => e.formKey, e => new RecordLookupEntry(e.type, e.editorId));
 
     private static FieldMetadata Meta(string name, string type = "string") =>
         new(name, type, false, [], []);
@@ -61,7 +59,7 @@ public class ConflictClassifierTests
         var spelled = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
             [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(json))], "Data");
 
-        var diff = Assert.Single(Classify([master, spelled]).Diffs);
+        var diff = Assert.Single(CompareQuery.Classify([master, spelled]).Diffs);
 
         Assert.Equal(equal ? ConflictThis.IdenticalToMaster : ConflictThis.Override, diff.CellStates["B.esp"]);
     }
@@ -77,25 +75,9 @@ public class ConflictClassifierTests
         var spelled = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
             [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(json))], "Data");
 
-        var diff = Assert.Single(Classify([master, spelled]).Diffs);
+        var diff = Assert.Single(CompareQuery.Classify([master, spelled]).Diffs);
 
         Assert.Equal(equal ? ConflictThis.IdenticalToMaster : ConflictThis.Override, diff.CellStates["B.esp"]);
-    }
-
-    [Fact]
-    public void Classify_EmptyList_ReturnsOnlyOne()
-    {
-        var result = Classify([]);
-        Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
-    }
-
-    [Fact]
-    public void Classify_SinglePlugin_ReturnsOnlyOne()
-    {
-        var o = MakeOverride("A.esp", 0, true, ("Name", "Alice"));
-        var result = Classify([o]);
-        Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
-        Assert.Equal(ConflictThis.OnlyOne, result.PluginStates["A.esp"]);
     }
 
     [Fact]
@@ -103,7 +85,7 @@ public class ConflictClassifierTests
     {
         var o = MakeOverride("DLCRobot.esm", 0, true,
             ("Name", "SomeNPC"), ("Level", (object?)10), ("NullField", (object?)null));
-        var result = Classify([o]);
+        var result = CompareQuery.Classify([o]);
 
         Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
         Assert.Contains(result.Diffs, d => d.FieldName == "Name");
@@ -121,7 +103,7 @@ public class ConflictClassifierTests
     {
         var a = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var b = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
-        var ex = Assert.Throws<InvalidOperationException>(() => Classify([a, b]));
+        var ex = Assert.Throws<InvalidOperationException>(() => CompareQuery.Classify([a, b]));
         Assert.Contains("000001:Test.esp", ex.Message);
     }
 
@@ -131,7 +113,7 @@ public class ConflictClassifierTests
         var modA = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, false, ("Name", "FromModA"));
         var modB = MakeOverrideWithOrigin("Shared.esp", "ModB", 1, true, ("Name", "FromModB"));
 
-        var result = Classify([modA, modB]);
+        var result = CompareQuery.Classify([modA, modB]);
 
         Assert.Equal(2, result.PluginStates.Count);
         var nameDiff = Assert.Single(result.Diffs, d => d.FieldName == "Name");
@@ -144,12 +126,12 @@ public class ConflictClassifierTests
     {
         var modA = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, false, ("Name", "Original"));
         var modB = MakeOverrideWithOrigin("Shared.esp", "ModB", 1, true, ("Name", "Original"));
-        var baseline = Classify([modA, modB]);
+        var baseline = CompareQuery.Classify([modA, modB]);
         var baselineDiff = Assert.Single(baseline.Diffs, d => d.FieldName == "Name");
         Assert.Equal(ConflictThis.IdenticalToMaster, baselineDiff.CellStates["Shared.esp|ModB"]);
 
         var modAEdited = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, false, ("Name", "Edited"));
-        var after = Classify([modAEdited, modB]);
+        var after = CompareQuery.Classify([modAEdited, modB]);
 
         var afterDiff = Assert.Single(after.Diffs, d => d.FieldName == "Name");
         Assert.Equal("Edited", afterDiff.Values["Shared.esp|ModA"]);
@@ -161,7 +143,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Alice"));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
         Assert.Equal(ConflictThis.Master, result.PluginStates["A.esp"]);
         Assert.Equal(ConflictThis.IdenticalToMaster, result.PluginStates["B.esp"]);
@@ -172,7 +154,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var empty = MakeOverride("B.esp", 1, true);
-        var result = Classify([master, empty]);
+        var result = CompareQuery.Classify([master, empty]);
         Assert.DoesNotContain("B.esp", result.PluginStates.Keys);
     }
 
@@ -183,7 +165,7 @@ public class ConflictClassifierTests
         var loser = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
         var itm = MakeOverride("C.esp", 2, false, ("Name", "Alice"));
         var winner = MakeOverride("D.esp", 3, true, ("Name", "Charlie"));
-        var result = Classify([master, loser, itm, winner]);
+        var result = CompareQuery.Classify([master, loser, itm, winner]);
         Assert.Equal(ConflictAll.Conflict, result.ConflictAll);
     }
 
@@ -192,7 +174,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 1));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Alice"), ("Level", 5));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
         Assert.Equal(ConflictThis.Master, result.PluginStates["A.esp"]);
         Assert.Equal(ConflictThis.Override, result.PluginStates["B.esp"]);
@@ -203,7 +185,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Bob"));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
         Assert.Equal(ConflictThis.Master, result.PluginStates["A.esp"]);
         Assert.Equal(ConflictThis.Override, result.PluginStates["B.esp"]);
@@ -215,7 +197,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var loser = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Charlie"));
-        var result = Classify([master, loser, winner]);
+        var result = CompareQuery.Classify([master, loser, winner]);
         Assert.Equal(ConflictAll.Conflict, result.ConflictAll);
         Assert.Equal(ConflictThis.ConflictLoses, result.PluginStates["B.esp"]);
         Assert.Equal(ConflictThis.ConflictWins, result.PluginStates["C.esp"]);
@@ -227,7 +209,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 1));
         var loser = MakeOverride("B.esp", 1, false, ("Name", "Bob"), ("Level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Bob"), ("Level", 10));
-        var result = Classify([master, loser, winner]);
+        var result = CompareQuery.Classify([master, loser, winner]);
         Assert.Equal(ConflictAll.Conflict, result.ConflictAll);
     }
 
@@ -238,7 +220,7 @@ public class ConflictClassifierTests
         var contester = MakeOverride("B.esp", 1, false, ("Name", "Bob"), ("Level", 1));
         var nonContester = MakeOverride("C.esp", 2, false, ("Name", null), ("Level", 5));
         var winner = MakeOverride("D.esp", 3, true, ("Name", "Dave"), ("Level", 5));
-        var result = Classify([master, contester, nonContester, winner]);
+        var result = CompareQuery.Classify([master, contester, nonContester, winner]);
         Assert.Equal(ConflictThis.ConflictWins, result.PluginStates["D.esp"]);
     }
 
@@ -248,7 +230,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 1));
         var other = MakeOverride("B.esp", 1, false, ("Name", "Bob"), ("Level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Alice"), ("Level", 5));
-        var result = Classify([master, other, winner]);
+        var result = CompareQuery.Classify([master, other, winner]);
         Assert.Equal(ConflictThis.Override, result.PluginStates["C.esp"]);
     }
 
@@ -258,7 +240,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 1));
         var loser = MakeOverride("B.esp", 1, false, ("Name", "Bob"), ("Level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Charlie"), ("Level", 5));
-        var result = Classify([master, loser, winner]);
+        var result = CompareQuery.Classify([master, loser, winner]);
         Assert.Equal(ConflictThis.ConflictLoses, result.PluginStates["B.esp"]);
     }
 
@@ -268,7 +250,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 1));
         var partial = MakeOverride("B.esp", 1, false, ("Name", null), ("Level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Charlie"), ("Level", 5));
-        var result = Classify([master, partial, winner]);
+        var result = CompareQuery.Classify([master, partial, winner]);
         Assert.NotEqual(ConflictThis.ConflictLoses, result.PluginStates["B.esp"]);
         Assert.Contains(result.Diffs, d => d.FieldName == "Name");
     }
@@ -279,7 +261,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var partial = MakeOverride("B.esp", 1, false, ("Name", null));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Alice"));
-        var result = Classify([master, partial, winner]);
+        var result = CompareQuery.Classify([master, partial, winner]);
         Assert.NotEqual(ConflictAll.Conflict, result.ConflictAll);
     }
 
@@ -288,7 +270,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Level", 1), ("Name", "Alice"));
         var winner = MakeOverride("C.esp", 1, true, ("Level", null), ("Name", "Bob"));
-        var result = Classify([master, winner]);
+        var result = CompareQuery.Classify([master, winner]);
 
         var level = result.Diffs.Single(d => d.FieldName == "Level");
         Assert.Equal("A.esp", level.WinnerColumn);
@@ -300,7 +282,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Level", 1));
         var partial = MakePartialFormOverrideWhoseOwnFieldsAreExcludedRegardlessOfContent("B.esp", 1, true, ("Level", 999));
-        var result = Classify([master, partial]);
+        var result = CompareQuery.Classify([master, partial]);
 
         Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
     }
@@ -311,7 +293,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("Level", 1));
         var partial = MakePartialFormOverrideWhoseOwnFieldsAreExcludedRegardlessOfContent("B.esp", 1, false, ("Level", 999));
         var winner = MakeOverride("C.esp", 2, true, ("Level", 5));
-        var result = Classify([master, partial, winner]);
+        var result = CompareQuery.Classify([master, partial, winner]);
 
         Assert.DoesNotContain(result.Diffs, d => d.CellStates.ContainsKey("B.esp"));
     }
@@ -323,7 +305,7 @@ public class ConflictClassifierTests
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[1,2,3]");
         var master = MakeOverride("A.esp", 0, false, ("Keywords", (object?)arrayA));
         var override1 = MakeOverride("B.esp", 1, true, ("Keywords", (object?)arrayB));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
     }
 
@@ -334,7 +316,7 @@ public class ConflictClassifierTests
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[4,5,6]");
         var master = MakeOverride("A.esp", 0, false, ("Keywords", (object?)arrayA));
         var override1 = MakeOverride("B.esp", 1, true, ("Keywords", (object?)arrayB));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 
@@ -345,7 +327,7 @@ public class ConflictClassifierTests
             [new FieldValue(Meta("Name"), "Alice"), new FieldValue(Meta("Level"), 1)], Origin: "Data");
         var partial = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
             [new FieldValue(Meta("Level"), 5)], Origin: "Data");
-        var result = Classify([master, partial]);
+        var result = CompareQuery.Classify([master, partial]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
         Assert.Equal(ConflictThis.Override, result.PluginStates["B.esp"]);
     }
@@ -359,7 +341,7 @@ public class ConflictClassifierTests
             [LinkArrayField("Packages", (object?)arrayA)], Origin: "Data");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
             [LinkArrayField("Packages", (object?)arrayB)], Origin: "Data");
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
         Assert.Equal(ConflictThis.Override, result.Diffs.Single().CellStates["B.esp"]);
     }
@@ -373,7 +355,7 @@ public class ConflictClassifierTests
             [LinkArrayField("scriptProperties", (object?)arrayA)], Origin: "Data");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
             [LinkArrayField("scriptProperties", (object?)arrayB)], Origin: "Data");
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 
@@ -386,7 +368,7 @@ public class ConflictClassifierTests
             [LinkArrayField("scriptProperties", (object?)arrayA)], Origin: "Data");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
             [LinkArrayField("scriptProperties", (object?)arrayB)], Origin: "Data");
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 
@@ -397,7 +379,7 @@ public class ConflictClassifierTests
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[2,1]");
         var master = MakeOverride("A.esp", 0, false, ("Keywords", (object?)arrayA));
         var override1 = MakeOverride("B.esp", 1, true, ("Keywords", (object?)arrayB));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 
@@ -406,7 +388,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Alice"));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal(ConflictThis.IdenticalToMaster, nameDiff.CellStates["B.esp"]);
         Assert.False(nameDiff.CellStates.ContainsKey("A.esp"));
@@ -417,7 +399,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Bob"));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal(ConflictThis.Override, nameDiff.CellStates["B.esp"]);
         Assert.False(nameDiff.CellStates.ContainsKey("A.esp"));
@@ -429,7 +411,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var loser = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Charlie"));
-        var result = Classify([master, loser, winner]);
+        var result = CompareQuery.Classify([master, loser, winner]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal(ConflictThis.ConflictWins, nameDiff.CellStates["C.esp"]);
         Assert.Equal(ConflictThis.ConflictLoses, nameDiff.CellStates["B.esp"]);
@@ -442,7 +424,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var fieldWinner = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
         var recordWinner = MakeOverride("C.esp", 2, true, ("Name", null));
-        var result = Classify([master, fieldWinner, recordWinner]);
+        var result = CompareQuery.Classify([master, fieldWinner, recordWinner]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal(ConflictThis.Override, nameDiff.CellStates["B.esp"]);
         Assert.False(nameDiff.CellStates.ContainsKey("C.esp"));
@@ -454,7 +436,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var nonWinner = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Bob"));
-        var result = Classify([master, nonWinner, winner]);
+        var result = CompareQuery.Classify([master, nonWinner, winner]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal(ConflictThis.Override, nameDiff.CellStates["B.esp"]);
     }
@@ -465,7 +447,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var partial = MakeOverride("B.esp", 1, false, ("Name", null));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Charlie"));
-        var result = Classify([master, partial, winner]);
+        var result = CompareQuery.Classify([master, partial, winner]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.False(nameDiff.CellStates.ContainsKey("B.esp"));
         Assert.True(nameDiff.CellStates.ContainsKey("C.esp"));
@@ -476,7 +458,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Alice"));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal(ConflictAll.NoConflict, nameDiff.ConflictAll);
     }
@@ -486,7 +468,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Bob"));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal(ConflictAll.Override, nameDiff.ConflictAll);
     }
@@ -497,7 +479,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var loser = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Charlie"));
-        var result = Classify([master, loser, winner]);
+        var result = CompareQuery.Classify([master, loser, winner]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal(ConflictAll.Conflict, nameDiff.ConflictAll);
     }
@@ -507,7 +489,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 5));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Bob"), ("Level", 5));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         var levelDiff = result.Diffs.First(d => d.FieldName == "Level");
@@ -528,7 +510,7 @@ public class ConflictClassifierTests
         var master = MakeStructOverride("A.esp", 0, false, structMeta, masterVal);
         var override1 = MakeStructOverride("B.esp", 1, true, structMeta, overrideVal);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
         var xChild = RequireChildren(boundsDiff).First(c => c.FieldName == "X");
@@ -555,7 +537,7 @@ public class ConflictClassifierTests
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
             [new FieldValue(itemsMeta, overrideVal)], Origin: "Data");
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var itemsDiff = result.Diffs.First(d => d.FieldName == "Items");
         var elementDiff = RequireChildren(itemsDiff).First(c => c.FieldName == "[1]");
@@ -573,7 +555,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 5));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Bob"), ("Level", 5));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 
@@ -591,7 +573,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Bob"));
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Null(nameDiff.Children);
     }
@@ -609,7 +591,7 @@ public class ConflictClassifierTests
         var master = MakeStructOverride("A.esp", 0, false, structMeta, masterVal);
         var override1 = MakeStructOverride("B.esp", 1, true, structMeta, overrideVal);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
         Assert.NotNull(boundsDiff.Children);
@@ -637,7 +619,7 @@ public class ConflictClassifierTests
         var master = MakeStructOverride("A.esp", 0, false, structMeta, val);
         var override1 = MakeStructOverride("B.esp", 1, true, structMeta, val);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
         Assert.NotNull(boundsDiff.Children);
@@ -659,7 +641,7 @@ public class ConflictClassifierTests
         var loser = MakeStructOverride("B.esp", 1, false, structMeta, loserVal);
         var winner = MakeStructOverride("C.esp", 2, true, structMeta, winnerVal);
 
-        var result = Classify([master, loser, winner]);
+        var result = CompareQuery.Classify([master, loser, winner]);
 
         var posDiff = result.Diffs.First(d => d.FieldName == "Pos");
         Assert.NotNull(posDiff.Children);
@@ -682,7 +664,7 @@ public class ConflictClassifierTests
         var override1 = MakeStructOverride("B.esp", 1, false, structMeta, overrideVal);
         var winnerWithoutField = new RecordDetail("000001:Test.esp", "C.esp", 2, true, null, [], Origin: "Data");
 
-        var result = Classify([master, override1, winnerWithoutField]);
+        var result = CompareQuery.Classify([master, override1, winnerWithoutField]);
 
         var posDiff = result.Diffs.FirstOrDefault(d => d.FieldName == "Pos");
         Assert.NotNull(posDiff);
@@ -703,7 +685,7 @@ public class ConflictClassifierTests
         var master = MakeStructOverride("A.esp", 0, false, structMeta, masterVal);
         var override1 = MakeStructOverride("B.esp", 1, true, structMeta, overrideVal);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
         Assert.NotNull(boundsDiff.Children);
@@ -727,7 +709,7 @@ public class ConflictClassifierTests
         var master = MakeStructOverride("A.esp", 0, false, structMeta, masterVal);
         var override1 = MakeStructOverride("B.esp", 1, true, structMeta, overrideVal);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
         Assert.NotNull(boundsDiff.Children);
@@ -751,7 +733,7 @@ public class ConflictClassifierTests
         var master = MakeStructOverride("A.esp", 0, false, structMeta, masterVal);
         var override1 = MakeStructOverride("B.esp", 1, true, structMeta, overrideVal);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var xChild = RequireChildren(result.Diffs.First(d => d.FieldName == "Pos")).First(c => c.FieldName == "X");
         Assert.Equal("B.esp", xChild.WinnerColumn);
@@ -771,7 +753,7 @@ public class ConflictClassifierTests
         var master = MakeStructOverride("A.esp", 0, false, structMeta, masterVal);
         var override1 = MakeStructOverride("B.esp", 1, true, structMeta, overrideVal);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var yChild = RequireChildren(result.Diffs.First(d => d.FieldName == "Bounds")).FirstOrDefault(c => c.FieldName == "Y");
         Assert.NotNull(yChild);
@@ -787,10 +769,7 @@ public class ConflictClassifierTests
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
             [new FieldValue(meta, "000BBB:Test.esp")], Origin: "Data");
 
-        static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
-            fk == "000AAA:Test.esp" ? new MEditService.Index.RecordLookupEntry("race", "GoodRace") : null;
-
-        var result = Classifier.Classify([master, override1], GameRelease.Fallout4, Resolve);
+        var result = CompareQuery.Classify([master, override1], resolvable: Lookups(("000AAA:Test.esp", "race", "GoodRace")));
 
         var diff = result.Diffs.First(d => d.FieldName == "Race");
         Assert.NotNull(diff.Resolutions);
@@ -806,10 +785,7 @@ public class ConflictClassifierTests
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
             [LinkArrayField("Keywords", (object?)arrayA)], Origin: "Data");
 
-        static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
-            fk == "000AAA:Test.esp" ? new MEditService.Index.RecordLookupEntry("kywd", "GoodKeyword") : null;
-
-        var result = Classifier.Classify([master], GameRelease.Fallout4, Resolve);
+        var result = CompareQuery.Classify([master], resolvable: Lookups(("000AAA:Test.esp", "kywd", "GoodKeyword")));
 
         var arrayDiff = result.Diffs.First(d => d.FieldName == "Keywords");
         Assert.Null(arrayDiff.Resolutions);
@@ -833,10 +809,7 @@ public class ConflictClassifierTests
         var master = MakeStructOverride("A.esp", 0, false, structMeta, good);
         var override1 = MakeStructOverride("B.esp", 1, true, structMeta, dangling);
 
-        static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
-            fk == "000FFF:Test.esp" ? new MEditService.Index.RecordLookupEntry("fact", "GoodFaction") : null;
-
-        var result = Classifier.Classify([master, override1], GameRelease.Fallout4, Resolve);
+        var result = CompareQuery.Classify([master, override1], resolvable: Lookups(("000FFF:Test.esp", "fact", "GoodFaction")));
 
         var factions = result.Diffs.First(d => d.FieldName == "Factions");
         var checkErrors = RequireCheckErrors(factions);
@@ -860,22 +833,7 @@ public class ConflictClassifierTests
         var partial = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
             [new FieldValue(meta, link)], "Data", IsPartialForm: true);
 
-        static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
-            new MEditService.Index.RecordLookupEntry("race", "GoodRace");
-
-        var diff = Assert.Single(Classifier.Classify([master, partial], GameRelease.Fallout4, Resolve).Diffs);
-
-        Assert.Null(diff.CheckErrors);
-    }
-
-    [Fact]
-    public void Classify_NoResolverPassed_CheckErrorsStayNull()
-    {
-        var meta = new FieldMetadata("Race", "formKey", false, ["Race"], []);
-        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
-            [new FieldValue(meta, "000AAA:Test.esp")], Origin: "Data");
-
-        var diff = Assert.Single(Classify([master]).Diffs);
+        var diff = Assert.Single(CompareQuery.Classify([master, partial], resolvable: Lookups(("000AAA:Test.esp", "race", "GoodRace"))).Diffs);
 
         Assert.Null(diff.CheckErrors);
     }
@@ -890,9 +848,7 @@ public class ConflictClassifierTests
         var val = JsonSerializer.Deserialize<JsonElement>("""{"Faction":"000FFF:Test.esp","Rank":1}""");
         var master = MakeStructOverride("A.esp", 0, true, structMeta, val);
 
-        static MEditService.Index.RecordLookupEntry? EveryFormKeyDangling(string _) => null;
-
-        var result = Classifier.Classify([master], GameRelease.Fallout4, EveryFormKeyDangling);
+        var result = CompareQuery.Classify([master]);
 
         var factionsDiff = result.Diffs.First(d => d.FieldName == "Factions");
         var factionChild = RequireChildren(factionsDiff).First(c => c.FieldName == "Faction");
@@ -900,17 +856,5 @@ public class ConflictClassifierTests
 
         Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.Unresolved, RequireResolutions(factionChild)["A.esp"].State);
         Assert.Null(rankChild.Resolutions);
-    }
-
-    [Fact]
-    public void Classify_NoResolverPassed_ResolutionsStayNull()
-    {
-        var meta = new FieldMetadata("Race", "formKey", false, ["Race"], []);
-        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
-            [new FieldValue(meta, "000AAA:Test.esp")], Origin: "Data");
-
-        var result = Classify([master]);
-
-        Assert.Null(result.Diffs.First(d => d.FieldName == "Race").Resolutions);
     }
 }

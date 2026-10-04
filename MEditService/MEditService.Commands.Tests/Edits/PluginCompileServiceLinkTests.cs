@@ -120,8 +120,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     [Fact]
     public async Task Compile_ForALinkIntoATrackedPlugin_ReadsThatPluginsFile_NotItsWorkingTree()
     {
-        File.Delete(SourceDocumentPath.Of(
-            _targetFolder, TargetName, "kywd", _targetKeyword.ToString(), TargetKeywordEditorId, GameRelease.Fallout4));
+        TrackedTree.Remove(_targetFolder, _target, new RecordIdentity(_targetKeyword.ToString(), "kywd", TargetKeywordEditorId));
 
         var result = await CompileHost();
 

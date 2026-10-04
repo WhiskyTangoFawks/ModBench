@@ -1,7 +1,5 @@
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -12,7 +10,7 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>Two mod folders and one load order, since a copy across plugins is unaskable of one.
 /// <see cref="SourcePlugin"/> defaults untracked: a Data-directory master's own file is its only
 /// representation. No index anywhere in it.</summary>
-public sealed class CopyFixture : IDisposable
+public sealed class CopyFixture : IDisposable, ITrackedPlugins
 {
     public const string SourcePluginName = "Source.esm";
     public const string SourceOrigin = "SourceMod";
@@ -88,22 +86,11 @@ public sealed class CopyFixture : IDisposable
         CopyHandler = TestEditService.CopyHandler(holder);
     }
 
-    /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
-    public SourceDocument? Document(PluginAddress plugin, string formKey) =>
-        TrackedTree.Document(ModFolderOf(plugin), plugin, formKey);
-
-    public SourceDocument? CommittedDocument(PluginAddress plugin, RecordIdentity identity) =>
-        TrackedTree.CommittedDocument(ModFolderOf(plugin), plugin, identity);
-
-    public IReadOnlyList<string> DestinationGitStatus() => TrackedTree.GitStatus(DestinationModFolder);
-
     /// <summary>Commits the destination's working tree, so what it holds now is what HEAD holds —
     /// the state a later working-tree deletion does not free.</summary>
     public void CommitDestination()
     {
-        var gitDir = Path.Combine(DestinationModFolder, ".git");
-        GitProbe.Run(gitDir, DestinationModFolder, "add", "-A");
-        GitProbe.Run(gitDir, DestinationModFolder, "commit", "-m", "fixture");
+        TrackedTree.Commit(DestinationModFolder);
     }
 
     /// <summary>The source plugin's own bytes, so "a copy, not a move" is asserted against the file
@@ -114,13 +101,6 @@ public sealed class CopyFixture : IDisposable
         plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder;
 
     public static CopyFixture Create(bool trackSource = false) => new(trackSource);
-
-    // Asked of the repository, matching TwoModFixture's own reason: computing the path needs an
-    // order index this fixture has no reason to track.
-    public string SourceFileFor(PluginAddress plugin, FormKey formKey, string recordType, string? editorId) =>
-        SourceDocumentPath.Of(
-            plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder,
-            plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
 
     public void Dispose()
     {

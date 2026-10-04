@@ -1,6 +1,5 @@
 using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
-using MEditService.Index;
 using MEditService.LoadOrder;
 
 namespace MEditService.Queries;
@@ -99,7 +98,7 @@ public record FieldDiff(
     // An array element's own index in each column's array that holds it; null on any other node.
     IReadOnlyDictionary<string, int>? Indexes = null);
 
-public record ClassifyResult(
+internal sealed record ClassifyResult(
     ConflictAll ConflictAll,
     IReadOnlyDictionary<string, ConflictThis> PluginStates,
     IReadOnlyList<FieldDiff> Diffs);

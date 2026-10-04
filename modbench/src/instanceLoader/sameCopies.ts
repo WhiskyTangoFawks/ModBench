@@ -5,7 +5,7 @@ import { foldPath } from './fileConflictIndex';
 /** One provider's copy of a file. Two copies of one file with the same `sameAs` hold the same
  *  bytes. */
 export type Copy = { readonly origin: FileOrigin } & (
-  | { readonly kind: 'read'; readonly sameAs: number }
+  | { readonly kind: 'read'; readonly sameAs: number; readonly size: bigint; readonly modifiedNs: bigint }
   | { readonly kind: 'unreadable'; readonly reason: string });
 
 export interface FileCopies {
@@ -48,16 +48,24 @@ function copyPathsIn(value: CopiesIn): (origin: FileOrigin, relativePath: string
 
 type Contents = FileRead<string> | { readonly kind: 'ownSize' };
 
-function numbered(contents: readonly { readonly origin: FileOrigin; readonly contents: Contents }[]): Copy[] {
+interface Stamped {
+  readonly origin: FileOrigin;
+  readonly stamp: FileRead<FileStamp>;
+  readonly contents: Contents;
+}
+
+function numbered(copies: readonly Stamped[]): Copy[] {
   const numbers = new Map<string, number>();
   let next = 0;
-  return contents.map(({ origin, contents: read }) => {
-    if (read.kind === 'unreadable') return { origin, kind: 'unreadable', reason: read.reason };
-    if (read.kind === 'ownSize') return { origin, kind: 'read', sameAs: next++ };
-    const known = numbers.get(read.answer);
-    if (known !== undefined) return { origin, kind: 'read', sameAs: known };
-    numbers.set(read.answer, next);
-    return { origin, kind: 'read', sameAs: next++ };
+  return copies.map(({ origin, stamp, contents }) => {
+    if (contents.kind === 'unreadable') return { origin, kind: 'unreadable', reason: contents.reason };
+    if (stamp.kind === 'unreadable') return { origin, kind: 'unreadable', reason: stamp.reason };
+    const { size, modifiedNs } = stamp.answer;
+    if (contents.kind === 'ownSize') return { origin, kind: 'read', sameAs: next++, size, modifiedNs };
+    const known = numbers.get(contents.answer);
+    if (known !== undefined) return { origin, kind: 'read', sameAs: known, size, modifiedNs };
+    numbers.set(contents.answer, next);
+    return { origin, kind: 'read', sameAs: next++, size, modifiedNs };
   });
 }
 
@@ -76,7 +84,7 @@ export class SameCopies {
       }));
       const sizes = stamped.flatMap(({ stamp }) => (stamp.kind === 'read' ? [stamp.answer.size] : []));
       const contents = await Promise.all(stamped.map(async ({ origin, path, stamp }) =>
-        ({ origin, contents: await this.contentsOf(path, stamp, sizes) })));
+        ({ origin, stamp, contents: await this.contentsOf(path, stamp, sizes) })));
       return { relativePath, copies: numbered(contents) };
     }));
   }

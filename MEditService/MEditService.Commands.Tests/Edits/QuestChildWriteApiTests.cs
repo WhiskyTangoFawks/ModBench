@@ -21,7 +21,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string QuestFile => _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
+    private string QuestText => _fixture.Document(_fixture.Quest.ToString()).Require().Body;
 
     private async Task<IQuestGetter> CompiledQuest()
     {
@@ -38,11 +38,8 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private readonly List<IDisposable> _overlays = [];
 
-    private void AssertOnlyTheQuestFileChanged()
-    {
-        var changed = Assert.Single(_fixture.GitStatus());
-        Assert.EndsWith(Path.GetFileName(QuestFile), changed, StringComparison.Ordinal);
-    }
+    private void AssertOnlyTheQuestDocumentChanged() =>
+        Assert.Equal([_fixture.Quest.ToString()], _fixture.ChangedFormKeys());
 
     private IReadOnlyList<string> QuestSlot(string slotName) => SlotOf(_fixture.Quest, slotName);
 
@@ -68,16 +65,16 @@ public sealed class QuestChildWriteApiTests : IDisposable
     public async Task SettingAQuestChildsField_ChangesTheQuestDocumentAtThatPathAndNowhereElse_AndCompilesInOrder(string kind)
     {
         var (child, editorId, siblings) = Kind(kind);
-        var before = File.ReadAllText(QuestFile);
-        Assert.Empty(_fixture.GitStatus());
+        var before = QuestText;
+        Assert.Empty(_fixture.ChangedFormKeys());
 
         var result = EditService().Set(_fixture.Plugin, child.ToString(), "EditorID", Json($"\"Renamed{kind}\""));
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             before.Replace($"\"EditorID\": \"{editorId}\"", $"\"EditorID\": \"Renamed{kind}\"", StringComparison.Ordinal),
-            File.ReadAllText(QuestFile));
-        AssertOnlyTheQuestFileChanged();
+            QuestText);
+        AssertOnlyTheQuestDocumentChanged();
 
         Assert.Equal($"Renamed{kind}", _fixture.Document(child.ToString()).Require().EditorId);
         var compiled = siblings(await CompiledQuest()).ToList();
@@ -92,15 +89,15 @@ public sealed class QuestChildWriteApiTests : IDisposable
     [Fact]
     public async Task RenamingANestedResponse_ChangesTheQuestDocumentAtTheResponsesElementOnly_AndCompilesInOrder()
     {
-        var before = File.ReadAllText(QuestFile);
+        var before = QuestText;
 
         var result = EditService().Set(_fixture.Plugin, _fixture.Response.ToString(), "EditorID", Json("\"RenamedResponse\""));
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             before.Replace($"\"EditorID\": \"{ContainerModFixture.ResponseEditorId}\"", "\"EditorID\": \"RenamedResponse\"", StringComparison.Ordinal),
-            File.ReadAllText(QuestFile));
-        AssertOnlyTheQuestFileChanged();
+            QuestText);
+        AssertOnlyTheQuestDocumentChanged();
 
         Assert.Equal("RenamedResponse", _fixture.Document(_fixture.Response.ToString()).Require().EditorId);
         Assert.Contains(_fixture.Response.ToString(), SlotOf(_fixture.DialogTopic, nameof(DialogTopic.Responses)));
@@ -128,8 +125,8 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.True(removed.Applied, removed.Message);
         Assert.Equal([3, 2], LineNumbersInDocument());
 
-        AssertOnlyTheQuestFileChanged();
-        Assert.Contains($"\"{ContainerModFixture.Response2EditorId}\"", File.ReadAllText(QuestFile), StringComparison.Ordinal);
+        AssertOnlyTheQuestDocumentChanged();
+        Assert.Contains($"\"{ContainerModFixture.Response2EditorId}\"", QuestText, StringComparison.Ordinal);
         Assert.Equal(
             [3, 2],
             (await CompiledQuest()).DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic)
@@ -138,7 +135,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private int[] LineNumbersInDocument()
     {
-        var root = JsonNode.Parse(File.ReadAllText(QuestFile)).Require().AsObject();
+        var root = JsonNode.Parse(QuestText).Require().AsObject();
         var response = root[nameof(Quest.DialogTopics)].Require().AsArray()
             .SelectMany(t => t.Require()[nameof(DialogTopic.Responses)] as JsonArray ?? [])
             .Single(r => r.Require()[nameof(IMajorRecordGetter.FormKey)].Require().GetValue<string>() == _fixture.Response.ToString()).Require();
@@ -151,12 +148,12 @@ public sealed class QuestChildWriteApiTests : IDisposable
         var result = _fixture.DeleteHandler.DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.DialogTopic.ToString())]);
 
         Assert.Empty(result.Refused);
-        var after = File.ReadAllText(QuestFile);
+        var after = QuestText;
         foreach (var gone in new[] { ContainerModFixture.DialogTopicEditorId, ContainerModFixture.ResponseEditorId, ContainerModFixture.Response2EditorId })
             Assert.DoesNotContain($"\"{gone}\"", after, StringComparison.Ordinal);
         foreach (var kept in new[] { ContainerModFixture.DialogTopic2EditorId, ContainerModFixture.DialogTopic3EditorId, ContainerModFixture.DialogBranchEditorId, ContainerModFixture.SceneEditorId })
             Assert.Contains($"\"{kept}\"", after, StringComparison.Ordinal);
-        AssertOnlyTheQuestFileChanged();
+        AssertOnlyTheQuestDocumentChanged();
 
         foreach (var (gone, recordType, editorId) in new[]
                  {
@@ -182,10 +179,10 @@ public sealed class QuestChildWriteApiTests : IDisposable
             _fixture.Plugin, _fixture.DialogTopic2.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
-        var after = File.ReadAllText(QuestFile);
+        var after = QuestText;
         Assert.Contains(result.NewFormKey.Require(), after, StringComparison.Ordinal);
         Assert.DoesNotContain(_fixture.DialogTopic2.ToString(), after, StringComparison.Ordinal);
-        AssertOnlyTheQuestFileChanged();
+        AssertOnlyTheQuestDocumentChanged();
 
         Assert.Equal(
             [_fixture.DialogTopic.ToString(), result.NewFormKey.Require(), _fixture.DialogTopic3.ToString()],
@@ -199,14 +196,14 @@ public sealed class QuestChildWriteApiTests : IDisposable
     [Fact]
     public void ARefusedQuestChildEdit_LeavesTheQuestDocumentAndTheSceneItselfUntouched()
     {
-        var before = File.ReadAllText(QuestFile);
+        var before = QuestText;
         var sceneBefore = _fixture.Document(_fixture.Scene.ToString()).Require().Body;
 
         var result = EditService().Set(_fixture.Plugin, _fixture.Scene.ToString(), "NoSuchField", Json("1"));
 
         Assert.False(result.Applied);
-        Assert.Equal(before, File.ReadAllText(QuestFile));
-        Assert.Empty(_fixture.GitStatus());
+        Assert.Equal(before, QuestText);
+        Assert.Empty(_fixture.ChangedFormKeys());
         Assert.Equal(sceneBefore, _fixture.Document(_fixture.Scene.ToString()).Require().Body);
     }
 
@@ -227,10 +224,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
             Assert.Single(JsonDocument.Parse(quest.Body).RootElement.GetProperty("Scenes").EnumerateArray())
                 .GetProperty("FormKey").GetString());
 
-        var questFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.SceneEditorId);
-        Assert.Equal("Quests", Path.GetFileName(Path.GetDirectoryName(questFile)));
-        Assert.Contains($"\"FormKey\": \"{fixture.Quest}\"", File.ReadAllText(questFile), StringComparison.Ordinal);
-        Assert.Empty(Directory.EnumerateDirectories(Path.Combine(fixture.DestinationSourceRoot, "Quests")));
+        Assert.Equal(fixture.Quest.ToString(), fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.SceneEditorId).FormKey);
 
         var compiled = (await CompileAndImport(fixture)).Quests.Single(q => q.FormKey == fixture.Quest);
         Assert.Equal(ContainerCopyFixture.SceneEditorId, Assert.Single(compiled.Scenes).EditorID);
@@ -282,9 +276,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
             Assert.Single(JsonDocument.Parse(topic.Body).RootElement.GetProperty("Responses").EnumerateArray())
                 .GetProperty("FormKey").GetString());
 
-        var questsFolder = Path.Combine(fixture.DestinationSourceRoot, "Quests");
-        Assert.Single(Directory.EnumerateFiles(questsFolder), f => Path.GetFileName(f) != "GroupRecordData.json");
-        Assert.Empty(Directory.EnumerateDirectories(questsFolder));
+        Assert.Equal(fixture.Quest.ToString(), fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response2EditorId).FormKey);
 
         var compiledTopic = Assert.Single((await CompileAndImport(fixture)).Quests.Single(q => q.FormKey == fixture.Quest).DialogTopics);
         Assert.Equal(ContainerCopyFixture.Response2EditorId, Assert.Single(compiledTopic.Responses).EditorID);

@@ -1,12 +1,14 @@
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class EmbeddedChildEditTests : IDisposable
+public sealed partial class EmbeddedChildEditTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
 
@@ -23,27 +25,24 @@ public sealed class EmbeddedChildEditTests : IDisposable
             _fixture.EmbedCell.ToString(), "cell", ContainerModPlugin.EmbedCellEditorId).Require().Body;
 
     [Fact]
-    public void EditingAnEmbeddedPlacedRefsField_RewritesOnlyThatFieldInTheOwningCellsFile()
+    public void EditingAnEmbeddedPlacedRefsField_RewritesOnlyThatFieldInTheOwningCellsDocument()
     {
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-        var before = File.ReadAllText(file);
-        Assert.Empty(_fixture.GitStatus());
+        var before = EmbedCellDocument().Body;
+        Assert.Empty(_fixture.ChangedFormKeys());
 
         var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotEmpty(_fixture.GitStatus());
-        Assert.Equal(before.Replace("\"Scale\": 1.0", "\"Scale\": 2.5", StringComparison.Ordinal), File.ReadAllText(file));
+        Assert.NotEmpty(_fixture.ChangedFormKeys());
+        Assert.Equal(before.Replace("\"Scale\": 1.0", "\"Scale\": 2.5", StringComparison.Ordinal), EmbedCellDocument().Body);
     }
 
     [Fact]
     public void EditingAnEmbeddedChild_LeavesTheParentsOwnFieldsAlone()
     {
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("7.0")).Applied);
 
-        var after = File.ReadAllText(file);
+        var after = EmbedCellDocument().Body;
         Assert.Contains("\"WaterHeight\": 10.0", after, StringComparison.Ordinal);
         Assert.Contains($"\"EditorID\": \"{ContainerModPlugin.EmbedCellEditorId}\"", after, StringComparison.Ordinal);
     }
@@ -82,7 +81,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         Assert.Contains("placement", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body);
-        Assert.Empty(_fixture.GitStatus());
+        Assert.Empty(_fixture.ChangedFormKeys());
     }
 
     [Fact]
@@ -110,7 +109,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         var cell = WorkingTreeCell();
         Assert.Contains(_fixture.Navmesh.ToString(), cell, StringComparison.Ordinal);
         Assert.Contains(_fixture.Landscape.ToString(), cell, StringComparison.Ordinal);
-        Assert.Empty(_fixture.GitStatus());
+        Assert.Empty(_fixture.ChangedFormKeys());
     }
 
     [Fact]
@@ -122,11 +121,11 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         Assert.Contains("structural gesture", result.Message, StringComparison.Ordinal);
-        Assert.Empty(_fixture.GitStatus());
+        Assert.Empty(_fixture.ChangedFormKeys());
     }
 
     [Fact]
-    public void EveryEmbeddedSlot_ResolvesToItsOwningContainersFile()
+    public void EveryEmbeddedSlot_ResolvesToItsOwningContainersDocument()
     {
         var service = EditService();
 
@@ -136,39 +135,36 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.True(service.Set(_fixture.Plugin, _fixture.Navmesh.ToString(), "EditorID", Json("\"EditedNavmesh\"")).Applied);
         Assert.True(service.Set(_fixture.Plugin, _fixture.TopCell.ToString(), "WaterHeight", Json("42.0")).Applied);
 
-        var cellFile = File.ReadAllText(_fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId));
+        var cellFile = EmbedCellDocument().Body;
         Assert.Contains("\"Scale\": 2.0", cellFile, StringComparison.Ordinal);
         Assert.Contains("\"Scale\": 3.0", cellFile, StringComparison.Ordinal);
         Assert.Contains("\"EditedLandscape\"", cellFile, StringComparison.Ordinal);
         Assert.Contains("\"EditedNavmesh\"", cellFile, StringComparison.Ordinal);
 
-        var worldspaceFile = _fixture.SourceFileContaining(ContainerModPlugin.WorldspaceEditorId);
-        Assert.Contains("\"WaterHeight\": 42.0", File.ReadAllText(worldspaceFile), StringComparison.Ordinal);
-        Assert.Equal(worldspaceFile, _fixture.SourceFileContaining(ContainerModPlugin.TopCellEditorId));
+        var worldspace = _fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId);
+        Assert.Contains("\"WaterHeight\": 42.0", worldspace.Body, StringComparison.Ordinal);
+        Assert.Equal(worldspace.FormKey, _fixture.DocumentCarrying(ContainerModPlugin.TopCellEditorId).FormKey);
     }
 
     [Fact]
-    public void APlacedRefInsideAWorldspacesTopCell_IsEditable_TwoEmbedLevelsDeepInOneFile()
+    public void APlacedRefInsideAWorldspacesTopCell_IsEditable_TwoEmbedLevelsDeepInOneDocument()
     {
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.WorldspaceEditorId);
-        var before = File.ReadAllText(file);
+        var before = _fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId).Body;
 
         var result = EditService().Set(_fixture.Plugin, _fixture.TopCellRef.ToString(), "Scale", Json("9.5"));
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             before.Replace("\"Scale\": 6.0", "\"Scale\": 9.5", StringComparison.Ordinal),
-            File.ReadAllText(file));
+            _fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId).Body);
         Assert.Contains(
             "\"Scale\": 9.5", _fixture.Document(_fixture.TopCellRef.ToString()).Require().Body, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void EditingARecordWhoseSourceDirectoryIsGone_RefusesAsRecordNotFound()
+    public void EditingARecordTheTreeNoLongerHolds_RefusesAsRecordNotFound()
     {
-        var embedCellFile = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-        Directory.Delete(Path.GetDirectoryName(embedCellFile)
-            ?? throw new InvalidOperationException($"Expected '{embedCellFile}' to have a parent directory."), recursive: true);
+        _fixture.Remove(new RecordIdentity(_fixture.EmbedCell.ToString(), "cell", ContainerModPlugin.EmbedCellEditorId));
 
         var result = EditService().Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "WaterHeight", Json("77.0"));
 
@@ -180,12 +176,10 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void EditingAnEmbeddedChildAbsentFromItsParentsSourceText_RefusesAsRecordNotFound()
     {
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-        var withoutTheRef = System.Text.RegularExpressions.Regex.Replace(
-            File.ReadAllText(file), $@"\s*\{{[^{{}}]*""{ContainerModPlugin.TemporaryRefEditorId}""[^{{}}]*\}},?", "",
-            System.Text.RegularExpressions.RegexOptions.Singleline);
+        var cell = EmbedCellDocument();
+        var withoutTheRef = WithoutTheTemporaryRef(cell.Body);
         Assert.DoesNotContain(ContainerModPlugin.TemporaryRefEditorId, withoutTheRef, StringComparison.Ordinal);
-        File.WriteAllText(file, withoutTheRef);
+        _fixture.Overwrite(cell with { Body = withoutTheRef });
 
         var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("5.0"));
 
@@ -196,14 +190,12 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void DeletingAKeyTheOwningDocumentOnlyReferences_RefusesRatherThanReportingASuccess()
     {
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-        var withoutTheRef = System.Text.RegularExpressions.Regex.Replace(
-            File.ReadAllText(file), $@"\s*\{{[^{{}}]*""{ContainerModPlugin.TemporaryRefEditorId}""[^{{}}]*\}},?", "",
-            System.Text.RegularExpressions.RegexOptions.Singleline);
-        File.WriteAllText(
-            file,
-            withoutTheRef.TrimEnd().TrimEnd('}')
-            + $",\n  \"NotAChild\": {{ \"FormKey\": \"{_fixture.TemporaryRef}\" }}\n}}");
+        var cell = EmbedCellDocument();
+        _fixture.Overwrite(cell with
+        {
+            Body = WithoutTheTemporaryRef(cell.Body).TrimEnd().TrimEnd('}')
+                   + $",\n  \"NotAChild\": {{ \"FormKey\": \"{_fixture.TemporaryRef}\" }}\n}}",
+        });
 
         var result = _fixture.DeleteHandler.DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.TemporaryRef.ToString())]);
 
@@ -220,48 +212,40 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         Assert.Contains("structural gesture", result.Message, StringComparison.Ordinal);
-        Assert.Empty(_fixture.GitStatus());
+        Assert.Empty(_fixture.ChangedFormKeys());
     }
 
     [Fact]
-    public void EditingAWorldspacesEditorId_MovesItsSourceDirectory()
+    public void EditingAWorldspacesEditorId_LandsTheNewNameOnItsDocument()
     {
-        var worldspaceFile = _fixture.SourceFileContaining(ContainerModPlugin.WorldspaceEditorId);
-        var oldDirectory = Path.GetDirectoryName(worldspaceFile)
-            ?? throw new InvalidOperationException($"Expected '{worldspaceFile}' to have a parent directory.");
-
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.Worldspace.ToString(), "EditorID", Json("\"RenamedWorld\"")).Applied);
 
-        Assert.False(Directory.Exists(oldDirectory));
-        Assert.Contains(
-            "\"EditorID\": \"RenamedWorld\"",
-            File.ReadAllText(_fixture.SourceFileContaining("RenamedWorld")),
-            StringComparison.Ordinal);
+        var renamed = _fixture.DocumentCarrying("RenamedWorld");
+        Assert.Equal(_fixture.Worldspace.ToString(), renamed.FormKey);
+        Assert.Contains("\"EditorID\": \"RenamedWorld\"", renamed.Body, StringComparison.Ordinal);
+        Assert.Equal(renamed.FormKey, _fixture.DocumentCarrying(ContainerModPlugin.TopCellEditorId).FormKey);
     }
 
     [Fact]
-    public void EditingAQuestsEditorId_RenamesItsFile_AndItsChildrenStayInsideIt()
+    public void EditingAQuestsEditorId_RenamesItsDocument_AndItsChildrenStayInsideIt()
     {
-        var oldFile = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
-        Assert.Equal(oldFile, _fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId));
-
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.Quest.ToString(), "EditorID", Json("\"RenamedQuest\"")).Applied);
 
-        Assert.False(File.Exists(oldFile));
-        var newFile = _fixture.SourceFileContaining("RenamedQuest");
-        Assert.Equal(Path.GetDirectoryName(oldFile), Path.GetDirectoryName(newFile));
+        var renamed = _fixture.DocumentCarrying("RenamedQuest");
+        Assert.Equal(_fixture.Quest.ToString(), renamed.FormKey);
         foreach (var child in new[] { ContainerModFixture.DialogTopicEditorId, ContainerModFixture.ResponseEditorId, ContainerModFixture.DialogBranchEditorId, ContainerModFixture.SceneEditorId })
-            Assert.Equal(newFile, _fixture.SourceFileContaining(child));
+            Assert.Equal(renamed.FormKey, _fixture.DocumentCarrying(child).FormKey);
     }
 
     [Fact]
     public void EditingAnEmbeddedChild_WhoseOwnerTheTreeNoLongerHolds_RefusesNamingTheDocument()
     {
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
+        var cell = EmbedCellDocument();
+        var file = TreeTampering.FileOf(
+            _fixture.ModFolder, _fixture.Plugin, new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId));
         var declared = $"\"FormKey\": \"{_fixture.EmbedCell}\"";
-        var text = File.ReadAllText(file);
-        Assert.Contains(declared, text, StringComparison.Ordinal);
-        File.WriteAllText(file, ReplaceFirst(text, declared, "\"FormKey\": \"NotAFormKey\""));
+        Assert.Contains(declared, cell.Body, StringComparison.Ordinal);
+        _fixture.Overwrite(cell with { Body = ReplaceFirst(cell.Body, declared, "\"FormKey\": \"NotAFormKey\"") });
 
         var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
 
@@ -271,9 +255,17 @@ public sealed class EmbeddedChildEditTests : IDisposable
             Path.GetRelativePath(_fixture.ModFolder, file), result.Message, StringComparison.Ordinal);
     }
 
+    private SourceDocument EmbedCellDocument() => _fixture.DocumentCarrying(ContainerModPlugin.EmbedCellEditorId);
+
+    private static string WithoutTheTemporaryRef(string cellBody) =>
+        MyRegex().Replace(cellBody, "");
+
     private static string ReplaceFirst(string text, string what, string with)
     {
         var at = text.IndexOf(what, StringComparison.Ordinal);
         return text[..at] + with + text[(at + what.Length)..];
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\s*\{[^{}]*""TempRef""[^{}]*\},?", System.Text.RegularExpressions.RegexOptions.Singleline)]
+    private static partial System.Text.RegularExpressions.Regex MyRegex();
 }

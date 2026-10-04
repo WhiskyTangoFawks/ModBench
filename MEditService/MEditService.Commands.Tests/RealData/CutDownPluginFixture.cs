@@ -1,3 +1,4 @@
+using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -30,13 +31,12 @@ public static class CutDownPluginFixture
             TrackedTemplates.TrackAlone(template, PluginFileName);
         });
 
-    public static string SourceRootIn(string modFolder) =>
-        Path.Combine(modFolder, SourceRepository.RootFor(PluginFileName));
-
-    /// <summary>Every document of the plugin's tree, keyed by its path relative to the mod folder.</summary>
+    /// <summary>Every document of the plugin's tree, keyed by FormKey.</summary>
     public static Dictionary<string, byte[]> ReadSourceTree(string modFolder) =>
-        Directory.EnumerateFiles(SourceRootIn(modFolder), "*.json", SearchOption.AllDirectories)
-            .ToDictionary(f => Path.GetRelativePath(modFolder, f), File.ReadAllBytes);
+        DocumentsOf(TrackedTree.Repository(modFolder));
+
+    private static Dictionary<string, byte[]> DocumentsOf(SourceRepository repository) =>
+        repository.ReadAll(Plugin).ToDictionary(document => document.FormKey, document => Encoding.UTF8.GetBytes(document.Body));
 
     // The library's whole-mod writer alone, not TrackService's own door: identical production code on
     // both sides would agree with itself about any file Track added.
@@ -50,14 +50,14 @@ public static class CutDownPluginFixture
         var scratch = Directory.CreateTempSubdirectory("medit-compile-derived-").FullName;
         try
         {
+            var root = Path.Combine(scratch, SourceRepository.RootFor(PluginFileName));
+            Directory.CreateDirectory(root);
             RecordTextCodecGeneratorSeed
-                .SerializeWholeMod((IFallout4ModGetter)mod, scratch, InlineWorkDropoff.Instance, CancellationToken.None)
+                .SerializeWholeMod((IFallout4ModGetter)mod, root, InlineWorkDropoff.Instance, CancellationToken.None)
                 .GetAwaiter().GetResult();
 
-            return Directory.EnumerateFiles(scratch, "*.json", SearchOption.AllDirectories)
-                .ToDictionary(
-                    f => Path.Combine(SourceRepository.RootFor(PluginFileName), Path.GetRelativePath(scratch, f)),
-                    f => StripCarriageReturns(File.ReadAllBytes(f)));
+            return DocumentsOf(SourceRepository.Over(scratch, GameRelease.Fallout4))
+                .ToDictionary(document => document.Key, document => StripCarriageReturns(document.Value));
         }
         finally
         {

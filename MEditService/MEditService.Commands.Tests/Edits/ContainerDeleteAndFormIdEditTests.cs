@@ -1,6 +1,5 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -14,20 +13,18 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
+    private string EmbedCellText() => _fixture.DocumentCarrying(ContainerModPlugin.EmbedCellEditorId).Body;
+
+    private string WorldspaceText() => _fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId).Body;
+
     private DeleteRecordHandler DeleteHandler() => _fixture.DeleteHandler;
 
     [Fact]
-    public void DeletingAContainersOwnRecord_RemovesItsDirectory_AndEveryEmbeddedDescendantWithIt()
+    public void DeletingAContainersOwnRecord_RemovesEveryEmbeddedDescendantWithIt()
     {
-        var embedCellFile = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-        var directory = Path.GetDirectoryName(embedCellFile)
-            ?? throw new InvalidOperationException($"Expected '{embedCellFile}' to have a parent directory.");
-        Assert.True(Directory.Exists(directory));
-
         var result = DeleteHandler().DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.EmbedCell.ToString())]);
 
         Assert.Empty(result.Refused);
-        Assert.False(Directory.Exists(directory));
 
         Assert.Null(_fixture.Document(_fixture.EmbedCell.ToString()));
         Assert.Null(_fixture.Document(_fixture.TemporaryRef.ToString()));
@@ -55,14 +52,13 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     [Fact]
     public void DeletingAnEmbeddedListChild_RemovesItFromTheOwnersInlineList_AndRewritesTheOwnersDocument_LeavingSiblingsIntact()
     {
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-        var before = File.ReadAllText(file);
+        var before = EmbedCellText();
         Assert.Contains(ContainerModPlugin.TemporaryRefEditorId, before, StringComparison.Ordinal);
 
         var result = DeleteHandler().DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.TemporaryRef.ToString())]);
 
         Assert.Empty(result.Refused);
-        var after = File.ReadAllText(file);
+        var after = EmbedCellText();
         Assert.DoesNotContain(ContainerModPlugin.TemporaryRefEditorId, after, StringComparison.Ordinal);
         Assert.Contains(ContainerModPlugin.PersistentRefEditorId, after, StringComparison.Ordinal);
         Assert.Contains(ContainerModPlugin.NavmeshEditorId, after, StringComparison.Ordinal);
@@ -80,12 +76,10 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     [Fact]
     public void DeletingACellsLandscape_NullsTheSlot_LeavingItsNavmeshIntact()
     {
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-
         var result = DeleteHandler().DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.Landscape.ToString())]);
 
         Assert.Empty(result.Refused);
-        var after = File.ReadAllText(file);
+        var after = EmbedCellText();
         Assert.DoesNotContain(ContainerModPlugin.LandscapeEditorId, after, StringComparison.Ordinal);
         Assert.Contains(ContainerModPlugin.NavmeshEditorId, after, StringComparison.Ordinal);
         Assert.Null(_fixture.Document(_fixture.Landscape.ToString()));
@@ -95,12 +89,10 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     [Fact]
     public void DeletingACellsNavmesh_RemovesItFromTheCellsList_LeavingItsLandscapeIntact()
     {
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-
         var result = DeleteHandler().DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.Navmesh.ToString())]);
 
         Assert.Empty(result.Refused);
-        var after = File.ReadAllText(file);
+        var after = EmbedCellText();
         Assert.DoesNotContain(ContainerModPlugin.NavmeshEditorId, after, StringComparison.Ordinal);
         Assert.Contains(ContainerModPlugin.LandscapeEditorId, after, StringComparison.Ordinal);
         Assert.Null(_fixture.Document(_fixture.Navmesh.ToString()));
@@ -110,13 +102,12 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     [Fact]
     public void DeletingASingleValueEmbeddedSlot_NullsTheSlot_AndCascadesItsOwnDescendant()
     {
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.WorldspaceEditorId);
-        Assert.Contains(ContainerModPlugin.TopCellEditorId, File.ReadAllText(file), StringComparison.Ordinal);
+        Assert.Contains(ContainerModPlugin.TopCellEditorId, WorldspaceText(), StringComparison.Ordinal);
 
         var result = DeleteHandler().DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.TopCell.ToString())]);
 
         Assert.Empty(result.Refused);
-        var after = File.ReadAllText(file);
+        var after = WorldspaceText();
         Assert.DoesNotContain(ContainerModPlugin.TopCellEditorId, after, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerModPlugin.TopCellRefEditorId, after, StringComparison.Ordinal);
 
@@ -128,42 +119,33 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     }
 
     [Fact]
-    public void EditingTheFormIdOfAContainersOwnRecord_MovesItsDirectoryToTheNewFormKey_AtTheSameParent()
+    public void EditingTheFormIdOfAContainersOwnRecord_MovesItsDocumentToTheNewFormKey()
     {
-        var cellFile = _fixture.SourceFileContaining(ContainerModPlugin.CellEditorId);
-        var oldDirectory = Path.GetDirectoryName(cellFile)
-            ?? throw new InvalidOperationException($"Expected '{cellFile}' to have a parent directory.");
-        var parent = Path.GetDirectoryName(oldDirectory) ?? throw new InvalidOperationException($"Expected '{oldDirectory}' to have a parent directory.");
-
         var result = _fixture.EditHandler.SetFormId(_fixture.Plugin, _fixture.Cell.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
-        Assert.False(Directory.Exists(oldDirectory));
         Assert.Null(_fixture.Document(_fixture.Cell.ToString()));
 
         var moved = _fixture.Document(result.NewFormKey.Require());
         Assert.NotNull(moved);
         Assert.Contains(result.NewFormKey.Require(), moved.Body, StringComparison.Ordinal);
-
-        var newFile = _fixture.SourceFileContaining(ContainerModPlugin.CellEditorId);
-        Assert.Equal(parent, Path.GetDirectoryName(Path.GetDirectoryName(newFile)));
+        Assert.Equal(result.NewFormKey.Require(), _fixture.DocumentCarrying(ContainerModPlugin.CellEditorId).FormKey);
     }
 
     [Fact]
-    public void EditingTheFormIdOfAnEmbeddedChild_ChangesOnlyItsFormKeyInPlace_NoFileMoves_SameOwnerFile()
+    public void EditingTheFormIdOfAnEmbeddedChild_ChangesOnlyItsFormKeyInPlace_InTheSameOwnerDocument()
     {
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-        var before = File.ReadAllText(file);
+        var before = EmbedCellText();
         var formKeyLine = $"\"FormKey\": \"{_fixture.TemporaryRef}\"";
         Assert.Contains(formKeyLine, before, StringComparison.Ordinal);
 
         var result = _fixture.EditHandler.SetFormId(_fixture.Plugin, _fixture.TemporaryRef.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(file, _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId));
+        Assert.Equal(_fixture.EmbedCell.ToString(), _fixture.DocumentCarrying(ContainerModPlugin.EmbedCellEditorId).FormKey);
         Assert.Equal(
             before.Replace(formKeyLine, $"\"FormKey\": \"{result.NewFormKey.Require()}\"", StringComparison.Ordinal),
-            File.ReadAllText(file));
+            EmbedCellText());
 
         Assert.Null(_fixture.Document(_fixture.TemporaryRef.ToString()));
         Assert.NotNull(_fixture.CommittedDocument(
@@ -172,7 +154,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     }
 
     [Fact]
-    public void EditingTheFormIdOfARecordReferencedByAContainer_LeavesTheContainersFileAsItWas()
+    public void EditingTheFormIdOfARecordReferencedByAContainer_LeavesTheContainersDocumentAsItWas()
     {
         const string pluginName = "ContainerReferencer.esp";
         var referenced = FormKey.Null;
@@ -191,17 +173,13 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
             referenced = npc.FormKey;
         });
 
-        var file = Directory.EnumerateFiles(
-                Path.Combine(referencer.ModFolder, SourceRepository.RootFor(pluginName)), "RecordData.json",
-                SearchOption.AllDirectories)
-            .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal));
-        var before = File.ReadAllText(file);
+        var before = TrackedTree.DocumentCarrying(referencer.ModFolder, referencer.Plugin, "ReferencerRef").Body;
         Assert.Contains(referenced.ToString(), before, StringComparison.Ordinal);
 
         var result = referencer.EditHandler.SetFormId(referencer.Plugin, referenced.ToString(), $"000F00:{pluginName}");
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(before, File.ReadAllText(file));
+        Assert.Equal(before, TrackedTree.DocumentCarrying(referencer.ModFolder, referencer.Plugin, "ReferencerRef").Body);
     }
 
     [Fact]
@@ -228,11 +206,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
             m.Cells.Records.Add(block);
             enabler = first.FormKey;
         });
-        var file = Directory.EnumerateFiles(
-                Path.Combine(mod.ModFolder, SourceRepository.RootFor(pluginName)), "RecordData.json",
-                SearchOption.AllDirectories)
-            .Single(f => File.ReadAllText(f).Contains("\"EnablerRef\"", StringComparison.Ordinal));
-        var before = File.ReadAllText(file);
+        var before = TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "EnablerRef").Body;
         var formKeyLine = $"\"FormKey\": \"{enabler}\"";
         Assert.Contains(formKeyLine, before, StringComparison.Ordinal);
         Assert.Contains($"\"Reference\": \"{enabler}\"", before, StringComparison.Ordinal);
@@ -242,7 +216,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             before.Replace(formKeyLine, $"\"FormKey\": \"{result.NewFormKey.Require()}\"", StringComparison.Ordinal),
-            File.ReadAllText(file));
+            TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "EnablerRef").Body);
     }
 
     [Fact]
@@ -255,8 +229,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
             Assert.Empty(deleted.Refused);
         }
 
-        var questFile = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
-        Assert.DoesNotContain($"\"{nameof(Quest.DialogTopics)}\"", File.ReadAllText(questFile), StringComparison.Ordinal);
+        Assert.DoesNotContain($"\"{nameof(Quest.DialogTopics)}\"", _fixture.Document(_fixture.Quest.ToString()).Require().Body, StringComparison.Ordinal);
 
         var compileResult = await CompileServices.Over(_fixture.LoadOrder)
             .CompileAsync(_fixture.Plugin);

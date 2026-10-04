@@ -1,6 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -11,7 +10,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A tracked mod holding the one shape a flat record cannot show: a worldspace, whose
 /// directory a FormID edit moves whole, subtree and all. No index anywhere in it.</summary>
-public sealed class SourceContainerFixture : IDisposable
+public sealed class SourceContainerFixture : IDisposable, ITrackedPlugin
 {
     public const string PluginName = "SourceContainer.esp";
     public const string Origin = "SourceContainerMod";
@@ -64,16 +63,6 @@ public sealed class SourceContainerFixture : IDisposable
     }
 
     private readonly string _instanceRoot;
-
-    public string SourceRoot => Path.Combine(ModFolder, SourceRepository.RootFor(PluginName));
-
-    /// <summary>Any document in the tree carrying an EditorID: a container's own RecordData.json, or
-    /// the file that inlines an embedded child.</summary>
-    public string SourceFileContaining(string editorId) =>
-        Directory.EnumerateFiles(SourceRoot, "*.json", SearchOption.AllDirectories)
-            .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
-
-    public IReadOnlyList<string> GitStatus() => TrackedTree.GitStatus(ModFolder);
 
     public void Dispose()
     {

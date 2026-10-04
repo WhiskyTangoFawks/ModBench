@@ -18,12 +18,12 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     [Fact]
     public void EditField_TopLevelFormLinkColumn_AcceptsAValidTarget_LandsAsWorkingTreeChange()
     {
-        Assert.Empty(_mod.GitStatus());
+        Assert.Empty(_mod.ChangedFormKeys());
 
         var result = Service().Set(_mod.Plugin, _mod.OtherNpc.ToString(), "Race", Json($"\"{_mod.Race}\""));
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotEmpty(_mod.GitStatus());
+        Assert.NotEmpty(_mod.ChangedFormKeys());
 
         Assert.Contains(
             _mod.Race.ToString(), _mod.Document(_mod.OtherNpc.ToString()).Require().Body, StringComparison.Ordinal);
@@ -35,7 +35,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         var result = Service().Set(_mod.Plugin, _mod.OtherNpc.ToString(), "Race", Json("\"ABCDEF:NoSuchPlugin.esp\""));
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotEmpty(_mod.GitStatus());
+        Assert.NotEmpty(_mod.ChangedFormKeys());
         Assert.Contains(
             "ABCDEF:NoSuchPlugin.esp", _mod.Document(_mod.OtherNpc.ToString()).Require().Body, StringComparison.Ordinal);
     }

@@ -38,7 +38,7 @@ public sealed class LoadOrderFormIdKeyOrderTests
         var plugins = placed.Select((p, slot) => new LoadOrderEntry(p.Plugin.Name, p.Plugin.Name, "Data", slot, Enabled: true, Winning: true));
         var service = new RecordQueryService(
             new FakeIndex(new FakeReads(opened, [.. rows])), FakeLoadOrder.Of(GameRelease.Fallout4, [.. plugins]),
-            SharedSchemaReflector.Instance, new ConflictClassifier());
+            SharedSchemaReflector.Instance);
         return service.GetCompare(ContainerKey.ToString())
             ?? throw new InvalidOperationException($"Expected {ContainerKey} to resolve to a compare result.");
     }

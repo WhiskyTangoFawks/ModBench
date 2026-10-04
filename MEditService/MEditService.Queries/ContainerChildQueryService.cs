@@ -45,7 +45,7 @@ public sealed class ContainerChildQueryService(
         {
             var page = repo.Search(new RecordQuery(
                 RecordTypes: [recordType], Plugin: pluginKey.Name, Origin: pluginKey.Origin, Limit: UnlimitedRecords, Offset: 0));
-            foreach (var record in page.Items) byFormKey[record.FormKey] = record;
+            foreach (var record in page.Items) byFormKey[record.FormKey] = record.ToQuery();
         }
 
         var result = new List<ContainerChildSummary>(rows.Count);
