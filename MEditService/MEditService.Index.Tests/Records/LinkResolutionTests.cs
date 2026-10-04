@@ -75,8 +75,6 @@ public sealed class LinkResolutionTests
 
     private const string ResolverPlugin = "Fixture.esp";
 
-    // One resolver is one response: what it answered, found or absent, it keeps answering however
-    // the index moves on, and a resolver asked afterwards sees the new rows.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
