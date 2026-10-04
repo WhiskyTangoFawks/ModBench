@@ -448,6 +448,31 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
     expect(shown(await named.getChildren(await rootOf(named, OverwriteNode, 'Overwrite')))).toEqual([]);
   });
 
+  it('with no separators, a mod whose name matches opens to all its files, collapsed', async () => {
+    const provider = filtered('armour', false);
+    const row = await rootOf(provider, ModNode, 'Armour');
+
+    expect(row.collapsibleState).toBe(Collapsed);
+    expect(shown(await provider.getChildren(row))).toEqual(['folder meshes', 'folder textures', 'file readme.txt']);
+  });
+
+  it('Overwrite counts and tints all its files, whatever the filter lists under it', async () => {
+    const provider = filtered('a.log', true, { overwrite: [file('F4SE/Plugins/a.log'), file('Tool.esp')] });
+    const row = await rootOf(provider, OverwriteNode, 'Overwrite');
+
+    expect(row.description).toBe('2');
+    expect(row.iconPath?.color).toBeDefined();
+  });
+
+  it('Overwrite holding files, none of them found, still counts and tints them, and lists none', async () => {
+    const provider = filtered('zzz', true, { overwrite: [file('Tool.esp')] });
+    const row = await rootOf(provider, OverwriteNode, 'Overwrite');
+
+    expect(row.description).toBe('1');
+    expect(row.iconPath?.color).toBeDefined();
+    expect(row.lists()).toBe(false);
+  });
+
   it('a mod whose only match is an empty folder is shown, and opens to it', async () => {
     const empty: OriginFolder = { relativePath: 'empty', path: '/instance/mods/Armour/empty', excluded: false };
     const provider = filtered('empty', true, { mods: [mod('Armour')], files: { Armour: [] }, folders: { Armour: [empty] } });

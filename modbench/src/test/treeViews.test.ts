@@ -533,12 +533,17 @@ describe('the focused view', () => {
 describe('the Mods view finds a file the filter matches, however deep', () => {
   const file = (relativePath: string) => ({ relativePath, path: `/instance/${relativePath}`, sourcePath: `/instance/${relativePath}`, excluded: false });
   const folder = (relativePath: string) => ({ relativePath, path: `/instance/${relativePath}`, excluded: false });
+  const revealed = () => h.reveals.map((r) => r.label);
+  const open = { select: false, focus: false, expand: true };
 
-  const mountFiltered = async (term: string, overwrite = false) => {
+  const mountFiltered = (term: string, overwrite = false) => {
     const value = instanceValueFixture({
-      mods: [{ kind: 'mod', name: 'Armour', enabled: true }, { kind: 'separator', name: 'Gear', enabled: false }],
-      filesByMod: new Map([['Armour', [file('textures/armour/b.dds')]]]),
-      foldersByMod: new Map([['Armour', [folder('textures'), folder('textures/armour')]]]),
+      mods: [
+        { kind: 'mod', name: 'Armour', enabled: true }, { kind: 'separator', name: 'Gear', enabled: false },
+        { kind: 'mod', name: 'Boots', enabled: true }, { kind: 'separator', name: 'Other', enabled: false },
+      ],
+      filesByMod: new Map([['Armour', [file('textures/armour/b.dds')]], ['Boots', [file('gear.esp')]]]),
+      foldersByMod: new Map([['Armour', [folder('textures'), folder('textures/armour')]], ['Boots', []]]),
       overwriteFiles: overwrite ? [file('F4SE/a.log')] : [],
       overwriteFolders: overwrite ? [folder('F4SE')] : [],
     });
@@ -546,34 +551,36 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
     const { modListView, modListFilter } = createModListView(own, provider, () => undefined, syncMessageDouble());
     modListFilter.open();
     currentBox().type(term);
-    await new Promise((resolve) => setTimeout(resolve, 20));
     return modListView;
   };
 
   it('reveals, expanded, each row it shows for its matches: the separator, the mod and each folder', async () => {
-    await mountFiltered('b.dds');
+    mountFiltered('b.dds');
+    await vi.waitFor(() => expect(revealed()).toContain('armour'));
 
-    expect(h.reveals).toEqual(['Gear', 'Armour', 'textures', 'armour'].map((label) => (
-      { label, options: { select: false, focus: false, expand: true } }
-    )));
+    expect(h.reveals).toEqual(['Gear', 'Armour', 'textures', 'armour'].map((label) => ({ label, options: open })));
   });
 
-  it('does not reveal a row shown for its own name, nor the rows under it', async () => {
-    await mountFiltered('gear');
+  it('does not reveal a row shown for its own name, nor the rows under it, while it reveals one shown for a match', async () => {
+    const view = mountFiltered('gear');
+    await vi.waitFor(() => expect(revealed()).toContain('Boots'));
 
-    expect(h.reveals).toEqual([]);
+    expect(view.description).toContain('"gear"');
+    expect(revealed()).toEqual(['Other', 'Boots']);
   });
 
   it('is not told no match by a term that only an Overwrite file matches, and reveals Overwrite open', async () => {
-    const view = await mountFiltered('a.log', true);
+    const view = mountFiltered('a.log', true);
+    await vi.waitFor(() => expect(revealed()).toContain('F4SE'));
 
     expect(view.message).toBeUndefined();
-    expect(h.reveals.map((r) => r.label)).toEqual(['Overwrite', 'F4SE']);
+    expect(revealed()).toEqual(['Overwrite', 'F4SE']);
   });
 
   it('is told no match by a term that only the name Overwrite matches', async () => {
-    const view = await mountFiltered('overwrite', true);
+    const view = mountFiltered('overwrite', true);
+    await waitForMessage(view, (m) => m === 'No matches for "overwrite".', 'the no-match message');
 
-    expect(view.message).toBe('No matches for "overwrite".');
+    expect(revealed()).toEqual([]);
   });
 });

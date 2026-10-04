@@ -16,8 +16,6 @@ const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0
 const byName = ([a]: readonly [string, unknown], [b]: readonly [string, unknown]): number =>
   collator.compare(a, b) || byCodeUnit(a, b);
 
-/** Whether a row shows everything under it, or only what the name filter matched there, and then
- *  opens on its own. */
 export type ChildrenShown = 'all' | 'matching';
 
 export const expanderOver = (children: readonly unknown[], shown: ChildrenShown = 'all'): vscode.TreeItemCollapsibleState => {
@@ -27,14 +25,15 @@ export const expanderOver = (children: readonly unknown[], shown: ChildrenShown 
 
 type NameMatch = (name: string) => boolean;
 
+export const shownUnder = (parent: ChildrenShown, matches: NameMatch, name: string): ChildrenShown =>
+  (parent === 'matching' && !matches(name) ? 'matching' : 'all');
+
 const pathNamed = (relativePath: string, matches: NameMatch): boolean => relativePath.split('/').some(matches);
 
-/** Whether an entry is found by the name filter: its own name matches, or that of a folder above it. */
-export function holdsMatch(files: readonly OriginFile[], folders: readonly OriginFolder[], matches: NameMatch): boolean {
+export function anyNamed(files: readonly OriginFile[], folders: readonly OriginFolder[], matches: NameMatch): boolean {
   return files.some((file) => pathNamed(file.relativePath, matches)) || folders.some((folder) => pathNamed(folder.relativePath, matches));
 }
 
-/** The files and folders the name filter finds, and the folders above them. */
 export function narrowToMatches(
   files: readonly OriginFile[], folders: readonly OriginFolder[], matches: NameMatch,
 ): { files: OriginFile[]; folders: OriginFolder[] } {
@@ -112,8 +111,8 @@ function byLevel<T extends { readonly relativePath: string }>(entries: readonly 
   return { here, below };
 }
 
-/** The folders, then the files, directly in `parent`, each by name. `files` and `folders` are those under it,
- *  `path` is its path in the mod. Under a `matching` parent, a folder not matching shows only what does. */
+/** The folders, then the files, directly in `parent`, each by name. `files` and `folders` are
+ *  those under it, and `path` is its own path in its mod, none for the mod or Overwrite itself. */
 export function filesIn(
   parent: ModlistNode, origin: FileOrigin, files: readonly OriginFile[], folders: readonly OriginFolder[], path?: string,
   filter?: { shown: ChildrenShown; matches: NameMatch },
@@ -124,7 +123,7 @@ export function filesIn(
   return [
     ...[...ownFolders.here].sort(byName).map(([name, folder]) => new FolderNode(
       parent, origin, folder, ownFiles.below.get(name) ?? [], ownFolders.below.get(name) ?? [], name,
-      filter?.shown === 'matching' && !filter.matches(name) ? 'matching' : 'all',
+      filter ? shownUnder(filter.shown, filter.matches, name) : 'all',
     )),
     ...[...ownFiles.here].sort(byName).map(([name, file]) => new FileNode(parent, origin, file, name)),
   ];

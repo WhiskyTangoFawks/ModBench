@@ -43,10 +43,7 @@ export function createModListView(
     object: 'modbench.mod',
     placeholder: 'Filter mods…',
     setFilter: (text, grouping) => modListProvider.setFilter(text, grouping),
-    // Overwrite survives every filter and is no match unless it shows a file, so it is evidence only then.
-    hasRows: async () => (await modListProvider.getChildren()).some(
-      (n) => !(n instanceof OverwriteNode) || n.collapsibleState !== vscode.TreeItemCollapsibleState.None,
-    ),
+    hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode) || n.lists()),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
     termPlacement: 'afterBase',
     viewMessage: () => messageLine(modListProvider.viewMessage(), modSync.message()),
@@ -84,7 +81,7 @@ async function expandFilteredRows(
     try {
       await view.reveal(row, { select: false, focus: false, expand: true });
     } catch (e) {
-      log(`Could not expand "${typeof row.label === 'string' ? row.label : row.label?.label}" for the filter: ${errorMessage(e)}`);
+      log(`Could not expand "${typeof row.label === 'string' ? row.label : row.id}" for the filter: ${errorMessage(e)}`);
       continue;
     }
     await expandFilteredRows(view, provider, log, row);
