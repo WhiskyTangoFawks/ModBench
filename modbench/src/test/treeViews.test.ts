@@ -6,7 +6,7 @@ import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  uriFile, DataTransferItem, DataTransfer,
+  uriFile, uriFrom, DataTransferItem, DataTransfer,
 } from './vscodeMock';
 import {
   filterBoxWindowMock, filterBoxCommandsMock, commandInvoker, currentBoxOf, waitForMessage,
@@ -30,7 +30,7 @@ const h = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  Uri: { file: uriFile }, DataTransferItem, DataTransfer,
+  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
   window: {
     ...filterBoxWindowMock(h.state),
     createTreeView: (id: string, options: { treeDataProvider: unknown }) => {
@@ -81,6 +81,8 @@ import { withUnreadCorpusInstance } from './mo2/unreadCorpusInstance';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 import { accessTo, adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
 import { syncMessageDouble } from './syncMessageDouble';
+import { FakeInstance } from './mo2/fakeInstance';
+import { instanceValueFixture } from './mo2/instanceValueFixture';
 
 const own = <T extends { dispose: () => void }>(d: T): T => d;
 
@@ -525,5 +527,53 @@ describe('the focused view', () => {
     expect(focused.id()).toBe('modbench.recordGrid');
     mods.select(['ModB']);
     expect(focused.id()).toBe('modbench.modList');
+  });
+});
+
+describe('the Mods view finds a file the filter matches, however deep', () => {
+  const file = (relativePath: string) => ({ relativePath, path: `/instance/${relativePath}`, sourcePath: `/instance/${relativePath}`, excluded: false });
+  const folder = (relativePath: string) => ({ relativePath, path: `/instance/${relativePath}`, excluded: false });
+
+  const mountFiltered = async (term: string, overwrite = false) => {
+    const value = instanceValueFixture({
+      mods: [{ kind: 'mod', name: 'Armour', enabled: true }, { kind: 'separator', name: 'Gear', enabled: false }],
+      filesByMod: new Map([['Armour', [file('textures/armour/b.dds')]]]),
+      foldersByMod: new Map([['Armour', [folder('textures'), folder('textures/armour')]]]),
+      overwriteFiles: overwrite ? [file('F4SE/a.log')] : [],
+      overwriteFolders: overwrite ? [folder('F4SE')] : [],
+    });
+    const provider = new ModListProvider({ instance: new FakeInstance(value), access: accessTo('/instance'), log: () => undefined });
+    const { modListView, modListFilter } = createModListView(own, provider, () => undefined, syncMessageDouble());
+    modListFilter.open();
+    currentBox().type(term);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return modListView;
+  };
+
+  it('reveals, expanded, each row it shows for its matches: the separator, the mod and each folder', async () => {
+    await mountFiltered('b.dds');
+
+    expect(h.reveals).toEqual(['Gear', 'Armour', 'textures', 'armour'].map((label) => (
+      { label, options: { select: false, focus: false, expand: true } }
+    )));
+  });
+
+  it('does not reveal a row shown for its own name, nor the rows under it', async () => {
+    await mountFiltered('gear');
+
+    expect(h.reveals).toEqual([]);
+  });
+
+  it('is not told no match by a term that only an Overwrite file matches, and reveals Overwrite open', async () => {
+    const view = await mountFiltered('a.log', true);
+
+    expect(view.message).toBeUndefined();
+    expect(h.reveals.map((r) => r.label)).toEqual(['Overwrite', 'F4SE']);
+  });
+
+  it('is told no match by a term that only the name Overwrite matches', async () => {
+    const view = await mountFiltered('overwrite', true);
+
+    expect(view.message).toBe('No matches for "overwrite".');
   });
 });

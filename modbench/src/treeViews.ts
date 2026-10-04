@@ -43,8 +43,10 @@ export function createModListView(
     object: 'modbench.mod',
     placeholder: 'Filter mods…',
     setFilter: (text, grouping) => modListProvider.setFilter(text, grouping),
-    // Overwrite survives every filter and is no match, so it is not evidence that the term matched.
-    hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode)),
+    // Overwrite survives every filter and is no match unless it shows a file, so it is evidence only then.
+    hasRows: async () => (await modListProvider.getChildren()).some(
+      (n) => !(n instanceof OverwriteNode) || n.collapsibleState !== vscode.TreeItemCollapsibleState.None,
+    ),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
     termPlacement: 'afterBase',
     viewMessage: () => messageLine(modListProvider.viewMessage(), modSync.message()),
@@ -65,26 +67,28 @@ export function createModListView(
   showKeyContext();
   own(modListView.onDidChangeSelection(showKeyContext));
   own(modListProvider.onDidChangeTreeData(showKeyContext));
-  const expand = () => void expandFilteredSeparators(modListView, modListProvider, log);
+  const expand = () => void expandFilteredRows(modListView, modListProvider, log);
   own(modListProvider.onDidChangeTreeData(expand));
   own(modListView.onDidChangeVisibility(expand));
   return { modListView, modListFilter };
 }
 
 // VS Code keeps the expansion it remembers for a known row identity over the provider's
-// collapsible state, so only a reveal opens a separator the filter shows for its matching mods.
-// A reveal also opens a hidden view.
-async function expandFilteredSeparators(
-  view: vscode.TreeView<ModlistNode>, provider: ModListProvider, log: (line: string) => void,
+// collapsible state, so only a reveal opens a row the filter shows for its matches, from the
+// separator down. A reveal also opens a hidden view.
+async function expandFilteredRows(
+  view: vscode.TreeView<ModlistNode>, provider: ModListProvider, log: (line: string) => void, parent?: ModlistNode,
 ): Promise<void> {
   if (!view.visible) return;
-  for (const row of await provider.getChildren()) {
-    if (!(row instanceof SeparatorNode) || row.collapsibleState !== vscode.TreeItemCollapsibleState.Expanded) continue;
+  for (const row of await provider.getChildren(parent)) {
+    if (row.collapsibleState !== vscode.TreeItemCollapsibleState.Expanded) continue;
     try {
       await view.reveal(row, { select: false, focus: false, expand: true });
     } catch (e) {
-      log(`Could not expand "${row.separator.name}" for the filter: ${errorMessage(e)}`);
+      log(`Could not expand "${String(row.label)}" for the filter: ${errorMessage(e)}`);
+      continue;
     }
+    await expandFilteredRows(view, provider, log, row);
   }
 }
 
