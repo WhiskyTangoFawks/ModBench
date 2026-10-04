@@ -43,13 +43,13 @@ export function mo2FolderName(name: string): string {
 
 /** The folder under `mods/` a mod line names. `undefined` for a name that would reach outside
  *  `mods/`, such as one another tool wrote with a `/`: no path is built from it. */
-export const modFolderName = (modName: string): string | undefined =>
+const modFolderName = (modName: string): string | undefined =>
   (modName === '' || modName === '.' || modName === '..' || /[\\/]/.test(modName) ? undefined : modName);
 
 /** The folder under `mods/` MO2 gives a separator. `undefined` for a name MO2 never gives a
  *  folder, such as one another tool wrote with a `/`: such a separator has no folder, and no path
  *  is built from its name. */
-export const separatorFolderName = (separatorName: string): string | undefined =>
+const separatorFolderName = (separatorName: string): string | undefined =>
   mo2FolderName(separatorName) === separatorName ? separatorModName(separatorName) : undefined;
 
 export const separatorDir = (instanceRoot: string, separatorName: string): string | undefined => {

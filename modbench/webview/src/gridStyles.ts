@@ -3,7 +3,7 @@ import type { ConflictAll, ConflictThis } from './types';
 
 export const mono = 'var(--vscode-editor-font-family, "Consolas", monospace)';
 export const fg = 'var(--vscode-editor-foreground, #ccc)';
-export const borderColor = 'var(--vscode-editorGroup-border, #444)';
+const borderColor = 'var(--vscode-editorGroup-border, #444)';
 
 export const baseCell: React.CSSProperties = {
   border: `1px solid ${borderColor}`,
