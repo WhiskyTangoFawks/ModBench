@@ -6,8 +6,7 @@ import {
   ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder, installNameRefusal,
   type InstallAccess,
 } from '../install/install';
-import { runWritingGesture } from '../drivingLib/writingGesture';
-import { MODS_KEY_ARGS } from './gestureEntry';
+import { runModsWriting } from './gestureEntry';
 
 /** What the gesture answers its invoker: whether a mod landed. A cancelled picker, a cancelled
  *  name prompt and a refused install are one answer, since each leaves nothing installed. */
@@ -46,13 +45,12 @@ interface SourceKindItem extends vscode.QuickPickItem {
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { access, instance, runModAction, promptModName, warnIfFomod, installDownloaded } = deps;
-  const runWriting = (command: () => Promise<void>) => runWritingGesture(MODS_KEY_ARGS.view, instance, command);
   const validateName = (name: string) => installNameRefusal(access, name);
   const installArchive = async (archivePath: string): Promise<InstallOutcome> => {
     const name = await promptModName(defaultModName(archivePath), validateName);
     if (!name) return NOT_INSTALLED;
     let succeeded = false;
-    await runWriting(() => runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
+    await runModsWriting(instance, () => runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
       const outcome = await installFromArchive(access, { kind: 'new', name }, archivePath, { gameName: instance.value.gameName });
       if (!outcome.applied) throw new Error(outcome.refusal);
       warnIfFomod(name, outcome.isFomod);
@@ -64,7 +62,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     const name = await promptModName(defaultModNameForFolder(folder), validateName);
     if (!name) return NOT_INSTALLED;
     let succeeded = false;
-    await runWriting(() => runModAction('installFromFolder', `Failed to install "${name}".`, async () => {
+    await runModsWriting(instance, () => runModAction('installFromFolder', `Failed to install "${name}".`, async () => {
       const outcome = await installFromFolder(access, { kind: 'new', name }, folder, { gameName: instance.value.gameName });
       if (!outcome.applied) throw new Error(outcome.refusal);
       warnIfFomod(name, outcome.isFomod);

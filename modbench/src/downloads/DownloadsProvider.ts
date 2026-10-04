@@ -11,28 +11,6 @@ import {
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 
-function whatTheDiskShows(shown: boolean | undefined, on: string, off: string): string {
-  if (shown === undefined) return 'it is gone from the disk';
-  return `the disk now shows it ${shown ? on : off}`;
-}
-
-const MARK_DELAY_MS = 300;
-
-export const UNCONFIRMED_TOOLTIP = 'Written; waiting for the disk to confirm';
-
-interface UnconfirmedWrite {
-  readonly excluded: boolean;
-  marked: boolean;
-  differedOnce: boolean;
-  readonly timer: ReturnType<typeof setTimeout>;
-}
-
-interface UnconfirmedDelete {
-  marked: boolean;
-  differedOnce: boolean;
-  readonly timer: ReturnType<typeof setTimeout>;
-}
-
 // Mirrors the reference tool's own colour-coded Status cell. The icon is always set explicitly so
 // the file-icon theme never takes over; a colour is affordable because every row is an archive.
 function downloadStatusIcon(status: DownloadStatus): vscode.ThemeIcon {
@@ -93,8 +71,6 @@ export type DownloadsTreeNode = DownloadNode | ErrorNode;
 export interface DownloadsProviderOptions {
   /** downloads/ rows, `.meta` sidecars folded in. */
   instance: InstanceView;
-  /** One line to the Output. */
-  log: (line: string) => void;
 }
 
 /** Flat: downloads have no grouping or reorder concept, so every row is a leaf. One row per
@@ -104,9 +80,6 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly instance: InstanceView;
-  private readonly log: (line: string) => void;
-  private readonly unconfirmed = new Map<string, UnconfirmedWrite>();
-  private readonly unconfirmedDeletes = new Map<string, UnconfirmedDelete>();
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
   private readonly readFailureSubscription: vscode.Disposable;
@@ -124,11 +97,9 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
 
   constructor(options: DownloadsProviderOptions) {
     this.instance = options.instance;
-    this.log = options.log;
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
     this.instanceSubscription = options.instance.subscribe((value) => {
-      this.settleUnconfirmed(value);
       this.instanceValue = value;
       this.invalidate();
     });
@@ -139,89 +110,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     return lastGoodReadMessage(this.instance);
   }
 
-  private settleUnconfirmed(value: InstanceValue): void {
-    if (value.downloads.kind !== 'listed') return;
-    const { rows } = value.downloads;
-    for (const [name, write] of this.unconfirmed) {
-      const disk = rows.find((row) => row.name === name);
-      if (disk?.excluded !== write.excluded) {
-        if (!write.differedOnce) {
-          write.differedOnce = true;
-          continue;
-        }
-        this.log(`"${name}" was written ${write.excluded ? 'excluded' : 'included'}, and ${whatTheDiskShows(disk?.excluded, 'excluded', 'included')}.`);
-      }
-      clearTimeout(write.timer);
-      this.unconfirmed.delete(name);
-    }
-    this.settleUnconfirmedDeletes(rows);
-  }
-
-  private settleUnconfirmedDeletes(rows: readonly DownloadFile[]): void {
-    for (const [name, write] of this.unconfirmedDeletes) {
-      if (rows.some((row) => row.name === name)) {
-        if (!write.differedOnce) {
-          write.differedOnce = true;
-          continue;
-        }
-        this.log(`"${name}" was deleted, and the disk still lists it.`);
-      }
-      clearTimeout(write.timer);
-      this.unconfirmedDeletes.delete(name);
-    }
-  }
-
-  /** The row stays as it is; the mark follows after a delay. */
-  markUnconfirmedDelete(name: string): void {
-    clearTimeout(this.unconfirmedDeletes.get(name)?.timer);
-    const write: UnconfirmedDelete = {
-      marked: false, differedOnce: false,
-      timer: setTimeout(() => {
-        write.marked = true;
-        this.rerender();
-      }, MARK_DELAY_MS),
-    };
-    this.unconfirmedDeletes.set(name, write);
-  }
-
-  /** A refused or failed delete shows the disk's row at once, with no mark. */
-  forgetUnconfirmedDelete(name: string): void {
-    clearTimeout(this.unconfirmedDeletes.get(name)?.timer);
-    this.unconfirmedDeletes.delete(name);
-    this.invalidate();
-  }
-
-  /** The row shows its new state at once, even where show excluded is off; the mark follows after
-   *  a delay. */
-  markUnconfirmed(name: string, excluded: boolean): void {
-    clearTimeout(this.unconfirmed.get(name)?.timer);
-    const write: UnconfirmedWrite = {
-      excluded, marked: false, differedOnce: false,
-      timer: setTimeout(() => {
-        write.marked = true;
-        this.rerender();
-      }, MARK_DELAY_MS),
-    };
-    this.unconfirmed.set(name, write);
-    this.rerender();
-  }
-
-  /** A refused or failed write shows the disk's value at once, with no mark. */
-  forgetUnconfirmed(name: string): void {
-    clearTimeout(this.unconfirmed.get(name)?.timer);
-    this.unconfirmed.delete(name);
-    this.invalidate();
-  }
-
-  private rerender(): void {
-    this.cache = undefined;
-    this._onDidChangeTreeData.fire(undefined);
-  }
-
   dispose(): void {
-    for (const write of [...this.unconfirmed.values(), ...this.unconfirmedDeletes.values()]) clearTimeout(write.timer);
-    this.unconfirmed.clear();
-    this.unconfirmedDeletes.clear();
     this.instanceSubscription.dispose();
     this.readFailureSubscription.dispose();
     this.firstRead.dispose();
@@ -296,24 +185,8 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   private build(downloads: readonly DownloadFile[]): DownloadNode[] {
     // Archive-filtering applies first — a non-archive is never a row, toggle or not — then
     // excluded-filtering, then sort — the acceptance criterion the three compose by.
-    const archives = filterArchiveRows(downloads).map((row) => this.writtenState(row));
-    const shown = new Set(filterExcludedRows(archives, this.showExcluded));
-    const filtered = archives.filter((row) => shown.has(row) || this.unconfirmed.has(row.name));
-    const rows = sortDownloadRows(filtered, this.sortColumn, this.sortDescending);
-    return rows.map((row) => this.toNode(row));
-  }
-
-  private writtenState(row: DownloadFile): DownloadFile {
-    const write = this.unconfirmed.get(row.name);
-    return write === undefined ? row : { ...row, excluded: write.excluded };
-  }
-
-  private toNode(row: DownloadFile): DownloadNode {
-    const node = new DownloadNode(row);
-    if (this.unconfirmed.get(row.name)?.marked || this.unconfirmedDeletes.get(row.name)?.marked) {
-      node.iconPath = new vscode.ThemeIcon('sync~spin');
-      node.tooltip = UNCONFIRMED_TOOLTIP;
-    }
-    return node;
+    const archives = filterArchiveRows(downloads);
+    const rows = sortDownloadRows(filterExcludedRows(archives, this.showExcluded), this.sortColumn, this.sortDescending);
+    return rows.map((row) => new DownloadNode(row));
   }
 }
