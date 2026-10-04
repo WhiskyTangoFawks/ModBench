@@ -313,6 +313,15 @@ describe('the row for an origin, which Go to mod reveals', () => {
     expect(provider.getParent(expectInstanceOf(provider.rowFor(modOf('Old Mod')), ModNode))).toBeUndefined();
   });
 
+  it('is a mod a matching separator shows whole, though the mod\'s own name does not match', () => {
+    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
+    provider.setFilter('early section', true);
+
+    expect(provider.getParent(expectInstanceOf(provider.rowFor(modOf('Base Patch')), ModNode)))
+      .toMatchObject({ id: 'separator:Early Section' });
+    expect(provider.rowFor(modOf('Old Mod'))).toBeUndefined();
+  });
+
   it('under a grouping filter has the separator its filter shows for it as its parent', () => {
     const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
     provider.setFilter('base', true);

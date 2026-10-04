@@ -1208,9 +1208,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     expect(menuOn('file conflict')).toEqual([
       ['modbench.mod.openFolder', '1_open'], ['modbench.mod.goToMod', '1_open'], ['modbench.copyValue', '5_copy'],
     ]);
-    expect(menuOn('folder').map(([command]) => command)).not.toContain('modbench.mod.goToMod');
   });
-
 
   it('Folder menu: open folder, then copy value, and no item of a mod\'s, a separator\'s or Overwrite\'s', () => {
     expect(menuOn('folder')).toEqual([['modbench.mod.openFolder', '1_open'], ['modbench.copyValue', '5_copy']]);

@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
 
 import { registerGoToModCommand } from '../goToMod';
 import { ModNode, OverwriteNode } from '../ModListProvider';
-import { FileNode, goToModCandidates } from '../modFiles';
+import { FileNode } from '../modFiles';
 import { FileConflictLookup, RUNTIME_OUTPUT, modOrigin, type ConflictEntry } from '../../instanceLoader/fileConflictIndex';
 import type { FileOrigin, OriginFile } from '../../instanceLoader/instance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -28,31 +28,6 @@ const entryOf = (...providers: FileOrigin[]): ConflictEntry => ({
 const high = modOrigin('High');
 const middle = modOrigin('Middle');
 const low = modOrigin('Low');
-
-describe('the origins go to mod can name for a copy of a file', () => {
-  it('is the winning copy for a copy that loses', () => {
-    expect(goToModCandidates(entryOf(high, middle, low), middle)).toEqual([high]);
-  });
-
-  it('is every copy the winning copy wins over, in the order the index lists them', () => {
-    expect(goToModCandidates(entryOf(high, middle, low), high)).toEqual([middle, low]);
-  });
-
-  it('is Overwrite as the winner of a mod copy it wins over', () => {
-    expect(goToModCandidates(entryOf(RUNTIME_OUTPUT, low), low)).toEqual([RUNTIME_OUTPUT]);
-  });
-
-  it('is nothing for a copy nothing else provides, a copy that is no provider, and a path no one provides', () => {
-    expect(goToModCandidates(entryOf(high), high)).toEqual([]);
-    expect(goToModCandidates(entryOf(high, middle), low)).toEqual([]);
-    expect(goToModCandidates(undefined, high)).toEqual([]);
-  });
-
-  it('tells a mod folder named overwrite from Overwrite', () => {
-    const folderNamedOverwrite = modOrigin('overwrite');
-    expect(goToModCandidates(entryOf(RUNTIME_OUTPUT, folderNamedOverwrite), folderNamedOverwrite)).toEqual([RUNTIME_OUTPUT]);
-  });
-});
 
 describe('the go to mod command', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -132,6 +107,16 @@ describe('the go to mod command', () => {
 
     expect(reveal.mock.calls).toEqual([[modRows.get('Low')]]);
     expect(showQuickPick).not.toHaveBeenCalled();
+  });
+
+  it('refuses an option that names no copy this one relates to, rather than selecting something else', async () => {
+    const { reveal, reporter, fileIn, invoke } = setup([high, middle, low]);
+
+    await invoke(fileIn(high), undefined, modOrigin('Stranger'));
+    await invoke(fileIn(high), undefined, 'Low');
+
+    expect(reveal).not.toHaveBeenCalled();
+    expect(reporter.reports.map((r) => r.message)).toEqual(['Failed to go to a mod.', 'Failed to go to a mod.']);
   });
 
   it('does nothing for a copy no conflict holds, and for a row that is not a file', async () => {

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { FileOrigin, Mod, OriginFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
-import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
+import { goToModCandidates, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistGroup, type ModlistTree } from './modlistTree';
 import type { ModStatus, ModStatusResult } from '../instanceLoader/statusChecker';
@@ -9,7 +9,7 @@ import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
 import { setModsEnabled as setModsEnabledCommand, type ModlistAccess } from '../modlist/modlist';
-import { anyNamed, goToModCandidates, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode, type ChildrenShown } from './modFiles';
+import { anyNamed, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode, type ChildrenShown } from './modFiles';
 
 /** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
 export type SortDirection = 'losingAtTop' | 'winningAtTop';
@@ -202,7 +202,7 @@ export class OverwriteNode extends vscode.TreeItem {
   ) {
     const listed = found ?? { files, folders };
     const shown = found ? 'matching' : 'all';
-    super('Overwrite', expanderOver([...listed.files, ...listed.folders], shown));
+    super(OVERWRITE_LABEL, expanderOver([...listed.files, ...listed.folders], shown));
     this.listed = listed;
     this.shown = shown;
     this.id = this.kind;
@@ -595,7 +595,6 @@ export class ModListProvider
     };
   }
 
-  // A separator, with the mods the filter shows under it; none when it shows nothing.
   private groupRow(group: ModlistGroup): SeparatorNode | undefined {
     if (!this.filterText) return this.separatorNode(group.separator, this.inViewOrder(group.mods));
     const shown = shownUnder('matching', this.matches, group.separator.name);
@@ -650,17 +649,26 @@ export class ModListProvider
 
   getParent(element: ModlistNode): ModlistNode | undefined {
     if (element instanceof FolderNode || element instanceof FileNode) return element.parent;
-    if (!(element instanceof ModNode) || (this.filterText && !this.groupingOn)) return undefined;
-    const group = this.ensureLoaded().groups.find((g) => g.mods.some((m) => m.name === element.mod.name));
+    const group = element instanceof ModNode ? this.groupHolding(element.mod.name) : undefined;
     return group && this.groupRow(group);
   }
 
-  /** The row the tree shows for an origin: undefined when the list does not hold the mod or the
-   *  filter hides it. */
+  /** The row the tree shows for an origin, or undefined when it shows none. */
   rowFor(origin: FileOrigin): ModNode | OverwriteNode | undefined {
     if (origin.kind !== 'mod') return this.overwriteNode();
     const mod = this.instanceValue.mods.find((entry): entry is Mod => entry.kind === 'mod' && entry.name === origin.name);
-    return mod && (!this.filterText || this.isFound(mod)) ? this.modNode(mod) : undefined;
+    return mod && this.showsMod(mod) ? this.modNode(mod) : undefined;
+  }
+
+  private groupHolding(modName: string): ModlistGroup | undefined {
+    if (this.filterText && !this.groupingOn) return undefined;
+    return this.ensureLoaded().groups.find((g) => g.mods.some((m) => m.name === modName));
+  }
+
+  private showsMod(mod: Mod): boolean {
+    if (!this.filterText) return true;
+    const group = this.groupHolding(mod.name);
+    return group ? this.groupRow(group)?.mods.some((m) => m.name === mod.name) === true : this.isFound(mod);
   }
 
   // modlist.txt is winning-first. View order only.

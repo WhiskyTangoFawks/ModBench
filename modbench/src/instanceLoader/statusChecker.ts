@@ -3,7 +3,7 @@
 // opened (ADR-0016).
 
 import type { FileOrigin, ModlistEntry, OriginFile } from '../instanceAdapter/instanceAdapter';
-import type { FileConflictIndex } from './fileConflictIndex';
+import { OVERWRITE_LABEL, type FileConflictIndex } from './fileConflictIndex';
 
 export type ModStatus =
   | { kind: 'ok' }
@@ -16,7 +16,7 @@ export interface ModStatusResult {
   conflictLines: string[];
 }
 
-const winnerLabel = (origin: FileOrigin): string => (origin.kind === 'mod' ? `"${origin.name}"` : 'Overwrite');
+const winnerLabel = (origin: FileOrigin): string => (origin.kind === 'mod' ? `"${origin.name}"` : OVERWRITE_LABEL);
 
 export function computeModStatuses(entries: ModlistEntry[], index: FileConflictIndex): Map<string, ModStatusResult> {
   const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import type { Mod, Separator, ModlistEntry } from '../instance';
-import { buildFileConflictIndex, modOrigin, rootLevelWinners, foldPath } from '../fileConflictIndex';
+import {
+  buildFileConflictIndex, modOrigin, rootLevelWinners, foldPath, goToModCandidates, RUNTIME_OUTPUT, type ConflictEntry,
+} from '../fileConflictIndex';
 import { computeModStatuses } from '../statusChecker';
 import type { InstanceAdapter, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../loadOrderSnapshot';
@@ -233,5 +235,37 @@ describe.skipIf(litrInstance === '')('buildFileConflictIndex — real LitR insta
           ?.conflictLines.some((line) => sameLineIgnoringCasing(line, `${relativePath} → winner: "${fixName}"`)),
       ).toBe(true);
     }
+  });
+});
+
+const entryOf = (...providers: ConflictEntry['providers']): ConflictEntry => ({
+  relativePath: 'textures/a.dds', winner: '/w', winnerOrigin: providers[0] ?? RUNTIME_OUTPUT, providers,
+});
+const high = modOrigin('High');
+const middle = modOrigin('Middle');
+const low = modOrigin('Low');
+
+describe('the origins go to mod can name for a copy of a file', () => {
+  it('is the winning copy for a copy that loses', () => {
+    expect(goToModCandidates(entryOf(high, middle, low), middle)).toEqual([high]);
+  });
+
+  it('is every copy the winning copy wins over, in the order the index lists them', () => {
+    expect(goToModCandidates(entryOf(high, middle, low), high)).toEqual([middle, low]);
+  });
+
+  it('is Overwrite as the winner of a mod copy it wins over', () => {
+    expect(goToModCandidates(entryOf(RUNTIME_OUTPUT, low), low)).toEqual([RUNTIME_OUTPUT]);
+  });
+
+  it('is nothing for a copy nothing else provides, a copy that is no provider, and a path no one provides', () => {
+    expect(goToModCandidates(entryOf(high), high)).toEqual([]);
+    expect(goToModCandidates(entryOf(high, middle), low)).toEqual([]);
+    expect(goToModCandidates(undefined, high)).toEqual([]);
+  });
+
+  it('tells a mod folder named overwrite from Overwrite', () => {
+    const folderNamedOverwrite = modOrigin('overwrite');
+    expect(goToModCandidates(entryOf(RUNTIME_OUTPUT, folderNamedOverwrite), folderNamedOverwrite)).toEqual([RUNTIME_OUTPUT]);
   });
 });

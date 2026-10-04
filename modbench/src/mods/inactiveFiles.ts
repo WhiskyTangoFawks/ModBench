@@ -3,8 +3,8 @@
 
 import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFile, OriginFolder } from '../instanceLoader/instance';
-import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import { fileRowUri, sameOrigin } from './modFiles';
+import { modOrigin, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { fileRowUri } from './modFiles';
 
 /** Why the game does not get a file: another copy wins its path, it is excluded, or its mod is
  *  disabled. A folder never loses: the game merges folders. */
