@@ -3,9 +3,9 @@ import { Linter } from 'eslint';
 import { noRereadAfterWrite, WRITES, VIEW_REREADS } from '../../eslint-rules/noRereadAfterWrite.mjs';
 
 const MESSAGE =
-  'A write writes its file and returns. A view changes only when the watch reads the file back: the '
-  + "Instance loader's next value for the instance's files, mEdit's published rows for plugin source. "
-  + 'A write path never refreshes or invalidates a view, landed or failed (ADR-0015).';
+  "A write writes its file and returns. A view changes only when a read lands: the Instance loader's, which "
+  + "runWritingGesture asks for once the command ends, or mEdit's published rows for plugin source. "
+  + 'A write path never refreshes or invalidates a view itself, landed or failed (ADR-0015).';
 
 function lint(code: string): Linter.LintMessage[] {
   const linter = new Linter();
@@ -36,6 +36,14 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
     const messages = lint(`async function f(client, tree) { await client.createRecord(x); tree.${reread}(); }\n`);
 
     expect(messages).toHaveLength(1);
+  });
+
+  it('passes a write run through runWritingGesture, and fails an instance refresh beside the write inside it', () => {
+    const through = lint('async function f(client, instance) { await client.track(x); await runWritingGesture(view, instance, noop); }\n');
+    const beside = lint('function f(client, instance) { return runWritingGesture(view, instance, async () => { await client.track(x); instance.refresh(); }); }\n');
+
+    expect(through).toEqual([]);
+    expect(beside).toHaveLength(1);
   });
 
   it('fails a tree-data event fired straight after a drop\'s write', () => {
