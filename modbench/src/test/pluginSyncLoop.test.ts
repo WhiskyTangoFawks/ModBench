@@ -13,7 +13,7 @@ import { syncPlugins, setPluginsEnabled, type PluginSyncResult } from '../plugin
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
-import { logGameFolderNotFound } from '../gameFolderNotFoundLog';
+import { logGameFolderNotFound } from '../toolbox/gameFolderNotFoundLog';
 import { modSyncOver } from '../modlist/modlist';
 
 const PROFILE = 'Default';
@@ -185,7 +185,7 @@ describe('the game folder not found, across the whole instance', () => {
       adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }), log: write, logReadFailure: write,
     });
     instances.push(instance);
-    logGameFolderNotFound(instance, (line) => channel.warn(`[instance] ${line}`));
+    logGameFolderNotFound(instance, (line) => channel.warn(line));
     const pluginSync = wirePluginSync(instance, ({ profile, provided, inData, loadedWithNoLine }) => {
       return syncPlugins(accessTo(root), profile, provided, inData, loadedWithNoLine);
     }, channel);
