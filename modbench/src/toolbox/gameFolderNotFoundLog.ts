@@ -1,9 +1,9 @@
 import type * as vscode from 'vscode';
-import type { GameFolder, InstanceView } from './instanceLoader/instance';
+import type { GameFolder, InstanceView } from '../instanceLoader/instance';
 
 function lineFor(gameFolder: Extract<GameFolder, { kind: 'notFound' }>): string {
   const looked = gameFolder.looked.map(({ place, answer }) => `${place}: ${answer}`).join('; ');
-  return `Game folder not found. Modbench looked at: ${looked}. Set ${gameFolder.setting} to the game folder to fix it.`;
+  return `[instance] Game folder not found. Modbench looked at: ${looked}. Set ${gameFolder.setting} to the game folder to fix it.`;
 }
 
 /** One Output line per failure however many views show it (common.md, States, story 5). A folder
