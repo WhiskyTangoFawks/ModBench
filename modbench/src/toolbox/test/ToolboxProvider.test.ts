@@ -16,8 +16,8 @@ const VALUE = instanceValueFixture({
   gameFolder: { kind: 'found', root: GAME_FOLDER, dataFolder: `${GAME_FOLDER}/Data` },
 });
 
-function rowsOf(instance: FakeInstance | undefined) {
-  return new ToolboxProvider({ instance }).getChildren();
+function rowsOf(instance: FakeInstance) {
+  return new ToolboxProvider({ instance, channel: { warn: () => undefined } }).getChildren();
 }
 
 function row(instance: FakeInstance, label: string) {
@@ -53,7 +53,7 @@ describe('the Toolbox view, given an instance value', () => {
 
   it('follows a landed value', () => {
     const instance = new FakeInstance(VALUE);
-    const provider = new ToolboxProvider({ instance });
+    const provider = new ToolboxProvider({ instance, channel: { warn: () => undefined } });
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
@@ -67,7 +67,7 @@ describe('the Toolbox view, given an instance value', () => {
 describe('the Toolbox view, given a later read that fails', () => {
   it('keeps its rows, says it shows the last good read, and clears the line once a read lands', () => {
     const instance = new FakeInstance(VALUE);
-    const provider = new ToolboxProvider({ instance });
+    const provider = new ToolboxProvider({ instance, channel: { warn: () => undefined } });
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
@@ -82,7 +82,7 @@ describe('the Toolbox view, given a later read that fails', () => {
 
   it('says nothing of a last good read while the first read has failed: the error row is the message', () => {
     const instance = new FakeInstance(VALUE, 0);
-    const provider = new ToolboxProvider({ instance });
+    const provider = new ToolboxProvider({ instance, channel: { warn: () => undefined } });
 
     instance.fail('ENOENT modlist.txt');
 
@@ -117,7 +117,7 @@ describe('the Toolbox view, given the game folder not found', () => {
 
   it('clears the warning on the next value with the game folder found', () => {
     const instance = new FakeInstance(NOT_FOUND);
-    const provider = new ToolboxProvider({ instance });
+    const provider = new ToolboxProvider({ instance, channel: { warn: () => undefined } });
 
     instance.publish(VALUE);
 
@@ -130,7 +130,7 @@ describe('the Toolbox view, given the game folder not found', () => {
 
 describe('the Toolbox view\'s states', () => {
   it('shows no rows where there is no instance to read', () => {
-    expect(rowsOf(undefined)).toEqual([]);
+    expect(new ToolboxProvider({ instance: undefined }).getChildren()).toEqual([]);
   });
 
   it('shows no rows before the first read lands, rather than a Profile row reading the pre-read empty profile as `—`', () => {
@@ -139,7 +139,7 @@ describe('the Toolbox view\'s states', () => {
 
   it('shows one error row in place of its rows when the first read fails, and rows once a read lands', () => {
     const instance = new FakeInstance(VALUE, 0);
-    const provider = new ToolboxProvider({ instance });
+    const provider = new ToolboxProvider({ instance, channel: { warn: () => undefined } });
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
@@ -168,7 +168,7 @@ describe('the Toolbox view\'s states', () => {
 
   it('stops following the instance once disposed', () => {
     const instance = new FakeInstance(VALUE);
-    const provider = new ToolboxProvider({ instance });
+    const provider = new ToolboxProvider({ instance, channel: { warn: () => undefined } });
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
