@@ -18,9 +18,6 @@ import { pluginAddressKey } from './trackedRepositories';
 import { isRecordRow, PLUGINS_KEY_ARGS } from './gestureEntry';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { RecordGroup } from './createdRecordSelection';
-import {
-  UNCONFIRMED_TOOLTIP, UnconfirmedRecordRows, type MarkedRow,
-} from './unconfirmedRecordRows';
 import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
@@ -305,7 +302,6 @@ export class PluginsTreeProvider
   private readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
   private readonly publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
   private instanceValue: InstanceValue;
-  private readonly unconfirmedRecords: UnconfirmedRecordRows;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
   // The plugin rows' plugins.txt lines as last rendered, which a drop's order check reads: the
@@ -343,18 +339,6 @@ export class PluginsTreeProvider
     }
     const unsubscribeChanges = options.client?.subscribe('external-change', (event) => this.applyExternalChange(event));
     if (unsubscribeChanges) this.subscriptions.push({ dispose: unsubscribeChanges });
-    this.unconfirmedRecords = new UnconfirmedRecordRows({
-      client: options.client, log: (line) => this.log('warn', `[PluginsTreeProvider] ${line}`), render: () => this.render(),
-    });
-    const unsubscribeRows = options.client?.subscribe('rows-changed',
-      (event) => this.unconfirmedRecords.rowsChanged({ name: event.plugin, origin: event.origin }, event.keys));
-    if (unsubscribeRows) this.subscriptions.push({ dispose: unsubscribeRows });
-  }
-
-  /** The rows a record write changes, marked until mEdit's index shows it (common.md, Unconfirmed
-   *  writes). */
-  get recordMarks(): Pick<UnconfirmedRecordRows, 'creating' | 'deleting' | 'copying'> {
-    return this.unconfirmedRecords;
   }
 
   // plugins.md, A row: each settle of a tracked mod names every plugin of it that changed outside
@@ -369,7 +353,6 @@ export class PluginsTreeProvider
   }
 
   dispose(): void {
-    this.unconfirmedRecords.dispose();
     for (const subscription of this.subscriptions) subscription.dispose();
     this._onDidChangeTreeData.dispose();
   }
@@ -565,7 +548,7 @@ export class PluginsTreeProvider
   // ── the tree item ─────────────────────────────────────────────────────────
 
   getTreeItem(element: PluginsTreeNode): vscode.TreeItem {
-    if (!isRow(element)) return this.markedBeneath(this.records?.getTreeItem(element) ?? element, element);
+    if (!isRow(element)) return this.records?.getTreeItem(element) ?? element;
     element.collapsibleState = this.collapsibleStateOf(element);
     // A row is returned *as* its own TreeItem, so decorating in place would accumulate
     // permanently, with no way back once the condition clears.
@@ -584,19 +567,6 @@ export class PluginsTreeProvider
   private collapsibleStateOf(element: PluginListNode): vscode.TreeItemCollapsibleState {
     if (element.kind === 'plugin' && !element.plugin.enabled) return vscode.TreeItemCollapsibleState.None;
     return vscode.TreeItemCollapsibleState.Collapsed;
-  }
-
-  private readonly unmarkedLook = new WeakMap<object, Pick<vscode.TreeItem, 'iconPath' | 'tooltip'>>();
-
-  private markedBeneath(item: vscode.TreeItem, element: PluginsTreeNode): vscode.TreeItem {
-    const plugin = this.pluginOf(element);
-    const row = plugin && markedRowOf(element, plugin);
-    const base = this.unmarkedLook.get(item) ?? { iconPath: item.iconPath, tooltip: item.tooltip };
-    this.unmarkedLook.set(item, base);
-    const marked = row !== undefined && this.unconfirmedRecords.isMarked(row);
-    item.iconPath = marked ? new vscode.ThemeIcon('sync~spin') : base.iconPath;
-    item.tooltip = marked ? UNCONFIRMED_TOOLTIP : base.tooltip;
-    return item;
   }
 
   private readonly originalDecoration = new WeakMap<object, RowDecoration>();
@@ -623,10 +593,6 @@ export class PluginsTreeProvider
     if (this.facts?.get(file, row.origin)?.readOnly === true) lines.push('read-only');
     for (const status of statuses) lines.push(status.tooltipLine);
     row.tooltip = lines.join('\n');
-    if (this.unconfirmedRecords.isMarked({ plugin: { name: file, origin: row.origin } })) {
-      row.iconPath = new vscode.ThemeIcon('sync~spin');
-      row.tooltip = UNCONFIRMED_TOOLTIP;
-    }
     row.contextValue = this.contextValueOf(row);
   }
 
@@ -742,7 +708,6 @@ export class PluginsTreeProvider
    *  `undefined` when the read failed. */
   async applyReconciled(failures: PluginLoadFailure[]): Promise<PluginMatch[] | undefined> {
     const generation = ++this.generation;
-    this.unconfirmedRecords.reconciled();
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation) return undefined;
     this.expansionOverride = undefined;
@@ -912,12 +877,6 @@ function isRow(element: PluginsTreeNode): element is PluginListNode {
 function recordFormKeyOf(row: PluginsTreeNode): string | undefined {
   if (!isRecordRow(row)) return undefined;
   return row.kind === 'record' ? row.record.formKey : row.formKey;
-}
-
-function markedRowOf(row: PluginsTreeNode, plugin: PluginAddress): MarkedRow | undefined {
-  if (row.kind === 'recordType') return { plugin, recordType: row.recordType };
-  const formKey = recordFormKeyOf(row);
-  return formKey === undefined ? undefined : { plugin, formKey };
 }
 
 function heldSet(plugins: readonly PluginAddress[]): ByPluginAddress<true> {

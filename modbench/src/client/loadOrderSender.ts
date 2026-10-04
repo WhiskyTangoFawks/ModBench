@@ -18,6 +18,9 @@ export interface LoadOrderSender {
   /** Hand mEdit this snapshot. Resolves with this snapshot's own outcome: `abandoned` when a
    *  newer snapshot superseded it before it was sent, or when it was abandoned outright. */
   send(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
+  /** The outcome of the newest snapshot handed to `send`, which follows a superseding snapshot.
+   *  Undefined when none was sent. */
+  latest(): Promise<LoadOrderOutcome | undefined>;
   /** The abort scope the send in flight runs under. A launch arms it before its own earlier
    *  phase; re-arming never aborts the scope it replaces, which the backend answers 409. */
   arm(): { signal: AbortSignal; abandoned: () => boolean };
@@ -92,14 +95,25 @@ export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSen
     pump();
   });
 
+  let newest: Promise<LoadOrderOutcome> | undefined;
+
   return {
     send(snapshot) {
       if (disposed) return Promise.resolve(ABANDONED);
       dropWaiting();
-      return new Promise<LoadOrderOutcome>((resolve) => {
+      const sent = new Promise<LoadOrderOutcome>((resolve) => {
         waiting = { snapshot, settle: resolve };
         pump();
       });
+      newest = sent;
+      return sent;
+    },
+    async latest() {
+      for (let asked = newest; asked !== undefined; asked = newest) {
+        const outcome = await asked;
+        if (asked === newest) return outcome;
+      }
+      return undefined;
     },
     arm,
     abandon,
