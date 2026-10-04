@@ -85,4 +85,18 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
 
         Assert.Equal(WorkingTreeState.None, SummaryFor(Listing(index), edited).WorkingTreeState);
     }
+
+    [Fact]
+    public void Search_WhileAChangedFileCannotBeRead_StillReportsModified_AndTheFailureIsReported()
+    {
+        using var index = Indexes.Reconciled(_fixture);
+        var edited = _editedFormKey.ToString();
+        var committed = index.RequireReads().DocumentOf(edited, _baseKey);
+        index.Edit(_base, committed, committed.BodyOf().Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal));
+        using var held = new FileStream(_base.SourceFileOf(committed), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        index.NextSnapshotUntil(() => index.Status.Failures.Count > 0, "the failure reported");
+
+        Assert.Equal(WorkingTreeState.Modified, SummaryFor(Listing(index), edited).WorkingTreeState);
+    }
 }

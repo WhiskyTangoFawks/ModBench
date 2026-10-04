@@ -356,16 +356,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         var changes = SourceRepository.Over(modFolder, _release)
             .ChangedSinceLastCommit(key, _schemaReflector.GetSchemas(_release));
 
-        var learned = changes
-            .Where(change => change.Value != RecordChange.Deleted)
-            .ToDictionary(
-                change => change.Key,
-                change => change.Value == RecordChange.Added ? WorkingTreeState.Added : WorkingTreeState.Modified,
-                StringComparer.Ordinal);
-        var held = HeldWorkingTreeStates(key);
-        var moved = held.Keys.Except(learned.Keys, StringComparer.Ordinal)
-            .Select(formKey => (FormKey: formKey, State: WorkingTreeState.None))
-            .Concat(learned.Where(l => held.GetValueOrDefault(l.Key) != l.Value).Select(l => (FormKey: l.Key, State: l.Value)))
+        var learned = changes.ToDictionary(
+            change => change.Key,
+            change => change.Value == RecordChange.Added ? WorkingTreeState.Added : WorkingTreeState.Modified,
+            StringComparer.Ordinal);
+        var moved = KeysDiffering(HeldWorkingTreeStates(key), learned)
+            .Select(formKey => (FormKey: formKey, State: learned.GetValueOrDefault(formKey)))
             .ToList();
         if (moved.Count == 0) return [];
 
@@ -383,6 +379,13 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
         return [.. moved.Select(m => m.FormKey)];
     }
+
+    // A key absent from one side reads as that value's default: a clean row, or no row.
+    private static IEnumerable<string> KeysDiffering<T>(
+        IReadOnlyDictionary<string, T> before, IReadOnlyDictionary<string, T> after) =>
+        before.Keys.Union(after.Keys, StringComparer.Ordinal)
+            .Where(formKey => !EqualityComparer<T>.Default.Equals(
+                before.GetValueOrDefault(formKey), after.GetValueOrDefault(formKey)));
 
     private Dictionary<string, WorkingTreeState> HeldWorkingTreeStates(PluginAddress key)
     {
@@ -403,7 +406,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.RefreshByKeys"/>.</summary>
     public void RefreshByKeys(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys)
     {
-        // One signal, one advance, however many documents and refs it moves.
+        // One signal, one advance, however many documents it moves.
         using var projection = BeginProjection();
 
         // The tree is what these rows are re-derived from, so it is what the plugin is derived from
@@ -493,7 +496,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (!SourceRepository.HoldsTreeFor(modFolder, key.Name)) return;
         if (RegistrationOf(key) is not { } registration) return;
 
-        // Ingest, head reconcile and winner sweep are one whole-plugin projection, so they are one
+        // Ingest and winner sweep are one whole-plugin projection, so they are one
         // advance and the notification below carries the number a subscriber can await.
         var before = EffectiveContentHashes(key);
         var statesBefore = HeldWorkingTreeStates(key);
@@ -509,11 +512,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         // ADR-0015: the keys asked about, and every row the tree read again moved, gone
         // or gained, at the sequence it landed on.
-        var moved = before.Keys.Union(after.Keys, StringComparer.Ordinal)
-            .Where(formKey => !before.TryGetValue(formKey, out var was) || !after.TryGetValue(formKey, out var now) || was != now)
-            .Union(statesBefore.Keys.Union(statesAfter.Keys, StringComparer.Ordinal)
-                .Where(formKey => statesBefore.GetValueOrDefault(formKey) != statesAfter.GetValueOrDefault(formKey)),
-                StringComparer.Ordinal);
+        var moved = KeysDiffering(before, after).Union(KeysDiffering(statesBefore, statesAfter), StringComparer.Ordinal);
         PublishRowsChanged(key, [.. formKeys.Union(moved, StringComparer.Ordinal)]);
     }
 

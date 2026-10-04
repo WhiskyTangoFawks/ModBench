@@ -45,11 +45,6 @@ internal sealed class SourceValidation(
         var gained = treeFullyRead ? onDisk.Keys.Except(held.Keys, StringComparer.Ordinal).ToList() : [];
         if (gained.Count > 0) return new ValidationReport(gained, NeedsRebuild: true, failures);
 
-        // A held record with no document here is refreshed by key, which reads it again, so the
-        // rows-changed it publishes names it (ADR-0015).
-        var deleted = treeFullyRead ? held.Keys.Except(onDisk.Keys, StringComparer.Ordinal).ToList() : [];
-        if (deleted.Count > 0) index.RefreshByKeys(key, modFolder, deleted);
-
         // The tree files the records the rows hold, so from here the plugin loads from it (ADR-0007).
         if (treeFullyRead) index.RestampDerivation(key, DerivedFrom.SourceTree);
 
@@ -57,19 +52,27 @@ internal sealed class SourceValidation(
             .Where(d => held.TryGetValue(d.Key, out var stamp) && !string.Equals(d.Value, stamp, StringComparison.Ordinal))
             .Select(d => d.Key)
             .ToList();
-        if (drifted.Count > 0)
+        if (drifted.Count > 0 && logger.IsEnabled(LogLevel.Information))
         {
-            if (logger.IsEnabled(LogLevel.Information))
-            {
-                logger.LogInformation(
-                    "Validate found {Count} source document(s) of {Plugin} ({Origin}) disagreeing with the index; refreshing",
-                    drifted.Count, key.Name, key.Origin);
-            }
-            index.RefreshByKeys(key, modFolder, drifted);
+            logger.LogInformation(
+                "Validate found {Count} source document(s) of {Plugin} ({Origin}) disagreeing with the index; refreshing",
+                drifted.Count, key.Name, key.Origin);
         }
 
-        var moved = index.LearnWorkingTreeStates(key, modFolder);
-        if (moved.Count > 0) index.PublishRowsChanged(key, moved);
+        // A held record with no document here is refreshed by key too, which reads it again, so the
+        // rows-changed it publishes names it (ADR-0015). A refresh learns the working tree states
+        // itself, so the tree is asked once either way.
+        var deleted = treeFullyRead ? held.Keys.Except(onDisk.Keys, StringComparer.Ordinal) : [];
+        List<string> stale = [.. deleted, .. drifted];
+        if (stale.Count > 0)
+        {
+            index.RefreshByKeys(key, modFolder, stale);
+        }
+        else if (index.LearnWorkingTreeStates(key, modFolder) is { Count: > 0 } moved)
+        {
+            index.PublishRowsChanged(key, moved);
+        }
+
         return new ValidationReport([], NeedsRebuild: false, failures);
     }
 

@@ -115,15 +115,45 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     }
 
     [Fact]
-    public void ADocumentTakenOutOfTheWorkingTree_IsDeleted()
+    public void ADocumentTakenOutOfTheWorkingTree_ChangesNoRecordTheTreeHolds()
     {
         var repository = Tracked();
 
         File.Delete(Path.Combine(_modFolder, NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk));
 
-        var only = Assert.Single(ChangesIn(repository));
-        Assert.Equal(NpcFormKey, only.Key);
-        Assert.Equal(RecordChange.Deleted, only.Value);
+        Assert.Empty(ChangesIn(repository));
+    }
+
+    [Fact]
+    public void AChangedFileThatCannotBeRead_Throws_NeverReadsAsADeletion()
+    {
+        var repository = Tracked();
+        var path = Path.Combine(_modFolder, NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk);
+        File.WriteAllText(path, EditedBody);
+        using var held = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        Assert.Throws<UnreadableSourceDocumentException>(() => ChangesIn(repository));
+    }
+
+    [Fact]
+    public void ATrackedTreeWhoseStatusGitCannotReport_Throws_NeverReadsAsEveryRecordAdded()
+    {
+        var repository = Tracked();
+        File.WriteAllText(Path.Combine(_modFolder, ".git", "index"), "not an index");
+
+        Assert.Throws<UnreadableSourceDocumentException>(() => ChangesIn(repository));
+    }
+
+    [Fact]
+    public void ATreeWithNoRepository_HasNoLastCommit_SoEveryRecordIsAdded()
+    {
+        var path = Path.Combine(_modFolder, NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk);
+        Directory.CreateDirectory(Path.GetDirectoryName(path).Require());
+        File.WriteAllText(path, NpcBody);
+
+        var only = Assert.Single(ChangesIn(SourceRepository.Over(_modFolder, Release)));
+
+        Assert.Equal((NpcFormKey, RecordChange.Added), (only.Key, only.Value));
     }
 
     [Fact]

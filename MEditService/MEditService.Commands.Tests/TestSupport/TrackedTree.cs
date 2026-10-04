@@ -48,7 +48,7 @@ internal static class TrackedTree
             .Keys.Order(StringComparer.Ordinal)];
 
     /// <summary>The files holding a record the tree changed since the last commit: an embedded child
-    /// answers with its owner's file, and a record the tree lost with none.</summary>
+    /// answers with its owner's file, and .</summary>
     internal static IReadOnlyList<string> ChangedDocumentFiles(string modFolder, PluginAddress plugin)
     {
         var repository = Repository(modFolder);
@@ -56,7 +56,6 @@ internal static class TrackedTree
         return
         [
             .. repository.ChangedSinceLastCommit(plugin, schemas)
-                .Where(change => change.Value != RecordChange.Deleted)
                 .Select(change => DocumentFile(modFolder, plugin, change.Key))
                 .OfType<string>().Distinct().Order(StringComparer.Ordinal),
         ];
