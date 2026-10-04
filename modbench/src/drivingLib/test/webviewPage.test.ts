@@ -10,7 +10,7 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import { showWebviewPage, type WebviewPage } from '../webviewPage';
 
-const RECORD_PAGE: WebviewPage = { script: 'main.js', stylesheet: 'main.css' };
+const RECORD_PAGE: WebviewPage = { script: 'main.js' };
 
 function shown(page: WebviewPage) {
   const webview = {
@@ -30,11 +30,11 @@ describe('a page of the webview build, loaded into a webview', () => {
   it('loads the page\'s own script and stylesheet', () => {
     const { html } = shown(RECORD_PAGE);
     expect(html).toContain('<script type="module" src="ext/out/webview/assets/main.js">');
-    expect(html).toContain('<link rel="stylesheet" href="ext/out/webview/assets/main.css">');
+    expect(html).toContain('<link rel="stylesheet" href="ext/out/webview/assets/webview.css">');
   });
 
-  it('links no stylesheet for a page the build emits none for', () => {
-    expect(shown({ script: 'conflicts.js' }).html).not.toContain('<link');
+  it('links the build\'s one stylesheet on every page', () => {
+    expect(shown({ script: 'conflicts.js' }).html).toContain('<link rel="stylesheet" href="ext/out/webview/assets/webview.css">');
   });
 
   it('includes a nonce in the CSP script-src, and applies it to the inline script tag', () => {

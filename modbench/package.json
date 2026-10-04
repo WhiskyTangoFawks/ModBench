@@ -425,6 +425,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.mod.compareFile",
+        "title": "Compare Mod File",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.mod.excludeFile",
         "title": "Exclude Mod File",
         "category": "Modbench"
@@ -637,6 +642,10 @@
         {
           "command": "modbench.mod.openConflicts",
           "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleOpenConflictsRow"
+        },
+        {
+          "command": "modbench.mod.compareFile",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleCompareFileRow"
         },
         {
           "command": "modbench.mod.excludeFile",
@@ -1103,9 +1112,14 @@
           "group": "1_open@1"
         },
         {
+          "command": "modbench.mod.compareFile",
+          "when": "view == modbench.modList && viewItem =~ /\\blosing\\b/",
+          "group": "1_open@2"
+        },
+        {
           "command": "modbench.mod.goToMod",
           "when": "view == modbench.modList && viewItem =~ /\\bconflict\\b/",
-          "group": "1_open@2"
+          "group": "1_open@3"
         },
         {
           "command": "modbench.mod.excludeFile",
@@ -1242,6 +1256,11 @@
         {
           "command": "modbench.mod.openConflicts",
           "when": "webviewId == 'modbench.conflicts' && webviewSection == conflictColumn",
+          "group": "1_open@1"
+        },
+        {
+          "command": "modbench.mod.compareFile",
+          "when": "webviewId == 'modbench.conflicts' && webviewSection == conflictCell",
           "group": "1_open@1"
         },
         {

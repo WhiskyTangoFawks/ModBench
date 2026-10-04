@@ -241,6 +241,21 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
     });
   });
 
+  it('marks the winning copy\'s cell, Overwrite\'s when it wins, and no other', async () => {
+    const value = await indexedValueOf([mod('High'), mod('Low'), mod('Other')], {
+      High: { files: [file('High', 'a.dds'), file('High', 'b.dds')] },
+      Low: { files: [file('Low', 'a.dds'), file('Low', 'b.dds')] },
+      Other: { files: [file('Other', 'b.dds')] },
+    }, { files: [file('overwrite', 'b.dds')] });
+
+    const table = conflictTable(read(value), 'High', [winningFirstCopies('a.dds', { High: 0, Low: 0 })]);
+
+    const winning = (path: string) => table.kind === 'table'
+      ? table.rows.flatMap((row) => (row.kind === 'file' && row.path === path ? [row.cells.map((cell) => cell?.winning === true)] : [])) : [];
+    expect(winning('a.dds')).toEqual([[false, false, true, false]]);
+    expect(winning('b.dds')).toEqual([[false, false, false, true]]);
+  });
+
   it('shows no state while the which-copies answer has not landed', async () => {
     expect(await threeMods([])).toEqual({ columns: [null, null, null], rows: [{ file: 'a.dds', state: null, cells: [null, null, null] }] });
   });

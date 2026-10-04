@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { FileOrigin, Mod, OriginFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
-import { inFileOrderConflict, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { inFileOrderConflict, losesFileOrderConflict, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistGroup, type ModlistTree } from './modlistTree';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
@@ -690,7 +690,9 @@ export class ModListProvider
   private within(row: ModNode | OverwriteNode | FolderNode) {
     const inConflict = (origin: FileOrigin, file: OriginFile) =>
       inFileOrderConflict(this.instanceValue.files.get(file.relativePath), origin);
-    return { shown: row.shown, matches: this.matches, inConflict };
+    const losesConflict = (origin: FileOrigin, file: OriginFile) =>
+      losesFileOrderConflict(this.instanceValue.files.get(file.relativePath), origin);
+    return { shown: row.shown, matches: this.matches, inConflict, losesConflict };
   }
 
   getParent(element: ModlistNode): ModlistNode | undefined {
