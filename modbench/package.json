@@ -1341,7 +1341,7 @@
     ],
     "colors": [
       {
-        "id": "modbench.conflict.rowOverride",
+        "id": "modbench.conflictRowOverride",
         "description": "A record field row where copies change the field and none disagrees with another.",
         "defaults": {
           "dark": "#4CAF5033",
@@ -1351,7 +1351,7 @@
         }
       },
       {
-        "id": "modbench.conflict.rowConflict",
+        "id": "modbench.conflictRowConflict",
         "description": "A record field row where copies disagree on the field.",
         "defaults": {
           "dark": "#FF980033",
@@ -1361,7 +1361,7 @@
         }
       },
       {
-        "id": "modbench.conflict.identicalToMaster",
+        "id": "modbench.conflictIdenticalToMaster",
         "description": "A record field cell whose copy is unchanged from the master.",
         "defaults": {
           "dark": "#9696962E",
@@ -1371,7 +1371,7 @@
         }
       },
       {
-        "id": "modbench.conflict.override",
+        "id": "modbench.conflictOverride",
         "description": "A record field cell changed from the master, with no other copy disagreeing.",
         "defaults": {
           "dark": "#4CAF502E",
@@ -1381,7 +1381,7 @@
         }
       },
       {
-        "id": "modbench.conflict.conflictWins",
+        "id": "modbench.conflictWins",
         "description": "A record field cell that disagrees with another copy and wins.",
         "defaults": {
           "dark": "#FF98002E",
@@ -1391,7 +1391,7 @@
         }
       },
       {
-        "id": "modbench.conflict.conflictLoses",
+        "id": "modbench.conflictLoses",
         "description": "A record field cell that disagrees with another copy and loses.",
         "defaults": {
           "dark": "#F443362E",
@@ -1401,7 +1401,7 @@
         }
       },
       {
-        "id": "modbench.conflict.conflictLosesText",
+        "id": "modbench.conflictLosesText",
         "description": "The text of a record field cell that disagrees with another copy and loses.",
         "defaults": {
           "dark": "#F44336",
