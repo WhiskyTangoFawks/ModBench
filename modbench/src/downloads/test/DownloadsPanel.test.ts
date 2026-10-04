@@ -12,7 +12,7 @@ const {
   openExternal: vi.fn(),
 }));
 
-import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, MarkdownString, type FakeUri } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, type FakeUri } from '../../test/vscodeMock';
 import { present } from '../../ports/present';
 import { progressSteps, recordedWithProgress } from '../../test/recordedProgress';
 
@@ -25,7 +25,7 @@ vi.mock('vscode', () => ({
     parse: (s: string) => ({ toString: () => s }),
   },
   ViewColumn: { One: 1 },
-  TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, MarkdownString,
+  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
 }));
 
 const { installFromArchive } = vi.hoisted(() => ({ installFromArchive: vi.fn() }));
@@ -52,7 +52,8 @@ import {
   installDownloadedFile,
   type DownloadInstallDeps,
 } from '../DownloadsPanel';
-import { DownloadNode, type DownloadsProvider } from '../DownloadsProvider';
+import { DownloadNode, DownloadsProvider } from '../DownloadsProvider';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { deleteDownloads } from '../../downloadsCommands/downloads';
 import type { MoveToTrash } from '../../ports/trash';
 import type { DownloadFile, DownloadRow, Instance, InstanceValue } from '../../instanceLoader/instance';
@@ -788,18 +789,18 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
   });
 
   it.each([
-    ['excluding what is already excluded', 'modbench.downloadedFile.exclude', { excluded: true }],
-    ['including what is already included', 'modbench.downloadedFile.include', { excluded: false }],
-  ])('%s writes nothing and reads nothing', async (_name, command, row) => {
+    ['exclude', 'modbench.downloadedFile.exclude', { excluded: true }, '[General]\r\n', 'removed=true'],
+    ['include', 'modbench.downloadedFile.include', { excluded: false }, '[General]\r\nremoved=true\r\n', 'removed=false'],
+  ])('%s still writes for a row the view shows already in that state, since the disk decides', async (_name, command, row, before, after) => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z');
+    const meta = await writeMeta(root, 'foo.7z', before);
 
     registerDownloadsMultiRowCommands(accessTo(root), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     await invoke(command, node(root, 'foo.7z', row));
 
-    expect(progressSteps).toEqual([]);
-    expect(await readFile(meta, 'utf8')).toBe('[General]\r\n');
+    expect(progressSteps).toEqual([opens, reads, 'progress closes']);
+    expect(await readFile(meta, 'utf8')).toContain(after);
   });
 
   it('delete trashes, then the read, then the bar closes', async () => {
@@ -854,6 +855,37 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
     await invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     expect(progressSteps).toEqual([opens, reads, 'progress closes']);
+  });
+
+  it('Esc at the upgrade pick opens no bar', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
+    createQuickPick.mockReturnValue(qp);
+    const installed = fakeInstance([mod({ name: 'Foo Mod', nexusId: '111', version: '1.0' })]);
+
+    registerModInstallForDownloadedFile(accessTo(root), installed, recordingReporter(), installDeps());
+    const running = invoke('modbench.mod.install', node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR));
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    escape();
+    await running;
+
+    expect(progressSteps).toEqual([]);
+  });
+
+  it('a read that fails after the gesture leaves the rows and says so', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    await writeMeta(root, 'foo.7z');
+    const disk = new FakeInstance(instanceValueFixture({ downloads: { kind: 'listed', rows: [downloadRowFixture('foo.7z', {}, root)] } }));
+    const provider = new DownloadsProvider({ instance: disk });
+    const instance = { value: disk.value, refresh: () => { disk.fail('locked'); return Promise.resolve(); } };
+
+    registerDownloadsMultiRowCommands(accessTo(root), instance, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
+    await invoke('modbench.downloadedFile.exclude', node(root, 'foo.7z'));
+
+    expect((await provider.getChildren()).map((n) => n.kind === 'download' && n.row.name)).toEqual(['foo.7z']);
+    expect(provider.viewMessage()).toBe('Showing the last good read: locked');
   });
 
   it('declining to name the mod opens no bar', async () => {

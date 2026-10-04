@@ -84,12 +84,11 @@ export function registerFileExclusionCommands(
   const run = (mark: OriginFileMark) => (entry: GestureEntry) => {
     const rows = pluralArgument(entry, 'file');
     if (rows.length === 0) return;
-    const { verb, state } = FILE_MARKS[mark];
-    const changing = rows.filter((row) => row.exclusion !== state).map((row) => row.ref);
-    if (changing.length === 0) return;
+    const { verb } = FILE_MARKS[mark];
+    const refs = rows.map((row) => row.ref);
     return runModsWriting(instance, async () => {
-      const outcome = await markFiles(access, changing, mark);
-      reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${changing.length} files.`, outcome, fileLabel);
+      const outcome = await markFiles(access, refs, mark);
+      reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${refs.length} files.`, outcome, fileLabel);
     });
   };
   return [

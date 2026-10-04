@@ -9,6 +9,9 @@ import {
 import type { DownloadNode, DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS, selectedFiles, singleSelectedFile } from './keyContext';
 import { runWritingGesture } from '../drivingLib/writingGesture';
+
+const runDownloadsWriting = <T>(instance: Pick<Instance, 'refresh'>, command: () => Promise<T>): Promise<T> =>
+  runWritingGesture(DOWNLOADS_KEY_ARGS.view, instance, command);
 import type { DownloadFile, Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -107,7 +110,7 @@ export async function installDownloadedFile(
     }
     const target = await resolveTarget(choice, row.path, deps.nameNewMod);
     if (!target) return false;
-    await runWritingGesture(DOWNLOADS_KEY_ARGS.view, instance, async () => {
+    await runDownloadsWriting(instance, async () => {
       const outcome = await installFromArchive(access, target, row.path, {
         gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,
       });
@@ -160,10 +163,7 @@ async function deleteSelection(
   ask: AskQuestion, trash: MoveToTrash, log: (line: string) => void,
 ): Promise<SelectionOutcome<DeletedDownload>> {
   if (rows.length === 0 || !(await confirmDelete(rows.map((row) => row.name), ask))) return { landed: [], refused: [] };
-  let outcome: SelectionOutcome<DeletedDownload> = { landed: [], refused: [] };
-  await runWritingGesture(DOWNLOADS_KEY_ARGS.view, instance, async () => {
-    outcome = await deleteDownloads(access, rows, trash);
-  });
+  const outcome = await runDownloadsWriting(instance, () => deleteDownloads(access, rows, trash));
   reporter.selectionOutcome(
     `Could not delete ${outcome.refused.length} of ${rows.length} downloaded files.`, outcome, (item) => item.name);
   for (const item of outcome.landed) {
@@ -174,18 +174,14 @@ async function deleteSelection(
   return outcome;
 }
 
-// No confirmation, unlike delete: exclude and include are reversible. A row already in the state
-// asked for writes nothing, so a selection of those opens no bar.
 async function changeExcluded(
   access: DownloadsAccess, instance: Pick<Instance, 'refresh'>, rows: readonly DownloadFile[], excluded: boolean,
-  write: (access: DownloadsAccess, names: readonly string[]) => Promise<SelectionOutcome<string>>,
   reporter: Reporter,
 ): Promise<SelectionOutcome<string>> {
-  if (!rows.some((row) => row.excluded !== excluded)) return NOTHING_CHANGED;
-  let outcome = NOTHING_CHANGED;
-  await runWritingGesture(DOWNLOADS_KEY_ARGS.view, instance, async () => {
-    outcome = await write(access, rows.map((row) => row.name));
-  });
+  if (rows.length === 0) return NOTHING_CHANGED;
+  const names = rows.map((row) => row.name);
+  const outcome = await runDownloadsWriting(instance, () =>
+    excluded ? excludeDownloads(access, names) : includeDownloads(access, names));
   reporter.selectionOutcome(
     `Could not ${excluded ? 'exclude' : 'include'} ${outcome.refused.length} of ${rows.length} downloaded files.`,
     outcome, (name) => name);
@@ -238,9 +234,9 @@ export function registerDownloadsMultiRowCommands(
     vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
       deleteSelection(access, instance, rows(clicked, selected), reporter, ask, trash, log)),
     vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      changeExcluded(access, instance, rows(clicked, selected), true, excludeDownloads, reporter)),
+      changeExcluded(access, instance, rows(clicked, selected), true, reporter)),
     vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      changeExcluded(access, instance, rows(clicked, selected), false, includeDownloads, reporter)),
+      changeExcluded(access, instance, rows(clicked, selected), false, reporter)),
   ];
 }
 
