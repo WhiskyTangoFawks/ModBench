@@ -11,7 +11,7 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
-using MEditService.Queries;
+using MEditService.Queries.Composition;
 using Serilog;
 using Serilog.Events;
 
@@ -65,7 +65,6 @@ try
     // the stream endpoint's own subscribe/unsubscribe, the interface for every publisher.
     builder.Services.AddSingleton<SseNotificationPublisher>();
     builder.Services.AddSingleton<INotificationPublisher>(sp => sp.GetRequiredService<SseNotificationPublisher>());
-    builder.Services.AddSingleton<ConflictClassifier>();
     builder.Services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
     // One Index for the whole process (ADR-0014). Which file it opens comes from the
@@ -78,10 +77,7 @@ try
         sp.GetRequiredService<INotificationPublisher>(),
         sp.GetRequiredService<TimeProvider>()));
     builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<Indexer>());
-    builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
-    builder.Services.AddSingleton<MalformedPluginQueryService>();
-    builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
-    builder.Services.AddSingleton<ContainerChildQueryService>();
+    builder.Services.AddQueries();
     builder.Services.AddSingleton<RecordTextCodec>();
     builder.Services.AddSingleton<TrackService>();
     // The handlers (ADR-0014) are registered where the module they share is visible,

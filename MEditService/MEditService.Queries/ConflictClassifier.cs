@@ -7,22 +7,18 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
 
-public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = null)
+internal sealed class ConflictClassifier(ILogger? logger = null)
 {
-    private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
+    private readonly ILogger _logger = logger ?? NullLogger.Instance;
 
     // resolveFormKey (ADR-0005), batched once per Classify so every formKey leaf's
-    // Resolutions fills in this pass; null leaves Resolutions empty. loadOrderFormIds orders
-    // a keyed array's FormKeys; null orders them by their text.
+    // Resolutions fills in this pass. loadOrderFormIds orders a keyed array's FormKeys.
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         GameRelease release,
-        Func<string, RecordLookupEntry?>? resolveFormKey = null,
-        Func<string, uint?>? loadOrderFormIds = null)
+        Func<string, RecordLookupEntry?> resolveFormKey,
+        Func<string, uint?> loadOrderFormIds)
     {
-        if (conflictingRecords.Count == 0)
-            return new ClassifyResult(ConflictAll.OnlyOne, new Dictionary<string, ConflictThis>(), []);
-
         // The fallback for a field no column carries; a lone override is its own winner whatever
         // its IsWinner flag says.
         var winner = conflictingRecords.Count == 1
@@ -76,8 +72,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         IReadOnlySet<string> PartialFormColumns,
         string FormKey,
         ILogger Logger,
-        Func<string, RecordLookupEntry?>? ResolveFormKey,
-        Func<string, uint?>? LoadOrderFormIds,
+        Func<string, RecordLookupEntry?> ResolveFormKey,
+        Func<string, uint?> LoadOrderFormIds,
         GameRelease Release);
 
     // One node of the diff tree, at whatever depth the walk reached it. absentMeansDefault is false
@@ -259,8 +255,6 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     private static (Dictionary<string, FormKeyResolution>? Resolutions, Dictionary<string, string>? CheckErrors) LinkFacts(
         Dictionary<string, FieldMetadata> shapes, Dictionary<string, object?> values, DiffContext ctx)
     {
-        if (ctx.ResolveFormKey == null) return (null, null);
-
         ResolvedFormKey? Resolve(string formKey) =>
             ctx.ResolveFormKey(formKey) is { } entry ? new ResolvedFormKey(entry.RecordType, entry.EditorId) : null;
 

@@ -94,7 +94,7 @@ public sealed class VersionStampConflictTests
             new LoadOrderEntry("Over.esp", "Over.esp", "Data", 1, Enabled: true, Winning: true),
         };
         var service = new RecordQueryService(
-            new FakeIndex(new FakeReads(opened, rows)), FakeLoadOrder.Of(Release, plugins), SharedSchemaReflector.Instance, new ConflictClassifier());
+            new FakeIndex(new FakeReads(opened, rows)), FakeLoadOrder.Of(Release, plugins), SharedSchemaReflector.Instance);
         return (service, baseCell.FormKey.ToString());
     }
 }

@@ -59,7 +59,7 @@ public sealed class VmadCompareTests
             new LoadOrderEntry("Top.esp", "Top.esp", "Data", 1, Enabled: true, Winning: true),
         };
         var holder = FakeLoadOrder.Of(Release, plugins);
-        _service = new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
+        _service = new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance);
     }
 
     private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, bool isWinner, string recordType) =>

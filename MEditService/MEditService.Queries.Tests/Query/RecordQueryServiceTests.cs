@@ -43,7 +43,7 @@ public sealed class RecordQueryServiceTests
     private static (FakeIndex Manager, RecordQueryService Service) Build(FakeFixtureData fixture)
     {
         var (manager, holder) = FakeIndex.From(fixture);
-        return (manager, new RecordQueryService(manager, holder, SharedSchemaReflector.Instance, new ConflictClassifier()));
+        return (manager, new RecordQueryService(manager, holder, SharedSchemaReflector.Instance));
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class RecordQueryServiceTests
             Release,
             new LoadOrderEntry(PluginName, PluginName, tracked.Origin, 0, Enabled: true, Winning: true),
             new LoadOrderEntry(PluginName, PluginName, untracked.Origin, 1, Enabled: true, Winning: false));
-        var svc = new RecordQueryService(new FakeIndex(reads), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
+        var svc = new RecordQueryService(new FakeIndex(reads), holder, SharedSchemaReflector.Instance);
 
         var plugins = svc.GetPlugins();
 
@@ -350,7 +350,7 @@ public sealed class RecordQueryServiceTests
         var compare = _svc.GetCompare(_npc01Key.ToString());
 
         Assert.NotNull(compare);
-        Assert.Single(compare.Overrides);
+        Assert.Equal(ConflictThis.OnlyOne, Assert.Single(compare.Overrides).ConflictThis);
         Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
         Assert.NotEmpty(compare.Diffs);
     }
@@ -907,14 +907,14 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetCreatableRecordTypes_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance);
 
         Assert.Throws<NoLoadOrderException>(() => unloaded.GetCreatableRecordTypes());
     }
 
     private static RecordQueryService ServiceIn(GameRelease release) => new(
         new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), [])),
-        FakeLoadOrder.Of(release), SharedSchemaReflector.Instance, new ConflictClassifier());
+        FakeLoadOrder.Of(release), SharedSchemaReflector.Instance);
 
     [Fact]
     public void GetLightPluginsSupported_AReleaseWithLightPlugins_IsTrue()
@@ -933,7 +933,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetLightPluginsSupported_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance);
 
         Assert.Throws<NoLoadOrderException>(() => unloaded.GetLightPluginsSupported());
     }
@@ -966,7 +966,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPlugins_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance);
         var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetPlugins());
         Assert.Contains("No load order", ex.Message);
     }
@@ -974,7 +974,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetRecords_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance);
         var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetRecords(["npc_"], null, null, 10, 0));
         Assert.Contains("No load order", ex.Message);
     }
@@ -1044,7 +1044,7 @@ public sealed class RecordQueryServiceTests
     public void GetFilter_WithNoLoadOrder_RefusesRatherThanAnsweringUnfiltered()
     {
         var svc = new RecordQueryService(
-            new StubIndex(reads: null), new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+            new StubIndex(reads: null), new LoadOrderHolder(), SharedSchemaReflector.Instance);
 
         Assert.Throws<NoLoadOrderException>(() => svc.GetFilter());
     }
