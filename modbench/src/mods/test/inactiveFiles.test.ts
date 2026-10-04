@@ -12,42 +12,15 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import type { FileOrigin, InstanceValue, Mod, ModlistEntry, OriginFile, OriginFolder } from '../../instanceLoader/instance';
-import { buildFileConflictIndex, modOrigin, RUNTIME_OUTPUT } from '../../instanceLoader/fileConflictIndex';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import type { FileOrigin, InstanceValue } from '../../instanceLoader/instance';
+import { modOrigin, RUNTIME_OUTPUT } from '../../instanceLoader/fileConflictIndex';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { accessTo } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
 import { ModListProvider, ModNode, type ModlistNode } from '../ModListProvider';
 import { fileRowUri } from '../modFiles';
 import { GREY_INACTIVE_FILES_SETTING, InactiveFileDecorationProvider, inactiveFiles } from '../inactiveFiles';
-
-const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
-const file = (origin: string, relativePath: string, excluded = false): OriginFile => {
-  const path = `/instance/${origin}/${relativePath}`;
-  return { relativePath, path, sourcePath: path, excluded };
-};
-const folder = (origin: string, relativePath: string, excluded = false): OriginFolder =>
-  ({ relativePath, path: `/instance/${origin}/${relativePath}`, excluded });
-
-async function indexedValueOf(
-  mods: ModlistEntry[],
-  listings: Record<string, { files: OriginFile[]; folders?: OriginFolder[] }>,
-  overwrite: { files: OriginFile[]; folders?: OriginFolder[] } = { files: [] },
-): Promise<InstanceValue> {
-  const adapter: Parameters<typeof buildFileConflictIndex>[2] = {
-    originFiles: (origin) => {
-      const name = origin.kind === 'mod' ? origin.name : 'overwrite';
-      const listing = listings[name] ?? { files: [] };
-      return Promise.resolve({ origin: name, folder: `/instance/${name}`, files: listing.files, folders: listing.folders ?? [], notes: [] });
-    },
-  };
-  const index = await buildFileConflictIndex(mods, overwrite.files, adapter, () => undefined);
-  return instanceValueFixture({
-    mods, files: index.files, filesByMod: index.filesByMod, foldersByMod: index.foldersByMod,
-    overwriteFiles: overwrite.files, overwriteFolders: overwrite.folders ?? [],
-  });
-}
+import { file, folder, indexedValueOf, mod } from './indexedValue';
 
 const whyOf = (value: InstanceValue, origin: FileOrigin, relativePath: string) =>
   inactiveFiles(value).get(fileRowUri(origin, relativePath).toString());

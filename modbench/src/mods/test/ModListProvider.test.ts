@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Mod, ModlistEntry, Separator } from '../../instanceLoader/instance';
 import type { InstanceValue } from '../../instanceLoader/instance';
-import type { ModStatusResult } from '../../instanceLoader/statusChecker';
 import { present } from '../../ports/present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
@@ -34,6 +33,7 @@ import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
+import { file, indexedValueOf } from './indexedValue';
 
 const INSTANCE_ROOT = '/instance';
 const ACTIVE_PROFILE = 'Default';
@@ -51,12 +51,11 @@ const sep = (name: string, enabled = false): Separator => ({ kind: 'separator', 
 
 function valueOf(
   mods: ModlistEntry[],
-  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFiles' | 'paths' | 'managerNames' | 'modFolders'>> = {},
+  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'overwriteFiles' | 'paths' | 'managerNames' | 'modFolders'>> = {},
 ): InstanceValue {
   return instanceValueFixture({
     mods,
     activeProfile: extra.activeProfile ?? ACTIVE_PROFILE,
-    modStatuses: extra.modStatuses ?? new Map<string, ModStatusResult>(),
     overwriteFiles: extra.overwriteFiles ?? [],
     ...(extra.paths ? { paths: extra.paths } : {}),
     ...(extra.managerNames ? { managerNames: extra.managerNames } : {}),
@@ -808,87 +807,27 @@ describe('ModListProvider', () => {
     });
   });
 
-  describe('status badges, straight off instance.value.modStatuses with no disk read', () => {
-    const conflictStatuses = (): Map<string, ModStatusResult> => new Map([
-      ['ModA', { status: { kind: 'conflicts', count: 1 }, conflictLines: ['textures/shared/foo.dds → winner: ModB'] }],
-      ['ModB', { status: { kind: 'overrides', count: 1 }, conflictLines: ['textures/shared/foo.dds → winner: ModB'] }],
-    ]);
+  describe('a mod row, whatever files it wins or loses (mods.md, A row, Mod)', () => {
+    const contested = () => indexedValueOf(
+      [mod('Winner'), mod('Loser', true, { version: '1.2', nexusId: '42', archiveFilename: 'loser.7z' })],
+      { Winner: { files: [file('Winner', 'a.dds')] }, Loser: { files: [file('Loser', 'a.dds'), file('Loser', 'b.dds')] } },
+    );
+    const rowOf = async (name: string) => {
+      const provider = makeProvider([], { instance: new FakeInstance(await contested()) });
+      return present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.mod.name === name), `the '${name}' row`);
+    };
 
-    it('attaches a warning icon and conflict tooltip line to conflicted mods', async () => {
-      const provider = makeProvider([mod('ModA'), mod('ModB')], {
-        instance: new FakeInstance(valueOf([mod('ModA'), mod('ModB')], { modStatuses: conflictStatuses() })),
-      });
-      const roots = await provider.getChildren();
-      const modNodes = roots.filter((n): n is ModNode => n instanceof ModNode);
-      const modA = present(modNodes.find((n) => n.label === 'ModA'), "the 'ModA' node");
-      const modB = present(modNodes.find((n) => n.label === 'ModB'), "the 'ModB' node");
+    it('shows $(package), the version as its description, and a tooltip of name, version, Nexus mod ID and installation file', async () => {
+      const loser = await rowOf('Loser');
 
-      expect(modA.iconPath).toEqual({ id: 'warning' });
-      expect(modA.tooltip).toContain('textures/shared/foo.dds');
-      expect(modB.iconPath).toEqual({ id: 'warning' });
-      expect(modB.tooltip).toContain('textures/shared/foo.dds');
+      expect([loser.iconPath, loser.description, loser.tooltip]).toEqual([{ id: 'package' }, '1.2', 'Loser · 1.2 · 42 · loser.7z']);
     });
 
-    it('keeps a conflicted mod\'s badge identical after filtering it in, and after clearing the filter, since a badge is a fixed field of the value and a filter only narrows already-built rows', async () => {
-      const instance = new FakeInstance(valueOf([mod('ModA'), mod('ModB')], { modStatuses: conflictStatuses() }));
-      const provider = makeProvider([], { instance });
-      const before = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
+    it('carries a URI of its own, on no file: scheme, for its indicators to decorate', async () => {
+      const [winner, loser] = [present((await rowOf('Winner')).resourceUri, 'its URI'), present((await rowOf('Loser')).resourceUri, 'its URI')];
 
-      provider.setFilter('moda', true);
-      const filtered = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
-      expect(filtered.iconPath).toEqual(before.iconPath);
-      expect(filtered.tooltip).toEqual(before.tooltip);
-      expect(filtered.description).toEqual(before.description);
-
-      provider.setFilter('', true);
-      const cleared = await provider.getChildren();
-      expect(cleared.filter((n): n is ModNode => n instanceof ModNode)).toHaveLength(2);
-      const clearedModA = present(cleared.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
-      expect(clearedModA.iconPath).toEqual(before.iconPath);
-    });
-
-    it('flipping the view direction and back leaves a conflict\'s winner, since view order is presentation-only and independent of override order', async () => {
-      const instance = new FakeInstance(valueOf([mod('ModA'), mod('ModB')], { modStatuses: conflictStatuses() }));
-      const provider = makeProvider([], { instance });
-      const before = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
-      expect(before.tooltip).toContain('winner: ModB');
-
-      provider.setViewDirection('winningAtTop');
-      const afterFlip = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
-      expect(afterFlip.tooltip).toContain('winner: ModB');
-      expect(afterFlip.iconPath).toEqual(before.iconPath);
-
-      provider.setViewDirection('losingAtTop');
-      const afterFlipBack = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
-      expect(afterFlipBack.tooltip).toContain('winner: ModB');
-    });
-
-    it('a mod absent from modStatuses (or explicitly ok) renders the default icon, no badge text', async () => {
-      const provider = makeProvider([mod('ModA'), mod('ModB')], {
-        instance: new FakeInstance(valueOf([mod('ModA'), mod('ModB')], {
-          modStatuses: new Map([['ModB', { status: { kind: 'ok' }, conflictLines: [] }]]),
-        })),
-      });
-      const roots = await provider.getChildren();
-      const modA = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
-      const modB = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModB'), "the 'ModB' node");
-      expect(modA.iconPath).toEqual({ id: 'package' });
-      expect(modB.iconPath).toEqual({ id: 'package' });
-    });
-
-    it('renders the status badge exactly as given by the Instance value rather than computing it, the count of 7 and its path being unreachable from this fixture\'s data', async () => {
-      const statuses = new Map<string, ModStatusResult>([
-        ['ModA', { status: { kind: 'conflicts', count: 7 }, conflictLines: ['nonexistent/path.dds → winner: ModZ'] }],
-      ]);
-      const provider = makeProvider([mod('ModA')], {
-        instance: new FakeInstance(valueOf([mod('ModA')], { modStatuses: statuses })),
-      });
-      const roots = await provider.getChildren();
-      const modA = present(roots.find((n): n is ModNode => n instanceof ModNode), "the sole ModNode");
-
-      expect(modA.iconPath).toEqual({ id: 'warning' });
-      expect(modA.description).toContain('7 conflicts');
-      expect(modA.tooltip).toContain('nonexistent/path.dds');
+      expect([typeof winner.scheme, winner.scheme === 'file']).toEqual(['string', false]);
+      expect(winner).not.toEqual(loser);
     });
   });
 

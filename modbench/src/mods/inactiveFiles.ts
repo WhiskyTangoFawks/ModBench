@@ -48,8 +48,8 @@ export function inactiveFiles(value: FilesValue): ReadonlyMap<string, InactiveRe
   return reasons;
 }
 
-/** The slice of VS Code's workspace the grey's setting is read through. */
-export interface GreySetting {
+/** The slice of VS Code's workspace the Mods view's settings are read through. */
+export interface WorkspaceSettings {
   getConfiguration(): { get(key: string): unknown };
   readonly onDidChangeConfiguration: vscode.Event<{ affectsConfiguration(section: string): boolean }>;
 }
@@ -62,7 +62,7 @@ export class InactiveFileDecorationProvider implements vscode.FileDecorationProv
   private reasons: ReadonlyMap<string, InactiveReason> | undefined;
   private readonly subscriptions: readonly vscode.Disposable[];
 
-  constructor(private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>, private readonly setting: GreySetting) {
+  constructor(private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>, private readonly setting: WorkspaceSettings) {
     this.subscriptions = [
       instance.subscribe(() => {
         this.reasons = undefined;

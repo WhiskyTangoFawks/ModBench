@@ -3,7 +3,7 @@ import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  MarkdownString, uriFile, DataTransferItem, DataTransfer,
+  MarkdownString, uriFile, uriFrom, DataTransferItem, DataTransfer,
 } from './vscodeMock';
 import { watchers, fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 
@@ -16,7 +16,7 @@ vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   MarkdownString, DataTransferItem, DataTransfer,
-  Uri: { file: uriFile },
+  Uri: { file: uriFile, from: uriFrom },
   window: { showErrorMessage, showWarningMessage, showInformationMessage },
 }));
 

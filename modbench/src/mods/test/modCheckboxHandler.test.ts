@@ -5,12 +5,13 @@ const { showErrorMessage, showWarningMessage } = vi.hoisted(() => ({
   showWarningMessage: vi.fn(),
 }));
 
-import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, uriFrom } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
   window: { showErrorMessage, showWarningMessage },
   TreeItemCheckboxState: { Unchecked: 0, Checked: 1 },
   TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor,
+  Uri: { from: uriFrom },
 }));
 
 import { onModCheckboxChanged } from '../modCheckboxHandler';

@@ -5,7 +5,7 @@ import { present } from '../ports/present';
 import { FOLDER_KEY, INSTANCE_READ_KEY } from '../folderContext';
 import { IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom,
 } from './vscodeMock';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
@@ -18,7 +18,7 @@ const placed = (entries: readonly MenuEntry[]): [string, string][] =>
 
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString,
-  Uri: { file: uriFile },
+  Uri: { file: uriFile, from: uriFrom },
 }));
 
 import { ModNode, NO_MODS_MESSAGE, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
@@ -29,6 +29,7 @@ import { DECOMPILE_PLUGIN_TITLE } from '../plugins/externalChangeNotice';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 import { GREY_INACTIVE_FILES_SETTING } from '../mods/inactiveFiles';
+import { indicatorSetting, MOD_INDICATORS } from '../mods/modIndicators';
 
 interface ViewsWelcomeEntry { view: string; contents: string; when?: string; }
 interface ViewEntry { id: string; name: string; when?: string; }
@@ -37,6 +38,7 @@ interface CommandEntry { command: string; title: string; category: string; icon?
 interface KeybindingEntry { command: string; key: string; when: string; mac?: string; args?: unknown; }
 interface ViewsContainerEntry { id: string; }
 interface SettingEntry { description?: string; type?: unknown; default?: unknown; }
+interface ColorEntry { id: string; }
 
 interface PackageManifest {
   activationEvents: string[];
@@ -48,6 +50,7 @@ interface PackageManifest {
     commands: CommandEntry[];
     keybindings: KeybindingEntry[];
     configuration: { properties: Record<string, SettingEntry> };
+    colors: ColorEntry[];
   };
 }
 
@@ -88,6 +91,9 @@ function isViewsContainerEntry(v: unknown): v is ViewsContainerEntry {
 function isSettingEntry(v: unknown): v is SettingEntry {
   return isRecord(v) && isOptionalString(v.description);
 }
+function isColorEntry(v: unknown): v is ColorEntry {
+  return isRecord(v) && isString(v.id);
+}
 
 function parsePackageManifest(raw: unknown): PackageManifest {
   if (!isRecord(raw) || !isArrayOf(raw.activationEvents, isString)) {
@@ -95,7 +101,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   }
   const { contributes } = raw;
   if (!isRecord(contributes)) throw new Error('Expected package.json to have a contributes object.');
-  const { viewsWelcome, views, viewsContainers, menus, commands, keybindings, configuration } = contributes;
+  const { viewsWelcome, views, viewsContainers, menus, commands, keybindings, configuration, colors } = contributes;
   if (!isArrayOf(viewsWelcome, isViewsWelcomeEntry)) {
     throw new Error('Expected contributes.viewsWelcome to be an array of { view, contents, when? }.');
   }
@@ -117,12 +123,13 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   if (!isRecord(configuration) || !isRecordOf(configuration.properties, isSettingEntry)) {
     throw new Error('Expected contributes.configuration.properties to be a map of { description? }.');
   }
+  if (!isArrayOf(colors, isColorEntry)) throw new Error('Expected contributes.colors to be an array of { id }.');
   const { properties } = configuration;
   return {
     activationEvents: raw.activationEvents,
     contributes: {
       viewsWelcome, views, viewsContainers: { panel: viewsContainers.panel }, menus, commands, keybindings,
-      configuration: { properties },
+      configuration: { properties }, colors,
     },
   };
 }
@@ -470,9 +477,28 @@ describe('package.json title-bar rubric', () => {
   });
 });
 
-describe('package.json contributes the grey of a file the game does not get as a setting (mods.md, Indicators)', () => {
-  it('a switch, on by default, under the key the grey reads', () => {
-    expect(pkg.contributes.configuration.properties[GREY_INACTIVE_FILES_SETTING]).toMatchObject({ type: 'boolean', default: true });
+describe('package.json contributes the Mods view\'s indicators and grey as settings (mods.md, Indicators)', () => {
+  const { properties } = pkg.contributes.configuration;
+
+  it('the grey of a file the game does not get: a switch, on by default, under the key the grey reads', () => {
+    expect(properties[GREY_INACTIVE_FILES_SETTING]).toMatchObject({ type: 'boolean', default: true });
+  });
+
+  it('a switch for each indicator\'s badge and colour, under the keys they read, defaulting as the table says', () => {
+    const switches = Object.fromEntries(MOD_INDICATORS.flatMap(({ id }) => (['badge', 'colour'] as const)
+      .map((part) => [`${id} ${part}`, properties[indicatorSetting(id, part)]?.type === 'boolean' && properties[indicatorSetting(id, part)]?.default]))) as unknown;
+
+    expect(switches).toEqual({
+      'overwritesLooseFiles badge': false, 'overwritesLooseFiles colour': false,
+      'overwrittenLooseFiles badge': true, 'overwrittenLooseFiles colour': false,
+      'redundant badge': true, 'redundant colour': false,
+      'containsExcludedFiles badge': false, 'containsExcludedFiles colour': false,
+    });
+  });
+
+  it('a theme colour for each indicator', () => {
+    const contributed = pkg.contributes.colors.map((colour) => colour.id);
+    expect(MOD_INDICATORS.filter(({ colour }) => !contributed.includes(colour)).map(({ id }) => id)).toEqual([]);
   });
 });
 

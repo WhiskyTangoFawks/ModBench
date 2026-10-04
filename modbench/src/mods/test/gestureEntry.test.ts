@@ -190,8 +190,8 @@ describe('what the Mods keys read off the selection', () => {
   });
 
   it('the palette\'s track sees a selection that holds a mod with no repository providing a plugin', () => {
-    const withPlugin = new ModNode({ kind: 'mod', name: 'Patch', enabled: true }, undefined, { holdsPlugin: true, tracked: false });
-    const trackedWithPlugin = new ModNode({ kind: 'mod', name: 'Tracked', enabled: true }, undefined, { holdsPlugin: true, tracked: true });
+    const withPlugin = new ModNode({ kind: 'mod', name: 'Patch', enabled: true }, { holdsPlugin: true, tracked: false });
+    const trackedWithPlugin = new ModNode({ kind: 'mod', name: 'Tracked', enabled: true }, { holdsPlugin: true, tracked: true });
     expect(modsKeyContext([enabledMod, withPlugin], byRow).holdsUntrackedModWithPlugin).toBe(true);
     expect(modsKeyContext([enabledMod, trackedWithPlugin], byRow).holdsUntrackedModWithPlugin).toBe(false);
     expect(modsKeyContext([enabledMod, group], byRow).holdsUntrackedModWithPlugin).toBe(false);
