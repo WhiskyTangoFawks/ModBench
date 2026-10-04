@@ -143,7 +143,7 @@ internal sealed class WorkingTreeOverlay
     }
 
     // A create writes a row straight to `ref = working-tree` with nothing in records_committed; that
-    // omission is what makes records_head answer nothing for this FormKey without the view knowing
+    // omission is what makes head_rows answer nothing for this FormKey without the view knowing
     // about creation.
     private void InsertNewWorkingTreeRow(PluginAddress key, string formKey, string recordType, string body)
     {
@@ -231,7 +231,7 @@ internal sealed class WorkingTreeOverlay
         foreach (var formKey in formKeys)
         {
             // The snapshot delete is not padding: a record that diverged earlier in the same load order
-            // has one, and a stale snapshot would keep answering at Head through records_head's UNION —
+            // has one, and a stale snapshot would keep answering at Head through head_rows's UNION —
             // the state this method exists to end.
             DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin);
@@ -258,7 +258,7 @@ internal sealed class WorkingTreeOverlay
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
         // Straight into records_committed with no `records` counterpart — the inverse of
-        // InsertNewWorkingTreeRow — which falls out of records_head's definition with no change to
+        // InsertNewWorkingTreeRow — which falls out of head_rows's definition with no change to
         // that view.
         InsertRecordRow(key, "mirror.records_committed", SourceRef.Committed, formKey, recordType, body, parseDiagnosis: null);
     }

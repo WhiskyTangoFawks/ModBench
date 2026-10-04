@@ -18,15 +18,11 @@ public record RecordDocument(
     // ParseFailedDocument wrote, and no write may land on it.
     string? ParseDiagnosis = null);
 
-/// <summary>For a record with no working-tree change, <see cref="Effective"/> and Head are the same
-/// instance (an identity, not merely equal values); for a dirty one, Head is resolved separately
-/// from the committed baseline.</summary>
 public record OverrideStackEntry(
     PluginAddress Plugin,
     int LoadOrderIndex,
     bool IsWinner,
     RecordDocument Effective,
-    RecordDocument Head,
     bool HasWorkingTreeChange);
 
 /// <summary>Every plugin's copy of one record, in load order — the "override stack". Named

@@ -150,6 +150,25 @@ public sealed class PersistentIndexTests : IDisposable
     }
 
     [Fact]
+    public void AFileWrittenWithTheWinnersTableOfTheLastFormat_RebuildsAndSweeps()
+    {
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
+        using (Launched([alpha])) { }
+
+        AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce("""
+            DROP TABLE winners;
+            CREATE TABLE winners (record_ref VARCHAR NOT NULL, form_key VARCHAR NOT NULL, plugin VARCHAR NOT NULL, origin VARCHAR NOT NULL);
+            UPDATE mirror.index_version SET value = '10' || substr(value, strpos(value, '|'));
+            """);
+
+        using var second = Launched([alpha]);
+        Assert.Equal(["Alpha.esp"], second.Opens.Opened);
+        var documents = second.Index.RequireReads().GetDocuments(alpha.KeyOf());
+        Assert.NotEmpty(documents);
+        Assert.All(documents, d => Assert.True(d.IsWinner));
+    }
+
+    [Fact]
     public void AFileWrittenUnderAnotherVersion_HoldingNoIndexedPlugin_RebuildsFromScratch()
     {
         using (Launched([])) { }

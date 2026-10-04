@@ -163,7 +163,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
                  })
         {
             Assert.Null(_fixture.Document(gone.ToString()));
-            Assert.NotNull(_fixture.CommittedDocument(gone.ToString(), recordType, editorId));
+            Assert.NotNull(_fixture.CommittedDocument(gone.ToString()));
         }
         Assert.Equal([_fixture.DialogTopic2.ToString(), _fixture.DialogTopic3.ToString()], QuestSlot(nameof(Quest.DialogTopics)));
 

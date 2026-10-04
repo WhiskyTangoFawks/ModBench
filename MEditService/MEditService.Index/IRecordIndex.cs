@@ -8,10 +8,8 @@ namespace MEditService.Index;
 /// no SQL crosses this seam except <see cref="SetFilter"/>.</summary>
 internal interface IRecordIndex : IDisposable
 {
-    /// <summary>Repositions every read at <paramref name="recordRef"/>. Named <c>recordRef</c>, not
-    /// <c>ref</c>: CA1716 rejects an interface parameter named after a reserved keyword, even
-    /// escaped.</summary>
-    IRecordReads At(RecordRef recordRef);
+    /// <summary>Every read the index answers.</summary>
+    IRecordReads Reads { get; }
 
     /// <summary>Where <see cref="IRecordReads.OpenedPlugins"/> reads from. The store holds no header
     /// flag, master list or record count, so the Indexer points it at the plugins it holds

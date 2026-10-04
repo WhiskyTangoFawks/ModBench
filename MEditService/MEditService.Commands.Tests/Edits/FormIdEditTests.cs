@@ -23,9 +23,9 @@ public sealed class FormIdEditTests
         Assert.True(result.Applied, result.Message);
         Assert.Equal(FreeFormKey, result.NewFormKey);
         Assert.Null(mod.Document(mod.Npc.ToString()));
-        Assert.NotNull(mod.CommittedDocument(mod.Npc.ToString(), "npc_", SourceEditFixture.NpcEditorId));
+        Assert.NotNull(mod.CommittedDocument(mod.Npc.ToString()));
         Assert.NotNull(mod.Document(FreeFormKey));
-        Assert.Null(mod.CommittedDocument(FreeFormKey, "npc_", SourceEditFixture.NpcEditorId));
+        Assert.Null(mod.CommittedDocument(FreeFormKey));
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public sealed class FormIdEditTests
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(mod.Document(oldFormKey));
-        Assert.Null(mod.CommittedDocument(oldFormKey, "npc_", "BrandNew"));
+        Assert.Null(mod.CommittedDocument(oldFormKey));
         Assert.NotNull(mod.Document(FreeFormKey));
     }
 

@@ -34,7 +34,7 @@ internal sealed class FakeReads(
     {
         var entries = rows.Where(r => r.Document.FormKey == formKey)
             .OrderBy(r => r.LoadOrderIndex)
-            .Select(r => new OverrideStackEntry(r.Plugin, r.LoadOrderIndex, r.IsWinner, r.Document, r.Document, HasWorkingTreeChange: false))
+            .Select(r => new OverrideStackEntry(r.Plugin, r.LoadOrderIndex, r.IsWinner, r.Document, HasWorkingTreeChange: false))
             .ToList();
         return entries.Count == 0 ? null : new RecordOverrides(formKey, entries[0].Effective.RecordType, entries);
     }

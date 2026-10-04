@@ -3,7 +3,7 @@ using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.Records;
 
-public sealed class RecordRefDivergenceCellReadsTests : IDisposable
+public sealed class WorkingTreeRenamedCellReadsTests : IDisposable
 {
     private readonly IndexedContainerMod _fixture = new();
 
@@ -16,46 +16,37 @@ public sealed class RecordRefDivergenceCellReadsTests : IDisposable
     }
 
     [Fact]
-    public void AWorldspaceCellRenamedInTheWorkingTree_KeepsItsCommittedEditorId_BesideTheNewOne()
+    public void AWorldspaceCellRenamedInTheWorkingTree_ListsUnderTheNewEditorId()
     {
         var topCell = _fixture.TopCell;
         RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(topCell, ContainerModPlugin.TopCellEditorId, "RenamedTopCell");
 
         var effective = _fixture.Reads.GetWorldspaceCells(_fixture.Plugin, _fixture.Worldspace)
             .Single(c => c.FormKey == topCell);
-        var head = _fixture.Reads.HeadDocument(topCell, _fixture.Plugin);
 
         Assert.Equal("RenamedTopCell", effective.EditorId);
-        Assert.NotNull(head);
-        Assert.Equal(ContainerModPlugin.TopCellEditorId, head.EditorId);
     }
 
     [Fact]
-    public void AnInteriorCellRenamedInTheWorkingTree_KeepsItsCommittedEditorId_BesideTheNewOne()
+    public void AnInteriorCellRenamedInTheWorkingTree_ListsUnderTheNewEditorId()
     {
         var cell = _fixture.Cell;
         RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(cell, ContainerModPlugin.CellEditorId, "RenamedCell");
 
         var effective = _fixture.Reads.GetInteriorCells(_fixture.Plugin).Single(c => c.FormKey == cell);
-        var head = _fixture.Reads.HeadDocument(cell, _fixture.Plugin);
 
         Assert.Equal("RenamedCell", effective.EditorId);
-        Assert.NotNull(head);
-        Assert.Equal(ContainerModPlugin.CellEditorId, head.EditorId);
     }
 
     [Fact]
-    public void APlacedReferenceRenamedInTheWorkingTree_KeepsItsCommittedEditorId_BesideTheNewOne()
+    public void APlacedReferenceRenamedInTheWorkingTree_ListsUnderTheNewEditorId()
     {
         var temporaryRef = _fixture.TemporaryRef;
         RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(temporaryRef, ContainerModPlugin.TemporaryRefEditorId, "RenamedTempRef");
 
         var effective = _fixture.Reads.GetCellChildRecords(_fixture.Plugin, _fixture.EmbedCell)
             .Temporary.Single(p => p.FormKey == temporaryRef);
-        var head = _fixture.Reads.HeadDocument(temporaryRef, _fixture.Plugin);
 
         Assert.Equal("RenamedTempRef", effective.EditorId);
-        Assert.NotNull(head);
-        Assert.Equal(ContainerModPlugin.TemporaryRefEditorId, head.EditorId);
     }
 }

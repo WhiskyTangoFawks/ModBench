@@ -36,16 +36,12 @@ public sealed class RefreshByKeysTests : IDisposable
     private void Refresh() => _index.NextSnapshot();
 
     [Fact]
-    public void ACommitMadeOutsideModbench_MovesTheCommittedRef_OnTheNextRefresh()
+    public void ACommitMadeOutsideModbench_LeavesTheRecordClean_OnTheNextRefresh()
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
 
         Refresh();
-
-        var atHead = Reads.HeadDocument(_npc, _mod.KeyOf());
-        Assert.NotNull(atHead);
-        Assert.NotNull(atHead.Body);
-        Assert.DoesNotContain("RenamedByHand", atHead.Body, StringComparison.Ordinal);
+        Assert.True(Reads.StackEntry(_npc, _mod.KeyOf()).Require().HasWorkingTreeChange);
 
         _mod.Git("add", "-A");
         _mod.Git("commit", "-q", "-m", "committed outside Modbench");
@@ -56,7 +52,7 @@ public sealed class RefreshByKeysTests : IDisposable
         Assert.NotNull(stack);
         var entry = stack.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
-        Assert.Equal("RenamedByHand", entry.Head.EditorId);
+        Assert.Equal("RenamedByHand", entry.Effective.EditorId);
     }
 
     [Fact]

@@ -135,22 +135,26 @@ public sealed class ValidateThroughGitTests : IDisposable
     }
 
     [Fact]
-    public void ACommitOutsideModbench_MovesTheRecordAtHead()
+    public void ACommitOutsideModbench_LeavesTheRecordClean()
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
+        Validate();
+        Assert.True(Reads.StackEntry(_npc, _mod.KeyOf()).Require().HasWorkingTreeChange);
         _mod.Git("commit", "-q", "-am", "an edit committed outside Modbench");
 
         Validate();
 
         var entry = Reads.StackEntry(_npc, _mod.KeyOf()).Require();
         Assert.False(entry.HasWorkingTreeChange);
-        Assert.Equal("RenamedByHand", entry.Head.EditorId);
+        Assert.Equal("RenamedByHand", entry.Effective.EditorId);
     }
 
     [Fact]
     public void ADocumentACommitChangedButThatCouldNotBeRead_IsRefreshedByTheNextValidation()
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
+        Validate();
+        Assert.True(Reads.StackEntry(_npc, _mod.KeyOf()).Require().HasWorkingTreeChange);
         _mod.Git("commit", "-q", "-am", "an edit committed outside Modbench");
         using (new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None))
             ValidateUntilFailed();
