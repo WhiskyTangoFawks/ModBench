@@ -100,9 +100,9 @@ internal sealed class Indexer : IQueryIndex, IDisposable
 
     private GameRelease _gameRelease;
 
-    /// <summary>One per Indexer, never replaced — a reconcile swaps the store underneath it, which
-    /// is when the ordering matters most. By construction the outer of the two locks: taking
-    /// <c>_lock</c> first and then waiting here would deadlock.</summary>
+    // One per Indexer, never replaced — a reconcile swaps the store underneath it, which
+    // is when the ordering matters most. By construction the outer of the two locks: taking
+    // _lock first and then waiting here would deadlock.
     private readonly IndexWriteGate _writeGate = new();
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
