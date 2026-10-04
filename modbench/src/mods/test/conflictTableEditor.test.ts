@@ -181,7 +181,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
         { name: 'Low', origin: { kind: 'mod', name: 'Low' }, opened: false, state: 'Master' },
         { name: 'High', origin: { kind: 'mod', name: 'High' }, opened: true, state: 'Override' },
       ],
-      rows: [{ kind: 'file', name: 'a.dds', path: 'a.dds', state: 'Override', cells: [{ state: 'Master' }, { state: 'Override' }] }],
+      rows: [{ kind: 'file', name: 'a.dds', path: 'a.dds', state: 'Override', cells: [{ state: 'Master' }, { state: 'Override', winning: true }] }],
     }]);
   });
 
