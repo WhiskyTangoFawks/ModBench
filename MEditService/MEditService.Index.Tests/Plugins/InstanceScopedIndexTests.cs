@@ -54,9 +54,11 @@ public sealed class InstanceScopedIndexTests : IDisposable
         using (var first = MakeIndexer(holder)) first.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
         using (var second = MakeIndexer(holder)) second.Reconcile(holder, gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
 
-        using var warmB = MakeIndexer(holder);
-        warmB.Reconcile(holder, gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
-        Assert.Equal(["NpcFromB"], EditorIdsIn(warmB));
+        using (var warmB = MakeIndexer(holder))
+        {
+            warmB.Reconcile(holder, gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
+            Assert.Equal(["NpcFromB"], EditorIdsIn(warmB));
+        }
 
         using var warmA = MakeIndexer(holder);
         warmA.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
