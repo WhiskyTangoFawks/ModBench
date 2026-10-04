@@ -4,6 +4,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { messageLine, registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import type { ModSyncRun } from '../modlist/modlist';
+import type { SyncChannel } from '../drivingLib/syncFailureReport';
 import { createModSync, type ModSync } from './modSync';
 import { modsKeyContext } from './gestureEntry';
 import { onModCheckboxChanged } from './modCheckboxHandler';
@@ -14,7 +15,7 @@ export interface ModsViewDeps {
   log: (line: string) => void;
   /** Mod sync, whose failure the view's message line says and whose Output lines go to `channel`. */
   syncMods: ModSyncRun;
-  channel: { error(msg: string): void; info(msg: string): void };
+  channel: SyncChannel;
 }
 
 export interface ModsView extends vscode.Disposable {

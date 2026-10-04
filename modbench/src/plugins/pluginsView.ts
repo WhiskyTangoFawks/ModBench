@@ -4,6 +4,7 @@ import { originFiles } from '../instanceLoader/loadOrderSnapshot';
 import { messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
 import { reorderOver, type PluginSyncRun, type PluginsAccess } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
+import type { SyncChannel } from '../drivingLib/syncFailureReport';
 import { createPluginSync, type PluginSync } from './pluginSync';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginsInstance, type PluginsTreeNode } from './PluginsTreeProvider';
 import type { PluginTreeProvider } from './PluginTreeProvider';
@@ -36,7 +37,7 @@ export interface PluginsViewDeps {
   /** Plugin sync, whose failure the view's message line says and whose Output lines go to
    *  `channel`. */
   syncPlugins: PluginSyncRun;
-  channel: { error(msg: string): void; info(msg: string): void };
+  channel: SyncChannel;
   /** The path of a file at the root of the Data folder, answered by a box this view does not
    *  reference. */
   dataFolderFile: (name: string) => string | undefined;

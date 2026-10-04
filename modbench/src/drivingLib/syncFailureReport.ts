@@ -2,7 +2,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { SyncMessage } from './nameFilter';
 
 type SyncOutcome =
-  | { applied: true }
+  | { applied: true; added: readonly string[]; dropped: readonly string[] }
   | { applied: false; refusal: string }
   // Wrote nothing for a cause the instance's state tells once, so the command has none of its own.
   | { applied: false; toldAsInstanceState: true };
@@ -68,5 +68,52 @@ export function reportSyncFailures(
       if (mine === latest) settle('refusal' in outcome ? outcome.refusal : undefined);
       return landed(outcome) ? outcome : undefined;
     },
+  };
+}
+
+/** Where a sync writes the Output lines it owes. */
+export interface SyncChannel {
+  error(msg: string): void;
+  info(msg: string): void;
+}
+
+/** What one system command says of itself: `added` and `dropped` finish "added N …" and
+ *  "dropped N …". */
+export interface SyncLabels {
+  command: string;
+  prefix: string;
+  unsynced: string;
+  added: string;
+  dropped: string;
+}
+
+/** A system command: its runs, its failure message and its Output lines. */
+export interface Sync<Args> extends SyncMessage, SyncRuns {
+  /** Resolves once this run has told what it did. */
+  run(args: Args): Promise<void>;
+}
+
+export function createSync<Args, T extends SyncOutcome>(
+  sync: (args: Args) => Promise<T>, channel: SyncChannel, labels: SyncLabels,
+): Sync<Args> {
+  const failures = reportSyncFailures(labels.command, labels.unsynced, (line) => channel.error(`${labels.prefix} ${line}`));
+  const runs = trackSyncRuns();
+  const tell = (verb: string, what: string, names: readonly string[]): void => {
+    if (names.length > 0) channel.info(`${labels.prefix} ${labels.command} ${verb} ${names.length} ${what}: ${names.join(', ')}`);
+  };
+  return {
+    run: (args) => {
+      const run = (async () => {
+        const outcome = await failures.run(() => sync(args));
+        if (outcome === undefined) return;
+        tell('added', labels.added, outcome.added);
+        tell('dropped', labels.dropped, outcome.dropped);
+      })();
+      runs.begin(run);
+      return run;
+    },
+    message: () => failures.message(),
+    onMessageChanged: (listener) => failures.onMessageChanged(listener),
+    settled: () => runs.settled(),
   };
 }

@@ -11,7 +11,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { nexusRowInFocusedView, selectionInFocusedView } from '../lastSelectedView';
+import { nexusRowInFocusedView, selectionInFocusedView } from '../inFocusedView';
 import { createFocusedView } from '../focusedView';
 import { fakeView } from './selectableViewDouble';
 
