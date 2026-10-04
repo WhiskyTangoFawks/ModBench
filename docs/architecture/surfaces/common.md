@@ -40,16 +40,13 @@ As a user, I want:
 5. When the instance's game folder cannot be found, to be told once, the same way everywhere. The Toolbox's Game row says where Modbench looked ([toolbox.md](toolbox.md)). Every view whose rows need the game folder says so in its message line. One line in the Output. No notification; this is the background tier. Rows that do not need the game folder still show, and the records mEdit shows stay as they were until the folder is found. A configuration that names no game is story 2; no configuration is story 4. Source: ADR-0019
 6. When a later read fails, the rows I had to stay, and the view's message line to say "Showing the last good read:" and the reason, with one line in the Output. No notification. The next good read clears it. Source: ADR-0019
 
-## Unconfirmed writes
+## A gesture that writes
 
-A gesture writes and forgets (ADR-0015); the view learns the result from the disk. Between the two, as a user, I want:
+By commands.md, A gesture ends when the disk shows it. As a user, I want:
 
-1. A value I changed, a field, a check box or a name, to show my new value at once, and the thing I changed to carry `$(sync~spin)`, its tooltip "Written; waiting for the disk to confirm". Nothing else in the view changes.
-2. A gesture that changes the shape of a list, a move, a create, a delete, an element added or removed, to leave the shape as it is until the disk confirms it, and the thing it changed to carry the same mark: the row I moved or deleted, or the row I created in.
-3. The mark only after a short delay, so a write the disk confirms at once never flickers.
-4. The mark to go when the disk's next value covers what I changed, and the disk's value to show, whatever it is. When it differs from what I wrote, one line in the Output naming the thing and saying the disk now shows something else. No notification. Source: ADR-0003; ADR-0019
-5. While the disk cannot be read, the mark to stay (States, story 6). Source: ADR-0015
-6. `refresh` to clear every mark, because it reloads from disk. A refused or failed gesture is reported as Reporting says. What it changed shows the disk's value at once, with no mark. A gesture with no answer keeps its mark until the disk's next value or a refresh. Only the disk can say what happened. Source: ADR-0015
+1. The view's progress bar from my click until the read that follows the gesture's write lands, and nothing in the view to change until then. Source: ADR-0015
+2. Every value I see to be the disk's. A view shows what each read holds, whoever wrote it, and never a value it remembers from my gesture. Source: ADR-0003
+3. A gesture whose read fails to end with it: the rows I had stay and the message line says so (States, story 6). Source: ADR-0019
 
 ## The status bar
 

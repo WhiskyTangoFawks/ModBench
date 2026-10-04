@@ -8,7 +8,7 @@ The Editor surface has three more files:
 - [editor-conflicts.md](editor-conflicts.md): the colours of a record order conflict.
 - [editor-referenced-by.md](editor-referenced-by.md): the Referenced By view.
 
-The panel is a grid, not a list, so the list rules in [common.md](common.md) do not apply to it. Its States, Unconfirmed writes and Reporting do.
+The panel is a grid, not a list, so the list rules in [common.md](common.md) do not apply to it. Its States, A gesture that writes and Reporting do.
 
 Each story cites its source. A story with no source is owned here.
 
@@ -135,7 +135,7 @@ As a user, I want:
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. A refused edit to raise a notification that says why and names the field. The cell shows mEdit's value again. Source: common, Unconfirmed writes, story 6
+1. A refused edit to raise a notification that says why and names the field. The cell shows mEdit's value. Source: common, Reporting; A gesture that writes, story 2
 2. A failed copy to the clipboard to say so. Source: ADR-0019
 
 ## Test seam
