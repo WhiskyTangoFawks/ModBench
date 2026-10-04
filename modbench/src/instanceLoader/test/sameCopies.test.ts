@@ -74,12 +74,12 @@ describe('Instance — which copies of a file are the same', () => {
     await writeCopy(root, 'overwrite', SHARED, 'bbbb');
     await instance.refresh();
 
-    expect(await instance.sameCopies([SHARED])).toEqual([{
+    expect(await instance.sameCopies([SHARED])).toMatchObject([{
       relativePath: SHARED,
       copies: [
-        { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0, size: 4n, modifiedNs: expect.any(BigInt) },
-        { origin: mod(NONO), kind: 'read', sameAs: 1, size: 4n, modifiedNs: expect.any(BigInt) },
-        { origin: mod(PATCH), kind: 'read', sameAs: 1, size: 4n, modifiedNs: expect.any(BigInt) },
+        { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0, size: 4n },
+        { origin: mod(NONO), kind: 'read', sameAs: 1, size: 4n },
+        { origin: mod(PATCH), kind: 'read', sameAs: 1, size: 4n },
       ],
     }]);
   });

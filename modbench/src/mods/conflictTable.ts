@@ -23,7 +23,7 @@ function sizeText(bytes: number): string {
 const letterOf = (index: number): string =>
   (index < 26 ? '' : letterOf(Math.floor(index / 26) - 1)) + String.fromCharCode(65 + (index % 26));
 
-/** Copies are winning-most first, so the master is the last: its contents are A. */
+// Copies are winning-most first, so the master is the last: its contents are A.
 function contentLetters(copies: readonly Copy[]): ReadonlyMap<number, string> {
   const letters = new Map<number, string>();
   for (const copy of [...copies].reverse()) {

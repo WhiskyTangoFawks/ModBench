@@ -22,8 +22,8 @@ export interface ConflictColumn {
 }
 
 /** One mod's copy of one file. `state` is null where it is not known: the copy could not be read
- *  (`unreadable` says why), or the copies' answer has not landed. A copy that was read has its
- *  `value` for the cell, and its `size` in bytes and `modified` in milliseconds for the tooltip. */
+ *  (`unreadable` says why), or the answer has not landed. `value` is the cell's text; `size` is in
+ *  bytes and `modified` in milliseconds. */
 export interface ConflictCell {
   readonly state: ConflictCellState | null;
   readonly unreadable?: string;
