@@ -314,28 +314,20 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // Effective, one relation: the header is an ordinary `records` row, swept here by
         // construction. form_lookup gets no branch: ingest keeps one lookup row per Effective
         // record row, so `records`' winners are form_lookup's.
-        InsertWinners(RecordRef.Effective, "SELECT form_key, plugin, origin FROM mirror.records");
-
-        // Head, over the same membership relation records_head itself is built on. A record the
-        // working tree deleted is gone from Effective but still held at Head, so the two stacks can
-        // name different winners for one FormKey.
-        InsertWinners(RecordRef.Head, $"SELECT form_key, plugin, origin FROM {TableDdlBuilder.HeadRowsRelation}");
-    }
-
-    // The active plugin latest in the load order wins its FormKey. The join is
-    // `active_plugins` alone, so no SQL re-spells who competes; QUALIFY and the (plugin, origin)
-    // tiebreak make a load_order_idx tie deterministic.
-    private void InsertWinners(RecordRef @ref, string rowsSql) =>
+        // The active plugin latest in the load order wins its FormKey. The join is `active_plugins`
+        // alone, so no SQL re-spells who competes; QUALIFY and the (plugin, origin) tiebreak make a
+        // load_order_idx tie deterministic.
         Execute($"""
-            INSERT INTO {TableDdlBuilder.WinnersRelation} (record_ref, form_key, plugin, origin)
-            SELECT '{WinnerRef.Of(@ref)}', r.form_key, r.plugin, r.origin
-            FROM ({rowsSql}) r
+            INSERT INTO {TableDdlBuilder.WinnersRelation} (form_key, plugin, origin)
+            SELECT r.form_key, r.plugin, r.origin
+            FROM mirror.records r
             JOIN {TableDdlBuilder.ActiveRelation} p
               ON p.plugin = r.plugin AND p.origin = r.origin
             QUALIFY ROW_NUMBER() OVER (
                 PARTITION BY r.form_key
                 ORDER BY p.load_order_idx DESC, r.plugin, r.origin) = 1
             """);
+    }
 
     // --- Working-tree changes ---
 
@@ -383,9 +375,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         using var tx = Connection.BeginTransaction();
         RequireWorkingTreeOverlay().MarkWorkingTreeOnly(key, formKeys);
-        // Effective is untouched, but Head just lost a row per FormKey, which can promote the next
-        // plugin down at that ref; Head's winners are swept, not derived per read (ADR-0012).
-        UpdateWinnersCore();
         _store.BumpSequence();
         tx.Commit();
     }
@@ -399,9 +388,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         using var tx = Connection.BeginTransaction();
         RequireWorkingTreeOverlay().SeedCommittedOnly(key, records);
-        // The counterpart of MarkWorkingTreeOnly's sweep: Head just gained a row per FormKey, which can
-        // demote whoever was winning it at that ref. Effective is untouched either way.
-        UpdateWinnersCore();
         _store.BumpSequence();
         tx.Commit();
     }
@@ -604,13 +590,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // --- Queries ---
 
-    // `records` holds one row per record copy and that row is Effective, so every read reaches its
-    // ref by naming a relation of the same shape; no read carries a ref predicate.
-    private const string EffectiveRelation = "records";
-    private const string HeadRelation = "records_head";
-
-    private IRecordReads? _effectiveReads;
-    private IRecordReads? _headReads;
+    private IRecordReads? _reads;
 
     // Empty until the Indexer points it somewhere: a store opened by a test that never reconciles
     // has no plugins open, which is what an empty set says.
@@ -620,19 +600,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     public void ReadOpenedPluginsFrom(Func<IReadOnlyDictionary<PluginAddress, PluginContent>> opened) =>
         _openedPlugins = opened;
 
-    /// <summary>Reads answering from the extracted tables (<c>Resolve</c>, <c>GetReferencedBy</c>,
-    /// <c>GetPlacement</c>) are identical at both refs: those tables carry no ref dimension and
-    /// track Effective. The public surface is <c>At(Effective)</c>.</summary>
-    public IRecordReads At(RecordRef recordRef)
-    {
-        if (recordRef == RecordRef.Head)
-        {
-            _headReads ??= new RelationReads(this, HeadRelation);
-            return _headReads;
-        }
-        _effectiveReads ??= new RelationReads(this, EffectiveRelation);
-        return _effectiveReads;
-    }
+    /// <summary>See <see cref="IRecordIndex.Reads"/>.</summary>
+    public IRecordReads Reads => _reads ??= new RelationReads(this, "records");
 
     // The one implementation of every IRecordReads member, parameterized by which relation its SQL
     // names, so a read cannot be ref-aware on one path and not the other.
@@ -721,30 +690,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             cmd.Parameters.Add(new DuckDBParameter { Value = NormalizeRecordType(tableName) });
             using var reader = cmd.ExecuteReader();
 
-            // Read the whole stack out before resolving any Head counterpart — ReadDocument opens
-            // its own command on this same connection, and doing that while this reader is still open
-            // would interleave two readers on one DuckDB connection.
-            var rows = new List<(RecordDocument Document, bool IsDirty)>();
+            var entries = new List<OverrideStackEntry>();
             while (reader.Read())
             {
                 var doc = owner.ReadDocumentFromBody(reader, schema, resolve);
-                // On a Head-scoped read every row is committed by construction, so this reads false
-                // for all of them without needing to know which relation it is on.
                 var isDirty = reader.GetString(8) == SourceRef.WorkingTree;
-                rows.Add((doc, isDirty));
-            }
-            reader.Close();
-
-            var entries = new List<OverrideStackEntry>();
-            foreach (var (doc, isDirty) in rows)
-            {
-                // A clean entry keeps Head and Effective as the same instance, so "did this change" is
-                // answerable by identity. Deliberately `HeadRelation`, never `records`: a dirty entry's
-                // committed counterpart lives at records_head whichever ref this call is scoped to.
-                var head = isDirty
-                    ? owner.ReadDocument(connection, HeadRelation, tableName, doc.FormKey, doc.Plugin.Name, doc.Plugin.Origin, winnerOnly: false) ?? doc
-                    : doc;
-                entries.Add(new OverrideStackEntry(doc.Plugin, doc.LoadOrderIndex, doc.IsWinner, doc, head, isDirty));
+                entries.Add(new OverrideStackEntry(doc.Plugin, doc.LoadOrderIndex, doc.IsWinner, doc, isDirty));
             }
 
             return entries.Count == 0 ? null : new RecordOverrides(formKey, tableName, entries);

@@ -203,7 +203,7 @@ public sealed class DeleteRecordHandlerTests
         Assert.Empty(result.Refused);
         Assert.Null(mod.Document(mod.Npc.ToString()));
         Assert.NotNull(
-            mod.CommittedDocument(mod.Npc.ToString(), "npc_", SourceEditFixture.NpcEditorId));
+            mod.CommittedDocument(mod.Npc.ToString()));
     }
 
     [Fact]
@@ -234,7 +234,7 @@ public sealed class DeleteRecordHandlerTests
 
         Assert.Empty(result.Refused);
         Assert.Null(mod.Document(newFormKey));
-        Assert.Null(mod.CommittedDocument(newFormKey, "npc_", "BrandNew"));
+        Assert.Null(mod.CommittedDocument(newFormKey));
     }
 
     [Fact]

@@ -27,11 +27,14 @@ internal static class TrackedTree
         Document(modFolder, plugin, formKey)?.Body
             ?? throw new InvalidOperationException($"Expected '{formKey}' to have a tracked document in '{modFolder}'.");
 
-    /// <summary>The same question at a named ref: what the last commit holds, which a working-tree
-    /// change does not alter.</summary>
-    internal static SourceDocument? CommittedDocument(
-        string modFolder, PluginAddress plugin, RecordIdentity identity) =>
-        SourceRepository.Open(modFolder, GameRelease.Fallout4)?.GetAt(plugin, identity, "HEAD");
+    /// <summary>What the last commit holds for the record, which a working-tree change does not
+    /// alter: its own document, or the owner's when the record is embedded in it.</summary>
+    internal static SourceDocument? CommittedDocument(string modFolder, PluginAddress plugin, string formKey)
+    {
+        var committed = Repository(modFolder).ReadAll(plugin, "HEAD");
+        return committed.FirstOrDefault(document => document.FormKey == formKey)
+            ?? committed.FirstOrDefault(document => document.Body.Contains($"\"FormKey\": \"{formKey}\"", StringComparison.Ordinal));
+    }
 
     internal static bool IsPartialForm(this SourceDocument document)
     {
@@ -103,9 +106,8 @@ public static class TrackedPluginTree
     public static SourceDocument? Document(this ITrackedPlugin tracked, string formKey) =>
         TrackedTree.Document(tracked.ModFolder, tracked.Plugin, formKey);
 
-    public static SourceDocument? CommittedDocument(
-        this ITrackedPlugin tracked, string formKey, string recordType, string? editorId) =>
-        TrackedTree.CommittedDocument(tracked.ModFolder, tracked.Plugin, new RecordIdentity(formKey, recordType, editorId));
+    public static SourceDocument? CommittedDocument(this ITrackedPlugin tracked, string formKey) =>
+        TrackedTree.CommittedDocument(tracked.ModFolder, tracked.Plugin, formKey);
 
     public static SourceDocument DocumentCarrying(this ITrackedPlugin tracked, string editorId) =>
         TrackedTree.DocumentCarrying(tracked.ModFolder, tracked.Plugin, editorId);
@@ -137,9 +139,6 @@ public static class TrackedPluginsTree
 
     public static SourceDocument? Document(this ITrackedPlugins tracked, PluginAddress plugin, FormKey formKey) =>
         tracked.Document(plugin, formKey.ToString());
-
-    public static SourceDocument? CommittedDocument(this ITrackedPlugins tracked, PluginAddress plugin, RecordIdentity identity) =>
-        TrackedTree.CommittedDocument(tracked.ModFolderOf(plugin), plugin, identity);
 
     public static SourceDocument DocumentCarrying(this ITrackedPlugins tracked, PluginAddress plugin, string editorId) =>
         TrackedTree.DocumentCarrying(tracked.ModFolderOf(plugin), plugin, editorId);

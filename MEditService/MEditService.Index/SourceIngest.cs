@@ -162,7 +162,7 @@ internal static class SourceIngest
     }
 
     // An EditorID edit moves the file, so one FormKey shows as a delete plus a create, which would land
-    // in both halves of records_head. Only flat records reach here; renamed containers go through the
+    // in both halves of head_rows. Only flat records reach here; renamed containers go through the
     // structural pass.
     private static void PairRenamedSourceUnits(
         List<(string FormKey, string Body)> baselines,

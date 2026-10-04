@@ -81,7 +81,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     }
 
     [Fact]
-    public void ApplyingAContainersDocument_DerivesTheEmbeddedChildsOwnDocument_AtEffectiveOnly()
+    public void ApplyingAContainersDocument_DerivesTheEmbeddedChildsOwnDocument()
     {
         var scaleEditReachingOnlyTemporaryRefBecauseThePlacedRefsCarryDistinctScales =
             CellBody().Replace("\"Scale\": 1.0", "\"Scale\": 2.5", StringComparison.Ordinal);
@@ -90,9 +90,6 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         Project(_fixture.EmbedCell, scaleEditReachingOnlyTemporaryRefBecauseThePlacedRefsCarryDistinctScales);
 
         var effectiveChild = _fixture.Reads.DocumentOf(_fixture.TemporaryRef, _fixture.Plugin);
-        var headChild = _fixture.Reads.HeadDocument(_fixture.TemporaryRef, _fixture.Plugin);
-        Assert.NotNull(headChild);
         Assert.Contains("\"Scale\": 2.5", effectiveChild.BodyOf(), StringComparison.Ordinal);
-        Assert.DoesNotContain("\"Scale\": 2.5", headChild.BodyOf(), StringComparison.Ordinal);
     }
 }

@@ -79,17 +79,6 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     }
 
     [Fact]
-    public void GetAt_ThePluginHeader_IsTheCommittedHeaderDocument()
-    {
-        var repository = TrackedWithHeader();
-
-        var header = repository.GetAt(
-            Plugin, new RecordIdentity(HeaderFormKey, PluginHeader.RecordType, null), "refs/heads/main");
-
-        Assert.Equal(HeaderBody, header?.Body);
-    }
-
-    [Fact]
     public void ReadAll_AtTheWorkingTree_IsEveryDocumentPut()
     {
         var repository = Tracked();
@@ -144,29 +133,6 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     public void ReadAll_AtARefThatHoldsNothingForThisPlugin_IsEmpty()
     {
         Assert.Empty(Tracked().ReadAll(new PluginAddress("Other.esp", "FixtureMod"), "refs/heads/main"));
-    }
-
-    [Fact]
-    public void GetAt_TheParkedCompileRef_IsTheCommittedTextNotTheWorkingTreesEdit()
-    {
-        var repository = Tracked();
-        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, EditedBody));
-
-        var parked = repository.GetAt(
-            Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId), SourceRepository.LastCompileRef(PluginName));
-
-        Assert.Equal(NpcBody, parked?.Body);
-    }
-
-    [Fact]
-    public void GetAt_ARecordTheRefNeverHeld_IsNull()
-    {
-        var repository = Tracked();
-        repository.Put(Plugin, new SourceDocument("000900:Fixture.esp", "weap", "Later", LaterBody));
-
-        Assert.Null(repository.GetAt(
-            Plugin, new RecordIdentity("000900:Fixture.esp", "weap", "Later"),
-            SourceRepository.LastCompileRef(PluginName)));
     }
 
     [Fact]

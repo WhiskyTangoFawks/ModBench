@@ -135,7 +135,7 @@ public sealed class ValidateThroughGitTests : IDisposable
     }
 
     [Fact]
-    public void ACommitOutsideModbench_MovesTheRecordAtHead()
+    public void ACommitOutsideModbench_LeavesTheRecordClean()
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
         _mod.Git("commit", "-q", "-am", "an edit committed outside Modbench");
@@ -144,7 +144,7 @@ public sealed class ValidateThroughGitTests : IDisposable
 
         var entry = Reads.StackEntry(_npc, _mod.KeyOf()).Require();
         Assert.False(entry.HasWorkingTreeChange);
-        Assert.Equal("RenamedByHand", entry.Head.EditorId);
+        Assert.Equal("RenamedByHand", entry.Effective.EditorId);
     }
 
     [Fact]
