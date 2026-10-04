@@ -60,6 +60,17 @@
           "scope": "resource",
           "description": "The game directory (the folder containing the game executable and Data/). A Steam install or a stock game folder. Leave blank to fall back to ModOrganizer.ini's gamePath, then Steam auto-detect."
         },
+        "modbench.mods.conflictTable.cellValue": {
+          "type": "string",
+          "enum": ["size", "dateModified", "contents"],
+          "enumDescriptions": [
+            "The size of the copy.",
+            "The day the copy was last modified.",
+            "A letter for the contents of the copy: A is the master's, so two cells with the same letter hold the same file."
+          ],
+          "default": "size",
+          "description": "What each cell of a mod's conflict table shows of its copy."
+        },
         "modbench.mods.greyInactiveFiles": {
           "type": "boolean",
           "default": true,
