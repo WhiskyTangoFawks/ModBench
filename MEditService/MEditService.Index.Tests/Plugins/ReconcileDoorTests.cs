@@ -8,7 +8,18 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class ReconcileDoorTests
 {
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+
+    private static async Task ParkedEqualArrivalFinding(
+        LoadOrderHolder holder, GatedPluginAdapter gate, InMemoryNotificationPublisher notifications, LoadOrderEntry plugin)
+    {
+        var before = notifications.Notifications.Count;
+        PluginBinaries.Touch(plugin.Path);
+        gate.ParkNextOpenOf(plugin.Name);
+        holder.Apply(holder.Current);
+        await gate.WaitUntilParkedAsync();
+        gate.Release();
+        Waits.Reached(() => notifications.Since(before).Any(n => Announcements.PluginChanged(plugin)(n)), "the parked arrival's announcement");
+    }
 
     private static LoadOrderStatusNotification[] StatusesPublished(InMemoryNotificationPublisher notifications) =>
         [.. notifications.Notifications.OfType<LoadOrderStatusNotification>()];
@@ -70,9 +81,7 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
 
         File.Delete(blocker);
-        holder.Apply(snapshot);
-
-        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status", Patience);
+        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
         Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 
@@ -82,15 +91,19 @@ public sealed class ReconcileDoorTests
         using var data = new PluginFixtureBuilder("retry-once-door").WithPlugin("A.esp").Build();
         var notifications = new InMemoryNotificationPublisher();
         var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, notifications: notifications);
+        using var opens = new GatedPluginAdapter();
+        using var index = Indexes.Open(holder, opens, notifications: notifications);
         var snapshot = LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.SkyrimSE, data.Plugins);
         index.Receive(holder, snapshot);
         var before = StatusesPublished(notifications).Length;
 
-        holder.Apply(snapshot);
+        index.NextSnapshotUntil(() => StatusesPublished(notifications).Length > before, "the retried reconcile's failed status");
+        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.SkyrimSE, []));
 
-        Waits.Reached(() => StatusesPublished(notifications).Length > before, "the retried reconcile's failed status", Patience);
-        Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)[before..]).Status.State);
+        var retried = StatusesPublished(notifications)[before..];
+        Assert.Equal(2, retried.Length);
+        Assert.All(retried, n => Assert.Equal(LoadOrderState.Failed, n.Status.State));
+        Assert.Equal(0, opens.OpenedTotal);
     }
 
     [Fact]
@@ -101,19 +114,13 @@ public sealed class ReconcileDoorTests
         var holder = new LoadOrderHolder();
         using var gate = new GatedPluginAdapter();
         using var index = Indexes.Open(holder, gate, notifications: notifications);
-        var snapshot = LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
-        index.Receive(holder, snapshot);
-        var before = StatusesPublished(notifications).Length;
-        var sequence = index.Sequence;
-        PluginBinaries.Touch(data.Plugins[0].Path);
-        gate.ParkNextOpenOf("A.esp");
+        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        var before = notifications.Notifications.Count;
 
-        holder.Apply(snapshot);
-        await gate.WaitUntilParkedAsync();
-        gate.Release();
+        await ParkedEqualArrivalFinding(holder, gate, notifications, data.Plugins[0]);
+        index.AnnouncedByEqualArrivals(notifications, () => Announcements.Touched(data.Plugins[0]));
 
-        Assert.True(await index.AwaitSequenceAsync(sequence + 1, Patience));
-        Assert.Equal(before, StatusesPublished(notifications).Length);
+        Assert.Empty(notifications.Since(before).OfType<LoadOrderStatusNotification>());
     }
 
     [Fact]
@@ -138,32 +145,33 @@ public sealed class ReconcileDoorTests
         Assert.NotEqual(first, second);
         Waits.Reached(
             () => StatusesPublished(notifications).Any(n => n.Status.State == LoadOrderState.Ready && n.Status.Version == second),
-            "the survivor's ready status", Patience);
+            "the survivor's ready status");
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Equal(second, index.Status.Version);
         Assert.DoesNotContain(StatusesPublished(notifications), n => n.Status.State == LoadOrderState.HeldElsewhere);
     }
 
     [Fact]
-    public void AnIdenticalResend_AnswersTheVersionAlreadyReady_AndPublishesNothing()
+    public async Task AnIdenticalResend_AnswersTheVersionAlreadyReady_AndAnnouncesOnlyWhatChangedOnDisk()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("no-op-door").WithPlugin("A.esp").Build();
         var notifications = new InMemoryNotificationPublisher();
-        using var index = Indexes.Open(holder, notifications: notifications);
+        using var gate = new GatedPluginAdapter();
+        using var index = Indexes.Open(holder, gate, notifications: notifications);
         var snapshot = LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
         var first = index.Receive(holder, snapshot);
         var before = notifications.Notifications.Count;
 
         var second = holder.Apply(snapshot);
-        PluginBinaries.Touch(fx.Plugins[0].Path);
-        holder.Apply(snapshot);
+        await ParkedEqualArrivalFinding(holder, gate, notifications, fx.Plugins[0]);
+        var announced = index.AnnouncedByEqualArrivals(notifications, () => Announcements.Touched(fx.Plugins[0]));
 
-        Waits.Reached(() => notifications.Notifications.Count > before, "the touched plugin's announcement", Patience);
         Assert.Equal(first, second);
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Equal(first, index.Status.Version);
-        Assert.IsType<PluginChangedNotification>(Assert.Single(notifications.Notifications.Skip(before)));
+        Assert.All(notifications.Since(before), n => Assert.True(Announcements.PluginChanged(fx.Plugins[0])(n)));
+        Assert.Equal(2, announced.Count);
     }
 
     [Fact]

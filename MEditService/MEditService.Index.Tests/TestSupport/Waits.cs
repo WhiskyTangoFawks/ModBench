@@ -2,25 +2,18 @@ using System.Diagnostics;
 
 namespace MEditService.Index.Tests.TestSupport;
 
-/// <summary>A subscribed reconcile runs on its own thread, so a test asserting its outcome waits
-/// for the status it publishes rather than for a call to return.</summary>
+/// <summary>An arrival runs on a thread of its own, so a test asserting its outcome waits for what
+/// the arrival announces rather than for a call to return.</summary>
 internal static class Waits
 {
-    internal static async Task<bool> Until(Func<bool> condition, TimeSpan? timeout = null)
-    {
-        var limit = timeout ?? TimeSpan.FromSeconds(10);
-        var elapsed = Stopwatch.StartNew();
-        while (!condition())
-        {
-            if (elapsed.Elapsed > limit) return false;
-            await Task.Delay(20);
-        }
-        return true;
-    }
+    internal static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
 
-    internal static void Reached(Func<bool> condition, string what, TimeSpan timeout)
+    internal static Task<bool> Until(Func<bool> condition, TimeSpan? timeout = null) =>
+        Task.Run(() => ReachedWithin(condition, timeout ?? TimeSpan.FromSeconds(10)));
+
+    internal static void Reached(Func<bool> condition, string what)
     {
-        if (!ReachedWithin(condition, timeout)) throw new TimeoutException($"Never reached {what}.");
+        if (!ReachedWithin(condition, Patience)) throw new TimeoutException($"Never reached {what}.");
     }
 
     internal static bool ReachedWithin(Func<bool> condition, TimeSpan timeout)

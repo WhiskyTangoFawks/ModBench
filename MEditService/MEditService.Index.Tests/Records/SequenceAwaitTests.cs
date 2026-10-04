@@ -61,7 +61,7 @@ public sealed class SequenceAwaitTests : IDisposable
 
         var path = _fixture.Plugins.Single().Path;
         PluginBinaries.Touch(path);
-        Assert.True(_index.Revalidate());
+        _index.NextSnapshot();
 
         _clock.Advance(TimeSpan.FromMilliseconds(50));
 

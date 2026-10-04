@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Index.Tests;
 
 /// <summary>A shared filename's winning copy, as the game loads it (ADR-0012).</summary>
-internal static class IndexReconcile
+internal static class WinningCopies
 {
     /// <summary>The game loads one file per name (ADR-0012), so a read sees the copy of a shared
     /// filename that wins it. Reconciles <paramref name="plugins"/> with <paramref name="origin"/>'s

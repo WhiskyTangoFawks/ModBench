@@ -11,7 +11,7 @@ public sealed class ValidateThroughGitTests : IDisposable
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _mod;
     private readonly LoadOrderEntry _partner;
-    private string _partnerEditorId = "PartnerNpc";
+    private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly Indexer _index;
     private readonly string _npc;
 
@@ -26,7 +26,7 @@ public sealed class ValidateThroughGitTests : IDisposable
         _mod = _fixture.Plugins.Single(p => p.Name == "Fixture.esp");
         _partner = _fixture.Plugins.Single(p => p.Name == "Partner.esp");
         _npc = npc.ToString();
-        _index = Indexes.Reconciled(_fixture);
+        _index = Indexes.Reconciled(_fixture, notifications: _notifications);
     }
 
     public void Dispose()
@@ -38,14 +38,6 @@ public sealed class ValidateThroughGitTests : IDisposable
     private IRecordReads Reads => _index.RequireReads();
 
     private void Validate() => _index.NextSnapshot();
-
-    private void ChangeThePartner()
-    {
-        var document = Reads.Search(new RecordQuery(Plugin: _partner.Name, Origin: _partner.Origin, RecordTypes: ["npc_"], Limit: 1)).Items.Single();
-        var next = $"{_partnerEditorId}X";
-        _partner.HandEdit(Reads.DocumentOf(document.FormKey, _partner.KeyOf()), $"\"{_partnerEditorId}\"", $"\"{next}\"");
-        _partnerEditorId = next;
-    }
 
     private void ValidateUntilEditorId(string editorId) =>
         _index.NextSnapshotUntil(() => Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId == editorId, $"the record named {editorId}");
@@ -63,22 +55,21 @@ public sealed class ValidateThroughGitTests : IDisposable
     {
         using var handleDenyingSharingSoAnyReadOfTheDocumentWouldFail = new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None);
 
-        ChangeThePartner();
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(Reads));
 
-        Assert.True(_index.Revalidate());
         Assert.False(PluginFailed);
+        Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
     }
 
     [Fact]
-    public void ADirtyDocumentUnchangedSinceTheLastValidation_AdvancesNoSequence()
+    public void ADirtyDocumentUnchangedSinceTheLastValidation_IsNotAnnouncedAgain()
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
         Validate();
-        var before = _index.Sequence;
-        ChangeThePartner();
 
-        Assert.True(_index.Revalidate());
-        Assert.Equal(before + 1, _index.Sequence);
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(Reads));
+
+        Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
     }
 
     [Fact]
@@ -177,9 +168,8 @@ public sealed class ValidateThroughGitTests : IDisposable
         _mod.Git("commit", "-q", "-m", "a document declaring no FormKey");
         ValidateUntilFailed();
         Assert.True(PluginFailed);
-        ChangeThePartner();
 
-        Assert.True(_index.Revalidate());
+        _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(Reads));
 
         Assert.True(PluginFailed);
     }
@@ -193,8 +183,6 @@ public sealed class ValidateThroughGitTests : IDisposable
         var treeWhoseRestoreAtTheSameHeadReadsCleanToGit = SourceRepository.RootIn(_mod.ModFolderOf(), _mod.Name);
         Directory.Move(treeWhoseRestoreAtTheSameHeadReadsCleanToGit, treeWhoseRestoreAtTheSameHeadReadsCleanToGit + ".away");
         ValidateUntilEditorId("FixtureNpc");
-        ChangeThePartner();
-        Assert.True(_index.Revalidate());
         Directory.Move(treeWhoseRestoreAtTheSameHeadReadsCleanToGit + ".away", treeWhoseRestoreAtTheSameHeadReadsCleanToGit);
 
         ValidateUntilEditorId("RenamedByHand");

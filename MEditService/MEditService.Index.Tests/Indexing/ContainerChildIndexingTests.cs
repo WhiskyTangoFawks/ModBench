@@ -116,7 +116,7 @@ public sealed class ContainerChildIndexingTests : IDisposable
         Assert.NotEmpty(reads.GetContainerChildren(Key, _questFk));
 
         File.Delete(_fixture.Plugins.Single().Path);
-        Assert.True(index.Revalidate());
+        index.NextSnapshot();
 
         Assert.Empty(reads.GetContainerChildren(Key, _questFk));
         Assert.Empty(reads.GetContainerChildren(Key, _topic0Fk));

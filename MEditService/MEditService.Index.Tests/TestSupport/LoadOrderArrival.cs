@@ -10,8 +10,6 @@ namespace MEditService.Index.Tests;
 /// version.</summary>
 internal static class LoadOrderArrival
 {
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
-
     internal static LoadOrderHolder Reconcile(
         this Indexer index, LoadOrderHolder holder, string gameDirectory,
         IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null)
@@ -35,16 +33,6 @@ internal static class LoadOrderArrival
         string gameDirectory, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> plugins) =>
         SnapshotPlugins.Snapshot(gameDirectory, instanceRoot, gameRelease, plugins);
 
-    internal static void AwaitVersion(this Indexer index, long version)
-    {
-        Waits.Reached(() => index.Status.Version >= version, $"the status answering version {version}", Patience);
-        index.AwaitValidation();
-    }
-
-    // Validation holds the write gate from its first plugin to its last, and every announcement of
-    // a validation is made inside that hold.
-    internal static void AwaitValidation(this Indexer index)
-    {
-        using var _ = index.WriteGate.Enter();
-    }
+    internal static void AwaitVersion(this Indexer index, long version) =>
+        Waits.Reached(() => index.Status.Version >= version, $"the status answering version {version}");
 }

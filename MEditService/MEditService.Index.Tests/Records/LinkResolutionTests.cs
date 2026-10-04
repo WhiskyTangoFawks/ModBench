@@ -100,7 +100,7 @@ public sealed class LinkResolutionTests
             mod.Npcs.AddNew("Asker");
             mod.Races.Add(new Race(late, Fallout4Release.Fallout4) { EditorID = "After" });
         });
-        Assert.True(index.Revalidate());
+        index.NextSnapshot();
 
         Assert.Equal(first, resolve(late.ToString())?.EditorId);
         Assert.Equal("After", index.RequireReads().LinkResolver(asker)(late.ToString())?.EditorId);

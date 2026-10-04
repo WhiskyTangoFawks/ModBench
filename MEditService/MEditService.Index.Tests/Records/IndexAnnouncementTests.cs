@@ -68,7 +68,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         ReconcileHeld();
 
         PluginBinaries.Touch(_pluginPath);
-        Assert.True(_index.Revalidate());
+        _index.NextSnapshot();
 
         TheOnePluginChanged();
     }
@@ -80,7 +80,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         ReconcileHeld();
 
         File.Delete(_pluginPath);
-        Assert.True(_index.Revalidate());
+        _index.NextSnapshot();
 
         TheOnePluginChanged();
     }
@@ -98,7 +98,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         _publishedByReconcile = _notifications.Notifications.Count;
         PluginBinaries.Touch(otherPath);
 
-        Assert.True(_index.Revalidate());
+        _index.NextSnapshot();
 
         Assert.DoesNotContain(SinceReconcile.OfType<PluginChangedNotification>(), n => n.Plugin.Equals(Key));
     }

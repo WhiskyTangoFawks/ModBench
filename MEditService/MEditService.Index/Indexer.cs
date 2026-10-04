@@ -38,6 +38,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     // the reconciling thread as each plugin lands, read by whoever asks for Status meanwhile.
     private readonly List<IndexedPlugin> _indexed = [];
     private bool _conflictsComputed;
+    private bool _validating;
     private int _plannedCount;
     private int _activeCount;
     // Set only by the reconcile door's own catch, cleared at the top of every attempt: a repeated
@@ -156,7 +157,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
                 }
                 else
                 {
-                    var state = _conflictsComputed ? LoadOrderState.Ready : LoadOrderState.Reconciling;
+                    var state = _conflictsComputed && !_validating ? LoadOrderState.Ready : LoadOrderState.Reconciling;
                     held = new LoadOrderStatus(state, _plannedCount, _activeCount, [.. _indexed], _conflictsComputed, _heldPlugins.Failures, Version: _version);
                 }
 
@@ -239,7 +240,6 @@ public sealed class Indexer : IQueryIndex, IDisposable
             _version = Math.Max(_version, version);
         }
         if (changed) PublishStatus();
-        ValidateEveryPlugin();
     }
 
     // A superseded reconcile throws OperationCanceledException, leaving its work for its
@@ -270,7 +270,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
             }
             var token = BeginReconcile();
             var (held, index) = EnsureScope(snapshot);
-            return ReconcileProgressively(held, index, snapshot, token) || refusalCleared;
+            var reconciled = ReconcileProgressively(held, index, snapshot, token) || refusalCleared;
+            return ValidateHeld(holdsStatus: reconciled, token) || reconciled;
         }
         catch (OperationCanceledException ex)
         {
@@ -821,41 +822,38 @@ public sealed class Indexer : IQueryIndex, IDisposable
         $"Could not validate this plugin's {(holdsTree ? "source tree" : "binary")} ({reason}). Still showing " +
         "what was last read from it.";
 
-    // Once the status answering the version is out, so the views read the load order while this
-    // corrects what changed on disk. It waits out a reconcile, and a newer one cancels it.
-    private void ValidateEveryPlugin()
+    // ADR-0003: the status answering the version is published once the plugins are validated. While
+    // they are, a reconcile that changed the status still reads Reconciling. True when validation
+    // failed outright and became status data.
+    private bool ValidateHeld(bool holdsStatus, CancellationToken token)
     {
-        _exclusive.Enter();
+        lock (_lock)
+        {
+            if (_disposed || _heldPlugins is null) return false;
+            _validating = holdsStatus;
+        }
         try
         {
-            lock (_lock)
-            {
-                if (_disposed || _heldPlugins is null || _heldElsewhereMessage is not null || _failureMessage is not null)
-                    return;
-            }
-            ValidateIndex(BeginReconcile());
-        }
-        catch (OperationCanceledException ex)
-        {
-            _logger.LogDebug(ex, "Validation was superseded by a newer reconcile");
+            ValidateIndex(token);
+            return false;
         }
         catch (IndexWriteGateTimeoutException ex)
         {
             // Busy, not broken: validation is idempotent, and the next snapshot validates again.
             _logger.LogWarning(ex, "Could not validate the index while another write held it; it is re-checked at the next snapshot");
+            return false;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
-            // No caller waits on this thread, so the failure becomes status data (plugins.md, States,
-            // story 6), and the next snapshot tries again.
+            // The failure becomes status data (plugins.md, States, story 6), and the next snapshot
+            // tries again.
             _logger.LogError(ex, "Validating the index failed unexpectedly");
             lock (_lock) _failureMessage = ex.Message;
-            PublishStatus();
+            return true;
         }
         finally
         {
-            EndReconcile();
-            ExitExclusive();
+            lock (_lock) _validating = false;
         }
     }
 

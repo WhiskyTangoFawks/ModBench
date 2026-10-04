@@ -37,7 +37,7 @@ public sealed class IndexerTests
     private static void ReDeriveByTouchingTheBytesThenValidating(Indexer indexer, LoadOrderEntry entry)
     {
         PluginBinaries.Touch(entry.Path);
-        Assert.True(indexer.Revalidate());
+        indexer.NextSnapshot();
     }
 
     private static string SharedNpc(Indexer indexer) =>
@@ -53,7 +53,7 @@ public sealed class IndexerTests
     }
 
     [Fact]
-    public async Task ASweepBetweenSnapshots_TakesItsWinnersFromTheHolder_NotFromThePluginsItHasOpen()
+    public async Task AReDerivationAfterASnapshotMovedTheWinners_TakesItsWinnersFromTheHolder_NotFromThePluginsItHasOpen()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProvidersOfSharedNpcDefinedInAEsmAndOverriddenInBEsp("indexer-winners-from-holder");
@@ -129,7 +129,7 @@ public sealed class IndexerTests
         PluginBinaries.Touch(fx.Plugins.Single(p => p.Name == "B.esp").Path);
         var before = indexer.Sequence;
 
-        Assert.True(indexer.Revalidate());
+        indexer.NextSnapshot();
 
         Assert.Equal(before + 1, indexer.Sequence);
     }

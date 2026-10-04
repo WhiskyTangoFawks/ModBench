@@ -69,44 +69,24 @@ internal static class Indexes
         return index;
     }
 
-    /// <summary>The held load order arriving again (ADR-0013), which validates every
-    /// plugin (ADR-0003). It answers once the rows it changed are announced.</summary>
-    internal static void NextSnapshot(this Indexer index)
-    {
-        if (!index.Revalidate()) throw new TimeoutException("The arrival announced no change.");
-    }
-
-    /// <summary>How far the sequence moved while <paramref name="arrival"/> was answered. An equal
-    /// snapshot sent before a measured arrival is proved silent by the two measurements of the same
-    /// arrival agreeing.</summary>
-    internal static long AdvanceDuring(this Indexer index, Action arrival)
-    {
-        var before = index.Sequence;
-        arrival();
-        return index.Sequence - before;
-    }
-
-    /// <summary>The next snapshot: true when it landed a change.</summary>
-    internal static bool Revalidate(this Indexer index)
-    {
-        if (!Holders.TryGetValue(index, out var holder))
-            throw new InvalidOperationException("Only an Indexer from Indexes.Open has a holder to deliver an arrival through.");
-        var before = index.Sequence;
-        holder.Apply(holder.Current);
-        var landed = Waits.ReachedWithin(() => index.Sequence > before, TimeSpan.FromSeconds(10));
-        if (landed) index.AwaitValidation();
-        return landed;
-    }
-
-    /// <summary>The held load order arriving again, answered once <paramref name="announced"/> holds
-    /// and the validation that announced it has finished.</summary>
+    /// <summary>The held load order arriving again (ADR-0013), answered once
+    /// <paramref name="announced"/> holds. Validation announces inside its write-gate hold, so taking
+    /// the gate waits out the rest of it.</summary>
     internal static void NextSnapshotUntil(this Indexer index, Func<bool> announced, string what)
     {
         if (!Holders.TryGetValue(index, out var holder))
             throw new InvalidOperationException("Only an Indexer from Indexes.Open has a holder to deliver an arrival through.");
         holder.Apply(holder.Current);
-        Waits.Reached(announced, what, TimeSpan.FromSeconds(30));
-        index.AwaitValidation();
+        Waits.Reached(announced, what);
+        using var validated = index.WriteGate.Enter();
+    }
+
+    /// <summary>The held load order arriving again, answered once the rows it changed are announced
+    /// as the sequence moving.</summary>
+    internal static void NextSnapshot(this Indexer index)
+    {
+        var before = index.Sequence;
+        index.NextSnapshotUntil(() => index.Sequence > before, "the sequence moving");
     }
 
     /// <summary>The SQL door: the filter is arbitrary SQL yielding form_key, so what it

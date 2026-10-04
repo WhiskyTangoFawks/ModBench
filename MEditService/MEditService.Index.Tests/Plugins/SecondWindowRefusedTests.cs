@@ -33,8 +33,7 @@ public sealed class SecondWindowRefusedTests
         Assert.Equal(filesWhileHeld, Directory.GetFiles(indexDir).Select(Path.GetFileName).Order().ToList());
 
         otherWindow.Dispose();
-        holder.Apply(holder.Current);
-        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status", TimeSpan.FromSeconds(30));
+        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
         Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 }

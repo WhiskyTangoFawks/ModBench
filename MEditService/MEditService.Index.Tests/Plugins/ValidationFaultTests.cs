@@ -47,38 +47,31 @@ public sealed class ValidationFaultTests : IDisposable
     }
 
     [Fact]
-    public async Task AValidationThatWaitsOutTheWriteGate_IsLogged_AndReCheckedAtTheNextSnapshot()
+    public void AValidationThatWaitsOutTheWriteGate_IsLogged_AndReCheckedAtTheNextSnapshot()
     {
         using var index = Subscribed(writeGate: new IndexWriteGate(TimeSpan.FromMilliseconds(100)));
         RewriteThePlugin();
         using (new GateHeld(index.WriteGate))
         {
             _holder.Apply(_holder.Current);
-
-            Assert.True(
-                await Waits.Until(() => Logged(LogLevel.Warning, e => e.Message.Contains("re-checked", StringComparison.Ordinal))),
-                "the timed-out validation was never logged");
+            Waits.Reached(
+                () => Logged(LogLevel.Warning, e => e.Message.Contains("re-checked", StringComparison.Ordinal)), "the timed-out validation's log");
         }
 
-        _holder.Apply(_holder.Current);
-
-        Assert.True(
-            await Waits.Until(() => index.RequireReads().GetDocuments(Plugin.KeyOf()).Any(d => d.EditorId == "WrittenByAnotherTool")),
-            "the next snapshot never validated the plugin again");
+        index.NextSnapshotUntil(
+            () => index.RequireReads().GetDocuments(Plugin.KeyOf()).Any(d => d.EditorId == "WrittenByAnotherTool"),
+            "the next snapshot validating the plugin again");
     }
 
     [Fact]
-    public async Task AValidationThatFaultsOutright_IsLogged_AndNamedInTheStatus()
+    public void AValidationThatFaultsOutright_IsLogged_AndNamedInTheStatus()
     {
         using var index = Subscribed(notifications: new PluginChangedFaults());
         RewriteThePlugin();
 
-        _holder.Apply(_holder.Current);
+        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Failed, "the failed status");
 
-        Assert.True(
-            await Waits.Until(() => Logged(LogLevel.Error, e => e.Exception?.Message == PluginChangedFaults.Reason)),
-            "the fault was never logged");
-        Assert.Equal(LoadOrderState.Failed, index.Status.State);
+        Assert.True(Logged(LogLevel.Error, e => e.Exception?.Message == PluginChangedFaults.Reason), "the fault was never logged");
         Assert.Contains(PluginChangedFaults.Reason, index.Status.Message, StringComparison.Ordinal);
     }
 

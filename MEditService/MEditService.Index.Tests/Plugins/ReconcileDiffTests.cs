@@ -50,28 +50,22 @@ public sealed class ReconcileDiffTests
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-noop");
-        var (index, opens) = MakeIndex(holder);
-        using var _ = index;
-        using var __ = opens;
-
+        var notifications = new InMemoryNotificationPublisher();
+        var opens = new GatedPluginAdapter();
+        using var _ = opens;
+        using var index = Indexes.Open(holder, opens, notifications: notifications);
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        var openedAfterFirst = opens.OpenedTotal;
         var statusAfterFirst = index.Status;
-        var sequenceAfterFirst = index.Sequence;
         Assert.True(statusAfterFirst.ConflictsComputed);
+        var patch = fx.Plugins.Single(p => p.Name == "B.esp");
 
-        var swapped = fx.Plugins.Select(p => p with { Slot = p.Name == "A.esm" ? 1 : 0 }).ToList();
-        var control = index.AdvanceDuring(() => index.Reconcile(holder, fx.GameDirectory, swapped, GameRelease.Fallout4));
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        var announced = index.AnnouncedByEqualArrivals(notifications, () => Announcements.Touched(patch));
 
-        holder.Apply(holder.Current);
-        var afterAnEqualSnapshot = index.AdvanceDuring(() => index.Reconcile(holder, fx.GameDirectory, swapped, GameRelease.Fallout4));
-
-        Assert.Equal(control, afterAnEqualSnapshot);
-        Assert.Equal(openedAfterFirst, opens.OpenedTotal);
+        Assert.All(announced, n => Assert.True(Announcements.PluginChanged(patch)(n)));
+        Assert.Equal(2, opens.Opened.Count(name => name == "B.esp") - 1);
+        Assert.Equal(1, opens.Opened.Count(name => name == "A.esm"));
         Assert.Equal(statusAfterFirst.IndexedPlugins, index.Status.IndexedPlugins);
         Assert.Equal(statusAfterFirst.State, index.Status.State);
-        Assert.True(index.Status.ConflictsComputed);
     }
 
     [Fact]
@@ -234,14 +228,12 @@ public sealed class ReconcileDiffTests
 
         var sequence = index.Sequence;
         PluginBinaries.Touch(fx.Plugins[0].Path);
-        holder.Apply(holder.Current);
-        Waits.Reached(() => index.Sequence > sequence, "the touched plugin's projection", TimeSpan.FromSeconds(30));
+        index.NextSnapshot();
         Assert.Equal(sequence + 1, index.Sequence);
 
         new Fallout4Mod(ModKey.FromFileName("Bad.esp"), Fallout4Release.Fallout4).WriteToBinary(badPath);
-        holder.Apply(holder.Current);
+        index.NextSnapshotUntil(() => index.Status.Failures.Count == 0, "the status without the recovered plugin's failure");
 
-        Waits.Reached(() => index.Status.Failures.Count == 0, "the status without the recovered plugin's failure", TimeSpan.FromSeconds(30));
         Assert.Contains(ReadsOf(index).OpenedPlugins.Keys, k => k.Name == "Bad.esp");
     }
 

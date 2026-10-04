@@ -7,7 +7,6 @@ namespace MEditService.Index.Tests.Records;
 public sealed class IndexWriteOrderTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
 
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("index-write-order")
         .WithPlugin(PluginName, mod => mod.Npcs.AddNew("FixtureNpc"), origin: "FixtureMod")
@@ -30,7 +29,7 @@ public sealed class IndexWriteOrderTests : IDisposable
     {
         PluginBinaries.Touch(Plugin.Path);
         _adapter.ParkNextOpenOf(PluginName);
-        var revalidation = Task.Run(() => _index.Revalidate());
+        var revalidation = Task.Run(_index.NextSnapshot);
         await _adapter.WaitUntilParkedAsync();
         return revalidation;
     }
@@ -44,7 +43,7 @@ public sealed class IndexWriteOrderTests : IDisposable
 
         Assert.NotSame(filter, await Task.WhenAny(filter, Task.Delay(TimeSpan.FromMilliseconds(500))));
         _adapter.Release();
-        await Task.WhenAll(revalidation, filter).WaitAsync(Patience);
+        await Task.WhenAll(revalidation, filter).WaitAsync(Waits.Patience);
         Assert.Equal("filter.sql", _index.ActiveFilter?.Source);
     }
 
@@ -55,8 +54,8 @@ public sealed class IndexWriteOrderTests : IDisposable
 
         var listing = Task.Run(() => _index.RequireReads().GetDocuments(Plugin.KeyOf()));
 
-        Assert.NotEmpty(await listing.WaitAsync(Patience));
+        Assert.NotEmpty(await listing.WaitAsync(Waits.Patience));
         _adapter.Release();
-        await revalidation.WaitAsync(Patience);
+        await revalidation.WaitAsync(Waits.Patience);
     }
 }

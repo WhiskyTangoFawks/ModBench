@@ -1,5 +1,6 @@
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -10,6 +11,8 @@ public sealed class ProjectionSequenceTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _base;
+    private readonly LoadOrderEntry _partner;
+    private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly PluginAddress _baseKey;
     private readonly FormKey _npc1;
     private readonly FormKey _npc2;
@@ -25,13 +28,15 @@ public sealed class ProjectionSequenceTests : IDisposable
                 fk1 = mod.Npcs.AddNew("First").FormKey;
                 fk2 = mod.Npcs.AddNew("Second").FormKey;
             }, origin: "BaseMod")
+            .WithPlugin("Partner.esp", mod => mod.Npcs.AddNew("PartnerNpc"), origin: "PartnerMod")
             .BuildScattered()
             .Tracked();
-        _base = _fixture.Plugins.Single();
+        _base = _fixture.Plugins.Single(p => p.Name == "Base.esm");
+        _partner = _fixture.Plugins.Single(p => p.Name == "Partner.esp");
         _baseKey = _base.KeyOf();
         _npc1 = fk1;
         _npc2 = fk2;
-        _index = Indexes.Open(_holder);
+        _index = Indexes.Open(_holder, notifications: _notifications);
     }
 
     public void Dispose()
@@ -103,16 +108,14 @@ public sealed class ProjectionSequenceTests : IDisposable
     }
 
     [Fact]
-    public void Validate_WithUnchangedBytes_DoesNotAdvanceTheSequence()
+    public void Validate_WithUnchangedBytes_AnnouncesNothingOfThePlugin()
     {
         Reconcile(_fixture.Plugins);
-        var disabled = _fixture.Plugins.Select(p => p with { Enabled = false }).ToList();
-        var control = _index.AdvanceDuring(() => Reconcile(disabled));
-        Reconcile(_fixture.Plugins);
 
-        _holder.Apply(_holder.Current);
-        var afterAnEqualSnapshot = _index.AdvanceDuring(() => Reconcile(disabled));
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index.RequireReads()));
 
-        Assert.Equal(control, afterAnEqualSnapshot);
+        Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
+        Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc1.ToString()));
+        Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc2.ToString()));
     }
 }

@@ -64,7 +64,7 @@ public class PluginParticipationTests
     }
 
     [Fact]
-    public void SetPluginParticipation_FlippedTwice_IsIdempotent()
+    public void ADisabledPluginsSnapshotArrivingAgain_LeavesTheWinnersAsTheyWere()
     {
         using var fixture = SharedNpcFixture("participation-idempotent", out var npcKey);
         var holder = new LoadOrderHolder();
@@ -75,7 +75,7 @@ public class PluginParticipationTests
         var afterFirstFlip = WinnersByPlugin(index, npcKey);
 
         PluginBinaries.Touch(fixture.Plugins[0].Path);
-        Assert.True(index.Revalidate());
+        index.NextSnapshot();
         var afterSecondFlip = WinnersByPlugin(index, npcKey);
 
         Assert.Equal(afterFirstFlip, afterSecondFlip);

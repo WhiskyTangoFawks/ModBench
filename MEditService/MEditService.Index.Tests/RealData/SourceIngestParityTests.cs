@@ -19,24 +19,25 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     }
 
     [Fact]
-    public void AFreshlyIngestedRealPlugin_ValidatesCleanAndAdvancesNoSequence()
+    public void AFreshlyIngestedRealPlugin_ValidatesClean_AndAnnouncesNothingOfIt()
     {
         using var scratch = new ScratchDirectory("medit-source-parity-validates-");
         var partnerPath = Path.Combine(scratch, "Partner.esp");
         PluginBinaries.Rewrite(partnerPath, mod => mod.Npcs.AddNew("PartnerNpc"));
+        var partner = new LoadOrderEntry("Partner.esp", partnerPath, "PartnerMod", 1, Enabled: true, Winning: true);
+        var notifications = new InMemoryNotificationPublisher();
         using var index = Indexes.Reconciled(
             scratch,
             [
                 new LoadOrderEntry(RealDataPlugin.PluginFileName, Path.Combine(fixture.ModFolder, RealDataPlugin.PluginFileName), SourceParityFixture.Origin, 0, Enabled: true, Winning: true),
-                new LoadOrderEntry("Partner.esp", partnerPath, "PartnerMod", 1, Enabled: true, Winning: true),
+                partner,
             ],
-            Directory.CreateDirectory(Path.Combine(scratch, "instance")).FullName);
-        var before = index.Sequence;
-        PluginBinaries.Touch(partnerPath);
+            Directory.CreateDirectory(Path.Combine(scratch, "instance")).FullName,
+            notifications: notifications);
 
-        Assert.True(index.Revalidate());
+        var announced = index.AnnouncedByEqualArrivals(notifications, () => Announcements.Touched(partner));
 
-        Assert.Equal(before + 1, index.Sequence);
+        Assert.All(announced, n => Assert.True(Announcements.PluginChanged(partner)(n)));
         Assert.Empty(index.Status.Failures);
     }
 

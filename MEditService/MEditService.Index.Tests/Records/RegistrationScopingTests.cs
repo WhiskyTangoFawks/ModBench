@@ -254,7 +254,7 @@ public class RegistrationScopingTests
         var opened = fx.Opens.OpenedTotal;
 
         File.Delete(betaPath);
-        Assert.True(fx.Index.Revalidate());
+        fx.Index.NextSnapshot();
 
         Assert.Empty(fx.Reads.GetDocuments(BetaKey));
 

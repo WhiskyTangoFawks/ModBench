@@ -1,5 +1,6 @@
 using DuckDB.NET.Data;
 using MEditService.Index.Tests.TestSupport;
+using static MEditService.Index.Tests.TestSupport.Announcements;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
@@ -14,7 +15,6 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class EveryReconcileValidatesTests : IDisposable
 {
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
 
     private const string Untracked = "Untracked.esp";
     private const string Tracked = "Tracked.esp";
@@ -52,22 +52,11 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     private void Reconcile() =>
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
-    private IReadOnlyList<Notification> PublishedUntil(Func<Notification, bool> announced)
+    private void ArrivalAnnouncing(Predicate<Notification> announced)
     {
         var before = _notifications.Notifications.Count;
-        _holder.Apply(_holder.Current);
-        Waits.Reached(() => _notifications.Notifications.Skip(before).Any(announced), "the arrival's announcement", Patience);
-        return [.. _notifications.Notifications.Skip(before)];
+        _index.NextSnapshotUntil(() => _notifications.Since(before).Any(n => announced(n)), "the arrival's announcement");
     }
-
-    private static Func<Notification, bool> PluginChanged(LoadOrderEntry plugin) =>
-        n => n is PluginChangedNotification changed && PluginAddress.Comparer.Equals(changed.Plugin, plugin.KeyOf());
-
-    private static Func<Notification, bool> RowsChanged(string formKey) =>
-        n => n is RowsChangedNotification rows && rows.Keys.Contains(formKey);
-
-    private static Func<Notification, bool> FailureNamed(string plugin) =>
-        n => n is LoadOrderStatusNotification status && status.Status.Failures.Any(f => f.Name == plugin);
 
     private void HandEditTracked(string editorId = "EditedByHand")
     {
@@ -87,7 +76,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     {
         RewriteUntracked("WrittenByAnotherTool");
 
-        PublishedUntil(PluginChanged(_untracked));
+        ArrivalAnnouncing(PluginChanged(_untracked));
 
         Assert.Contains(_index.RequireReads().GetDocuments(_untracked.KeyOf()), d => d.EditorId == "WrittenByAnotherTool");
     }
@@ -97,7 +86,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     {
         HandEditTracked();
 
-        PublishedUntil(RowsChanged(_trackedNpc));
+        ArrivalAnnouncing(RowsChanged(_trackedNpc));
 
         Assert.Equal("EditedByHand", _index.RequireReads().DocumentOf(_trackedNpc, _tracked.KeyOf()).EditorId);
     }
@@ -107,7 +96,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     {
         File.Delete(_untracked.Path);
 
-        PublishedUntil(PluginChanged(_untracked));
+        ArrivalAnnouncing(PluginChanged(_untracked));
 
         Assert.Empty(_index.RequireReads().GetDocuments(_untracked.KeyOf()));
     }
@@ -116,12 +105,12 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     public void AnEqualSnapshot_TakesEveryRowOfAPluginWhoseRepositoryAndBinaryWent_ItsDirtyRecordsHeadRowsToo()
     {
         HandEditTracked();
-        PublishedUntil(RowsChanged(_trackedNpc));
+        ArrivalAnnouncing(RowsChanged(_trackedNpc));
         Assert.NotEqual(0, CommittedRowsOf(_tracked));
 
         Directory.Delete(Path.Combine(_tracked.ModFolderOf(), ".git"), recursive: true);
         File.Delete(_tracked.Path);
-        PublishedUntil(PluginChanged(_tracked));
+        ArrivalAnnouncing(PluginChanged(_tracked));
 
         Assert.Equal(0, CommittedRowsOf(_tracked));
         Assert.Empty(_index.RequireReads().GetDocuments(_tracked.KeyOf()));
@@ -143,11 +132,11 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     {
         var bytes = File.ReadAllBytes(_untracked.Path);
         File.Delete(_untracked.Path);
-        PublishedUntil(PluginChanged(_untracked));
+        ArrivalAnnouncing(PluginChanged(_untracked));
         Assert.Empty(_index.RequireReads().GetDocuments(_untracked.KeyOf()));
 
         File.WriteAllBytes(_untracked.Path, bytes);
-        PublishedUntil(PluginChanged(_untracked));
+        ArrivalAnnouncing(PluginChanged(_untracked));
 
         Assert.Contains(_index.RequireReads().GetDocuments(_untracked.KeyOf()), d => d.EditorId == "UntrackedNpc");
     }
@@ -155,16 +144,12 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     [Fact]
     public void AnEqualSnapshot_OfABinaryWhoseStampHolds_ReadsNothing()
     {
-        HandEditTracked("EditedBeforeTheBinaryIsHeld");
-        PublishedUntil(RowsChanged(_trackedNpc));
-
         using var held = new FileStream(_untracked.Path, FileMode.Open, FileAccess.Read, FileShare.None);
         Assert.Null(PluginBinaryHash.OfFile(_untracked.Path));
-        HandEditTracked();
 
-        var published = PublishedUntil(RowsChanged(_trackedNpc));
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _tracked.RenamedByHand(_index.RequireReads()));
 
-        Assert.All(published, n => Assert.IsType<RowsChangedNotification>(n));
+        Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
         Assert.Empty(_index.Status.Failures);
     }
 
@@ -172,14 +157,11 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     public void AnEqualSnapshot_OfAPluginHeldWithAFailure_PublishesNothingWhileItsBytesStayTheSame()
     {
         File.WriteAllText(_untracked.Path, "not a plugin");
-        PublishedUntil(FailureNamed(Untracked));
-        HandEditTracked("EditedOnce");
-        PublishedUntil(RowsChanged(_trackedNpc));
-        HandEditTracked("EditedTwice");
+        ArrivalAnnouncing(FailureNamed(Untracked));
 
-        var published = PublishedUntil(RowsChanged(_trackedNpc));
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _tracked.RenamedByHand(_index.RequireReads()));
 
-        Assert.All(published, n => Assert.IsType<RowsChangedNotification>(n));
+        Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
     }
 
     [Fact]
@@ -193,11 +175,10 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         _index.Reconcile(_holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         Assert.Contains(
             _index.RequireReads().GetDocuments(new PluginAddress("Loose.esp", _tracked.Origin)), d => d.EditorId == "LooseNpc");
-        HandEditTracked();
 
-        var published = PublishedUntil(RowsChanged(_trackedNpc));
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _tracked.RenamedByHand(_index.RequireReads()));
 
-        Assert.All(published, n => Assert.IsType<RowsChangedNotification>(n));
+        Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
     }
 
     [Fact]
@@ -205,14 +186,14 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     {
         var document = _tracked.SourceFileOf(_index.RequireReads().DocumentOf(_trackedNpc, _tracked.KeyOf()));
         File.Copy(document, Path.Combine(Path.GetDirectoryName(document).Require(), "Backup.json"));
-        PublishedUntil(FailureNamed(Tracked));
+        ArrivalAnnouncing(FailureNamed(Tracked));
         var header = Path.Combine(SourceRepository.RootIn(_tracked.ModFolderOf(), Tracked), "RecordData.json");
 
         using var heldShut = new FileStream(header, FileMode.Open, FileAccess.Read, FileShare.None);
-        RewriteUntracked("ChangedBesideTheHeldHeader");
-        var published = PublishedUntil(PluginChanged(_untracked));
 
-        Assert.All(published, n => Assert.IsType<PluginChangedNotification>(n));
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => Touched(_untracked));
+
+        Assert.All(announced, n => Assert.IsType<PluginChangedNotification>(n));
         Assert.Contains(_index.Status.Failures, f => f.Name == Tracked);
     }
 
@@ -220,10 +201,10 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     public void AnEqualSnapshot_ReadsABinaryThatFailedAgain_OnceItsBytesChange()
     {
         File.WriteAllText(_untracked.Path, "not a plugin");
-        PublishedUntil(FailureNamed(Untracked));
+        ArrivalAnnouncing(FailureNamed(Untracked));
 
         RewriteUntracked("FixedByAnotherTool");
-        PublishedUntil(PluginChanged(_untracked));
+        ArrivalAnnouncing(PluginChanged(_untracked));
 
         Assert.Contains(_index.RequireReads().GetDocuments(_untracked.KeyOf()), d => d.EditorId == "FixedByAnotherTool");
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == Untracked);
@@ -240,12 +221,10 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         var holder = new LoadOrderHolder();
         using var failing = Indexes.Open(holder);
         holder.Apply(_holder.Current);
-        Assert.True(await Waits.Until(() => failing.Status.State == LoadOrderState.Failed), "the first arrival never failed");
+        Waits.Reached(() => failing.Status.State == LoadOrderState.Failed, "the first arrival's failure");
 
         File.Delete(blocker);
-        holder.Apply(_holder.Current);
-
-        Assert.True(await Waits.Until(() => failing.Status.State == LoadOrderState.Ready), "the equal arrival never retried");
+        failing.NextSnapshotUntil(() => failing.Status.State == LoadOrderState.Ready, "the equal arrival's retry");
         Assert.NotEmpty(failing.RequireReads().GetDocuments(_untracked.KeyOf()));
     }
 
@@ -254,10 +233,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     {
         TrackedMods.Track(_untracked, _fixture.GameDirectory);
 
-        _holder.Apply(_holder.Current);
-
-        Waits.Reached(
-            () => _index.RequireReads().GetTrackedPlugins().Contains(_untracked.KeyOf()),
-            "the arrival's re-derivation of the plugin from its tree", Patience);
+        _index.NextSnapshotUntil(
+            () => _index.RequireReads().GetTrackedPlugins().Contains(_untracked.KeyOf()), "the arrival's re-derivation of the plugin from its tree");
     }
 }

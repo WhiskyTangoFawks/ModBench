@@ -201,7 +201,7 @@ public sealed class SourceIngestTests : IDisposable
         _entry.HandEdit(before, NpcEditorId, "ExternallyRenamed");
 
         PluginBinaries.Touch(_entry.Path);
-        Assert.True(index.Revalidate());
+        index.NextSnapshot();
 
         Assert.Equal("ExternallyRenamed", index.RequireReads().DocumentOf(_npc, Plugin).EditorId);
     }
@@ -285,7 +285,7 @@ public sealed class SourceIngestTests : IDisposable
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
         PluginBinaries.Touch(partnerPath);
 
-        Assert.True(index.Revalidate());
+        index.NextSnapshot();
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);

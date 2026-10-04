@@ -10,6 +10,8 @@ public sealed class InactivePluginProjectionTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _mod;
+    private readonly LoadOrderEntry _partner;
+    private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly LoadOrderHolder _holder = new();
     private readonly Indexer _index;
     private readonly string _npc;
@@ -19,11 +21,13 @@ public sealed class InactivePluginProjectionTests : IDisposable
         FormKey npc = default;
         _fixture = new PluginFixtureBuilder("inactive-projection")
             .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
+            .WithPlugin("Partner.esp", mod => mod.Npcs.AddNew("PartnerNpc"), origin: "PartnerMod")
             .BuildScattered()
             .Tracked();
-        _mod = _fixture.Plugins.Single();
+        _mod = _fixture.Plugins.Single(p => p.Name == "Fixture.esp");
+        _partner = _fixture.Plugins.Single(p => p.Name == "Partner.esp");
         _npc = npc.ToString();
-        _index = Indexes.Open(_holder);
+        _index = Indexes.Open(_holder, notifications: _notifications);
         Reconcile(active: true);
     }
 
@@ -36,7 +40,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     private IRecordReads Reads => _index.RequireReads();
 
     private void Reconcile(bool active) =>
-        _index.Reconcile(_holder, _fixture.GameDirectory, [_mod with { Enabled = active }], GameRelease.Fallout4);
+        _index.Reconcile(_holder, _fixture.GameDirectory, [_mod with { Enabled = active }, _partner], GameRelease.Fallout4);
 
     [Fact]
     public void AHandEditWhileNotActive_IsTheRecordTheReadsSeeOnceActive()
@@ -58,13 +62,10 @@ public sealed class InactivePluginProjectionTests : IDisposable
         Reconcile(active: false);
         _mod.HandEdit(document, "\"FixtureNpc\"", "\"RenamedByHand\"");
         _index.NextSnapshot();
-        var control = _index.AdvanceDuring(() => Reconcile(active: true));
-        Reconcile(active: false);
 
-        _holder.Apply(_holder.Current);
-        var afterAnEqualSnapshot = _index.AdvanceDuring(() => Reconcile(active: true));
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(Reads));
 
-        Assert.Equal(control, afterAnEqualSnapshot);
+        Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
     }
 
     [Fact]
@@ -79,12 +80,10 @@ public sealed class InactivePluginProjectionTests : IDisposable
     public void ASnapshotThatMovesNothing_ProjectsNothingForATrackedPluginThatIsNotActive()
     {
         Reconcile(active: false);
-        var control = _index.AdvanceDuring(() => Reconcile(active: true));
-        Reconcile(active: false);
 
-        _holder.Apply(_holder.Current);
-        var afterAnEqualSnapshot = _index.AdvanceDuring(() => Reconcile(active: true));
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(Reads));
 
-        Assert.Equal(control, afterAnEqualSnapshot);
+        Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
+        Assert.DoesNotContain(announced, Announcements.PluginChanged(_mod));
     }
 }

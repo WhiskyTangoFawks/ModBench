@@ -65,7 +65,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
             [BaseKey, OverKey], headerWinnersAssertedBecauseNoWinnerReadsAsNoHeaderThroughOpenHeadersWinnerOnlyLookup);
 
         PluginBinaries.Touch(_fixture.Plugins.Single(p => p.Name == OverKey.Name).Path);
-        Assert.True(_index.Revalidate());
+        _index.NextSnapshot();
         Assert.Equal(OverKey, WinnerOf(_npc));
         Assert.Single((Reads.GetOverrideStack(_npc) ?? throw new InvalidOperationException()).Entries, e => e.IsWinner);
     }
