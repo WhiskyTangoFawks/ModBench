@@ -4,9 +4,11 @@ import { exitEditing, refreshMatchingPlugins, say } from '../editingTeardown';
 function makeSession(facts: { name: string; hasMatchingRecords: boolean }[] = []) {
   return {
     loadOrderSender: { abandon: vi.fn() },
-    pluginsTree: { refreshFacts: vi.fn().mockResolvedValue(facts) },
-    pluginsTreeView: { message: 'loading…' as string | undefined },
-    pluginsNameFilter: { refresh: vi.fn() },
+    plugins: {
+      tree: { refreshFacts: vi.fn().mockResolvedValue(facts) },
+      view: { message: 'loading…' as string | undefined },
+      nameFilter: { refresh: vi.fn() },
+    },
   };
 }
 
@@ -28,8 +30,8 @@ describe('exitEditing', () => {
 
     exitEditing(session, makeClient());
 
-    expect(session.pluginsTreeView.message).toBe('loading…');
-    expect(session.pluginsNameFilter.refresh).not.toHaveBeenCalled();
+    expect(session.plugins.view.message).toBe('loading…');
+    expect(session.plugins.nameFilter.refresh).not.toHaveBeenCalled();
   });
 
   it('tolerates a session whose fields were never built', () => {
@@ -46,7 +48,7 @@ describe('refreshMatchingPlugins', () => {
 
     await refreshMatchingPlugins(session);
 
-    expect(session.pluginsTree.refreshFacts).toHaveBeenCalled();
+    expect(session.plugins.tree.refreshFacts).toHaveBeenCalled();
   });
 
   it('a workspace with no tree reads nothing', async () => {
@@ -58,14 +60,14 @@ describe('say', () => {
   it('a cleared message hands the readout back to the name filter', () => {
     const session = makeSession();
     say(session, undefined);
-    expect(session.pluginsTreeView.message).toBeUndefined();
-    expect(session.pluginsNameFilter.refresh).toHaveBeenCalled();
+    expect(session.plugins.view.message).toBeUndefined();
+    expect(session.plugins.nameFilter.refresh).toHaveBeenCalled();
   });
 
   it('a live message takes the readout without poking the filter', () => {
     const session = makeSession();
     say(session, 'Indexing 3/100…');
-    expect(session.pluginsTreeView.message).toBe('Indexing 3/100…');
-    expect(session.pluginsNameFilter.refresh).not.toHaveBeenCalled();
+    expect(session.plugins.view.message).toBe('Indexing 3/100…');
+    expect(session.plugins.nameFilter.refresh).not.toHaveBeenCalled();
   });
 });

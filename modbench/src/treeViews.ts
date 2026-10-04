@@ -19,9 +19,8 @@ import type { Own } from './session';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
-import { messageLine, registerNameFilter, type NameFilter } from './drivingLib/nameFilter';
+import { messageLine, registerNameFilter, type NameFilter, type SyncMessage } from './drivingLib/nameFilter';
 import { modsKeyContext } from './mods/gestureEntry';
-import type { SyncMessage } from './syncFailureReport';
 
 /** Tree, filter and count readout together, because the view's description and message line
  *  each have exactly one owner. Split apart, a row change and a filter keystroke race for them and

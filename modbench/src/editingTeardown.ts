@@ -4,21 +4,21 @@ import type { MarkdownString } from 'vscode';
  *  harness to test; the real `ExtensionSession` satisfies it by shape. */
 export interface TeardownSession {
   loadOrderSender?: { abandon(): void };
-  pluginsTree?: {
-    refreshFacts(): Promise<{ name: string; hasMatchingRecords: boolean }[] | undefined>;
+  plugins?: {
+    tree: { refreshFacts(): Promise<{ name: string; hasMatchingRecords: boolean }[] | undefined> };
+    view: { message?: string | MarkdownString };
+    nameFilter: { refresh(): void };
   };
-  pluginsTreeView?: { message?: string | MarkdownString };
-  pluginsNameFilter?: { refresh(): void };
 }
 
 /** `TreeView.message` is the native surface for a view-scoped statement about its own contents,
  *  so there is no banner row and no bespoke widget. */
 export function say(session: TeardownSession, message: string | undefined): void {
-  if (!session.pluginsTreeView) return;
-  session.pluginsTreeView.message = message;
+  if (!session.plugins) return;
+  session.plugins.view.message = message;
   // One message surface, two things that can want it: when the load stops talking, whatever the
   // name filter had to say comes back rather than staying silently swallowed.
-  if (message === undefined) session.pluginsNameFilter?.refresh();
+  if (message === undefined) session.plugins.nameFilter.refresh();
 }
 
 /** Abandons the reconcile in flight and takes the backend down (ADR-0002). */
@@ -34,7 +34,7 @@ export function exitEditing(session: TeardownSession, client: { stop(): Promise<
 /** Re-reads the tree's own plugin facts, so a row reads the filter active now — including the
  *  record filter's `hasMatchingRecords`, which the tree applies to itself from this same read. */
 export async function refreshMatchingPlugins(session: TeardownSession): Promise<void> {
-  const tree = session.pluginsTree;
+  const tree = session.plugins?.tree;
   if (!tree) return; // no tree means no load order to describe, not a failure
   await tree.refreshFacts();
 }

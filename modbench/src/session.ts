@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import type { MinimalRepository } from './plugins/pluginRowCommands';
-import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
-import type { LoadOrderSender, RecordFilter } from './client';
-import type { NameFilter } from './drivingLib/nameFilter';
+import type { PluginsView } from './plugins/pluginsView';
+import type { LoadOrderSender } from './client';
 import { say } from './editingTeardown';
 
 /** Records a disposable against its owner's teardown and hands it back. The Toolbox's one way
@@ -13,23 +12,15 @@ export type Own = <T extends vscode.Disposable>(disposable: T) => T;
 // one object rather than nine module-level singletons. `undefined` until the wiring reaches the
 // field; every reader treats "not yet built" and "no live workspace" alike.
 export interface ExtensionSession {
-  pluginsTree?: PluginsTreeProvider;
+  /** Its view carries the load's own progress and incompleteness statement (`TreeView.message`,
+   *  via `say`). */
+  plugins?: PluginsView;
   /** The one sender of ADR-0013's snapshot. */
   loadOrderSender?: LoadOrderSender;
-  /** The same view, as a `TreeView` — carries the load's own progress and incompleteness
-   *  statement (`TreeView.message`, via `say`). */
-  pluginsTreeView?: vscode.TreeView<PluginsTreeNode>;
-  /** The same view's name filter — a second, independent narrowing axis from the record filter,
-   *  which has to be able to add itself to this view's readout. */
-  pluginsNameFilter?: NameFilter;
   /** Plugin filename → the `vscode.git` `Repository` for that plugin's mod folder. Kept so a
    *  successful field edit can prompt that repository's `status()` and make the Source Control
    *  panel pick up the working-tree change without a manual Refresh. */
   pluginRepositories?: Map<string, MinimalRepository>;
-  /** The record filter's single writer: `makeShowRecordFilter`. */
-  showRecordFilter?: (filter: RecordFilter | null) => void;
-  /** The malformed-plugin scan's Problems entries, replaced wholesale by each reconcile. */
-  loadDiagnostics?: vscode.DiagnosticCollection;
 }
 
 // plugins.md, States, story 2: progress lives in the loading view, never a notification. The

@@ -1,7 +1,8 @@
 import type * as vscode from 'vscode';
 import type { Instance, InstanceValue } from './instanceLoader/instance';
 import type { ModSyncResult } from './modlist/modlist';
-import { reportSyncFailures, trackSyncRuns, type SyncMessage, type SyncRuns } from './syncFailureReport';
+import { reportSyncFailures, trackSyncRuns, type SyncRuns } from './syncFailureReport';
+import type { SyncMessage } from './drivingLib/nameFilter';
 
 /** Its message is the Mods view's, for a failed run until a run lands. */
 export interface ModSyncTrigger extends vscode.Disposable, SyncMessage, SyncRuns {}

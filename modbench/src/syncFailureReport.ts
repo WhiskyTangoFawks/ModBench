@@ -1,17 +1,11 @@
 import { errorMessage } from './ports/errorMessage';
+import type { SyncMessage } from './drivingLib/nameFilter';
 
 type SyncOutcome =
   | { applied: true }
   | { applied: false; refusal: string }
   // Wrote nothing for a cause the instance's state tells once, so the command has none of its own.
   | { applied: false; toldAsInstanceState: true };
-
-/** A system command's part of its view's message line. */
-export interface SyncMessage {
-  /** The failure standing now, or undefined. */
-  message(): string | undefined;
-  onMessageChanged(listener: () => void): { dispose(): void };
-}
 
 /** A system command's runs, each begun by a landed value and ended once it has told what it did. */
 export interface SyncRuns {

@@ -1,4 +1,4 @@
-import type { SyncMessage } from '../syncFailureReport';
+import type { SyncMessage } from '../drivingLib/nameFilter';
 
 /** A sync trigger's message, as a view reads it; `say` is a run that changed it. */
 export interface SyncMessageDouble extends SyncMessage {

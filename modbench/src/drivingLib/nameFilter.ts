@@ -37,6 +37,13 @@ export function messageLine(...parts: (string | undefined)[]): string | undefine
   return said.length > 0 ? said.join(' ') : undefined;
 }
 
+/** A system command's part of its view's message line. */
+export interface SyncMessage {
+  /** The failure standing now, or undefined. */
+  message(): string | undefined;
+  onMessageChanged(listener: () => void): { dispose(): void };
+}
+
 export interface NameFilter extends vscode.Disposable {
   /** Whatever else this view says about itself. The filter owns `view.description` outright —
    *  two writers would race — and the term appears beside the base rather than replacing it. */

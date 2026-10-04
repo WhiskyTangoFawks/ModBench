@@ -21,17 +21,14 @@ export interface FilterCommandDeps {
   /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
    *  hidden (plugins.md). */
   refreshMatchingPlugins: () => void;
-  /** The record filter's single writer — the context key, the code lens, and the view's
-   *  description and message. */
   showRecordFilter: (filter: RecordFilter | null) => void;
   reporter: Reporter;
 }
 
-/** Where the record filter shows. Read at each write, because the Plugins view is built after
- *  the writer is. */
+/** Where the record filter shows. */
 export interface RecordFilterViews {
-  pluginsNameFilter?: { setBaseDescription(text: string | undefined): void };
-  pluginsTree?: { setRecordFilterSource(source: string | undefined): void };
+  pluginsNameFilter: { setBaseDescription(text: string | undefined): void };
+  pluginsTree: { setRecordFilterSource(source: string | undefined): void };
 }
 
 /** The record filter's single writer. Each surface names the filter by its source, never by its
@@ -42,8 +39,8 @@ export function makeShowRecordFilter(
   return (filter) => {
     void vscode.commands.executeCommand('setContext', 'modbench.record.filterActive', filter !== null);
     lens.setActiveSql(filter?.sql ?? null);
-    views.pluginsNameFilter?.setBaseDescription(filter === null ? undefined : `records: ${filter.source}`);
-    views.pluginsTree?.setRecordFilterSource(filter?.source);
+    views.pluginsNameFilter.setBaseDescription(filter === null ? undefined : `records: ${filter.source}`);
+    views.pluginsTree.setRecordFilterSource(filter?.source);
   };
 }
 

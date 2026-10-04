@@ -6,9 +6,8 @@ import * as cp from 'child_process';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { backendStatusText, wireBackendStatus } from './medit/backendStatus';
 import { HttpMEditClient, type BackendLifecycleOptions } from './client';
-import { announceConflictsComputed, subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
+import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
-import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
 import { createReferencedByView } from './editor/referencedByView';
 import { makeReporter } from './reporter';
@@ -30,9 +29,7 @@ import {
   conflictsComputedOver, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
 import type { OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
-import {
-  registerFilterCommands, makeShowRecordFilter, type FilterScripts,
-} from './plugins/recordFilterCommands';
+import { registerFilterCommands, type FilterScripts } from './plugins/recordFilterCommands';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
 import { registerRecordCreateCommand } from './plugins/createRecordCommand';
 import { createdRecordSelection } from './plugins/createdRecordSelection';
@@ -82,11 +79,6 @@ export function activate(context: vscode.ExtensionContext) {
   // CompileProblems replaces a plugin's own entries each time it compiles.
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
-  // The session-load scan's own collection — a sibling of the compile one, targeting plugin
-  // binaries, replaced wholesale per scan.
-  const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
-  context.subscriptions.push(loadDiagnostics);
-  session.loadDiagnostics = loadDiagnostics;
 
   // ADR-0002.
   const meditClient = new HttpMEditClient({ backend: backendOptions(attachPort, outputChannel), log });
@@ -97,16 +89,13 @@ export function activate(context: vscode.ExtensionContext) {
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const editsInFlight = new EditsInFlight(activeRecordTracker);
   const filterScripts = setupScriptsFolder(meditConfig());
-  const filterProvider = new FilterCodeLensProvider();
 
   // One subscription for the whole session; the mEdit client opens and closes its stream with the
   // backend.
   context.subscriptions.push(
-    { dispose: subscribeTreeToNotifications(meditClient, treeProvider, () => { void refreshMatchingPlugins(session); }) },
     { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker, editsInFlight) },
   );
 
-  session.showRecordFilter = makeShowRecordFilter(filterProvider, session);
   const focusedView = createFocusedView();
   const focusedCells = new FocusedCells<vscode.WebviewPanel>((cell) => {
     for (const [name, value] of Object.entries(focusedCellKeys(cell))) {
@@ -155,7 +144,6 @@ export function activate(context: vscode.ExtensionContext) {
     trash: moveToTrash,
     recordBrowser: treeProvider,
     pluginFacts: meditClient,
-    loadDiagnostics,
     setStatusText: (t) => { statusBarItem.text = t; },
     notifyConflictsComputed,
     extensionId: context.extension.id,
@@ -168,21 +156,20 @@ export function activate(context: vscode.ExtensionContext) {
   });
   const recordViews = [
     { id: REFERENCED_BY_VIEW, view: referencedByTreeView },
-    ...(session.pluginsTreeView ? [{ id: 'modbench.pluginListTree', view: session.pluginsTreeView }] : []),
+    ...(session.plugins ? [{ id: 'modbench.pluginListTree', view: session.plugins.view }] : []),
   ];
   context.subscriptions.push(
     toolbox,
     { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
     referencedBy,
     activeRecordSubscription,
-    vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerPluginRowCommands(pluginRowDeps),
     // The record filter scopes the Plugins tree's own rows — a Plugins-view concern (its module
     // lives under plugins/), so it is wired here rather than inside Editor's own registration.
     ...registerFilterCommands({
       scripts: filterScripts, client: meditClient, treeProvider,
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
-      showRecordFilter: (filter) => session.showRecordFilter?.(filter),
+      showRecordFilter: (filter) => session.plugins?.showRecordFilter(filter),
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
@@ -194,9 +181,9 @@ export function activate(context: vscode.ExtensionContext) {
         (disposable) => { context.subscriptions.push(disposable); return disposable; }, recordViews, 'modbench.record.selectionIn'),
       viewSelections: new Map(recordViews.map(({ id, view }) => [id, () => view.selection])),
       recordMarks: {
-        deleting: (records, editorIds) => session.pluginsTree?.recordMarks.deleting(records, editorIds) ?? UNMARKED,
+        deleting: (records, editorIds) => session.plugins?.tree.recordMarks.deleting(records, editorIds) ?? UNMARKED,
         copying: (items, mode, replacing, editorIds) =>
-          session.pluginsTree?.recordMarks.copying(items, mode, replacing, editorIds) ?? UNMARKED,
+          session.plugins?.tree.recordMarks.copying(items, mode, replacing, editorIds) ?? UNMARKED,
       },
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
@@ -210,7 +197,7 @@ export function activate(context: vscode.ExtensionContext) {
       setStatusText: (t) => { statusBarItem.text = t; },
       abandonReconcile: () => session.loadOrderSender?.abandon(),
       refreshTree: () => { void refreshMatchingPlugins(session); },
-      setUnreachable: (reason) => session.pluginsTree?.applyBackendUnreachable(reason),
+      setUnreachable: (reason) => session.plugins?.tree.applyBackendUnreachable(reason),
     }),
   });
 
@@ -223,7 +210,7 @@ export function activate(context: vscode.ExtensionContext) {
     folder: toolbox.folder, instanceRead: toolbox.instanceRead,
     modListProvider: toolbox.modListProvider, downloadsProvider: toolbox.downloadsProvider,
     pluginsTree: toolbox.pluginsTree,
-    pluginListView: session.pluginsTreeView,
+    pluginListView: session.plugins?.view,
     outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session, meditClient),
     client: meditClient, instance: toolbox.instance,
     // The record tab in focus reporting its focused cell, as its webview's `focusCell` does.
@@ -261,17 +248,17 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
       reporter: makeReporter(outputChannel, 'plugin.decompile'),
       ask: askQuestion,
-    }, () => session.pluginsTreeView?.selection ?? []),
-    registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),
+    }, () => session.plugins?.view.selection ?? []),
+    registerCompileCommand(compileDeps(deps), () => session.plugins?.view.selection ?? []),
     registerRecordCreateCommand({
       client, reporter: makeReporter(outputChannel, 'record.create'),
-      marks: { creating: (row) => session.pluginsTree?.recordMarks.creating(row) ?? UNMARKED },
+      marks: { creating: (row) => session.plugins?.tree.recordMarks.creating(row) ?? UNMARKED },
       createdRecords: createdRecordSelection({
         client, reporter: makeReporter(outputChannel, 'record.create'),
-        rowOf: (group, formKey) => session.pluginsTree?.recordRow(group, formKey) ?? Promise.resolve(undefined),
-        view: { reveal: (row, options) => session.pluginsTreeView?.reveal(row, options) ?? Promise.resolve() },
+        rowOf: (group, formKey) => session.plugins?.tree.recordRow(group, formKey) ?? Promise.resolve(undefined),
+        view: { reveal: (row, options) => session.plugins?.view.reveal(row, options) ?? Promise.resolve() },
       }),
-    }, () => session.pluginsTreeView?.selection ?? []),
+    }, () => session.plugins?.view.selection ?? []),
   ];
 }
 
