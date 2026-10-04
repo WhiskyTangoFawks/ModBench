@@ -14,6 +14,7 @@ import {
   createEmptyMod,
   deleteSeparators,
   insertSeparator,
+  markFiles,
   moveMods,
   moveSeparators,
   renameSeparator,
@@ -23,7 +24,9 @@ import {
   type ModlistAccess,
   type ModlistSelectionResult,
   type MovePlace,
+  type OriginFileMark,
 } from '../modlist/modlist';
+import { FILE_MARKS, fileLabel } from './modFiles';
 import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
 import { installNameRefusal } from '../install/install';
 import { errorMessage } from '../ports/errorMessage';
@@ -74,6 +77,28 @@ export function registerModEnableCommands(
   return [
     registerModsGesture('modbench.mod.enable', viewSelection, run(true)),
     registerModsGesture('modbench.mod.disable', viewSelection, run(false)),
+  ];
+}
+
+// modbench.mod.excludeFile / modbench.mod.includeFile: the direction is the command's, so a mixed
+// selection takes the right-clicked row's (mods.md, Menus and keys, story 7).
+export function registerFileExclusionCommands(
+  access: ModlistAccess, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+  marks: Pick<ModListProvider, 'markExclusions' | 'exclusionLandedAt' | 'forgetUnconfirmedExclusions'>,
+): vscode.Disposable[] {
+  const run = (mark: OriginFileMark) => async (entry: GestureEntry) => {
+    const rows = pluralArgument(entry, 'file');
+    if (rows.length === 0) return;
+    const { verb, state } = FILE_MARKS[mark];
+    const changing = rows.filter((row) => row.exclusion !== state).map((row) => row.ref);
+    marks.markExclusions(changing, mark);
+    const outcome = await markFiles(access, changing, mark, (file) => marks.exclusionLandedAt(file));
+    reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${changing.length} files.`, outcome, fileLabel);
+    marks.forgetUnconfirmedExclusions(outcome.refused.map(({ item }) => item));
+  };
+  return [
+    registerModsGesture('modbench.mod.excludeFile', viewSelection, run('Excluded')),
+    registerModsGesture('modbench.mod.includeFile', viewSelection, run('Included')),
   ];
 }
 

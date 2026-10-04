@@ -32,7 +32,7 @@ const low = modOrigin('Low');
 describe('the go to mod command', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const copy: OriginFile = { relativePath: PATH, path: '/m/a.dds', sourcePath: '/m/a.dds', excluded: false };
+  const copy: OriginFile = { relativePath: PATH, path: '/m/a.dds', sourcePath: '/m/a.dds', excluded: false, excludedByName: false };
   const modRows = new Map(['High', 'Middle', 'Low'].map((name) => [name, new ModNode({ kind: 'mod', name, enabled: true })]));
   const overwriteRow = new OverwriteNode([], 'MO2');
   const rowOf = (origin: FileOrigin) => (origin.kind === 'mod' ? modRows.get(origin.name) : overwriteRow);

@@ -36,7 +36,7 @@ import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
 import { registerGoToModCommand } from './mods/goToMod';
-import { registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
+import { registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
 import { createModListView, lastSelectedViewSelection, type FocusedView, nexusRowInLastSelectedView, registerDownloadsView } from './treeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { modRepositoryContext } from './modRepositories';
@@ -556,6 +556,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     log: (line) => outputChannel.warn(`[modList] ${line}`), marks: modListProvider,
   }));
   ownAll(own, registerModEnableCommands(access, instance, () => modListView.selection, reporterFor('mod.enableDisable'), modListProvider));
+  ownAll(own, registerFileExclusionCommands(access, () => modListView.selection, reporterFor('mod.excludeFile'), modListProvider));
   own(registerModMoveCommand(
     access, instance,
     { selection: () => modListView.selection, direction: () => modListProvider.viewDirection() },

@@ -1033,7 +1033,7 @@ describe('Instance — Overwrite\'s files', () => {
     await instance.refresh();
 
     const log = join(root, 'overwrite', 'F4SE', 'plugin.log');
-    expect(instance.value.overwriteFiles).toEqual([{ relativePath: 'F4SE/plugin.log', path: log, sourcePath: log, excluded: false }]);
+    expect(instance.value.overwriteFiles).toEqual([{ relativePath: 'F4SE/plugin.log', path: log, sourcePath: log, excluded: false, excludedByName: false }]);
     expect(instance.value.overwriteFolders).toEqual([{ relativePath: 'F4SE', path: join(root, 'overwrite', 'F4SE'), excluded: false }]);
   });
 });

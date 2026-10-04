@@ -81,7 +81,7 @@ describe('buildFileConflictIndex', () => {
 });
 
 describe('buildFileConflictIndex — Overwrite is the winning-most provider', () => {
-  const overwriteCopy = { relativePath: 'textures/shared/foo.dds', path: '/instance/overwrite/textures/shared/foo.dds', sourcePath: '/instance/overwrite/textures/shared/foo.dds', excluded: false };
+  const overwriteCopy = { relativePath: 'textures/shared/foo.dds', path: '/instance/overwrite/textures/shared/foo.dds', sourcePath: '/instance/overwrite/textures/shared/foo.dds', excluded: false, excludedByName: false };
 
   it('wins a path over every mod that provides it, and is listed as a provider', async () => {
     const index = await buildFileConflictIndex([mod('ModA'), mod('ModB')], [overwriteCopy], fixture, () => {});
@@ -93,7 +93,7 @@ describe('buildFileConflictIndex — Overwrite is the winning-most provider', ()
   });
 
   it('is the sole provider of a path no mod ships', async () => {
-    const index = await buildFileConflictIndex([mod('ModA')], [{ relativePath: 'only.txt', path: '/o/only.txt', sourcePath: '/o/only.txt', excluded: false }], fixture, () => {});
+    const index = await buildFileConflictIndex([mod('ModA')], [{ relativePath: 'only.txt', path: '/o/only.txt', sourcePath: '/o/only.txt', excluded: false, excludedByName: false }], fixture, () => {});
     expect(index.files.get('only.txt')).toMatchObject({ winnerOrigin: { kind: 'runtimeOutput' }, providers: [{ kind: 'runtimeOutput' }] });
   });
 
@@ -104,9 +104,9 @@ describe('buildFileConflictIndex — Overwrite is the winning-most provider', ()
 
   it('tells Overwrite from a mod folder named overwrite: that mod loses to Overwrite', async () => {
     const entries = [mod(OVERWRITE_ORIGIN)];
-    const sharing = { relativePath: 'a.dds', path: '/instance/overwrite/a.dds', sourcePath: '/instance/overwrite/a.dds', excluded: false };
+    const sharing = { relativePath: 'a.dds', path: '/instance/overwrite/a.dds', sourcePath: '/instance/overwrite/a.dds', excluded: false, excludedByName: false };
     const index = await buildFileConflictIndex(
-      entries, [sharing], answering({ folder: '/mods/overwrite', files: [{ relativePath: 'a.dds', path: '/mods/overwrite/a.dds', sourcePath: '/mods/overwrite/a.dds', excluded: false }], folders: [], notes: [] }), () => {},
+      entries, [sharing], answering({ folder: '/mods/overwrite', files: [{ relativePath: 'a.dds', path: '/mods/overwrite/a.dds', sourcePath: '/mods/overwrite/a.dds', excluded: false, excludedByName: false }], folders: [], notes: [] }), () => {},
     );
     expect(index.files.get('a.dds')?.winner).toBe(sharing.path);
     expect(index.files.get('a.dds')?.winnerOrigin).toEqual({ kind: 'runtimeOutput' });
@@ -134,7 +134,7 @@ describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine 
   });
 
   it('names a mod or Overwrite once among a path\'s providers, though it ships two case variants of it', async () => {
-    const variant = (root: string, relativePath: string) => ({ relativePath, path: `${root}/${relativePath}`, sourcePath: `${root}/${relativePath}`, excluded: false });
+    const variant = (root: string, relativePath: string) => ({ relativePath, path: `${root}/${relativePath}`, sourcePath: `${root}/${relativePath}`, excluded: false, excludedByName: false });
     const index = await buildFileConflictIndex(
       [mod('ModA'), mod('ModB')],
       [variant('/overwrite', 'Textures/Foo.dds'), variant('/overwrite', 'textures/foo.dds')],
@@ -179,9 +179,9 @@ describe('buildFileConflictIndex — what the adapter answers: the walk is the a
   });
 
   it('takes no excluded file as a provider, in a mod or Overwrite, and keeps it among its mod\'s files', async () => {
-    const excluded = { relativePath: 'Hidden.esp', path: '/mods/ModA/Hidden.esp', sourcePath: '/mods/ModA/Hidden.esp', excluded: true };
-    const kept = { relativePath: 'Kept.esp', path: '/mods/ModA/Kept.esp', sourcePath: '/mods/ModA/Kept.esp', excluded: false };
-    const overwritten = { relativePath: 'Hidden.esp', path: '/overwrite/Hidden.esp', sourcePath: '/overwrite/Hidden.esp', excluded: true };
+    const excluded = { relativePath: 'Hidden.esp', path: '/mods/ModA/Hidden.esp', sourcePath: '/mods/ModA/Hidden.esp', excluded: true, excludedByName: true };
+    const kept = { relativePath: 'Kept.esp', path: '/mods/ModA/Kept.esp', sourcePath: '/mods/ModA/Kept.esp', excluded: false, excludedByName: false };
+    const overwritten = { relativePath: 'Hidden.esp', path: '/overwrite/Hidden.esp', sourcePath: '/overwrite/Hidden.esp', excluded: true, excludedByName: true };
     const index = await buildFileConflictIndex(
       [mod('ModA')], [overwritten], answering({ folder: '/mods/ModA', files: [excluded, kept], folders: [], notes: [] }), () => {},
     );
@@ -191,7 +191,7 @@ describe('buildFileConflictIndex — what the adapter answers: the walk is the a
   });
 
   it('keeps each file where the adapter says it sits and is read from, and each folder where it sits', async () => {
-    const linked = { relativePath: 'x/linked.dds', path: '/mods/ModA/x/linked.dds', sourcePath: '/shared/real.dds', excluded: false };
+    const linked = { relativePath: 'x/linked.dds', path: '/mods/ModA/x/linked.dds', sourcePath: '/shared/real.dds', excluded: false, excludedByName: false };
     const folder = { relativePath: 'x', path: '/mods/ModA/x', excluded: false };
     const index = await buildFileConflictIndex(
       [mod('ModA')], [], answering({ folder: '/mods/ModA', files: [linked], folders: [folder], notes: [] }), () => {},

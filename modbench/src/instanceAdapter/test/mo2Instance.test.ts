@@ -599,7 +599,7 @@ describe('the MO2 Instance adapter', () => {
         const files = await adapter.originFiles(mod('Harder VATS'));
 
         expect(files.files.find((f) => f.relativePath === 'Linked.esp'))
-          .toEqual({ relativePath: 'Linked.esp', path: join(folder, 'Linked.esp'), sourcePath: await realpath(target), excluded: false });
+          .toEqual({ relativePath: 'Linked.esp', path: join(folder, 'Linked.esp'), sourcePath: await realpath(target), excluded: false, excludedByName: false });
         expect(relativePaths(files.files)).not.toContain('Broken.esp');
         expect(files.notes.join('\n')).toMatch(/Broken\.esp/);
       });
@@ -656,6 +656,20 @@ describe('the MO2 Instance adapter', () => {
         expect(['Textures.mohidden/Armour/a.dds', 'Hidden.esp.MOHIDDEN', 'Kept.esp'].map((path) => excludedOf(files.files, path)))
           .toEqual([true, true, false]);
         expect(['Textures.mohidden', 'Textures.mohidden/Armour'].map((path) => excludedOf(files.folders, path))).toEqual([true, true]);
+      });
+
+      it('says which files are excluded by their own name, apart from their folder', async () => {
+        await mkdir(join(root, 'mods', 'Harder VATS', 'Textures.mohidden'), { recursive: true });
+        await writeFile(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'), '');
+        await writeFile(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'b.dds.mohidden'), '');
+        await writeFile(join(root, 'mods', 'Harder VATS', 'Hidden.esp.MOHIDDEN'), '');
+        await writeFile(join(root, 'mods', 'Harder VATS', 'Kept.esp'), '');
+
+        const { files } = await adapter.originFiles(mod('Harder VATS'));
+        const byNameOf = (relativePath: string) => files.find((file) => file.relativePath === relativePath)?.excludedByName;
+
+        expect(['Textures.mohidden/a.dds', 'Textures.mohidden/b.dds.mohidden', 'Hidden.esp.MOHIDDEN', 'Kept.esp'].map(byNameOf))
+          .toEqual([false, true, true, false]);
       });
 
       it('follows a linked folder, its files keyed beneath the link\'s own name', async () => {
@@ -824,11 +838,11 @@ describe('the MO2 Instance adapter', () => {
     ])('renames %s file with the suffix, and back', async (_, origin, folder) => {
       await put(join(root, folder, 'Textures', 'a.dds'), 'pixels');
 
-      expect(await adapter.markOriginFile(origin, 'Textures/a.dds', 'Excluded')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markOriginFile(origin, 'Textures/a.dds', 'Excluded')).toEqual({ gone: false, wrote: true, relativePath: 'Textures/a.dds.mohidden' });
       expect(await isThere(join(root, folder, 'Textures', 'a.dds'))).toBe(false);
       expect(await text(root, join(folder, 'Textures', 'a.dds.mohidden'))).toBe('pixels');
 
-      expect(await adapter.markOriginFile(origin, 'Textures/a.dds.mohidden', 'Included')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markOriginFile(origin, 'Textures/a.dds.mohidden', 'Included')).toEqual({ gone: false, wrote: true, relativePath: 'Textures/a.dds' });
       expect(await text(root, join(folder, 'Textures', 'a.dds'))).toBe('pixels');
       expect(await isThere(join(root, folder, 'Textures', 'a.dds.mohidden'))).toBe(false);
     });
@@ -836,25 +850,43 @@ describe('the MO2 Instance adapter', () => {
     it('renames a folder, which excludes everything in it', async () => {
       await put(join(root, 'mods', 'Harder VATS', 'Textures', 'a.dds'));
 
-      expect(await adapter.markOriginFile(modOrigin, 'Textures', 'Excluded')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markOriginFile(modOrigin, 'Textures', 'Excluded')).toEqual({ gone: false, wrote: true, relativePath: 'Textures.mohidden' });
 
       expect(await isThere(join(root, 'mods', 'Harder VATS', 'Textures'))).toBe(false);
       expect(await isThere(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'))).toBe(true);
     });
 
-    it('refuses to include a file its folder excludes, changing nothing', async () => {
+    it('refuses to include a file with no suffix of its own that its folder excludes, changing nothing', async () => {
       await put(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'));
       const before = await snapshotTree(root);
 
-      await expect(adapter.markOriginFile(modOrigin, 'Textures.mohidden/a.dds', 'Included')).rejects.toThrow(/excluded by its folder/);
+      expect(await adapter.markOriginFile(modOrigin, 'Textures.mohidden/a.dds', 'Included')).toEqual({
+        gone: false, refusal: '"Textures.mohidden/a.dds" has no suffix of its own to remove, and its folder excludes it.',
+      });
 
       assertOnlyChanged(before, await snapshotTree(root), new Set());
+    });
+
+    it('includes a file with its own suffix inside an excluded folder, removing its own suffix alone', async () => {
+      await put(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds.mohidden'), 'pixels');
+
+      expect(await adapter.markOriginFile(modOrigin, 'Textures.mohidden/a.dds.mohidden', 'Included')).toEqual({ gone: false, wrote: true, relativePath: 'Textures.mohidden/a.dds' });
+
+      expect(await text(root, join('mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'))).toBe('pixels');
+    });
+
+    it('excludes a file inside an excluded folder by its own name', async () => {
+      await put(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'), 'pixels');
+
+      expect(await adapter.markOriginFile(modOrigin, 'Textures.mohidden/a.dds', 'Excluded')).toEqual({ gone: false, wrote: true, relativePath: 'Textures.mohidden/a.dds.mohidden' });
+
+      expect(await text(root, join('mods', 'Harder VATS', 'Textures.mohidden', 'a.dds.mohidden'))).toBe('pixels');
     });
 
     it('includes a file whose suffix is in capitals', async () => {
       await put(join(root, 'mods', 'Harder VATS', 'a.dds.MOHIDDEN'), 'pixels');
 
-      expect(await adapter.markOriginFile(modOrigin, 'a.dds.MOHIDDEN', 'Included')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markOriginFile(modOrigin, 'a.dds.MOHIDDEN', 'Included')).toEqual({ gone: false, wrote: true, relativePath: 'a.dds' });
 
       expect(await text(root, join('mods', 'Harder VATS', 'a.dds'))).toBe('pixels');
     });
@@ -864,8 +896,8 @@ describe('the MO2 Instance adapter', () => {
       await put(join(root, 'mods', 'Harder VATS', 'b.dds'));
       const before = await snapshotTree(root);
 
-      expect(await adapter.markOriginFile(modOrigin, 'a.dds.MOHIDDEN', 'Excluded')).toEqual({ gone: false, wrote: false });
-      expect(await adapter.markOriginFile(modOrigin, 'b.dds', 'Included')).toEqual({ gone: false, wrote: false });
+      expect(await adapter.markOriginFile(modOrigin, 'a.dds.MOHIDDEN', 'Excluded')).toEqual({ gone: false, wrote: false, relativePath: 'a.dds.MOHIDDEN' });
+      expect(await adapter.markOriginFile(modOrigin, 'b.dds', 'Included')).toEqual({ gone: false, wrote: false, relativePath: 'b.dds' });
 
       assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
@@ -883,7 +915,7 @@ describe('the MO2 Instance adapter', () => {
       await put(join(folder, to), 'theirs');
       const before = await snapshotTree(root);
 
-      await expect(adapter.markOriginFile(modOrigin, from, mark)).rejects.toThrow(`"${join(folder, to)}" is already there`);
+      expect(await adapter.markOriginFile(modOrigin, from, mark)).toEqual({ gone: false, refusal: `"${to}" is already there.` });
 
       assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
@@ -892,7 +924,7 @@ describe('the MO2 Instance adapter', () => {
       await put(join(root, 'mods', 'overwrite', 'a.esp'));
       await put(join(root, 'overwrite', 'a.esp'));
 
-      expect(await adapter.markOriginFile({ kind: 'mod', name: 'overwrite' }, 'a.esp', 'Excluded')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markOriginFile({ kind: 'mod', name: 'overwrite' }, 'a.esp', 'Excluded')).toEqual({ gone: false, wrote: true, relativePath: 'a.esp.mohidden' });
 
       expect(await isThere(join(root, 'mods', 'overwrite', 'a.esp.mohidden'))).toBe(true);
       expect(await isThere(join(root, 'overwrite', 'a.esp'))).toBe(true);

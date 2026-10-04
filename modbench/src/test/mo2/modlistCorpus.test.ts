@@ -3,12 +3,14 @@ import { fakeVscodeModule } from './fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { rm, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   createEmptyMod,
   deleteSeparators,
   insertSeparator,
+  markFiles,
   moveMods,
   moveSeparators,
   renameSeparator,
@@ -181,5 +183,71 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     });
     expect(after.has('mods/DragIn Manual Extract/textures/dummy.dds')).toBe(true);
     expect((await readModlistEntries(dir)).map((e) => e.name)).toContain('DragIn Manual Extract');
+  });
+});
+
+describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename the files they name and nothing else', () => {
+  let dir: string;
+  const inMod = { origin: { kind: 'mod', name: 'DragIn Manual Extract' }, relativePath: 'textures/dummy.dds' } as const;
+  const inOverwrite = { origin: { kind: 'runtimeOutput' }, relativePath: 'F4SE/Plugins/SomePlugin.log' } as const;
+
+  beforeEach(() => {
+    dir = cloneCorpusFixture();
+  });
+  afterEach(() => rm(dir, { recursive: true, force: true }));
+
+  it('excludes a mod\'s file and an Overwrite file, then includes them back byte-identical', async () => {
+    const before = await snapshotTree(dir);
+
+    const excluded = await markFiles(accessTo(dir), [inMod, inOverwrite], 'Excluded');
+
+    expect(excluded).toEqual({
+      landed: [{ ...inMod, markedPath: 'textures/dummy.dds.mohidden' }, { ...inOverwrite, markedPath: 'F4SE/Plugins/SomePlugin.log.mohidden' }],
+      refused: [],
+    });
+    const after = await snapshotTree(dir);
+    assertOnlyChanged(before, after, new Set([
+      'mods/DragIn Manual Extract/textures/dummy.dds', 'mods/DragIn Manual Extract/textures/dummy.dds.mohidden',
+      'overwrite/F4SE/Plugins/SomePlugin.log', 'overwrite/F4SE/Plugins/SomePlugin.log.mohidden',
+    ]));
+    expect(after.get('mods/DragIn Manual Extract/textures/dummy.dds.mohidden')).toEqual(before.get('mods/DragIn Manual Extract/textures/dummy.dds'));
+    expect(after.get('overwrite/F4SE/Plugins/SomePlugin.log.mohidden')).toEqual(before.get('overwrite/F4SE/Plugins/SomePlugin.log'));
+
+    await markFiles(accessTo(dir), [
+      { ...inMod, relativePath: 'textures/dummy.dds.mohidden' }, { ...inOverwrite, relativePath: 'F4SE/Plugins/SomePlugin.log.mohidden' },
+    ], 'Included');
+
+    assertOnlyChanged(before, await snapshotTree(dir), new Set());
+  });
+
+  it('answers where each file is the moment it is marked, before it marks the next', async () => {
+    const answered: [string, boolean][] = [];
+    const nextUnmarked = join(dir, 'overwrite', 'F4SE', 'Plugins', 'SomePlugin.log');
+
+    await markFiles(accessTo(dir), [inMod, inOverwrite], 'Excluded', ({ markedPath }) => {
+      answered.push([markedPath, existsSync(nextUnmarked)]);
+    });
+
+    expect(answered).toEqual([['textures/dummy.dds.mohidden', true], ['F4SE/Plugins/SomePlugin.log.mohidden', false]]);
+  });
+
+  it('refuses a file gone from disk by name, and an include its folder leaves undone with the instance\'s reason, while the rest land', async () => {
+    const own = { ...inMod, relativePath: 'textures/dummy.dds.mohidden' };
+    const gone = { ...inMod, relativePath: 'Missing.esp' };
+    const byFolder = { ...inMod, relativePath: 'meshes.mohidden/a.nif' };
+    await markFiles(accessTo(dir), [inMod], 'Excluded');
+    await mkdir(join(dir, 'mods', 'DragIn Manual Extract', 'meshes.mohidden'));
+    await writeFile(join(dir, 'mods', 'DragIn Manual Extract', 'meshes.mohidden', 'a.nif'), '');
+    const before = await snapshotTree(dir);
+
+    const outcome = await markFiles(accessTo(dir), [gone, byFolder, own], 'Included');
+
+    expect(outcome.landed).toEqual([{ ...own, markedPath: 'textures/dummy.dds' }]);
+    expect(outcome.refused.map(({ item }) => item)).toEqual([gone, byFolder]);
+    expect(outcome.refused[0]?.reason).toBe('"Missing.esp" is gone from disk.');
+    expect(outcome.refused[1]?.reason).toBe('"meshes.mohidden/a.nif" has no suffix of its own to remove, and its folder excludes it.');
+    assertOnlyChanged(before, await snapshotTree(dir), new Set([
+      'mods/DragIn Manual Extract/textures/dummy.dds', 'mods/DragIn Manual Extract/textures/dummy.dds.mohidden',
+    ]));
   });
 });

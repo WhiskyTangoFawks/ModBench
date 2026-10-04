@@ -32,7 +32,8 @@ const isExcluded = (relativePath: string): boolean => relativePath.split('/').so
 
 function keep(walk: Walk, path: string, sourcePath: string = path): void {
   const relativePath = relativeUnder(walk.root, path);
-  if (!NOT_CONTENT.has(relativePath)) walk.files.push({ relativePath, path, sourcePath, excluded: isExcluded(relativePath) });
+  if (NOT_CONTENT.has(relativePath)) return;
+  walk.files.push({ relativePath, path, sourcePath, excluded: isExcluded(relativePath), excludedByName: isExcludedName(relativePath) });
 }
 
 const keepFolder = (walk: Walk, path: string): void => {
