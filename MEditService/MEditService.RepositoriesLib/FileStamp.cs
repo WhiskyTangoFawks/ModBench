@@ -2,11 +2,11 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
-namespace MEditService.PluginAdapter;
+namespace MEditService.RepositoriesLib;
 
 /// <summary>What the file system says of a file without a read of its bytes. Times are nanoseconds
 /// since the Unix epoch. .NET exposes no change time, so each platform's is read natively.</summary>
-internal readonly record struct FileStamp(long Size, long Modified, long Changed)
+public readonly record struct FileStamp(long Size, long Modified, long Changed)
 {
     /// <summary>Null when the file system cannot answer, and then nothing vouches for a remembered
     /// hash.</summary>
