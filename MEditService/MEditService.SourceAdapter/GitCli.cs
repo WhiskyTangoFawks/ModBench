@@ -3,7 +3,7 @@ using Serilog;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>The git CLI behind the Source adapter (target-architecture.d2 medit_driven.sourceadapter).
+/// <summary>The git CLI behind the Source adapter (target-architecture.d2 medit_repositories.sourceadapter).
 /// No interface, no fake: every call states its own gitdir/worktree, the seam tests need —
 /// scratch directories, never a mocked git.</summary>
 internal static class GitCli

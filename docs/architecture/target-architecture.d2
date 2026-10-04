@@ -1,9 +1,9 @@
 # The zoom-out. Row = layer, column = process; each mEdit layer sits beside its Modbench
 # twin and means the same thing. A module box carries three lines: its name, what it owns,
-# what it hides. A cylinder is a store and carries what it holds. No arrows here: references
-# are target-architecture-references.d2, and every data flow is a trace in traces/.
+# what it hides. A cylinder is a store and carries what it holds. No arrows here: the layer
+# rule is layers.d2, a reference is a line in a project file, and every data flow is a trace.
 ...@styles
-grid-rows: 6
+grid-rows: 7
 grid-columns: 2
 grid-gap: 24
 
@@ -15,6 +15,7 @@ medit_drivers: "MEDIT · Drivers — its clients" {
 modbench_drivers: "MODBENCH · Drivers — the user, in VS Code's trees, panels and palette" {
   class: band; grid-rows: 1
   user: "The user\nclicks, checks, drags, types" {class: other}
+  activation: "Activation\nowns: wiring\nhides: nothing; it decides nothing" {class: driving}
 }
 
 medit_driving: "MEDIT · Driving adapters — the API" {
@@ -31,10 +32,9 @@ modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fir
   drivinglib: "driving lib\nowns: code two or more of this layer's boxes share\nhides: nothing; it holds no state and no port" {class: driving}
 }
 
-medit_core: "MEDIT · Core — the write side and the read side; each references the kernel" {
+medit_core: "MEDIT · Core — the write side; it references the kernel and the repositories" {
   class: band; grid-rows: 1
   commands: "Commands\nowns: the write side: one handler per gesture\nhides: resolution under the load order; the external-change\ncheck" {class: core}
-  queries: "Queries\nowns: the read side: every answer the API gives, from the\nrecord index\nhides: the Index's reads" {class: core}
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
@@ -46,13 +46,13 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
   deploy: "deploy commands\nowns: deploy and purge\nhides: the rules that refuse a deploy" {class: core}
 }
 
-medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
+medit_kernel: "MEDIT · Kernel — read by the core, the read model and the repositories; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
   class: band; grid-rows: 1
   loadorder: "Load order state\nowns: the load order Mod Management hands Editing: every plugin\nin the instance, what provides it, and the active ones in order\nhides: nothing" {class: kernel}
   codec: "Codec + schema\nowns: a record as text and as document, and what the schema\nsays of each record type\nhides: the game assemblies; Mutagen owns the typing" {class: kernel}
   ports: "Ports\nowns: the notification port and its payloads\nhides: nothing; the endpoints implement it" {class: kernel}
 }
-modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven adapter; a kernel box references nothing" {
+modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model and the repositories; a kernel box references nothing" {
   class: band; grid-rows: 1
   loadorderfilecodec: "Load-order file codec\nowns: plugins.txt as text: parse and byte-faithful splice\nhides: the game's format, per release" {class: kernel}
   wire: "Wire\nowns: the generated API types; the webview message protocol\nhides: nothing; generated" {class: kernel}
@@ -60,21 +60,29 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven
   ports: "Ports\nowns: how the core reaches the extension host: failures\n(ADR-0019), questions, a selection's outcome, the system trash\nhides: nothing; the composition root implements it" {class: kernel}
 }
 
-medit_driven: "MEDIT · Driven adapters — the record index is a view over the two beside it" {
+medit_readmodel: "MEDIT · Read model — the record index, a view over the repositories below it" {
   class: band; grid-rows: 1
-  index: "Record index — one deep module, rebuildable\nowns: the read model: every plugin's rows, read for the active\nplugins only\nhides: the Indexer and the Store; the reconcile" {
-    indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: driven}
+  index: "Record index — one deep module, rebuildable\nowns: the read model: every plugin's rows, read for the active\nplugins only, and every answer the API draws from them\nhides: the Indexer and the Store; the reconcile" {
+    queries: "Queries\nthe face: what the API asks of the read model" {class: readmodel}
+    indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: readmodel}
     store: "Store\nDuckDB: every plugin's rows" {class: derived}
   }
-  sourceadapter: "Source adapter\nowns: a tracked plugin's source tree\nhides: layout and git" {class: driven}
-  pluginadapter: "Plugin adapter\nowns: a plugin file, read and written through Mutagen\nhides: the game assemblies; when a file is re-read" {class: driven}
 }
-modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {
+modbench_readmodel: "MODBENCH · Read model — the instance value, derived from the Instance adapter by watching, and nothing else" {
   class: band; grid-rows: 1
-  instanceloader: "Instance loader\nowns: the instance value, recomputed whole on every change\nhides: the recompute: which file wins each path, which plugins\nare active" {class: driven}
-  instanceadapter: "Instance adapter — a repository; MO2 is one implementation\nowns: the instance, read and written in the manager's formats,\nand the one watch\nhides: layout; the manager's file formats; how it finds the\ngame folder" {class: driven}
-  deployment: "deployment\nowns: making the game see the instance's winners\nhides: the deployment model and what it writes into the game\nfolder" {class: driven}
-  client: "mEdit client\nowns: Modbench's one reach to mEdit: commands, queries,\nnotifications\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}
+  instanceloader: "Instance loader\nowns: the instance value, recomputed whole on every change\nhides: the recompute: which file wins each path, which plugins\nare active" {class: readmodel}
+}
+
+medit_repositories: "MEDIT · Repositories — the only boxes that read or write a system of record" {
+  class: band; grid-rows: 1
+  sourceadapter: "Source adapter\nowns: a tracked plugin's source tree\nhides: layout and git" {class: repositories}
+  pluginadapter: "Plugin adapter\nowns: a plugin file, read and written through Mutagen\nhides: the game assemblies; when a file is re-read" {class: repositories}
+}
+modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the one reader and writer of the instance" {
+  class: band; grid-rows: 1
+  instanceadapter: "Instance adapter — a repository; MO2 is one implementation\nowns: the instance, read and written in the manager's formats,\nand the one watch\nhides: layout; the manager's file formats; how it finds the\ngame folder" {class: repositories}
+  deployment: "deployment\nowns: making the game see the instance's winners\nhides: the deployment model and what it writes into the game\nfolder" {class: repositories}
+  client: "mEdit client\nowns: Modbench's one reach to mEdit: commands, queries,\nnotifications\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: repositories}
 }
 
 medit_data: "MEDIT · Systems of record" {

@@ -3,7 +3,7 @@
 shape: sequence_diagram
 plugins: @../target-architecture.modbench_driving.plugins
 plugins.label: Plugins
-client: @../target-architecture.modbench_driven.client
+client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
@@ -12,12 +12,12 @@ commands.label: Commands
 port: @../target-architecture.medit_kernel.ports
 port.label: Ports
 plugin: @../target-architecture.medit_data.plugin
-pluginadapter: @../target-architecture.medit_driven.pluginadapter
+pluginadapter: @../target-architecture.medit_repositories.pluginadapter
 pluginadapter.label: Plugin adapter
-sourceadapter: @../target-architecture.medit_driven.sourceadapter
+sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
-indexer: @../target-architecture.medit_driven.index.indexer
+indexer: @../target-architecture.medit_readmodel.index.indexer
 indexer.label: Indexer
 
 plugins -> client: "decompile plugin: track, a mod · decompile" {class: edit}

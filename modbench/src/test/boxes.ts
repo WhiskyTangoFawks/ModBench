@@ -1,34 +1,55 @@
-// The boxes the zoom-out draws, each with the reference list target-architecture-references.d2
-// draws for it, plus its band's lib by the band's rule.
+// The Modbench column of the zoom-out, docs/architecture/target-architecture.d2, joined to the
+// box folders on disk; a box's references are its tsconfig's.
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import ts from 'typescript';
 
-export const KERNEL_BOXES = ['loadOrderFileCodec', 'tables', 'wire', 'ports'];
+const SRC = join(__dirname, '..');
+const ZOOM_OUT = join(SRC, '..', '..', 'docs', 'architecture', 'target-architecture.d2');
 
-// The driven column: the arrows that leave the box, plus its column's kernel by the band's rule.
-export const DRIVEN_BOXES: Record<string, string[]> = {
-  instanceAdapter: ['loadOrderFileCodec', 'ports', 'tables'],
-  instanceLoader: ['instanceAdapter', 'ports', 'tables'],
-};
+function boxIdsByBand(): Record<string, string[]> {
+  const bands: Record<string, string[]> = {};
+  let current: string[] | undefined;
+  for (const line of readFileSync(ZOOM_OUT, 'utf8').split('\n')) {
+    const container = /^modbench_(\w+): "/.exec(line)?.[1];
+    if (container !== undefined) {
+      current = [];
+      bands[container] = current;
+      continue;
+    }
+    if (/^\w/.test(line)) current = undefined;
+    const member = /^ {2}(\w+): "/.exec(line)?.[1];
+    if (member !== undefined && current !== undefined) current.push(member);
+  }
+  return bands;
+}
 
-// The core column, same rule. An arrow the diagram draws that the code has no use for is left
-// out here and reported, never referenced to make the picture symmetric.
-export const CORE_BOXES: Record<string, string[]> = {
-  modlist: ['instanceAdapter', 'ports'],
-  pluginsCommands: ['instanceLoader', 'loadOrderFileCodec', 'instanceAdapter', 'ports'],
-  instanceCommands: ['client', 'instanceLoader', 'instanceAdapter', 'ports', 'tables'],
-  downloadsCommands: ['instanceAdapter', 'ports'],
-  install: ['instanceAdapter', 'ports'],
-  client: ['ports', 'wire'],
-};
+export const PROJECT_FOLDERS: string[] = readdirSync(SRC, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && entry.name !== 'test' && existsSync(join(SRC, entry.name, 'tsconfig.json')))
+  .map((entry) => entry.name)
+  .sort();
 
-// The driving band: the views, and the driving lib they share (ADR-0014). No Toolbox file uses
-// its drawn deploy commands or tables, so both are left out.
-export const DRIVING_BOXES: Record<string, string[]> = {
-  toolbox: ['instanceCommands', 'instanceLoader', 'ports'],
-  mods: ['drivingLib', 'install', 'instanceLoader', 'modlist', 'ports'],
-  downloads: ['downloadsCommands', 'drivingLib', 'install', 'instanceLoader', 'ports'],
-  plugins: ['client', 'drivingLib', 'instanceLoader', 'pluginsCommands', 'ports'],
-  editor: ['client', 'ports', 'wire'],
-  drivingLib: ['instanceLoader', 'ports'],
-};
+const folderOf = (id: string): string | undefined => PROJECT_FOLDERS.find((folder) => folder.toLowerCase() === id);
 
-export const REFERENCING_BOXES: Record<string, string[]> = { ...DRIVEN_BOXES, ...CORE_BOXES, ...DRIVING_BOXES };
+export const BOXES_BY_BAND: Record<string, string[]> = Object.fromEntries(
+  Object.entries(boxIdsByBand()).map(([band, ids]) => [band, ids.map(folderOf).filter((f): f is string => f !== undefined)]),
+);
+
+export const KERNEL_BOXES: string[] = BOXES_BY_BAND.kernel ?? [];
+export const DRIVING_BOXES: string[] = BOXES_BY_BAND.driving ?? [];
+export const CORE_BOXES: string[] = BOXES_BY_BAND.core ?? [];
+export const READ_MODEL_AND_REPOSITORY_BOXES: string[] = [...(BOXES_BY_BAND.readmodel ?? []), ...(BOXES_BY_BAND.repositories ?? [])];
+export const REFERENCING_BOXES: string[] = [...DRIVING_BOXES, ...CORE_BOXES, ...READ_MODEL_AND_REPOSITORY_BOXES];
+export const BOXES: string[] = [...KERNEL_BOXES, ...REFERENCING_BOXES];
+
+export function parseProject(path: string): ts.ParsedCommandLine {
+  const result = ts.getParsedCommandLineOfConfigFile(path, undefined, {
+    ...ts.sys,
+    onUnRecoverableConfigFileDiagnostic: (d) => { throw new Error(ts.flattenDiagnosticMessageText(d.messageText, ' ')); },
+  });
+  if (!result) throw new Error(`No parsed command line for ${path}`);
+  return result;
+}
+
+export const referencesOf = (box: string): string[] =>
+  (parseProject(join(SRC, box, 'tsconfig.json')).projectReferences ?? []).map((r) => basename(r.path)).sort();

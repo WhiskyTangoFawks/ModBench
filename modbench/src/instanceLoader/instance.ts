@@ -2,8 +2,8 @@
 
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
-  buildLoadOrderRows, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine,
-  type PluginAddress,
+  buildLoadOrderRows, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin,
+  type LoadOrderPluginLine, type LoadOrderSnapshotValue, type PluginAddress,
 } from './loadOrderSnapshot';
 import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
@@ -88,6 +88,9 @@ export interface InstanceValue {
   /** The plugins the game loads with no line, in the order it loads them; undefined while the
    *  game folder's plugins cannot be listed. */
   readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
+  /** ADR-0013's snapshot; undefined while the game folder is not found or its plugins cannot be
+   *  listed, so nothing silently wrong is sent. */
+  readonly loadOrderSnapshot: LoadOrderSnapshotValue | undefined;
   /** Overwrite's own files, recursive; none when the folder is absent or empty. */
   readonly overwriteFiles: readonly OriginFile[];
   /** Overwrite's folders, as `overwriteFiles` holds its files. */
@@ -160,6 +163,7 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   gameFolder: { kind: 'notFound', looked: [], setting: GAME_FOLDER_SETTING },
   dataFolderPlugins: { kind: 'unresolved' },
   pluginsLoadedWithNoLine: undefined,
+  loadOrderSnapshot: undefined,
   overwriteFiles: [],
   overwriteFolders: [],
   paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() },
@@ -380,6 +384,7 @@ export class Instance implements Subscription {
     for (const note of runtimeOutput.notes) log(`[instance] ${runtimeOutput.origin}: ${note}`);
     const { gameFolder, dataFolderPlugins, creationClub } = game;
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder);
+    const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins);
     const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.files
       ? await this.readInstalledInto(entries, modFolders?.all ?? [])
       : undefined;
@@ -405,7 +410,8 @@ export class Instance implements Subscription {
       nexusSlug: nexusSlugFor(gameRelease, gameName),
       gameFolder,
       dataFolderPlugins,
-      pluginsLoadedWithNoLine: pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins),
+      pluginsLoadedWithNoLine,
+      loadOrderSnapshot: loadOrderSnapshotOf({ plugins, gameFolder, pluginsLoadedWithNoLine }),
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
       paths: pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders),
