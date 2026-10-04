@@ -19,7 +19,7 @@ internal static class Announcements
     /// <summary>Two equal arrivals, each answered once the change it found is announced. An arrival
     /// validates every plugin before it announces, so a plugin neither announced is known quiet.</summary>
     internal static IReadOnlyList<Notification> AnnouncedByEqualArrivals(
-        this Indexer index, InMemoryNotificationPublisher notifications, Func<Predicate<Notification>> change)
+        this OpenedIndex index, InMemoryNotificationPublisher notifications, Func<Predicate<Notification>> change)
     {
         var start = notifications.Notifications.Count;
         for (var arrival = 0; arrival < 2; arrival++)

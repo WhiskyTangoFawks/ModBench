@@ -11,7 +11,7 @@ internal static class WinningCopies
     /// filename that wins it. Reconciles <paramref name="plugins"/> with <paramref name="origin"/>'s
     /// copies winning, and answers the reads.</summary>
     internal static IRecordReads ReadsWithWinner(
-        this Indexer index, LoadOrderHolder holder, string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, string origin)
+        this OpenedIndex index, LoadOrderHolder holder, string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, string origin)
     {
         index.Reconcile(holder, gameDirectory, Winning(plugins, origin), GameRelease.Fallout4);
         return index.RequireReads();

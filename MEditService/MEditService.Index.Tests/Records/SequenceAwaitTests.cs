@@ -14,7 +14,7 @@ public sealed class SequenceAwaitTests : IDisposable
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("sequence-await")
         .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
         .Build();
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
 
     public SequenceAwaitTests()
     {

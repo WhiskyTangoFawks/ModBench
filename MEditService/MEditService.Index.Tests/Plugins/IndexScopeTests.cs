@@ -14,7 +14,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static OpenedIndex MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
     [Fact]
     public void Load_ForUnsupportedGameRelease_FailsNamingTheRelease()
@@ -301,7 +301,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             oldRepo.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
     }
 
-    private Indexer MakeLoadedManager(LoadOrderHolder holder)
+    private OpenedIndex MakeLoadedManager(LoadOrderHolder holder)
     {
         var m = MakeIndexer(holder);
         m.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);

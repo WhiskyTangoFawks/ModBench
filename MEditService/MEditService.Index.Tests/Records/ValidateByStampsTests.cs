@@ -12,7 +12,7 @@ public sealed class ValidateByStampsTests : IDisposable
     private readonly LoadOrderEntry _mod;
     private readonly LoadOrderEntry _partner;
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
     private readonly string _npc;
 
     public ValidateByStampsTests()

@@ -10,7 +10,7 @@ public class FilterTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private Indexer LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
+    private OpenedIndex LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
 
     [Fact]
     public void SetFilter_ValidSqlWithExtraColumns_FiltersByFormKey()

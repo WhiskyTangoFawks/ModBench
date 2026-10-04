@@ -74,7 +74,7 @@ public class PlacementIndexingTests
         }
 
         public PluginFixtureData Fixture { get; }
-        public Indexer Index { get; }
+        public OpenedIndex Index { get; }
         public IRecordReads Reads => Index.RequireReads();
         public string WorldspaceFk { get; }
         public string TopCellFk { get; }
@@ -348,7 +348,7 @@ public class PlacementIndexingTests
         private readonly LoadOrderHolder _holder = new();
 
         public ScatteredFixtureData Fixture { get; }
-        public Indexer Index { get; }
+        public OpenedIndex Index { get; }
 
         public IRecordReads ReadsWithWinner(PluginAddress winner) =>
             Index.ReadsWithWinner(_holder, Fixture.GameDirectory, Fixture.Plugins, winner.Origin);

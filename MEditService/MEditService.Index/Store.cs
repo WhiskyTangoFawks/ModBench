@@ -96,17 +96,17 @@ internal sealed class Store : IDisposable
     private bool _rebuilding;
     private bool _disposed;
 
-    // Called under _rebuildGate. Bounded for the reason IndexWriteGate.DefaultTimeout gives: a read
+    // Called under _rebuildGate. Bounded for the reason IndexWriteGate.HoldLimit gives: a read
     // connection that is never disposed would otherwise wedge every later rebuild and read behind
     // it, with nothing said.
     private void WaitWhile(Func<bool> pending, string what)
     {
-        var deadline = _timeProvider.GetUtcNow() + IndexWriteGate.DefaultTimeout;
+        var deadline = _timeProvider.GetUtcNow() + IndexWriteGate.HoldLimit;
         while (pending())
         {
             var remaining = deadline - _timeProvider.GetUtcNow();
             if (remaining <= TimeSpan.Zero || !Monitor.Wait(_rebuildGate, remaining))
-                throw new TimeoutException($"The index is still {what} after {IndexWriteGate.DefaultTimeout.TotalSeconds:0.###}s.");
+                throw new TimeoutException($"The index is still {what} after {IndexWriteGate.HoldLimit.TotalSeconds:0.###}s.");
         }
     }
 

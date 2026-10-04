@@ -13,7 +13,7 @@ public sealed class TrackedPluginReadTests : IDisposable
         .BuildScattered();
 
     private readonly LoadOrderHolder _holder = new();
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
 
     public TrackedPluginReadTests()
     {

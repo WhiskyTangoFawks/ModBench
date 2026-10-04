@@ -24,7 +24,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     private readonly string _trackedNpc;
     private readonly LoadOrderHolder _holder = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
 
     public EveryReconcileValidatesTests()
     {

@@ -9,7 +9,7 @@ public sealed class SourceIngestContainerTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private Indexer Reloaded() => Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
+    private OpenedIndex Reloaded() => Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
 
     [Fact]
     public void AnExternallyEditedContainer_ServesItsEdit_ThroughStructuralDiff()

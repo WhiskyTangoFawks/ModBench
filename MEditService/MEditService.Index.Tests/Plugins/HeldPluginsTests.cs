@@ -10,7 +10,7 @@ public sealed class HeldPluginsTests
 {
     private const string UserPlugin = "UserMod.esp";
 
-    private static Indexer Open(PluginFixtureData data, IReadOnlyList<LoadOrderEntry>? entries = null, ILoggerFactory? loggerFactory = null) =>
+    private static OpenedIndex Open(PluginFixtureData data, IReadOnlyList<LoadOrderEntry>? entries = null, ILoggerFactory? loggerFactory = null) =>
         Indexes.Reconciled(data.DataFolder, entries ?? data.Plugins, loggerFactory: loggerFactory);
 
     private static PluginAddress Key(string name, string origin = PluginOrigin.DataDirectory) => new(name, origin);

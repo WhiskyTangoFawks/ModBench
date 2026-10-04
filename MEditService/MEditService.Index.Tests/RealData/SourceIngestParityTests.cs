@@ -139,12 +139,12 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
             $"\nOnly untracked:\n{string.Join('\n', onlyBinary.Take(20))}\nOnly tracked:\n{string.Join('\n', onlySource.Take(20))}");
     }
 
-    private List<string> AllFormKeysInOneUnpagedQuery(Indexer index) =>
+    private List<string> AllFormKeysInOneUnpagedQuery(OpenedIndex index) =>
         [.. index.RequireReads()
             .Search(new RecordQuery(Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: int.MaxValue))
             .Items.Select(i => i.FormKey)];
 
-    private int CountOf(Indexer index, string recordType) =>
+    private int CountOf(OpenedIndex index, string recordType) =>
         index.RequireReads().Search(new RecordQuery(
             RecordTypes: [recordType], Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: 0)).Total;
 

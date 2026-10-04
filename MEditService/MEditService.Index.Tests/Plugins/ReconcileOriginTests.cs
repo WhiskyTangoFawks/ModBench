@@ -7,7 +7,7 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class ReconcileOriginTests
 {
-    private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static OpenedIndex MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
     [Fact]
     public void Reconcile_WithOrigin_PluginCarriesCallerSuppliedOrigin()
@@ -19,7 +19,7 @@ public sealed class ReconcileOriginTests
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
         using var manager = MakeIndexer(holder);
-        Indexer index = manager;
+        OpenedIndex index = manager;
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
         var reads = manager.RequireReads();
@@ -37,7 +37,7 @@ public sealed class ReconcileOriginTests
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
         using var manager = MakeIndexer(holder);
-        Indexer index = manager;
+        OpenedIndex index = manager;
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
         var reads = manager.RequireReads();

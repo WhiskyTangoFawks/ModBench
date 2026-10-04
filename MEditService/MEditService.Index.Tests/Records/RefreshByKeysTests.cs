@@ -10,7 +10,7 @@ public sealed class RefreshByKeysTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _mod;
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
     private readonly string _npc;
 
     public RefreshByKeysTests()

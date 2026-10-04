@@ -53,9 +53,9 @@ public sealed class SourceIngestTests : IDisposable
 
     private string ModFolder => _entry.ModFolderOf();
 
-    private Indexer LaunchedFreshOverTheSameTrackedTreeAndToldNothing() => Indexes.Reconciled(_fixture.GameDirectory, _fixture.Plugins);
+    private OpenedIndex LaunchedFreshOverTheSameTrackedTreeAndToldNothing() => Indexes.Reconciled(_fixture.GameDirectory, _fixture.Plugins);
 
-    private string NpcSourceFile(Indexer index) =>
+    private string NpcSourceFile(OpenedIndex index) =>
         _entry.SourceFileOf(index.RequireReads().DocumentOf(_npc, Plugin));
 
     private string RootDocument => Path.Combine(ModFolder, SourceRepository.RootFor(PluginName), "RecordData.json");

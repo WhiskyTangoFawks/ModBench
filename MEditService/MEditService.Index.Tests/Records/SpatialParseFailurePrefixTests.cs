@@ -124,7 +124,7 @@ public sealed class SpatialParseFailurePrefixTests
         private readonly ScratchDirectory _dataFolder = new("medit-spatial-");
         private readonly string _path;
         private readonly DiagnosingAdapter _adapter = new();
-        private readonly Indexer _index;
+        private readonly OpenedIndex _index;
 
         internal string WorldspaceFormKey { get; }
         internal string CellFormKey { get; }
