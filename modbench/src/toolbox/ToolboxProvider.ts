@@ -6,7 +6,7 @@ import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../i
  *  container's first view and must never be a hole — but the commands its rows activate do not
  *  exist, so it renders no rows. */
 export type ToolboxDeps =
-  | { instance: InstanceView; channel: { warn(msg: string): void } }
+  | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'> }
   | { instance: undefined };
 
 function gameRow({ gameName, gameFolder }: InstanceValue): vscode.TreeItem {

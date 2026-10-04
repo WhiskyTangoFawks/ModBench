@@ -13,3 +13,7 @@ export function modSyncOnEachValue(instance: Pick<Instance, 'subscribe'>, modSyn
 export function pluginSyncOnEachValue(instance: Pick<Instance, 'subscribe'>, pluginSync: PluginSync) {
   return instance.subscribe((value) => { void pluginSync.run(value.pluginSyncArguments); });
 }
+
+export function loadOrderPutOnEachValue(instance: Pick<Instance, 'subscribe'>, editing: { onRecompute(): void }) {
+  return instance.subscribe(() => { editing.onRecompute(); });
+}
