@@ -26,7 +26,7 @@ async function targetOf(candidates: readonly FileOrigin[], option: unknown): Pro
   const given = originOf(option);
   if (given !== undefined && candidates.some((candidate) => sameOrigin(candidate, given))) return given;
   if (candidates.length < 2) return candidates[0];
-  const items = candidates.map((origin) => ({ label: nameOf(origin), origin }));
+  const items = [...candidates].reverse().map((origin) => ({ label: nameOf(origin), origin }));
   return (await vscode.window.showQuickPick(items, { placeHolder: 'Go to mod…' }))?.origin;
 }
 

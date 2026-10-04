@@ -20,7 +20,7 @@ const byName = ([a]: readonly [string, unknown], [b]: readonly [string, unknown]
 export const sameOrigin = (a: FileOrigin, b: FileOrigin): boolean =>
   a.kind === 'mod' ? b.kind === 'mod' && a.name === b.name : a.kind === b.kind;
 
-/** The winning copy when `own` loses, and the copies `own` wins over, in the index's order, when
+/** The winning copy when `own` loses, and the copies `own` wins over, in the index's winning-first order, when
  *  it wins. None unless another enabled copy provides the path. */
 export function goToModCandidates(entry: ConflictEntry | undefined, own: FileOrigin): FileOrigin[] {
   const providers = entry?.providers ?? [];

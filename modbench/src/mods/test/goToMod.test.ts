@@ -105,14 +105,14 @@ describe('the go to mod command', () => {
     expect(showQuickPick).not.toHaveBeenCalled();
   });
 
-  it('picks among the several the winning copy wins over, in the order listed, and selects the pick', async () => {
+  it('picks among the several the winning copy wins over, in mod order, losing first, and selects the pick', async () => {
     const { reveal, fileIn, invoke } = setup([high, middle, low]);
     showQuickPick.mockImplementation((items) => Promise.resolve(items[1]));
 
     await invoke(fileIn(high));
 
-    expect(showQuickPick.mock.calls[0]?.[0].map((item) => item.label)).toEqual(['Middle', 'Low']);
-    expect(reveal.mock.calls).toEqual([[modRows.get('Low')]]);
+    expect(showQuickPick.mock.calls[0]?.[0].map((item) => item.label)).toEqual(['Low', 'Middle']);
+    expect(reveal.mock.calls).toEqual([[modRows.get('Middle')]]);
   });
 
   it('selects nothing when the pick is dismissed', async () => {
