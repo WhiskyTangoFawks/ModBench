@@ -125,6 +125,7 @@ describe('modbench.mod.track', () => {
       plugins: () => INSTANCE_PLUGINS,
       mods: () => INSTANCE_MODS,
       modOfRow: (value) => (value instanceof ModsRowStandIn ? value.modName : undefined),
+      modsView: 'modbench.modList',
     }, paletteSelection);
     return {
       handler: present(handlers.get('modbench.mod.track'), 'the track command registerTrackCommand registers'),
@@ -171,6 +172,16 @@ describe('modbench.mod.track', () => {
       'progress opens on modbench.pluginListTree', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(said.at(-1)).toBeUndefined();
+  });
+
+  it('shows the Mods view\'s bar when a Mods row was clicked', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [FIRST, SECOND], refused: [] });
+    const { handler } = invokeTrack(client);
+
+    await runTrackedWithPreset(handler, EDITS_ITEM, new ModsRowStandIn('ModA'));
+
+    expect(progressSteps[0]).toBe('progress opens on modbench.modList');
   });
 
   it('on selected plugin rows of one mod, tracks that mod once', async () => {

@@ -16,15 +16,21 @@ const { handlers, registerCommand, executeCommand, showQuickPick } = vi.hoisted(
   };
 });
 
-vi.mock('vscode', () => ({
-  commands: { registerCommand, executeCommand },
-  window: { showQuickPick },
-}));
+vi.mock('vscode', async () => {
+  const { TreeItem, TreeItemCollapsibleState } = await import('../../test/vscodeMock');
+  return {
+    commands: { registerCommand, executeCommand },
+    window: { showQuickPick },
+    TreeItem, TreeItemCollapsibleState,
+  };
+});
 
 import {
-  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, recordArgument, type RecordWriteMarks,
+  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, recordArgument,
 } from '../recordLifecycleCommands';
-import { InMemoryMEditClient, type CopyItem, type RecordAddress } from '../../client';
+import { InMemoryMEditClient } from '../../client';
+import type { RecordWrite } from '../../drivingLib/writingGesture';
+import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from '../ReferencedByTreeProvider';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -40,25 +46,16 @@ const RECORD_NODE = {
 };
 const RECORD_IDENTITY = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
 
-function recordingMarks(): { marks: RecordWriteMarks; told: string[] } {
-  const told: string[] = [];
-  const named = (records: readonly RecordAddress[]) => records.map((r) => `${r.formKey} ${r.origin}`).join(', ');
-  const copies = (items: readonly CopyItem[]) =>
-    items.map((i) => `${i.record.formKey} into ${i.destination.name}${i.newFormKey ? ` as ${i.newFormKey}` : ''}`).join(', ');
-  const ids = (editorIds: ReadonlyMap<string, string | undefined>) =>
-    [...editorIds].filter(([, id]) => id).map(([formKey, id]) => ` (${id} is ${formKey})`).join('');
-  const unanswered = () => { told.push('unanswered'); };
+function recordingWrite(): { write: RecordWrite; writing: string[]; viewsAskedFor: (string | undefined)[] } {
+  const writing: string[] = [];
+  const viewsAskedFor: (string | undefined)[] = [];
   return {
-    told,
-    marks: {
-      deleting: (records, editorIds) => {
-        told.push(`deleting ${named(records)}${ids(editorIds)}`);
-        return { answered: (landed) => { told.push(`deleted ${named(landed)}`); }, unanswered };
-      },
-      copying: (items, mode, replacing, editorIds) => {
-        told.push(`copying ${mode} ${copies(items)}${replacing.length > 0 ? `, replacing ${copies(replacing)}` : ''}${ids(editorIds)}`);
-        return { answered: (landed) => { told.push(`copied ${copies(landed)}`); }, unanswered };
-      },
+    writing, viewsAskedFor,
+    write: async (command, invokedFrom) => {
+      viewsAskedFor.push(invokedFrom);
+      writing.push('opens');
+      await command();
+      writing.push('ends');
     },
   };
 }
@@ -87,9 +84,9 @@ describe('registerRecordLifecycleCommands', () => {
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    const { marks, told } = recordingMarks();
-    registerRecordLifecycleCommands(client, reporter, ask, () => viewSelection, marks);
-    return { reporter, ask, told };
+    const { write, writing, viewsAskedFor } = recordingWrite();
+    registerRecordLifecycleCommands(client, reporter, ask, () => viewSelection, write);
+    return { reporter, ask, writing, viewsAskedFor };
   }
 
   describe('from the palette, handed no row, taking the Plugins selection', () => {
@@ -288,42 +285,48 @@ describe('registerRecordLifecycleCommands', () => {
       ]);
     });
 
-    it('marks the records before the write, then tells the marks which landed', async () => {
+    it('runs the delete inside the write, which ends when the call is answered', async () => {
       const client = new InMemoryMEditClient();
-      const { told } = invoke(client, 'Delete');
+      const { writing } = invoke(client, 'Delete');
       client.setCommandHandler('deleteRecords', () => {
-        told.push('write');
+        writing.push('delete');
         return Promise.resolve({ landed: [FIRST], refused: [{ item: SECOND, reason: 'no' }] });
       });
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
 
-      expect(told).toEqual([
-        'deleting 000801:MyPatch.esp ModA, 000802:MyPatch.esp ModA (SecondNpc is 000802:MyPatch.esp)',
-        'write',
-        'deleted 000801:MyPatch.esp ModA',
-      ]);
+      expect(writing).toEqual(['opens', 'delete', 'ends']);
     });
 
-    it('tells the marks nothing landed when mEdit refuses the call, and marks nothing when cancelled', async () => {
+    it('runs under Referenced By\'s bar when the rows are Referenced By\'s, and under the default bar for a Plugins row', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { refused: true, message: 'boom' });
-      const { told } = invoke(client, 'Delete', undefined);
+      client.setCommandResult('deleteRecords', { landed: [], refused: [] });
+      const { viewsAskedFor } = invoke(client, 'Delete', 'Delete');
+      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'SecondNpc', { name: 'MyPatch.esp', origin: 'ModA' }, []);
 
-      await deleteRecords(SECOND_NODE);
+      await deleteRecords(holder);
       await deleteRecords(SECOND_NODE);
 
-      expect(told).toEqual(['deleting 000802:MyPatch.esp ModA (SecondNpc is 000802:MyPatch.esp)', 'deleted ']);
+      expect(viewsAskedFor).toEqual([REFERENCED_BY_VIEW, undefined]);
     });
 
-    it('tells the marks a call mEdit never answered, since only the disk can say what it did, and reports it as before', async () => {
+    it('opens no write when the question is declined', async () => {
+      const client = new InMemoryMEditClient();
+      const { writing } = invoke(client, undefined);
+
+      await deleteRecords(SECOND_NODE);
+
+      expect(writing).toEqual([]);
+    });
+
+    it('ends the write after a call mEdit never answered, and reports it', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { refused: true, unanswered: true, message: 'Could not delete 1 record — socket hang up' });
-      const { told, reporter } = invoke(client, 'Delete');
+      const { writing, reporter } = invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE);
 
-      expect(told).toEqual(['deleting 000802:MyPatch.esp ModA (SecondNpc is 000802:MyPatch.esp)', 'unanswered']);
+      expect(writing).toEqual(['opens', 'ends']);
       expect(reporter.reports).toEqual([
         { severity: 'error', message: 'Could not delete 1 record — socket hang up', detail: undefined },
       ]);
@@ -349,9 +352,9 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    const { marks, told } = recordingMarks();
-    registerRecordCopyCommands(client, reporter, ask, () => viewSelection, marks);
-    return { reporter, ask, told };
+    const { write, writing, viewsAskedFor } = recordingWrite();
+    registerRecordCopyCommands(client, reporter, ask, () => viewSelection, write);
+    return { reporter, ask, writing, viewsAskedFor };
   }
 
   const copy = (...args: unknown[]) =>
@@ -627,66 +630,55 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     expect(showQuickPick).toHaveBeenCalledOnce();
   });
 
-  it('marks each copy it writes before the write, then tells the marks which landed and under what FormKey', async () => {
+  it('runs the copy inside the write, which ends when the call is answered', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
     pick('New', [PATCH, OTHER]);
-    const { told } = invoke(client);
+    const { writing } = invoke(client);
     client.setCommandHandler('copyRecords', () => {
-      told.push('write');
-      return Promise.resolve({
-        landed: [{ record: SOURCE, destination: PATCH, newFormKey: '000900:Patch.esp' }],
-        refused: [{ item: { record: SOURCE, destination: OTHER }, reason: 'no' }],
-      });
+      writing.push('copy');
+      return Promise.resolve({ landed: [{ record: SOURCE, destination: PATCH, newFormKey: '000900:Patch.esp' }], refused: [] });
     });
 
     await copy(RECORD_NODE);
 
-    expect(told).toEqual([
-      'copying New 000801:MyPatch.esp into Patch.esp, 000801:MyPatch.esp into Other.esp',
-      'write',
-      'copied 000801:MyPatch.esp into Patch.esp as 000900:Patch.esp',
-    ]);
+    expect(writing).toEqual(['opens', 'copy', 'ends']);
   });
 
-  it('names the copies that replace what a destination held', async () => {
+  it('runs under Referenced By\'s bar when the rows are Referenced By\'s', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
-    client.setQueryAnswer('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }, PATCH]);
-    client.setCommandResult('copyRecords', { landed: [{ record: SOURCE, destination: PATCH }], refused: [] });
-    pick('Override', [PATCH, OTHER]);
-    const { told } = invoke(client, 'Replace');
+    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    pick('New', [PATCH]);
+    const { viewsAskedFor } = invoke(client);
+    const holder = new ReferencedByHolderNode('000001:A.esp', SOURCE.formKey, undefined, { name: 'MyPatch.esp', origin: 'ModA' }, []);
+
+    await copy(holder);
+
+    expect(viewsAskedFor).toEqual([REFERENCED_BY_VIEW]);
+  });
+
+  it('opens no write when the pick is left with Esc', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    pick('New', undefined);
+    const { writing } = invoke(client);
 
     await copy(RECORD_NODE);
 
-    expect(told[0]).toBe(
-      'copying Override 000801:MyPatch.esp into Patch.esp, 000801:MyPatch.esp into Other.esp, replacing 000801:MyPatch.esp into Patch.esp');
+    expect(writing).toEqual([]);
   });
 
-  it('tells the marks a call mEdit never answered, and reports it as before', async () => {
+  it('ends the write after a call mEdit never answered, and reports it', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
     client.setCommandResult('copyRecords', { refused: true, unanswered: true, message: 'Could not copy 1 record — socket hang up' });
     pick('New', [PATCH]);
-    const { told, reporter } = invoke(client);
+    const { writing, reporter } = invoke(client);
 
     await copy(RECORD_NODE);
 
-    expect(told).toEqual(['copying New 000801:MyPatch.esp into Patch.esp', 'unanswered']);
+    expect(writing).toEqual(['opens', 'ends']);
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not copy 1 record — socket hang up', detail: undefined }]);
-  });
-
-  it('marks no override into a record\'s own plugin, which writes nothing, and nothing when a call fails', async () => {
-    const client = new InMemoryMEditClient();
-    destinations(client);
-    client.setQueryAnswer('getRecordHolders', []);
-    client.setCommandResult('copyRecords', { refused: true, message: 'boom' });
-    const elsewhere = { formKey: '000900:Patch.esp', plugin: 'Patch.esp', origin: 'PatchMod' };
-    pick('Override', [PATCH]);
-    const { told } = invoke(client);
-
-    await copy(RECORD_NODE, [RECORD_NODE, elsewhere]);
-
-    expect(told).toEqual(['copying Override 000801:MyPatch.esp into Patch.esp', 'copied ']);
   });
 });

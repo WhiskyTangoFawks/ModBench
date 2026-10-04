@@ -133,6 +133,49 @@ describe('createLoadOrderSender — the last snapshot lands and the superseded o
   });
 });
 
+describe('createLoadOrderSender — latest answers the newest snapshot handed to send', () => {
+  it('is none before any send', async () => {
+    const sender = createLoadOrderSender(attached());
+
+    await expect(sender.latest()).resolves.toBeUndefined();
+  });
+
+  it('waits behind a put in flight for the snapshot parked after it, not for the put in flight', async () => {
+    const client = attached();
+    let release!: () => void;
+    client.setCommandHandler('putLoadOrder', () =>
+      new Promise<LoadOrderOutcome>((resolve) => { release = () => resolve(APPLIED); }));
+    const sender = createLoadOrderSender(client);
+    void sender.send(snapshot('A.esp'));
+    await Promise.resolve();
+    void sender.send(snapshot('B.esp'));
+    const settled: LoadOrderOutcome[] = [];
+    const latest = sender.latest().then((outcome) => { if (outcome) settled.push(outcome); });
+
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toEqual([]);
+
+    release();
+    await latest;
+    expect(settled).toEqual([APPLIED]);
+    expect(sentNames(client)).toEqual(['A.esp', 'B.esp']);
+  });
+
+  it('follows a snapshot that a newer one supersedes before it is sent', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('putLoadOrder', APPLIED);
+    const sender = createLoadOrderSender(client);
+    void sender.send(snapshot('A.esp'));
+    const latest = sender.latest();
+    void sender.send(snapshot('B.esp'));
+    client.setStatus('running');
+
+    await expect(latest).resolves.toEqual(APPLIED);
+    expect(sentNames(client)).toEqual(['B.esp']);
+  });
+});
+
 describe('createLoadOrderSender — arm and abandon', () => {
   it('a freshly armed scope is not abandoned', () => {
     const sender = createLoadOrderSender(attached());
