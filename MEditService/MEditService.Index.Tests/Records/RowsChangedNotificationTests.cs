@@ -92,7 +92,7 @@ public sealed class RowsChangedNotificationTests
     }
 
     private static (ScatteredFixtureData Fixture, LoadOrderEntry Entry, InMemoryNotificationPublisher Notifications,
-        Indexer Index, FormKey Moved, FormKey Still) TwoNpcs(string name)
+        OpenedIndex Index, FormKey Moved, FormKey Still) TwoNpcs(string name)
     {
         FormKey moved = default, still = default;
         var fixture = new PluginFixtureBuilder(name)
@@ -108,7 +108,7 @@ public sealed class RowsChangedNotificationTests
         return (fixture, fixture.Plugins.Single(), notifications, index, moved, still);
     }
 
-    private static string GainACopyOfARecordUnderAFormKeyNeitherRefHolds(LoadOrderEntry entry, Indexer index, string template)
+    private static string GainACopyOfARecordUnderAFormKeyNeitherRefHolds(LoadOrderEntry entry, OpenedIndex index, string template)
     {
         var gained = $"000F00:{entry.Name}";
         var document = index.RequireReads().DocumentOf(template, entry.KeyOf());

@@ -12,7 +12,7 @@ public sealed class CutDownPluginFixture : IDisposable
 
     public string InstanceRoot { get; } = Directory.CreateTempSubdirectory("medit-cutdown-instance-").FullName;
 
-    internal Indexer Index { get; }
+    internal OpenedIndex Index { get; }
 
     public IRecordReads Reads => Index.RequireReads();
 

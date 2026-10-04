@@ -32,7 +32,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
 
     private LoadOrderEntry Entry => new(MalformedFixture, _pluginPath, Origin, 0, Enabled: true, Winning: true);
 
-    private Indexer Reconciled(LoadOrderHolder holder, GatedPluginAdapter? opens = null)
+    private OpenedIndex Reconciled(LoadOrderHolder holder, GatedPluginAdapter? opens = null)
     {
         var index = Indexes.Open(holder, opens);
         index.Reconcile(holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);

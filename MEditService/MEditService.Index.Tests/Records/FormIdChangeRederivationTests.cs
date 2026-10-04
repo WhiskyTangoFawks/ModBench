@@ -144,7 +144,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
 
         public LoadOrderEntry Entry { get; }
         public PluginAddress Plugin => Entry.KeyOf();
-        public Indexer Index { get; }
+        public OpenedIndex Index { get; }
         public IRecordReads Reads => Index.RequireReads();
         public string Worldspace { get; }
         public string ExteriorCell { get; }

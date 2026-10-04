@@ -10,9 +10,9 @@ namespace MEditService.Index.Tests.Records;
 
 public sealed class IndexerTests
 {
-    private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static OpenedIndex MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
-    private static (Indexer Index, GatedPluginAdapter Opens) MakeCountingIndexer(LoadOrderHolder holder)
+    private static (OpenedIndex Index, GatedPluginAdapter Opens) MakeCountingIndexer(LoadOrderHolder holder)
     {
         var opens = new GatedPluginAdapter();
         return (Indexes.Open(holder, opens), opens);
@@ -31,21 +31,21 @@ public sealed class IndexerTests
     private static LoadOrderSnapshot Snapshot(ScatteredFixtureData fx, IReadOnlyList<LoadOrderEntry>? plugins = null) =>
         SnapshotPlugins.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, plugins ?? fx.Plugins);
 
-    private static void ReconcileInTheLoadOrderEndpointsOrder(Indexer indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
+    private static void ReconcileInTheLoadOrderEndpointsOrder(OpenedIndex indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
         indexer.Receive(holder, snapshot);
 
-    private static void ReDeriveByTouchingTheBytesThenValidating(Indexer indexer, LoadOrderEntry entry)
+    private static void ReDeriveByTouchingTheBytesThenValidating(OpenedIndex indexer, LoadOrderEntry entry)
     {
         PluginBinaries.Touch(entry.Path);
         indexer.NextSnapshot();
     }
 
-    private static string SharedNpc(Indexer indexer) =>
+    private static string SharedNpc(OpenedIndex indexer) =>
         indexer.RequireReads()
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
             .Items.Single().FormKey;
 
-    private static string? WinnerOf(Indexer indexer, string formKey)
+    private static string? WinnerOf(OpenedIndex indexer, string formKey)
     {
         var stack = indexer.RequireReads().GetOverrideStack(formKey)
             ?? throw new InvalidOperationException($"Expected {formKey} to resolve to an override stack.");

@@ -12,7 +12,7 @@ public sealed class IndexWriteOrderTests : IDisposable
         .WithPlugin(PluginName, mod => mod.Npcs.AddNew("FixtureNpc"), origin: "FixtureMod")
         .BuildScattered();
     private readonly GatedPluginAdapter _adapter = new();
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
 
     public IndexWriteOrderTests() => _index = Indexes.Reconciled(_fixture, adapter: _adapter);
 

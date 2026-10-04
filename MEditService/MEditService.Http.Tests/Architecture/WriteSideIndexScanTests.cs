@@ -95,7 +95,7 @@ public sealed class WriteSideIndexScanTests
     private const string EndpointRoot = "MEditService.Http/Endpoints";
 
     private static string[] IndexTypesAnEndpointCannotNameByTheirOwnWord() =>
-        [.. typeof(Indexer).Assembly.GetExportedTypes().Select(SourceName)
+        [.. typeof(IQueryIndex).Assembly.GetExportedTypes().Select(SourceName)
             .Except(typeof(IRecordQueryService).Assembly.GetExportedTypes().Select(SourceName), StringComparer.Ordinal)
             .Append("MEditService.Index")
             .Append(@"Index\.[A-Z]\w*")
@@ -119,7 +119,7 @@ public sealed class WriteSideIndexScanTests
         var leaked = typeof(IRecordQueryService).Assembly.GetExportedTypes()
             .SelectMany(SignatureTypes)
             .SelectMany(Unwrapped)
-            .Where(t => t.Assembly == typeof(Indexer).Assembly)
+            .Where(t => t.Assembly == typeof(IQueryIndex).Assembly)
             .Select(t => t.FullName)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)

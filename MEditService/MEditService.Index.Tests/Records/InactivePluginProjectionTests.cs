@@ -13,7 +13,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     private readonly LoadOrderEntry _partner;
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly LoadOrderHolder _holder = new();
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
     private readonly string _npc;
 
     public InactivePluginProjectionTests()

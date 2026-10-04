@@ -11,7 +11,7 @@ namespace MEditService.Index.Tests;
 internal static class LoadOrderArrival
 {
     internal static LoadOrderHolder Reconcile(
-        this Indexer index, LoadOrderHolder holder, string gameDirectory,
+        this OpenedIndex index, LoadOrderHolder holder, string gameDirectory,
         IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null)
     {
         index.Receive(holder, Snapshot(gameDirectory, instanceRoot, gameRelease, plugins));
@@ -19,7 +19,7 @@ internal static class LoadOrderArrival
     }
 
     /// <summary>The version the snapshot arrived as, once the Index's status answers it.</summary>
-    internal static long Receive(this Indexer index, LoadOrderHolder holder, LoadOrderSnapshot snapshot)
+    internal static long Receive(this OpenedIndex index, LoadOrderHolder holder, LoadOrderSnapshot snapshot)
     {
         var answered = index.Status.Version;
         var version = holder.Apply(snapshot);
@@ -33,6 +33,6 @@ internal static class LoadOrderArrival
         string gameDirectory, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> plugins) =>
         SnapshotPlugins.Snapshot(gameDirectory, instanceRoot, gameRelease, plugins);
 
-    internal static void AwaitVersion(this Indexer index, long version) =>
+    internal static void AwaitVersion(this OpenedIndex index, long version) =>
         Waits.Reached(() => index.Status.Version >= version, $"the status answering version {version}");
 }

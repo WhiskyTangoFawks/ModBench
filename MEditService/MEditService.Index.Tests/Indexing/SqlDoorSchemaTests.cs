@@ -14,7 +14,7 @@ public sealed class SqlDoorSchemaTests : IDisposable
     private static readonly PluginAddress OverKey = new("Over.esp", "Data");
 
     private readonly PluginFixtureData _fixture;
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
     private readonly string _npc;
 
     public SqlDoorSchemaTests()

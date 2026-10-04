@@ -10,7 +10,7 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class ReconcileScatteredTests
 {
-    private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static OpenedIndex MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
     [Fact]
     public void Reconcile_PopulatesLoadOrderAndIndexesScatteredPlugins()

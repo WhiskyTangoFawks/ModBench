@@ -2,7 +2,7 @@ namespace MEditService.Index;
 
 // Wrapped once per response, so each distinct FormKey is queried at most once however many
 // FieldDiff leaves share it.
-public static class FormKeyResolutionCache
+internal static class FormKeyResolutionCache
 {
     public static Func<string, RecordLookupEntry?> Memoize(Func<string, RecordLookupEntry?> resolve)
     {

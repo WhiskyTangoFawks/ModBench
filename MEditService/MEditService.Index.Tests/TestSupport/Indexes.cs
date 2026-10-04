@@ -1,38 +1,40 @@
-using System.Runtime.CompilerServices;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.TestSupport;
 
-/// <summary>The Index as the composition root builds it: the public constructor over the real
-/// adapter, subscribed to its holder and reconciled over a fixture's plugins.</summary>
+/// <summary>The Index as the host builds it: through the registration over the real adapter,
+/// subscribed to its holder and reconciled over a fixture's plugins.</summary>
 internal static class Indexes
 {
-    // The Indexer keeps its holder to itself, and the next arrival is the holder's.
-    private static readonly ConditionalWeakTable<Indexer, LoadOrderHolder> Holders = [];
-
-    internal static Indexer Open(
+    internal static OpenedIndex Open(
         LoadOrderHolder holder,
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null,
-        TaskScheduler? refillScheduler = null,
-        IndexWriteGate? writeGate = null)
+        TaskScheduler? refillScheduler = null)
     {
-        var index = new Indexer(
-            holder, adapter ?? TestAdapters.Mutagen(), SharedSchemaReflector.Instance, loggerFactory, notifications, timeProvider,
-            refillScheduler, writeGate);
-        Holders.Add(index, holder);
-        index.Subscribe();
-        return index;
+        var services = new ServiceCollection();
+        services.AddSingleton(holder);
+        services.AddSingleton(adapter ?? TestAdapters.Mutagen());
+        services.AddSingleton(SharedSchemaReflector.Instance);
+        services.AddSingleton(loggerFactory ?? NullLoggerFactory.Instance);
+        services.AddSingleton(timeProvider ?? TimeProvider.System);
+        if (notifications is not null) services.AddSingleton(notifications);
+        if (refillScheduler is not null) services.AddSingleton(refillScheduler);
+        services.AddRecordIndex();
+        var container = services.BuildServiceProvider();
+        return new OpenedIndex(container.GetRequiredService<IQueryIndex>(), holder, container);
     }
 
-    internal static Indexer Reconciled(
+    internal static OpenedIndex Reconciled(
         PluginFixtureData fixture,
         string? instanceRoot = null,
         IPluginAdapter? adapter = null,
@@ -40,7 +42,7 @@ internal static class Indexes
         INotificationPublisher? notifications = null) =>
         Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications);
 
-    internal static Indexer Reconciled(
+    internal static OpenedIndex Reconciled(
         ScatteredFixtureData fixture,
         string? instanceRoot = null,
         IPluginAdapter? adapter = null,
@@ -48,7 +50,7 @@ internal static class Indexes
         INotificationPublisher? notifications = null) =>
         Reconciled(fixture.GameDirectory, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications);
 
-    internal static Indexer Reconciled(
+    internal static OpenedIndex Reconciled(
         string gameDirectory,
         IReadOnlyList<LoadOrderEntry> plugins,
         string? instanceRoot = null,
@@ -71,20 +73,18 @@ internal static class Indexes
 
     /// <summary>The held load order arriving again (ADR-0013), answered once
     /// <paramref name="announced"/> holds and the arrival has ended: its status is out when it
-    /// re-derived, and its write-gate hold is over when it only validated.</summary>
-    internal static void NextSnapshotUntil(this Indexer index, Func<bool> announced, string what)
+    /// re-derived, and its validation is over when it only validated.</summary>
+    internal static void NextSnapshotUntil(this OpenedIndex index, Func<bool> announced, string what)
     {
-        if (!Holders.TryGetValue(index, out var holder))
-            throw new InvalidOperationException("Only an Indexer from Indexes.Open has a holder to deliver an arrival through.");
-        holder.Apply(holder.Current);
+        index.Holder.Apply(index.Holder.Current);
         Waits.Reached(announced, what);
         Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the arrival's status");
-        using var validated = index.WriteGate.Enter();
+        index.Settled();
     }
 
     /// <summary>The held load order arriving again, answered once the rows it changed are announced
     /// as the sequence moving.</summary>
-    internal static void NextSnapshot(this Indexer index)
+    internal static void NextSnapshot(this OpenedIndex index)
     {
         var before = index.Sequence;
         index.NextSnapshotUntil(() => index.Sequence > before, "the sequence moving");
@@ -93,7 +93,7 @@ internal static class Indexes
     /// <summary>The SQL door: the filter is arbitrary SQL yielding form_key, so what it
     /// matches is the relational schema's own answer. The filter is cleared after, the door being
     /// shared.</summary>
-    internal static int Matching(this Indexer index, string sql)
+    internal static int Matching(this OpenedIndex index, string sql)
     {
         index.SetFilter(sql, "filter.sql");
         try
@@ -108,7 +108,7 @@ internal static class Indexes
 
     /// <summary>Whether a filter may name the relations and columns in <paramref name="sql"/>: the
     /// door refuses SQL it cannot resolve.</summary>
-    internal static bool Accepts(this Indexer index, string sql)
+    internal static bool Accepts(this OpenedIndex index, string sql)
     {
         if (Record.Exception(() => index.SetFilter(sql, "filter.sql")) is not null) return false;
         index.ClearFilter();

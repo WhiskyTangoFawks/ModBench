@@ -12,7 +12,7 @@ public sealed class CellLandscapeAndNavmeshChildrenTests : IDisposable
     private static readonly PluginAddress Key = new("Land.esp", "Data");
 
     private readonly PluginFixtureData _fixture;
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
     private readonly string _landed;
     private readonly string _landOnly;
     private readonly string _bare;

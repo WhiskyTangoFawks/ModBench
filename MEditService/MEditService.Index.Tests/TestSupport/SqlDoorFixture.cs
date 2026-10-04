@@ -8,7 +8,7 @@ public sealed class SqlDoorFixture : IDisposable
 {
     private readonly TestPluginFixture _plugin = new();
 
-    internal Indexer Index { get; }
+    internal OpenedIndex Index { get; }
 
     public SqlDoorFixture() => Index = Indexes.Reconciled(_plugin.DataFolder, _plugin.Plugins);
 

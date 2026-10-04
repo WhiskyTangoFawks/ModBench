@@ -14,7 +14,7 @@ public sealed class StoreRebuildTests : IDisposable
 
     private readonly LoadOrderHolder _holder = new();
     private readonly GatedPluginAdapter _opens = new();
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
 
     public StoreRebuildTests() => _index = Indexes.Open(_holder, _opens);
 
@@ -74,7 +74,7 @@ public sealed class StoreRebuildTests : IDisposable
         .WithPlugin("B.esp", mod => mod.Npcs.AddNew("NpcB"))
         .Build();
 
-    private static string[] ListedNpcs(Indexer index) =>
+    private static string[] ListedNpcs(OpenedIndex index) =>
         [.. index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Items.Select(i => i.EditorId ?? "")];
 
     [Fact]

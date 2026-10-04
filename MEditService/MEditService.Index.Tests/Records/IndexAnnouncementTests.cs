@@ -16,7 +16,7 @@ public sealed class IndexAnnouncementTests : IDisposable
 
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly LoadOrderHolder _holder = new();
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
     private readonly ScratchDirectory _gameDirectory = new("medit-announce-game-");
     private readonly ScratchDirectory _instanceRoot = new("medit-announce-instance-");
     private readonly string _pluginPath;

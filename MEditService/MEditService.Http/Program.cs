@@ -69,14 +69,7 @@ try
     builder.Services.AddSingleton<LoadOrderHolder>();
     // One Index for the whole process (ADR-0014). Which file it opens comes from the
     // load request (ADR-0010), not from here.
-    builder.Services.AddSingleton(sp => new Indexer(
-        sp.GetRequiredService<LoadOrderHolder>(),
-        sp.GetRequiredService<IPluginAdapter>(),
-        sp.GetRequiredService<SchemaReflector>(),
-        sp.GetRequiredService<ILoggerFactory>(),
-        sp.GetRequiredService<INotificationPublisher>(),
-        sp.GetRequiredService<TimeProvider>()));
-    builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<Indexer>());
+    builder.Services.AddRecordIndex();
     builder.Services.AddQueries();
     builder.Services.AddSingleton<RecordTextCodec>();
     builder.Services.AddSingleton<TrackService>();
@@ -87,9 +80,6 @@ try
     builder.Services.AddSingleton<PluginCompileService>();
 
     var app = builder.Build();
-
-    // The record index reconciles every arrival of the load order (ADR-0013).
-    app.Services.GetRequiredService<Indexer>().Subscribe();
 
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure
     // would be invisible; at Information a success line would flood. The appsettings

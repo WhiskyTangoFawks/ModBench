@@ -15,7 +15,7 @@ namespace MEditService.Index;
 /// <summary>ADR-0014: the Index's other half (target-architecture.d2
 /// medit_readmodel.index.indexer). Ingest, the registration sweep and the validation of every
 /// plugin.</summary>
-public sealed class Indexer : IQueryIndex, IDisposable
+internal sealed class Indexer : IQueryIndex, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger _logger;
@@ -50,7 +50,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     // since that one returns before reaching its own update.
     private long _version;
 
-    /// <summary>The composition root's door: the Index opens its own store (ADR-0014).</summary>
+    /// <summary>The registration's door: the Index opens its own store (ADR-0014).</summary>
     public Indexer(
         LoadOrderHolder holder,
         IPluginAdapter adapter,
@@ -58,11 +58,10 @@ public sealed class Indexer : IQueryIndex, IDisposable
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null,
-        TaskScheduler? refillScheduler = null,
-        IndexWriteGate? writeGate = null)
+        TaskScheduler? refillScheduler = null)
     {
         _holder = holder;
-        WriteGate = writeGate ?? new IndexWriteGate();
+        WriteGate = new IndexWriteGate();
         _adapter = adapter;
         _schemaReflector = schemaReflector;
         _notifications = notifications;
@@ -199,9 +198,11 @@ public sealed class Indexer : IQueryIndex, IDisposable
     {
         long version = 0;
         bool changed;
+        string? heldElsewhere = null;
+        string? failure = null;
         try
         {
-            if (ReconcileOrRefuse(arrival, ref version) is not { } reconciled) return;
+            if (ReconcileOrRefuse(arrival, ref version, ref failure) is not { } reconciled) return;
             changed = reconciled;
         }
         catch (OperationCanceledException)
@@ -212,20 +213,22 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
         catch (IndexHeldElsewhereException ex)
         {
-            lock (_lock) _heldElsewhereMessage = ex.Message;
+            heldElsewhere = ex.Message;
             changed = true;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // ReconcileOrRefuse already logged this at error; there is nothing further up to raise
             // it to, so it becomes status data instead of only a log line.
-            lock (_lock) _failureMessage = ex.Message;
+            failure = ex.Message;
             changed = true;
         }
         // Max, not assign: the exclusive lock is released before this runs, so a newer version's
         // own stamp can land first, and this one must never answer for it downward.
         lock (_lock)
         {
+            if (heldElsewhere is not null) _heldElsewhereMessage = heldElsewhere;
+            if (failure is not null) _failureMessage = failure;
             changed |= version > _version;
             _version = Math.Max(_version, version);
             _validating = false;
@@ -236,7 +239,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
     // A superseded reconcile throws OperationCanceledException, leaving its work for its
     // successor; a second window's hold throws IndexHeldElsewhereException. Null when the arrival
     // resolved to none, and false when the reconcile changed nothing Status reports.
-    private bool? ReconcileOrRefuse(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version)
+    private bool? ReconcileOrRefuse(
+        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version, ref string? failure)
     {
         EnterExclusive();
         try
@@ -262,7 +266,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
             var token = BeginReconcile();
             var (held, index) = EnsureScope(snapshot);
             var reconciled = ReconcileProgressively(held, index, snapshot, token) || refusalCleared;
-            return ValidateHeld(token) || reconciled;
+            failure = ValidateHeld(token);
+            return failure is not null || reconciled;
         }
         catch (OperationCanceledException ex)
         {
@@ -820,32 +825,31 @@ public sealed class Indexer : IQueryIndex, IDisposable
         "what was last read from it.";
 
     // ADR-0003: the status answering the version is published once the plugins are validated, and a
-    // reconcile that changed the status reads Reconciling until then. True when validation failed
-    // outright and became status data.
-    private bool ValidateHeld(CancellationToken token)
+    // reconcile that changed the status reads Reconciling until then. The message when validation
+    // failed outright, which becomes status data.
+    private string? ValidateHeld(CancellationToken token)
     {
         lock (_lock)
         {
-            if (_disposed || _heldPlugins is null) return false;
+            if (_disposed || _heldPlugins is null) return null;
         }
         try
         {
             ValidateIndex(token);
-            return false;
+            return null;
         }
         catch (IndexWriteGateTimeoutException ex)
         {
             // Busy, not broken: validation is idempotent, and the next snapshot validates again.
             _logger.LogWarning(ex, "Could not validate the index while another write held it; it is re-checked at the next snapshot");
-            return false;
+            return null;
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
             // The failure becomes status data (plugins.md, States, story 6), and the next snapshot
             // tries again.
             _logger.LogError(ex, "Validating the index failed unexpectedly");
-            lock (_lock) _failureMessage = ex.Message;
-            return true;
+            return ex.Message;
         }
     }
 
