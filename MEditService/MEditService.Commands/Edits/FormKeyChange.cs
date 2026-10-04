@@ -115,9 +115,8 @@ internal sealed class FormKeyChange(
         return null;
     }
 
-    // Move, put, remove for every shape: a container moves whole and the put replaces it, a flat
-    // record's put lands at the new leaf and the remove takes the old, and an embedded record's
-    // put rewrites its owner, leaving the remove nothing to find.
+    // The same three steps serve every shape: each is a no-op where the shape has nothing for it
+    // to do, so no caller needs to know where the record lives.
     private static void WriteTargetRewrite(
         SourceRepository.SourceTransaction transaction, SourceRepository repository, PluginAddress plugin,
         ComputedTarget target, string newFormKey)
