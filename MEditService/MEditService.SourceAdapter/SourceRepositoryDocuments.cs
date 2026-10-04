@@ -13,7 +13,8 @@ namespace MEditService.SourceAdapter;
 public sealed partial class SourceRepository
 {
     /// <summary>The document carrying <paramref name="identity"/>: its own, else its container's. Null
-    /// when no document holds it, or the document carrying it names no record.</summary>
+    /// when no document holds it. Throws <see cref="UnreadableSourceDocumentException"/> when the
+    /// document carrying it names no record.</summary>
     public SourceDocument? ContainerDocument(
         PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
@@ -23,7 +24,11 @@ public sealed partial class SourceRepository
         if (!unit.IsEmbedded)
             return new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, text);
 
-        if (IdentityOf(plugin, unit.OwnerFormKey, schemas) is not { } owner) return null;
+        if (IdentityOf(plugin, unit.OwnerFormKey, schemas) is not { } owner)
+        {
+            throw new UnreadableSourceDocumentException(
+                $"{unit.RelativePath} carries {identity.FormKey}, but {unit.OwnerFormKey} names no document of its own.");
+        }
         return new SourceDocument(owner.FormKey, owner.RecordType, owner.EditorId, text);
     }
 
@@ -34,8 +39,7 @@ public sealed partial class SourceRepository
     {
         if (Locate(plugin, identity) is not { IsEmbedded: true } unit) return null;
         var owner = ContainerDocument(plugin, identity, schemas)
-            ?? throw new UnreadableSourceDocumentException(
-                $"{unit.RelativePath} carries {identity.FormKey}, but {unit.OwnerFormKey} names no document of its own.");
+            ?? throw new UnreadableSourceDocumentException($"{unit.RelativePath} could not be read.");
 
         using var parsed = JsonDocument.Parse(owner.Body);
         return new ContainerDocuments(_release, schemas).ContainmentOf(owner.RecordType, parsed.RootElement, identity.FormKey);

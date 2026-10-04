@@ -48,14 +48,23 @@ public sealed class EditRecordHandler
         // An embedded child is patched inside the document that carries it, so the identity written
         // back is that document's — its own for every other shape, the header included.
         var relativePath = repository.RelativePathOf(plugin, identity);
-        if (repository.ContainerDocument(plugin, identity, schemas) is not { } document)
+        SourceDocument? carrying;
+        try
+        {
+            carrying = repository.ContainerDocument(plugin, identity, schemas);
+        }
+        catch (UnreadableSourceDocumentException ex)
+        {
+            return WriteTargets.RefuseUnreadable(formKey, ex.Message);
+        }
+        if (carrying is not { } document)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
                 $"{relativePath ?? $"{plugin.Name}'s source tree"} does not hold {formKey} — it was moved or removed outside " +
                 "Modbench. Check the Source Control panel.");
         }
-        if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, document, envelope.Value);
+        if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, schemas, envelope.Value);
         var isEmbedded = !document.FormKey.Equals(identity.FormKey, StringComparison.Ordinal);
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
 

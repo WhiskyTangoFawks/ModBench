@@ -74,6 +74,20 @@ public sealed class UnreadableCopySourceTests : IDisposable
     }
 
     [Fact]
+    public void CopyAsOverride_OntoADestinationHoldingTheRecordInTwoDocuments_IsRefusedAsAmbiguous_AndLeavesItAlone()
+    {
+        Assert.True(_mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, _mod.FlatNpc.ToString(), _mod.DestinationPlugin).Applied);
+        var document = _mod.Document(_mod.DestinationPlugin, _mod.FlatNpc.ToString()).Require();
+        TreeTampering.Duplicate(_mod.DestinationModFolder, _mod.DestinationPlugin, document.Identity);
+        var before = TreeSnapshot.Of(_mod.DestinationModFolder);
+
+        var result = _mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, _mod.FlatNpc.ToString(), _mod.DestinationPlugin, replace: true);
+
+        Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, result.Refusal);
+        Assert.Equal(before, TreeSnapshot.Of(_mod.DestinationModFolder));
+    }
+
+    [Fact]
     public void CopyAsOverride_OfAnExteriorCellWhoseWorldspaceDocumentIsNoJsonDocument_IsRefusedNamingIt_AndWritesNothing()
     {
         MakeNoJsonDocument(_mod.Worldspace);

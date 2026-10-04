@@ -1,11 +1,9 @@
-using System.Diagnostics;
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
@@ -25,7 +23,8 @@ internal sealed class FormKeyChange(
     /// <summary>A delete+create pair in source terms, written through a
     /// <see cref="SourceRepository.SourceTransaction"/> that restores the tree on failure.</summary>
     internal RecordEditResult Change(
-        PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, SourceDocument carrying, JsonElement? value)
+        PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, JsonElement? value)
     {
         var (release, identity, repository) = editTarget;
         if (identity.RecordType == PluginHeader.RecordType)
@@ -62,12 +61,10 @@ internal sealed class FormKeyChange(
         var transaction = new SourceRepository.SourceTransaction();
         if (SourceCommit.Write(transaction, repository, logger, $"Changing the FormID of {formKey} to {targetFormKey} failed.", () =>
             {
-                if (ComputeTargetRewrite(plugin, repository, identity, carrying, formKey, targetFormKey, release, out var targetRewrite)
-                    is { } refusedSelf) return refusedSelf;
-                WriteTargetRewrite(
-                    transaction, repository, plugin,
-                    targetRewrite ?? throw new UnreachableException("ComputeTargetRewrite neither refused nor computed a target."),
-                    targetFormKey);
+                transaction.Rekey(repository, plugin, identity, targetFormKey, schemas, new DocumentRekey(
+                    (document, newKey) => RecordDocumentEdits.WithFormKey(codec, document.Body, release, document.RecordType, newKey),
+                    (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
+                        codec, owner.Body, release, owner.RecordType, oldKey, newKey)));
                 return null;
             }) is { } refused) return refused;
 
@@ -78,54 +75,5 @@ internal sealed class FormKeyChange(
                 formKey, targetFormKey, plugin.Name, plugin.Origin);
         }
         return RecordEditResult.Success(targetFormKey);
-    }
-
-    // Text is the target's own document under its new FormKey — the owner's whole text when
-    // embedded — and Written is that document's identity. Held is the target's own identity, as the
-    // tree has it.
-    private sealed record ComputedTarget(RecordIdentity Written, RecordIdentity Held, string Text);
-
-    // Nothing here writes; every failure mode is a typed refusal. The carrying document is the
-    // record's own, or the owner's when another record's document carries it.
-    private RecordEditResult? ComputeTargetRewrite(
-        PluginAddress plugin, SourceRepository repository, RecordIdentity identity, SourceDocument carrying,
-        string oldFormKey, string newFormKey, GameRelease release, out ComputedTarget? target)
-    {
-        target = null;
-
-        if (!carrying.FormKey.Equals(identity.FormKey, StringComparison.Ordinal))
-        {
-            if (RecordDocumentEdits.WithEmbeddedChildFormKey(
-                    codec, carrying.Body, release, carrying.RecordType, oldFormKey, newFormKey)
-                is not { } ownerText)
-            {
-                return RecordEditResult.Refused(
-                    RecordEditRefusal.SourceUnitNotFound,
-                    $"{repository.RelativePathOf(plugin, identity)} was found holding {oldFormKey}, but its own text does not carry it. " +
-                    "Nothing was written.");
-            }
-
-            target = new ComputedTarget(carrying.Identity, identity, ownerText);
-            return null;
-        }
-
-        target = new ComputedTarget(
-            new RecordIdentity(newFormKey, identity.RecordType, identity.EditorId), identity,
-            RecordDocumentEdits.WithFormKey(codec, carrying.Body, release, carrying.RecordType, newFormKey));
-        return null;
-    }
-
-    // The same three steps serve every shape: each is a no-op where the shape has nothing for it
-    // to do, so no caller needs to know where the record lives.
-    private static void WriteTargetRewrite(
-        SourceRepository.SourceTransaction transaction, SourceRepository repository, PluginAddress plugin,
-        ComputedTarget target, string newFormKey)
-    {
-        var (written, held, text) = target;
-        transaction.Move(repository, plugin, held, newFormKey);
-        transaction.Put(repository, plugin, new SourceDocument(written.FormKey, written.RecordType, written.EditorId, text));
-
-        if (transaction.Remove(repository, plugin, held) == SourceRemoval.OwnerDoesNotCarryIt)
-            throw new IOException($"The document holding {held.FormKey} does not carry it, so the FormID change cannot take it out.");
     }
 }
