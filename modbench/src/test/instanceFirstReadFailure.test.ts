@@ -66,7 +66,7 @@ function fourViewsOverOneInstance() {
     log: (level, msg) => { channel[level](msg); },
     reporter: makeReporter(channel, 'pluginList'),
   });
-  const downloads = new DownloadsProvider({ instance, log: () => undefined });
+  const downloads = new DownloadsProvider({ instance });
   const toolbox = new ToolboxProvider({ instance });
   disposables.push(instance, mods, plugins, downloads, toolbox);
   const render = () => Promise.all([mods.getChildren(), plugins.getChildren(), downloads.getChildren()]);

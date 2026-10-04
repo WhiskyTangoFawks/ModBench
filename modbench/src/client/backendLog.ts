@@ -1,7 +1,7 @@
-import type { LogOutputChannel } from 'vscode';
-import type { BackendStream } from '../client';
+import type { BackendStream } from './backendLifecycle';
 
-type LeveledChannel = Pick<LogOutputChannel, 'debug' | 'info' | 'warn' | 'error'>;
+type LeveledChannel = Record<'debug' | 'info' | 'warn' | 'error', (message: string) => void>;
+export type BackendLogChannel = LeveledChannel & { logLevel: number };
 
 // Serilog's `{Level:u3}` tokens, as they appear in its default console template.
 type SerilogTag = 'VRB' | 'DBG' | 'INF' | 'WRN' | 'ERR' | 'FTL';
@@ -33,8 +33,7 @@ export function makeBackendLogForwarder(channel: LeveledChannel): (line: string,
   };
 }
 
-// `vscode.LogLevel`'s ordinals (Off=0, Trace=1 .. Error=5). Untyped as `number` so this file
-// needs no runtime `vscode` import, and so no VS Code test harness.
+// `vscode.LogLevel`'s ordinals (Off=0, Trace=1 .. Error=5).
 const SERILOG_LEVEL_NAMES: Record<number, string> = {
   1: 'Verbose', 2: 'Debug', 3: 'Information', 4: 'Warning', 5: 'Error',
 };

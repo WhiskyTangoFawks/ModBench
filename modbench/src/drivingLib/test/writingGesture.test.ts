@@ -45,4 +45,8 @@ describe('runWritingGesture', () => {
 
     expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
   });
+
+  it('answers what the command answered', async () => {
+    expect(await runWritingGesture('modbench.thing', instanceThatReads(), () => Promise.resolve('landed'))).toBe('landed');
+  });
 });

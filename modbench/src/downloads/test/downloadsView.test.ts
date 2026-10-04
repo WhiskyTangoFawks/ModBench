@@ -66,7 +66,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { accessTo, adapterOver, STEADY_WINDOW } from '../../test/mo2/adapterOver';
 
-const downloadsViewDeps = (instanceRoot: string, instance: InstanceView): DownloadsViewDeps => ({
+const downloadsViewDeps = (instanceRoot: string, instance: InstanceView & Pick<Instance, 'refresh'>): DownloadsViewDeps => ({
   access: accessTo(instanceRoot), instance, reporter: recordingReporter(),
   ask: () => Promise.resolve(undefined), trash: () => Promise.resolve(),
   install: { nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => undefined, log: () => undefined },

@@ -392,7 +392,25 @@ describe('modbench.mod.sync syncs the instance value it is handed', () => {
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 
-async function readsAskedByTheNextTurn(instance: { refresh(): Promise<void> }, command: string): Promise<number> {
+async function enableOrDisableCommandsRunByTheNextTurn(command: string): Promise<string[]> {
+  const run: string[] = [];
+  const execute = vscode.commands.executeCommand;
+  assert.ok(Reflect.set(vscode.commands, 'executeCommand', (id: string, ...args: unknown[]) => {
+    run.push(id);
+    return execute(id, ...args);
+  }), 'the probe replaced executeCommand');
+  try {
+    await vscode.commands.executeCommand('list.focusFirst');
+    assert.deepStrictEqual(run.splice(0), ['list.focusFirst'], 'the probe sees a call through executeCommand');
+    await vscode.commands.executeCommand(command);
+    await new Promise((turn) => setImmediate(turn));
+  } finally {
+    Reflect.set(vscode.commands, 'executeCommand', execute);
+  }
+  return run.filter((id) => /^modbench\.(mod|plugin)\.(enable|disable)$/.test(id));
+}
+
+async function refreshesWithin(instance: { refresh(): Promise<void> }, command: string, ms: number): Promise<number> {
   let reads = 0;
   const refresh = instance.refresh.bind(instance);
   instance.refresh = () => {
@@ -401,7 +419,7 @@ async function readsAskedByTheNextTurn(instance: { refresh(): Promise<void> }, c
   };
   try {
     await vscode.commands.executeCommand(command);
-    await new Promise((turn) => setImmediate(turn));
+    await new Promise((window) => setTimeout(window, ms));
   } finally {
     instance.refresh = refresh;
   }
@@ -929,8 +947,7 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
   it('VS Code\'s own Space on a focused mod row leaves its check box alone', async function () {
     if (!root) this.skip();
     await enabledAndSelected();
-    const instance = present(instanceExport(), "the activated extension's instance export");
-    assert.strictEqual(await readsAskedByTheNextTurn(instance, 'list.toggleExpand'), 0);
+    assert.deepStrictEqual(await enableOrDisableCommandsRunByTheNextTurn('list.toggleExpand'), []);
   });
 
   it('copies the selection of the view last selected in when Copy Value is run from the palette', async function () {
@@ -1002,7 +1019,7 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
     if (!root) this.skip();
     await focusRow(0);
     const instance = present(instanceExport(), "the activated extension's instance export");
-    assert.strictEqual(await readsAskedByTheNextTurn(instance, 'list.toggleExpand'), 0);
+    assert.strictEqual(await refreshesWithin(instance, 'list.toggleExpand', 750), 0);
   });
 
   it('Space disables the selected plugin', async function () {
