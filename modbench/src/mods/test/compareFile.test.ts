@@ -35,7 +35,7 @@ async function setup(overwrite = false) {
   const invoke = (...args: unknown[]) => Promise.resolve(registerCommand.mock.calls.find((c) => c[0] === 'modbench.mod.compareFile')?.[1](...args));
   const cell = (modName: string, path = PATH) => ({ webviewSection: 'conflictCell', origin: { kind: 'mod', name: modName }, path, preventDefaultContextMenuItems: true });
   const row = (modName: string, listed: OriginFile) => {
-    const node = new FileNode(new ModNode({ kind: 'mod', name: modName, enabled: true }), modOrigin(modName), listed, 'a.dds', true);
+    const node = new FileNode(new ModNode({ kind: 'mod', name: modName, enabled: true }), modOrigin(modName), listed, 'a.dds', 'wins');
     selection = [node];
     return node;
   };

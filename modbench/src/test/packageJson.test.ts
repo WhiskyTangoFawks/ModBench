@@ -22,6 +22,8 @@ vi.mock('vscode', () => ({
 }));
 
 import { ModNode, NO_MODS_MESSAGE, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
+import { CELL_VALUE_SETTING } from '../mods/conflictTableEditor';
+import { CONFLICT_CELL_VALUES } from '../wire/conflictTable';
 import { MODS_KEY_ARGS } from '../mods/gestureEntry';
 import { PLUGINS_KEY_ARGS } from '../plugins/gestureEntry';
 import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
@@ -37,7 +39,7 @@ interface MenuEntry { command: string; when: string; group?: string; icon?: stri
 interface CommandEntry { command: string; title: string; category: string; icon?: string; }
 interface KeybindingEntry { command: string; key: string; when: string; mac?: string; args?: unknown; }
 interface ViewsContainerEntry { id: string; }
-interface SettingEntry { description?: string; type?: unknown; default?: unknown; }
+interface SettingEntry { description?: string; type?: unknown; default?: unknown; enum?: unknown; }
 interface ColorEntry { id: string; }
 
 interface PackageManifest {
@@ -474,6 +476,14 @@ describe('package.json title-bar rubric', () => {
     const sidebar = sidebarIds.map((v) => v.id);
     expect(sidebar).toContain('modbench.modList');
     expect(sidebar).toContain('modbench.pluginListTree');
+  });
+});
+
+describe('package.json contributes the conflict table\'s cell value as a setting (mods-conflicts.md, Cells)', () => {
+  it('a choice of the values the table can show, the size by default', () => {
+    expect(pkg.contributes.configuration.properties[CELL_VALUE_SETTING]).toMatchObject({
+      type: 'string', enum: [...CONFLICT_CELL_VALUES], default: 'size',
+    });
   });
 });
 
