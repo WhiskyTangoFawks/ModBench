@@ -134,6 +134,39 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Equal(["NpcA", "NpcB", "NpcOther"], ListedNpcs(index).Order());
     }
 
+    [ForeignIndexHolderFact]
+    public void AFilterKeptThroughARefusedRebuild_StillClears()
+    {
+        using var otherWindow = new HoldsTheFileOnceTheRebuildClosesTheStore(() => IndexFiles.In(_fixture.InstanceRoot));
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, notifications: otherWindow);
+        index.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        index.SetFilter(MatchesNpcA, "npc-a.sql");
+        otherWindow.Armed = true;
+
+        var rebuild = index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
+        Assert.NotNull(rebuild.Refusal);
+        Assert.NotNull(index.ActiveFilter);
+        index.ClearFilter();
+
+        Assert.Null(index.ActiveFilter);
+    }
+
+    private sealed class HoldsTheFileOnceTheRebuildClosesTheStore(Func<string> indexPath) : INotificationPublisher, IDisposable
+    {
+        private ForeignIndexHolder? _holder;
+
+        public bool Armed { get; set; }
+
+        public void Publish(Notification notification)
+        {
+            if (Armed && _holder is null && notification is LoadOrderStatusNotification)
+                _holder = ForeignIndexHolder.Hold(indexPath());
+        }
+
+        public void Dispose() => _holder?.Dispose();
+    }
+
     [Fact]
     public async Task Rebuild_WithNoLoadOrderHeld_LeavesTheStoreEmpty_AndReportsNothing()
     {

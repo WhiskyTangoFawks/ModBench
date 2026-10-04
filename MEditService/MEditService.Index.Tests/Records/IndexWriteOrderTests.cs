@@ -29,7 +29,7 @@ public sealed class IndexWriteOrderTests : IDisposable
     {
         PluginBinaries.Touch(Plugin.Path);
         _adapter.ParkNextOpenOf(PluginName);
-        var revalidation = Task.Run(_index.NextSnapshotUnsettled);
+        var revalidation = Task.Run(_index.NextSnapshot);
         await _adapter.WaitUntilParkedAsync();
         return revalidation;
     }

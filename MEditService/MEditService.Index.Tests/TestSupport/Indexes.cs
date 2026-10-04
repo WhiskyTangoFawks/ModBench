@@ -89,8 +89,8 @@ internal static class Indexes
         index.Settled();
     }
 
-    /// <summary>As <see cref="NextSnapshotUntil"/>, for a test that holds a filter whose write is
-    /// still to land, or whose re-application fails: passing the gate would change what it asserts.
+    /// <summary>The arrival, answered once <paramref name="announced"/> holds and its status is out:
+    /// no pass through the write gate, which would re-apply the filter a test may be asserting on.
     /// </summary>
     internal static void NextSnapshotUnsettledUntil(this OpenedIndex index, Func<bool> announced, string what)
     {
@@ -100,14 +100,8 @@ internal static class Indexes
     }
 
     /// <summary>The held load order arriving again, answered once the rows it changed are announced
-    /// as the sequence moving.</summary>
+    /// as the sequence moving, which a projection does after it has re-applied the filter.</summary>
     internal static void NextSnapshot(this OpenedIndex index)
-    {
-        var before = index.Sequence;
-        index.NextSnapshotUntil(() => index.Sequence > before, "the sequence moving");
-    }
-
-    internal static void NextSnapshotUnsettled(this OpenedIndex index)
     {
         var before = index.Sequence;
         index.NextSnapshotUnsettledUntil(() => index.Sequence > before, "the sequence moving");
