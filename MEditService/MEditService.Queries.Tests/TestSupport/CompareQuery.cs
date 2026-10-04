@@ -8,9 +8,12 @@ namespace MEditService.Queries.Tests.TestSupport;
 
 /// <summary>The compare query over one record's override stack, hand-built from the copies a test
 /// names: conflict classification as the query answers it.</summary>
+internal sealed record Classified(
+    ConflictAll ConflictAll, IReadOnlyDictionary<string, ConflictThis> PluginStates, IReadOnlyList<FieldDiff> Diffs);
+
 internal static class CompareQuery
 {
-    internal static ClassifyResult Classify(IReadOnlyList<RecordDetail> records,
+    internal static Classified Classify(IReadOnlyList<RecordDetail> records,
         ILogger<RecordQueryService>? logger = null,
         IReadOnlyDictionary<string, RecordLookupEntry>? resolvable = null)
     {
@@ -23,12 +26,12 @@ internal static class CompareQuery
             PluginAddress.Comparer);
         var entries = records.Select(r => new LoadOrderEntry(r.Plugin, r.Plugin, r.Origin, r.LoadOrderIndex, Enabled: true, Winning: r.IsWinner)).ToArray();
         var service = new RecordQueryService(
-            new FakeIndex(new FakeReads(opened, rows) { Lookups = resolvable ?? new Dictionary<string, RecordLookupEntry>() }), FakeLoadOrder.Of(GameRelease.Fallout4, entries), SharedSchemaReflector.Instance, logger);
+            new FakeIndex(new FakeReads(opened, rows) { Lookups = resolvable }), FakeLoadOrder.Of(GameRelease.Fallout4, entries), SharedSchemaReflector.Instance, logger);
 
         var compare = service.GetCompare(records[0].FormKey)
             ?? throw new InvalidOperationException($"Expected {records[0].FormKey} to resolve to a compare result.");
         var states = compare.Overrides.Where(o => o.ConflictThis.HasValue)
             .ToDictionary(o => ColumnKey.Of(o.Plugin, o.Origin), o => o.ConflictThis.GetValueOrDefault());
-        return new ClassifyResult(compare.ConflictAll, states, compare.Diffs);
+        return new Classified(compare.ConflictAll, states, compare.Diffs);
     }
 }

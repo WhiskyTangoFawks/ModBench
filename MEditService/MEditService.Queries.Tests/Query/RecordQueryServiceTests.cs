@@ -350,7 +350,7 @@ public sealed class RecordQueryServiceTests
         var compare = _svc.GetCompare(_npc01Key.ToString());
 
         Assert.NotNull(compare);
-        Assert.Single(compare.Overrides);
+        Assert.Equal(ConflictThis.OnlyOne, Assert.Single(compare.Overrides).ConflictThis);
         Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
         Assert.NotEmpty(compare.Diffs);
     }

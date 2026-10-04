@@ -59,10 +59,10 @@ internal sealed class FakeReads(
     public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin) =>
         RecordTypeCountsByPlugin.GetValueOrDefault(plugin, []);
 
-    public IReadOnlyDictionary<string, RecordLookupEntry> Lookups { get; set; } = new Dictionary<string, RecordLookupEntry>();
+    public IReadOnlyDictionary<string, RecordLookupEntry>? Lookups { get; init; }
 
     public RecordLookupEntry? Resolve(string formKey) =>
-        Lookups.TryGetValue(formKey, out var entry) ? entry :
+        Lookups is not null && Lookups.TryGetValue(formKey, out var entry) ? entry :
         rows.FirstOrDefault(r => r.Document.FormKey == formKey && r.IsWinner) is { Document: { } d } ? new(d.RecordType, d.EditorId) : null;
 
     public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey) =>
