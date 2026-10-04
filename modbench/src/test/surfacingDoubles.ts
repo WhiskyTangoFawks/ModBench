@@ -11,7 +11,7 @@ export interface RecordedSelectionOutcomeCall { message: string; outcome: Select
 export interface RecordingReporter extends Reporter {
   readonly reports: RecordedReport[];
   readonly landings: string[];
-  readonly dialogFailures: RecordedReport[];
+  readonly shownFailures: RecordedReport[];
   readonly selectionOutcomeCalls: RecordedSelectionOutcomeCall[];
 }
 
@@ -20,17 +20,17 @@ export interface RecordingReporter extends Reporter {
 export function recordingReporter(): RecordingReporter {
   const reports: RecordedReport[] = [];
   const landings: string[] = [];
-  const dialogFailures: RecordedReport[] = [];
+  const shownFailures: RecordedReport[] = [];
   const selectionOutcomeCalls: RecordedSelectionOutcomeCall[] = [];
   const report: Reporter['report'] = (severity, message, detail) => { reports.push({ severity, message, detail }); };
   return {
     reports,
     landings,
-    dialogFailures,
+    shownFailures,
     selectionOutcomeCalls,
     report,
     landed: (message) => { landings.push(message); },
-    insideDialog: (severity, message, detail) => { dialogFailures.push({ severity, message, detail }); },
+    shownOnSurface: (severity, message, detail) => { shownFailures.push({ severity, message, detail }); },
     selectionOutcome: (message, outcome, nameOf) => {
       selectionOutcomeCalls.push({ message, outcome });
       reportSelectionOutcome(report, message, outcome, nameOf);

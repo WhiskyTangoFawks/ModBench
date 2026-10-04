@@ -85,9 +85,9 @@ describe('pickRecord', () => {
   }
 
   function fakeDeps(searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 })) {
-    const insideDialog = vi.fn();
-    const deps: RecordPickerDeps = { meditClient: { searchRecords }, reporter: { insideDialog } };
-    return { deps, searchRecords, insideDialog };
+    const shownOnSurface = vi.fn();
+    const deps: RecordPickerDeps = { meditClient: { searchRecords }, reporter: { shownOnSurface } };
+    return { deps, searchRecords, shownOnSurface };
   }
 
   afterEach(() => { vi.useRealTimers(); });
@@ -256,7 +256,7 @@ describe('pickRecord', () => {
   });
 
   it('says a failed search in the picker itself and logs it, without picking anything', async () => {
-    const { deps, insideDialog } = fakeDeps(vi.fn().mockRejectedValue(new Error('connection refused')));
+    const { deps, shownOnSurface } = fakeDeps(vi.fn().mockRejectedValue(new Error('connection refused')));
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
@@ -264,7 +264,7 @@ describe('pickRecord', () => {
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
 
     expect(qp.items).toEqual([expect.objectContaining({ label: '$(error) The search failed', detail: 'connection refused' })]);
-    expect(insideDialog).toHaveBeenCalledWith('error', 'The record search failed.', 'connection refused');
+    expect(shownOnSurface).toHaveBeenCalledWith('error', 'The record search failed.', 'connection refused');
     expect(qp.busy).toBe(false);
 
     qp.hide();

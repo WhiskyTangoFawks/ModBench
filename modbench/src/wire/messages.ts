@@ -43,6 +43,9 @@ export const WEBVIEW_TO_EXTENSION = {
 
 export type LogLevel = 'debug' | 'info' | 'warn';
 
+export type ConflictThis = components['schemas']['ConflictThis'];
+export type ConflictAll = components['schemas']['ConflictAll'];
+
 
 export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.LOG; level: LogLevel; message: string }
