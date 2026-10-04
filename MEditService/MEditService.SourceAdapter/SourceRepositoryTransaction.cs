@@ -28,8 +28,6 @@ public enum UnrestoredReason
 public sealed record UnrestoredPath(
     string RelativePath, string FullPath, UnrestoredReason Reason, string? Error = null);
 
-/// <summary>Rollback's own filesystem primitives (ADR-0003): nested so undoing a mint or a move reaches
-/// the same private machinery the put or move it undoes used, rather than a second copy of it.</summary>
 public sealed partial class SourceRepository
 {
     /// <summary>A batch of puts, removes and moves, each by identity, across one or more repositories,
@@ -47,14 +45,14 @@ public sealed partial class SourceRepository
             // Refused before the tree is touched, as a container's removal is: putting a record no
             // document holds would have the repository decide its place and mint the levels above it,
             // which one document's bytes cannot take back.
-            if (repository.LocateToPlace(plugin, identity) is not { } unit) throw NotRestorableCreate(plugin, identity);
+            if (repository.Locator.LocateToPlace(plugin, identity) is not { } unit) throw NotRestorableCreate(plugin, identity);
 
             // Refused before the tree is touched: the move a changed EditorID makes is a path this
             // batch holds no bytes for.
-            if (ChangesEditorId(unit, document)) throw NotRestorableRename(unit, identity);
+            if (SourceRepositoryWrites.ChangesEditorId(unit, document)) throw NotRestorableRename(unit, identity);
 
             var before = Snapshot(unit.FullPath);
-            var minted = LevelsMintedBy(PathShape.DirectoryOf(unit.FullPath));
+            var minted = SourceRepositoryLayout.LevelsMintedBy(PathShape.DirectoryOf(unit.FullPath));
             try
             {
                 repository.Put(plugin, document);
@@ -72,21 +70,21 @@ public sealed partial class SourceRepository
         public void Put(SourceRepository repository, PluginAddress plugin, SourceDocument document, CellPlacement placement)
         {
             var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
-            if (repository.LocateToPlace(plugin, identity) is not null)
+            if (repository.Locator.LocateToPlace(plugin, identity) is not null)
             {
                 Put(repository, plugin, document);
                 return;
             }
 
-            var (block, subBlock, cell) = repository.ExteriorCellLevels(plugin, identity, placement);
+            var (block, subBlock, cell) = repository.Layout.ExteriorCellLevels(plugin, identity, placement);
             string[] files =
             [
-                Path.Combine(block, GroupRecordDataFileName),
-                Path.Combine(subBlock, GroupRecordDataFileName),
-                Path.Combine(cell, RecordDataFileName),
+                Path.Combine(block, SourceRepositoryLayout.GroupRecordDataFileName),
+                Path.Combine(subBlock, SourceRepositoryLayout.GroupRecordDataFileName),
+                Path.Combine(cell, SourceRepositoryLayout.RecordDataFileName),
             ];
             var before = files.Select(Snapshot).ToList();
-            var minted = LevelsMintedBy(cell);
+            var minted = SourceRepositoryLayout.LevelsMintedBy(cell);
             try
             {
                 repository.Put(plugin, document, placement);
@@ -102,14 +100,14 @@ public sealed partial class SourceRepository
         /// <summary><see cref="SourceRepository.PutInWorldspace"/>, holding what the put writes so the rollback
         /// takes a new cell away again.</summary>
         public void PutInWorldspace(SourceRepository repository, PluginAddress plugin, SourceDocument cell, string worldspace) =>
-            Put(repository, plugin, cell, SourceRepository.PlacementIn(worldspace, cell));
+            Put(repository, plugin, cell, SourceRepositoryWrites.PlacementIn(worldspace, cell));
 
         /// <summary>Takes one repository's record out of the tree, holding the document's bytes so the
         /// rollback puts it back. The pre-image is that one document, so a shape whose removal takes more
         /// than it is refused.</summary>
         public SourceRemoval Remove(SourceRepository repository, PluginAddress plugin, RecordIdentity identity)
         {
-            if (repository.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
+            if (repository.Locator.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
 
             // Refused before the tree is touched: a container's removal takes its whole directory, block
             // subtree and all, and one document's bytes cannot put that back (commands.md, A failed
@@ -167,7 +165,7 @@ public sealed partial class SourceRepository
         /// no-op — nothing found, not a container, or already at that leaf — logs nothing.</summary>
         public void Move(SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey)
         {
-            if (repository.Move(plugin, identity, newFormKey) is not { } moved) return;
+            if (repository.Writes.Move(plugin, identity, newFormKey) is not { } moved) return;
             _log.Add(new EntryMove(repository.ModFolder, moved.From, moved.To));
         }
 
@@ -177,7 +175,7 @@ public sealed partial class SourceRepository
             SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey,
             IReadOnlyDictionary<string, RecordTableSchema> schemas, DocumentRekey rekey)
         {
-            var rekeyed = repository.RekeyedDocument(plugin, identity, newFormKey, schemas, rekey);
+            var rekeyed = repository.Writes.RekeyedDocument(plugin, identity, newFormKey, schemas, rekey);
             Move(repository, plugin, identity, newFormKey);
             Put(repository, plugin, rekeyed);
             if (Remove(repository, plugin, identity) == SourceRemoval.OwnerDoesNotCarryIt)
@@ -201,7 +199,7 @@ public sealed partial class SourceRepository
                         RestoreMove(move, unrestored);
                         break;
                     case MintedDirectories mint:
-                        RemoveMintedLevels(mint.Levels);
+                        SourceRepositoryLayout.RemoveMintedLevels(mint.Levels);
                         break;
                 }
             }
@@ -281,7 +279,7 @@ public sealed partial class SourceRepository
 
             try
             {
-                MoveEntry(move.To, move.From);
+                SourceRepositoryLayout.MoveEntry(move.To, move.From);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -15,14 +13,27 @@ public sealed partial class SourceRepository
 {
     private readonly string _modFolder;
     private readonly GameRelease _release;
+    private readonly SourceRepositoryGit _git;
 
     /// <summary>The folder this repository is over, for a caller naming a path relative to it.</summary>
     public string ModFolder => _modFolder;
 
+    internal SourceRepositoryLocator Locator { get; }
+
+    internal SourceRepositoryLayout Layout { get; }
+
+    internal SourceRepositoryWrites Writes { get; }
+
     // Private so a repository comes from one of the two named doors, each stating what it observed:
     // Open, which found a tracked folder, or Over, which established that or did not need it.
-    private SourceRepository(string modFolder, GameRelease release) =>
+    private SourceRepository(string modFolder, GameRelease release)
+    {
         (_modFolder, _release) = (modFolder, release);
+        _git = new SourceRepositoryGit(modFolder);
+        Locator = new SourceRepositoryLocator(modFolder, release);
+        Layout = new SourceRepositoryLayout(modFolder, release, Locator);
+        Writes = new SourceRepositoryWrites(modFolder, release, Locator, Layout, _git);
+    }
 
     /// <summary>The repository over <paramref name="modFolder"/>, or null when the folder is not
     /// tracked and so has no source tree to answer from. <paramref name="release"/> is the game
@@ -36,58 +47,68 @@ public sealed partial class SourceRepository
     public static SourceRepository Over(string root, GameRelease release) => new(root, release);
 
     /// <summary>True exactly when <paramref name="modFolder"/> holds a repository whose <c>main</c>
-    /// exists. A <c>.git</c> with no <c>main</c> is Track's own, half made, or
-    /// <see cref="HoldsAnotherRepository"/>.</summary>
-    public static bool IsTracked(string modFolder)
-    {
-        var gitDir = Path.Combine(modFolder, ".git");
-        return Directory.Exists(gitDir) && HasMainBranch(gitDir);
-    }
+    /// exists.</summary>
+    public static bool IsTracked(string modFolder) => SourceRepositoryGit.IsTracked(modFolder);
 
     /// <summary>A repository with history but no <c>main</c>: someone else's, which Track never
-    /// writes to (ADR-0003). A <c>.git</c> with no branch at all is Track's own, half made.</summary>
-    public static bool HoldsAnotherRepository(string modFolder)
-    {
-        var gitDir = Path.Combine(modFolder, ".git");
-        return Directory.Exists(gitDir) && !HasMainBranch(gitDir) && HasAnyBranch(gitDir);
-    }
-
-    // Read off the ref store's files, not by running git: every read of a tracked plugin asks this.
-    // A branch is a loose ref file until git packs it into packed-refs.
-    private static bool HasMainBranch(string gitDir) =>
-        File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedBranches(gitDir).Contains("main");
-
-    private static bool HasAnyBranch(string gitDir)
-    {
-        var heads = Path.Combine(gitDir, "refs", "heads");
-        // A .lock file is a ref being written, never a ref.
-        return (Directory.Exists(heads) && Directory.EnumerateFiles(heads, "*", SearchOption.AllDirectories).Any(file => !file.EndsWith(".lock", StringComparison.Ordinal)))
-            || PackedBranches(gitDir).Count > 0;
-    }
-
-    private static HashSet<string> PackedBranches(string gitDir)
-    {
-        const string prefix = " refs/heads/";
-        var packedRefs = Path.Combine(gitDir, "packed-refs");
-        if (!File.Exists(packedRefs)) return [];
-        return [.. File.ReadLines(packedRefs)
-            .Select(line => line.IndexOf(prefix, StringComparison.Ordinal) is var at and >= 0 ? line[(at + prefix.Length)..] : null)
-            .OfType<string>()];
-    }
+    /// writes to (ADR-0003).</summary>
+    public static bool HoldsAnotherRepository(string modFolder) => SourceRepositoryGit.HoldsAnotherRepository(modFolder);
 
     /// <summary>The mod folder only when it is tracked — the single condition under which a plugin
     /// has source text at all.</summary>
     public static string? TrackedModFolderOf(LoadOrderSnapshot loadOrder, PluginAddress plugin) =>
         loadOrder.ModFolderOf(plugin) is { } modFolder && IsTracked(modFolder) ? modFolder : null;
 
+    /// <summary>Whether this folder holds source for the plugin at all: tracked, and a tree written for
+    /// this one. A tracked mod folder holds a tree per plugin, and may hold none for a given
+    /// plugin.</summary>
+    public static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
+        IsTracked(modFolder) && Directory.Exists(SourceRepositoryLayout.RootIn(modFolder, pluginFileName));
+
+    /// <summary><c>plugin-source/&lt;pluginFileName&gt;</c>, relative to the mod folder.</summary>
+    public static string RootFor(string pluginFileName) => SourceRepositoryLayout.RootFor(pluginFileName);
+
+    /// <summary>The folder holding <paramref name="pluginFileName"/>'s documents. It need not exist:
+    /// an untracked mod has none until Track writes one.</summary>
+    public static string RootIn(string modFolder, string pluginFileName) =>
+        SourceRepositoryLayout.RootIn(modFolder, pluginFileName);
+
+    /// <summary>The plugin header's own document, relative to the mod folder.</summary>
+    public static string HeaderDocumentFor(string pluginFileName) => SourceRepositoryLayout.HeaderDocumentFor(pluginFileName);
+
+    /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and a
+    /// re-baseline commit.</summary>
+    public static IReadOnlyList<TreeFile> PristineFilesOf(string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
+        SourceRepositoryLayout.PristineFilesOf(pluginFileName, treeFiles);
+
+    /// <summary>Throws <see cref="GitUnavailableException"/> when git cannot be run, so no repository
+    /// can be made or written here.</summary>
+    public static void EnsureTrackable() => SourceRepositoryGit.EnsureOnPath();
+
+    /// <summary>A repository for a mod that has none: <c>Track &lt;mod&gt;</c>, then one baseline commit
+    /// per plugin on <c>main</c>, which stays checked out. Answers each plugin whose commit
+    /// failed.</summary>
+    public static IReadOnlyList<(string Plugin, string Reason)> Track(
+        string modFolder, SourcePreset preset,
+        IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines) =>
+        GitTracking.Track(modFolder, preset, baselines);
+
+    /// <summary>A scratch folder for <paramref name="pluginFileName"/>, outside every mod folder so
+    /// a half-written plugin is never mistaken for a tracked one.</summary>
+    public static ScratchPlugin ScratchFor(string pluginFileName) => ScratchPlugin.For(pluginFileName);
+
+    /// <summary>The stamp of one document's text, as the UTF-8 the index stores it in: every side hashes
+    /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the index.</summary>
+    public static string ContentStamp(string text) => TreeStamps.ContentStamp(text);
+
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
     /// asked; the body is the tree's answer, spliced out of another record's document when that is
     /// what carries it.</summary>
     public SourceDocument? Get(PluginAddress plugin, RecordIdentity identity)
     {
-        if (Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
+        if (Locator.Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
 
-        var body = RecordBodyFromOwnerBytes(File.ReadAllBytes(unit.FullPath), unit, identity.FormKey, _release);
+        var body = DocumentText.RecordBodyFromOwnerBytes(File.ReadAllBytes(unit.FullPath), unit, identity.FormKey, _release);
         return body == null ? null : new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body);
     }
 
@@ -96,379 +117,172 @@ public sealed partial class SourceRepository
     public SourceDocument? Get(
         PluginAddress plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        if (IdentityOf(plugin, formKey, schemas) is { } identity) return Get(plugin, identity);
-        return UnreadableDocumentFor(plugin, formKey) is { } why
+        if (Locator.IdentityOf(plugin, formKey, schemas) is { } identity) return Get(plugin, identity);
+        return Locator.UnreadableDocumentFor(plugin, formKey) is { } why
             ? throw new UnreadableSourceDocumentException($"{plugin.Name}'s document for {formKey} is no record document: {why}")
             : null;
     }
 
+    /// <summary>The unit holding <paramref name="identity"/>, as the document it is and the facts about
+    /// it. Null when no document in the tree holds it, which is a refusal to the caller.</summary>
+    public HoldingUnit? UnitHolding(PluginAddress plugin, RecordIdentity identity) =>
+        Locator.Locate(plugin, identity) is { } unit
+            ? new HoldingUnit(
+                unit.RelativePath, unit.IsEmbedded, unit.OwnerFormKey, unit.OwnerRecordType,
+                unit.IsDirectoryPerRecord)
+            : null;
+
+    /// <summary>Which record the tree holds at <paramref name="formKey"/> — one with a document of
+    /// its own, an embedded child, or the header — or null when nothing carries it.</summary>
+    public RecordIdentity? IdentityOf(
+        PluginAddress plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        Locator.IdentityOf(plugin, formKey, schemas);
+
+    /// <summary>The reader's own words for a document whose name carries <paramref name="formKey"/>
+    /// and whose text is not one; null when the tree names no such document.</summary>
+    public string? UnreadableDocumentFor(PluginAddress plugin, string formKey) =>
+        Locator.UnreadableDocumentFor(plugin, formKey);
+
+    /// <summary>The document carrying <paramref name="identity"/>: its own, else its container's. Null
+    /// when no document holds it. Throws <see cref="UnreadableSourceDocumentException"/> when the
+    /// document carrying it names no record.</summary>
+    public SourceDocument? ContainerDocument(
+        PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        Locator.ContainerDocument(plugin, identity, schemas);
+
+    /// <summary>The record that carries <paramref name="identity"/> inline, and the slot it sits in; null
+    /// for a record with a document of its own.</summary>
+    public DocumentContainment? ContainerOf(
+        PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        Locator.ContainerOf(plugin, identity, schemas);
+
+    /// <summary>The document holding <paramref name="identity"/>, relative to the mod folder — a
+    /// diagnostic's path for the Problems panel. Null when nothing there holds it.</summary>
+    public string? RelativePathOf(PluginAddress plugin, RecordIdentity identity) =>
+        Locator.Locate(plugin, identity)?.RelativePath;
+
+    /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
+    /// holds it. A worldspace document declaring no FormKey throws.</summary>
+    public CellPlacement? CellPlacementOf(PluginAddress plugin, RecordIdentity identity) =>
+        Locator.CellPlacementOf(plugin, identity);
+
+    /// <summary>The worldspace carrying the cell <paramref name="identity"/> names; null for an interior
+    /// cell or one the plugin does not hold. A cell filed under neither refuses with the reader's words.</summary>
+    public string? WorldspaceOf(PluginAddress plugin, RecordIdentity identity)
+    {
+        if (Locator.Locate(plugin, identity) is null) return null;
+        if (Locator.CellPlacementOf(plugin, identity) is { } placement) return placement.ParentWorldspace;
+
+        throw new UnreadableSourceDocumentException(
+            $"{identity.FormKey} sits under neither a cell group nor a worldspace's blocks, so the tree names no worldspace for it.");
+    }
+
+    /// <summary>The exterior cell this plugin's tree holds at grid (<paramref name="x"/>,
+    /// <paramref name="y"/>) of <paramref name="worldspace"/>, or null when it holds none there.</summary>
+    public SourceDocument? GetCellAt(
+        PluginAddress plugin, string worldspace, int x, int y, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        Locator.CellFormKeyAt(plugin, worldspace, x, y) is { } formKey ? Get(plugin, formKey, schemas) : null;
+
+    /// <summary>Every document one plugin's tree holds right now, each as the record at its root. An
+    /// embedded child belongs to its owner's document; <see cref="Get(PluginAddress, RecordIdentity)"/> answers with the child's own
+    /// text.</summary>
+    public IReadOnlyList<SourceDocument> ReadAll(PluginAddress plugin) => Locator.ReadAll(plugin);
+
+    /// <summary>Every EditorID the plugin's tree holds now, a record with a document of its own and
+    /// an embedded child alike — what a derived EditorID is checked against to stay unique in the
+    /// destination.</summary>
+    public IReadOnlySet<string> EditorIdsHeld(PluginAddress plugin) =>
+        DocumentTokens.EditorIdsOf(Locator.ReadAll(plugin));
+
+    /// <summary>Every FormKey the plugin's source uses, committed or not: a record's own, an embedded
+    /// child's and the header's synthetic one. A deletion frees its key once committed.</summary>
+    public IReadOnlySet<string> FormKeysUsed(PluginAddress plugin) =>
+        DocumentTokens.FormKeysOf([.. Locator.ReadAll(plugin), .. ReadAllCommitted(plugin)], _release);
+
+    /// <summary>The plugin's tree as the documents it holds right now, each record's own. The caller
+    /// disposes it.</summary>
+    public IPluginDocuments OpenDocuments(
+        PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        new SourceTreeDocuments(_modFolder, plugin.Name, _release, schemas);
+
+    /// <summary>Every file one plugin's source tree holds in the working tree, relative to the mod
+    /// folder — the carrier Track hands in, handed back out. Empty when there is no source there.</summary>
+    public PluginSourceFiles FilesOf(PluginAddress plugin) => Locator.FilesOf(plugin);
+
+    /// <summary>Which of <paramref name="formKeys"/> more than one document claims. Asked of the
+    /// files, not of the compiled mod: the reader's FormKey-keyed RecordCache collapses two documents
+    /// in one group folder to the last read.</summary>
+    public IReadOnlyList<string> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys) =>
+        PluginSourceChecks.CollidingFormKeys(plugin.Name, Locator.FilesOf(plugin), formKeys);
+
+    /// <summary>Where the source and <paramref name="serialized"/>, the door's tree for the mod it
+    /// compiles to, first part ways; null when they match. An unreadable file outranks every other
+    /// answer.</summary>
+    public SourceDivergence? DivergenceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
+        PluginSourceChecks.DivergenceFrom(plugin.Name, Locator.FilesOf(plugin), serialized);
+
+    /// <summary>One listing of the plugin's tree. A file whose file-system stamp is unchanged and
+    /// settled is not read again. A FormKey two documents declare throws
+    /// <see cref="AmbiguousSourceUnitException"/>.</summary>
+    public RecordStamps StampsOf(PluginAddress plugin) => TreeStamps.StampsOf(_modFolder, plugin);
+
+    /// <summary>Every record the tree holds whose text differs from the last commit's, an embedded
+    /// child among them; a tree with no repository is all added. A failed read throws
+    /// <see cref="UnreadableSourceDocumentException"/>, never reads as a deletion.</summary>
+    public IReadOnlyDictionary<string, RecordChange> ChangedSinceLastCommit(
+        PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        LastCommitComparison.Of(_modFolder, _release, _git, Locator, plugin, schemas);
+
     /// <summary>Creates or replaces the record's document, placing an absent one from its identity
     /// alone and minting the levels above it. A record another document carries is replaced at its
     /// own slot, every other byte untouched.</summary>
-    public void Put(PluginAddress plugin, SourceDocument document) => Put(plugin, document, placement: null);
+    public void Put(PluginAddress plugin, SourceDocument document) => Writes.Put(plugin, document, placement: null);
 
     /// <summary>The put of an exterior cell, the one record whose directory sits inside another
     /// record's: <paramref name="placement"/> names the worldspace holding it and its block numbers.
     /// Every other record is placed from its identity alone.</summary>
-    public void Put(PluginAddress plugin, SourceDocument document, CellPlacement? placement)
-    {
-        var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
-        if (LocateToPlace(plugin, identity) is { } held) MoveToItsEditorId(held, document);
-        var unit = LocateToPlace(plugin, identity)
-                   ?? PlaceNewDocument(plugin, identity, placement)
-                   ?? throw NoPlaceInTheTree(plugin, identity);
-
-        if (unit.IsEmbedded)
-        {
-            var ownerBytes = OwnerBytes(unit);
-            if (EmbeddedChildIn(ownerBytes, unit, document.FormKey, _release) is not { } span)
-                throw NoLongerCarried(unit, document.FormKey);
-
-            WriteTextAtomic(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, document.Body));
-            Forget();
-            return;
-        }
-
-        InMintedDirectory(
-            PathShape.DirectoryOf(unit.FullPath), () => WriteTextAtomic(unit.FullPath, document.Body));
-        Forget();
-    }
+    public void Put(PluginAddress plugin, SourceDocument document, CellPlacement? placement) =>
+        Writes.Put(plugin, document, placement);
 
     /// <summary>The put of an exterior cell, which lands in the block its own grid falls in inside
     /// <paramref name="worldspace"/>'s directory. A cell the plugin already holds is replaced where it is.</summary>
     public void PutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
-        Put(plugin, cell, PlacementIn(worldspace, cell));
-
-    internal static CellPlacement PlacementIn(string worldspace, SourceDocument cell) =>
-        JsonNode.Parse(cell.Body) is JsonObject document && PlacedCell.Grid(document) is var (x, y)
-            ? CellPlacement.AtGrid(worldspace, x, y)
-            : throw new InvalidOperationException(
-                $"{cell.FormKey}'s document carries no grid, so it has no place in worldspace {worldspace}.");
+        Writes.Put(plugin, cell, SourceRepositoryWrites.PlacementIn(worldspace, cell));
 
     /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
     /// record's document. Already gone is the state asked for; the other two outcomes say what
     /// stopped it.</summary>
-    public SourceRemoval Remove(PluginAddress plugin, RecordIdentity identity)
-    {
-        if (Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
-
-        if (unit.IsEmbedded)
-        {
-            var ownerBytes = OwnerBytes(unit);
-            if (EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) is not { } span)
-                return SourceRemoval.OwnerDoesNotCarryIt;
-
-            WriteTextAtomic(unit.FullPath, EmbeddedChildSplice.Cut(ownerBytes, span));
-            Forget();
-            return SourceRemoval.Removed;
-        }
-
-        if (unit.IsDirectoryPerRecord)
-        {
-            var directory = PathShape.DirectoryOf(unit.FullPath);
-            if (Directory.Exists(directory)) DeleteWholeOrNotAtAll(directory);
-            Forget();
-            return SourceRemoval.Removed;
-        }
-
-        if (File.Exists(unit.FullPath)) File.Delete(unit.FullPath);
-        Forget();
-        return SourceRemoval.Removed;
-    }
-
-    // A failed recursive delete goes on past the entry it could not take, so it stops partway. The
-    // pre-image puts back what went; a file still standing is left alone, as this delete never wrote it.
-    private void DeleteWholeOrNotAtAll(string directory)
-    {
-        var before = PreImageOf(directory);
-        try
-        {
-            Directory.Delete(directory, recursive: true);
-        }
-        catch (Exception cause) when (cause is IOException or UnauthorizedAccessException)
-        {
-            var unrestored = PutBack(before);
-            if (unrestored.Count == 0) throw;
-            throw new IOException(
-                $"{cause.Message} Everything it removed is back except: {string.Join(" ", unrestored)}", cause);
-        }
-    }
+    public SourceRemoval Remove(PluginAddress plugin, RecordIdentity identity) => Writes.Remove(plugin, identity);
 
     /// <summary>The plugin's source in the working tree becomes <paramref name="files"/>, and the
     /// last-compile ref names only the binary they were read from. A failure leaves both as they
     /// were.</summary>
-    public void ReplaceSourceFrom(string pluginFileName, IReadOnlyList<TreeFile> files, string binarySha256)
-    {
-        // A mod folder another tool removed is not written back into being.
-        if (!IsTracked(_modFolder))
-            throw new InvalidOperationException($"'{_modFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
-
-        var root = RootIn(_modFolder, pluginFileName);
-        var before = Directory.Exists(root) ? PreImageOf(root) : new PreImage([], []);
-        try
-        {
-            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
-            PristineFileWriter.WriteAll(files, _modFolder);
-            ParkDecompiled(pluginFileName, binarySha256);
-        }
-        catch (Exception cause) when (cause is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            var unrestored = new List<string>();
-            TryPutBack(root, () => { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }, unrestored);
-            unrestored.AddRange(PutBack(before));
-            if (unrestored.Count == 0) throw;
-            throw new IOException(
-                $"{cause.Message} Its source is back as it was except: {string.Join(" ", unrestored)}", cause);
-        }
-        finally
-        {
-            Forget();
-        }
-    }
-
-    // What the working tree now holds was made from this binary, as a landed compile's is. The
-    // snapshot takes the plugin's whole source, which git may not track yet.
-    private void ParkDecompiled(string plugin, string binarySha256)
-    {
-        var gitDir = Path.Combine(_modFolder, ".git");
-        var headSha = GitCli.Run(gitDir, _modFolder, "rev-parse", "HEAD").Trim();
-        var tree = WorkingTreeSnapshotTree(gitDir, _modFolder, LiteralPathspec(RootFor(plugin)));
-        Repark(gitDir, _modFolder, "Decompile", plugin, tree, headSha, [$"{BinaryTrailer}: {binarySha256}"]);
-    }
-
-    private sealed record PreImage(List<string> Directories, List<(string Path, byte[] Bytes)> Files);
-
-    private static PreImage PreImageOf(string directory) => new(
-        [.. Directory.GetDirectories(directory, "*", SearchOption.AllDirectories)
-            .Prepend(directory)
-            .Order(StringComparer.Ordinal)],
-        [.. Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
-            .Order(StringComparer.Ordinal)
-            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))]);
-
-    // One path that cannot be written never stops the pass, and every other one is still put back
-    // (ADR-0019).
-    private List<string> PutBack(PreImage before)
-    {
-        var unrestored = new List<string>();
-        foreach (var level in before.Directories)
-        {
-            TryPutBack(level, () => Directory.CreateDirectory(level), unrestored);
-        }
-        foreach (var (path, bytes) in before.Files.Where(file => !File.Exists(file.Path)))
-        {
-            TryPutBack(path, () => File.WriteAllBytes(path, bytes), unrestored);
-        }
-        return unrestored;
-    }
-
-    private void TryPutBack(string path, Action write, List<string> unrestored)
-    {
-        try
-        {
-            write();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            unrestored.Add($"{Path.GetRelativePath(_modFolder, path)} could not be put back: {ex.Message}");
-        }
-    }
-
-    // Move before write: a crash between leaves the record at its new name with old content, still
-    // found by FormKey. A leaf something else renamed keeps its name while the EditorID is unchanged.
-    private void MoveToItsEditorId(SourceUnit unit, SourceDocument document)
-    {
-        if (!ChangesEditorId(unit, document)) return;
-
-        var from = unit.IsDirectoryPerRecord ? PathShape.DirectoryOf(unit.FullPath) : unit.FullPath;
-        var to = Path.Combine(
-            PathShape.DirectoryOf(from),
-            LeafNameFor(FormKey.Factory(document.FormKey), document.EditorId, unit.IsDirectoryPerRecord));
-        if (string.Equals(from, to, StringComparison.Ordinal)) return;
-
-        if (unit.IsDirectoryPerRecord) Directory.Move(from, to);
-        else File.Move(from, to, overwrite: true);
-        Forget();
-    }
-
-    /// <summary>Whether putting <paramref name="document"/> would rename the file it replaces. Refuses
-    /// a file whose text is not a document: its EditorID cannot be compared, and overwriting it would
-    /// drop what something else wrote.</summary>
-    internal static bool ChangesEditorId(SourceUnit unit, SourceDocument document)
-    {
-        if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !File.Exists(unit.FullPath))
-            return false;
-
-        var text = File.ReadAllText(unit.FullPath);
-        if (NotADocument(text) is { } why)
-            throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its EditorID cannot be compared: {why}");
-        return !string.Equals(EditorIdOf(text), document.EditorId, StringComparison.Ordinal);
-    }
-
-    private static string? EditorIdOf(string text)
-    {
-        using var document = JsonDocument.Parse(text);
-        return document.RootElement.TryGetProperty(RecordMembers.EditorId, out var editorId)
-            && editorId.ValueKind == JsonValueKind.String
-            ? editorId.GetString()
-            : null;
-    }
-
-    private static byte[] OwnerBytes(SourceUnit unit) => StripUtf8Bom(File.ReadAllBytes(unit.FullPath));
-
-    private static InvalidOperationException NoPlaceInTheTree(PluginAddress plugin, RecordIdentity identity) =>
-        new($"No document in {plugin.Name}'s tree holds {identity.FormKey}, and its type has no file of " +
-            "its own, so there is nowhere to write it.");
-
-    private static InvalidOperationException NoLongerCarried(SourceUnit unit, string formKey) =>
-        new($"{unit.RelativePath} was found holding {formKey}, but its own text does not carry it.");
-
-    /// <summary>Throws <see cref="GitUnavailableException"/> when git cannot be run, so no repository
-    /// can be made or written here.</summary>
-    public static void EnsureTrackable() => GitCli.EnsureOnPath();
-
-    /// <summary>One file's text at <paramref name="gitRef"/>, or null. cat-file -p, not git show: for
-    /// a missing glob-shaped path, show exits 0 with empty output — a lying empty string.</summary>
-    internal static string? ReadCommittedSourceText(string modFolder, string relativePath, string gitRef = "HEAD")
-    {
-        if (!IsTracked(modFolder)) return null;
-
-        var gitDir = Path.Combine(modFolder, ".git");
-        return GitCli.TryRun(gitDir, modFolder, out var stdout, "cat-file", "-p", $"{gitRef}:{ToGitPath(relativePath)}")
-            ? stdout
-            : null;
-    }
+    public void ReplaceSourceFrom(string pluginFileName, IReadOnlyList<TreeFile> files, string binarySha256) =>
+        Writes.ReplaceSourceFrom(pluginFileName, files, binarySha256);
 
     /// <summary>Runs <paramref name="write"/>, which puts the plugin's binary on disk, recording
     /// <paramref name="binarySha256"/> as the one last written. An interrupted write leaves a record
     /// naming the old and the new binary (ADR-0003).</summary>
-    public void WriteBinary(PluginAddress plugin, string binarySha256, Action write)
-    {
-        var gitDir = Path.Combine(_modFolder, ".git");
-        var headSha = GitCli.Run(gitDir, _modFolder, "rev-parse", "HEAD").Trim();
-        var tree = WorkingTreeSnapshotTree(gitDir, _modFolder);
-        var earlier = LastWrittenBinarySha256s(plugin);
-        Repark(gitDir, _modFolder, "Compile", plugin.Name, tree, headSha, [$"{BinaryTrailer}: {binarySha256}",
-            .. earlier.Select(sha => $"{EarlierBinaryTrailer}: {sha}")]);
-
-        write();
-
-        var parked = LastCompileRef(plugin.Name);
-        var parkedTree = GitCli.Run(gitDir, _modFolder, "rev-parse", $"{parked}^{{tree}}").Trim();
-        var parent = GitCli.Run(gitDir, _modFolder, "rev-parse", $"{parked}^").Trim();
-        Repark(gitDir, _modFolder, "Compile", plugin.Name, parkedTree, parent, [$"{BinaryTrailer}: {binarySha256}"]);
-    }
-
-    // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written. The
-    // subject names the gesture that made the snapshot.
-    private static void Repark(
-        string gitDir, string modFolder, string gesture, string plugin, string tree, string parent, IEnumerable<string> trailers)
-    {
-        var message = string.Join('\n', [$"{gesture}: {plugin}", "", .. trailers]);
-        var snapshotSha = GitCli.Run(gitDir, modFolder, "commit-tree", tree, "-p", parent, "-m", message).Trim();
-        GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), snapshotSha);
-    }
-
-    private const string BinaryTrailer = "Binary-SHA256";
-    private const string EarlierBinaryTrailer = "Earlier-Binary-SHA256";
-
-    // The index, every tracked file's working-tree bytes and every file under the pathspecs, on a copy
-    // of the index: git stash create would take index.lock, which the user's commit may hold.
-    private static string WorkingTreeSnapshotTree(string gitDir, string workTree, params string[] alsoTaking)
-    {
-        var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-snapshot-index-{Guid.NewGuid():N}");
-        try
-        {
-            File.Copy(Path.Combine(gitDir, "index"), scratchIndex);
-            GitCli.RunWithIndex(gitDir, workTree, scratchIndex, "add", "-u");
-            if (alsoTaking.Length > 0) GitCli.RunWithIndex(gitDir, workTree, scratchIndex, ["add", "-A", "--", .. alsoTaking]);
-            return GitCli.RunWithIndex(gitDir, workTree, scratchIndex, "write-tree").Trim();
-        }
-        finally
-        {
-            if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
-        }
-    }
-
-    /// <summary>Each path under the plugin's tree that git status names, with its index-column code;
-    /// null when git cannot say. It names both ends of a move and every untracked or ignored
-    /// file.</summary>
-    internal static IReadOnlyList<(char Code, string Path)>? WorkingTreeStatus(string modFolder, string pluginFileName)
-    {
-        var gitDir = Path.Combine(modFolder, ".git");
-        if (!GitCli.TryRun(gitDir, modFolder, out var stdout,
-                "status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all", "--ignored",
-                "--", LiteralPathspec(RootFor(pluginFileName))))
-        {
-            return null;
-        }
-
-        var entries = new List<(char, string)>();
-        foreach (var entry in stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-        {
-            // "XY path": a shorter entry is one this parse cannot read.
-            if (entry.Length < 4) return null;
-            entries.Add((entry[0], entry[3..]));
-        }
-        return entries;
-    }
+    public void WriteBinary(PluginAddress plugin, string binarySha256, Action write) =>
+        _git.WriteBinary(plugin.Name, binarySha256, write);
 
     /// <summary>Every binary hash Modbench last wrote for the plugin: one, or several while a write
     /// was interrupted. Empty when none is recorded.</summary>
-    public IReadOnlyList<string> LastWrittenBinarySha256s(PluginAddress plugin)
-    {
-        if (!IsTracked(_modFolder)) return [];
+    public IReadOnlyList<string> LastWrittenBinarySha256s(PluginAddress plugin) =>
+        _git.LastWrittenBinarySha256s(plugin.Name);
 
-        var gitDir = Path.Combine(_modFolder, ".git");
-        if (!GitCli.TryRun(gitDir, _modFolder, out var body, "log", "-1", "--format=%B", LastCompileRef(plugin.Name)))
-            return [];
-
-        return [.. ReadTrailers(body, BinaryTrailer), .. ReadTrailers(body, EarlierBinaryTrailer)];
-    }
-
-    // git speaks forward slashes on every platform, Windows included, while the layout builds
-    // its paths with Path.Combine.
-    internal static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
-
-    // The one place refs/medit/last-compile/<plugin> is built. Almost every real plugin name is
-    // ref-unsafe, so the filename is percent-encoded: injective, but deliberately not reversible —
-    // nothing enumerates these refs.
-    private static string LastCompileRef(string plugin)
-    {
-        // An empty name is an upstream bug: encoding it would yield a ref ending in "/", which git rejects
-        // too.
-        if (string.IsNullOrEmpty(plugin))
-            throw new ArgumentException("Plugin filename must not be empty.", nameof(plugin));
-
-        return $"refs/medit/last-compile/{EncodeRefComponent(plugin)}";
-    }
-
-    // Percent-encodes every byte outside ASCII alnum/-/_, plus '.' where a literal one would make a
-    // component git rejects (leading, trailing, "..", trailing ".lock"). '%' is always escaped, which
-    // keeps this injective.
-    private static string EncodeRefComponent(string plugin)
-    {
-        var bytes = System.Text.Encoding.UTF8.GetBytes(plugin);
-        var endsWithDotLock = bytes.Length >= 5
-            && bytes[^5] == (byte)'.' && bytes[^4] == (byte)'l' && bytes[^3] == (byte)'o'
-            && bytes[^2] == (byte)'c' && bytes[^1] == (byte)'k';
-
-        var sb = new System.Text.StringBuilder(bytes.Length);
-        for (var i = 0; i < bytes.Length; i++)
-        {
-            var b = bytes[i];
-            var isDot = b == (byte)'.';
-            var dotIsSafe = isDot && i != 0 && i != bytes.Length - 1 && bytes[i - 1] != (byte)'.'
-                && !(endsWithDotLock && i == bytes.Length - 5);
-            var safe = (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
-                || b == '-' || b == '_' || dotIsSafe;
-            if (safe) sb.Append((char)b);
-            else sb.Append('%').Append(b.ToString("X2", System.Globalization.CultureInfo.InvariantCulture));
-        }
-        return sb.ToString();
-    }
-
+    private IEnumerable<SourceDocument> ReadAllCommitted(PluginAddress plugin) =>
+        _git.BlobsAtRef(plugin.Name, "HEAD")
+            .Select(blob => Locator.DocumentAt(blob.RelativePath, blob.Text, plugin.Name))
+            .OfType<SourceDocument>();
 }
+
+/// <summary>The unit holding a record: the document it is, relative to the mod folder, whose record
+/// that document is, and whether it is a directory of its own. One read, so the facts and the path
+/// cannot disagree.</summary>
+public sealed record HoldingUnit(
+    string RelativePath, bool IsEmbedded, string OwnerFormKey, string? OwnerRecordType,
+    bool IsDirectoryPerRecord);
 
 /// <summary>Why a record is or is not out of the tree — three states a caller must tell apart, since
 /// "no document holds it" and "the owner's own text lacks it" send the author to different

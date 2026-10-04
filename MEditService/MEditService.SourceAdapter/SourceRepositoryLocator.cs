@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
@@ -11,7 +12,7 @@ namespace MEditService.SourceAdapter;
 /// <summary>The file holding a record: found on disk for a container or embedded child, computed for
 /// a flat record. A null <see cref="SourceUnit.OwnerRecordType"/> means the document names its own
 /// type.</summary>
-public readonly record struct SourceUnit(
+internal readonly record struct SourceUnit(
     string FullPath, string RelativePath, string OwnerFormKey, string? OwnerRecordType, bool IsEmbedded)
 {
     /// <summary>A container's own field file, not a flat file. The header's root RecordData.json shares
@@ -19,56 +20,23 @@ public readonly record struct SourceUnit(
     /// remove the whole source root.</summary>
     internal bool IsDirectoryPerRecord =>
         OwnerRecordType != PluginHeader.RecordType
-        && Path.GetFileName(FullPath).Equals(SourceRepository.RecordDataFileName, StringComparison.Ordinal);
+        && Path.GetFileName(FullPath).Equals(SourceRepositoryLayout.RecordDataFileName, StringComparison.Ordinal);
 }
 
-/// <summary>The unit holding a record: the document it is, relative to the mod folder, whose record
-/// that document is, and whether it is a directory of its own. One read, so the facts and the path
-/// cannot disagree.</summary>
-public sealed record HoldingUnit(
-    string RelativePath, bool IsEmbedded, string OwnerFormKey, string? OwnerRecordType,
-    bool IsDirectoryPerRecord);
-
-/// <summary>Where the tree puts a cell: the worldspace whose subtree carries it and the block
-/// directories it sits in. An interior cell has neither; a worldspace's own top cell has a
-/// worldspace and no block.</summary>
-public readonly record struct CellPlacement(
-    string? ParentWorldspace, int? BlockX, int? BlockY, int? SubX, int? SubY, bool IsInterior)
+/// <summary>Which document in the tree holds a record, and what that document says. The listing memo
+/// and the tree scans are this locator's own per-operation state, and nothing outside it holds either.</summary>
+internal sealed class SourceRepositoryLocator(string modFolder, GameRelease release)
 {
-    // Every game's GRUP layout: a sub-block spans 8 cells a side, and a block 4 sub-blocks.
-    private const int CellsPerSubBlock = 8;
-    private const int SubBlocksPerBlock = 4;
+    private readonly string _modFolder = modFolder;
+    private readonly GameRelease _release = release;
+    private readonly Dictionary<string, PluginSourceFiles> _filesByPlugin = new(StringComparer.Ordinal);
 
-    /// <summary>Where the exterior cell at grid (<paramref name="x"/>, <paramref name="y"/>) of
-    /// <paramref name="worldspace"/> sits.</summary>
-    public static CellPlacement AtGrid(string worldspace, int x, int y)
-    {
-        var (subX, subY) = (FloorDiv(x, CellsPerSubBlock), FloorDiv(y, CellsPerSubBlock));
-        return new(worldspace, FloorDiv(subX, SubBlocksPerBlock), FloorDiv(subY, SubBlocksPerBlock), subX, subY, IsInterior: false);
-    }
-
-    private static int FloorDiv(int value, int by) => (int)Math.Floor(value / (double)by);
-}
-
-/// <summary>Resolution: which document in the tree holds a record. The listing memo and the tree
-/// scans are the repository's own per-operation state, and nothing outside it holds either.</summary>
-public sealed partial class SourceRepository
-{
-    // One repository is one operation, so all live and die with it: the next Track, compile or edit
+    // One locator is one operation, so all live and die with it: the next Track, compile or edit
     // looks at the tree again, never trusting a file timestamp (ADR-0003).
     private readonly Dictionary<string, string[]> _entriesByScanRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TreeScan> _scansBySourceRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<(string SourceRoot, string FormKey), TreeScan> _scansByKey = [];
     private readonly Dictionary<(string Plugin, string FormKey), string> _foundByText = [];
-
-    /// <summary>The unit holding <paramref name="identity"/>, as the document it is and the facts about
-    /// it. Null when no document in the tree holds it, which is a refusal to the caller.</summary>
-    public HoldingUnit? UnitHolding(PluginAddress plugin, RecordIdentity identity) =>
-        Locate(plugin, identity) is { } unit
-            ? new HoldingUnit(
-                unit.RelativePath, unit.IsEmbedded, unit.OwnerFormKey, unit.OwnerRecordType,
-                unit.IsDirectoryPerRecord)
-            : null;
 
     /// <summary>The document holding <paramref name="identity"/>, and whether that document is another
     /// record's. The one place an identity becomes a path, which is why it stays here.</summary>
@@ -85,7 +53,7 @@ public sealed partial class SourceRepository
         if (identity.RecordType == PluginHeader.RecordType)
         {
             return Unit(
-                HeaderDocumentIn(_modFolder, plugin.Name), identity.FormKey, identity.RecordType, isEmbedded: false);
+                SourceRepositoryLayout.HeaderDocumentIn(_modFolder, plugin.Name), identity.FormKey, identity.RecordType, isEmbedded: false);
         }
 
         // A flat record's own document is under its group folder, and where a new one would go is
@@ -99,7 +67,7 @@ public sealed partial class SourceRepository
 
         // Only a directory-per-record type (Cell, Worldspace) can have a directory of its own; a type
         // with no group of its own is always embedded, so nothing is scanned for it.
-        var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
+        var sourceRoot = Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name));
         if (RecordTypeDispatch.For(_release).GroupFolderNameFor(identity.RecordType) is not null
             && FindOwnUnit(sourceRoot, plugin.Name, identity.FormKey, byText) is { } own)
         {
@@ -114,7 +82,7 @@ public sealed partial class SourceRepository
 
     /// <summary>Which record the tree holds at <paramref name="formKey"/> — one with a document of
     /// its own, an embedded child, or the header — or null when nothing carries it.</summary>
-    public RecordIdentity? IdentityOf(
+    internal RecordIdentity? IdentityOf(
         PluginAddress plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         // A malformed FormKey is a caller's raw input, not a broken tree: it names nothing and throws
@@ -122,14 +90,14 @@ public sealed partial class SourceRepository
         if (!FormKey.TryFactory(formKey, out var parsed)) return null;
         var spelled = parsed.ToString();
 
-        var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
+        var sourceRoot = Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name));
         if (!Directory.Exists(sourceRoot)) return null;
 
         // The header's document is the fixed root RecordData.json, and it declares a ModKey rather
         // than the FormKey the index files it under, so no name or text in the tree carries that key.
         if (spelled.Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), StringComparison.OrdinalIgnoreCase))
         {
-            return File.Exists(HeaderDocumentIn(_modFolder, plugin.Name))
+            return File.Exists(SourceRepositoryLayout.HeaderDocumentIn(_modFolder, plugin.Name))
                 ? new RecordIdentity(spelled, PluginHeader.RecordType, null)
                 : null;
         }
@@ -139,7 +107,7 @@ public sealed partial class SourceRepository
         // Nothing of its own, so another record's document carries it inline, and the codec reads its
         // type and name off that document's text.
         if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
-        if (BytesOrNull(owner.FullPath) is not { } ownerBytes) return null;
+        if (DocumentText.BytesOrNull(owner.FullPath) is not { } ownerBytes) return null;
         if (new ContainerDocuments(_release, schemas).EmbeddedIdentity(owner.RecordType, ownerBytes, spelled)
             is not { } child)
         {
@@ -151,22 +119,22 @@ public sealed partial class SourceRepository
 
     /// <summary>The reader's own words for a document whose name carries <paramref name="formKey"/>
     /// and whose text is not one; null when the tree names no such document.</summary>
-    public string? UnreadableDocumentFor(PluginAddress plugin, string formKey)
+    internal string? UnreadableDocumentFor(PluginAddress plugin, string formKey)
     {
         if (!FormKey.TryFactory(formKey, out var parsed)) return null;
-        var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
+        var sourceRoot = Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name));
         if (!Directory.Exists(sourceRoot)) return null;
 
         foreach (var documentPath in DocumentsNaming(sourceRoot, parsed.ToString()))
         {
-            if (ReadOrNull(documentPath) is { } text && NotADocument(text) is { } why) return why;
+            if (DocumentText.ReadOrNull(documentPath) is { } text && NotADocument(text) is { } why) return why;
         }
         return null;
     }
 
     // Its root has to be a JSON object before any member of it can be read; anything else is a file
     // something else wrote over the document, and the reader's message is the whole diagnosis.
-    private static string? NotADocument(string text)
+    internal static string? NotADocument(string text)
     {
         try
         {
@@ -184,13 +152,13 @@ public sealed partial class SourceRepository
     private IEnumerable<string> DocumentsNaming(string sourceRoot, string spelled)
     {
         // Computed once rather than per entry: FilesafeFormKey reparses the FormKey on every call.
-        var filesafe = FilesafeFormKey(spelled);
+        var filesafe = SourceRepositoryLayout.FilesafeFormKey(spelled);
         foreach (var entry in EntriesUnder(sourceRoot))
         {
             var leaf = Path.GetFileName(entry);
-            if (!NameCarries(leaf, filesafe) && !NameCarries(leaf, filesafe + JsonSuffix)) continue;
+            if (!SourceRepositoryLayout.NameCarries(leaf, filesafe) && !SourceRepositoryLayout.NameCarries(leaf, filesafe + SourceRepositoryLayout.JsonSuffix)) continue;
 
-            yield return Directory.Exists(entry) ? Path.Combine(entry, RecordDataFileName) : entry;
+            yield return Directory.Exists(entry) ? Path.Combine(entry, SourceRepositoryLayout.RecordDataFileName) : entry;
         }
     }
 
@@ -220,14 +188,14 @@ public sealed partial class SourceRepository
         var identified = new List<(string, RecordIdentity)>();
         foreach (var documentPath in documentPaths)
         {
-            if (ReadOrNull(documentPath) is not { } text) continue;
+            if (DocumentText.ReadOrNull(documentPath) is not { } text) continue;
             var relativePath = Path.GetRelativePath(_modFolder, documentPath);
             if (DocumentAt(relativePath, text, pluginFileName) is not { } document) continue;
             if (!FormKey.TryFactory(document.FormKey, out var declared) || declared != formKey) continue;
 
             // A path-ambiguous group's document names its own type, and that name is the codec's
             // rather than the schema's table, so the codec maps it to one.
-            if ((RecordTypeOf(relativePath, _release)
+            if ((SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
                  ?? new ContainerDocuments(_release, schemas).RecordTypeNamed(document.RecordType))
                 is not { } recordType)
             {
@@ -244,7 +212,7 @@ public sealed partial class SourceRepository
         {
             return Path.Combine(
                 _modFolder,
-                FlatPathFor(plugin.Name, identity.RecordType, identity.FormKey, identity.EditorId, _release));
+                SourceRepositoryLayout.FlatPathFor(plugin.Name, identity.RecordType, identity.FormKey, identity.EditorId, _release));
         }
         catch (NotSupportedException)
         {
@@ -267,7 +235,7 @@ public sealed partial class SourceRepository
             documents = [found];
         if (documents.Count == 0 && byText)
         {
-            documents = [.. DocumentsDeclaring(Path.Combine(_modFolder, RootFor(pluginFileName)), formKey)
+            documents = [.. DocumentsDeclaring(Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(pluginFileName)), formKey)
                 .Where(document => roots.Exists(root => IsUnder(root, document)))];
             RememberFoundByText(pluginFileName, formKey, documents);
         }
@@ -294,7 +262,7 @@ public sealed partial class SourceRepository
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
     /// holds it. Only the repository reads block directories back (ADR-0014). A
     /// worldspace document declaring no FormKey throws.</summary>
-    public CellPlacement? CellPlacementOf(PluginAddress plugin, RecordIdentity identity)
+    internal CellPlacement? CellPlacementOf(PluginAddress plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit) return null;
 
@@ -306,8 +274,8 @@ public sealed partial class SourceRepository
         if (path.UnderGroupBlockLevels) return new CellPlacement(null, null, null, null, null, IsInterior: true);
         if (!path.UnderWorldspaceBlockLevels) return null;
 
-        var worldspaceDocument = Path.Combine(_modFolder, path.WorldspaceDirectory, RecordDataFileName);
-        var worldspace = FormKeyDeclaredBy(worldspaceDocument, plugin.Name)
+        var worldspaceDocument = Path.Combine(_modFolder, path.WorldspaceDirectory, SourceRepositoryLayout.RecordDataFileName);
+        var worldspace = DocumentText.FormKeyDeclaredBy(worldspaceDocument, plugin.Name)
             ?? throw new UnreadableSourceDocumentException(worldspaceDocument, "it declares no FormKey, so the worldspace its exterior cells sit in is unknown");
 
         var (blockX, blockY) = Coordinates(path.BlockFolderName);
@@ -315,33 +283,16 @@ public sealed partial class SourceRepository
         return new CellPlacement(worldspace, blockX, blockY, subX, subY, IsInterior: false);
     }
 
-    /// <summary>The worldspace carrying the cell <paramref name="identity"/> names; null for an interior
-    /// cell or one the plugin does not hold. A cell filed under neither refuses with the reader's words.</summary>
-    public string? WorldspaceOf(PluginAddress plugin, RecordIdentity identity)
+    internal string? CellFormKeyAt(PluginAddress plugin, string worldspace, int x, int y)
     {
-        if (Locate(plugin, identity) is null) return null;
-        if (CellPlacementOf(plugin, identity) is { } placement) return placement.ParentWorldspace;
-
-        throw new UnreadableSourceDocumentException(
-            $"{identity.FormKey} sits under neither a cell group nor a worldspace's blocks, so the tree names no worldspace for it.");
-    }
-
-    /// <summary>The exterior cell this plugin's tree holds at grid (<paramref name="x"/>,
-    /// <paramref name="y"/>) of <paramref name="worldspace"/>, or null when it holds none there.</summary>
-    public SourceDocument? GetCellAt(
-        PluginAddress plugin, string worldspace, int x, int y, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        CellFormKeyAt(plugin, worldspace, x, y) is { } formKey ? Get(plugin, formKey, schemas) : null;
-
-    private string? CellFormKeyAt(PluginAddress plugin, string worldspace, int x, int y)
-    {
-        if (FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), plugin.Name, worldspace) is not { } worldspaceDocument)
+        if (FindOwnUnit(Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name)), plugin.Name, worldspace) is not { } worldspaceDocument)
             return null;
         var placement = CellPlacement.AtGrid(worldspace, x, y);
         var subBlock = Path.Combine(
             PathShape.DirectoryOf(worldspaceDocument),
-            BlockLevelName(placement.BlockX, placement.BlockY), BlockLevelName(placement.SubX, placement.SubY));
+            SourceRepositoryLayout.BlockLevelName(placement.BlockX, placement.BlockY), SourceRepositoryLayout.BlockLevelName(placement.SubX, placement.SubY));
         if (!Directory.Exists(subBlock)) return null;
-        foreach (var document in Directory.EnumerateDirectories(subBlock).Select(cell => Path.Combine(cell, RecordDataFileName)))
+        foreach (var document in Directory.EnumerateDirectories(subBlock).Select(cell => Path.Combine(cell, SourceRepositoryLayout.RecordDataFileName)))
         {
             if (!File.Exists(document)) continue;
             var text = File.ReadAllText(document);
@@ -354,7 +305,7 @@ public sealed partial class SourceRepository
             {
                 throw new UnreadableSourceDocumentException(document, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
             }
-            if (cell is JsonObject held && PlacedCell.Grid(held) == (x, y)) return FormKeyDeclaredIn(text, document, plugin.Name);
+            if (cell is JsonObject held && PlacedCell.Grid(held) == (x, y)) return DocumentText.FormKeyDeclaredIn(text, document, plugin.Name);
         }
         return null;
     }
@@ -371,13 +322,13 @@ public sealed partial class SourceRepository
             : (null, null);
     }
 
-    private SourceUnit Unit(string fullPath, string ownerFormKey, string? ownerRecordType, bool isEmbedded) =>
+    internal SourceUnit Unit(string fullPath, string ownerFormKey, string? ownerRecordType, bool isEmbedded) =>
         new(fullPath, Path.GetRelativePath(_modFolder, fullPath), ownerFormKey, ownerRecordType, isEmbedded);
 
     // Matches the FormKey alone, never the EditorID, which a caller may hold stale mid-rename. Every
     // directory-per-record group is searched, since a cell's directory sits in its own group's blocks
     // or inside its worldspace's.
-    private string? FindOwnUnit(string sourceRoot, string pluginFileName, string formKey, bool byText = true) =>
+    internal string? FindOwnUnit(string sourceRoot, string pluginFileName, string formKey, bool byText = true) =>
         OwnDocumentUnder(
             [.. RecordTypeDispatch.For(_release).DirectoryPerRecordFolderNames
                 .Select(groupFolder => Path.Combine(sourceRoot, groupFolder))],
@@ -396,7 +347,7 @@ public sealed partial class SourceRepository
 
     // Every verb that writes calls this: the listing, owner and file maps describe a tree this
     // repository has just changed. A document found by its text stays found until a write moves it.
-    private void Forget()
+    internal void Forget()
     {
         _entriesByScanRoot.Clear();
         _scansBySourceRoot.Clear();
@@ -425,200 +376,111 @@ public sealed partial class SourceRepository
         return _scansBySourceRoot[sourceRoot] = new TreeScan(sourceRoot, _release, onlyKey: null, listed);
     }
 
-    // Never exclusive owners of the file: it may be gone or locked since the listing named it.
-    private static byte[]? BytesOrNull(string path)
+    /// <summary>The document carrying <paramref name="identity"/>: its own, else its container's. Null
+    /// when no document holds it. Throws <see cref="UnreadableSourceDocumentException"/> when the
+    /// document carrying it names no record.</summary>
+    internal SourceDocument? ContainerDocument(
+        PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
+        var text = Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(File.ReadAllBytes(unit.FullPath)));
+
+        if (!unit.IsEmbedded)
+            return new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, text);
+
+        if (IdentityOf(plugin, unit.OwnerFormKey, schemas) is not { } owner)
+        {
+            throw new UnreadableSourceDocumentException(
+                $"{unit.RelativePath} carries {identity.FormKey}, but {unit.OwnerFormKey} names no document of its own.");
+        }
+        return new SourceDocument(owner.FormKey, owner.RecordType, owner.EditorId, text);
+    }
+
+    /// <summary>The record that carries <paramref name="identity"/> inline, and the slot it sits in; null
+    /// for a record with a document of its own.</summary>
+    internal DocumentContainment? ContainerOf(
+        PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (Locate(plugin, identity) is not { IsEmbedded: true } unit) return null;
+        var owner = ContainerDocument(plugin, identity, schemas)
+            ?? throw new UnreadableSourceDocumentException($"{unit.RelativePath} could not be read.");
+
+        using var parsed = JsonDocument.Parse(owner.Body);
+        return new ContainerDocuments(_release, schemas).ContainmentOf(owner.RecordType, parsed.RootElement, identity.FormKey);
+    }
+
+    /// <summary>Every document one plugin's tree holds right now, each as the record at its root. An
+    /// embedded child belongs to its owner's document; answers with the child's own text.</summary>
+    internal IReadOnlyList<SourceDocument> ReadAll(PluginAddress plugin)
+    {
+        var root = SourceRepositoryLayout.RootIn(_modFolder, plugin.Name);
+        if (!Directory.Exists(root)) return [];
+
+        var documents = new List<SourceDocument>();
+        foreach (var path in Directory.EnumerateFiles(root, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories))
+        {
+            if (DocumentText.ReadOrNull(path) is not { } text) continue;
+            if (DocumentAt(Path.GetRelativePath(_modFolder, path), text, plugin.Name) is { } document)
+                documents.Add(document);
+        }
+        return documents;
+    }
+
+    // Null for a file that holds no record: group and block metadata, a document that declares no
+    // FormKey, and one whose type neither its path nor its own text names.
+    internal SourceDocument? DocumentAt(string relativePath, string text, string pluginFileName)
+    {
+        if (SourceRepositoryLayout.CarriesNoRecord(relativePath)) return null;
+
+        if (DocumentText.FormKeyDeclaredIn(text, relativePath, pluginFileName)
+            is not { } formKey)
+            return null;
+
+        var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
+                         ?? DocumentText.RootStringIn(text, "MutagenObjectType");
+        return recordType == null
+            ? null
+            : new SourceDocument(formKey, recordType, DocumentText.RootStringIn(text, "EditorID"), text);
+    }
+
+    /// <summary>Every file one plugin's source tree holds in the working tree, relative to the mod
+    /// folder — the carrier Track hands in, handed back out. Empty when there is no source there.</summary>
+    internal PluginSourceFiles FilesOf(PluginAddress plugin)
+    {
+        if (!_filesByPlugin.TryGetValue(plugin.Name, out var files))
+            _filesByPlugin[plugin.Name] = files = WorkingTreeFiles(plugin);
+        return files;
+    }
+
+    private PluginSourceFiles WorkingTreeFiles(PluginAddress plugin)
+    {
+        var root = SourceRepositoryLayout.RootIn(_modFolder, plugin.Name);
+        if (!Directory.Exists(root)) return new PluginSourceFiles([], null);
+
+        var files = new List<TreeFile>();
+        foreach (var path in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            var relativePath = Path.GetRelativePath(_modFolder, path);
+            if (RawBytesOrNull(path) is not { } content)
+                return new PluginSourceFiles([], relativePath);
+            files.Add(new TreeFile(relativePath, content));
+        }
+        return new PluginSourceFiles(Ordered(files), null);
+    }
+
+    private static IReadOnlyList<TreeFile> Ordered(IEnumerable<TreeFile> files) =>
+        [.. files.OrderBy(file => file.RelativePath, StringComparer.Ordinal)];
+
+    // Never exclusive owners of the file: it may have been deleted, moved or locked since the listing.
+    private static byte[]? RawBytesOrNull(string path)
     {
         try
         {
-            return File.Exists(path) ? StripUtf8Bom(File.ReadAllBytes(path)) : null;
+            return File.ReadAllBytes(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return null;
         }
     }
-
-    // What the documents under one plugin's source root declare, from one token scan: the record at
-    // each one's root, and the children it carries inline. A scan for one key reads only the
-    // documents that may hold it.
-    private sealed class TreeScan
-    {
-        // The document a child sits inside: its file, the record at its root, and that record's type
-        // where the path decides it — null means the document names its own.
-        internal readonly record struct OwnerDocument(string FullPath, string FormKey, string? RecordType);
-
-        private readonly record struct Holders(List<string> Declaring, List<OwnerDocument> Carrying);
-
-        private sealed record DocumentKeys(byte[] Bytes, HashSet<string> AtRoot, HashSet<string> Embedded);
-
-        private readonly string _sourceRoot;
-        private readonly GameRelease _release;
-        private readonly byte[]? _onlyKey;
-        private Dictionary<string, List<OwnerDocument>> _byChild = new(StringComparer.Ordinal);
-        private Dictionary<string, List<string>> _byRoot = new(StringComparer.Ordinal);
-        private bool _rescanned;
-        private readonly Dictionary<string, DocumentKeys> _keysByDocument = new(StringComparer.Ordinal);
-
-        internal TreeScan(string sourceRoot, GameRelease release, string? onlyKey, IEnumerable<string> listed)
-        {
-            (_sourceRoot, _release) = (sourceRoot, release);
-            _onlyKey = onlyKey is null ? null : System.Text.Encoding.UTF8.GetBytes(onlyKey);
-            Scan(listed);
-        }
-
-        internal OwnerDocument? DocumentHolding(string formKey)
-        {
-            var carrying = HoldersOf(formKey).Carrying;
-            return OneDocumentPerFormKey.TheOne([.. carrying.Select(owner => owner.FullPath)], formKey, ModFolder) is { } path
-                ? carrying.Single(owner => owner.FullPath == path)
-                : null;
-        }
-
-        internal List<string> DocumentsDeclaring(string formKey) => HoldersOf(formKey).Declaring;
-
-        // Every answer is checked against the document's current text, so a stale entry reads as
-        // absence. A key no document bears out, at its root or inline, is read again once per scan.
-        private Holders HoldersOf(string formKey)
-        {
-            var holders = BorneOut(formKey);
-            if (holders.Declaring.Count > 0 || holders.Carrying.Count > 0 || _rescanned) return holders;
-            _rescanned = true;
-            Scan(Directory.Exists(_sourceRoot) ? Directory.EnumerateFiles(_sourceRoot, "*.json", SearchOption.AllDirectories) : []);
-            return BorneOut(formKey);
-        }
-
-        private Holders BorneOut(string formKey) => new(
-            [.. _byRoot.GetValueOrDefault(formKey, []).Where(document => KeysOf(document)?.AtRoot.Contains(formKey) == true)],
-            [.. _byChild.GetValueOrDefault(formKey, []).Where(owner => KeysOf(owner.FullPath)?.Embedded.Contains(formKey) == true)]);
-
-        private string ModFolder => PathShape.DirectoryOf(PathShape.DirectoryOf(_sourceRoot));
-
-        // One owner is verified for each of its many children, so its tokens are reused while its
-        // bytes are unchanged.
-        private DocumentKeys? KeysOf(string documentPath)
-        {
-            if (DocumentBytes(documentPath) is not { } bytes) return null;
-            if (_keysByDocument.TryGetValue(documentPath, out var known) && known.Bytes.AsSpan().SequenceEqual(bytes))
-                return known;
-
-            var keys = FormKeysIn(bytes, _release);
-            return _keysByDocument[documentPath] = new DocumentKeys(
-                bytes,
-                [.. keys.Where(k => k.AtRoot).Select(k => k.FormKey)],
-                [.. keys.Where(k => k.InAnEmbedSlot).Select(k => k.FormKey)]);
-        }
-
-        private void Scan(IEnumerable<string> listed)
-        {
-            var byChild = new Dictionary<string, List<OwnerDocument>>(StringComparer.Ordinal);
-            var byRoot = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-            foreach (var documentPath in listed)
-            {
-                if (CarriesNoRecord(documentPath)) continue;
-                if (DocumentBytes(documentPath) is not { } bytes) continue;
-                if (_onlyKey is { } key && !MaySpell(bytes, key)) continue;
-
-                var keys = FormKeysIn(bytes, _release);
-                if (keys.FirstOrDefault(k => k.AtRoot).FormKey is not { } root) continue;
-
-                if (!byRoot.TryGetValue(root, out var declaring)) byRoot[root] = declaring = [];
-                declaring.Add(documentPath);
-
-                // A null type is an answer, not a skip: a path-ambiguous group's documents name
-                // their own type, and dropping them leaves every child they carry unlocatable.
-                var recordType = RecordTypeOf(Path.GetRelativePath(ModFolder, documentPath), _release);
-
-                var owner = new OwnerDocument(documentPath, root, recordType);
-                foreach (var (childFormKey, _, inAnEmbedSlot) in keys)
-                {
-                    if (!inAnEmbedSlot) continue;
-                    if (!byChild.TryGetValue(childFormKey, out var owners)) byChild[childFormKey] = owners = [];
-                    owners.Add(owner);
-                }
-            }
-            (_byChild, _byRoot) = (byChild, byRoot);
-        }
-
-        // JSON spells a FormKey other than literally only through a \u escape: no plugin's file name
-        // holds a quote, a backslash, a slash or a control character, the only others it escapes.
-        private static bool MaySpell(byte[] document, byte[] formKey) =>
-            document.AsSpan().IndexOf(formKey) >= 0 || document.AsSpan().IndexOf(@"\u"u8) >= 0;
-
-        // Never exclusive owners of the file: it may be gone or locked since the listing.
-        private static byte[]? DocumentBytes(string path)
-        {
-            try
-            {
-                return File.Exists(path) ? StripUtf8Bom(File.ReadAllBytes(path)) : null;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                return null;
-            }
-        }
-    }
-
-    // The codec writes a link as a bare string and a child as an object with a FormKey of its
-    // own, so the slot a key sits under tells the two apart. Malformed text yields what it read.
-    private static List<(string FormKey, bool AtRoot, bool InAnEmbedSlot)> FormKeysIn(byte[] bytes, GameRelease release)
-    {
-        var embeddedSlotNames = ContainerSlots.For(release).EmbeddedSlotsOf(null).ToHashSet(StringComparer.Ordinal);
-        var found = new List<(string, bool, bool)>();
-        var reader = new Utf8JsonReader(bytes);
-
-        // The member that opened the container at each depth; null where an array element or the
-        // document's own root opened it.
-        var openedBy = new List<string?>();
-        string? pendingMember = null;
-        var atFormKey = false;
-        var keyDepth = 0;
-        try
-        {
-            while (reader.Read())
-            {
-                switch (reader.TokenType)
-                {
-                    case JsonTokenType.PropertyName:
-                        atFormKey = reader.ValueTextEquals(FormKeyPropertyName);
-                        keyDepth = reader.CurrentDepth;
-                        pendingMember = reader.GetString();
-                        continue;
-                    case JsonTokenType.StartObject or JsonTokenType.StartArray:
-                        OpenedAt(openedBy, reader.CurrentDepth, pendingMember);
-                        break;
-                    case JsonTokenType.String when atFormKey:
-                        var formKey = reader.GetString()
-                            ?? throw new InvalidOperationException("Expected a JSON string value to read a non-null string.");
-                        found.Add((formKey, keyDepth == 1, UnderAnEmbedSlot(openedBy, keyDepth, embeddedSlotNames)));
-                        break;
-                }
-                atFormKey = false;
-                pendingMember = null;
-            }
-        }
-        catch (JsonException)
-        {
-            // Caught mid-save, or hand-edited into something that is not a document.
-        }
-        return found;
-    }
-
-    private static void OpenedAt(List<string?> openedBy, int depth, string? member)
-    {
-        while (openedBy.Count <= depth) openedBy.Add(null);
-        openedBy[depth] = member;
-    }
-
-    // A child record's own FormKey sits inside the slot its container embeds it in, at any depth: a
-    // worldspace embeds its TopCell, which embeds its placed references.
-    private static bool UnderAnEmbedSlot(List<string?> openedBy, int keyDepth, HashSet<string> embeddedSlotNames)
-    {
-        for (var depth = 0; depth < keyDepth && depth < openedBy.Count; depth++)
-        {
-            if (openedBy[depth] is { } member && embeddedSlotNames.Contains(member)) return true;
-        }
-        return false;
-    }
-
-    private static ReadOnlySpan<byte> FormKeyPropertyName => "FormKey"u8;
 }

@@ -1,0 +1,246 @@
+namespace MEditService.SourceAdapter;
+
+/// <summary>The git repository under one mod folder (ADR-0007): whether it is tracked, what it
+/// committed, and the refs that remember the binary Modbench last wrote. Every verb tolerates the
+/// folder having vanished since last observed.</summary>
+internal sealed class SourceRepositoryGit(string modFolder)
+{
+    private const string BinaryTrailer = "Binary-SHA256";
+    private const string EarlierBinaryTrailer = "Earlier-Binary-SHA256";
+
+    private readonly string _modFolder = modFolder;
+    private readonly string _gitDir = Path.Combine(modFolder, ".git");
+
+    internal static void EnsureOnPath() => GitCli.EnsureOnPath();
+
+    /// <summary>True exactly when <paramref name="modFolder"/> holds a repository whose <c>main</c>
+    /// exists. A <c>.git</c> with no <c>main</c> is Track's own, half made, or
+    /// <see cref="HoldsAnotherRepository"/>.</summary>
+    internal static bool IsTracked(string modFolder)
+    {
+        var gitDir = Path.Combine(modFolder, ".git");
+        return Directory.Exists(gitDir) && HasMainBranch(gitDir);
+    }
+
+    /// <summary>A repository with history but no <c>main</c>: someone else's, which Track never
+    /// writes to (ADR-0003). A <c>.git</c> with no branch at all is Track's own, half made.</summary>
+    internal static bool HoldsAnotherRepository(string modFolder)
+    {
+        var gitDir = Path.Combine(modFolder, ".git");
+        return Directory.Exists(gitDir) && !HasMainBranch(gitDir) && HasAnyBranch(gitDir);
+    }
+
+    // Read off the ref store's files, not by running git: every read of a tracked plugin asks this.
+    // A branch is a loose ref file until git packs it into packed-refs.
+    private static bool HasMainBranch(string gitDir) =>
+        File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedBranches(gitDir).Contains("main");
+
+    private static bool HasAnyBranch(string gitDir)
+    {
+        var heads = Path.Combine(gitDir, "refs", "heads");
+        // A .lock file is a ref being written, never a ref.
+        return (Directory.Exists(heads) && Directory.EnumerateFiles(heads, "*", SearchOption.AllDirectories).Any(file => !file.EndsWith(".lock", StringComparison.Ordinal)))
+            || PackedBranches(gitDir).Count > 0;
+    }
+
+    private static HashSet<string> PackedBranches(string gitDir)
+    {
+        const string prefix = " refs/heads/";
+        var packedRefs = Path.Combine(gitDir, "packed-refs");
+        if (!File.Exists(packedRefs)) return [];
+        return [.. File.ReadLines(packedRefs)
+            .Select(line => line.IndexOf(prefix, StringComparison.Ordinal) is var at and >= 0 ? line[(at + prefix.Length)..] : null)
+            .OfType<string>()];
+    }
+
+    internal string Run(params string[] args) => GitCli.Run(_gitDir, _modFolder, args);
+
+    internal string RunWithIndex(string indexFile, params string[] args) =>
+        GitCli.RunWithIndex(_gitDir, _modFolder, indexFile, args);
+
+    internal bool TryRun(out string stdout, params string[] args) => GitCli.TryRun(_gitDir, _modFolder, out stdout, args);
+
+    // git speaks forward slashes on every platform, Windows included, while the layout builds
+    // its paths with Path.Combine.
+    internal static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
+
+    // Plugin and asset file names carry brackets and asterisks, which git otherwise reads as a glob.
+    internal static string LiteralPathspec(string relativePath) => $":(literal){ToGitPath(relativePath)}";
+
+    /// <summary>One file's text at <paramref name="gitRef"/>, or null. cat-file -p, not git show: for
+    /// a missing glob-shaped path, show exits 0 with empty output — a lying empty string.</summary>
+    internal string? ReadCommittedSourceText(string relativePath, string gitRef = "HEAD")
+    {
+        if (!IsTracked(_modFolder)) return null;
+
+        return TryRun(out var stdout, "cat-file", "-p", $"{gitRef}:{ToGitPath(relativePath)}") ? stdout : null;
+    }
+
+    /// <summary>Each path under the plugin's tree that git status names, with its index-column code;
+    /// null when git cannot say. It names both ends of a move and every untracked or ignored
+    /// file.</summary>
+    internal IReadOnlyList<(char Code, string Path)>? WorkingTreeStatus(string pluginFileName)
+    {
+        if (!TryRun(out var stdout,
+                "status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all", "--ignored",
+                "--", LiteralPathspec(SourceRepositoryLayout.RootFor(pluginFileName))))
+        {
+            return null;
+        }
+
+        var entries = new List<(char, string)>();
+        foreach (var entry in stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            // "XY path": a shorter entry is one this parse cannot read.
+            if (entry.Length < 4) return null;
+            entries.Add((entry[0], entry[3..]));
+        }
+        return entries;
+    }
+
+    // The plugin's committed subtree, path and text, from one ls-tree plus one cat-file per blob.
+    // Empty, never null: "nothing at that ref" is an answer here.
+    internal IEnumerable<(string RelativePath, string Text)> BlobsAtRef(string pluginName, string gitRef)
+    {
+        if (!IsTracked(_modFolder)) yield break;
+
+        var sourcePrefix = ToGitPath(SourceRepositoryLayout.RootFor(pluginName));
+        if (!TryRun(out var listing, "ls-tree", "-r", "-z", gitRef, "--", $"{sourcePrefix}/"))
+            yield break;
+
+        // -z so a path carrying a space or non-ASCII survives verbatim; every source path segment
+        // comes from a plugin filename or an EditorID.
+        foreach (var entry in listing.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            // "<mode> SP <type> SP <object> TAB <file>"
+            var tab = entry.IndexOf('\t', StringComparison.Ordinal);
+            if (tab < 0) continue;
+            var fields = entry[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (fields.Length < 3 || fields[1] != "blob") continue;
+            var gitPath = entry[(tab + 1)..];
+
+            // cat-file -p, not show: for a missing glob-shaped path show exits 0 with empty output.
+            if (!TryRun(out var text, "cat-file", "-p", $"{gitRef}:{gitPath}")) continue;
+            yield return (gitPath.Replace('/', Path.DirectorySeparatorChar), text);
+        }
+    }
+
+    /// <summary>Every binary hash Modbench last wrote for the plugin: one, or several while a write
+    /// was interrupted. Empty when none is recorded.</summary>
+    internal IReadOnlyList<string> LastWrittenBinarySha256s(string pluginFileName)
+    {
+        if (!IsTracked(_modFolder)) return [];
+
+        if (!TryRun(out var body, "log", "-1", "--format=%B", LastCompileRef(pluginFileName)))
+            return [];
+
+        return [.. ReadTrailers(body, BinaryTrailer), .. ReadTrailers(body, EarlierBinaryTrailer)];
+    }
+
+    /// <summary>Runs <paramref name="write"/>, which puts the plugin's binary on disk, recording
+    /// <paramref name="binarySha256"/> as the one last written. An interrupted write leaves a record
+    /// naming the old and the new binary (ADR-0003).</summary>
+    internal void WriteBinary(string pluginFileName, string binarySha256, Action write)
+    {
+        var headSha = Run("rev-parse", "HEAD").Trim();
+        var tree = WorkingTreeSnapshotTree();
+        var earlier = LastWrittenBinarySha256s(pluginFileName);
+        ParkSnapshot("Compile", pluginFileName, tree, headSha, [$"{BinaryTrailer}: {binarySha256}",
+            .. earlier.Select(sha => $"{EarlierBinaryTrailer}: {sha}")]);
+
+        write();
+
+        var parked = LastCompileRef(pluginFileName);
+        var parkedTree = Run("rev-parse", $"{parked}^{{tree}}").Trim();
+        var parent = Run("rev-parse", $"{parked}^").Trim();
+        ParkSnapshot("Compile", pluginFileName, parkedTree, parent, [$"{BinaryTrailer}: {binarySha256}"]);
+    }
+
+    /// <summary>What the working tree now holds was made from this binary, as a landed compile's is. The
+    /// snapshot takes the plugin's whole source, which git may not track yet.</summary>
+    internal void ParkDecompiled(string pluginFileName, string binarySha256)
+    {
+        var headSha = Run("rev-parse", "HEAD").Trim();
+        var tree = WorkingTreeSnapshotTree(LiteralPathspec(SourceRepositoryLayout.RootFor(pluginFileName)));
+        ParkSnapshot("Decompile", pluginFileName, tree, headSha, [$"{BinaryTrailer}: {binarySha256}"]);
+    }
+
+    /// <summary>Points the plugin's last-compile ref at a baseline commit Track made, whose own
+    /// trailers name the binary.</summary>
+    internal void ParkBaseline(string pluginFileName, string commitSha) => Park(pluginFileName, commitSha);
+
+    // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written. The
+    // subject names the gesture that made the snapshot.
+    private void ParkSnapshot(string gesture, string pluginFileName, string tree, string parent, IEnumerable<string> trailers)
+    {
+        var message = string.Join('\n', [$"{gesture}: {pluginFileName}", "", .. trailers]);
+        Park(pluginFileName, Run("commit-tree", tree, "-p", parent, "-m", message).Trim());
+    }
+
+    // The one place the last-compile ref moves, whichever of Track, a compile or a decompile moves it.
+    private void Park(string pluginFileName, string commitSha) =>
+        Run("update-ref", LastCompileRef(pluginFileName), commitSha);
+
+    // The index, every tracked file's working-tree bytes and every file under the pathspecs, on a copy
+    // of the index: git stash create would take index.lock, which the user's commit may hold.
+    private string WorkingTreeSnapshotTree(params string[] alsoTaking)
+    {
+        var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-snapshot-index-{Guid.NewGuid():N}");
+        try
+        {
+            File.Copy(Path.Combine(_gitDir, "index"), scratchIndex);
+            RunWithIndex(scratchIndex, "add", "-u");
+            if (alsoTaking.Length > 0) RunWithIndex(scratchIndex, ["add", "-A", "--", .. alsoTaking]);
+            return RunWithIndex(scratchIndex, "write-tree").Trim();
+        }
+        finally
+        {
+            if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
+        }
+    }
+
+    private static IEnumerable<string> ReadTrailers(string body, string key)
+    {
+        var prefix = $"{key}: ";
+        return body.Split('\n')
+            .Where(line => line.StartsWith(prefix, StringComparison.Ordinal))
+            .Select(line => line[prefix.Length..].Trim());
+    }
+
+    // The one place refs/medit/last-compile/<plugin> is built. Almost every real plugin name is
+    // ref-unsafe, so the filename is percent-encoded, which keeps it injective.
+    private static string LastCompileRef(string plugin)
+    {
+        // An empty name is an upstream bug: encoding it would yield a ref ending in "/", which git rejects
+        // too.
+        if (string.IsNullOrEmpty(plugin))
+            throw new ArgumentException("Plugin filename must not be empty.", nameof(plugin));
+
+        return $"refs/medit/last-compile/{EncodeRefComponent(plugin)}";
+    }
+
+    // Percent-encodes every byte outside ASCII alnum/-/_, plus '.' where a literal one would make a
+    // component git rejects (leading, trailing, "..", trailing ".lock"). '%' is always escaped, which
+    // keeps this injective.
+    private static string EncodeRefComponent(string plugin)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(plugin);
+        var endsWithDotLock = bytes.Length >= 5
+            && bytes[^5] == (byte)'.' && bytes[^4] == (byte)'l' && bytes[^3] == (byte)'o'
+            && bytes[^2] == (byte)'c' && bytes[^1] == (byte)'k';
+
+        var sb = new System.Text.StringBuilder(bytes.Length);
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            var b = bytes[i];
+            var isDot = b == (byte)'.';
+            var dotIsSafe = isDot && i != 0 && i != bytes.Length - 1 && bytes[i - 1] != (byte)'.'
+                && !(endsWithDotLock && i == bytes.Length - 5);
+            var safe = (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
+                || b == '-' || b == '_' || dotIsSafe;
+            if (safe) sb.Append((char)b);
+            else sb.Append('%').Append(b.ToString("X2", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        return sb.ToString();
+    }
+}

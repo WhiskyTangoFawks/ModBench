@@ -1,33 +1,33 @@
 using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
+using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
 
 /// <summary>How a record the tree still holds stands against the last commit.</summary>
 public enum RecordChange { Modified, Added }
 
-public sealed partial class SourceRepository
+/// <summary>The records of a plugin's tree whose text differs from the last commit's.</summary>
+internal static class LastCommitComparison
 {
-    /// <summary>Every record the tree holds whose text differs from the last commit's, an embedded
-    /// child among them; a tree with no repository is all added. A failed read throws
-    /// <see cref="UnreadableSourceDocumentException"/>, never reads as a deletion.</summary>
-    public IReadOnlyDictionary<string, RecordChange> ChangedSinceLastCommit(
+    internal static IReadOnlyDictionary<string, RecordChange> Of(
+        string modFolder, GameRelease release, SourceRepositoryGit git, SourceRepositoryLocator locator,
         PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        using var expansion = new SourceTreeDocuments(_modFolder, plugin.Name, _release, schemas);
+        using var expansion = new SourceTreeDocuments(modFolder, plugin.Name, release, schemas);
         var committed = new Dictionary<string, string>(StringComparer.Ordinal);
         var working = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var (relativePath, heldAtLastCommit) in ChangedFiles(plugin))
+        foreach (var (relativePath, heldAtLastCommit) in ChangedFiles(modFolder, git, plugin))
         {
-            var fullPath = Path.Combine(_modFolder, relativePath);
+            var fullPath = Path.Combine(modFolder, relativePath);
             var committedText = heldAtLastCommit
-                ? ReadCommittedSourceText(_modFolder, relativePath)
+                ? git.ReadCommittedSourceText(relativePath)
                     ?? throw new UnreadableSourceDocumentException(fullPath, "git cannot read what the last commit holds for it")
                 : null;
-            RecordTextsIn(committed, expansion, plugin, relativePath, committedText);
-            RecordTextsIn(working, expansion, plugin, relativePath, ReadWorkingText(fullPath));
+            RecordTextsIn(committed, locator, expansion, plugin, relativePath, committedText);
+            RecordTextsIn(working, locator, expansion, plugin, relativePath, ReadWorkingText(fullPath));
         }
 
         var changes = new Dictionary<string, RecordChange>(StringComparer.Ordinal);
@@ -41,21 +41,22 @@ public sealed partial class SourceRepository
 
     // Git's paths use forward slashes on every platform. An index column of ?, ! or A means the last
     // commit has no such file.
-    private IEnumerable<(string RelativePath, bool HeldAtLastCommit)> ChangedFiles(PluginAddress plugin)
+    private static IEnumerable<(string RelativePath, bool HeldAtLastCommit)> ChangedFiles(
+        string modFolder, SourceRepositoryGit git, PluginAddress plugin)
     {
-        if (WorkingTreeStatus(_modFolder, plugin.Name) is { } status)
+        if (git.WorkingTreeStatus(plugin.Name) is { } status)
         {
             return status.Select(entry => (
                 entry.Path.Replace('/', Path.DirectorySeparatorChar), entry.Code is not ('?' or '!' or 'A')));
         }
 
-        if (IsTracked(_modFolder))
-            throw new UnreadableSourceDocumentException(_modFolder, "git cannot report what changed in its tree");
+        if (SourceRepositoryGit.IsTracked(modFolder))
+            throw new UnreadableSourceDocumentException(modFolder, "git cannot report what changed in its tree");
 
-        var root = RootIn(_modFolder, plugin.Name);
+        var root = SourceRepositoryLayout.RootIn(modFolder, plugin.Name);
         return Directory.Exists(root)
             ? Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
-                .Select(path => (Path.GetRelativePath(_modFolder, path), false))
+                .Select(path => (Path.GetRelativePath(modFolder, path), false))
             : [];
     }
 
@@ -64,7 +65,7 @@ public sealed partial class SourceRepository
     {
         try
         {
-            return Encoding.UTF8.GetString(StripUtf8Bom(File.ReadAllBytes(path)));
+            return Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(File.ReadAllBytes(path)));
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
@@ -76,11 +77,11 @@ public sealed partial class SourceRepository
         }
     }
 
-    private void RecordTextsIn(
-        Dictionary<string, string> texts, SourceTreeDocuments expansion, PluginAddress plugin,
+    private static void RecordTextsIn(
+        Dictionary<string, string> texts, SourceRepositoryLocator locator, SourceTreeDocuments expansion, PluginAddress plugin,
         string relativePath, string? fileText)
     {
-        if (fileText is null || DocumentAt(relativePath, fileText, plugin.Name) is not { } document) return;
+        if (fileText is null || locator.DocumentAt(relativePath, fileText, plugin.Name) is not { } document) return;
 
         if (document.RecordType == PluginHeader.RecordType)
         {

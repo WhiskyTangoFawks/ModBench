@@ -13,13 +13,17 @@ namespace MEditService.SourceAdapter;
 internal sealed record SourceRecordIdentity(string PluginFileName, string RecordType);
 
 /// <summary>Where a record with a file of its own lands, relative to the mod folder.
-/// <see cref="SourceRepository.PlacementFor"/> is the only thing that computes one.</summary>
+/// <see cref="SourceRepositoryLayout.PlacementFor"/> is the only thing that computes one.</summary>
 internal readonly record struct SourcePlacement(string RelativePath);
 
 /// <summary>The source tree's layout: the only type spelling the root folder, the door's file names
-/// and the JSON suffix. Everything else asks for a path rather than composing one.</summary>
-public sealed partial class SourceRepository
+/// and the JSON suffix. Everything else asks for a path rather than composing one. The instance
+/// places a new document and mints the levels above it.</summary>
+internal sealed class SourceRepositoryLayout(string modFolder, GameRelease release, SourceRepositoryLocator locator)
 {
+    private readonly string _modFolder = modFolder;
+    private readonly GameRelease _release = release;
+
     /// <summary>Plain, not dot-prefixed: the plugin's source is first-class, not hidden metadata. The
     /// deployer exclusion matches this name at the mod root only, so a nested folder that merely
     /// shares it still deploys.</summary>
@@ -38,39 +42,37 @@ public sealed partial class SourceRepository
 
     /// <summary><c>plugin-source/&lt;pluginFileName&gt;</c>, one root rather than a per-plugin sibling
     /// tree: a per-plugin suffix guard orphans the tree when its plugin is renamed outside Modbench.</summary>
-    public static string RootFor(string pluginFileName) => Path.Combine(RootFolderName, pluginFileName);
+    internal static string RootFor(string pluginFileName) => Path.Combine(RootFolderName, pluginFileName);
 
     /// <summary>The mod's own display name, for a caller naming it in a message without reaching
     /// for the path itself.</summary>
-    public static string ModNameIn(string modFolder) =>
+    internal static string ModNameIn(string modFolder) =>
         Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar));
 
     /// <summary>The folder holding <paramref name="pluginFileName"/>'s documents. It need not exist:
     /// an untracked mod has none until Track writes one.</summary>
-    public static string RootIn(string modFolder, string pluginFileName) =>
+    internal static string RootIn(string modFolder, string pluginFileName) =>
         Path.Combine(modFolder, RootFor(pluginFileName));
 
     /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and a
     /// re-baseline commit. The name is verbatim: that is how the load order spells the root a reader
     /// looks under.</summary>
-    public static IReadOnlyList<TreeFile> PristineFilesOf(
+    internal static IReadOnlyList<TreeFile> PristineFilesOf(
         string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
         [.. treeFiles.Select(file =>
             new TreeFile(Path.Combine(RootFor(pluginFileName), file.RelativePath), file.Content))];
-
-    /// <summary>Whether this folder holds source for the plugin at all: tracked, and a tree written for
-    /// this one. A tracked mod folder holds a tree per plugin, and may hold none for a given
-    /// plugin.</summary>
-    public static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
-        IsTracked(modFolder) && Directory.Exists(RootIn(modFolder, pluginFileName));
 
     /// <summary>The plugin header's own document: the whole-mod door's root RecordData.json.</summary>
     internal static string HeaderDocumentIn(string modFolder, string pluginFileName) =>
         Path.Combine(RootIn(modFolder, pluginFileName), RecordDataFileName);
 
+    /// <summary>The plugin header's own document, relative to the mod folder.</summary>
+    internal static string HeaderDocumentFor(string pluginFileName) =>
+        Path.Combine(RootFor(pluginFileName), RecordDataFileName);
+
     // The flat record's own file. The origin ModKey, never the plugin written into, keeps two
     // masters' records from colliding on one path; a directory-per-record type refuses.
-    private static string FlatPathFor(
+    internal static string FlatPathFor(
         string pluginFileName, string recordType, string formKeyString, string? editorId, GameRelease gameRelease)
     {
         var folder = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType)
@@ -87,7 +89,7 @@ public sealed partial class SourceRepository
     // The three shapes with a group folder: flat file, container directory, and an interior Cell
     // nested under block/sub-block, the only reason blockPath exists. An embedded child lands
     // inside its container's document instead.
-    private static SourcePlacement PlacementFor(
+    internal static SourcePlacement PlacementFor(
         string pluginFileName,
         string recordType,
         string formKeyString,
@@ -114,14 +116,14 @@ public sealed partial class SourceRepository
 
     // "<x>, <y>", the whole-mod door's own name for a block level's directory, and the spelling
     // Coordinates reads the numbers back out of. A missing number is the zero the door writes.
-    private static string BlockLevelName(int? x, int? y) =>
+    internal static string BlockLevelName(int? x, int? y) =>
         string.Create(CultureInfo.InvariantCulture, $"{x ?? 0}, {y ?? 0}");
 
     // "[<EditorID> - ]<hex6>_<originModKey>", ".json" on a flat file only. The EditorID is cut so a
     // deep path stays under Windows' 260 characters; the FormKey part keeps the name unique.
     private const int MaxEditorIdInLeaf = 64;
 
-    private static string LeafNameFor(FormKey formKey, string? editorId, bool isDirectory)
+    internal static string LeafNameFor(FormKey formKey, string? editorId, bool isDirectory)
     {
         var extension = isDirectory ? string.Empty : JsonSuffix;
         var filesafe = FilesafeFormKey(formKey);
@@ -134,7 +136,7 @@ public sealed partial class SourceRepository
 
     internal static string FilesafeFormKey(string formKey) => FilesafeFormKey(FormKey.Factory(formKey));
 
-    private static string FilesafeFormKey(FormKey formKey) => $"{formKey.ID:X6}_{formKey.ModKey.FileName}";
+    internal static string FilesafeFormKey(FormKey formKey) => $"{formKey.ID:X6}_{formKey.ModKey.FileName}";
 
     /// <summary>The record type of the document at <paramref name="relativePath"/>. Null means the
     /// path does not decide it, so the document names its own type.</summary>
@@ -167,7 +169,7 @@ public sealed partial class SourceRepository
 
     /// <summary>True for a file under the source root that holds no record — group and block metadata,
     /// and anything that is not a document at all. No row is derived from one.</summary>
-    public static bool CarriesNoRecord(string filePath) =>
+    internal static bool CarriesNoRecord(string filePath) =>
         !filePath.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase)
         || Path.GetFileName(filePath).Equals(GroupRecordDataFileName, StringComparison.Ordinal);
 
@@ -198,7 +200,7 @@ public sealed partial class SourceRepository
 
     // One place that knows a container is a directory and a flat record a file, so callers and
     // the rollback cannot disagree.
-    private static void MoveEntry(string from, string to)
+    internal static void MoveEntry(string from, string to)
     {
         if (Directory.Exists(from)) Directory.Move(from, to);
         else File.Move(from, to);
@@ -206,7 +208,7 @@ public sealed partial class SourceRepository
 
     // The codec's own write-then-rename, for the writers that hold text rather than a record: an
     // interrupted direct write leaves a partial file that dirty detection reads as an edit.
-    private static void WriteTextAtomic(string filePath, string body)
+    internal static void WriteTextAtomic(string filePath, string body)
     {
         var tempPath = filePath + ".tmp";
         try
@@ -223,7 +225,7 @@ public sealed partial class SourceRepository
 
     // The levels of directory that do not exist yet, deepest first — what creating it mints, and
     // so what undoing it has to take away again.
-    private static List<string> LevelsMintedBy(string directory)
+    internal static List<string> LevelsMintedBy(string directory)
     {
         var minted = new List<string>();
         for (var level = directory;
@@ -237,7 +239,7 @@ public sealed partial class SourceRepository
 
     // Removes the directories this call minted when write throws: an empty record directory is
     // invisible to git and fails the next ingest, since the reader opens every one unconditionally.
-    private static T InMintedDirectory<T>(string directory, Func<T> write)
+    internal static T InMintedDirectory<T>(string directory, Func<T> write)
     {
         var minted = LevelsMintedBy(directory);
 
@@ -253,13 +255,13 @@ public sealed partial class SourceRepository
         }
     }
 
-    private static void InMintedDirectory(string directory, Action write) =>
+    internal static void InMintedDirectory(string directory, Action write) =>
         InMintedDirectory(directory, () => { write(); return true; });
 
     // Where a document this plugin does not hold yet lands, from the identity alone. Null for a
     // record with no group folder: it lands inside its container's document, which its own identity
     // cannot name.
-    private SourceUnit? PlaceNewDocument(PluginAddress plugin, RecordIdentity identity, CellPlacement? placement)
+    internal SourceUnit? PlaceNewDocument(PluginAddress plugin, RecordIdentity identity, CellPlacement? placement)
     {
         var dispatch = RecordTypeDispatch.For(_release);
         if (dispatch.GroupFolderNameFor(identity.RecordType) is not { } groupFolder) return null;
@@ -268,7 +270,7 @@ public sealed partial class SourceRepository
         // with tells an exterior cell from an interior one, which has no worldspace above it.
         if (dispatch.IsCell(identity.RecordType) && placement is { IsInterior: false } exterior)
         {
-            return Unit(
+            return locator.Unit(
                 Path.Combine(ExteriorCellDirectory(plugin, identity, exterior), RecordDataFileName),
                 identity.FormKey, identity.RecordType, isEmbedded: false);
         }
@@ -281,7 +283,7 @@ public sealed partial class SourceRepository
 
         var where = PlacementFor(
             plugin.Name, identity.RecordType, identity.FormKey, identity.EditorId, _release, blockPath);
-        return Unit(
+        return locator.Unit(
             Path.Combine(_modFolder, where.RelativePath), identity.FormKey, identity.RecordType, isEmbedded: false);
     }
 
@@ -304,7 +306,7 @@ public sealed partial class SourceRepository
     }
 
     // The directories an exterior cell's put lands in, none of them minted.
-    private (string Block, string SubBlock, string Cell) ExteriorCellLevels(
+    internal (string Block, string SubBlock, string Cell) ExteriorCellLevels(
         PluginAddress plugin, RecordIdentity identity, CellPlacement placement)
     {
         var block = Path.Combine(WorldspaceDirectoryHolding(plugin, placement), BlockLevelName(placement.BlockX, placement.BlockY));
@@ -321,7 +323,7 @@ public sealed partial class SourceRepository
         if (placement.ParentWorldspace is not { } worldspace)
             throw new InvalidOperationException("An exterior cell's placement names no worldspace to place it under.");
 
-        if (FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), plugin.Name, worldspace) is not { } document)
+        if (locator.FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), plugin.Name, worldspace) is not { } document)
         {
             throw new InvalidOperationException(
                 $"{plugin.Name}'s tree holds no document for worldspace {worldspace}, so an exterior cell " +
@@ -405,7 +407,7 @@ public sealed partial class SourceRepository
 
     // Takes back the levels LevelsMintedBy named, deepest first, so a parent is already empty by
     // the time it is reached. A level something else filled stops the walk.
-    private static void RemoveMintedLevels(List<string> minted)
+    internal static void RemoveMintedLevels(List<string> minted)
     {
         foreach (var stray in minted)
         {
@@ -420,69 +422,6 @@ public sealed partial class SourceRepository
         }
     }
 
-    // A relative path read as the layout's own segments: the one place a segment index means anything.
-    // plugin-source / <plugin> / <group folder> / [block levels] / <record directory> / RecordData.json.
-    private sealed class LayoutPath(string relativePath)
-    {
-        private const int RootSegment = 0;
-        private const int PluginSegment = 1;
-        private const int GroupFolderSegment = 2;
-        private const int HeaderDocumentDepth = 3;
-        private const int FlatDocumentDepth = 4;
-        private const int ShallowestContainerDocument = 5;
-
-        private readonly string[] _segments =
-            relativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-
-        internal string PluginFileName => _segments[PluginSegment];
-
-        internal string GroupFolderName => _segments[GroupFolderSegment];
-
-        private string Leaf => _segments[^1];
-
-        private bool UnderTheSourceRoot =>
-            _segments.Length > RootSegment && _segments[RootSegment].Equals(RootFolderName, StringComparison.Ordinal);
-
-        private bool NamesAPlugin => _segments.Length > PluginSegment && _segments[PluginSegment].Length > 0;
-
-        internal bool IsHeaderDocument =>
-            _segments.Length == HeaderDocumentDepth && UnderTheSourceRoot && NamesAPlugin
-            && Leaf.Equals(RecordDataFileName, StringComparison.Ordinal);
-
-        internal bool IsFlatDocument =>
-            _segments.Length >= FlatDocumentDepth && UnderTheSourceRoot && NamesAPlugin
-            && Leaf.EndsWith(JsonSuffix, StringComparison.Ordinal)
-            && !Leaf.Equals(RecordDataFileName, StringComparison.Ordinal)
-            && !Leaf.Equals(GroupRecordDataFileName, StringComparison.Ordinal);
-
-        // A container's own field file, at its group's own level or deeper.
-        internal bool IsContainerDocument =>
-            _segments.Length >= ShallowestContainerDocument
-            && Leaf.Equals(RecordDataFileName, StringComparison.Ordinal);
-
-        // Below its group's own directory level: an interior cell in a block, an exterior cell in its
-        // worldspace's blocks.
-        internal bool ContainerIsNested => _segments.Length > ShallowestContainerDocument;
-
-        // A block and a sub-block level sit between a cell's own directory and whatever holds it: its
-        // group folder for an interior cell, its worldspace's own directory for an exterior one.
-        private const int BlockLevels = 2;
-
-        internal bool UnderGroupBlockLevels =>
-            IsContainerDocument && _segments.Length == ShallowestContainerDocument + BlockLevels;
-
-        internal bool UnderWorldspaceBlockLevels =>
-            IsContainerDocument && _segments.Length == ShallowestContainerDocument + BlockLevels + 1;
-
-        internal string BlockFolderName => _segments[^4];
-
-        internal string SubBlockFolderName => _segments[^3];
-
-        /// <summary>The worldspace's own directory, for a path <see cref="UnderWorldspaceBlockLevels"/>
-        /// answers for: everything above the two block levels and the cell's own directory.</summary>
-        internal string WorldspaceDirectory =>
-            Path.Combine(_segments[..(ShallowestContainerDocument - 1)]);
-    }
 }
 
 /// <summary>Two source units under one plugin's tree carry the same FormKey: corruption, not a
