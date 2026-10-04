@@ -1,16 +1,17 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Index;
-using Mutagen.Bethesda;
+using MEditService.Queries.Tests.TestSupport;
 
 namespace MEditService.Queries.Tests.Query;
 
-public class ConflictClassifierTests
+public class ConflictByCompareTests
 {
-    private static readonly ConflictClassifier Classifier = new ConflictClassifier();
-
     private static ClassifyResult Classify(IReadOnlyList<RecordDetail> records) =>
-        Classifier.Classify(records, GameRelease.Fallout4);
+        CompareQuery.Classify(records);
+
+    private static IReadOnlyDictionary<string, RecordLookupEntry> Lookups(params (string formKey, string type, string editorId)[] entries) =>
+        entries.ToDictionary(e => e.formKey, e => new RecordLookupEntry(e.type, e.editorId));
 
     private static FieldMetadata Meta(string name, string type = "string") =>
         new(name, type, false, [], []);
@@ -80,13 +81,6 @@ public class ConflictClassifierTests
         var diff = Assert.Single(Classify([master, spelled]).Diffs);
 
         Assert.Equal(equal ? ConflictThis.IdenticalToMaster : ConflictThis.Override, diff.CellStates["B.esp"]);
-    }
-
-    [Fact]
-    public void Classify_EmptyList_ReturnsOnlyOne()
-    {
-        var result = Classify([]);
-        Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
     }
 
     [Fact]
@@ -787,10 +781,7 @@ public class ConflictClassifierTests
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
             [new FieldValue(meta, "000BBB:Test.esp")], Origin: "Data");
 
-        static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
-            fk == "000AAA:Test.esp" ? new MEditService.Index.RecordLookupEntry("race", "GoodRace") : null;
-
-        var result = Classifier.Classify([master, override1], GameRelease.Fallout4, Resolve);
+        var result = CompareQuery.Classify([master, override1], resolvable: Lookups(("000AAA:Test.esp", "race", "GoodRace")));
 
         var diff = result.Diffs.First(d => d.FieldName == "Race");
         Assert.NotNull(diff.Resolutions);
@@ -806,10 +797,7 @@ public class ConflictClassifierTests
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
             [LinkArrayField("Keywords", (object?)arrayA)], Origin: "Data");
 
-        static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
-            fk == "000AAA:Test.esp" ? new MEditService.Index.RecordLookupEntry("kywd", "GoodKeyword") : null;
-
-        var result = Classifier.Classify([master], GameRelease.Fallout4, Resolve);
+        var result = CompareQuery.Classify([master], resolvable: Lookups(("000AAA:Test.esp", "kywd", "GoodKeyword")));
 
         var arrayDiff = result.Diffs.First(d => d.FieldName == "Keywords");
         Assert.Null(arrayDiff.Resolutions);
@@ -833,10 +821,7 @@ public class ConflictClassifierTests
         var master = MakeStructOverride("A.esp", 0, false, structMeta, good);
         var override1 = MakeStructOverride("B.esp", 1, true, structMeta, dangling);
 
-        static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
-            fk == "000FFF:Test.esp" ? new MEditService.Index.RecordLookupEntry("fact", "GoodFaction") : null;
-
-        var result = Classifier.Classify([master, override1], GameRelease.Fallout4, Resolve);
+        var result = CompareQuery.Classify([master, override1], resolvable: Lookups(("000FFF:Test.esp", "fact", "GoodFaction")));
 
         var factions = result.Diffs.First(d => d.FieldName == "Factions");
         var checkErrors = RequireCheckErrors(factions);
@@ -860,22 +845,7 @@ public class ConflictClassifierTests
         var partial = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
             [new FieldValue(meta, link)], "Data", IsPartialForm: true);
 
-        static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
-            new MEditService.Index.RecordLookupEntry("race", "GoodRace");
-
-        var diff = Assert.Single(Classifier.Classify([master, partial], GameRelease.Fallout4, Resolve).Diffs);
-
-        Assert.Null(diff.CheckErrors);
-    }
-
-    [Fact]
-    public void Classify_NoResolverPassed_CheckErrorsStayNull()
-    {
-        var meta = new FieldMetadata("Race", "formKey", false, ["Race"], []);
-        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
-            [new FieldValue(meta, "000AAA:Test.esp")], Origin: "Data");
-
-        var diff = Assert.Single(Classify([master]).Diffs);
+        var diff = Assert.Single(CompareQuery.Classify([master, partial], resolvable: Lookups(("000AAA:Test.esp", "race", "GoodRace"))).Diffs);
 
         Assert.Null(diff.CheckErrors);
     }
@@ -890,9 +860,7 @@ public class ConflictClassifierTests
         var val = JsonSerializer.Deserialize<JsonElement>("""{"Faction":"000FFF:Test.esp","Rank":1}""");
         var master = MakeStructOverride("A.esp", 0, true, structMeta, val);
 
-        static MEditService.Index.RecordLookupEntry? EveryFormKeyDangling(string _) => null;
-
-        var result = Classifier.Classify([master], GameRelease.Fallout4, EveryFormKeyDangling);
+        var result = Classify([master]);
 
         var factionsDiff = result.Diffs.First(d => d.FieldName == "Factions");
         var factionChild = RequireChildren(factionsDiff).First(c => c.FieldName == "Faction");
@@ -900,17 +868,5 @@ public class ConflictClassifierTests
 
         Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.Unresolved, RequireResolutions(factionChild)["A.esp"].State);
         Assert.Null(rankChild.Resolutions);
-    }
-
-    [Fact]
-    public void Classify_NoResolverPassed_ResolutionsStayNull()
-    {
-        var meta = new FieldMetadata("Race", "formKey", false, ["Race"], []);
-        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
-            [new FieldValue(meta, "000AAA:Test.esp")], Origin: "Data");
-
-        var result = Classify([master]);
-
-        Assert.Null(result.Diffs.First(d => d.FieldName == "Race").Resolutions);
     }
 }

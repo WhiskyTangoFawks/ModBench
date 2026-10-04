@@ -7,9 +7,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
 
-public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = null)
+internal sealed class ConflictClassifier(ILogger? logger = null)
 {
-    private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
+    private readonly ILogger _logger = logger ?? NullLogger.Instance;
 
     // resolveFormKey (ADR-0005), batched once per Classify so every formKey leaf's
     // Resolutions fills in this pass; null leaves Resolutions empty. loadOrderFormIds orders

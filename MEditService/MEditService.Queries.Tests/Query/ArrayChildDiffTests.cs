@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Index;
+using MEditService.Queries.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -11,8 +12,8 @@ public class ArrayChildDiffTests
 {
     private static ClassifyResult Classify(
         IReadOnlyList<RecordDetail> records,
-        ConflictClassifier? classifier = null) =>
-        (classifier ?? new ConflictClassifier()).Classify(records, GameRelease.Fallout4);
+        ILogger<RecordQueryService>? logger = null) =>
+        CompareQuery.Classify(records, logger);
 
     private static FieldMetadata LinkArrayMeta(string name) =>
         new(name, "array", true, [], [],
@@ -296,8 +297,7 @@ public class ArrayChildDiffTests
         var logEntries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b =>
             b.AddProvider(new CollectingLoggerProvider(logEntries)));
-        var classifier = new ConflictClassifier(
-            loggerFactory.CreateLogger<ConflictClassifier>());
+        var logger = loggerFactory.CreateLogger<RecordQueryService>();
 
         var meta = UnsortedArrayMeta("Items");
         var oneOverMaxArrayChildCount = JsonSerializer.Deserialize<JsonElement>(
@@ -306,7 +306,7 @@ public class ArrayChildDiffTests
         var master = MakeRecord("A.esp", 0, false, meta, oneOverMaxArrayChildCount);
         var override1 = MakeRecord("B.esp", 1, true, meta, oneOverMaxArrayChildCount);
 
-        var result = Classify([master, override1], classifier);
+        var result = Classify([master, override1], logger);
 
         var kwdDiff = result.Diffs.First(d => d.FieldName == "Items");
         Assert.Null(kwdDiff.Children);
@@ -412,8 +412,7 @@ public class ArrayChildDiffTests
         var logEntries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b =>
             b.AddProvider(new CollectingLoggerProvider(logEntries)));
-        var classifier = new ConflictClassifier(
-            loggerFactory.CreateLogger<ConflictClassifier>());
+        var logger = loggerFactory.CreateLogger<RecordQueryService>();
 
         var meta = LinkArrayMeta("Keywords");
         var bigArray = JsonSerializer.Deserialize<JsonElement>(
@@ -421,7 +420,7 @@ public class ArrayChildDiffTests
 
         var master = MakeRecord("A.esp", 0, true, meta, bigArray);
 
-        var result = Classify([master], classifier);
+        var result = Classify([master], logger);
 
         Assert.Null(result.Diffs.First(d => d.FieldName == "Keywords").Children);
         Assert.Contains(logEntries, e => e.Message.Contains("MaxArrayChildCount"));
