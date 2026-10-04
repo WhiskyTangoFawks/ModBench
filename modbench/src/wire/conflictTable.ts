@@ -5,19 +5,38 @@
  *  (ADR-0012). */
 export type ConflictOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
 
+/** A cell's state, as mods-conflicts.md's Cell table names it. */
+export type ConflictCellState = 'Master' | 'IdenticalToMaster' | 'Override' | 'ConflictWins' | 'ConflictLoses';
+
+/** A row's state, as mods-conflicts.md's Row table names it. */
+export type ConflictRowState = 'NoConflict' | 'Override' | 'Conflict';
+
 export interface ConflictColumn {
   readonly name: string;
   readonly origin: ConflictOrigin;
   readonly opened: boolean;
+  /** The worst state among the column's cells; null when none has one. */
+  readonly state: ConflictCellState | null;
 }
 
-/** One mod's copy of one file. */
-export type ConflictCell = Readonly<Record<string, never>>;
+/** One mod's copy of one file. `state` is null where it is not known: the copy could not be read
+ *  (`unreadable` says why), or the copies' answer has not landed. */
+export interface ConflictCell {
+  readonly state: ConflictCellState | null;
+  readonly unreadable?: string;
+}
 
 /** A cell for each column, in column order; null where the column's mod has no copy. */
 export type ConflictRow =
-  | { readonly kind: 'folder'; readonly name: string; readonly path: string; readonly rows: readonly ConflictRow[] }
-  | { readonly kind: 'file'; readonly name: string; readonly path: string; readonly cells: readonly (ConflictCell | null)[] };
+  | {
+    readonly kind: 'folder'; readonly name: string; readonly path: string; readonly rows: readonly ConflictRow[];
+    /** The worst state beneath it. */
+    readonly state: ConflictRowState | null;
+  }
+  | {
+    readonly kind: 'file'; readonly name: string; readonly path: string; readonly cells: readonly (ConflictCell | null)[];
+    readonly state: ConflictRowState | null;
+  };
 
 /** The table, or the message shown in its place. */
 export type ConflictTable =

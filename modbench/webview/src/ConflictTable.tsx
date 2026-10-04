@@ -5,10 +5,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { conflictTableHost } from './vscode';
 import { navigate, type NavRow } from './gridNavigation';
 import { ExpandArrow } from './ExpandArrow';
-import { baseCell, focusedRowStyle, headerCell } from './gridStyles';
+import { baseCell, focusedRowStyle, getCellStyle, headerCell, rowBackground } from './gridStyles';
 import {
   CONFLICT_TABLE_READY, parseConflictTableShown,
-  type ConflictColumn, type ConflictColumnContext, type ConflictRow, type ConflictTable,
+  type ConflictCell, type ConflictColumn, type ConflictColumnContext, type ConflictRow, type ConflictTable,
 } from '../../src/wire/conflictTable';
 
 const NOT_READ_YET: ConflictTable = { kind: 'table', columns: [], rows: [] };
@@ -22,6 +22,12 @@ function headerContext({ origin }: ConflictColumn): string | undefined {
   const context: ConflictColumnContext = { webviewSection: 'conflictColumn', mod: origin.name, preventDefaultContextMenuItems: true };
   return JSON.stringify(context);
 }
+
+// A collapsed folder shows the worst state beneath it, and an expanded one none (mods-conflicts.md, Cells, story 1).
+const rowStyle = (row: ConflictRow, expanded: boolean): React.CSSProperties => {
+  const state = row.kind === 'folder' && expanded ? null : row.state;
+  return { backgroundColor: state === null ? undefined : rowBackground(state) };
+};
 
 const columnKey = ({ origin }: ConflictColumn): string => (origin.kind === 'mod' ? `mod/${origin.name}` : origin.kind);
 
@@ -88,7 +94,7 @@ export function ConflictTableView() {
           <tr ref={headerRow}>
             <th style={headerCell} />
             {table.columns.map((column) => (
-              <th key={columnKey(column)} style={{ ...headerCell, ...columnStyle(column) }} data-vscode-context={headerContext(column)}>
+              <th key={columnKey(column)} style={{ ...headerCell, ...columnStyle(column), backgroundColor: getCellStyle(column.state ?? undefined).backgroundColor }} data-vscode-context={headerContext(column)}>
                 {column.name}
               </th>
             ))}
@@ -100,7 +106,7 @@ export function ConflictTableView() {
               key={row.path}
               aria-selected={nav.key === current}
               aria-expanded={nav.expandable ? nav.expanded : undefined}
-              style={nav.key === current ? focusedRowStyle : undefined}
+              style={{ ...rowStyle(row, nav.expanded), ...(nav.key === current ? focusedRowStyle : undefined) }}
               onClick={() => {
                 setFocused(row.path);
                 if (row.kind === 'folder') toggle(row.path);
@@ -110,7 +116,12 @@ export function ConflictTableView() {
                 {row.kind === 'folder' && <ExpandArrow expanded={nav.expanded} />}
                 {row.name}
               </td>
-              {table.columns.map((column) => <td key={columnKey(column)} style={{ ...baseCell, ...columnStyle(column) }} />)}
+              {table.columns.map((column, index) => {
+                const cell: ConflictCell | null = row.kind === 'file' ? row.cells[index] ?? null : null;
+                return (
+                  <td key={columnKey(column)} title={cell?.unreadable} style={{ ...baseCell, ...getCellStyle(cell?.state ?? undefined), ...columnStyle(column) }} />
+                );
+              })}
             </tr>
           ))}
         </tbody>

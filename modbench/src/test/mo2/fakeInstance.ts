@@ -1,4 +1,4 @@
-import type { InstanceValue } from '../../instanceLoader/instance';
+import type { FileCopies, InstanceValue } from '../../instanceLoader/instance';
 
 /** The double every provider's row contract needs: `.value` plus `.subscribe`, structurally
  *  compatible with `Instance` without ever constructing one. Shared so a fake `publish`ed
@@ -26,6 +26,12 @@ export class FakeInstance {
     this.readFailure = undefined;
     this.sequence++;
     for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
+  }
+  readonly askedForCopies: (readonly string[])[] = [];
+  copies: (relativePaths: readonly string[]) => Promise<FileCopies[]> = () => Promise.resolve([]);
+  sameCopies(relativePaths: readonly string[]): Promise<FileCopies[]> {
+    this.askedForCopies.push(relativePaths);
+    return this.copies(relativePaths);
   }
   onReadFailure(listener: () => void) {
     this.failureListeners.push(listener);
