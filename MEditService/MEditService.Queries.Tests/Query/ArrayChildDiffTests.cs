@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Index;
+using MEditService.Queries.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -9,11 +10,6 @@ namespace MEditService.Queries.Tests.Query;
 
 public class ArrayChildDiffTests
 {
-    private static ClassifyResult Classify(
-        IReadOnlyList<RecordDetail> records,
-        ConflictClassifier? classifier = null) =>
-        (classifier ?? new ConflictClassifier()).Classify(records, GameRelease.Fallout4);
-
     private static FieldMetadata LinkArrayMeta(string name) =>
         new(name, "array", true, [], [],
             ElementType: new FieldMetadata("", "formKey", false, [], []));
@@ -37,7 +33,7 @@ public class ArrayChildDiffTests
 
     private static JsonElement Json(string text) => JsonSerializer.Deserialize<JsonElement>(text);
 
-    private static List<string> RowsAsEachColumnsElementOrDashWhereAbsent(ClassifyResult result, string field, params string[] columns) =>
+    private static List<string> RowsAsEachColumnsElementOrDashWhereAbsent(Classified result, string field, params string[] columns) =>
         [.. RequireChildren(result.Diffs.First(d => d.FieldName == field)).Select(row => string.Join(" ",
             columns.Select(c => row.Values[c] is JsonElement e ? e.GetString() ?? e.GetRawText() : "-")))];
 
@@ -48,7 +44,7 @@ public class ArrayChildDiffTests
         var a = Json("{\"Packages\":[\"PkgA\",\"PkgB\"]}");
         var b = Json("{\"Packages\":[\"PkgB\",\"PkgA\"]}");
 
-        var result = Classify([MakeRecord("A.esp", 0, false, meta, a), MakeRecord("B.esp", 1, true, meta, b)]);
+        var result = CompareQuery.Classify([MakeRecord("A.esp", 0, false, meta, a), MakeRecord("B.esp", 1, true, meta, b)]);
 
         var packages = RequireChildren(result.Diffs.First(d => d.FieldName == "Owner")).First(c => c.FieldName == "Packages");
         Assert.Equal(ConflictThis.Override, packages.CellStates["B.esp"]);
@@ -59,7 +55,7 @@ public class ArrayChildDiffTests
     {
         var meta = LinkArrayMeta("Packages");
 
-        var result = Classify([
+        var result = CompareQuery.Classify([
             MakeRecord("A.esp", 0, false, meta, Json("[\"x\",\"y\",\"z\"]")),
             MakeRecord("B.esp", 1, true, meta, Json("[\"x\",\"z\"]"))]);
 
@@ -71,7 +67,7 @@ public class ArrayChildDiffTests
     {
         var meta = UnsortedArrayMeta("Items");
 
-        var result = Classify([
+        var result = CompareQuery.Classify([
             MakeRecord("A.esp", 0, false, meta, Json("[\"a\",\"b\"]")),
             MakeRecord("B.esp", 1, true, meta, Json("[\"n\",\"a\",\"b\"]"))]);
 
@@ -87,7 +83,7 @@ public class ArrayChildDiffTests
     {
         var meta = UnsortedArrayMeta("Items");
 
-        var result = Classify([
+        var result = CompareQuery.Classify([
             MakeRecord("A.esp", 0, false, meta, Json("[\"a\",\"b\",\"c\"]")),
             MakeRecord("B.esp", 1, true, meta, Json("[\"a\",\"x\",\"c\"]"))]);
 
@@ -99,7 +95,7 @@ public class ArrayChildDiffTests
     {
         var meta = UnsortedArrayMeta("Items");
 
-        var result = Classify([
+        var result = CompareQuery.Classify([
             MakeRecord("A.esp", 0, false, meta, Json("[\"a\",\"b\"]")),
             MakeRecord("B.esp", 1, false, meta, Json("[\"a\",\"c\",\"b\"]")),
             MakeRecord("C.esp", 2, true, meta, Json("[\"a\",\"b\",\"d\"]"))]);
@@ -112,7 +108,7 @@ public class ArrayChildDiffTests
     {
         var meta = UnsortedArrayMeta("Items");
 
-        var result = Classify([
+        var result = CompareQuery.Classify([
             MakeRecord("A.esp", 0, false, meta, null),
             MakeRecord("B.esp", 1, true, meta, Json("[\"a\",\"b\"]"))]);
 
@@ -124,7 +120,7 @@ public class ArrayChildDiffTests
     {
         var meta = LinkArrayMeta("Packages");
 
-        var result = Classify([
+        var result = CompareQuery.Classify([
             MakeRecord("A.esp", 0, false, meta, Json("[\"PkgA\",\"PkgA\"]")),
             MakeRecord("B.esp", 1, true, meta, Json("[\"PkgA\"]"))]);
 
@@ -136,7 +132,7 @@ public class ArrayChildDiffTests
     {
         var meta = UnsortedArrayMeta("Items");
 
-        var result = Classify([
+        var result = CompareQuery.Classify([
             MakeRecord("A.esp", 0, false, meta, Json("[\"x\",null,\"z\"]")),
             MakeRecord("B.esp", 1, true, meta, Json("[null,\"z\"]"))]);
 
@@ -157,7 +153,7 @@ public class ArrayChildDiffTests
             ElementType: new FieldMetadata("", "struct", false, [], [], Fields: [new FieldMetadata("Index", "int", false, [], [])]),
             KeyMembers: ["Index"]);
 
-        var result = Classify([MakeRecord("A.esp", 0, true, meta, Json("[{\"Index\":20},{\"Index\":10}]"))]);
+        var result = CompareQuery.Classify([MakeRecord("A.esp", 0, true, meta, Json("[{\"Index\":20},{\"Index\":10}]"))]);
 
         var rows = RequireChildren(result.Diffs.First(d => d.FieldName == "Stages"));
         Assert.Equal(["10", "20"], rows.Select(r => r.FieldName));
@@ -186,7 +182,7 @@ public class ArrayChildDiffTests
         var master = Json("""{"Scripts":[{"Name":"A","Properties":[{"Name":"x","Data":1},{"Name":"y","Data":2}]},{"Name":"B"}]}""");
         var reordered = Json("""{"Scripts":[{"Name":"B"},{"Name":"A","Properties":[{"Name":"y","Data":2},{"Name":"x","Data":1}]}]}""");
 
-        var result = Classify([MakeRecord("A.esp", 0, false, ScriptsAndTheirPropertiesKeyedByName(), master), MakeRecord("B.esp", 1, true, ScriptsAndTheirPropertiesKeyedByName(), reordered)]);
+        var result = CompareQuery.Classify([MakeRecord("A.esp", 0, false, ScriptsAndTheirPropertiesKeyedByName(), master), MakeRecord("B.esp", 1, true, ScriptsAndTheirPropertiesKeyedByName(), reordered)]);
 
         var adapter = result.Diffs.Single(d => d.FieldName == "Adapter");
         var scripts = RequireChildren(adapter).Single();
@@ -201,7 +197,7 @@ public class ArrayChildDiffTests
         var master = Json("""{"Scripts":[{"Name":"A","Properties":[{"Name":"x","Data":1}]},{"Name":"B"}]}""");
         var changed = Json("""{"Scripts":[{"Name":"B"},{"Name":"A","Properties":[{"Name":"x","Data":9}]}]}""");
 
-        var result = Classify([MakeRecord("A.esp", 0, false, ScriptsAndTheirPropertiesKeyedByName(), master), MakeRecord("B.esp", 1, true, ScriptsAndTheirPropertiesKeyedByName(), changed)]);
+        var result = CompareQuery.Classify([MakeRecord("A.esp", 0, false, ScriptsAndTheirPropertiesKeyedByName(), master), MakeRecord("B.esp", 1, true, ScriptsAndTheirPropertiesKeyedByName(), changed)]);
 
         var scripts = RequireChildren(result.Diffs.Single(d => d.FieldName == "Adapter")).Single();
         Assert.Equal(ConflictThis.Override, scripts.CellStates["B.esp"]);
@@ -215,7 +211,7 @@ public class ArrayChildDiffTests
                 Fields: [new FieldMetadata("Index", "int", false, [], []), new FieldMetadata("Note", "string", false, [], [])]),
             KeyMembers: ["Index"]);
 
-        var result = Classify([
+        var result = CompareQuery.Classify([
             MakeRecord("A.esp", 0, false, meta, Json("""[{"Index":10,"Note":"a"},{"Index":20,"Note":"b"}]""")),
             MakeRecord("B.esp", 1, true, meta, Json("""[{"Index":20,"Note":"b"},{"Index":10,"Note":"a"},{"Index":10,"Note":"c"}]"""))]);
 
@@ -235,7 +231,7 @@ public class ArrayChildDiffTests
     {
         var meta = UnsortedArrayMeta("Items");
 
-        var result = Classify([
+        var result = CompareQuery.Classify([
             MakeRecord("A.esp", 0, false, meta, Json("[\"a\"]")),
             MakeRecord("B.esp", 1, true, meta, Json("[\"n\",\"a\"]"))]);
 
@@ -247,7 +243,7 @@ public class ArrayChildDiffTests
     {
         var meta = LinkArrayMeta("Keywords");
 
-        var result = Classify([
+        var result = CompareQuery.Classify([
             MakeRecord("A.esp", 0, false, meta, Json("[\"KwdA\"]")),
             MakeRecord("B.esp", 1, true, meta, Json("[\"KwdA\",\"Null\"]"))]);
 
@@ -261,7 +257,7 @@ public class ArrayChildDiffTests
         var meta = new FieldMetadata("Items", "array", true, [], [],
             ElementType: new FieldMetadata("", "int", false, [], []));
 
-        var result = Classify([
+        var result = CompareQuery.Classify([
             MakeRecord("A.esp", 0, false, meta, Json("[1,2]")),
             MakeRecord("B.esp", 1, true, meta, Json("[1,2,0]"))]);
 
@@ -279,7 +275,7 @@ public class ArrayChildDiffTests
         var master = MakeRecord("A.esp", 0, false, meta, arrayA);
         var override1 = MakeRecord("B.esp", 1, true, meta, arrayB);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var children = RequireChildren(result.Diffs.First(d => d.FieldName == "Items"));
         Assert.Equal(3, children.Count);
@@ -296,8 +292,7 @@ public class ArrayChildDiffTests
         var logEntries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b =>
             b.AddProvider(new CollectingLoggerProvider(logEntries)));
-        var classifier = new ConflictClassifier(
-            loggerFactory.CreateLogger<ConflictClassifier>());
+        var logger = loggerFactory.CreateLogger<RecordQueryService>();
 
         var meta = UnsortedArrayMeta("Items");
         var oneOverMaxArrayChildCount = JsonSerializer.Deserialize<JsonElement>(
@@ -306,7 +301,7 @@ public class ArrayChildDiffTests
         var master = MakeRecord("A.esp", 0, false, meta, oneOverMaxArrayChildCount);
         var override1 = MakeRecord("B.esp", 1, true, meta, oneOverMaxArrayChildCount);
 
-        var result = Classify([master, override1], classifier);
+        var result = CompareQuery.Classify([master, override1], logger);
 
         var kwdDiff = result.Diffs.First(d => d.FieldName == "Items");
         Assert.Null(kwdDiff.Children);
@@ -325,7 +320,7 @@ public class ArrayChildDiffTests
         var master = MakeRecord("A.esp", 0, false, meta, arrayA);
         var override1 = MakeRecord("B.esp", 1, true, meta, arrayB);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var ranks = RequireChildren(result.Diffs.First(d => d.FieldName == "Ranks"));
         Assert.Equal(3, ranks.Count);
@@ -347,7 +342,7 @@ public class ArrayChildDiffTests
         var master = MakeRecord("A.esp", 0, false, structMeta, val);
         var override1 = MakeRecord("B.esp", 1, true, structMeta, val);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
         Assert.NotNull(boundsDiff.Children);
@@ -368,7 +363,7 @@ public class ArrayChildDiffTests
         var master = MakeRecord("A.esp", 0, false, outerMeta, valA);
         var override1 = MakeRecord("B.esp", 1, true, outerMeta, valB);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         var outerDiff = result.Diffs.First(d => d.FieldName == "Outer");
         Assert.NotNull(outerDiff.Children);
@@ -387,7 +382,7 @@ public class ArrayChildDiffTests
         var master = MakeRecord("A.esp", 0, false, structMeta, emptyStruct);
         var override1 = MakeRecord("B.esp", 1, true, structMeta, emptyStruct);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         Assert.Null(result.Diffs.First(d => d.FieldName == "Bounds").Children);
     }
@@ -401,7 +396,7 @@ public class ArrayChildDiffTests
         var master = MakeRecord("A.esp", 0, false, meta, emptyArray);
         var override1 = MakeRecord("B.esp", 1, true, meta, emptyArray);
 
-        var result = Classify([master, override1]);
+        var result = CompareQuery.Classify([master, override1]);
 
         Assert.Null(result.Diffs.First(d => d.FieldName == "Keywords").Children);
     }
@@ -412,8 +407,7 @@ public class ArrayChildDiffTests
         var logEntries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b =>
             b.AddProvider(new CollectingLoggerProvider(logEntries)));
-        var classifier = new ConflictClassifier(
-            loggerFactory.CreateLogger<ConflictClassifier>());
+        var logger = loggerFactory.CreateLogger<RecordQueryService>();
 
         var meta = LinkArrayMeta("Keywords");
         var bigArray = JsonSerializer.Deserialize<JsonElement>(
@@ -421,7 +415,7 @@ public class ArrayChildDiffTests
 
         var master = MakeRecord("A.esp", 0, true, meta, bigArray);
 
-        var result = Classify([master], classifier);
+        var result = CompareQuery.Classify([master], logger);
 
         Assert.Null(result.Diffs.First(d => d.FieldName == "Keywords").Children);
         Assert.Contains(logEntries, e => e.Message.Contains("MaxArrayChildCount"));
@@ -436,7 +430,7 @@ public class ArrayChildDiffTests
 
         var master = MakeRecord("A.esp", 0, true, meta, exactly500);
 
-        var result = Classify([master]);
+        var result = CompareQuery.Classify([master]);
 
         Assert.Equal(500, RequireChildren(result.Diffs.First(d => d.FieldName == "Keywords")).Count);
     }
@@ -450,7 +444,7 @@ public class ArrayChildDiffTests
 
         var master = MakeRecord("A.esp", 0, true, meta, exactly500);
 
-        var result = Classify([master]);
+        var result = CompareQuery.Classify([master]);
 
         Assert.Equal(500, RequireChildren(result.Diffs.First(d => d.FieldName == "Items")).Count);
     }

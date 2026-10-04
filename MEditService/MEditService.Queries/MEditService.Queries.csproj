@@ -18,6 +18,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Drawn: queries -> record index (target-architecture-references.d2). -->
     <ProjectReference Include="..\MEditService.Index\MEditService.Index.csproj" />
     <!-- The kernel, by the band's rule (target-architecture.d2 medit_kernel). -->

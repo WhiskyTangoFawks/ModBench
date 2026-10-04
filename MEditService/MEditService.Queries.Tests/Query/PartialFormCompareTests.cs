@@ -52,7 +52,7 @@ public sealed class PartialFormCompareTests
             new LoadOrderEntry("Partial.esp", "Partial.esp", "Data", 1, Enabled: true, Winning: true),
         };
         var holder = FakeLoadOrder.Of(Release, plugins);
-        _service = new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
+        _service = new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance);
     }
 
     [Fact]

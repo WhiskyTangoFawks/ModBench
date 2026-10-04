@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
@@ -10,12 +11,12 @@ public sealed class RecordQueryService(
     IQueryIndex index,
     LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
-    ConflictClassifier conflictClassifier) : IRecordQueryService
+    ILogger<RecordQueryService>? logger = null) : IRecordQueryService
 {
     private readonly IQueryIndex _index = index;
     private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
-    private readonly ConflictClassifier _conflictClassifier = conflictClassifier;
+    private readonly ConflictClassifier _conflictClassifier = new ConflictClassifier(logger);
 
     public IReadOnlyList<PluginRow> GetPlugins()
     {
