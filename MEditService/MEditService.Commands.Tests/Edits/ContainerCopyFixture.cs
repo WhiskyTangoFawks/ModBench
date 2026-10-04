@@ -285,13 +285,8 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
 
     public string ModFolderOf(PluginAddress plugin) => plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder;
 
-    /// <summary>Where the destination's tree puts a cell it holds — the block directories the mint
-    /// wrote, read back the one way the write side reads them.</summary>
-    internal CellPlacement? DestinationCellPlacement(string cellFormKey, string? editorId)
-    {
-        var repository = SourceRepository.Open(DestinationModFolder, GameRelease.Fallout4).Require();
-        return repository.CellPlacementOf(DestinationPlugin, new RecordIdentity(cellFormKey, "cell", editorId));
-    }
+    internal CellPlacement? DestinationCellPlacement(string cellFormKey, string? editorId) =>
+        TreeTampering.CellPlacementOf(DestinationModFolder, DestinationPlugin, new RecordIdentity(cellFormKey, "cell", editorId));
 
     private static void AddInteriorCell(Fallout4Mod mod, Cell cell, int blockNumber)
     {

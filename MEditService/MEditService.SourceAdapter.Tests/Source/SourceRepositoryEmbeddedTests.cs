@@ -274,11 +274,14 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void ContainerDocument_OfAChildWhoseOwnerDocumentNamesNoRecord_IsNull()
+    public void ContainerDocument_OfAChildWhoseOwnerDocumentNamesNoRecord_RefusesWithTheReadersWords()
     {
         GiveTheInteriorCellsDocumentNoFormKey();
 
-        Assert.Null(Repository.ContainerDocument(Plugin, Identity(_temporaryRef, "refr"), Schemas));
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.ContainerDocument(Plugin, Identity(_temporaryRef, "refr"), Schemas));
+
+        Assert.Contains("names no document of its own", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -290,6 +293,92 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
             () => Repository.ContainerOf(Plugin, Identity(_temporaryRef, "refr"), Schemas));
 
         Assert.Contains("names no document of its own", refused.Message, StringComparison.Ordinal);
+    }
+
+    private const string FreeFormKey = "000F00:Embedded.esp";
+
+    private DocumentRekey Rekeying => new(
+        (document, newKey) => RecordDocumentEdits.WithFormKey(_codec, document.Body, Release, document.RecordType, newKey),
+        (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
+            _codec, owner.Body, Release, owner.RecordType, oldKey, newKey));
+
+    private static (IReadOnlyList<string> Gone, IReadOnlyList<string> Appeared) Difference(
+        IReadOnlyList<string> before, IReadOnlyList<string> after) =>
+        ([.. before.Except(after)], [.. after.Except(before)]);
+
+    [Fact]
+    public void Rekey_AnEmbeddedChild_RewritesOnlyTheOwnersDocument_AndRollbackPutsItBack()
+    {
+        var before = TreeSnapshot.Of(_modFolder);
+        var transaction = new SourceRepository.SourceTransaction();
+
+        transaction.Rekey(Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, Rekeying);
+
+        var (gone, appeared) = Difference(before, TreeSnapshot.Of(_modFolder));
+        Assert.Single(gone);
+        Assert.Single(appeared);
+        Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", gone[0], StringComparison.Ordinal);
+        Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", appeared[0], StringComparison.Ordinal);
+        Assert.NotNull(Repository.Get(Plugin, FreeFormKey, Schemas));
+        Assert.Null(Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas));
+        Assert.Empty(transaction.Rollback());
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+    }
+
+    [Fact]
+    public void Rekey_AContainer_MovesItsChildRecordsFilesUnderTheNewKey_AndRollbackMovesThemBack()
+    {
+        var before = TreeSnapshot.Of(_modFolder);
+        var transaction = new SourceRepository.SourceTransaction();
+
+        transaction.Rekey(Repository, Plugin, Identity(_worldspace, "wrld"), FreeFormKey, Schemas, Rekeying);
+
+        var child = Repository.UnitHolding(Plugin, Identity(_exteriorCell, "cell"));
+        Assert.Contains("000F00_Embedded.esp", child?.RelativePath, StringComparison.Ordinal);
+        Assert.Null(Repository.UnitHolding(Plugin, Identity(_worldspace, "wrld")));
+        Assert.Empty(transaction.Rollback());
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+    }
+
+    [Fact]
+    public void Rekey_ARecordWithAFileOfItsOwn_ReplacesThatFileUnderTheNewKey_AndRollbackPutsItBack()
+    {
+        var before = TreeSnapshot.Of(_modFolder);
+        var transaction = new SourceRepository.SourceTransaction();
+
+        transaction.Rekey(Repository, Plugin, Identity(_quest, "qust"), FreeFormKey, Schemas, Rekeying);
+
+        var (gone, appeared) = Difference(before, TreeSnapshot.Of(_modFolder));
+        Assert.Single(gone);
+        Assert.Single(appeared);
+        Assert.Contains("Quests/", gone[0], StringComparison.Ordinal);
+        Assert.Contains("000F00_Embedded.esp.json", appeared[0], StringComparison.Ordinal);
+        Assert.Empty(transaction.Rollback());
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+    }
+
+    [Fact]
+    public void Rekey_OfARecordNoDocumentCarries_RefusesBeforeTheTreeIsTouched()
+    {
+        var before = TreeSnapshot.Of(_modFolder);
+
+        Assert.Throws<InvalidOperationException>(() => new SourceRepository.SourceTransaction().Rekey(
+            Repository, Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent"), FreeFormKey, Schemas, Rekeying));
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+    }
+
+    [Fact]
+    public void Rekey_OfAChildItsOwnersTextDoesNotCarry_RefusesInOneSentence_BeforeTheTreeIsTouched()
+    {
+        var before = TreeSnapshot.Of(_modFolder);
+        var ownerLacksIt = Rekeying with { ChildOfOwner = (_, _, _) => null };
+
+        var refused = Assert.Throws<InvalidOperationException>(() => new SourceRepository.SourceTransaction().Rekey(
+            Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, ownerLacksIt));
+
+        Assert.Contains("its own text does not carry it", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Nothing was written", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
     [Fact]
