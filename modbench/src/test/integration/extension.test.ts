@@ -392,6 +392,22 @@ describe('modbench.mod.sync syncs the instance value it is handed', () => {
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 
+async function readsAskedByTheNextTurn(instance: { refresh(): Promise<void> }, command: string): Promise<number> {
+  let reads = 0;
+  const refresh = instance.refresh.bind(instance);
+  instance.refresh = () => {
+    reads++;
+    return refresh();
+  };
+  try {
+    await vscode.commands.executeCommand(command);
+    await new Promise((turn) => setImmediate(turn));
+  } finally {
+    instance.refresh = refresh;
+  }
+  return reads;
+}
+
 describe('modbench.record.open', () => {
   const titled = (title: string) => openTabs().some(t => t.label === title);
 
