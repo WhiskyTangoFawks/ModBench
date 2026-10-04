@@ -39,17 +39,17 @@ export function registerPluginSync(
   sync: (value: InstanceValue) => Promise<PluginSyncOutcome>,
   channel: { error(msg: string): void; info(msg: string): void },
 ): PluginSyncTrigger {
-  const failures = reportSyncFailures('plugin sync', 'plugins.txt is not synced', (line) => channel.error(line));
+  const failures = reportSyncFailures('plugin sync', 'plugins.txt is not synced', (line) => channel.error(`[pluginsCommands] ${line}`));
   const runs = trackSyncRuns();
   const run = (value: InstanceValue): void => {
     runs.begin((async () => {
       const outcome = await failures.run(() => sync(value));
       if (outcome === undefined) return;
       if (outcome.added.length > 0) {
-        channel.info(`[modmanager] plugin sync added ${outcome.added.length} disabled plugins.txt line(s) for plugin(s) on disk with no line: ${outcome.added.join(', ')}`);
+        channel.info(`[pluginsCommands] plugin sync added ${outcome.added.length} disabled plugins.txt line(s) for plugin(s) on disk with no line: ${outcome.added.join(', ')}`);
       }
       if (outcome.dropped.length > 0) {
-        channel.info(`[modmanager] plugin sync dropped ${outcome.dropped.length} plugins.txt line(s) with no plugin on disk: ${outcome.dropped.join(', ')}`);
+        channel.info(`[pluginsCommands] plugin sync dropped ${outcome.dropped.length} plugins.txt line(s) with no plugin on disk: ${outcome.dropped.join(', ')}`);
       }
     })());
   };

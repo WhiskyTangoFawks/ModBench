@@ -15,17 +15,17 @@ export function registerModSync(
   channel: { error(msg: string): void; info(msg: string): void },
 ): ModSyncTrigger {
   const { modOrderFile } = instance.value.managerNames;
-  const failures = reportSyncFailures('mod sync', `${modOrderFile} is not synced`, (line) => channel.error(line));
+  const failures = reportSyncFailures('mod sync', `${modOrderFile} is not synced`, (line) => channel.error(`[modlist] ${line}`));
   const runs = trackSyncRuns();
   const subscription = instance.subscribe((value) => {
     runs.begin((async () => {
       const outcome = await failures.run(() => sync(value));
       if (outcome === undefined) return;
       if (outcome.added.length > 0) {
-        channel.info(`[modmanager] mod sync added ${outcome.added.length} ${modOrderFile} line(s) for folder(s) in mods/ with no line: ${outcome.added.join(', ')}`);
+        channel.info(`[modlist] mod sync added ${outcome.added.length} ${modOrderFile} line(s) for folder(s) in mods/ with no line: ${outcome.added.join(', ')}`);
       }
       if (outcome.dropped.length > 0) {
-        channel.info(`[modmanager] mod sync dropped ${outcome.dropped.length} ${modOrderFile} line(s) whose folder is gone from mods/: ${outcome.dropped.join(', ')}`);
+        channel.info(`[modlist] mod sync dropped ${outcome.dropped.length} ${modOrderFile} line(s) whose folder is gone from mods/: ${outcome.dropped.join(', ')}`);
       }
     })());
   });
