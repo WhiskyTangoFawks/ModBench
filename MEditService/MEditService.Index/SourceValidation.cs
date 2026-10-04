@@ -59,9 +59,8 @@ internal sealed class SourceValidation(
                 drifted.Count, key.Name, key.Origin);
         }
 
-        // A held record with no document here is refreshed by key too, which reads it again, so the
-        // rows-changed it publishes names it (ADR-0015). A refresh learns the working tree states
-        // itself, so the tree is asked once either way.
+        // A held record with no document here is refreshed by key too, so the rows-changed it
+        // publishes names it (ADR-0015). A refresh learns the working tree states itself.
         var deleted = treeFullyRead ? held.Keys.Except(onDisk.Keys, StringComparer.Ordinal) : [];
         List<string> stale = [.. deleted, .. drifted];
         if (stale.Count > 0)
