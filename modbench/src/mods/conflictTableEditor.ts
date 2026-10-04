@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import type { Instance, InstanceView } from '../instanceLoader/instance';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import {
-  CONFLICT_TABLE_SHOWN, isConflictTableReady, modOfConflictColumn, type ConflictTable, type ConflictTableShown,
+  CONFLICT_TABLE_SHOWN, isConflictTableReady, modOfConflictColumn, type ConflictCellValue, type ConflictTable, type ConflictTableShown,
 } from '../wire/conflictTable';
 import { originLabel } from '../instanceLoader/fileConflictIndex';
 import { conflictPaths, conflictTable } from './conflictTable';
@@ -14,8 +14,12 @@ import type { ModlistNode } from './ModListProvider';
 import type { Reporter } from '../ports/reporter';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { errorMessage } from '../ports/errorMessage';
+import type { WorkspaceSettings } from './workspaceSettings';
 
 export const CONFLICT_TABLE_VIEW_TYPE = 'modbench.conflicts';
+export const CELL_VALUE_SETTING = 'modbench.mods.conflictTable.cellValue';
+
+const CELL_VALUES: readonly ConflictCellValue[] = ['size', 'dateModified', 'contents'];
 
 const SCHEME = 'modbench-conflicts';
 const SUFFIX = '.modbench-conflicts';
@@ -28,7 +32,15 @@ const modOfUri = (uri: vscode.Uri): string => decodeURIComponent(uri.path.slice(
 type TableInstance = Pick<InstanceView, 'value' | 'sequence' | 'subscribe'> & Pick<Instance, 'sameCopies'>;
 
 class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider {
-  constructor(private readonly instance: TableInstance, private readonly extensionUri: vscode.Uri, private readonly reporter: Reporter) {}
+  constructor(
+    private readonly instance: TableInstance, private readonly extensionUri: vscode.Uri, private readonly reporter: Reporter,
+    private readonly settings: WorkspaceSettings,
+  ) {}
+
+  private cellValue(): ConflictCellValue {
+    const chosen = CELL_VALUES.find((value) => value === this.settings.getConfiguration().get(CELL_VALUE_SETTING));
+    return chosen ?? 'size';
+  }
 
   openCustomDocument(uri: vscode.Uri): vscode.CustomDocument {
     return { uri, dispose: () => undefined };
@@ -58,7 +70,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
           }
         }
         told = new Set(unreadable.map(({ key }) => key));
-        const table = conflictTable(view, mod, copies);
+        const table = conflictTable(view, mod, copies, this.cellValue());
         if (view.sequence > 0) lastGood = table;
         post(table);
       } catch (err) {
@@ -70,7 +82,13 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
       }
     };
     const subscription = this.instance.subscribe((value, sequence) => void show({ value, sequence }));
-    panel.onDidDispose(() => subscription.dispose());
+    const setting = this.settings.onDidChangeConfiguration((change) => {
+      if (change.affectsConfiguration(CELL_VALUE_SETTING)) void show(this.instance);
+    });
+    panel.onDidDispose(() => {
+      subscription.dispose();
+      setting.dispose();
+    });
     panel.webview.onDidReceiveMessage((message: unknown) => {
       if (isConflictTableReady(message)) void show(this.instance);
     });
@@ -82,10 +100,11 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
  *  selected mod. */
 export function registerConflictTable(
   instance: TableInstance, extensionUri: vscode.Uri, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+  settings: WorkspaceSettings,
 ): vscode.Disposable[] {
   return [
     vscode.window.registerCustomEditorProvider(
-      CONFLICT_TABLE_VIEW_TYPE, new ConflictTableEditorProvider(instance, extensionUri, reporter),
+      CONFLICT_TABLE_VIEW_TYPE, new ConflictTableEditorProvider(instance, extensionUri, reporter, settings),
       { webviewOptions: { retainContextWhenHidden: true } }),
     vscode.commands.registerCommand('modbench.mod.openConflicts', async (clicked?: unknown, selected?: readonly ModlistNode[]) => {
       const mod = modOfConflictColumn(clicked)

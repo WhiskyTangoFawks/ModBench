@@ -15,7 +15,8 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { CONFLICT_TABLE_VIEW_TYPE, conflictTableUri, registerConflictTable } from '../conflictTableEditor';
+import { CELL_VALUE_SETTING, CONFLICT_TABLE_VIEW_TYPE, conflictTableUri, registerConflictTable } from '../conflictTableEditor';
+import type { WorkspaceSettings } from '../workspaceSettings';
 import { ModNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -26,8 +27,18 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 
 const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 
+let cellValueSetting: unknown;
+let settingListeners: ((change: { affectsConfiguration(section: string): boolean }) => void)[] = [];
+const settings: WorkspaceSettings = {
+  getConfiguration: () => ({ get: (key) => (key === CELL_VALUE_SETTING ? cellValueSetting : undefined) }),
+  onDidChangeConfiguration: (listener) => {
+    settingListeners.push(listener);
+    return { dispose: () => { settingListeners = settingListeners.filter((each) => each !== listener); } };
+  },
+};
+
 function setup(instance = new FakeInstance(instanceValueFixture()), selection: readonly ModlistNode[] = [], reporter = recordingReporter()) {
-  registerConflictTable(instance, vscode.Uri.file('/extension'), () => selection, reporter);
+  registerConflictTable(instance, vscode.Uri.file('/extension'), () => selection, reporter, settings);
   const openConflicts = (...args: unknown[]) =>
     registerCommand.mock.calls.find(([id]) => id === 'modbench.mod.openConflicts')?.[1](...args);
   const opened = () => executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith');
@@ -132,7 +143,11 @@ function openTable(instance: FakeInstance, modName: string, reporter = recording
 }
 
 describe('a mod\'s conflict table, open in a tab', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    cellValueSetting = undefined;
+    settingListeners = [];
+  });
 
   const shared = () => indexedValueOf([mod('High'), mod('Low')], {
     High: { files: [file('High', 'a.dds')] }, Low: { files: [file('Low', 'a.dds')] },
@@ -148,7 +163,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
       relativePath,
       copies: [
         { origin, kind: 'unreadable' as const, reason },
-        { origin: { kind: 'mod' as const, name: 'Low' }, kind: 'read' as const, sameAs: 0 },
+        { origin: { kind: 'mod' as const, name: 'Low' }, kind: 'read' as const, sameAs: 0, size: 1n, modifiedNs: 0n },
       ],
     })));
 
@@ -165,8 +180,8 @@ describe('a mod\'s conflict table, open in a tab', () => {
     instance.copies = (paths) => Promise.resolve(paths.map((relativePath) => ({
       relativePath,
       copies: [
-        { origin: { kind: 'mod', name: 'High' }, kind: 'read', sameAs: 1 },
-        { origin: { kind: 'mod', name: 'Low' }, kind: 'read', sameAs: 0 },
+        { origin: { kind: 'mod', name: 'High' }, kind: 'read', sameAs: 1, size: 2048n, modifiedNs: 0n },
+        { origin: { kind: 'mod', name: 'Low' }, kind: 'read', sameAs: 0, size: 512n, modifiedNs: 0n },
       ],
     })));
     const panel = openTable(instance, 'High');
@@ -181,8 +196,67 @@ describe('a mod\'s conflict table, open in a tab', () => {
         { name: 'Low', origin: { kind: 'mod', name: 'Low' }, opened: false, state: 'Master' },
         { name: 'High', origin: { kind: 'mod', name: 'High' }, opened: true, state: 'Override' },
       ],
-      rows: [{ kind: 'file', name: 'a.dds', path: 'a.dds', state: 'Override', cells: [{ state: 'Master' }, { state: 'Override', winning: true }] }],
+      rows: [{ kind: 'file', name: 'a.dds', path: 'a.dds', state: 'Override', cells: [
+        { state: 'Master', value: '512 B', size: 512, modified: 0 },
+        { state: 'Override', value: '2 KB', size: 2048, modified: 0, winning: true },
+      ] }],
     }]);
+  });
+
+  describe('the cell value setting', () => {
+    const stamped = (instance: FakeInstance) => {
+      instance.copies = (paths) => Promise.resolve(paths.map((relativePath) => ({
+        relativePath,
+        copies: [
+          { origin: { kind: 'mod', name: 'High' }, kind: 'read', sameAs: 1, size: 2048n, modifiedNs: 0n },
+          { origin: { kind: 'mod', name: 'Low' }, kind: 'read', sameAs: 0, size: 512n, modifiedNs: 0n },
+        ],
+      })));
+    };
+    const values = (panel: FakePanel, index: number) => {
+      const table = shownTables(panel)[index];
+      const row = table?.kind === 'table' ? table.rows[0] : undefined;
+      return row?.kind === 'file' ? row.cells.map((cell) => cell?.value) : [];
+    };
+
+    it('shows the size when it is unset, or names a value there is not', async () => {
+      const instance = new FakeInstance(await shared());
+      stamped(instance);
+      cellValueSetting = 'colour';
+      const panel = openTable(instance, 'High');
+      panel.webview.receive?.(ready);
+      await posted(panel, 1);
+
+      expect(values(panel, 0)).toEqual(['512 B', '2 KB']);
+    });
+
+    it('shows the value it names, and shows again when it changes, until the tab closes', async () => {
+      const instance = new FakeInstance(await shared());
+      stamped(instance);
+      cellValueSetting = 'contents';
+      const panel = openTable(instance, 'High');
+      panel.webview.receive?.(ready);
+      await posted(panel, 1);
+
+      cellValueSetting = 'dateModified';
+      settingListeners.forEach((listener) => listener({ affectsConfiguration: (section) => section === CELL_VALUE_SETTING }));
+      await posted(panel, 2);
+      panel.dispose?.();
+
+      expect([values(panel, 0), values(panel, 1)]).toEqual([['A', 'B'], ['1970-01-01', '1970-01-01']]);
+      expect(settingListeners).toEqual([]);
+    });
+
+    it('stays as it is for a setting that is not this one', async () => {
+      const instance = new FakeInstance(await shared());
+      const panel = openTable(instance, 'High');
+      panel.webview.receive?.(ready);
+      await posted(panel, 1);
+
+      settingListeners.forEach((listener) => listener({ affectsConfiguration: (section) => section === 'modbench.scriptsPath' }));
+
+      expect(instance.askedForCopies).toHaveLength(1);
+    });
   });
 
   it('shows an empty table while the instance is not read yet, asking for no copies', async () => {

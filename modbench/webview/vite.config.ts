@@ -21,6 +21,7 @@ export default defineConfig({
       output: {
         entryFileNames: "assets/[name].js",
         chunkFileNames: "assets/[name].js",
+        // Vite 5 names the bundled stylesheet style.css.
         assetFileNames: ({ name }) => (name === "style.css" ? `assets/${WEBVIEW_STYLESHEET}` : "assets/[name][extname]"),
       },
     },

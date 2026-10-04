@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { conflictTable } from '../conflictTable';
+import { conflictTable as tableOf } from '../conflictTable';
 import { file, indexedValueOf, mod } from './indexedValue';
 import type { InstanceValue } from '../../instanceLoader/instance';
-import type { ConflictRow, ConflictTable } from '../../wire/conflictTable';
+import type { ConflictCellValue, ConflictRow, ConflictTable } from '../../wire/conflictTable';
 import type { Copy, FileCopies } from '../../instanceLoader/instance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const read = (value: InstanceValue) => ({ value, sequence: 1 });
+
+const conflictTable = (view: ReturnType<typeof read>, name: string, copies: readonly FileCopies[], cellValue: ConflictCellValue = 'size') =>
+  tableOf(view, name, copies, cellValue);
 
 const shape = (rows: readonly ConflictRow[]): unknown[] => rows.map((row) =>
   (row.kind === 'folder' ? { folder: row.path, rows: shape(row.rows) } : { file: row.path, cells: row.cells.map((cell) => cell !== null) }));
@@ -137,7 +140,7 @@ const winningFirstCopies = (relativePath: string, copies: Record<string, number 
   relativePath,
   copies: Object.entries(copies).map(([name, answer]): Copy => ({
     origin: { kind: 'mod', name },
-    ...(typeof answer === 'number' ? { kind: 'read', sameAs: answer } : { kind: 'unreadable', reason: answer }),
+    ...(typeof answer === 'number' ? { kind: 'read', sameAs: answer, size: 1n, modifiedNs: 0n } : { kind: 'unreadable', reason: answer }),
   })),
 });
 
@@ -261,3 +264,48 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
   });
 });
 
+
+
+describe('the conflict table\'s cell values', () => {
+  const SECOND_NS = 1_000_000_000n;
+  const stamped = (sameAs: number, size: bigint, modifiedSeconds: bigint): Omit<Copy & { kind: 'read' }, 'origin'> =>
+    ({ kind: 'read', sameAs, size, modifiedNs: modifiedSeconds * SECOND_NS });
+  const copiesOf = (...stamps: Omit<Copy & { kind: 'read' }, 'origin'>[]): FileCopies[] => [{
+    relativePath: 'a.dds',
+    copies: stamps.map((stamp, index): Copy => ({ ...stamp, origin: { kind: 'mod', name: ['High', 'Middle', 'Low'][index] ?? '' } })),
+  }];
+  const cellsOf = async (copies: FileCopies[], cellValue: ConflictCellValue) => {
+    const value = await indexedValueOf([mod('High'), mod('Middle'), mod('Low')], Object.fromEntries(
+      ['High', 'Middle', 'Low'].map((name) => [name, { files: [file(name, 'a.dds')] }])));
+    const table = conflictTable(read(value), 'Middle', copies, cellValue);
+    const row = table.kind === 'table' ? table.rows[0] : undefined;
+    return row?.kind === 'file' ? row.cells : [];
+  };
+  const copies = copiesOf(stamped(2, 1_572_864n, 1_700_000_000n), stamped(1, 2_048n, 1_600_000_000n), stamped(0, 512n, 0n));
+
+  it('carries each copy\'s size and date modified in milliseconds, for its tooltip', async () => {
+    expect((await cellsOf(copies, 'size')).map((cell) => cell && [cell.size, cell.modified])).toEqual([
+      [512, 0], [2_048, 1_600_000_000_000], [1_572_864, 1_700_000_000_000],
+    ]);
+  });
+
+  it('shows the size, by default the cell value, in the unit that keeps it short', async () => {
+    expect((await cellsOf(copies, 'size')).map((cell) => cell?.value)).toEqual(['512 B', '2 KB', '1.5 MB']);
+  });
+
+  it('shows the date modified as a day', async () => {
+    expect((await cellsOf(copies, 'dateModified')).map((cell) => cell?.value)).toEqual(['1970-01-01', '2020-09-13', '2023-11-14']);
+  });
+
+  it('shows a letter for the contents: A for the master\'s, so two cells with one letter hold one file', async () => {
+    const same = copiesOf(stamped(1, 9n, 0n), stamped(0, 9n, 0n), stamped(0, 9n, 0n));
+    expect((await cellsOf(same, 'contents')).map((cell) => cell?.value)).toEqual(['A', 'A', 'B']);
+  });
+
+  it('shows no value and no size on a copy that could not be read, nor on a copy the answer lacks', async () => {
+    const [low, middle, high] = await cellsOf([winningFirstCopies('a.dds', { High: 'locked' })], 'size');
+    expect(high).toEqual({ state: null, unreadable: 'locked', winning: true });
+    expect(middle).toEqual({ state: null });
+    expect(low).toEqual({ state: null });
+  });
+});

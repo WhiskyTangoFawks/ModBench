@@ -231,7 +231,7 @@ describe('what the Mods keys read off the selection', () => {
 
   it('go to mod sees exactly one selected file that is in a file order conflict', () => {
     const copy = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false, excludedByName: false };
-    const conflicting = new FileNode(enabledMod, { kind: 'mod', name: 'On' }, copy, 'a.dds', true);
+    const conflicting = new FileNode(enabledMod, { kind: 'mod', name: 'On' }, copy, 'a.dds', 'wins');
     const alone = new FileNode(enabledMod, { kind: 'mod', name: 'On' }, copy, 'a.dds');
     expect(modsKeyContext([conflicting], byRow).singleGoToModRow).toBe(true);
     expect(modsKeyContext([alone], byRow).singleGoToModRow).toBe(false);
@@ -243,8 +243,8 @@ describe('what the Mods keys read off the selection', () => {
   it('compare file sees exactly one selected file row that loses its file order conflict', () => {
     const copy = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false, excludedByName: false };
     const origin = { kind: 'mod' as const, name: 'On' };
-    const losing = new FileNode(enabledMod, origin, copy, 'a.dds', true, true);
-    const winning = new FileNode(enabledMod, origin, copy, 'a.dds', true);
+    const losing = new FileNode(enabledMod, origin, copy, 'a.dds', 'loses');
+    const winning = new FileNode(enabledMod, origin, copy, 'a.dds', 'wins');
     expect(modsKeyContext([losing], byRow).singleCompareFileRow).toBe(true);
     expect(modsKeyContext([winning], byRow).singleCompareFileRow).toBe(false);
     expect(modsKeyContext([losing, losing], byRow).singleCompareFileRow).toBe(false);

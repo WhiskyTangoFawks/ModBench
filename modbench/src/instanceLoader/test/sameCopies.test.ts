@@ -77,11 +77,25 @@ describe('Instance — which copies of a file are the same', () => {
     expect(await instance.sameCopies([SHARED])).toEqual([{
       relativePath: SHARED,
       copies: [
-        { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0 },
-        { origin: mod(NONO), kind: 'read', sameAs: 1 },
-        { origin: mod(PATCH), kind: 'read', sameAs: 1 },
+        { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0, size: 4n, modifiedNs: expect.any(BigInt) },
+        { origin: mod(NONO), kind: 'read', sameAs: 1, size: 4n, modifiedNs: expect.any(BigInt) },
+        { origin: mod(PATCH), kind: 'read', sameAs: 1, size: 4n, modifiedNs: expect.any(BigInt) },
       ],
     }]);
+  });
+
+  it('gives each copy it read its size and date modified, a copy of a size of its own included', async () => {
+    const { root, instance } = instanceOver();
+    const nono = await writeCopy(root, `mods/${NONO}`, SHARED, 'aaaa');
+    await writeCopy(root, `mods/${PATCH}`, SHARED, 'bb');
+    await utimes(nono, MODIFIED_ON_A_WHOLE_SECOND, MODIFIED_ON_A_WHOLE_SECOND);
+    await instance.refresh();
+
+    const [answer] = await instance.sameCopies([SHARED]);
+
+    const stamps = answer?.copies.map((copy) => copy.kind === 'read' && [copy.origin, copy.size]);
+    expect(stamps).toEqual([[mod(NONO), 4n], [mod(PATCH), 2n]]);
+    expect(answer?.copies[0]).toMatchObject({ modifiedNs: BigInt(MODIFIED_ON_A_WHOLE_SECOND.getTime()) * 1_000_000n });
   });
 
   it('reads the contents of only the copies whose size another copy shares, a copy of a size of its own being different', async () => {
@@ -112,7 +126,7 @@ describe('Instance — which copies of a file are the same', () => {
     const [answer] = await instance.sameCopies([SHARED]);
 
     const [overwrite, removed, locked] = answer?.copies ?? [];
-    expect(overwrite).toEqual({ origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0 });
+    expect(overwrite).toMatchObject({ origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0 });
     expect(removed).toMatchObject({ origin: mod(NONO), kind: 'unreadable' });
     expect(removed?.kind === 'unreadable' && removed.reason).toContain('ENOENT');
     expect(locked).toEqual({ origin: mod(PATCH), kind: 'unreadable', reason: 'locked by the game' });
@@ -173,7 +187,7 @@ describe('Instance — which copies of a file are the same', () => {
 
     const [answer] = await instance.sameCopies([SHARED]);
 
-    expect(answer?.copies).toEqual([
+    expect(answer?.copies).toMatchObject([
       { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0 },
       { origin: mod('overwrite'), kind: 'read', sameAs: 1 },
     ]);

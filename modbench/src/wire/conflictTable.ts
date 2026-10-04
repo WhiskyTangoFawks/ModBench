@@ -7,6 +7,9 @@ import type { ConflictAll, ConflictThis } from './messages';
  *  (ADR-0012). */
 export type ConflictOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
 
+/** What a cell shows of its copy: its size, its date modified, or a letter for its contents. */
+export type ConflictCellValue = 'size' | 'dateModified' | 'contents';
+
 export type ConflictCellState = Exclude<ConflictThis, 'OnlyOne'>;
 export type ConflictRowState = Exclude<ConflictAll, 'OnlyOne'>;
 
@@ -19,11 +22,15 @@ export interface ConflictColumn {
 }
 
 /** One mod's copy of one file. `state` is null where it is not known: the copy could not be read
- *  (`unreadable` says why), or the copies' answer has not landed. */
+ *  (`unreadable` says why), or the copies' answer has not landed. A copy that was read has its
+ *  `value` for the cell, and its `size` in bytes and `modified` in milliseconds for the tooltip. */
 export interface ConflictCell {
   readonly state: ConflictCellState | null;
   readonly unreadable?: string;
   readonly winning?: true;
+  readonly value?: string;
+  readonly size?: number;
+  readonly modified?: number;
 }
 
 /** A cell for each column, in column order; null where the column's mod has no copy. */
