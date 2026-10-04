@@ -51,27 +51,29 @@ export const toggleBtnStyle: React.CSSProperties = {
 
 // editor-conflicts.md, The colours: each is a theme colour the extension manifest contributes.
 const COLOUR_NAMES = [
-  'rowOverride', 'rowConflict', 'identicalToMaster', 'override', 'conflictWins', 'conflictLoses',
+  'conflictRowOverride', 'conflictRowConflict', 'conflictIdenticalToMaster', 'conflictOverride', 'conflictWins', 'conflictLoses',
   'conflictLosesText',
 ] as const;
 type ColourName = (typeof COLOUR_NAMES)[number];
 
-export const CONFLICT_COLOURS: readonly string[] = COLOUR_NAMES.map(name => `modbench.conflict.${name}`);
+export const CONFLICT_COLOURS: readonly string[] = COLOUR_NAMES.map(name => `modbench.${name}`);
 
-const themeColour = (name: ColourName): string => `var(--vscode-modbench-conflict-${name})`;
+const themeColour = (name: ColourName): string => `var(--vscode-modbench-${name})`;
+
+export const CONFLICT_VARIABLES: readonly string[] = COLOUR_NAMES.map(themeColour);
 
 // NoConflict and OnlyOne are absent: they paint no background, so an expanded row deferring to its
 // children reads the same way they do.
 const ROW_BG: Partial<Record<ConflictAll, string>> = {
-  Override: themeColour('rowOverride'),
-  Conflict: themeColour('rowConflict'),
+  Override: themeColour('conflictRowOverride'),
+  Conflict: themeColour('conflictRowConflict'),
 };
 
 export const rowBackground = (conflictAll: ConflictAll): string | undefined => ROW_BG[conflictAll];
 
 const CELL_BG: Partial<Record<ConflictThis, string>> = {
-  IdenticalToMaster: themeColour('identicalToMaster'),
-  Override: themeColour('override'),
+  IdenticalToMaster: themeColour('conflictIdenticalToMaster'),
+  Override: themeColour('conflictOverride'),
   ConflictWins: themeColour('conflictWins'),
   ConflictLoses: themeColour('conflictLoses'),
 };
