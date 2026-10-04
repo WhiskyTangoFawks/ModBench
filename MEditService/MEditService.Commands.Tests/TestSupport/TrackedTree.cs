@@ -27,10 +27,8 @@ internal static class TrackedTree
         Document(modFolder, plugin, formKey)?.Body
             ?? throw new InvalidOperationException($"Expected '{formKey}' to have a tracked document in '{modFolder}'.");
 
-    /// <summary>Whether the last commit holds the record, which a working-tree change does not
-    /// alter.</summary>
-    internal static bool CommittedHolds(string modFolder, PluginAddress plugin, string formKey) =>
-        Repository(modFolder).NativeFormKeysHeldAt(plugin, "HEAD").Contains(formKey);
+    internal static bool Uses(string modFolder, PluginAddress plugin, string formKey) =>
+        Repository(modFolder).FormKeysUsed(plugin).Contains(formKey);
 
     internal static bool IsPartialForm(this SourceDocument document)
     {
@@ -116,8 +114,8 @@ public static class TrackedPluginTree
     public static SourceDocument? Document(this ITrackedPlugin tracked, string formKey) =>
         TrackedTree.Document(tracked.ModFolder, tracked.Plugin, formKey);
 
-    public static bool CommittedHolds(this ITrackedPlugin tracked, string formKey) =>
-        TrackedTree.CommittedHolds(tracked.ModFolder, tracked.Plugin, formKey);
+    public static bool Uses(this ITrackedPlugin tracked, string formKey) =>
+        TrackedTree.Uses(tracked.ModFolder, tracked.Plugin, formKey);
 
     public static SourceDocument DocumentCarrying(this ITrackedPlugin tracked, string editorId) =>
         TrackedTree.DocumentCarrying(tracked.ModFolder, tracked.Plugin, editorId);

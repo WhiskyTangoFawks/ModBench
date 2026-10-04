@@ -527,9 +527,9 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void NativeFormKeysHeld_IncludesEveryEmbeddedChildsFormKey_InThreeDifferentOwnersSlots()
+    public void FormKeysUsed_IncludesEveryEmbeddedChildsFormKey_InThreeDifferentOwnersSlots()
     {
-        var held = Repository.NativeFormKeysHeld(Plugin);
+        var held = Repository.FormKeysUsed(Plugin);
 
         Assert.Contains(_persistentRef.FormKey.ToString(), held);
         Assert.Contains(_temporaryRef.FormKey.ToString(), held);

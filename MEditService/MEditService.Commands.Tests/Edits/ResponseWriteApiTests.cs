@@ -72,7 +72,7 @@ public sealed class ResponseWriteApiTests : IDisposable
         Assert.Equal([_fixture.DocumentFile(_fixture.Quest.ToString()).Require()], _fixture.ChangedDocumentFiles());
 
         Assert.Null(_fixture.Document(_fixture.Response.ToString()));
-        Assert.True(_fixture.CommittedHolds(_fixture.Response.ToString()));
+        Assert.True(_fixture.Uses(_fixture.Response.ToString()));
         Assert.Equal([_fixture.Response2.ToString()], ResponseFormKeys());
 
         Assert.Equal([ContainerModFixture.Response2EditorId], await CompiledResponseEditorIds());

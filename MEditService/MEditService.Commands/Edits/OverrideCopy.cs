@@ -66,7 +66,7 @@ internal sealed class OverrideCopy
         if (RefuseIfCopySourceHasNoContainerOfItsOwn(identity.RecordType, release) is { } containerRefusal)
             return containerRefusal;
 
-        if (destination.Repository.HoldsAtEitherRef(destinationPlugin, formKey))
+        if (destination.Repository.FormKeysUsed(destinationPlugin).Contains(formKey))
         {
             // A record held only at Head has no document to replace, so no replacement is asked for.
             if (_recordCopy.Identity(destination, formKey, release) is not { } existingTarget)

@@ -11,9 +11,9 @@ using Noggog;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
+public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
 {
-    private const string PluginName = "HoldsAtEitherRef.esp";
+    private const string PluginName = "FormKeysUsed.esp";
     private static readonly PluginAddress Plugin = new(PluginName, "HoldsMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
@@ -45,12 +45,12 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
         Git("commit", "-q", "-m", "leave the header at no ref, as a plugin minted since the last commit has it");
 
         Assert.Empty(Git("ls-tree", "-r", "--name-only", "HEAD", "--", headerPathInGitsForwardSlashes));
-        Assert.True(repository.HoldsAtEitherRef(Plugin, headerFormKey));
+        Assert.True(repository.FormKeysUsed(Plugin).Contains(headerFormKey));
     }
 
     [Theory]
     [InlineData("Npcs/RenamedByHand.json")]
-    [InlineData("Npcs/Misnamed - 000900_HoldsAtEitherRef.esp.json")]
+    [InlineData("Npcs/Misnamed - 000900_FormKeysUsed.esp.json")]
     public void AnUncommittedDocumentNamedForNoKeyItDeclares_IsHeld(string relativePath)
     {
         var repository = Tracked();
@@ -58,7 +58,7 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
         File.WriteAllText(file, $"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": \"Hidden\"}}");
 
-        Assert.True(repository.HoldsAtEitherRef(Plugin, $"000850:{PluginName}"));
+        Assert.True(repository.FormKeysUsed(Plugin).Contains($"000850:{PluginName}"));
     }
 
     [Fact]
@@ -82,8 +82,8 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
             file,
             File.ReadAllText(file).Replace(child.FormKey.ToString(), movedInTheWorkingTreeAlone, StringComparison.Ordinal));
 
-        Assert.True(repository.HoldsAtEitherRef(Plugin, movedInTheWorkingTreeAlone));
-        Assert.True(repository.HoldsAtEitherRef(Plugin, $"00080a:{PluginName}"));
-        Assert.False(repository.HoldsAtEitherRef(Plugin, $"00099F:{PluginName}"));
+        Assert.True(repository.FormKeysUsed(Plugin).Contains(movedInTheWorkingTreeAlone));
+        Assert.True(repository.FormKeysUsed(Plugin).Contains($"00080a:{PluginName}"));
+        Assert.False(repository.FormKeysUsed(Plugin).Contains($"00099F:{PluginName}"));
     }
 }
