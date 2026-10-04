@@ -311,12 +311,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     {
         Execute($"DELETE FROM {TableDdlBuilder.WinnersRelation}");
 
-        // Effective, one relation: the header is an ordinary `records` row, swept here by
-        // construction. form_lookup gets no branch: ingest keeps one lookup row per Effective
-        // record row, so `records`' winners are form_lookup's.
-        // The active plugin latest in the load order wins its FormKey. The join is `active_plugins`
-        // alone, so no SQL re-spells who competes; QUALIFY and the (plugin, origin) tiebreak make a
-        // load_order_idx tie deterministic.
+        // form_lookup gets no branch: ingest keeps one lookup row per `records` row, so `records`'
+        // winners are form_lookup's. QUALIFY and the (plugin, origin) tiebreak make a load_order_idx
+        // tie deterministic.
         Execute($"""
             INSERT INTO {TableDdlBuilder.WinnersRelation} (form_key, plugin, origin)
             SELECT r.form_key, r.plugin, r.origin
