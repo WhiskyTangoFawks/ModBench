@@ -97,6 +97,7 @@ public sealed class WriteSideIndexScanTests
     private static string[] IndexTypesAnEndpointCannotNameByTheirOwnWord() =>
         [.. typeof(IQueryIndex).Assembly.GetExportedTypes().Select(SourceName)
             .Except(typeof(IRecordQueryService).Assembly.GetExportedTypes().Select(SourceName), StringComparer.Ordinal)
+            .Concat(["Indexer", "IndexWriteGate", "FormKeyResolutionCache"])
             .Append("MEditService.Index")
             .Append(@"Index\.[A-Z]\w*")
             .Distinct(StringComparer.Ordinal)];
