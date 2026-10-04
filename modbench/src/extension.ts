@@ -34,6 +34,7 @@ import { registerFilterCommands, type FilterScripts } from './plugins/recordFilt
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
 import { registerRecordCreateCommand } from './plugins/createRecordCommand';
 import { createdRecordSelection } from './plugins/createdRecordSelection';
+import { recordWriteOver, type RecordWrite } from './plugins/recordWrite';
 import { errorMessage } from './ports/errorMessage';
 import { modOfRow } from './mods/ModListProvider';
 
@@ -61,9 +62,6 @@ function wireAutoLaunch(
 }
 
 export type ActivateExports = ReturnType<typeof activate>;
-
-// Before the Plugins tree exists, no row shows what a record write changes.
-const UNMARKED = { answered: () => undefined, unanswered: () => undefined };
 
 export function activate(context: vscode.ExtensionContext) {
   const session: ExtensionSession = {};
@@ -129,10 +127,11 @@ export function activate(context: vscode.ExtensionContext) {
   referencedByTreeProvider.showFor(activeRecordTracker.current());
   // Its `originFiles` closes over the Toolbox built below and re-reads the value each call, so a
   // compile always asks the generation on screen.
+  const instance = { refresh: () => toolbox.instance?.refresh() ?? Promise.resolve() };
+  const recordWrite = recordWriteOver(instance, meditClient);
   const pluginRowDeps: PluginRowCommandDeps = {
     session, client: meditClient, outputChannel, compileProblems: new CompileProblems(compileDiagnostics),
-    conflictsComputed,
-    instance: { refresh: () => toolbox.instance?.refresh() ?? Promise.resolve() },
+    conflictsComputed, instance, recordWrite,
     originFiles: (origin) => toolbox.originFiles(origin),
     instancePlugins: () => toolbox.instance?.value.plugins ?? [],
     instanceMods: () => toolbox.instance?.value.mods ?? [],
@@ -183,11 +182,7 @@ export function activate(context: vscode.ExtensionContext) {
       focusedViewSelection: lastSelectedViewSelection(
         (disposable) => { context.subscriptions.push(disposable); return disposable; }, recordViews, 'modbench.record.selectionIn'),
       viewSelections: new Map(recordViews.map(({ id, view }) => [id, () => view.selection])),
-      recordMarks: {
-        deleting: (records, editorIds) => session.plugins?.tree.recordMarks.deleting(records, editorIds) ?? UNMARKED,
-        copying: (items, mode, replacing, editorIds) =>
-          session.plugins?.tree.recordMarks.copying(items, mode, replacing, editorIds) ?? UNMARKED,
-      },
+      recordWrite,
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),
@@ -218,6 +213,7 @@ interface PluginRowCommandDeps {
   compileProblems: CompileProblems;
   conflictsComputed: () => Promise<void>;
   instance: Pick<Instance, 'refresh'>;
+  recordWrite: RecordWrite;
   originFiles: OriginFilesOf;
   instancePlugins: TrackDeps['plugins'];
   instanceMods: TrackDeps['mods'];
@@ -246,7 +242,7 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
     registerCompileCommand(compileDeps(deps), () => session.plugins?.view.selection ?? []),
     registerRecordCreateCommand({
       client, reporter: makeReporter(outputChannel, 'record.create'),
-      marks: { creating: (row) => session.plugins?.tree.recordMarks.creating(row) ?? UNMARKED },
+      write: deps.recordWrite,
       createdRecords: createdRecordSelection({
         client, reporter: makeReporter(outputChannel, 'record.create'),
         rowOf: (group, formKey) => session.plugins?.tree.recordRow(group, formKey) ?? Promise.resolve(undefined),

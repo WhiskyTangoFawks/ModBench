@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isRefused, isUnanswered, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
+import { isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
 import { COPY_MODE_ITEMS, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -73,32 +73,14 @@ function selectedRecords(clicked: unknown, selected: readonly unknown[] | undefi
 
 type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords'>;
 
-/** What a write tells a view's marks once mEdit answers it, or that it never did. */
-export interface WriteAnswer<Answer> {
-  answered(answer: Answer): void;
-  unanswered(): void;
-}
-
-/** The rows a view shows for what a delete or copy writes, marked until the disk confirms it
- *  (common.md, Unconfirmed writes). Each is told before the write. */
-export interface RecordWriteMarks {
-  deleting(records: readonly RecordAddress[], editorIds: ReadonlyMap<string, string | undefined>): WriteAnswer<readonly RecordAddress[]>;
-  copying(
-    items: readonly CopyItem[], mode: CopyMode, replacing: readonly CopyItem[], editorIds: ReadonlyMap<string, string | undefined>,
-  ): WriteAnswer<readonly CopyItem[]>;
-}
-
-// Only the disk can say what a write with no answer did.
-function tell<Answer>(marks: WriteAnswer<Answer>, answer: unknown, landed: Answer): void {
-  if (isUnanswered(answer)) marks.unanswered();
-  else marks.answered(landed);
-}
+/** Runs a delete or copy as its view's writing gesture (common.md, A gesture that writes). */
+export type RecordWrite = (command: () => Promise<void>) => Promise<void>;
 
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, reporter: Reporter, ask: AskQuestion,
   // The palette hands no row, so it takes the selection of the view last selected in.
   viewSelection: () => readonly unknown[],
-  marks: RecordWriteMarks,
+  write: RecordWrite,
 ): vscode.Disposable[] {
   return [
     // Asked once for the whole selection and naming each record, so the user confirms the right thing.
@@ -108,14 +90,15 @@ export function registerRecordLifecycleCommands(
       const label = (record: RecordArgument) => addressLabel(record, editorIds);
       if (records.length > 0 && await askToDelete(records.map(label), ask) !== 'Delete') return;
 
-      const marked = marks.deleting(records, editorIds);
-      const answer = records.length > 0 ? await client.deleteRecords(records) : { landed: [], refused: [] };
-      tell(marked, answer, isRefused(answer) ? [] : answer.landed);
-      if (isRefused(answer)) { reporter.report('error', answer.message); return; }
-      const refused = [...originless, ...answer.refused];
-      reporter.selectionOutcome(
-        `Could not delete ${refused.length} of ${records.length + originless.length} records.`,
-        { landed: answer.landed, refused }, label);
+      const reportOutcome = async () => {
+        const answer = records.length > 0 ? await client.deleteRecords(records) : { landed: [], refused: [] };
+        if (isRefused(answer)) { reporter.report('error', answer.message); return; }
+        const refused = [...originless, ...answer.refused];
+        reporter.selectionOutcome(
+          `Could not delete ${refused.length} of ${records.length + originless.length} records.`,
+          { landed: answer.landed, refused }, label);
+      };
+      await (records.length > 0 ? write(reportOutcome) : reportOutcome());
     }),
   ];
 }
@@ -220,7 +203,7 @@ export function registerRecordCopyCommands(
   client: RecordCopyClient, reporter: Reporter, ask: AskQuestion,
   // The palette hands no row, so it takes the selection of the view last selected in.
   viewSelection: () => readonly unknown[],
-  marks: RecordWriteMarks,
+  write: RecordWrite,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.record.copy', async (clicked?: unknown, selected?: unknown[]) => {
@@ -241,19 +224,18 @@ export function registerRecordCopyCommands(
         : [];
       if (replacing === undefined) return;
 
-      const copies = records.flatMap((record) => destinations.map((destination) => ({ record, destination })));
-      const marked = marks.copying(copiesWritten(copies, mode), mode, replacing, editorIds);
-      const answer = await client.copyRecords(records, mode, destinations, replacing.length > 0);
-      const written = isRefused(answer) ? [] : copiesWritten(answer.landed, mode);
-      tell(marked, answer, written);
-      if (isRefused(answer)) { reporter.report('error', answer.message); return; }
-      if (written.length > 0) reporter.landed(landedMessage(written, editorIds));
-      const into = (item: CopyItem) =>
-        `${addressLabel(item.record, editorIds)} into ${item.destination.name} (${item.destination.origin})`;
-      reporter.selectionOutcome(
-        `Could not make ${answer.refused.length} of ${written.length + answer.refused.length} copies.`,
-        answer, into);
-      reportOriginless();
+      await write(async () => {
+        const answer = await client.copyRecords(records, mode, destinations, replacing.length > 0);
+        if (isRefused(answer)) { reporter.report('error', answer.message); return; }
+        const written = copiesWritten(answer.landed, mode);
+        if (written.length > 0) reporter.landed(landedMessage(written, editorIds));
+        const into = (item: CopyItem) =>
+          `${addressLabel(item.record, editorIds)} into ${item.destination.name} (${item.destination.origin})`;
+        reporter.selectionOutcome(
+          `Could not make ${answer.refused.length} of ${written.length + answer.refused.length} copies.`,
+          answer, into);
+        reportOriginless();
+      });
     }),
   ];
 }

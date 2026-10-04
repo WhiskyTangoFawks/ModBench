@@ -14,7 +14,6 @@ import { makeReporter } from '../reporter';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { applyRecordEdit } from '../editor/applyRecordEdit';
 import { registerRecordLifecycleCommands } from '../editor/recordLifecycleCommands';
-import { noRecordWriteMarks } from './recordWriteMarks';
 import { InMemoryMEditClient } from '../client';
 import { present } from '../ports/present';
 import type { RecordEditEnvelope } from '../wire/messages';
@@ -26,7 +25,7 @@ const ACCEPT = 'Delete';
 async function offerTwice(dialog: ReturnType<typeof scriptedDialog>): Promise<boolean[]> {
   const client = new InMemoryMEditClient();
   client.setCommandResult('deleteRecords', { landed: [], refused: [] });
-  registerRecordLifecycleCommands(client, recordingReporter(), dialog, () => [], noRecordWriteMarks);
+  registerRecordLifecycleCommands(client, recordingReporter(), dialog, () => [], (command) => command());
   const deleteRecord = present(handlers.get('modbench.record.delete'), 'the record delete handler');
   const offer = async (plugin: string) => {
     const before = client.calls.length;

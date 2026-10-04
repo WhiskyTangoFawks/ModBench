@@ -13,7 +13,7 @@ import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecora
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerGridKeyCommands } from './gridKeyCommands';
 import {
-  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, type RecordWriteMarks,
+  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, type RecordWrite,
 } from './recordLifecycleCommands';
 import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { Reporter } from '../ports/reporter';
@@ -49,7 +49,7 @@ export interface EditorCommandDeps {
   // Each view's own selection, which that view's keys act on.
   viewSelections: ReadonlyMap<string, () => readonly unknown[]>;
   // The rows a record delete or copy changes, which a view marks until the disk confirms the write.
-  recordMarks: RecordWriteMarks;
+  recordWrite: RecordWrite;
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
   // object, narrowed to a callback like focusedViewSelection.
   refreshSourceControlFor: (plugin: string, origin: string) => void;
@@ -176,9 +176,9 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // Editor owns the record gestures (delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
     ...registerRecordLifecycleCommands(
-      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, deps.focusedViewSelection, deps.recordMarks),
+      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, deps.focusedViewSelection, deps.recordWrite),
     ...registerRecordCopyCommands(
-      meditClient, deps.reporterFor('recordCopy'), deps.ask, deps.focusedViewSelection, deps.recordMarks),
+      meditClient, deps.reporterFor('recordCopy'), deps.ask, deps.focusedViewSelection, deps.recordWrite),
     ...registerDeleteHereCommands(deps.viewSelections),
     vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {
       const plan = recordOpenPlan(argument, deps.focusedViewSelection());

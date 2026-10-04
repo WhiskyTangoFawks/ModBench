@@ -43,6 +43,7 @@ export class HttpMEditClient implements MEditClient {
   private readonly timeoutMs: number;
   private readonly lifecycle: BackendLifecycle;
   private readonly notifications: SseNotificationSubscriber;
+  private latestPut: Promise<LoadOrderOutcome | undefined> = Promise.resolve(undefined);
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? (() => {});
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
@@ -155,7 +156,7 @@ export class HttpMEditClient implements MEditClient {
   }
 
   /** `instanceRoot` scopes the backend's index (ADR-0010). */
-  async putLoadOrder(
+  putLoadOrder(
     plugins: LoadOrderPluginInput[],
     active: PluginAddress[],
     loadedWithNoLine: PluginAddress[],
@@ -163,6 +164,24 @@ export class HttpMEditClient implements MEditClient {
     instanceRoot: string,
     gameRelease: string,
     options: LoadOrderOptions = {},
+  ): Promise<LoadOrderOutcome> {
+    const put = this.sendLoadOrder(plugins, active, loadedWithNoLine, gameDirectory, instanceRoot, gameRelease, options);
+    this.latestPut = put.catch(() => undefined);
+    return put;
+  }
+
+  latestLoadOrderPut(): Promise<LoadOrderOutcome | undefined> {
+    return this.latestPut;
+  }
+
+  private async sendLoadOrder(
+    plugins: LoadOrderPluginInput[],
+    active: PluginAddress[],
+    loadedWithNoLine: PluginAddress[],
+    gameDirectory: string,
+    instanceRoot: string,
+    gameRelease: string,
+    options: LoadOrderOptions,
   ): Promise<LoadOrderOutcome> {
     // The backend publishes its first tick as this PUT lands, so a PUT that outran the stream
     // loses every tick published before it connects — and with them the progressive chevrons.

@@ -202,6 +202,9 @@ export interface MEditClient {
     plugins: LoadOrderPluginInput[], active: PluginAddress[], loadedWithNoLine: PluginAddress[],
     gameDirectory: string, instanceRoot: string, gameRelease: string, options?: LoadOrderOptions,
   ): Promise<LoadOrderOutcome>;
+  /** The latest put's outcome, which resolves when the index reaches its version. Undefined when
+   *  none was put, or it threw. */
+  latestLoadOrderPut(): Promise<LoadOrderOutcome | undefined>;
 
   // The backend process: today's four values, read as a current value and observed through a
   // status-changed event.
