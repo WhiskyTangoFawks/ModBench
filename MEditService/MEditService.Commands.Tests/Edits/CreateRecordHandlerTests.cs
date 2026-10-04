@@ -3,6 +3,7 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -94,14 +95,16 @@ public sealed class CreateRecordHandlerTests
     }
 
     [Fact]
-    public void CreateRecord_IsAbsentAtHead_UntilCommittedAndCompiled()
+    public void CreateRecord_IsChangedSinceTheLastCommit_UntilCommitted()
     {
         using var mod = SourceEditFixture.Tracked();
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
 
         Assert.NotNull(result.NewFormKey);
-        Assert.False(mod.CommittedHolds(result.NewFormKey));
+        Assert.Contains(result.NewFormKey, mod.ChangedFormKeys());
+        Commit(mod);
+        Assert.DoesNotContain(result.NewFormKey, mod.ChangedFormKeys());
     }
 
     [Fact]
@@ -124,6 +127,22 @@ public sealed class CreateRecordHandlerTests
         Assert.True(LocalId(resultFormKey) > LocalId(headOnlyFormKey),
             $"expected an ID above {headOnlyFormKey}, got {resultFormKey} — the allocator must " +
             "consult the committed tree, not just the working one.");
+    }
+
+    [Fact]
+    public void CreateRecord_AllocatesNoHigherBecauseOfAnOverrideOfAMastersRecord()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        const string masterKey = "F00000:Master.esm";
+        TrackedTree.Repository(mod.ModFolder).Put(
+            mod.Plugin,
+            new SourceDocument(masterKey, "npc_", "Overridden", $"{{\n  \"FormKey\": \"{masterKey}\",\n  \"EditorID\": \"Overridden\"\n}}"));
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "Allocated");
+
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(result.NewFormKey);
+        Assert.True(LocalId(result.NewFormKey) < LocalId(masterKey), result.NewFormKey);
     }
 
     private static void Commit(SourceEditFixture mod)

@@ -14,7 +14,7 @@ public sealed class FormIdEditTests
     private const string FreeFormKey = "000F00:Fixture.esp";
 
     [Fact]
-    public void EditingTheFormId_MovesTheRecordToTheNewFormKey_OldGoneAtTheWorkingTree_StillAtHead_NewAbsentAtHead()
+    public void EditingTheFormId_MovesTheRecordToTheNewFormKey_OldGoneAtTheWorkingTree_StillUsed_NewChangedSinceTheLastCommit()
     {
         using var mod = SourceEditFixture.Tracked();
 
@@ -23,13 +23,13 @@ public sealed class FormIdEditTests
         Assert.True(result.Applied, result.Message);
         Assert.Equal(FreeFormKey, result.NewFormKey);
         Assert.Null(mod.Document(mod.Npc.ToString()));
-        Assert.True(mod.CommittedHolds(mod.Npc.ToString()));
+        Assert.True(mod.Uses(mod.Npc.ToString()));
         Assert.NotNull(mod.Document(FreeFormKey));
-        Assert.False(mod.CommittedHolds(FreeFormKey));
+        Assert.Contains(FreeFormKey, mod.ChangedFormKeys());
     }
 
     [Fact]
-    public void EditingTheFormId_OfANeverCommittedAddedRecord_LeavesTheOldFormKeyInNeitherRef()
+    public void EditingTheFormId_OfANeverCommittedAddedRecord_LeavesTheOldFormKeyUnused()
     {
         using var mod = SourceEditFixture.Tracked();
         const string oldFormKey = "800000:Fixture.esp";
@@ -40,7 +40,7 @@ public sealed class FormIdEditTests
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(mod.Document(oldFormKey));
-        Assert.False(mod.CommittedHolds(oldFormKey));
+        Assert.False(mod.Uses(oldFormKey));
         Assert.NotNull(mod.Document(FreeFormKey));
     }
 

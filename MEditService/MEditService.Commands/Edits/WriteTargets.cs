@@ -177,31 +177,23 @@ internal sealed class WriteTargets(
     // per-child re-read would walk the whole tree again for every key drawn.
     public readonly record struct Allocator(
         PluginAddress Plugin, GameRelease Release, bool IsLight, bool EslFlagIsRemovable,
-        IReadOnlySet<string> Effective, IReadOnlySet<string> Head)
-    {
-        public bool HoldsAtEitherRef(string formKey) => Effective.Contains(formKey) || Head.Contains(formKey);
+        IReadOnlySet<string> Used);
 
-        internal IEnumerable<string> Taken => Effective.Concat(Head);
-    }
-
-    // Both refs from the tree alone (ADR-0015): the working tree, plus HEAD, whose IDs a
-    // working-tree deletion has not freed until the plugin is compiled.
+    // From the tree alone (ADR-0015).
     internal Allocator AllocatorOver(SourceRepository repository, PluginAddress plugin) =>
         AllocatorOver(
             plugin,
             IsLightByRemovableFlag(repository, plugin),
-            repository.NativeFormKeysHeld(plugin),
-            repository.NativeFormKeysHeldAt(plugin, "HEAD"));
+            repository.FormKeysUsed(plugin));
 
     // A .esl extension also reads as light, and no header edit can un-flag that one.
     private Allocator AllocatorOver(
-        PluginAddress plugin, bool byRemovableFlag, IReadOnlySet<string> effective, IReadOnlySet<string> head) =>
+        PluginAddress plugin, bool byRemovableFlag, IReadOnlySet<string> used) =>
         new(plugin,
             loadOrder.Current.GameRelease,
             byRemovableFlag || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase),
             byRemovableFlag,
-            effective,
-            head);
+            used);
 
     // One allocator read per gesture, for the gestures that draw a single key. The embedded copy
     // draws several from one allocator and calls the overload below directly.
@@ -222,7 +214,7 @@ internal sealed class WriteTargets(
                 targetFormKey = "";
                 return notNative;
             }
-            if (allocator.HoldsAtEitherRef(requestedFormKey))
+            if (allocator.Used.Contains(requestedFormKey))
             {
                 targetFormKey = "";
                 return RecordEditResult.Refused(
@@ -258,6 +250,10 @@ internal sealed class WriteTargets(
         return header?.Body is { } body && HeaderDocument.IsLight(Encoding.UTF8.GetBytes(body));
     }
 
+    private static bool IsNativeTo(string formKey, PluginAddress plugin) =>
+        FormKey.TryFactory(formKey, out var parsed)
+        && parsed.ModKey.FileName.String.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase);
+
     // A foreign ModKey would land a record inside this plugin's tree while claiming another origin,
     // indistinguishable from a corrupt override; xEdit never offers one either. Range is checked
     // after ownership.
@@ -265,7 +261,7 @@ internal sealed class WriteTargets(
     {
         var parsed = FormKey.Factory(requestedFormKey);
         var requestedOwner = parsed.ModKey.FileName.String;
-        if (!requestedOwner.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
+        if (!IsNativeTo(requestedFormKey, plugin))
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.NotNativeRecord,
@@ -285,12 +281,12 @@ internal sealed class WriteTargets(
         return null;
     }
 
-    // Unions the working tree (committed plus uncompiled creates) and HEAD (natives the working tree
-    // deleted, whose IDs must not be reused before compile). Null means exhausted.
+    // Null means exhausted.
     private static string? NextFreeNativeFormId(Allocator allocator, bool isLight, IReadOnlySet<string>? taken = null)
     {
         var floor = PluginFlagPredicates.HighRangeFormIdFloor(allocator.Release);
-        var highest = allocator.Taken
+        var highest = allocator.Used
+            .Where(key => IsNativeTo(key, allocator.Plugin))
             .Concat(taken ?? Enumerable.Empty<string>())
             .Select(LocalId)
             .DefaultIfEmpty(0u)

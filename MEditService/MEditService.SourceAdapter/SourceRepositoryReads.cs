@@ -3,7 +3,6 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
 
@@ -42,14 +41,15 @@ public sealed partial class SourceRepository
     /// destination.</summary>
     public IReadOnlySet<string> EditorIdsHeld(PluginAddress plugin) => EditorIds(ReadAll(plugin));
 
-    /// <summary>Every FormKey the plugin originates and its tree holds now, a record with a document
-    /// of its own and an embedded child alike. The header is excluded: its key is synthetic.</summary>
-    public IReadOnlySet<string> NativeFormKeysHeld(PluginAddress plugin) => Native(ReadAll(plugin), plugin, _release);
-
-    /// <summary>The same set as <paramref name="gitRef"/> committed it, so an ID a working-tree
-    /// deletion freed stays taken until the plugin is compiled.</summary>
-    public IReadOnlySet<string> NativeFormKeysHeldAt(PluginAddress plugin, string gitRef) =>
-        Native(ReadAll(plugin, gitRef), plugin, _release);
+    /// <summary>Every FormKey the plugin's source uses, committed or not: a record's own, an embedded
+    /// child's and the header's synthetic one. A deletion frees its key once committed.</summary>
+    public IReadOnlySet<string> FormKeysUsed(PluginAddress plugin)
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddFormKeys(keys, ReadAll(plugin));
+        AddFormKeys(keys, ReadAll(plugin, "HEAD"));
+        return keys;
+    }
 
     /// <summary>The plugin's tree as the documents it holds right now, each record's own. The caller
     /// disposes it.</summary>
@@ -57,30 +57,19 @@ public sealed partial class SourceRepository
         PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         new SourceTreeDocuments(_modFolder, plugin.Name, _release, schemas);
 
-    private static HashSet<string> Native(IReadOnlyList<SourceDocument> documents, PluginAddress plugin, GameRelease release)
+    private void AddFormKeys(HashSet<string> keys, IReadOnlyList<SourceDocument> documents)
     {
-        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var document in documents)
         {
-            if (document.RecordType != PluginHeader.RecordType) AddIfNative(keys, document.FormKey, plugin);
+            keys.Add(document.FormKey);
 
             // A child inlined in this document is a record of its own with a FormKey of its own, so its
             // ID is as taken as any other.
-            foreach (var (formKey, _, inAnEmbedSlot) in FormKeysIn(Encoding.UTF8.GetBytes(document.Body), release))
+            foreach (var (formKey, _, inAnEmbedSlot) in FormKeysIn(Encoding.UTF8.GetBytes(document.Body), _release))
             {
-                if (inAnEmbedSlot) AddIfNative(keys, formKey, plugin);
+                if (inAnEmbedSlot) keys.Add(formKey);
             }
         }
-        return keys;
-    }
-
-    // Native: the record's own FormKey names this plugin, so this plugin allocated it — an override of
-    // a master carries the master's key and takes none of this plugin's space.
-    private static void AddIfNative(HashSet<string> keys, string formKey, PluginAddress plugin)
-    {
-        var colon = formKey.IndexOf(':', StringComparison.Ordinal);
-        if (colon > 0 && formKey.AsSpan(colon + 1).Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
-            keys.Add(formKey);
     }
 
     private static HashSet<string> EditorIds(IReadOnlyList<SourceDocument> documents)
