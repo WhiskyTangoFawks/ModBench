@@ -77,6 +77,7 @@ medit_repositories: "MEDIT · Repositories — the only boxes that read or write
   class: band; grid-rows: 1
   sourceadapter: "Source adapter\nowns: a tracked plugin's source tree\nhides: layout and git" {class: repositories}
   pluginadapter: "Plugin adapter\nowns: a plugin file, read and written through Mutagen\nhides: the game assemblies; when a file is re-read" {class: repositories}
+  repositorieslib: "repositories lib\nowns: code two or more of this layer's boxes share\nhides: nothing; it holds no state and no port" {class: repositories}
 }
 modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the one reader and writer of the instance" {
   class: band; grid-rows: 1

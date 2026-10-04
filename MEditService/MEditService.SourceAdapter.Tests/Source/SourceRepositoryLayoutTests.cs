@@ -1,10 +1,8 @@
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -77,81 +75,5 @@ public sealed class SourceRepositoryLayoutTests
              Path.Combine("plugin-source", "Mixed.ESP", "npc_", "SomeNpc - 000800_Mixed.ESP.json")],
             pristine.Select(file => file.RelativePath));
         Assert.Equal([1], pristine[0].Content);
-    }
-
-    [Fact]
-    public void PathCarrying_AFlatRecord_IsTheFileWhoseNameCarriesTheFormKey()
-    {
-        string[] paths =
-        [
-            "plugin-source/Vendor.esp/npc_/Other - 000900_Vendor.esp.json",
-            "plugin-source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json",
-        ];
-
-        Assert.Equal(
-            "plugin-source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json",
-            SourceRepository.PathCarrying(paths, "Vendor.esp", "000800:Vendor.esp"));
-    }
-
-    [Fact]
-    public void PathCarrying_AContainer_IsTheDocumentOfTheDirectoryWhoseNameCarriesTheFormKey_ForTheDocumentIsNamedForTheDoorNotTheRecord()
-    {
-        string[] paths = ["plugin-source/Vendor.esp/Cells/0, 0/0, 0/SomeCell - 0012AB_Vendor.esp/RecordData.json"];
-
-        Assert.Equal(paths[0], SourceRepository.PathCarrying(paths, "Vendor.esp", "0012AB:Vendor.esp"));
-    }
-
-    [Fact]
-    public void PathCarrying_ThePluginsOwnHeader_IsTheTreesRootDocument_ThoughTheLayoutNamesItAfterNoFormKey()
-    {
-        string[] paths = ["plugin-source/Vendor.esp/RecordData.json"];
-
-        Assert.Equal(
-            paths[0],
-            SourceRepository.PathCarrying(
-                paths, "Vendor.esp", PluginHeader.FormKeyFor(ModKey.FromFileName("Vendor.esp"))));
-    }
-
-    [Fact]
-    public void PathCarrying_ARecordThatIsNotTheHeader_DoesNotMatchTheTreesRootDocument()
-    {
-        string[] paths = ["plugin-source/Vendor.esp/RecordData.json"];
-
-        Assert.Null(SourceRepository.PathCarrying(paths, "Vendor.esp", "000800:Vendor.esp"));
-    }
-
-    [Fact]
-    public void PathCarrying_AWindowsSeparatedContainer_IsAnsweredLikeAGitListing_SoNoCallerNormalizesSeparatorsBeforeAsking()
-    {
-        string[] paths = [@"C:\mods\VendorMod\plugin-source\Vendor.esp\Cells\0, 0\0, 0\SomeCell - 0012AB_Vendor.esp\RecordData.json"];
-
-        Assert.Equal(paths[0], SourceRepository.PathCarrying(paths, "Vendor.esp", "0012AB:Vendor.esp"));
-    }
-
-    [Fact]
-    public void PathCarrying_AWindowsSeparatedHeaderDocument_IsThePluginsOwnHeader()
-    {
-        string[] paths = [@"C:\mods\VendorMod\plugin-source\Vendor.esp\RecordData.json"];
-
-        Assert.Equal(
-            paths[0],
-            SourceRepository.PathCarrying(
-                paths, "Vendor.esp", PluginHeader.FormKeyFor(ModKey.FromFileName("Vendor.esp"))));
-    }
-
-    [Fact]
-    public void PathCarrying_NothingHoldingTheFormKey_IsNull()
-    {
-        Assert.Null(SourceRepository.PathCarrying(
-            ["plugin-source/Vendor.esp/npc_/Other - 000900_Vendor.esp.json"], "Vendor.esp", "000800:Vendor.esp"));
-    }
-
-    [Fact]
-    public void PathCarrying_APathWithNoSegments_IsPassedOver_NotThrownPast_ForNeitherGitNorADirectoryWalkIsPromisedFreeOfAnEmptyLine()
-    {
-        string[] paths = ["", "/", "plugin-source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json"];
-
-        Assert.Equal(paths[2], SourceRepository.PathCarrying(paths, "Vendor.esp", "000800:Vendor.esp"));
-        Assert.Null(SourceRepository.PathCarrying(["", "/"], "Vendor.esp", "000800:Vendor.esp"));
     }
 }

@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
@@ -174,7 +173,7 @@ internal sealed class WorkingTreeOverlay
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin });
         cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
         cmd.Parameters.Add(new DuckDBParameter { Value = body });
-        cmd.Parameters.Add(new DuckDBParameter { Value = SourceRepository.ContentHash(Encoding.UTF8.GetBytes(body)) });
+        cmd.Parameters.Add(new DuckDBParameter { Value = SourceRepository.ContentStamp(body) });
         cmd.Parameters.Add(new DuckDBParameter { Value = (object?)parseDiagnosis ?? DBNull.Value });
         cmd.ExecuteNonQuery();
     }
@@ -218,7 +217,7 @@ internal sealed class WorkingTreeOverlay
             UPDATE mirror.records_committed
             SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin, body, SourceRepository.ContentHash(Encoding.UTF8.GetBytes(body)));
+            """, formKey, key.Name, key.Origin, body, SourceRepository.ContentStamp(body));
         DuckDbSql.ExecuteFor(_connection, $"""
             UPDATE mirror.records SET "ref" = '{SourceRef.WorkingTree}'
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
@@ -291,7 +290,7 @@ internal sealed class WorkingTreeOverlay
 
     private void UpsertEffectiveBody(PluginAddress key, string formKey, string body)
     {
-        var contentHash = SourceRepository.ContentHash(Encoding.UTF8.GetBytes(body));
+        var contentHash = SourceRepository.ContentStamp(body);
 
         // An UPDATE alone would silently do nothing for a record deleted in the working tree (no
         // Effective row) and then edited back to a different value, so the row is restored from the

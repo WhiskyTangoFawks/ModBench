@@ -171,45 +171,6 @@ public sealed partial class SourceRepository
         !filePath.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase)
         || Path.GetFileName(filePath).Equals(GroupRecordDataFileName, StringComparison.Ordinal);
 
-    /// <summary>Whether <paramref name="leaf"/> names the record with <paramref name="formKey"/> — asked
-    /// in the one unambiguous direction, since an EditorID containing <c>" - "</c> makes splitting a
-    /// name undecidable.</summary>
-    internal static bool NameCarriesFormKey(string leaf, string formKey)
-    {
-        var filesafe = FilesafeFormKey(formKey);
-        return NameCarries(leaf, filesafe) || NameCarries(leaf, filesafe + JsonSuffix);
-    }
-
-    /// <summary>Which of <paramref name="paths"/> holds <paramref name="formKey"/>'s document, or null
-    /// when none does. Both separators are read, so a git listing and a walk of the working tree ask
-    /// alike.</summary>
-    public static string? PathCarrying(IEnumerable<string> paths, string pluginFileName, string formKey)
-    {
-        foreach (var path in paths)
-        {
-            var segments = Segments(path);
-            if (segments.Length == 0) continue;
-            var leaf = segments[^1];
-
-            if (leaf.Equals(RecordDataFileName, StringComparison.Ordinal))
-            {
-                // The header's document has a fixed path and a name that carries no FormKey; every
-                // other one is named by the directory holding it.
-                if (IsHeaderDocumentPath(segments, pluginFileName))
-                {
-                    if (formKey.Equals(HeaderFormKeyOf(pluginFileName), StringComparison.Ordinal)) return path;
-                    continue;
-                }
-
-                if (segments.Length < 2) continue;
-                leaf = segments[^2];
-            }
-
-            if (NameCarriesFormKey(leaf, formKey)) return path;
-        }
-        return null;
-    }
-
     /// <summary>Whether <paramref name="path"/> names the header's own document. A suffix, not an
     /// equality: the caller may spell it absolute, relative to the mod folder, or as git does.</summary>
     internal static bool IsHeaderDocumentPath(string path, string pluginFileName) =>
