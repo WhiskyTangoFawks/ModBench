@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.Ports;
 using MEditService.TestSupport;
@@ -15,6 +14,7 @@ public sealed class TrackedProjectionTests : IDisposable
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _mod;
     private readonly InMemoryNotificationPublisher _notifications = new();
+    private readonly List<(long Sequence, string? EditorId)> _seenWhenPublished = [];
     private readonly Indexer _index;
     private readonly string _npc;
     private readonly string _otherNpc;
@@ -32,7 +32,7 @@ public sealed class TrackedProjectionTests : IDisposable
             .Tracked();
         _mod = _fixture.Plugins.Single();
         (_npc, _otherNpc) = (npc.ToString(), otherNpc.ToString());
-        _index = Indexes.Reconciled(_fixture, notifications: _notifications);
+        _index = Indexes.Reconciled(_fixture, notifications: new Observing(_notifications, SeenNow));
     }
 
     public void Dispose()
@@ -41,82 +41,59 @@ public sealed class TrackedProjectionTests : IDisposable
         _fixture.Dispose();
     }
 
+    private void SeenNow() =>
+        _seenWhenPublished.Add((_index.Sequence, _index.RequireReads().DocumentOf(_npc, _mod.KeyOf()).EditorId));
+
     private void RenameByHand(string formKey, string from, string to) =>
         _mod.HandEdit(_index.RequireReads().DocumentOf(formKey, _mod.KeyOf()), $"\"{from}\"", $"\"{to}\"");
+
+    private bool ReDeriveRenamed(string formKey, string from, string to)
+    {
+        RenameByHand(formKey, from, to);
+        PluginBinaries.Touch(_mod.Path);
+        return _index.Revalidate();
+    }
 
     [Fact]
     public async Task ATrackedPluginReDerivedFromADirtyTree_AdvancesTheSequenceExactlyOnce()
     {
-        RenameByHand(_npc, NpcEditorId, "RenamedByHand");
-        PluginBinaries.Touch(_mod.Path);
         var before = _index.Sequence;
 
-        Assert.True(_index.Revalidate());
+        Assert.True(ReDeriveRenamed(_npc, NpcEditorId, "RenamedByHand"));
 
         Assert.Equal(before + 1, _index.Sequence);
     }
 
     [Fact]
-    public void ARowsChangedNotification_WaitsForItsProjectionToLand_AndNamesTheSequenceItLandedOn()
+    public void ARowsChangedNotification_IsPublishedOnceItsRowsLanded_AndNamesTheSequenceItLandedOn()
     {
-        RenameByHand(_npc, NpcEditorId, "RenamedByHand");
-
-        using (_index.BeginProjection())
-        {
-            _index.NextSnapshot();
-            Assert.Empty(_notifications.Notifications.OfType<RowsChangedNotification>());
-        }
+        Assert.True(ReDeriveRenamed(_npc, NpcEditorId, "RenamedByHand"));
 
         var landed = _notifications.Notifications.OfType<RowsChangedNotification>().Single();
         Assert.Contains(_npc, landed.Keys);
         Assert.Equal(_index.Sequence, landed.Sequence);
+        Assert.Equal("RenamedByHand", _seenWhenPublished.Single().EditorId);
+        Assert.Equal(landed.Sequence, _seenWhenPublished.Single().Sequence);
     }
 
     [Fact]
-    public async Task TwoProjectionsOpenAtOnce_EachLandsItsOwnAdvance_AndNothingIsAnnouncedAheadOfTheStore()
+    public void TwoReDerivations_EachLandsItsOwnAdvance_AndEachIsAnnouncedAtTheSequenceItLandedOn()
     {
-        RenameByHand(_npc, NpcEditorId, "RenamedByHand");
         var before = _index.Sequence;
-        var announced = new ConcurrentBag<long>();
-
-        using var firstOpen = new ManualResetEventSlim();
-        using var secondOpen = new ManualResetEventSlim();
-        using var firstClosed = new ManualResetEventSlim();
-
-        var first = Task.Run(() =>
-        {
-            using (_index.BeginProjection())
-            {
-                _index.NextSnapshot();
-                _index.Announce(() => announced.Add(_index.Sequence));
-                firstOpen.Set();
-                Wait(secondOpen);
-            }
-            firstClosed.Set();
-        });
-
-        var second = Task.Run(() =>
-        {
-            Wait(firstOpen);
-            RenameByHand(_otherNpc, OtherNpcEditorId, "AlsoRenamedByHand");
-            using (_index.BeginProjection())
-            {
-                _index.NextSnapshot();
-                _index.Announce(() => announced.Add(_index.Sequence));
-                secondOpen.Set();
-                Wait(firstClosed);
-            }
-        });
-
-        await Task.WhenAll(first, second);
+        Assert.True(ReDeriveRenamed(_npc, NpcEditorId, "RenamedByHand"));
+        Assert.True(ReDeriveRenamed(_otherNpc, OtherNpcEditorId, "AlsoRenamedByHand"));
 
         Assert.Equal(before + 2, _index.Sequence);
-        Assert.Equal(2, announced.Count);
-        Assert.All(announced, sequence => Assert.InRange(sequence, before + 1, _index.Sequence));
+        var announced = _notifications.Notifications.OfType<RowsChangedNotification>().Select(n => n.Sequence);
+        Assert.Equal([before + 1, before + 2], announced);
     }
 
-    private static void Wait(ManualResetEventSlim gate)
+    private sealed class Observing(INotificationPublisher inner, Action onRowsChanged) : INotificationPublisher
     {
-        if (!gate.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("The other projection never got there.");
+        public void Publish(Notification notification)
+        {
+            if (notification is RowsChangedNotification) onRowsChanged();
+            inner.Publish(notification);
+        }
     }
 }

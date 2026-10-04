@@ -176,23 +176,6 @@ public sealed class Indexer : IQueryIndex, IDisposable
 
     public long Sequence { get { lock (_lock) return _index?.Sequence ?? 0; } }
 
-    /// <summary>ADR-0015: everything projected inside the scope advances the sequence
-    /// once, when the outermost of any nested scopes closes. A no-op with no store held.</summary>
-    public IDisposable BeginProjection()
-    {
-        lock (_lock) return _index?.BeginProjection() ?? Store.NoProjectionScope;
-    }
-
-    /// <summary>Runs <paramref name="publish"/> once the projection it was raised in has landed, so
-    /// nothing names a sequence the store has not reached. Runs at once with no store held.</summary>
-    public void Announce(Action publish)
-    {
-        IRecordIndex? index;
-        lock (_lock) index = _index;
-        if (index is null) publish();
-        else index.Announce(publish);
-    }
-
     // ADR-0015: a whole plugin re-derived or removed has too many rows to name, so the
     // announcement names the plugin and the sequence the store reached once the projection landed.
     private void AnnouncePluginChanged(IRecordIndex index, PluginAddress key) =>
