@@ -1,15 +1,11 @@
-// Which copies of a file are the same: sizes first, then the content digest of each copy whose size
-// another copy shares, remembered by the copy's stamp.
-
-import type { FileOrigin, FileRead, FileStamp, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { FileOrigin, FileRead, FileStamp, InstanceAdapter, OriginFile } from '../instanceAdapter/instanceAdapter';
 import { present } from '../ports/present';
 import { foldPath } from './fileConflictIndex';
-import type { InstanceValue } from './instance';
 
-/** One provider's copy of a file. Two copies of one file with the same `contents` hold the same
+/** One provider's copy of a file. Two copies of one file with the same `sameAs` hold the same
  *  bytes. */
 export type Copy = { readonly origin: FileOrigin } & (
-  | { readonly kind: 'read'; readonly contents: number }
+  | { readonly kind: 'read'; readonly sameAs: number }
   | { readonly kind: 'unreadable'; readonly reason: string });
 
 export interface FileCopies {
@@ -18,7 +14,13 @@ export interface FileCopies {
   readonly copies: readonly Copy[];
 }
 
-type CopiesIn = Pick<InstanceValue, 'files' | 'filesByMod' | 'overwriteFiles'>;
+type CopyFile = Pick<OriginFile, 'relativePath' | 'sourcePath'>;
+
+export interface CopiesIn {
+  readonly files: { get(relativePath: string): { readonly providers: readonly FileOrigin[] } | undefined };
+  readonly filesByMod: ReadonlyMap<string, readonly CopyFile[]>;
+  readonly overwriteFiles: readonly CopyFile[];
+}
 
 // A file system stamps a change with a clock coarser than a digest is quick, and a network share's
 // clock is not this machine's: a stamp this recent may not change for a write that follows it.
@@ -30,7 +32,6 @@ const sameStamp = (a: FileStamp, b: FileStamp): boolean =>
 const settledBefore = (stamp: FileStamp, readFromMs: number): boolean =>
   stamp.changedNs < BigInt(readFromMs - SETTLED_AFTER_MS) * 1_000_000n;
 
-// Each origin's files are looked up by folded path, built once per origin an answer needs.
 function copyPathsIn(value: CopiesIn): (origin: FileOrigin, relativePath: string) => string {
   const byOrigin = new Map<string, ReadonlyMap<string, string>>();
   return (origin, relativePath) => {
@@ -45,29 +46,28 @@ function copyPathsIn(value: CopiesIn): (origin: FileOrigin, relativePath: string
   };
 }
 
-// A digest names the contents; a copy whose size no other copy shares has contents of its own.
-type Contents = FileRead<string | undefined>;
+type Contents = FileRead<string> | { readonly kind: 'ownSize' };
 
 function numbered(contents: readonly { readonly origin: FileOrigin; readonly contents: Contents }[]): Copy[] {
   const numbers = new Map<string, number>();
   let next = 0;
   return contents.map(({ origin, contents: read }) => {
     if (read.kind === 'unreadable') return { origin, kind: 'unreadable', reason: read.reason };
-    const digest = read.answer;
-    const known = digest === undefined ? undefined : numbers.get(digest);
-    if (known !== undefined) return { origin, kind: 'read', contents: known };
-    if (digest !== undefined) numbers.set(digest, next);
-    return { origin, kind: 'read', contents: next++ };
+    if (read.kind === 'ownSize') return { origin, kind: 'read', sameAs: next++ };
+    const known = numbers.get(read.answer);
+    if (known !== undefined) return { origin, kind: 'read', sameAs: known };
+    numbers.set(read.answer, next);
+    return { origin, kind: 'read', sameAs: next++ };
   });
 }
 
 export class SameCopies {
-  // By the path a copy is read from; an answer still being read is shared, never read twice.
   private readonly remembered = new Map<string, { readonly stamp: FileStamp; readonly digest: Promise<FileRead<string>> }>();
 
   constructor(private readonly adapter: Pick<InstanceAdapter, 'fileStamp' | 'contentDigest'>) {}
 
   of(value: CopiesIn, relativePaths: readonly string[]): Promise<FileCopies[]> {
+    this.forgetCopiesNotIn(value);
     const copyPath = copyPathsIn(value);
     return Promise.all(relativePaths.map(async (relativePath) => {
       const stamped = await Promise.all((value.files.get(relativePath)?.providers ?? []).map(async (origin) => {
@@ -81,10 +81,15 @@ export class SameCopies {
     }));
   }
 
+  private forgetCopiesNotIn(value: CopiesIn): void {
+    const copies = new Set([...value.filesByMod.values()].flat().concat(value.overwriteFiles).map((file) => file.sourcePath));
+    for (const path of this.remembered.keys()) if (!copies.has(path)) this.remembered.delete(path);
+  }
+
   private async contentsOf(path: string, stamp: FileRead<FileStamp>, sizes: readonly bigint[]): Promise<Contents> {
     if (stamp.kind === 'unreadable') return stamp;
     const { answer } = stamp;
-    if (sizes.filter((size) => size === answer.size).length === 1) return { kind: 'read', answer: undefined };
+    if (sizes.filter((size) => size === answer.size).length === 1) return { kind: 'ownSize' };
     return this.digestOf(path, answer);
   }
 

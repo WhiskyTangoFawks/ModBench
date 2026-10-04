@@ -64,7 +64,6 @@ async function readCreationClubList(gameFolder: GameFolder, gameRelease: string 
   return text === undefined ? [] : parsePlugins(text).map((entry) => entry.name);
 }
 
-// One file that cannot be read is that file's answer, never a failure of whatever asked.
 async function answerOrReason<T>(read: () => Promise<T>): Promise<FileRead<T>> {
   try {
     return { kind: 'read', answer: await read() };

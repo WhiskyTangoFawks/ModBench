@@ -11,6 +11,7 @@ import { present } from '../../ports/present';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance } from '../instance';
+import { SameCopies, type CopiesIn } from '../sameCopies';
 
 const NONO = 'Ñoño\'s Retexture';
 const PATCH = 'Unofficial Fallout 4 Patch';
@@ -58,11 +59,11 @@ const clockAnHourPastEveryWrite = (): void => {
   vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
 };
 
-async function twoCopiesOfOneSize(read: string[]): Promise<{ root: string; instance: Instance; paths: string[] }> {
+async function twoCopiesOfOneSize(read: string[]): Promise<{ instance: Instance; paths: string[] }> {
   const { root, instance } = instanceOver(digestsRead(read));
   const paths = [await writeCopy(root, `mods/${NONO}`, SHARED, 'aaaa'), await writeCopy(root, `mods/${PATCH}`, SHARED, 'aaaa')];
   await instance.refresh();
-  return { root, instance, paths };
+  return { instance, paths };
 }
 
 describe('Instance — which copies of a file are the same', () => {
@@ -76,9 +77,9 @@ describe('Instance — which copies of a file are the same', () => {
     expect(await instance.sameCopies([SHARED])).toEqual([{
       relativePath: SHARED,
       copies: [
-        { origin: { kind: 'runtimeOutput' }, kind: 'read', contents: 0 },
-        { origin: mod(NONO), kind: 'read', contents: 1 },
-        { origin: mod(PATCH), kind: 'read', contents: 1 },
+        { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0 },
+        { origin: mod(NONO), kind: 'read', sameAs: 1 },
+        { origin: mod(PATCH), kind: 'read', sameAs: 1 },
       ],
     }]);
   });
@@ -93,7 +94,7 @@ describe('Instance — which copies of a file are the same', () => {
 
     const [answer] = await instance.sameCopies([SHARED]);
 
-    expect(answer?.copies.map((copy) => copy.kind === 'read' && copy.contents)).toEqual([0, 1, 2]);
+    expect(answer?.copies.map((copy) => copy.kind === 'read' && copy.sameAs)).toEqual([0, 1, 2]);
     expect(read.sort()).toEqual([nono, patch].sort());
   });
 
@@ -111,7 +112,7 @@ describe('Instance — which copies of a file are the same', () => {
     const [answer] = await instance.sameCopies([SHARED]);
 
     const [overwrite, removed, locked] = answer?.copies ?? [];
-    expect(overwrite).toEqual({ origin: { kind: 'runtimeOutput' }, kind: 'read', contents: 0 });
+    expect(overwrite).toEqual({ origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0 });
     expect(removed).toMatchObject({ origin: mod(NONO), kind: 'unreadable' });
     expect(removed?.kind === 'unreadable' && removed.reason).toContain('ENOENT');
     expect(locked).toEqual({ origin: mod(PATCH), kind: 'unreadable', reason: 'locked by the game' });
@@ -140,7 +141,7 @@ describe('Instance — which copies of a file are the same', () => {
     await utimes(copy, MODIFIED_ON_A_WHOLE_SECOND, MODIFIED_ON_A_WHOLE_SECOND);
 
     const [answer] = await instance.sameCopies([SHARED]);
-    expect(answer?.copies.map((c) => c.kind === 'read' && c.contents)).toEqual([0, 1]);
+    expect(answer?.copies.map((c) => c.kind === 'read' && c.sameAs)).toEqual([0, 1]);
   });
 
   it('reads again a copy whose stamp is within a clock tick of its last read, as a write in that tick may keep the stamp', async () => {
@@ -173,8 +174,31 @@ describe('Instance — which copies of a file are the same', () => {
     const [answer] = await instance.sameCopies([SHARED]);
 
     expect(answer?.copies).toEqual([
-      { origin: { kind: 'runtimeOutput' }, kind: 'read', contents: 0 },
-      { origin: mod('overwrite'), kind: 'read', contents: 1 },
+      { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0 },
+      { origin: mod('overwrite'), kind: 'read', sameAs: 1 },
     ]);
+  });
+});
+
+describe('SameCopies — what it remembers', () => {
+  it('forgets a copy the value it answers for no longer holds', async () => {
+    const stamp = { size: 4n, modifiedNs: 1n, changedNs: 1n };
+    const digested: string[] = [];
+    const copies = new SameCopies({
+      fileStamp: () => Promise.resolve({ kind: 'read', answer: stamp }),
+      contentDigest: (path) => { digested.push(path); return Promise.resolve({ kind: 'read', answer: 'd' }); },
+    });
+    const file = (origin: string) => ({ relativePath: SHARED, sourcePath: `/${origin}/${SHARED}` });
+    const valueOf = (...origins: string[]): CopiesIn => ({
+      files: new Map([[SHARED, { providers: origins.map((name) => mod(name)) }]]),
+      filesByMod: new Map(origins.map((name) => [name, [file(name)]])),
+      overwriteFiles: [],
+    });
+    await copies.of(valueOf('a', 'b'), [SHARED]);
+    await copies.of(valueOf('c'), [SHARED]);
+
+    await copies.of(valueOf('a', 'b'), [SHARED]);
+
+    expect(digested).toHaveLength(4);
   });
 });
