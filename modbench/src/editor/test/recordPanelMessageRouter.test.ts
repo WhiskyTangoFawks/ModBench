@@ -35,7 +35,7 @@ beforeEach(() => { meditClient = new InMemoryMEditClient(); });
 function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRecordPanelMessageDeps {
   return {
     channel: fakeChannel(),
-    reporter: { insideDialog: vi.fn() },
+    reporter: { shownOnSurface: vi.fn() },
     meditClient,
     formKeyPicker: undefined,
     focusCell: vi.fn(),
@@ -148,7 +148,7 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER', () => {
       onDidChangeValue: vi.fn(), onDidAccept: vi.fn(), onDidHide: (cb: () => void) => { hideListeners.push(cb); },
     });
     const reply = vi.fn();
-    const formKeyPicker = { meditClient, reporter: { insideDialog: vi.fn() }, reply };
+    const formKeyPicker = { meditClient, reporter: { shownOnSurface: vi.fn() }, reply };
 
     await routeRecordPanelMessage(message, makeDeps({ formKeyPicker }));
 

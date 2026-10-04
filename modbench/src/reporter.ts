@@ -15,7 +15,7 @@ export function makeReporter(channel: Pick<vscode.LogOutputChannel, 'warn' | 'er
   return {
     landed: (message) => { void vscode.window.showInformationMessage(`Modbench: ${message}`); },
     report,
-    insideDialog: (severity, message, detail) => { log(severity, whatAndWhy(message, detail)); },
+    shownOnSurface: (severity, message, detail) => { log(severity, whatAndWhy(message, detail)); },
     selectionOutcome: (message, outcome, nameOf) => { reportSelectionOutcome(report, message, outcome, nameOf); },
   };
 }

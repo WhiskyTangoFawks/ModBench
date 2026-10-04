@@ -44,7 +44,7 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
     meditClient,
     refreshSourceControlFor,
     tellPanels,
-    reporter: { report, landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() },
+    reporter: { report, landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() },
     fieldFile: () => ({ folder: '/tmp/does-not-open-here', file: '/tmp/does-not-open-here/field.txt' }),
     log: vi.fn(),
     editGateOf: gateSendingEachWriteWhereItWasAddressed,

@@ -18,7 +18,7 @@ export interface RouteRecordPanelMessageDeps {
   // The leveled 'Modbench' channel the webview has no direct route to — the webview composes the
   // message text, this is a pure level→method forward.
   channel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
-  reporter: Pick<Reporter, 'insideDialog'>;
+  reporter: Pick<Reporter, 'shownOnSurface'>;
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
   // reconstructed per message at the call site rather than shared like `channel`.
   formKeyPicker: FormKeyPickerDeps | undefined;
