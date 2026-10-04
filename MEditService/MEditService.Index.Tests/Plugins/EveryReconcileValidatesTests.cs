@@ -1,6 +1,5 @@
 using DuckDB.NET.Data;
 using MEditService.Index.Tests.TestSupport;
-using static MEditService.Index.Tests.TestSupport.Announcements;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
@@ -10,6 +9,7 @@ using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using static MEditService.Index.Tests.TestSupport.Announcements;
 
 namespace MEditService.Index.Tests.Plugins;
 
