@@ -4,6 +4,7 @@ using MEditService.Codec.Schema;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.RealData;
@@ -18,10 +19,26 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     }
 
     [Fact]
-    public void AFreshlyIngestedRealPlugin_ValidatesCleanAndAdvancesNoSequence()
+    public void AFreshlyIngestedRealPlugin_ValidatesClean_AndAnnouncesNothingOfIt()
     {
-        Assert.False(fixture.FromSource.Revalidate());
-        Assert.Empty(fixture.FromSource.Status.Failures);
+        using var scratch = new ScratchDirectory("medit-source-parity-validates-");
+        var partnerPath = Path.Combine(scratch, "Partner.esp");
+        PluginBinaries.Rewrite(partnerPath, mod => mod.Npcs.AddNew("PartnerNpc"));
+        var partner = new LoadOrderEntry("Partner.esp", partnerPath, "PartnerMod", 1, Enabled: true, Winning: true);
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = Indexes.Reconciled(
+            scratch,
+            [
+                new LoadOrderEntry(RealDataPlugin.PluginFileName, Path.Combine(fixture.ModFolder, RealDataPlugin.PluginFileName), SourceParityFixture.Origin, 0, Enabled: true, Winning: true),
+                partner,
+            ],
+            Directory.CreateDirectory(Path.Combine(scratch, "instance")).FullName,
+            notifications: notifications);
+
+        var announced = index.AnnouncedByEqualArrivals(notifications, () => Announcements.Touched(partner));
+
+        Assert.All(announced, n => Assert.True(Announcements.PluginChanged(partner)(n)));
+        Assert.Empty(index.Status.Failures);
     }
 
     [Fact]

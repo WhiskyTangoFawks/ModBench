@@ -96,13 +96,12 @@ public sealed class StoreRebuildTests : IDisposable
     public async Task WhileARebuildRefills_TheRowsAlreadyBackAnswerThroughTheFilter()
     {
         using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-refill");
-        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
+        using var gate = new GatedPluginAdapter();
         var holder = new LoadOrderHolder();
-        using var index = new Indexer(holder, gate, SharedSchemaReflector.Instance);
-        var onlyA = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, [data.Plugins[0]]);
-        index.Reconcile(onlyA, holder.Apply(onlyA));
+        using var index = Indexes.Open(holder, gate);
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         index.SetFilter(MatchesNpcA, "npc-a.sql");
-        holder.Apply(IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        gate.ParkNextOpenOf("B.esp");
 
         var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot).Refill;
         await gate.WaitUntilParkedAsync();
@@ -120,9 +119,8 @@ public sealed class StoreRebuildTests : IDisposable
         using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-clear");
         var refills = new HeldBackScheduler();
         var holder = new LoadOrderHolder();
-        using var index = new Indexer(holder, _opens, SharedSchemaReflector.Instance, refillScheduler: refills);
-        var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
-        index.Reconcile(snapshot, holder.Apply(snapshot));
+        using var index = Indexes.Open(holder, _opens, refillScheduler: refills);
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         index.SetFilter(MatchesNpcA, "npc-a.sql");
         var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot).Refill;
 
@@ -152,18 +150,16 @@ public sealed class StoreRebuildTests : IDisposable
         using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
         var refills = new HeldBackScheduler();
         var holder = new LoadOrderHolder();
-        using var index = new Indexer(holder, gate, SharedSchemaReflector.Instance, refillScheduler: refills);
-        var onlyA = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, [data.Plugins[0]]);
-        index.Reconcile(onlyA, holder.Apply(onlyA));
+        using var index = Indexes.Open(holder, gate, refillScheduler: refills);
+        index.Reconcile(holder, data.DataFolder, [data.Plugins[0]], GameRelease.Fallout4, data.InstanceRoot);
 
         var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot).Refill;
-        var both = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
-        var version = holder.Apply(both);
-        var arrival = Task.Run(() => index.Reconcile(both, version));
+        var version = holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
         await gate.WaitUntilParkedAsync();
         var refilling = Task.Run(refills.RunHeldBack);
         gate.Release();
-        await Task.WhenAll(arrival, refilling, refill);
+        await Task.WhenAll(refilling, refill);
+        index.AwaitVersion(version);
 
         Assert.Equal(version, index.Status.Version);
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
@@ -186,8 +182,9 @@ public sealed class StoreRebuildTests : IDisposable
     [ForeignIndexHolderFact]
     public void Rebuild_RefusesAndLeavesTheFileInPlace_WhenAnotherProcessHoldsIt()
     {
-        using (var earlier = Indexes.Open(new LoadOrderHolder(), _opens))
-            earlier.Reconcile(new LoadOrderHolder(), _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        var earlierHolder = new LoadOrderHolder();
+        using (var earlier = Indexes.Open(earlierHolder, _opens))
+            earlier.Reconcile(earlierHolder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         var indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex = IndexFiles.In(_fixture.InstanceRoot);
         var bytesBeforeHold = File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
         using var otherWindow = ForeignIndexHolder.Hold(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);

@@ -47,11 +47,13 @@ public sealed class TrackedProjectionTests : IDisposable
     private void RenameByHand(string formKey, string from, string to) =>
         _mod.HandEdit(_index.RequireReads().DocumentOf(formKey, _mod.KeyOf()), $"\"{from}\"", $"\"{to}\"");
 
-    private bool ReDeriveRenamed(string formKey, string from, string to)
+    private void ReDeriveRenamed(string formKey, string from, string to)
     {
         RenameByHand(formKey, from, to);
         PluginBinaries.Touch(_mod.Path);
-        return _index.Revalidate();
+        var before = _notifications.Notifications.Count;
+        _index.NextSnapshotUntil(
+            () => _notifications.Since(before).Any(n => Announcements.RowsChanged(formKey)(n)), "the rows changed announcement");
     }
 
     [Fact]
@@ -59,7 +61,7 @@ public sealed class TrackedProjectionTests : IDisposable
     {
         var before = _index.Sequence;
 
-        Assert.True(ReDeriveRenamed(_npc, NpcEditorId, "RenamedByHand"));
+        ReDeriveRenamed(_npc, NpcEditorId, "RenamedByHand");
 
         Assert.Equal(before + 1, _index.Sequence);
     }
@@ -67,7 +69,7 @@ public sealed class TrackedProjectionTests : IDisposable
     [Fact]
     public void ARowsChangedNotification_IsPublishedOnceItsRowsLanded_AndNamesTheSequenceItLandedOn()
     {
-        Assert.True(ReDeriveRenamed(_npc, NpcEditorId, "RenamedByHand"));
+        ReDeriveRenamed(_npc, NpcEditorId, "RenamedByHand");
 
         var landed = _notifications.Notifications.OfType<RowsChangedNotification>().Single();
         Assert.Contains(_npc, landed.Keys);
@@ -80,8 +82,8 @@ public sealed class TrackedProjectionTests : IDisposable
     public void TwoReDerivations_EachLandsItsOwnAdvance_AndEachIsAnnouncedAtTheSequenceItLandedOn()
     {
         var before = _index.Sequence;
-        Assert.True(ReDeriveRenamed(_npc, NpcEditorId, "RenamedByHand"));
-        Assert.True(ReDeriveRenamed(_otherNpc, OtherNpcEditorId, "AlsoRenamedByHand"));
+        ReDeriveRenamed(_npc, NpcEditorId, "RenamedByHand");
+        ReDeriveRenamed(_otherNpc, OtherNpcEditorId, "AlsoRenamedByHand");
 
         Assert.Equal(before + 2, _index.Sequence);
         var announced = _notifications.Notifications.OfType<RowsChangedNotification>().Select(n => n.Sequence);

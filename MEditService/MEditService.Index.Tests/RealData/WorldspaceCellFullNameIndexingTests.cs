@@ -51,6 +51,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
         TrackedMods.Track(pluginPath, _gameDirectory);
+        _index.NextSnapshot();
     }
 
     public void Dispose()
@@ -63,7 +64,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     [Fact]
     public void GetWorldspaceCells_ExteriorCellWithFullNameSet_CarriesItThrough()
     {
-        var cells = _index.Projected().GetWorldspaceCells(_plugin, _worldspaceFormKey);
+        var cells = _index.RequireReads().GetWorldspaceCells(_plugin, _worldspaceFormKey);
 
         var extCell = Assert.Single(cells, c => c.EditorId == "ExtCell");
         Assert.Equal("Sanctuary Hills", extCell.FullName);
@@ -72,7 +73,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     [Fact]
     public void GetWorldspaceCells_TopCellWithNoFullNameSet_FullNameIsNull()
     {
-        var cells = _index.Projected().GetWorldspaceCells(_plugin, _worldspaceFormKey);
+        var cells = _index.RequireReads().GetWorldspaceCells(_plugin, _worldspaceFormKey);
 
         var topCell = Assert.Single(cells, c => c.EditorId == "TopCell");
         Assert.Null(topCell.FullName);

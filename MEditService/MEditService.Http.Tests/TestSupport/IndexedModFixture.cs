@@ -1,5 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.Index;
+using MEditService.Index.Tests;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
@@ -64,6 +65,7 @@ public sealed class IndexedModFixture : IDisposable
             TestAdapters.Mutagen(),
             SharedSchemaReflector.Instance,
             notifications: notifications);
+        Index.Subscribe();
         Holder = Index.Reconcile(holder,
             GameDirectory,
             [Entry],

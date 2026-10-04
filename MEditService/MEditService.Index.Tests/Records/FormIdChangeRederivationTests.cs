@@ -3,6 +3,8 @@ using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
@@ -85,25 +87,24 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         Assert.Null(Reads.GetContainerParent(_mod.Plugin, newNavmeshKey));
     }
 
-    private static void MoveTheWorldspaceSubtreeThenPutItsCorrectedFormKeyText(OneExteriorCellWorldspaceFixture fixture, string newWorldspaceKey)
+    private static void RekeyTheWorldspace(OneExteriorCellWorldspaceFixture fixture, string newWorldspaceKey)
     {
-        var repository = TrackedMods.RepositoryOf(fixture.Entry);
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var current = fixture.Reads.DocumentOf(fixture.Worldspace, fixture.Plugin);
-        var oldIdentity = new RecordIdentity(fixture.Worldspace, current.RecordType, current.EditorId);
-        var transaction = new SourceRepository.SourceTransaction();
-        transaction.Move(repository, fixture.Plugin, oldIdentity, newWorldspaceKey);
-
-        var newIdentity = new RecordIdentity(newWorldspaceKey, current.RecordType, current.EditorId);
-        var moved = repository.Get(fixture.Plugin, newIdentity)
-            ?? throw new InvalidOperationException("Expected the moved worldspace to resolve at its new identity.");
-        var correctedBody = moved.Body.Replace(fixture.Worldspace, newWorldspaceKey, StringComparison.Ordinal);
-        transaction.Put(repository, fixture.Plugin, new SourceDocument(newWorldspaceKey, current.RecordType, current.EditorId, correctedBody));
+        var rekeying = new DocumentRekey(
+            (document, newKey) => RecordDocumentEdits.WithFormKey(codec, document.Body, GameRelease.Fallout4, document.RecordType, newKey),
+            (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
+                codec, owner.Body, GameRelease.Fallout4, owner.RecordType, oldKey, newKey));
+        new SourceRepository.SourceTransaction().Rekey(
+            TrackedMods.RepositoryOf(fixture.Entry), fixture.Plugin,
+            new RecordIdentity(fixture.Worldspace, current.RecordType, current.EditorId), newWorldspaceKey,
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), rekeying);
     }
 
     private static void RederiveTheWholePluginBecauseParentWorldspaceIsDerivedByWalkingTheWholeBlockTree(OneExteriorCellWorldspaceFixture fixture)
     {
         PluginBinaries.Touch(fixture.Entry.Path);
-        Assert.True(fixture.Index.Revalidate());
+        fixture.Index.NextSnapshot();
     }
 
     [Fact]
@@ -114,7 +115,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         Assert.Equal(fixture.Worldspace, before.ParentWorldspace);
         const string newWorldspaceKey = "F00020:WorldspaceFormId.esp";
 
-        MoveTheWorldspaceSubtreeThenPutItsCorrectedFormKeyText(fixture, newWorldspaceKey);
+        RekeyTheWorldspace(fixture, newWorldspaceKey);
         RederiveTheWholePluginBecauseParentWorldspaceIsDerivedByWalkingTheWholeBlockTree(fixture);
 
         var after = Assert.NotNull(fixture.Reads.GetCellLocation(fixture.Plugin, fixture.ExteriorCell));
@@ -129,7 +130,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         using var fixture = new OneExteriorCellWorldspaceFixture();
         const string newWorldspaceKey = "F00021:WorldspaceFormId.esp";
 
-        MoveTheWorldspaceSubtreeThenPutItsCorrectedFormKeyText(fixture, newWorldspaceKey);
+        RekeyTheWorldspace(fixture, newWorldspaceKey);
 
         var stale = Assert.NotNull(fixture.Reads.GetCellLocation(fixture.Plugin, fixture.ExteriorCell));
         Assert.Equal(fixture.Worldspace, stale.ParentWorldspace);

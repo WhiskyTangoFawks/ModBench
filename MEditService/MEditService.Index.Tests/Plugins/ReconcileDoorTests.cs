@@ -8,6 +8,19 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class ReconcileDoorTests
 {
+
+    private static async Task ParkedEqualArrivalFinding(
+        LoadOrderHolder holder, GatedPluginAdapter gate, InMemoryNotificationPublisher notifications, LoadOrderEntry plugin)
+    {
+        var before = notifications.Notifications.Count;
+        PluginBinaries.Touch(plugin.Path);
+        gate.ParkNextOpenOf(plugin.Name);
+        holder.Apply(holder.Current);
+        await gate.WaitUntilParkedAsync();
+        gate.Release();
+        Waits.Reached(() => notifications.Since(before).Any(n => Announcements.PluginChanged(plugin)(n)), "the parked arrival's announcement");
+    }
+
     private static LoadOrderStatusNotification[] StatusesPublished(InMemoryNotificationPublisher notifications) =>
         [.. notifications.Notifications.OfType<LoadOrderStatusNotification>()];
 
@@ -15,16 +28,15 @@ public sealed class ReconcileDoorTests
     public void AnotherWindowHoldsTheInstance_IsAnsweredAsHeldElsewhereStatus_NotThrown()
     {
         using var data = new PluginFixtureBuilder("held-elsewhere-door").WithPlugin("A.esp").Build();
-        using (var earlier = Indexes.Open(new LoadOrderHolder()))
-            earlier.Reconcile(new LoadOrderHolder(), data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var earlierHolder = new LoadOrderHolder();
+        using (var earlier = Indexes.Open(earlierHolder))
+            earlier.Reconcile(earlierHolder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         using var otherWindow = ForeignIndexHolder.Hold(IndexFiles.In(data.InstanceRoot));
         var notifications = new InMemoryNotificationPublisher();
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, notifications: notifications);
-        var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
 
-        var version = holder.Apply(snapshot);
-        index.Reconcile(snapshot, version);
+        var version = index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
         Assert.Equal(LoadOrderState.HeldElsewhere, index.Status.State);
         Assert.Equal(version, index.Status.Version);
@@ -42,10 +54,8 @@ public sealed class ReconcileDoorTests
         var notifications = new InMemoryNotificationPublisher();
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, notifications: notifications);
-        var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.SkyrimSE, data.Plugins);
 
-        var version = holder.Apply(snapshot);
-        index.Reconcile(snapshot, version);
+        var version = index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.SkyrimSE, data.Plugins));
 
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
         Assert.Equal(version, index.Status.Version);
@@ -57,22 +67,21 @@ public sealed class ReconcileDoorTests
     public void AFailedReconcile_IsTriedAgain_ByAnEqualSnapshot()
     {
         using var data = new PluginFixtureBuilder("retry-door").WithPlugin("A.esp").Build();
-        using (var earlier = Indexes.Open(new LoadOrderHolder()))
-            earlier.Reconcile(new LoadOrderHolder(), data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var earlierHolder = new LoadOrderHolder();
+        using (var earlier = Indexes.Open(earlierHolder))
+            earlier.Reconcile(earlierHolder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         var blocker = Path.GetDirectoryName(IndexFiles.In(data.InstanceRoot))
             ?? throw new InvalidOperationException("The index file sits in a folder.");
         Directory.Delete(blocker, recursive: true);
         File.WriteAllText(blocker, "not a folder");
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
-        var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
-        index.Reconcile(snapshot, holder.Apply(snapshot));
+        var snapshot = LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
+        index.Receive(holder, snapshot);
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
 
         File.Delete(blocker);
-        index.Reconcile(snapshot, holder.Apply(snapshot));
-
-        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
         Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 
@@ -82,30 +91,36 @@ public sealed class ReconcileDoorTests
         using var data = new PluginFixtureBuilder("retry-once-door").WithPlugin("A.esp").Build();
         var notifications = new InMemoryNotificationPublisher();
         var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, notifications: notifications);
-        var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.SkyrimSE, data.Plugins);
-        index.Reconcile(snapshot, holder.Apply(snapshot));
+        using var opens = new GatedPluginAdapter();
+        using var index = Indexes.Open(holder, opens, notifications: notifications);
+        var snapshot = LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.SkyrimSE, data.Plugins);
+        index.Receive(holder, snapshot);
         var before = StatusesPublished(notifications).Length;
 
-        index.Reconcile(snapshot, holder.Apply(snapshot));
+        index.NextSnapshotUntil(() => StatusesPublished(notifications).Length > before, "the retried reconcile's failed status");
+        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.SkyrimSE, []));
 
-        Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)[before..]).Status.State);
+        var retried = StatusesPublished(notifications)[before..];
+        Assert.Equal(2, retried.Length);
+        Assert.All(retried, n => Assert.Equal(LoadOrderState.Failed, n.Status.State));
+        Assert.Equal(0, opens.OpenedTotal);
     }
 
     [Fact]
-    public void AnEqualSnapshot_OfAnIndexThatHasNotFailed_PublishesNoStatus()
+    public async Task AnEqualSnapshot_OfAnIndexThatHasNotFailed_PublishesNoStatus()
     {
         using var data = new PluginFixtureBuilder("retry-ready-door").WithPlugin("A.esp").Build();
         var notifications = new InMemoryNotificationPublisher();
         var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, notifications: notifications);
-        var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
-        index.Reconcile(snapshot, holder.Apply(snapshot));
-        var before = StatusesPublished(notifications).Length;
+        using var gate = new GatedPluginAdapter();
+        using var index = Indexes.Open(holder, gate, notifications: notifications);
+        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        var before = notifications.Notifications.Count;
 
-        index.Reconcile(snapshot, holder.Apply(snapshot));
+        await ParkedEqualArrivalFinding(holder, gate, notifications, data.Plugins[0]);
+        index.AnnouncedByEqualArrivals(notifications, () => Announcements.Touched(data.Plugins[0]));
 
-        Assert.Equal(before, StatusesPublished(notifications).Length);
+        Assert.Empty(notifications.Since(before).OfType<LoadOrderStatusNotification>());
     }
 
     [Fact]
@@ -119,52 +134,76 @@ public sealed class ReconcileDoorTests
         var notifications = new InMemoryNotificationPublisher();
         using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
         using var index = Indexes.Open(holder, gate, notifications: notifications);
-        var snapshot = IndexReconcile.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
 
-        var first = holder.Apply(snapshot);
-        var firstReconcile = Task.Run(() => index.Reconcile(snapshot, first));
+        var first = holder.Apply(LoadOrderArrival.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
         await gate.WaitUntilParkedAsync();
-        var second = holder.Apply(snapshot);
-        var secondReconcile = Task.Run(() => index.Reconcile(snapshot, second));
+        var second = holder.Apply(LoadOrderArrival.Snapshot(
+            fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, [fx.Plugins[0] with { Enabled = false }, .. fx.Plugins.Skip(1)]));
         gate.Release();
-        await Task.WhenAll(firstReconcile, secondReconcile);
+        index.AwaitVersion(second);
 
+        Assert.NotEqual(first, second);
+        Waits.Reached(
+            () => StatusesPublished(notifications).Any(n => n.Status.State == LoadOrderState.Ready && n.Status.Version == second),
+            "the survivor's ready status");
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Equal(second, index.Status.Version);
         Assert.DoesNotContain(StatusesPublished(notifications), n => n.Status.State == LoadOrderState.HeldElsewhere);
-        Assert.Equal(second, StatusesPublished(notifications).Last(n => n.Status.State == LoadOrderState.Ready).Status.Version);
     }
 
     [Fact]
-    public void AnIdenticalResend_AnswersTheVersionAlreadyReady_AndPublishesNothing()
+    public async Task AnIdenticalResend_AnswersTheVersionAlreadyReady_AndAnnouncesOnlyWhatChangedOnDisk()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("no-op-door").WithPlugin("A.esp").Build();
         var notifications = new InMemoryNotificationPublisher();
-        using var index = Indexes.Open(holder, notifications: notifications);
-        var snapshot = IndexReconcile.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
-        var first = holder.Apply(snapshot);
-        index.Reconcile(snapshot, first);
+        using var gate = new GatedPluginAdapter();
+        using var index = Indexes.Open(holder, gate, notifications: notifications);
+        var snapshot = LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
+        var first = index.Receive(holder, snapshot);
         var before = notifications.Notifications.Count;
 
         var second = holder.Apply(snapshot);
-        index.Reconcile(snapshot, second);
+        await ParkedEqualArrivalFinding(holder, gate, notifications, fx.Plugins[0]);
+        var announced = index.AnnouncedByEqualArrivals(notifications, () => Announcements.Touched(fx.Plugins[0]));
 
         Assert.Equal(first, second);
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Equal(first, index.Status.Version);
-        Assert.Equal(before, notifications.Notifications.Count);
+        Assert.All(notifications.Since(before), n => Assert.True(Announcements.PluginChanged(fx.Plugins[0])(n)));
+        Assert.Equal(2, announced.Count);
     }
 
     [Fact]
-    public void Reconcile_AnswersOnTheCallersThread_BeforeReturning()
+    public void AnArrivalsStatus_IsPublishedBeforeItsVersionIsAnswered()
+    {
+        var holder = new LoadOrderHolder();
+        using var fx = new PluginFixtureBuilder("status-before-version").WithPlugin("A.esp").Build();
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = Indexes.Open(holder, notifications: new SlowStatuses(notifications));
+
+        var version = index.Receive(holder, LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
+
+        Assert.Contains(StatusesPublished(notifications), n => n.Status.Version == version);
+    }
+
+    private sealed class SlowStatuses(INotificationPublisher inner) : INotificationPublisher
+    {
+        public void Publish(Notification notification)
+        {
+            if (notification is LoadOrderStatusNotification) Thread.Sleep(300);
+            inner.Publish(notification);
+        }
+    }
+
+    [Fact]
+    public void AnAppliedLoadOrder_IsReconciledOffTheAppliersThread_UntilTheStatusAnswersItsVersion()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sync-door").WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA")).Build();
         using var index = Indexes.Open(holder);
-        var snapshot = IndexReconcile.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
 
-        index.Reconcile(snapshot, holder.Apply(snapshot));
+        index.Receive(holder, LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));

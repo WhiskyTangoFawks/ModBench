@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -194,15 +195,15 @@ public sealed class SourceIngestTests : IDisposable
     {
         using var index = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        var before = index.Projected().DocumentOf(_npc, Plugin);
+        var before = index.RequireReads().DocumentOf(_npc, Plugin);
         Assert.Equal(NpcEditorId, before.EditorId);
 
         _entry.HandEdit(before, NpcEditorId, "ExternallyRenamed");
 
         PluginBinaries.Touch(_entry.Path);
-        Assert.True(index.Revalidate());
+        index.NextSnapshot();
 
-        Assert.Equal("ExternallyRenamed", index.Projected().DocumentOf(_npc, Plugin).EditorId);
+        Assert.Equal("ExternallyRenamed", index.RequireReads().DocumentOf(_npc, Plugin).EditorId);
     }
 
     [Fact]
@@ -227,13 +228,13 @@ public sealed class SourceIngestTests : IDisposable
         var document = index.RequireReads().DocumentOf(_npc, Plugin);
         index.Edit(_entry, document, document.BodyOf().Replace("\"HeightMax\": 0.5", "\"HeightMax\": 0.75", StringComparison.Ordinal));
         const float editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt = 0.75f;
-        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.Projected().DocumentOf(_npc, Plugin)));
+        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.RequireReads().DocumentOf(_npc, Plugin)));
 
         File.WriteAllText(RootDocument, "{ this is not json");
 
-        index.NextSnapshot();
+        index.NextSnapshotUntil(() => index.Status.Failures.Count > 0, "the plugin's failure");
 
-        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.Projected().DocumentOf(_npc, Plugin)));
+        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.RequireReads().DocumentOf(_npc, Plugin)));
 
         var failure = Assert.Single(index.Status.Failures);
         Assert.Equal(PluginName, failure.Name);
@@ -276,10 +277,18 @@ public sealed class SourceIngestTests : IDisposable
     public void APluginWhoseBinaryCannotBeOpened_TakesARefreshOfItsSourceWithoutThrowing()
     {
         File.WriteAllText(_entry.Path, "this is not a plugin");
-        using var index = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
+        var partnerPath = Path.Combine(_fixture.GameDirectory, "Partner.esp");
+        PluginBinaries.Rewrite(partnerPath, mod => mod.Npcs.AddNew("PartnerNpc"));
+        using var index = Indexes.Reconciled(
+            _fixture.GameDirectory,
+            [.. _fixture.Plugins, new LoadOrderEntry("Partner.esp", partnerPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true)]);
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
+        PluginBinaries.Touch(partnerPath);
 
         index.NextSnapshot();
+
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
     }
 
     [Fact]

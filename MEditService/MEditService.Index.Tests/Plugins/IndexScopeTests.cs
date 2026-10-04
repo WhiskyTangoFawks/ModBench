@@ -86,7 +86,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         var firstRepo = manager.RequireReads();
 
-        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        manager.Reconcile(holder, _fixture.DataFolder, [.. _fixture.Plugins.Select(p => p with { Enabled = false })], GameRelease.Fallout4);
 
         Assert.Same(firstRepo, manager.RequireReads());
     }

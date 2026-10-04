@@ -50,23 +50,22 @@ public sealed class ReconcileDiffTests
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-noop");
-        var (index, opens) = MakeIndex(holder);
-        using var _ = index;
-        using var __ = opens;
-
+        var notifications = new InMemoryNotificationPublisher();
+        var opens = new GatedPluginAdapter();
+        using var _ = opens;
+        using var index = Indexes.Open(holder, opens, notifications: notifications);
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        var openedAfterFirst = opens.OpenedTotal;
         var statusAfterFirst = index.Status;
-        var sequenceAfterFirst = index.Sequence;
         Assert.True(statusAfterFirst.ConflictsComputed);
+        var patch = fx.Plugins.Single(p => p.Name == "B.esp");
 
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        var announced = index.AnnouncedByEqualArrivals(notifications, () => Announcements.Touched(patch));
 
-        Assert.Equal(sequenceAfterFirst, index.Sequence);
-        Assert.Equal(openedAfterFirst, opens.OpenedTotal);
+        Assert.All(announced, n => Assert.True(Announcements.PluginChanged(patch)(n)));
+        Assert.Equal(2, opens.Opened.Count(name => name == "B.esp") - 1);
+        Assert.Equal(1, opens.Opened.Count(name => name == "A.esm"));
         Assert.Equal(statusAfterFirst.IndexedPlugins, index.Status.IndexedPlugins);
         Assert.Equal(statusAfterFirst.State, index.Status.State);
-        Assert.True(index.Status.ConflictsComputed);
     }
 
     [Fact]
@@ -228,13 +227,13 @@ public sealed class ReconcileDiffTests
         Assert.DoesNotContain(ReadsOf(index).OpenedPlugins.Keys, k => k.Name == "Bad.esp");
 
         var sequence = index.Sequence;
-        index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
-        Assert.Equal(sequence, index.Sequence);
+        PluginBinaries.Touch(fx.Plugins[0].Path);
+        index.NextSnapshot();
+        Assert.Equal(sequence + 1, index.Sequence);
 
         new Fallout4Mod(ModKey.FromFileName("Bad.esp"), Fallout4Release.Fallout4).WriteToBinary(badPath);
-        index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
+        index.NextSnapshotUntil(() => index.Status.Failures.Count == 0, "the status without the recovered plugin's failure");
 
-        Assert.Empty(index.Status.Failures);
         Assert.Contains(ReadsOf(index).OpenedPlugins.Keys, k => k.Name == "Bad.esp");
     }
 

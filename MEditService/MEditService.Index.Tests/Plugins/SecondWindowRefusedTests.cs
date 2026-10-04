@@ -33,8 +33,7 @@ public sealed class SecondWindowRefusedTests
         Assert.Equal(filesWhileHeld, Directory.GetFiles(indexDir).Select(Path.GetFileName).Order().ToList());
 
         otherWindow.Dispose();
-        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
         Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 }

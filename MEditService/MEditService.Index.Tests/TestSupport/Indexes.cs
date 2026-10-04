@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Index.Tests.TestSupport;
 
 /// <summary>The Index as the composition root builds it: the public constructor over the real
-/// adapter, reconciled over a fixture's plugins.</summary>
+/// adapter, subscribed to its holder and reconciled over a fixture's plugins.</summary>
 internal static class Indexes
 {
     // The Indexer keeps its holder to itself, and the next arrival is the holder's.
@@ -20,11 +20,15 @@ internal static class Indexes
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        TaskScheduler? refillScheduler = null,
+        IndexWriteGate? writeGate = null)
     {
         var index = new Indexer(
-            holder, adapter ?? TestAdapters.Mutagen(), SharedSchemaReflector.Instance, loggerFactory, notifications, timeProvider);
+            holder, adapter ?? TestAdapters.Mutagen(), SharedSchemaReflector.Instance, loggerFactory, notifications, timeProvider,
+            refillScheduler, writeGate);
         Holders.Add(index, holder);
+        index.Subscribe();
         return index;
     }
 
@@ -65,21 +69,25 @@ internal static class Indexes
         return index;
     }
 
-    /// <summary>The held load order arriving again (ADR-0013), which validates every
-    /// plugin (ADR-0003).</summary>
-    internal static void NextSnapshot(this Indexer index)
+    /// <summary>The held load order arriving again (ADR-0013), answered once
+    /// <paramref name="announced"/> holds and the arrival has ended: its status is out when it
+    /// re-derived, and its write-gate hold is over when it only validated.</summary>
+    internal static void NextSnapshotUntil(this Indexer index, Func<bool> announced, string what)
     {
         if (!Holders.TryGetValue(index, out var holder))
             throw new InvalidOperationException("Only an Indexer from Indexes.Open has a holder to deliver an arrival through.");
-        index.Reconcile(holder.Current, holder.Apply(holder.Current));
+        holder.Apply(holder.Current);
+        Waits.Reached(announced, what);
+        Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the arrival's status");
+        using var validated = index.WriteGate.Enter();
     }
 
-    /// <summary>The next snapshot: true when it landed a change.</summary>
-    internal static bool Revalidate(this Indexer index)
+    /// <summary>The held load order arriving again, answered once the rows it changed are announced
+    /// as the sequence moving.</summary>
+    internal static void NextSnapshot(this Indexer index)
     {
         var before = index.Sequence;
-        index.NextSnapshot();
-        return index.Sequence > before;
+        index.NextSnapshotUntil(() => index.Sequence > before, "the sequence moving");
     }
 
     /// <summary>The SQL door: the filter is arbitrary SQL yielding form_key, so what it

@@ -67,7 +67,7 @@ public class FormReferencesTests
         using var index = Indexes.Reconciled(fixture);
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
-        Assert.True(index.Revalidate());
+        index.NextSnapshot();
 
         Assert.Single(ReferencesTo(index.RequireReads(), raceFormKey), r => r.FieldPath == "Race");
     }

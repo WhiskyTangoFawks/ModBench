@@ -68,7 +68,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         ReconcileHeld();
 
         PluginBinaries.Touch(_pluginPath);
-        Assert.True(_index.Revalidate());
+        _index.NextSnapshot();
 
         TheOnePluginChanged();
     }
@@ -80,7 +80,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         ReconcileHeld();
 
         File.Delete(_pluginPath);
-        Assert.True(_index.Revalidate());
+        _index.NextSnapshot();
 
         TheOnePluginChanged();
     }
@@ -90,10 +90,17 @@ public sealed class IndexAnnouncementTests : IDisposable
     {
         WriteValidPlugin(_pluginPath);
         ReconcileHeld();
+        var otherPath = Path.Combine(_gameDirectory, "Other.esp");
+        var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
+        other.Npcs.AddNew("OtherNpc");
+        other.WriteToBinary(otherPath);
+        _index.Reconcile(_holder, _gameDirectory, [Entry, new("Other.esp", otherPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true)], GameRelease.Fallout4, _instanceRoot);
+        _publishedByReconcile = _notifications.Notifications.Count;
+        PluginBinaries.Touch(otherPath);
 
-        Assert.False(_index.Revalidate());
+        _index.NextSnapshot();
 
-        Assert.Empty(SinceReconcile.OfType<PluginChangedNotification>());
+        Assert.DoesNotContain(SinceReconcile.OfType<PluginChangedNotification>(), n => n.Plugin.Equals(Key));
     }
 
     [Fact]

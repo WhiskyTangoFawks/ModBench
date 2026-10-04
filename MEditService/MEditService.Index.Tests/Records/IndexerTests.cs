@@ -32,12 +32,12 @@ public sealed class IndexerTests
         SnapshotPlugins.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, plugins ?? fx.Plugins);
 
     private static void ReconcileInTheLoadOrderEndpointsOrder(Indexer indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
-        indexer.Reconcile(snapshot, holder.Apply(snapshot));
+        indexer.Receive(holder, snapshot);
 
     private static void ReDeriveByTouchingTheBytesThenValidating(Indexer indexer, LoadOrderEntry entry)
     {
         PluginBinaries.Touch(entry.Path);
-        Assert.True(indexer.Revalidate());
+        indexer.NextSnapshot();
     }
 
     private static string SharedNpc(Indexer indexer) =>
@@ -53,7 +53,7 @@ public sealed class IndexerTests
     }
 
     [Fact]
-    public async Task ASweepBetweenSnapshots_TakesItsWinnersFromTheHolder_NotFromThePluginsItHasOpen()
+    public async Task AReDerivationAfterASnapshotMovedTheWinners_TakesItsWinnersFromTheHolder_NotFromThePluginsItHasOpen()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProvidersOfSharedNpcDefinedInAEsmAndOverriddenInBEsp("indexer-winners-from-holder");
@@ -63,7 +63,7 @@ public sealed class IndexerTests
         Assert.Equal("B.esp", WinnerOf(indexer, npc));
 
         var b = fx.Plugins.Single(p => p.Name == "B.esp");
-        holder.Apply(Snapshot(fx, [.. fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Winning = false } : p)]));
+        indexer.Receive(holder, Snapshot(fx, [.. fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Winning = false } : p)]));
         ReDeriveByTouchingTheBytesThenValidating(indexer, b);
 
         Assert.Equal("A.esm", WinnerOf(indexer, npc));
@@ -129,7 +129,7 @@ public sealed class IndexerTests
         PluginBinaries.Touch(fx.Plugins.Single(p => p.Name == "B.esp").Path);
         var before = indexer.Sequence;
 
-        Assert.True(indexer.Revalidate());
+        indexer.NextSnapshot();
 
         Assert.Equal(before + 1, indexer.Sequence);
     }

@@ -234,7 +234,7 @@ public sealed class ParseFailedRecordTests
         private readonly ScratchDirectory _modFolder = new("medit-parsefail-mod-");
 
         public Indexer Index { get; }
-        public IRecordReads Reads => Index.Projected();
+        public IRecordReads Reads => Index.RequireReads();
         public PluginAddress Plugin { get; }
         public string PluginPath { get; }
 
