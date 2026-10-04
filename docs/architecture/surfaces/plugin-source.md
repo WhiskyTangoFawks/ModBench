@@ -1,6 +1,6 @@
 # Plugin source
 
-The plugin source is a tracked plugin's text, and compile builds the plugin from it ([ADR-0006](../../adr/0006-a-tracked-plugins-truth-is-its-source.md)). Track and decompile write it into the mod's working tree, under `plugin-source/`, and I read, diff and edit it as I would any source code. Its layout is a schema Modbench owns, as thin as it can be over Mutagen: Mutagen decides what a record holds, and the schema decides only how the text is laid out. Neither xEdit nor MO2 has a source, so every story is owned here.
+The plugin source is a tracked plugin's text, and compile builds the plugin from it ([ADR-0006](../../adr/0006-a-tracked-plugins-truth-is-its-source.md)). Track and decompile write it into the mod's working tree, under `plugin-source/`, and I read, diff and edit it as I would any source code. Its layout is Modbench's schema: Mutagen's serialization gives the structure, and Modbench changes it in the few places the stories below need. Mutagen decides what a record holds; Modbench decides where the text departs from Mutagen's, and nothing else does. Neither xEdit nor MO2 has a source, so every story is owned here.
 
 ## The tree
 

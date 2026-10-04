@@ -49,7 +49,7 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
 medit_kernel: "MEDIT · Kernel — read by the core, the read model and the repositories; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
   class: band; grid-rows: 1
   loadorder: "Load order state\nowns: the load order Mod Management hands Editing: every plugin\nin the instance, what provides it, and the active ones in order\nhides: nothing" {class: kernel}
-  codec: "Codec + schema\nowns: a record as text and as document, and what the schema\nsays of each record type\nhides: the game assemblies; Mutagen owns the typing" {class: kernel}
+  codec: "Codec + schema\nowns: a record as text and as document, and what the schema\nsays of each record type\nhides: the game assemblies; Mutagen types a record, Modbench's\nschema lays it out" {class: kernel}
   ports: "Ports\nowns: the notification port and its payloads\nhides: nothing; the endpoints implement it" {class: kernel}
 }
 modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model and the repositories; a kernel box references nothing" {
