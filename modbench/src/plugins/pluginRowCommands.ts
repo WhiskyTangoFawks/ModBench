@@ -71,6 +71,8 @@ export interface TrackDeps {
   plugins: () => readonly PluginAddress[];
   mods: () => InstanceValue['mods'];
   modOfRow: (value: unknown) => string | undefined;
+  /** The Mods view's id, whose bar a gesture from a Mods row runs under. */
+  modsView: string;
 }
 
 /** commands.md, `track`: the mods of Mods rows, plugin rows, a column header, or the palette's
@@ -81,7 +83,8 @@ export function registerTrackCommand(deps: TrackDeps, paletteSelection: () => re
     async (clicked?: unknown, selected?: readonly unknown[]) => {
       const rows = clicked === undefined ? paletteSelection() : selected ?? [clicked];
       const mods = rows.map((row) => deps.modOfRow(row) ?? pluginOriginOf(row)).filter((mod) => mod !== undefined);
-      await trackMods(deps, [...new Set(mods)]);
+      const invokedFrom = rows.some((row) => deps.modOfRow(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
+      await trackMods(deps, [...new Set(mods)], invokedFrom);
     },
   );
 }
@@ -96,7 +99,7 @@ const PROVIDES_NO_PLUGIN = 'it provides no plugin';
 // Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost, so this
 // runs under the Plugins-view progress indicator.
-async function trackMods(deps: TrackDeps, mods: readonly string[]): Promise<void> {
+async function trackMods(deps: TrackDeps, mods: readonly string[], invokedFrom: string): Promise<void> {
   const { progress, instance, client, reporter, onTracked } = deps;
   const instancePlugins = deps.plugins();
   const pluginsOf = (mod: string): PluginAddress[] =>
@@ -115,7 +118,7 @@ async function trackMods(deps: TrackDeps, mods: readonly string[]): Promise<void
   const choice = await pickTrackPreset(`Track ${what}`);
   if (!choice) return;
 
-  await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, async () => {
+  await runWritingGesture(invokedFrom, instance, async () => {
     try {
       progress.say(trackProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
       const result = await client.track(addressed, choice.label, upstreamVersionByOrigin, {
