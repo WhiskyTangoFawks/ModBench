@@ -106,6 +106,46 @@ describe('the conflict table\'s rows', () => {
   });
 });
 
+describe('the conflict table\'s Overwrite column', () => {
+  const overwriteCopy = (answer: number): FileCopies => ({
+    relativePath: 'a.dds',
+    copies: [
+      { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: answer, size: 2_048n, modifiedNs: 1_600_000_000n * 1_000_000_000n },
+      { origin: { kind: 'mod', name: 'Opened' }, kind: 'read', sameAs: 0, size: 512n, modifiedNs: 0n },
+    ],
+  });
+  const shared = () => indexedValueOf([mod('Opened')], { Opened: { files: [file('Opened', 'a.dds')] } }, { files: [file('overwrite', 'a.dds')] });
+
+  it('keeps Overwrite\'s column apart from the column of a mod named Overwrite, which loses to it', async () => {
+    const value = await indexedValueOf([mod('Overwrite'), mod('Opened')], {
+      Overwrite: { files: [file('mods/Overwrite', 'a.dds')] },
+      Opened: { files: [file('Opened', 'a.dds')] },
+    }, { files: [file('overwrite', 'a.dds')] });
+
+    const table = conflictTable(read(value), 'Opened', []);
+
+    expect(table.kind === 'table' && table.columns).toMatchObject([
+      { name: 'Opened', origin: { kind: 'mod', name: 'Opened' } },
+      { name: 'Overwrite', origin: { kind: 'mod', name: 'Overwrite' } },
+      { name: 'Overwrite', origin: { kind: 'runtimeOutput' } },
+    ]);
+  });
+
+  it('colours Overwrite\'s copy as the winning copy, and the copy it differs from as losing', async () => {
+    const table = colours(conflictTable(read(await shared()), 'Opened', [overwriteCopy(1)]));
+
+    expect(table.rows).toEqual([{ file: 'a.dds', state: 'Override', cells: ['Master', 'Override'] }]);
+  });
+
+  it('shows Overwrite\'s value and carries its size and date for the tooltip', async () => {
+    const table = conflictTable(read(await shared()), 'Opened', [overwriteCopy(1)], 'size');
+    const row = table.kind === 'table' ? table.rows[0] : undefined;
+    const cell = row?.kind === 'file' ? row.cells[1] : undefined;
+
+    expect(cell).toMatchObject({ value: '2 KB', size: 2_048, modified: 1_600_000_000_000, winning: true });
+  });
+});
+
 describe('the conflict table\'s states', () => {
   it('is an empty table before the first read lands', () => {
     expect(conflictTable({ value: instanceValueFixture(), sequence: 0 }, 'Opened', [])).toEqual({ kind: 'table', columns: [], rows: [] });

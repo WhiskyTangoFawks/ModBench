@@ -440,6 +440,20 @@ describe('ModListProvider', () => {
     ]);
   });
 
+  it('a mod that shares a file with Overwrite alone has a file order conflict', async () => {
+    const value = await indexedValueOf([mod('Shares'), mod('Apart')], {
+      Shares: { files: [file('Shares', 'a.log')] },
+      Apart: { files: [file('Apart', 'b.dds')] },
+    }, { files: [file('overwrite', 'a.log')] });
+    const rows = (await makeProvider([], { instance: new FakeInstance(value) }).getChildren())
+      .filter((n): n is ModNode => n instanceof ModNode);
+
+    expect(rows.map((n) => [n.mod.name, n.contextValue])).toEqual([
+      ['Apart', 'mod enabled untracked'],
+      ['Shares', 'mod enabled untracked fileOrderConflict'],
+    ]);
+  });
+
   it('names the mod a mod row stands for, and no mod for any other row or value', async () => {
     const provider = makeProvider([mod('Patch'), sep('Tools')]);
     const roots = await provider.getChildren();
