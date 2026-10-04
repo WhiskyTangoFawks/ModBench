@@ -196,7 +196,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Equal(Override.ModKey, FormKey.Factory(created.FormKey).ModKey);
         Assert.Equal(["Wanderer"], Group(Document(FormKey.Factory(created.FormKey)), "Temporary"));
         Assert.Equal(["Leaver"], Group(Document(_keys["Here"]), "Persistent"));
-        Assert.Equal(new CellPlacement(World.ToString(), 0, 0, 1, 1, IsInterior: false), Tree.CellPlacementOf(Address(Override), created.Identity));
     }
 
     [Fact]

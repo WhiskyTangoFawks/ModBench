@@ -238,7 +238,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void EditingAnEmbeddedChild_WhoseOwnerTheTreeNoLongerHolds_RefusesNamingTheDocument()
+    public void EditingAnEmbeddedChild_WhoseOwnerDocumentNamesNoRecord_RefusesAsUnreadableNamingTheDocument()
     {
         var cell = EmbedCellDocument();
         var file = TreeTampering.FileOf(
@@ -250,9 +250,10 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
         var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
 
         Assert.False(result.Applied, result.Message);
-        Assert.Equal(RecordEditRefusal.SourceUnitNotFound, result.Refusal);
-        Assert.StartsWith(
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Contains(
             Path.GetRelativePath(_fixture.ModFolder, file), result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("moved or removed", result.Message, StringComparison.Ordinal);
     }
 
     private SourceDocument EmbedCellDocument() => _fixture.DocumentCarrying(ContainerModPlugin.EmbedCellEditorId);

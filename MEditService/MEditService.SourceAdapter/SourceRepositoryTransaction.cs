@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 
@@ -168,6 +169,19 @@ public sealed partial class SourceRepository
         {
             if (repository.Move(plugin, identity, newFormKey) is not { } moved) return;
             _log.Add(new EntryMove(repository.ModFolder, moved.From, moved.To));
+        }
+
+        /// <summary>Changes a record's FormKey. The repository decides what that moves or rewrites: a
+        /// container's folder, an embedded child's owner text, or a flat file.</summary>
+        public void Rekey(
+            SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey,
+            IReadOnlyDictionary<string, RecordTableSchema> schemas, RecordTextCodec codec)
+        {
+            var rekeyed = repository.RekeyedDocument(plugin, identity, newFormKey, schemas, codec);
+            Move(repository, plugin, identity, newFormKey);
+            Put(repository, plugin, rekeyed);
+            if (Remove(repository, plugin, identity) == SourceRemoval.OwnerDoesNotCarryIt)
+                throw new IOException($"The document holding {identity.FormKey} does not carry it, so the FormID change cannot take it out.");
         }
 
         /// <summary>Puts every recorded act back, most recent first, so a name this action took is vacated

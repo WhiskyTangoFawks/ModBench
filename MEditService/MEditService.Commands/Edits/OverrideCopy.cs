@@ -79,7 +79,7 @@ internal sealed class OverrideCopy
         }
 
         // A worldspace has both its numbered cells and its TopCell. Only a numbered cell has a grid
-        // to mint at; a TopCell falls through to the refusal, its placement being a follow-up.
+        // to mint at; a TopCell falls through to the refusal.
         var isCell = RecordTypeDispatch.For(release).IsCell(identity.RecordType);
         var worldspace = isCell ? source.WorldspaceOf(identity) : null;
         if (worldspace != null && source.SitsAtAGrid(identity))

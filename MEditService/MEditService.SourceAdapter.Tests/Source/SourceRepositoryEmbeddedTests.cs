@@ -292,6 +292,47 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains("names no document of its own", refused.Message, StringComparison.Ordinal);
     }
 
+    private const string FreeFormKey = "000F00:Embedded.esp";
+
+    [Fact]
+    public void Rekey_AnEmbeddedChild_RewritesOnlyTheOwnersDocument_AndRollbackPutsItBack()
+    {
+        var before = TreeSnapshot.Of(_modFolder);
+        var transaction = new SourceRepository.SourceTransaction();
+
+        transaction.Rekey(Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, _codec);
+
+        Assert.NotNull(Repository.Get(Plugin, FreeFormKey, Schemas));
+        Assert.Null(Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas));
+        Assert.Empty(transaction.Rollback());
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+    }
+
+    [Fact]
+    public void Rekey_AContainer_MovesItsFolderWithTheChildRecordsFiles_AndRollbackMovesThemBack()
+    {
+        var before = TreeSnapshot.Of(_modFolder);
+        var transaction = new SourceRepository.SourceTransaction();
+
+        transaction.Rekey(Repository, Plugin, Identity(_worldspace, "wrld"), FreeFormKey, Schemas, _codec);
+
+        var moved = Repository.Get(Plugin, new RecordIdentity(FreeFormKey, "wrld", _worldspace.EditorID));
+        Assert.NotNull(moved);
+        Assert.NotNull(Repository.Get(Plugin, Identity(_exteriorCell, "cell")));
+        Assert.Empty(transaction.Rollback());
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+    }
+
+    [Fact]
+    public void Rekey_OfARecordNoDocumentCarries_RefusesBeforeTheTreeIsTouched()
+    {
+        var before = TreeSnapshot.Of(_modFolder);
+
+        Assert.Throws<InvalidOperationException>(() => new SourceRepository.SourceTransaction().Rekey(
+            Repository, Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent"), FreeFormKey, Schemas, _codec));
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+    }
+
     [Fact]
     public void ContainerOf_ARecordWithADocumentOfItsOwn_IsNull()
     {
