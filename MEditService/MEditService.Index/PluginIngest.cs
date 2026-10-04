@@ -249,7 +249,7 @@ internal sealed class PluginIngest
             .Select(c => new ContainerChildRow(c.FormKey, document.FormKey, document.RecordType, c.SlotName, c.SlotIndex))];
 
         return new PreparedRecord(
-            document.RecordType, document.FormKey, body, SourceRepository.ContentStamp(body), refs, childRows,
+            document.RecordType, document.FormKey, body, SourceRepository.ContentStamp(document.Text), refs, childRows,
             placements, cellLocation, editorId, document.ParseDiagnosis);
     }
 

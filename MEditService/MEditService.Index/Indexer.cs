@@ -80,19 +80,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
 
     // What a failed read read from: the binary's hash, and for a plugin with a tree, each document's
     // content stamp then, or the doubly claimed FormKey the tree named instead (ADR-0003).
-    private sealed record FailedRead(string? Binary, IReadOnlyDictionary<string, string>? Stamps, string? Ambiguity = null)
-    {
-        public bool Holds(FailedRead now) =>
-            Binary == now.Binary
-            && Ambiguity == now.Ambiguity
-            && (Stamps, now.Stamps) switch
-            {
-                (null, null) => true,
-                ({ } then, { } stamps) => then.Count == stamps.Count && then.All(
-                    stamp => stamps.TryGetValue(stamp.Key, out var nowStamp) && nowStamp == stamp.Value),
-                _ => false,
-            };
-    }
+    private sealed record FailedRead(string? Binary, RecordStamps? Stamps, string? Ambiguity = null);
 
     // Two mechanisms, because one is not enough: the token asks the reconcile loop to stop, the
     // exclusive lock waits until it has. Cancelling without draining would let a teardown dispose
@@ -576,7 +564,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         {
             if (!_failedReads.TryGetValue(key, out failedAt)) return false;
         }
-        return failedAt is not null && ReadStateOf(index, key, path) is { } now && failedAt.Holds(now);
+        return failedAt is not null && ReadStateOf(index, key, path) is { } now && failedAt == now;
     }
 
     // A failure that says what the plugin already said publishes nothing.
@@ -614,7 +602,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         try
         {
             var stamps = SourceRepository.Over(modFolder, _gameRelease).StampsOf(key);
-            return stamps.Unreadable.Count == 0 ? new FailedRead(binary, stamps.ByFormKey) : null;
+            return stamps.Unreadable.Count == 0 ? new FailedRead(binary, stamps) : null;
         }
         catch (AmbiguousSourceUnitException ex)
         {

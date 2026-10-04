@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -30,14 +29,14 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     private string NpcFile =>
         SourceDocumentPath.Of(_modFolder, PluginName, "npc_", NpcFormKey, "FixtureNpc", GameRelease.Fallout4);
 
-    private static string StampOf(string text) => SourceRepository.ContentStamp(Encoding.UTF8.GetBytes(text));
+    private static string StampOf(string text) => SourceRepository.ContentStamp(text);
 
     [Fact]
     public void ContentStamp_IsEqualForEqualBytesAndDistinctForDifferentOnes()
     {
-        var a = Encoding.UTF8.GetBytes("{\n  \"Value\": 250\n}\n");
-        var alsoA = Encoding.UTF8.GetBytes("{\n  \"Value\": 250\n}\n");
-        var b = Encoding.UTF8.GetBytes("{\n  \"Value\": 251\n}\n");
+        var a = "{\n  \"Value\": 250\n}\n";
+        var alsoA = "{\n  \"Value\": 250\n}\n";
+        var b = "{\n  \"Value\": 251\n}\n";
 
         Assert.Equal(SourceRepository.ContentStamp(a), SourceRepository.ContentStamp(alsoA));
         Assert.NotEqual(SourceRepository.ContentStamp(a), SourceRepository.ContentStamp(b));
@@ -89,6 +88,17 @@ public sealed class SourceRepositoryStampsTests : IDisposable
         using var denyingSharingSoAnyReadWouldFail = new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None);
 
         Assert.Single(_repository.StampsOf(Plugin).Unreadable);
+    }
+
+    [Fact]
+    public void StampsOf_AFileThatIsNotValidUtf8_StampsTheTextTheIndexStores()
+    {
+        var file = NpcFile;
+        var bytes = File.ReadAllBytes(file);
+        bytes[bytes.AsSpan().IndexOf("FixtureNpc"u8) + 1] = 0xFF;
+        File.WriteAllBytes(file, bytes);
+
+        Assert.Equal(StampOf(File.ReadAllText(file)), _repository.StampsOf(Plugin).ByFormKey[NpcFormKey]);
     }
 
     [Fact]

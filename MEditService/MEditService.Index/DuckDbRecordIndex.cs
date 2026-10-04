@@ -419,7 +419,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             RefreshOneKey(repository, key, formKey);
     }
 
-    // Re-derives one key's rows at both refs. Called again with the same bytes, nothing below fires.
+    // Re-derives one key's rows. Called again with the same bytes, nothing below fires.
     private void RefreshOneKey(SourceRepository repository, PluginAddress key, string formKey)
     {
         var effective = StoredRow(EffectiveRows, key, formKey);

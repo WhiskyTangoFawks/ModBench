@@ -181,7 +181,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     [Fact]
-    public void AnEqualSnapshot_OfATreeThatFailedToRead_AndStandsUnchanged_ReadsItNoMore()
+    public void AnEqualSnapshot_OfATreeThatFailedToRead_AndStandsUnchanged_KeepsItsFailure()
     {
         var document = _tracked.SourceFileOf(_index.RequireReads().DocumentOf(_trackedNpc, _tracked.KeyOf()));
         File.Copy(document, Path.Combine(Path.GetDirectoryName(document).Require(), "Backup.json"));

@@ -169,7 +169,7 @@ public sealed class PersistentIndexTests : IDisposable
     }
 
     [Fact]
-    public void AFileWrittenWithGitBlobNamesAsContentHashes_RebuildsAndStampsEveryRecordByItsContent()
+    public void AFileWhoseContentHashesAreOfAnotherFormat_RebuildsAndRestampsEveryRecord()
     {
         var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
         using (Launched([alpha])) { }

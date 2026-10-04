@@ -48,7 +48,7 @@ public sealed class ValidateByStampsTests : IDisposable
 
     private string NpcFile => _mod.SourceFileOf(Reads.DocumentOf(_npc, _mod.KeyOf()));
 
-    private string GitPath(string file) => Path.GetRelativePath(_mod.ModFolderOf(), file).Replace('\\', '/');
+    private string ModRelativePath(string file) => Path.GetRelativePath(_mod.ModFolderOf(), file).Replace('\\', '/');
 
     [Fact]
     public void ADirtyDocumentUnchangedSinceTheLastValidation_IsNotAnnouncedAgain()
@@ -80,7 +80,7 @@ public sealed class ValidateByStampsTests : IDisposable
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
         ValidateUntilEditorId("RenamedByHand");
-        _mod.Git("checkout", "--", GitPath(NpcFile));
+        _mod.Git("checkout", "--", ModRelativePath(NpcFile));
 
         ValidateUntilEditorId("FixtureNpc");
 
@@ -95,7 +95,7 @@ public sealed class ValidateByStampsTests : IDisposable
         var file = NpcFile;
         File.Delete(file);
         _index.NextSnapshotUntil(() => Reads.GetDocument(_npc, _mod.KeyOf()) is null, "the record gone");
-        _mod.Git("checkout", "--", GitPath(file));
+        _mod.Git("checkout", "--", ModRelativePath(file));
 
         ValidateUntilEditorId("FixtureNpc");
 
@@ -116,6 +116,16 @@ public sealed class ValidateByStampsTests : IDisposable
         Validate();
 
         Assert.Null(Reads.GetDocument(created, _mod.KeyOf()));
+    }
+
+    [Fact]
+    public void ADocumentTheHandEditedToDeclareNoFormKey_FailsThePlugin_AndKeepsItsRows()
+    {
+        File.WriteAllText(NpcFile, "{\"EditorID\":\"NoFormKey\"}");
+
+        ValidateUntilFailed();
+
+        Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
     }
 
     [Fact]
@@ -162,11 +172,11 @@ public sealed class ValidateByStampsTests : IDisposable
     }
 
     [Fact]
-    public void AStagedRename_KeepsTheRecordAtHead_BecauseAStagedMoveNamesThePathItLeftAsWellAsTheOneItMade()
+    public void AStagedRenameOfADocument_LeavesItsRecordUnchanged()
     {
         var document = NpcFile;
         var renamed = Path.Combine(Path.GetDirectoryName(document).Require(), Path.GetFileName(document).Replace("FixtureNpc - ", "Renamed - ", StringComparison.Ordinal));
-        _mod.Git("mv", GitPath(document), GitPath(renamed));
+        _mod.Git("mv", ModRelativePath(document), ModRelativePath(renamed));
 
         using var index = Indexes.Reconciled(_fixture);
 

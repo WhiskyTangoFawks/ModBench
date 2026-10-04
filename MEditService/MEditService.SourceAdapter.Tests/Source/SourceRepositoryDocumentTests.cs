@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
@@ -206,7 +205,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
         var stamps = repository.StampsOf(Plugin).ByFormKey;
         Assert.Equal(
-            SourceRepository.ContentStamp(Encoding.UTF8.GetBytes(WithEditorId("RenamedNpc"))),
+            SourceRepository.ContentStamp(WithEditorId("RenamedNpc")),
             stamps[NpcFormKey]);
     }
 

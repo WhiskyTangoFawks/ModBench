@@ -8,7 +8,17 @@ namespace MEditService.SourceAdapter;
 
 /// <summary>Every document of a plugin's tree by the FormKey it declares, each with its content stamp,
 /// and a line for each file that could not be read as one.</summary>
-public sealed record RecordStamps(IReadOnlyDictionary<string, string> ByFormKey, IReadOnlyList<string> Unreadable);
+public sealed record RecordStamps(IReadOnlyDictionary<string, string> ByFormKey, IReadOnlyList<string> Unreadable)
+{
+    /// <summary>Equal when the same documents carry the same stamps and the same files could not be read.</summary>
+    public bool Equals(RecordStamps? other) =>
+        other is not null
+        && ByFormKey.Count == other.ByFormKey.Count
+        && ByFormKey.All(stamp => other.ByFormKey.TryGetValue(stamp.Key, out var theirs) && theirs == stamp.Value)
+        && Unreadable.SequenceEqual(other.Unreadable);
+
+    public override int GetHashCode() => ByFormKey.Count;
+}
 
 /// <summary>A record's content stamp: what the index remembers of a document, and what the tree is
 /// asked against (ADR-0003).</summary>
@@ -18,12 +28,14 @@ public sealed partial class SourceRepository
     // clock is not this machine's: a stamp this recent may not change for a write that follows it.
     private static readonly TimeSpan SettledAfter = TimeSpan.FromSeconds(2);
 
-    private static readonly ConcurrentDictionary<string, KnownDocument> Known = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, ConcurrentDictionary<string, KnownDocument>> Known =
+        new(StringComparer.Ordinal);
 
     private readonly record struct KnownDocument(FileStamp Stamp, string FormKey, string Content);
 
-    /// <summary>The stamp of one document's UTF-8 bytes, equal for equal bytes and for no others.</summary>
-    public static string ContentStamp(ReadOnlySpan<byte> body) => Convert.ToHexStringLower(SHA256.HashData(body));
+    /// <summary>The stamp of one document's text, as the UTF-8 the index stores it in: every side hashes
+    /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the index.</summary>
+    public static string ContentStamp(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
     /// <summary>One listing of the plugin's tree. A file whose file-system stamp is unchanged and
     /// settled is not read again. A FormKey two documents declare throws
@@ -35,6 +47,8 @@ public sealed partial class SourceRepository
         var stamps = new Dictionary<string, string>(StringComparer.Ordinal);
 
         var root = RootIn(_modFolder, plugin.Name);
+        foreach (var gone in Known.Keys.Where(tree => !Directory.Exists(tree))) Known.TryRemove(gone, out _);
+        var known = Known.GetOrAdd(root, _ => new ConcurrentDictionary<string, KnownDocument>(StringComparer.Ordinal));
         var listed = new HashSet<string>(StringComparer.Ordinal);
         if (Directory.Exists(root))
         {
@@ -45,22 +59,21 @@ public sealed partial class SourceRepository
                 if (CarriesNoRecord(file)) continue;
                 listed.Add(file);
 
-                if (KnownOrRead(file, plugin.Name, unreadable) is not { } document) continue;
+                if (KnownOrRead(known, file, plugin.Name, unreadable) is not { } document) continue;
                 OneDocumentPerFormKey.Claim(filedAt, document.FormKey, file, _modFolder);
                 stamps[document.FormKey] = document.Content;
             }
         }
 
-        var prefix = root + Path.DirectorySeparatorChar;
-        foreach (var path in Known.Keys.Where(path => path.StartsWith(prefix, StringComparison.Ordinal) && !listed.Contains(path)))
-            Known.TryRemove(path, out _);
+        foreach (var path in known.Keys.Where(path => !listed.Contains(path))) known.TryRemove(path, out _);
         return new RecordStamps(stamps, unreadable);
     }
 
-    private static KnownDocument? KnownOrRead(string file, string pluginName, List<string> unreadable)
+    private static KnownDocument? KnownOrRead(
+        ConcurrentDictionary<string, KnownDocument> known, string file, string pluginName, List<string> unreadable)
     {
         var current = FileStamp.Of(file);
-        if (current is { } now && Known.TryGetValue(file, out var known) && known.Stamp == now) return known;
+        if (current is { } now && known.TryGetValue(file, out var remembered) && remembered.Stamp == now) return remembered;
 
         var readFrom = TimeProvider.System.GetUtcNow();
         byte[] bytes;
@@ -72,21 +85,22 @@ public sealed partial class SourceRepository
         {
             // Never exclusive owners of a file: it may vanish or lock between the listing and the
             // read. A skip and a line, and the tree stops counting as evidence a record is gone.
-            Known.TryRemove(file, out _);
+            known.TryRemove(file, out _);
             unreadable.Add($"Could not read '{file}': {ex.Message}");
             return null;
         }
 
-        if (FormKeyDeclaredIn(Encoding.UTF8.GetString(bytes), file, pluginName) is not { } formKey)
+        var text = Encoding.UTF8.GetString(bytes);
+        if (FormKeyDeclaredIn(text, file, pluginName) is not { } formKey)
         {
-            Known.TryRemove(file, out _);
+            known.TryRemove(file, out _);
             unreadable.Add($"'{file}' declares no FormKey, so the records it holds could not be validated.");
             return null;
         }
 
-        var read = new KnownDocument(current ?? default, formKey, ContentStamp(bytes));
-        if (current is { } before && before.ChangedBefore(readFrom - SettledAfter)) Known[file] = read;
-        else Known.TryRemove(file, out _);
+        var read = new KnownDocument(current ?? default, formKey, ContentStamp(text));
+        if (current is { } before && before.ChangedBefore(readFrom - SettledAfter)) known[file] = read;
+        else known.TryRemove(file, out _);
         return read;
     }
 }
