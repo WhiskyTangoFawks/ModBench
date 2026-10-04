@@ -6,7 +6,7 @@ export const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, 
 
 export const file = (origin: string, relativePath: string, excluded = false): OriginFile => {
   const path = `/instance/${origin}/${relativePath}`;
-  return { relativePath, path, sourcePath: path, excluded };
+  return { relativePath, path, sourcePath: path, excluded, excludedByName: excluded };
 };
 
 export const folder = (origin: string, relativePath: string, excluded = false): OriginFolder =>

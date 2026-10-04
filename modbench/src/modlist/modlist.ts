@@ -97,6 +97,7 @@ export async function markFiles(
     try {
       const marked = await access.adapter.markOriginFile(file.origin, file.relativePath, mark);
       if (marked.gone) refused.push({ item: file, reason: goneFromDisk(file.relativePath) });
+      else if ('refusal' in marked) refused.push({ item: file, reason: marked.refusal });
       else landed.push(file);
     } catch (err) {
       refused.push({ item: file, reason: errorMessage(err) });

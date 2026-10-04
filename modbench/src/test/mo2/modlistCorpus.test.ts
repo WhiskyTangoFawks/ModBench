@@ -230,7 +230,7 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
     expect(outcome.landed).toEqual([own]);
     expect(outcome.refused.map(({ item }) => item)).toEqual([gone, byFolder]);
     expect(outcome.refused[0]?.reason).toBe('"Missing.esp" is gone from disk.');
-    expect(outcome.refused[1]?.reason).toContain('excluded by its folder');
+    expect(outcome.refused[1]?.reason).toBe('"meshes.mohidden/a.nif" has no suffix of its own to remove, and its folder excludes it.');
     assertOnlyChanged(before, await snapshotTree(dir), new Set([
       'mods/DragIn Manual Extract/textures/dummy.dds', 'mods/DragIn Manual Extract/textures/dummy.dds.mohidden',
     ]));

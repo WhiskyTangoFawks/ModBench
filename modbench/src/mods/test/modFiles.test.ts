@@ -23,7 +23,7 @@ import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
-const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath, excluded: false });
+const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath, excluded: false, excludedByName: false });
 
 function foldersHoldingFiles(files: readonly OriginFile[]): OriginFolder[] {
   const byPath = new Map<string, OriginFolder>();
@@ -511,7 +511,8 @@ describe('a file row\'s context, which the File menu\'s go to mod reads (mods.md
 
 describe('a file row\'s context, which the File menu\'s exclude or include reads (mods.md, Menus and keys, story 7)', () => {
   const flags = (row: ModlistNode): string[] => row.contextValue?.split(' ') ?? [];
-  const excludedFile = (relativePath: string): OriginFile => ({ ...file(relativePath), excluded: true });
+  const excludedFile = (relativePath: string, excludedByName = true): OriginFile =>
+    ({ ...file(relativePath), excluded: true, excludedByName });
 
   it('flags a file the game may get included, and a file excluded by its own name excluded', async () => {
     const provider = providerOver([mod('M')], { M: [file('a.dds'), excludedFile('b.dds.mohidden')] });
@@ -521,13 +522,15 @@ describe('a file row\'s context, which the File menu\'s exclude or include reads
     expect(flags(await childNamed(provider, row, 'b.dds.mohidden'))).toEqual(['file', 'excluded']);
   });
 
-  it.each(['a.dds', 'b.dds.mohidden'])('flags neither on a file its folder excludes, whatever its own name: %s', async (name) => {
-    const files = [excludedFile('Textures.mohidden/a.dds'), excludedFile('Textures.mohidden/b.dds.mohidden')];
+  it.each([
+    ['a.dds', 'included'], ['b.dds.mohidden', 'excluded'],
+  ])('flags a file its folder excludes by its own name: %s is %s', async (name, flag) => {
+    const files = [excludedFile('Textures.mohidden/a.dds', false), excludedFile('Textures.mohidden/b.dds.mohidden')];
     const folder: OriginFolder = { relativePath: 'Textures.mohidden', path: '/instance/mods/Textures.mohidden', excluded: true };
     const provider = providerOver([mod('M')], { M: files }, [], { byMod: { M: [folder] } });
     const textures = await childNamed(provider, await rootOf(provider, ModNode, 'M'), 'Textures.mohidden');
 
-    expect(flags(await childNamed(provider, textures, name))).toEqual(['file']);
+    expect(flags(await childNamed(provider, textures, name))).toEqual(['file', flag]);
   });
 });
 

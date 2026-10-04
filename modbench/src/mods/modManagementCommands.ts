@@ -96,14 +96,10 @@ export function registerFileExclusionCommands(
   const run = (mark: OriginFileMark) => async (entry: GestureEntry) => {
     const rows = pluralArgument(entry, 'file');
     if (rows.length === 0) return;
-    // No spec line draws what either direction does to a file its folder excludes.
-    const byFolder = rows.filter((row) => row.exclusion === undefined).map((row) => ({ item: row.ref, reason: 'its folder excludes it' }));
-    const writable = rows.filter((row) => row.exclusion !== undefined);
     const { verb, state } = FILE_MARKS[mark];
-    marks.markExclusions(writable.filter((row) => row.exclusion !== state).map((row) => row.ref), mark);
-    const outcome = await markFiles(access, writable.map((row) => row.ref), mark);
-    const refused = [...byFolder, ...outcome.refused];
-    reporter.selectionOutcome(`Could not ${verb} ${refused.length} of ${rows.length} files.`, { landed: outcome.landed, refused }, fileLabel);
+    marks.markExclusions(rows.filter((row) => row.exclusion !== state).map((row) => row.ref), mark);
+    const outcome = await markFiles(access, rows.map((row) => row.ref), mark);
+    reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${rows.length} files.`, outcome, fileLabel);
     marks.forgetUnconfirmedExclusions(outcome.refused.map(({ item }) => item));
   };
   return [

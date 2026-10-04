@@ -79,14 +79,9 @@ export class FolderNode extends vscode.TreeItem {
   }
 }
 
-/** Which of include or exclude the File menu offers. A file its folder excludes offers neither: no
- *  spec line draws what either does to it. */
-export type FileExclusion = 'excluded' | 'included' | undefined;
-
-function exclusionOf(parent: ModlistNode, file: OriginFile): FileExclusion {
-  if (parent.kind === 'folder' && parent.folder.excluded) return undefined;
-  return file.excluded ? 'excluded' : 'included';
-}
+/** The file's own name, as the reference tool reads it to offer one of the pair: excluded offers
+ *  include, and included offers exclude, whatever its folder. */
+export type FileExclusion = 'excluded' | 'included';
 
 export class FileNode extends vscode.TreeItem {
   readonly kind = 'file' as const;
@@ -100,7 +95,7 @@ export class FileNode extends vscode.TreeItem {
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
     fileRow(this, parent, origin, name, file.relativePath);
-    this.exclusion = exclusionOf(parent, file);
+    this.exclusion = file.excludedByName ? 'excluded' : 'included';
     this.contextValue = ['file', inConflict && 'conflict', this.exclusion].filter(Boolean).join(' ');
     this.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file.path), { preview: true }] };
   }

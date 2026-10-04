@@ -1115,7 +1115,7 @@ describe('open folder: one command for a mod, the Overwrite row, a file and a fo
   });
 
   const myMod = new ModNode({ kind: 'mod', name: 'My Mod', enabled: true });
-  const linked = { relativePath: 'textures/a.dds', path: '/instance/mods/My Mod/textures/a.dds', sourcePath: '/elsewhere/a.dds', excluded: false };
+  const linked = { relativePath: 'textures/a.dds', path: '/instance/mods/My Mod/textures/a.dds', sourcePath: '/elsewhere/a.dds', excluded: false, excludedByName: false };
   const folder = new FolderNode(myMod, { kind: 'mod', name: 'My Mod' },
     { relativePath: 'textures', path: '/instance/mods/My Mod/textures', excluded: false }, [linked], [], 'textures');
   const leaf = new FileNode(folder, folder.origin, linked, 'a.dds');
@@ -1264,7 +1264,7 @@ describe('modsCopyValueText, one line for each selected row copy value takes', (
 
   it('copies each selected file\'s and folder\'s path in its mod beside the mods\' names, from a click and from the key', () => {
     const armour = new ModNode({ kind: 'mod', name: 'Armour', enabled: true });
-    const file = { relativePath: 'textures/armour/a.dds', path: '/instance/mods/Armour/textures/armour/a.dds', sourcePath: '/instance/mods/Armour/textures/armour/a.dds', excluded: false };
+    const file = { relativePath: 'textures/armour/a.dds', path: '/instance/mods/Armour/textures/armour/a.dds', sourcePath: '/instance/mods/Armour/textures/armour/a.dds', excluded: false, excludedByName: false };
     const folder = new FolderNode(armour, { kind: 'mod', name: 'Armour' }, { relativePath: 'textures', path: '/instance/mods/Armour/textures', excluded: false }, [file], [], 'textures');
     const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
     const selection = [alpha, folder, leaf];
@@ -1496,7 +1496,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
   const modRow = new ModNode({ kind: 'mod', name: 'M', enabled: true });
   const origin = { kind: 'mod', name: 'M' } as const;
   const fileRow = (relativePath: string, excluded: boolean) => new FileNode(
-    modRow, origin, { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded },
+    modRow, origin, { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded, excludedByName: excluded },
     relativePath);
   const included = fileRow('a.dds', false);
   const excluded = fileRow('b.dds.mohidden', true);
@@ -1541,25 +1541,22 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
   });
 
   it.each([
-    ['excludeFile', 'exclude', included], ['includeFile', 'include', excluded],
-  ] as const)('%s refuses a file its folder excludes by name, writing and marking nothing for it', async (verb, word, clicked) => {
+    ['excludeFile', 'Excluded', included, 'x.mohidden/c.dds'], ['includeFile', 'Included', excluded, 'x.mohidden/d.dds.mohidden'],
+  ] as const)('%s writes a file its folder excludes too, by its own name, marking the one its own name changes', async (verb, mark, clicked, changed) => {
     const hidingFolder = new FolderNode(
       modRow, origin, { relativePath: 'x.mohidden', path: '/instance/mods/M/x.mohidden', excluded: true }, [], [], 'x.mohidden');
-    const byFolder = new FileNode(hidingFolder, origin,
-      { relativePath: 'x.mohidden/c.dds', path: '/instance/mods/M/x.mohidden/c.dds', sourcePath: '/instance/mods/M/x.mohidden/c.dds', excluded: true },
-      'c.dds');
-    markFiles.mockResolvedValue({ landed: [refOf(clicked)], refused: [] });
-    const reporter = recordingReporter();
+    const inFolder = (relativePath: string, excludedByName: boolean) => new FileNode(hidingFolder, origin,
+      { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded: true, excludedByName },
+      relativePath);
+    const plain = inFolder('x.mohidden/c.dds', false);
+    const marked = inFolder('x.mohidden/d.dds.mohidden', true);
+    markFiles.mockResolvedValue({ landed: [], refused: [] });
 
-    registerFileExclusionCommands(access, () => [], reporter, marks);
-    await invoke(`modbench.mod.${verb}`, clicked, [clicked, byFolder]);
+    registerFileExclusionCommands(access, () => [], recordingReporter(), marks);
+    await invoke(`modbench.mod.${verb}`, clicked, [clicked, plain, marked]);
 
-    expect(markFiles).toHaveBeenCalledWith(access, [refOf(clicked)], expect.anything());
-    expect(marks.markExclusions).toHaveBeenCalledWith([refOf(clicked)], expect.anything());
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: `Could not ${word} 1 of 2 files.`,
-      detail: '"M/x.mohidden/c.dds" (its folder excludes it)',
-    }]);
+    expect(markFiles).toHaveBeenCalledWith(access, [refOf(clicked), refOf(plain), refOf(marked)], mark);
+    expect(marks.markExclusions).toHaveBeenCalledWith([refOf(clicked), { origin, relativePath: changed }], mark);
   });
 
   it('calls nothing and reports nothing over a selection with no file', async () => {

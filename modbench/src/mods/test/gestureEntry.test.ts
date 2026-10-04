@@ -214,7 +214,7 @@ describe('what the Mods keys read off the selection', () => {
   });
 
   it('Space, Delete and F2 do nothing over a selection that holds a file or a folder, which may be the focused row', () => {
-    const file = { relativePath: 'textures/a.dds', path: '/instance/mods/On/textures/a.dds', sourcePath: '/instance/mods/On/textures/a.dds', excluded: false };
+    const file = { relativePath: 'textures/a.dds', path: '/instance/mods/On/textures/a.dds', sourcePath: '/instance/mods/On/textures/a.dds', excluded: false, excludedByName: false };
     const folder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, { relativePath: 'textures', path: '/instance/mods/On/textures', excluded: false }, [file], [], 'textures');
     const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
 
@@ -230,7 +230,7 @@ describe('what the Mods keys read off the selection', () => {
   });
 
   it('go to mod sees exactly one selected file that is in a file order conflict', () => {
-    const copy = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false };
+    const copy = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false, excludedByName: false };
     const conflicting = new FileNode(enabledMod, { kind: 'mod', name: 'On' }, copy, 'a.dds', true);
     const alone = new FileNode(enabledMod, { kind: 'mod', name: 'On' }, copy, 'a.dds');
     expect(modsKeyContext([conflicting], byRow).singleGoToModRow).toBe(true);
@@ -241,7 +241,7 @@ describe('what the Mods keys read off the selection', () => {
   });
 
   it('open folder sees exactly one selected row it takes: a mod, Overwrite, a file or a folder', () => {
-    const file = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false };
+    const file = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false, excludedByName: false };
     const folder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, { relativePath: 'x', path: '/instance/mods/On/x', excluded: false }, [file], [], 'x');
     const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
     expect(modsKeyContext([folder], byRow).singleOpenFolderRow).toBe(true);
@@ -261,18 +261,20 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([group], byRow)).toMatchObject({ holdsEnabledMod: false, holdsDisabledMod: false });
   });
 
-  it('exclude sees a selected file the File menu offers it on, and include one it offers include on', () => {
+  it('exclude sees a selected file whose own name has no mark, and include one whose own name has, whatever its folder', () => {
     const origin = { kind: 'mod', name: 'On' } as const;
-    const fileAt = (relativePath: string, excluded: boolean) =>
-      ({ relativePath, path: `/instance/mods/On/${relativePath}`, sourcePath: `/instance/mods/On/${relativePath}`, excluded });
-    const included = new FileNode(enabledMod, origin, fileAt('a.dds', false), 'a.dds');
-    const excluded = new FileNode(enabledMod, origin, fileAt('b.dds.mohidden', true), 'b.dds.mohidden');
+    const fileAt = (relativePath: string, excluded: boolean, excludedByName: boolean) =>
+      ({ relativePath, path: `/instance/mods/On/${relativePath}`, sourcePath: `/instance/mods/On/${relativePath}`, excluded, excludedByName });
+    const included = new FileNode(enabledMod, origin, fileAt('a.dds', false, false), 'a.dds');
+    const excluded = new FileNode(enabledMod, origin, fileAt('b.dds.mohidden', true, true), 'b.dds.mohidden');
     const hidingFolder = new FolderNode(enabledMod, origin, { relativePath: 'x.mohidden', path: '/instance/mods/On/x.mohidden', excluded: true }, [], [], 'x.mohidden');
-    const byFolder = new FileNode(hidingFolder, origin, fileAt('x.mohidden/c.dds', true), 'c.dds');
+    const plainInFolder = new FileNode(hidingFolder, origin, fileAt('x.mohidden/c.dds', true, false), 'c.dds');
+    const markedInFolder = new FileNode(hidingFolder, origin, fileAt('x.mohidden/d.dds.mohidden', true, true), 'd.dds.mohidden');
 
     expect(modsKeyContext([included, group], byRow)).toMatchObject({ holdsIncludedFile: true, holdsExcludedFile: false });
     expect(modsKeyContext([excluded], byRow)).toMatchObject({ holdsIncludedFile: false, holdsExcludedFile: true });
     expect(modsKeyContext([included, excluded], byRow)).toMatchObject({ holdsIncludedFile: true, holdsExcludedFile: true });
-    expect(modsKeyContext([byFolder, enabledMod], byRow)).toMatchObject({ holdsIncludedFile: false, holdsExcludedFile: false });
+    expect(modsKeyContext([plainInFolder, enabledMod], byRow)).toMatchObject({ holdsIncludedFile: true, holdsExcludedFile: false });
+    expect(modsKeyContext([markedInFolder], byRow)).toMatchObject({ holdsIncludedFile: false, holdsExcludedFile: true });
   });
 });
