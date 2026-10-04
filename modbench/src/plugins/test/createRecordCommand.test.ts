@@ -175,7 +175,7 @@ describe('modbench.record.create ends when the write does', () => {
     expect(writing).toEqual(['picked', 'opens', 'create', 'ends']);
   });
 
-  it('ends the write after a create mEdit refused or never answered', async () => {
+  it('ends the write after a create mEdit never answered', async () => {
     const { client, writing, create } = harness();
     client.setCommandHandler('createRecord', () => Promise.resolve({ refused: true, unanswered: true, message: 'no answer' }));
 

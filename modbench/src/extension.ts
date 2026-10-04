@@ -34,9 +34,11 @@ import { registerFilterCommands, type FilterScripts } from './plugins/recordFilt
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
 import { registerRecordCreateCommand } from './plugins/createRecordCommand';
 import { createdRecordSelection } from './plugins/createdRecordSelection';
-import { recordWriteOver, type RecordWrite } from './plugins/recordWrite';
+import { recordWriteOver } from './plugins/recordWrite';
+import type { RecordWrite } from './drivingLib/writingGesture';
 import { errorMessage } from './ports/errorMessage';
 import { modOfRow } from './mods/ModListProvider';
+import { MODS_KEY_ARGS } from './mods/gestureEntry';
 
 // The backend launches with the extension (ADR-0002), and a change to the game folder setting is
 // its only retry.
@@ -125,10 +127,10 @@ export function activate(context: vscode.ExtensionContext) {
   // Primes the view with whatever activeRecordTracker already knows — a no-op today, but it makes
   // ActiveRecordTracker.current()'s "initial state" contract true rather than aspirational.
   referencedByTreeProvider.showFor(activeRecordTracker.current());
+  const instance = { refresh: () => toolbox.instance?.refresh() ?? Promise.resolve() };
+  const recordWrite = recordWriteOver(instance, { latest: () => session.loadOrderSender?.latest() ?? Promise.resolve(undefined) });
   // Its `originFiles` closes over the Toolbox built below and re-reads the value each call, so a
   // compile always asks the generation on screen.
-  const instance = { refresh: () => toolbox.instance?.refresh() ?? Promise.resolve() };
-  const recordWrite = recordWriteOver(instance, meditClient);
   const pluginRowDeps: PluginRowCommandDeps = {
     session, client: meditClient, outputChannel, compileProblems: new CompileProblems(compileDiagnostics),
     conflictsComputed, instance, recordWrite,
@@ -231,7 +233,7 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       client, reporter: makeReporter(outputChannel, 'mod.track'), onTracked: conflictsComputed,
       plugins: instancePlugins,
       mods: instanceMods,
-      modOfRow,
+      modOfRow, modsView: MODS_KEY_ARGS.view,
     }, trackSelection),
     registerDecompileCommand({
       client,

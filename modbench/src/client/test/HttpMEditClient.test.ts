@@ -622,23 +622,6 @@ describe('HttpMEditClient — putLoadOrder', () => {
     expect(putBody).toEqual({ plugins, active, loadedWithNoLine, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' });
   });
 
-  it('names the latest PUT\'s outcome while it is in flight, and none before any PUT', async () => {
-    const { response, push } = pushableStreamResponse();
-    const fetch = routedFetch([
-      ['/notifications/stream', () => Promise.resolve(response)],
-      ['/load-order', () => Promise.resolve(jsonResponse(200, appliedBody))],
-    ]);
-    const client = makeClient(fetch);
-    await client.start();
-    await expect(client.latestLoadOrderPut()).resolves.toBeUndefined();
-
-    void client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
-    const latest = client.latestLoadOrderPut();
-    push(readyTickThatSettlesPutLoadOrder());
-
-    await expect(latest).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
-  });
-
   it('holds the PUT until the notification stream has connected, as the backend publishes its first tick as the PUT lands and a PUT that outran the stream would lose every tick published before it connects', async () => {
     let resolveStream!: (r: Response) => void;
     const streamPromise = new Promise<Response>((r) => { resolveStream = r; });

@@ -5,7 +5,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { registerPluginsGesture, singularArgument } from './gestureEntry';
 import type { PluginsTreeNode } from './PluginsTreeProvider';
 import type { RecordGroup } from './createdRecordSelection';
-import type { RecordWrite } from './recordWrite';
+import type { RecordWrite } from '../drivingLib/writingGesture';
 
 export interface RecordCreateDeps {
   client: Pick<MEditClient, 'createRecord' | 'getCreatableRecordTypes'>;

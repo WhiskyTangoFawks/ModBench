@@ -5,6 +5,8 @@ import type { Reporter } from '../ports/reporter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
+import type { RecordWrite } from '../drivingLib/writingGesture';
+import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from './ReferencedByTreeProvider';
 
 /** Read off whatever object a gesture is invoked with — a tree row from the Plugins view or a
  *  plain identity literal. Editor names no Plugins-view node type. */
@@ -57,6 +59,8 @@ interface Selection {
   records: RecordAddress[];
   originless: ItemRefusal<RecordArgument>[];
   editorIds: ReadonlyMap<string, string | undefined>;
+  /** The bar a write runs under: Referenced By's when its rows were the gesture's, else the write's own default. */
+  invokedFrom: string | undefined;
 }
 
 function selectedRecords(clicked: unknown, selected: readonly unknown[] | undefined): Selection {
@@ -68,13 +72,13 @@ function selectedRecords(clicked: unknown, selected: readonly unknown[] | undefi
     if (origin === undefined) originless.push({ item: { formKey, plugin, editorId }, reason: NO_ORIGIN });
     else records.push({ formKey, plugin, origin });
   }
-  return { records, originless, editorIds: new Map(named.map((a) => [a.formKey, a.editorId])) };
+  return {
+    records, originless, editorIds: new Map(named.map((a) => [a.formKey, a.editorId])),
+    invokedFrom: nodes.some((node) => node instanceof ReferencedByHolderNode) ? REFERENCED_BY_VIEW : undefined,
+  };
 }
 
 type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords'>;
-
-/** Runs a delete or copy as its view's writing gesture (common.md, A gesture that writes). */
-export type RecordWrite = (command: () => Promise<void>) => Promise<void>;
 
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, reporter: Reporter, ask: AskQuestion,
@@ -85,7 +89,7 @@ export function registerRecordLifecycleCommands(
   return [
     // Asked once for the whole selection and naming each record, so the user confirms the right thing.
     vscode.commands.registerCommand('modbench.record.delete', async (clicked?: unknown, selected?: unknown[]) => {
-      const { records, originless, editorIds } = clicked === undefined
+      const { records, originless, editorIds, invokedFrom } = clicked === undefined
         ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);
       const label = (record: RecordArgument) => addressLabel(record, editorIds);
       if (records.length > 0 && await askToDelete(records.map(label), ask) !== 'Delete') return;
@@ -98,7 +102,7 @@ export function registerRecordLifecycleCommands(
           `Could not delete ${refused.length} of ${records.length + originless.length} records.`,
           { landed: answer.landed, refused }, label);
       };
-      await (records.length > 0 ? write(reportOutcome) : reportOutcome());
+      await (records.length > 0 ? write(reportOutcome, invokedFrom) : reportOutcome());
     }),
   ];
 }
@@ -207,7 +211,7 @@ export function registerRecordCopyCommands(
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.record.copy', async (clicked?: unknown, selected?: unknown[]) => {
-      const { records, originless, editorIds } = clicked === undefined
+      const { records, originless, editorIds, invokedFrom } = clicked === undefined
         ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);
       const reportOriginless = () => reporter.selectionOutcome(
         `Could not copy ${originless.length} of ${records.length + originless.length} records.`,
@@ -235,7 +239,7 @@ export function registerRecordCopyCommands(
           `Could not make ${answer.refused.length} of ${written.length + answer.refused.length} copies.`,
           answer, into);
         reportOriginless();
-      });
+      }, invokedFrom);
     }),
   ];
 }

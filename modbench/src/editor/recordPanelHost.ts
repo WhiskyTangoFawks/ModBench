@@ -13,9 +13,10 @@ import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecora
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerGridKeyCommands } from './gridKeyCommands';
 import {
-  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, type RecordWrite,
+  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands,
 } from './recordLifecycleCommands';
 import { trackLoadOrderStatus } from './loadOrderStatusTracker';
+import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE, type RecordAddress } from './recordUri';
@@ -48,7 +49,6 @@ export interface EditorCommandDeps {
   focusedViewSelection: () => readonly unknown[];
   // Each view's own selection, which that view's keys act on.
   viewSelections: ReadonlyMap<string, () => readonly unknown[]>;
-  // The rows a record delete or copy changes, which a view marks until the disk confirms the write.
   recordWrite: RecordWrite;
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
   // object, narrowed to a callback like focusedViewSelection.

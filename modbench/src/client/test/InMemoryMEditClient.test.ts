@@ -156,15 +156,3 @@ describe('InMemoryMEditClient — subscribe/emit', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 });
-
-describe('InMemoryMEditClient — latestLoadOrderPut', () => {
-  it('is none before any put, then the outcome of the latest put', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandHandler('putLoadOrder', () => Promise.resolve({ outcome: 'failed', message: 'later' }));
-    await expect(client.latestLoadOrderPut()).resolves.toBeUndefined();
-
-    void client.putLoadOrder([], [], [], '/game/Data', '/instance', 'Fallout4');
-
-    await expect(client.latestLoadOrderPut()).resolves.toEqual({ outcome: 'failed', message: 'later' });
-  });
-});

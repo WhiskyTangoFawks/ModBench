@@ -189,16 +189,8 @@ export class InMemoryMEditClient implements MEditClient {
     return Promise.resolve(scripted.value);
   }
 
-  private latestPut: Promise<Awaited<ReturnType<MEditClient['putLoadOrder']>> | undefined> = Promise.resolve(undefined);
-
   putLoadOrder(...args: Parameters<MEditClient['putLoadOrder']>): ReturnType<MEditClient['putLoadOrder']> {
-    const put = this.command('putLoadOrder', args);
-    this.latestPut = put.catch(() => undefined);
-    return put;
-  }
-
-  latestLoadOrderPut(): ReturnType<MEditClient['latestLoadOrderPut']> {
-    return this.latestPut;
+    return this.command('putLoadOrder', args);
   }
 
   createPlugin(...args: Parameters<MEditClient['createPlugin']>): ReturnType<MEditClient['createPlugin']> {

@@ -16,15 +16,21 @@ const { handlers, registerCommand, executeCommand, showQuickPick } = vi.hoisted(
   };
 });
 
-vi.mock('vscode', () => ({
-  commands: { registerCommand, executeCommand },
-  window: { showQuickPick },
-}));
+vi.mock('vscode', async () => {
+  const { TreeItem, TreeItemCollapsibleState } = await import('../../test/vscodeMock');
+  return {
+    commands: { registerCommand, executeCommand },
+    window: { showQuickPick },
+    TreeItem, TreeItemCollapsibleState,
+  };
+});
 
 import {
-  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, recordArgument, type RecordWrite,
+  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, recordArgument,
 } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client';
+import type { RecordWrite } from '../../drivingLib/writingGesture';
+import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from '../ReferencedByTreeProvider';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -40,11 +46,13 @@ const RECORD_NODE = {
 };
 const RECORD_IDENTITY = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
 
-function recordingWrite(): { write: RecordWrite; writing: string[] } {
+function recordingWrite(): { write: RecordWrite; writing: string[]; viewsAskedFor: (string | undefined)[] } {
   const writing: string[] = [];
+  const viewsAskedFor: (string | undefined)[] = [];
   return {
-    writing,
-    write: async (command) => {
+    writing, viewsAskedFor,
+    write: async (command, invokedFrom) => {
+      viewsAskedFor.push(invokedFrom);
       writing.push('opens');
       await command();
       writing.push('ends');
@@ -76,9 +84,9 @@ describe('registerRecordLifecycleCommands', () => {
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    const { write, writing } = recordingWrite();
+    const { write, writing, viewsAskedFor } = recordingWrite();
     registerRecordLifecycleCommands(client, reporter, ask, () => viewSelection, write);
-    return { reporter, ask, writing };
+    return { reporter, ask, writing, viewsAskedFor };
   }
 
   describe('from the palette, handed no row, taking the Plugins selection', () => {
@@ -290,6 +298,18 @@ describe('registerRecordLifecycleCommands', () => {
       expect(writing).toEqual(['opens', 'delete', 'ends']);
     });
 
+    it('runs under Referenced By\'s bar when the rows are Referenced By\'s, and under the default bar for a Plugins row', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [], refused: [] });
+      const { viewsAskedFor } = invoke(client, 'Delete', 'Delete');
+      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'SecondNpc', { name: 'MyPatch.esp', origin: 'ModA' }, []);
+
+      await deleteRecords(holder);
+      await deleteRecords(SECOND_NODE);
+
+      expect(viewsAskedFor).toEqual([REFERENCED_BY_VIEW, undefined]);
+    });
+
     it('opens no write when the question is declined', async () => {
       const client = new InMemoryMEditClient();
       const { writing } = invoke(client, undefined);
@@ -299,7 +319,7 @@ describe('registerRecordLifecycleCommands', () => {
       expect(writing).toEqual([]);
     });
 
-    it('ends the write after a call mEdit refused or never answered, and reports it as before', async () => {
+    it('ends the write after a call mEdit never answered, and reports it', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { refused: true, unanswered: true, message: 'Could not delete 1 record — socket hang up' });
       const { writing, reporter } = invoke(client, 'Delete');
@@ -332,9 +352,9 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    const { write, writing } = recordingWrite();
+    const { write, writing, viewsAskedFor } = recordingWrite();
     registerRecordCopyCommands(client, reporter, ask, () => viewSelection, write);
-    return { reporter, ask, writing };
+    return { reporter, ask, writing, viewsAskedFor };
   }
 
   const copy = (...args: unknown[]) =>
@@ -625,6 +645,19 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     expect(writing).toEqual(['opens', 'copy', 'ends']);
   });
 
+  it('runs under Referenced By\'s bar when the rows are Referenced By\'s', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    pick('New', [PATCH]);
+    const { viewsAskedFor } = invoke(client);
+    const holder = new ReferencedByHolderNode('000001:A.esp', SOURCE.formKey, undefined, { name: 'MyPatch.esp', origin: 'ModA' }, []);
+
+    await copy(holder);
+
+    expect(viewsAskedFor).toEqual([REFERENCED_BY_VIEW]);
+  });
+
   it('opens no write when the pick is left with Esc', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
@@ -636,7 +669,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     expect(writing).toEqual([]);
   });
 
-  it('ends the write after a call mEdit never answered, and reports it as before', async () => {
+  it('ends the write after a call mEdit never answered, and reports it', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
     client.setCommandResult('copyRecords', { refused: true, unanswered: true, message: 'Could not copy 1 record — socket hang up' });
