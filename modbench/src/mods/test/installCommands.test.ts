@@ -17,13 +17,16 @@ const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuick
   openExternal: vi.fn(),
 }));
 
-vi.mock('vscode', () => ({
-  commands: { registerCommand, executeCommand },
-  window: { showOpenDialog, showInputBox, showQuickPick },
-  env: { openExternal },
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  Uri: { file: uriFile, parse: (s: string) => ({ toString: () => s }) },
-}));
+vi.mock('vscode', async () => {
+  const { recordedWithProgress } = await import('../../test/recordedProgress');
+  return {
+    commands: { registerCommand, executeCommand },
+    window: { showOpenDialog, showInputBox, showQuickPick, withProgress: recordedWithProgress },
+    env: { openExternal },
+    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
+    Uri: { file: uriFile, parse: (s: string) => ({ toString: () => s }) },
+  };
+});
 
 const { installFromArchive, installFromFolder } = vi.hoisted(() => ({
   installFromArchive: vi.fn(),
@@ -41,6 +44,7 @@ import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
+import { progressSteps } from '../../test/recordedProgress';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
@@ -54,7 +58,7 @@ const ACCESS = accessTo('/instance');
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     access: ACCESS,
-    instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE }) },
+    instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE }), refresh: () => Promise.resolve() },
     runModAction: async (_label, _fail, action) => action(),
     promptModName: vi.fn(),
     installDownloaded: vi.fn(),
@@ -201,5 +205,29 @@ describe('modbench.mod.install: a downloaded file is its source', () => {
 
     expect(showQuickPick).toHaveBeenCalled();
     expect(installDownloaded).not.toHaveBeenCalled();
+  });
+});
+
+describe('an install ends on the Instance loader\'s read, with the Mods progress bar open throughout', () => {
+  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
+
+  const instance = {
+    value: instanceValueFixture(),
+    refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
+  };
+  const ends = ['progress opens on modbench.modList', 'install', 'Instance loader: read every file again', 'progress closes'];
+
+  it.each([
+    ['archive', installFromArchive, { fsPath: '/somewhere/foo.zip' }],
+    ['folder', installFromFolder, { fsPath: '/somewhere/foo' }],
+  ] as const)('from a %s', async (sourceKind, install, picked) => {
+    install.mockImplementationOnce(() => { progressSteps.push('install'); return Promise.resolve({ applied: true, wrote: true, isFomod: false }); });
+    showQuickPick.mockResolvedValueOnce({ sourceKind });
+    showOpenDialog.mockResolvedValueOnce([picked]);
+
+    registerModInstallCommands(deps({ instance, promptModName: vi.fn().mockResolvedValueOnce('New Mod') }));
+    await invoke('modbench.mod.install');
+
+    expect(progressSteps).toEqual(ends);
   });
 });

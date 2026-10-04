@@ -12,13 +12,16 @@ const { registerCommand, showInputBox } = vi.hoisted(() => ({
   showInputBox: vi.fn(),
 }));
 
-vi.mock('vscode', () => ({
-  ...fakeVscodeModule(),
-  commands: { registerCommand },
-  window: { showInputBox },
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
-}));
+vi.mock('vscode', async () => {
+  const { recordedWithProgress } = await import('../../test/recordedProgress');
+  return {
+    ...fakeVscodeModule(),
+    commands: { registerCommand },
+    window: { showInputBox, withProgress: recordedWithProgress },
+    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
+    Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
+  };
+});
 
 import { ModListProvider, type ModlistNode, type SortDirection } from '../ModListProvider';
 import { registerSeparatorCommands } from '../modManagementCommands';
@@ -30,24 +33,20 @@ import { present } from '../../ports/present';
 
 async function anchorRowOfARealTreeOverTheCorpusModlist(direction: SortDirection, isRow: (node: ModlistNode) => boolean): Promise<ModlistNode> {
   const instance = new FakeInstance(instanceValueFixture({ mods: await readModlistEntries(CORPUS_FIXTURE) }));
-  const provider = new ModListProvider({ instance, access: accessTo(CORPUS_FIXTURE), log: () => undefined });
+  const provider = new ModListProvider({ instance });
   provider.setViewDirection(direction);
   const row = (await provider.getChildren()).find(isRow);
   provider.dispose();
   return present(row, 'the anchor row');
 }
 
-const separatorMarks = {
-  markUnconfirmedRename: vi.fn(), forgetUnconfirmedRename: vi.fn(), markRemoved: vi.fn(), markAddedSeparator: vi.fn(), forgetUnconfirmedShape: vi.fn(),
-};
-
 async function writeWithAnchor(anchor: ModlistNode): Promise<string> {
   const root = cloneCorpusFixture();
   registerCommand.mockClear();
   showInputBox.mockResolvedValueOnce('New Section');
-  const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
+  const instance = { value: instanceValueFixture({ activeProfile: 'Default' }), refresh: () => Promise.resolve() };
   const reporter = recordingReporter();
-  registerSeparatorCommands(accessTo(root), instance, reporter, scriptedDialog(), vi.fn(), () => [], separatorMarks);
+  registerSeparatorCommands(accessTo(root), instance, reporter, scriptedDialog(), vi.fn(), () => []);
   const call = registerCommand.mock.calls.find((c) => c[0] === 'modbench.separator.add');
   await present(call, 'the modbench.separator.add registration')[1](anchor);
   expect(reporter.reports).toEqual([]);

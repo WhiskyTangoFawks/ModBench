@@ -3,7 +3,6 @@ import { fakeVscodeModule } from './fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { existsSync } from 'node:fs';
 import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -202,7 +201,7 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
     const excluded = await markFiles(accessTo(dir), [inMod, inOverwrite], 'Excluded');
 
     expect(excluded).toEqual({
-      landed: [{ ...inMod, markedPath: 'textures/dummy.dds.mohidden' }, { ...inOverwrite, markedPath: 'F4SE/Plugins/SomePlugin.log.mohidden' }],
+      landed: [inMod, inOverwrite],
       refused: [],
     });
     const after = await snapshotTree(dir);
@@ -220,17 +219,6 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
   });
 
-  it('answers where each file is the moment it is marked, before it marks the next', async () => {
-    const answered: [string, boolean][] = [];
-    const nextUnmarked = join(dir, 'overwrite', 'F4SE', 'Plugins', 'SomePlugin.log');
-
-    await markFiles(accessTo(dir), [inMod, inOverwrite], 'Excluded', ({ markedPath }) => {
-      answered.push([markedPath, existsSync(nextUnmarked)]);
-    });
-
-    expect(answered).toEqual([['textures/dummy.dds.mohidden', true], ['F4SE/Plugins/SomePlugin.log.mohidden', false]]);
-  });
-
   it('refuses a file gone from disk by name, and an include its folder leaves undone with the instance\'s reason, while the rest land', async () => {
     const own = { ...inMod, relativePath: 'textures/dummy.dds.mohidden' };
     const gone = { ...inMod, relativePath: 'Missing.esp' };
@@ -242,7 +230,7 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
 
     const outcome = await markFiles(accessTo(dir), [gone, byFolder, own], 'Included');
 
-    expect(outcome.landed).toEqual([{ ...own, markedPath: 'textures/dummy.dds' }]);
+    expect(outcome.landed).toEqual([own]);
     expect(outcome.refused.map(({ item }) => item)).toEqual([gone, byFolder]);
     expect(outcome.refused[0]?.reason).toBe('"Missing.esp" is gone from disk.');
     expect(outcome.refused[1]?.reason).toBe('"meshes.mohidden/a.nif" has no suffix of its own to remove, and its folder excludes it.');

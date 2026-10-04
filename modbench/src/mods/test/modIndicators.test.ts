@@ -14,7 +14,6 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { accessTo } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
 import { ModListProvider, ModNode } from '../ModListProvider';
 import { indicatorSetting, MOD_INDICATORS, ModIndicatorDecorations, modIndicators, type ModIndicator } from '../modIndicators';
@@ -119,7 +118,7 @@ const allOn = Object.fromEntries(MOD_INDICATORS
   .flatMap(({ id }) => [[indicatorSetting(id, 'badge'), true], [indicatorSetting(id, 'colour'), true]]));
 
 async function rowUriOf(instance: FakeInstance, name: string): Promise<vscode.Uri> {
-  const rows = new ModListProvider({ instance, access: accessTo('/instance'), log: () => undefined });
+  const rows = new ModListProvider({ instance });
   const row = (await rows.getChildren()).find((node) => node instanceof ModNode && node.mod.name === name);
   return present(row?.resourceUri, `${name}'s row URI`);
 }

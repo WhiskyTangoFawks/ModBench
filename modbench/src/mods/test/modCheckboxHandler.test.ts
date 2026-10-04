@@ -1,14 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { showErrorMessage, showWarningMessage } = vi.hoisted(() => ({
-  showErrorMessage: vi.fn(),
-  showWarningMessage: vi.fn(),
-}));
+const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn((_id: string, ..._args: unknown[]) => Promise.resolve()) }));
 
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, uriFrom } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
-  window: { showErrorMessage, showWarningMessage },
+  commands: { executeCommand },
   TreeItemCheckboxState: { Unchecked: 0, Checked: 1 },
   TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor,
   Uri: { from: uriFrom },
@@ -16,54 +13,38 @@ vi.mock('vscode', () => ({
 
 import { onModCheckboxChanged } from '../modCheckboxHandler';
 import { ModNode, OverwriteNode } from '../ModListProvider';
-import { recordingReporter } from '../../test/surfacingDoubles';
 
-beforeEach(() => { showErrorMessage.mockClear(); showWarningMessage.mockClear(); });
+beforeEach(() => { executeCommand.mockClear(); });
 
 function modNode(name: string, enabled = true): ModNode {
   return new ModNode({ kind: 'mod', name, enabled });
 }
 
 describe('onModCheckboxChanged', () => {
-  it('enables/disables the mod and does nothing else on success', async () => {
-    const setModEnabled = vi.fn().mockResolvedValue(undefined);
-    const markUnconfirmed = vi.fn();
-    const forgetUnconfirmed = vi.fn();
-    const modListProvider = { setModEnabled, markUnconfirmed, forgetUnconfirmed };
+  it('fires enable once over every mod the click checked', async () => {
+    const a = modNode('A', false);
+    const b = modNode('B', false);
 
-    const reporter = recordingReporter();
+    await onModCheckboxChanged({ items: [[a, 1], [b, 1]] });
 
-    await onModCheckboxChanged({ items: [[modNode('TestMod'), 1]] }, modListProvider, reporter);
-
-    expect(setModEnabled).toHaveBeenCalledWith('TestMod', true);
-    expect(markUnconfirmed).toHaveBeenCalledWith('TestMod', true);
-    expect(forgetUnconfirmed).not.toHaveBeenCalled();
-    expect(reporter.reports).toEqual([]);
+    expect(executeCommand.mock.calls).toEqual([['modbench.mod.enable', a, [a, b]]]);
   });
 
-  it('reports and forgets the mark so the checkbox shows the disk when the toggle fails', async () => {
-    const setModEnabled = vi.fn().mockRejectedValue(new Error('permission denied'));
-    const forgetUnconfirmed = vi.fn();
-    const modListProvider = { setModEnabled, markUnconfirmed: vi.fn(), forgetUnconfirmed };
+  it('fires disable for the mods it unchecked and enable for the ones it checked, each once', async () => {
+    const on = modNode('On', false);
+    const off = modNode('Off');
 
-    const reporter = recordingReporter();
+    await onModCheckboxChanged({ items: [[off, 0], [on, 1]] });
 
-    await onModCheckboxChanged({ items: [[modNode('TestMod', false), 0]] }, modListProvider, reporter);
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to update "TestMod".', detail: 'permission denied' },
+    expect(executeCommand.mock.calls).toEqual([
+      ['modbench.mod.enable', on, [on]],
+      ['modbench.mod.disable', off, [off]],
     ]);
-    expect(forgetUnconfirmed).toHaveBeenCalledWith('TestMod');
   });
 
   it('ignores a non-mod row (the pinned Overwrite row sharing the tree)', async () => {
-    const setModEnabled = vi.fn();
-    const modListProvider = { setModEnabled, markUnconfirmed: vi.fn(), forgetUnconfirmed: vi.fn() };
-    const overwriteNode = new OverwriteNode([], 'MO2');
+    await onModCheckboxChanged({ items: [[new OverwriteNode([], 'MO2'), 1]] });
 
-    await onModCheckboxChanged({ items: [[overwriteNode, 1]] }, modListProvider, recordingReporter());
-
-    expect(setModEnabled).not.toHaveBeenCalled();
-    expect(modListProvider.markUnconfirmed).not.toHaveBeenCalled();
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 });

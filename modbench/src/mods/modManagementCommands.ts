@@ -3,7 +3,7 @@ import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { ModListProvider, type ModlistNode, type SortDirection } from './ModListProvider';
 import {
-  isModsKeyArgs, isRowOf, modsGestureEntry, openFolderArgument, pluralArgument, registerModsGesture, selectionArgument,
+  isModsKeyArgs, isRowOf, MODS_KEY_ARGS, modsGestureEntry, openFolderArgument, pluralArgument, registerModsGesture, selectionArgument,
   singularArgument, type GestureEntry, type RowOf,
 } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
@@ -31,6 +31,7 @@ import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMove
 import { installNameRefusal } from '../install/install';
 import { errorMessage } from '../ports/errorMessage';
 import { reportFailure } from '../drivingLib/reportFailure';
+import { runWritingGesture } from '../drivingLib/writingGesture';
 import { applyOrThrow } from '../ports/applyOrThrow';
 
 /** The Mods tree's view direction writes no instance file, so it lives with the view it flips. It
@@ -51,29 +52,24 @@ export function registerModListCoreCommands(modListProvider: Pick<ModListProvide
 // modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
 // Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
 export function registerModEnableCommands(
-  access: ModlistAccess, instance: Pick<Instance, 'value'>,
+  access: ModlistAccess, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly ModlistNode[], reporter: Reporter,
-  marks: Pick<ModListProvider, 'isEnabled' | 'markUnconfirmed' | 'forgetUnconfirmed'>,
 ): vscode.Disposable[] {
-  const run = (enabled: boolean) => async (entry: GestureEntry) => {
-    const rows = pluralArgument(entry, 'mod');
-    if (rows.length === 0) return;
-    const modNames = rows.map((n) => n.mod.name);
-    const changing = rows.filter((row) => marks.isEnabled(row) !== enabled).map((row) => row.mod.name);
-    for (const name of changing) marks.markUnconfirmed(name, enabled);
+  const run = (enabled: boolean) => (entry: GestureEntry) => {
+    const modNames = pluralArgument(entry, 'mod').map((n) => n.mod.name);
+    if (modNames.length === 0) return;
     const verb = enabled ? 'enable' : 'disable';
-    const profile = instance.value.activeProfile;
-    const result = await setModsEnabled(access, profile, modNames, enabled);
-    if (!result.applied) {
-      reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
-      for (const name of changing) marks.forgetUnconfirmed(name);
-      return;
-    }
-    reporter.selectionOutcome(
-      `Could not ${verb} ${result.outcome.refused.length} of ${modNames.length} mods.`,
-      result.outcome, (name) => name,
-    );
-    for (const { item } of result.outcome.refused) marks.forgetUnconfirmed(item);
+    return runWritingGesture(MODS_KEY_ARGS.view, instance, async () => {
+      const result = await setModsEnabled(access, instance.value.activeProfile, modNames, enabled);
+      if (!result.applied) {
+        reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
+        return;
+      }
+      reporter.selectionOutcome(
+        `Could not ${verb} ${result.outcome.refused.length} of ${modNames.length} mods.`,
+        result.outcome, (name) => name,
+      );
+    });
   };
   return [
     registerModsGesture('modbench.mod.enable', viewSelection, run(true)),
@@ -84,26 +80,23 @@ export function registerModEnableCommands(
 // modbench.mod.excludeFile / modbench.mod.includeFile: the direction is the command's, so a mixed
 // selection takes the right-clicked row's (mods.md, Menus and keys, story 7).
 export function registerFileExclusionCommands(
-  access: ModlistAccess, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
-  marks: Pick<ModListProvider, 'markExclusions' | 'exclusionLandedAt' | 'forgetUnconfirmedExclusions'>,
+  access: ModlistAccess, instance: Pick<Instance, 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
-  const run = (mark: OriginFileMark) => async (entry: GestureEntry) => {
+  const run = (mark: OriginFileMark) => (entry: GestureEntry) => {
     const rows = pluralArgument(entry, 'file');
     if (rows.length === 0) return;
     const { verb, state } = FILE_MARKS[mark];
     const changing = rows.filter((row) => row.exclusion !== state).map((row) => row.ref);
-    marks.markExclusions(changing, mark);
-    const outcome = await markFiles(access, changing, mark, (file) => marks.exclusionLandedAt(file));
-    reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${changing.length} files.`, outcome, fileLabel);
-    marks.forgetUnconfirmedExclusions(outcome.refused.map(({ item }) => item));
+    return runWritingGesture(MODS_KEY_ARGS.view, instance, async () => {
+      const outcome = await markFiles(access, changing, mark);
+      reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${changing.length} files.`, outcome, fileLabel);
+    });
   };
   return [
     registerModsGesture('modbench.mod.excludeFile', viewSelection, run('Excluded')),
     registerModsGesture('modbench.mod.includeFile', viewSelection, run('Included')),
   ];
 }
-
-const entryRefs = (kind: 'mod' | 'separator', names: readonly string[]) => names.map((name) => ({ kind, name }));
 
 /** What the move asks of the Mods view: its selection, and the direction its pick follows. */
 export interface MoveView {
@@ -115,19 +108,16 @@ const SEPARATOR_PLACES =
   'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.';
 
 export function registerModMoveCommand(
-  access: ModlistAccess, instance: Pick<Instance, 'value'>, view: MoveView, reporter: Reporter,
-  marks: Pick<ModListProvider, 'markMoved' | 'forgetUnconfirmedShape'>,
+  access: ModlistAccess, instance: Pick<Instance, 'value' | 'refresh'>, view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
   const report = (kind: 'mod' | 'separator', names: readonly string[], result: ModlistSelectionResult) => {
     const noun = `${kind}s`;
     if (!result.applied) {
       reporter.report('error', `Failed to move ${noun}.`, result.refusal);
-      marks.forgetUnconfirmedShape(entryRefs(kind, names));
       return;
     }
     reporter.selectionOutcome(
       `Could not move ${result.outcome.refused.length} of ${names.length} ${noun}.`, result.outcome, (name) => name);
-    marks.forgetUnconfirmedShape(entryRefs(kind, result.outcome.refused.map(({ item }) => item)));
   };
   return registerModsGesture('modbench.mod.move', view.selection, async (entry, option) => {
     const rows = pluralArgument(entry, 'mod', 'separator');
@@ -143,18 +133,19 @@ export function registerModMoveCommand(
     if (modNames.length > 0 && separatorNames.length === 0) {
       const target = given ?? await pick(modsMovePick(entries, direction, modNames), 'Move to…');
       if (!target) return;
-      marks.markMoved(entryRefs('mod', modNames));
-      report('mod', modNames, await moveMods(access, activeProfile, modNames, target.place, target.end));
+      await runWritingGesture(MODS_KEY_ARGS.view, instance, async () =>
+        report('mod', modNames, await moveMods(access, activeProfile, modNames, target.place, target.end)));
     } else if (separatorNames.length > 0 && modNames.length === 0) {
       const target = given ?? await pick(separatorsMovePick(entries, direction, separatorNames), 'Move above…');
       if (!target) return;
-      if (!isSeparatorsPlace(target.place)) {
-        reporter.report('error', 'Failed to move separators.', SEPARATOR_PLACES);
-        return;
-      }
-      marks.markMoved(entryRefs('separator', separatorNames));
-      report('separator', separatorNames,
-        await moveSeparators(access, activeProfile, separatorNames, target.place, target.end));
+      await runWritingGesture(MODS_KEY_ARGS.view, instance, async () => {
+        const { place, end } = target;
+        if (!isSeparatorsPlace(place)) {
+          reporter.report('error', 'Failed to move separators.', SEPARATOR_PLACES);
+          return;
+        }
+        report('separator', separatorNames, await moveSeparators(access, activeProfile, separatorNames, place, end));
+      });
     }
   });
 }
@@ -171,17 +162,16 @@ async function confirmUninstall(names: readonly string[], ask: AskQuestion): Pro
 
 export interface ModContextDeps {
   access: ModlistAccess;
-  instance: Pick<Instance, 'value'>;
+  instance: Pick<Instance, 'value' | 'refresh'>;
   viewSelection: () => readonly ModlistNode[];
   reporter: Reporter;
   ask: AskQuestion;
   trash: MoveToTrash;
   log: (line: string) => void;
-  marks: Pick<ModListProvider, 'markRemoved' | 'forgetUnconfirmedShape'>;
 }
 
 export function registerModContextCommands(
-  { access, instance, viewSelection, reporter, ask, trash, log, marks }: ModContextDeps,
+  { access, instance, viewSelection, reporter, ask, trash, log }: ModContextDeps,
 ): vscode.Disposable[] {
   return [
       registerModsGesture('modbench.mod.uninstall', viewSelection, async (entry) => {
@@ -190,26 +180,23 @@ export function registerModContextCommands(
         const mods = pluralArgument(entry, 'mod').map((n) => ({ name: n.mod.name, archiveFilename: n.mod.archiveFilename }));
         if (mods.length === 0) return;
         if (!(await confirmUninstall(mods.map((m) => m.name), ask))) return;
-        const profile = instance.value.activeProfile;
-        marks.markRemoved(entryRefs('mod', mods.map((m) => m.name)));
-        const result = await uninstallMods(access, profile, mods, trash);
-        if (!result.applied) {
-          reporter.report('error', 'Failed to uninstall mods.', result.refusal);
-          marks.forgetUnconfirmedShape(entryRefs('mod', mods.map((m) => m.name)));
-          return;
-        }
-        reporter.selectionOutcome(
-          `Could not uninstall ${result.outcome.refused.length} of ${mods.length} mods.`, result.outcome, (m) => m.name);
-        marks.forgetUnconfirmedShape(entryRefs('mod', result.outcome.refused.map(({ item }) => item.name)));
-        for (const item of result.outcome.landed) {
-          if (item.lineRefusal !== undefined) {
-            marks.forgetUnconfirmedShape(entryRefs('mod', [item.name]));
-            reporter.report('warning',
-              `"${item.name}" was uninstalled, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
-          } else if (item.markRefusal !== undefined) {
-            log(`"${item.name}" was uninstalled, but its downloaded file could not be marked uninstalled: ${item.markRefusal}`);
+        await runWritingGesture(MODS_KEY_ARGS.view, instance, async () => {
+          const result = await uninstallMods(access, instance.value.activeProfile, mods, trash);
+          if (!result.applied) {
+            reporter.report('error', 'Failed to uninstall mods.', result.refusal);
+            return;
           }
-        }
+          reporter.selectionOutcome(
+            `Could not uninstall ${result.outcome.refused.length} of ${mods.length} mods.`, result.outcome, (m) => m.name);
+          for (const item of result.outcome.landed) {
+            if (item.lineRefusal !== undefined) {
+              reporter.report('warning',
+                `"${item.name}" was uninstalled, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
+            } else if (item.markRefusal !== undefined) {
+              log(`"${item.name}" was uninstalled, but its downloaded file could not be marked uninstalled: ${item.markRefusal}`);
+            }
+          }
+        });
       }),
   ];
 }
@@ -227,13 +214,10 @@ async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion
 }
 
 export function registerSeparatorCommands(
-  access: ModlistAccess, instance: Pick<Instance, 'value'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  access: ModlistAccess, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   viewSelection: () => readonly ModlistNode[],
-  marks: Pick<
-    ModListProvider,
-    'markUnconfirmedRename' | 'forgetUnconfirmedRename' | 'markRemoved' | 'markAddedSeparator' | 'forgetUnconfirmedShape'
-  >,
 ): vscode.Disposable[] {
+  const write = (command: () => Promise<void>) => runWritingGesture(MODS_KEY_ARGS.view, instance, command);
   return [
       registerModsGesture('modbench.separator.rename', viewSelection, async (entry) => {
         const node = singularArgument(entry, 'separator');
@@ -243,15 +227,9 @@ export function registerSeparatorCommands(
           prompt: 'Rename separator', value: oldName, validateInput: separatorNamePrompt(access, instance, oldName),
         });
         if (!newName || newName === oldName) return;
-        marks.markUnconfirmedRename(oldName, newName);
-        await reportFailure(reporter, 'Failed to rename separator.', async () => {
-          try {
-            applyOrThrow(await renameSeparator(access, instance.value.activeProfile, oldName, newName));
-          } catch (err) {
-            marks.forgetUnconfirmedRename(newName);
-            throw err;
-          }
-        });
+        await write(() => reportFailure(reporter, 'Failed to rename separator.', async () => {
+          applyOrThrow(await renameSeparator(access, instance.value.activeProfile, oldName, newName));
+        }));
       }),
       registerModsGesture('modbench.separator.add', viewSelection, async (entry) => {
         const node = singularArgument(entry, 'mod', 'separator');
@@ -261,45 +239,36 @@ export function registerSeparatorCommands(
         });
         if (!name) return;
         const anchor = node.kind === 'mod' ? node.mod : node.separator;
-        marks.markAddedSeparator(name, { kind: anchor.kind, name: anchor.name });
-        await reportFailure(reporter, 'Failed to add separator.', async () => {
-          try {
-            applyOrThrow(await insertSeparator(
-              access, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name }));
-          } catch (err) {
-            marks.forgetUnconfirmedShape(entryRefs('separator', [name]));
-            throw err;
-          }
-        });
+        await write(() => reportFailure(reporter, 'Failed to add separator.', async () => {
+          applyOrThrow(await insertSeparator(
+            access, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name }));
+        }));
       }),
       registerModsGesture('modbench.separator.delete', viewSelection, async (entry) => {
         const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
         if (names.length === 0) return;
         if (!(await confirmSeparatorDelete(names, ask))) return;
-        marks.markRemoved(entryRefs('separator', names));
-        const result = await deleteSeparators(access, instance.value.activeProfile, names, trash);
-        if (!result.applied) {
-          reporter.report('error', 'Failed to delete separators.', result.refusal);
-          marks.forgetUnconfirmedShape(entryRefs('separator', names));
-          return;
-        }
-        reporter.selectionOutcome(
-          `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`,
-          result.outcome, (item) => item.name);
-        marks.forgetUnconfirmedShape(entryRefs('separator', result.outcome.refused.map(({ item }) => item.name)));
-        for (const item of result.outcome.landed) {
-          if (item.lineRefusal !== undefined) {
-            marks.forgetUnconfirmedShape(entryRefs('separator', [item.name]));
-            reporter.report('warning',
-              `"${item.name}" was deleted, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
+        await write(async () => {
+          const result = await deleteSeparators(access, instance.value.activeProfile, names, trash);
+          if (!result.applied) {
+            reporter.report('error', 'Failed to delete separators.', result.refusal);
+            return;
           }
-        }
+          reporter.selectionOutcome(
+            `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`,
+            result.outcome, (item) => item.name);
+          for (const item of result.outcome.landed) {
+            if (item.lineRefusal !== undefined) {
+              reporter.report('warning',
+                `"${item.name}" was deleted, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
+            }
+          }
+        });
       }),
   ];
 }
 export function registerCreateEmptyModCommand(
-  access: ModlistAccess, instance: Pick<Instance, 'value'>, reporter: Reporter,
-  marks: Pick<ModListProvider, 'markCreatedMod' | 'forgetUnconfirmedShape'>,
+  access: ModlistAccess, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.mod.createEmpty', async () => {
     const name = await vscode.window.showInputBox({
@@ -307,20 +276,18 @@ export function registerCreateEmptyModCommand(
       validateInput: (value) => installNameRefusal(access, value),
     });
     if (!name) return;
-    marks.markCreatedMod(name);
-    try {
-      const profile = instance.value.activeProfile;
-      const outcome = await createEmptyMod(access, profile, name);
-      applyOrThrow(outcome);
-      if (outcome.lineRefusal !== undefined) {
-        marks.forgetUnconfirmedShape(entryRefs('mod', [name]));
-        reporter.report(
-          'warning', `"${name}" was created, but its ${instance.value.managerNames.modOrderFile} line could not be written.`, outcome.lineRefusal);
+    await runWritingGesture(MODS_KEY_ARGS.view, instance, async () => {
+      try {
+        const outcome = await createEmptyMod(access, instance.value.activeProfile, name);
+        applyOrThrow(outcome);
+        if (outcome.lineRefusal !== undefined) {
+          reporter.report(
+            'warning', `"${name}" was created, but its ${instance.value.managerNames.modOrderFile} line could not be written.`, outcome.lineRefusal);
+        }
+      } catch (err) {
+        reporter.report('error', `Failed to create "${name}".`, errorMessage(err));
       }
-    } catch (err) {
-      marks.forgetUnconfirmedShape(entryRefs('mod', [name]));
-      reporter.report('error', `Failed to create "${name}".`, errorMessage(err));
-    }
+    });
   });
 }
 
