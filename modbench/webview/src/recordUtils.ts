@@ -40,10 +40,6 @@ export function offersArrayAdd(meta: FieldMetadata | undefined): boolean {
 //
 // VS Code gates these on a `data-vscode-context` attribute carrying JSON it parses itself, never a
 // rendered menu. One row can carry more than one context, so each builder returns a plain object.
-export type {
-  ArrayElementContext, ArrayParentContext, ColumnHeaderContext, EditableCellContext, ReferenceContext,
-  StringValueContext,
-} from '../../src/wire/messages';
 import type {
   ArrayElementContext, ArrayParentContext, ColumnHeaderContext, EditableCellContext, ReferenceContext,
   StringValueContext,
