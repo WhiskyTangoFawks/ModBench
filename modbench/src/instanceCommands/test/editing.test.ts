@@ -240,6 +240,17 @@ describe('the load order is put at every recompute', () => {
     expect(putPluginNames()).toEqual(['A.esp', 'B.esp', 'B.esp']);
   });
 
+  it('tells a reopen whose held first read failed, rather than leaving it unhandled', async () => {
+    const { client, flow, editing, toldCount, told } = wired('running', valueWith('A.esp'));
+    await flow.enter();
+    await editing.enter(Promise.reject(new Error('read failed'))).catch(() => undefined);
+
+    client.reconnected();
+    await toldCount(2);
+
+    expect(told[1]).toEqual({ kind: 'putThrew', message: 'read failed' });
+  });
+
   it('puts nothing on a stream reopen before mEdit started', async () => {
     const { client, flow, told, putPluginNames } = wired('running', valueWith('A.esp'));
 

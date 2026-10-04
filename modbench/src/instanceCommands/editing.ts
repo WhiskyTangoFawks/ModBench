@@ -33,14 +33,14 @@ export interface EditingFlow {
 export function editingFlow(deps: EditingDeps): EditingFlow {
   const { client, sender, instanceRoot, exitEditing, around, tell, log } = deps;
   let startPutRan = false;
-  let held!: Promise<LoadOrderSource>;
+  let held: Promise<LoadOrderSource> | undefined;
 
   const put = async (source: LoadOrderSource): Promise<void> => {
     await tell({ kind: 'put', put: await putLoadOrder(sender, instanceRoot, source) });
   };
 
-  const putTold = (source: LoadOrderSource): void => {
-    void put(source).catch((e: unknown) => tell({ kind: 'putThrew', message: errorMessage(e) }));
+  const putHeld = (): void => {
+    void held?.then(put).catch((e: unknown) => tell({ kind: 'putThrew', message: errorMessage(e) }));
   };
 
   const enterOnce = async (): Promise<void> => {
@@ -55,7 +55,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
       return tell({ kind: 'backendFailed' });
     }
     const value = await source;
-    if (!value.loadOrderSnapshot) return exitEditing();
+    if (!value?.loadOrderSnapshot) return exitEditing();
     startPutRan = true;
     await put(value);
   };
@@ -64,7 +64,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     if (status !== 'running') startPutRan = false;
   });
   const reconnectSubscription = client.onReconnected(() => {
-    if (startPutRan) void held.then(putTold);
+    if (startPutRan) putHeld();
   });
   const entry = enterEditingAcrossRestarts(
     client, () => around(enterOnce), (message) => log(`[instanceCommands] ${message}`));
@@ -77,7 +77,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     put,
     onRecompute: (source) => {
       held = Promise.resolve(source);
-      if (startPutRan) putTold(source);
+      if (startPutRan) putHeld();
     },
     dispose: () => {
       statusSubscription();
