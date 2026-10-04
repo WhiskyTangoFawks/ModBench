@@ -23,20 +23,27 @@ function sizeText(bytes: number): string {
 const letterOf = (index: number): string =>
   (index < 26 ? '' : letterOf(Math.floor(index / 26) - 1)) + String.fromCharCode(65 + (index % 26));
 
-// Copies are winning-most first, so the master is the last: its contents are A.
+// Copies are winning-most first, so the master is the last. A is reserved for its contents: with
+// the master unreadable, the letters start at B.
 function contentLetters(copies: readonly Copy[]): ReadonlyMap<number, string> {
   const letters = new Map<number, string>();
+  const master = copies.at(-1);
+  if (master?.kind === 'read') letters.set(master.sameAs, letterOf(0));
+  let next = 1;
   for (const copy of [...copies].reverse()) {
-    if (copy.kind === 'read' && !letters.has(copy.sameAs)) letters.set(copy.sameAs, letterOf(letters.size));
+    if (copy.kind === 'read' && !letters.has(copy.sameAs)) letters.set(copy.sameAs, letterOf(next++));
   }
   return letters;
 }
+
+const twoDigits = (n: number): string => String(n).padStart(2, '0');
+const localDay = (date: Date): string => `${date.getFullYear()}-${twoDigits(date.getMonth() + 1)}-${twoDigits(date.getDate())}`;
 
 const modifiedMs = (copy: ReadCopy): number => Number(copy.modifiedNs / 1_000_000n);
 
 function valueOf(copy: ReadCopy, cellValue: ConflictCellValue, letters: ReadonlyMap<number, string>): string {
   if (cellValue === 'contents') return letters.get(copy.sameAs) ?? '';
-  return cellValue === 'size' ? sizeText(Number(copy.size)) : new Date(modifiedMs(copy)).toISOString().slice(0, 10);
+  return cellValue === 'size' ? sizeText(Number(copy.size)) : localDay(new Date(modifiedMs(copy)));
 }
 
 const message = (text: string): ConflictTable => ({ kind: 'message', text });

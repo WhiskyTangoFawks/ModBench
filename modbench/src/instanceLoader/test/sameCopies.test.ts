@@ -54,6 +54,11 @@ function digestsRead(read: string[]): (adapter: InstanceAdapter) => InstanceAdap
 }
 
 const MODIFIED_ON_A_WHOLE_SECOND = new Date('2020-01-01T00:00:00Z');
+const MODIFIED_NS = BigInt(MODIFIED_ON_A_WHOLE_SECOND.getTime()) * 1_000_000n;
+
+async function modifiedOnAWholeSecond(...paths: string[]): Promise<void> {
+  for (const path of paths) await utimes(path, MODIFIED_ON_A_WHOLE_SECOND, MODIFIED_ON_A_WHOLE_SECOND);
+}
 
 const clockAnHourPastEveryWrite = (): void => {
   vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
@@ -69,33 +74,36 @@ async function twoCopiesOfOneSize(read: string[]): Promise<{ instance: Instance;
 describe('Instance — which copies of a file are the same', () => {
   it('tells copies holding the same bytes from copies of the same size holding other bytes', async () => {
     const { root, instance } = instanceOver();
-    await writeCopy(root, `mods/${NONO}`, SHARED, 'aaaa');
-    await writeCopy(root, `mods/${PATCH}`, SHARED, 'aaaa');
-    await writeCopy(root, 'overwrite', SHARED, 'bbbb');
+    await modifiedOnAWholeSecond(
+      await writeCopy(root, `mods/${NONO}`, SHARED, 'aaaa'),
+      await writeCopy(root, `mods/${PATCH}`, SHARED, 'aaaa'),
+      await writeCopy(root, 'overwrite', SHARED, 'bbbb'));
     await instance.refresh();
 
-    expect(await instance.sameCopies([SHARED])).toMatchObject([{
+    expect(await instance.sameCopies([SHARED])).toEqual([{
       relativePath: SHARED,
       copies: [
-        { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0, size: 4n },
-        { origin: mod(NONO), kind: 'read', sameAs: 1, size: 4n },
-        { origin: mod(PATCH), kind: 'read', sameAs: 1, size: 4n },
+        { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0, size: 4n, modifiedNs: MODIFIED_NS },
+        { origin: mod(NONO), kind: 'read', sameAs: 1, size: 4n, modifiedNs: MODIFIED_NS },
+        { origin: mod(PATCH), kind: 'read', sameAs: 1, size: 4n, modifiedNs: MODIFIED_NS },
       ],
     }]);
   });
 
   it('gives each copy it read its size and date modified, a copy of a size of its own included', async () => {
     const { root, instance } = instanceOver();
-    const nono = await writeCopy(root, `mods/${NONO}`, SHARED, 'aaaa');
-    await writeCopy(root, `mods/${PATCH}`, SHARED, 'bb');
-    await utimes(nono, MODIFIED_ON_A_WHOLE_SECOND, MODIFIED_ON_A_WHOLE_SECOND);
+    await modifiedOnAWholeSecond(
+      await writeCopy(root, `mods/${NONO}`, SHARED, 'aaaa'),
+      await writeCopy(root, `mods/${PATCH}`, SHARED, 'bb'));
     await instance.refresh();
 
-    const [answer] = await instance.sameCopies([SHARED]);
-
-    const stamps = answer?.copies.map((copy) => copy.kind === 'read' && [copy.origin, copy.size]);
-    expect(stamps).toEqual([[mod(NONO), 4n], [mod(PATCH), 2n]]);
-    expect(answer?.copies[0]).toMatchObject({ modifiedNs: BigInt(MODIFIED_ON_A_WHOLE_SECOND.getTime()) * 1_000_000n });
+    expect(await instance.sameCopies([SHARED])).toEqual([{
+      relativePath: SHARED,
+      copies: [
+        { origin: mod(NONO), kind: 'read', sameAs: 0, size: 4n, modifiedNs: MODIFIED_NS },
+        { origin: mod(PATCH), kind: 'read', sameAs: 1, size: 2n, modifiedNs: MODIFIED_NS },
+      ],
+    }]);
   });
 
   it('reads the contents of only the copies whose size another copy shares, a copy of a size of its own being different', async () => {
@@ -118,15 +126,17 @@ describe('Instance — which copies of a file are the same', () => {
       contentDigest: (path) => (path.includes(PATCH) ? Promise.resolve({ kind: 'unreadable', reason: 'locked by the game' }) : adapter.contentDigest(path)),
     }));
     const gone = await writeCopy(root, `mods/${NONO}`, SHARED, 'aaaa');
-    await writeCopy(root, `mods/${PATCH}`, SHARED, 'aaaa');
-    await writeCopy(root, 'overwrite', SHARED, 'aaaa');
+    await modifiedOnAWholeSecond(
+      gone,
+      await writeCopy(root, `mods/${PATCH}`, SHARED, 'aaaa'),
+      await writeCopy(root, 'overwrite', SHARED, 'aaaa'));
     await instance.refresh();
     await rm(gone);
 
     const [answer] = await instance.sameCopies([SHARED]);
 
     const [overwrite, removed, locked] = answer?.copies ?? [];
-    expect(overwrite).toMatchObject({ origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0 });
+    expect(overwrite).toEqual({ origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0, size: 4n, modifiedNs: MODIFIED_NS });
     expect(removed).toMatchObject({ origin: mod(NONO), kind: 'unreadable' });
     expect(removed?.kind === 'unreadable' && removed.reason).toContain('ENOENT');
     expect(locked).toEqual({ origin: mod(PATCH), kind: 'unreadable', reason: 'locked by the game' });
@@ -181,15 +191,16 @@ describe('Instance — which copies of a file are the same', () => {
     const { root, instance } = instanceOver();
     const modlist = join(root, DEFAULT_MODLIST);
     await writeFile(modlist, `${await readFile(modlist, 'utf8')}+overwrite\n`);
-    await writeCopy(root, 'mods/overwrite', SHARED, 'aaaa');
-    await writeCopy(root, 'overwrite', SHARED, 'bbbb');
+    await modifiedOnAWholeSecond(
+      await writeCopy(root, 'mods/overwrite', SHARED, 'aaaa'),
+      await writeCopy(root, 'overwrite', SHARED, 'bbbb'));
     await instance.refresh();
 
     const [answer] = await instance.sameCopies([SHARED]);
 
-    expect(answer?.copies).toMatchObject([
-      { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0 },
-      { origin: mod('overwrite'), kind: 'read', sameAs: 1 },
+    expect(answer?.copies).toEqual([
+      { origin: { kind: 'runtimeOutput' }, kind: 'read', sameAs: 0, size: 4n, modifiedNs: MODIFIED_NS },
+      { origin: mod('overwrite'), kind: 'read', sameAs: 1, size: 4n, modifiedNs: MODIFIED_NS },
     ]);
   });
 });

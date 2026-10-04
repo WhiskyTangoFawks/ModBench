@@ -8,7 +8,8 @@ import type { ConflictAll, ConflictThis } from './messages';
 export type ConflictOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
 
 /** What a cell shows of its copy: its size, its date modified, or a letter for its contents. */
-export type ConflictCellValue = 'size' | 'dateModified' | 'contents';
+export const CONFLICT_CELL_VALUES = ['size', 'dateModified', 'contents'] as const;
+export type ConflictCellValue = (typeof CONFLICT_CELL_VALUES)[number];
 
 export type ConflictCellState = Exclude<ConflictThis, 'OnlyOne'>;
 export type ConflictRowState = Exclude<ConflictAll, 'OnlyOne'>;

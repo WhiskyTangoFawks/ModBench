@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import type { Instance, InstanceView } from '../instanceLoader/instance';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import {
-  CONFLICT_TABLE_SHOWN, isConflictTableReady, modOfConflictColumn, type ConflictCellValue, type ConflictTable, type ConflictTableShown,
+  CONFLICT_CELL_VALUES, CONFLICT_TABLE_SHOWN, isConflictTableReady, modOfConflictColumn, type ConflictCellValue, type ConflictTable, type ConflictTableShown,
 } from '../wire/conflictTable';
 import { originLabel } from '../instanceLoader/fileConflictIndex';
 import { conflictPaths, conflictTable } from './conflictTable';
@@ -18,8 +18,6 @@ import type { WorkspaceSettings } from './workspaceSettings';
 
 export const CONFLICT_TABLE_VIEW_TYPE = 'modbench.conflicts';
 export const CELL_VALUE_SETTING = 'modbench.mods.conflictTable.cellValue';
-
-const CELL_VALUES: readonly ConflictCellValue[] = ['size', 'dateModified', 'contents'];
 
 const SCHEME = 'modbench-conflicts';
 const SUFFIX = '.modbench-conflicts';
@@ -38,7 +36,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
   ) {}
 
   private cellValue(): ConflictCellValue {
-    const chosen = CELL_VALUES.find((value) => value === this.settings.getConfiguration().get(CELL_VALUE_SETTING));
+    const chosen = CONFLICT_CELL_VALUES.find((value) => value === this.settings.getConfiguration().get(CELL_VALUE_SETTING));
     return chosen ?? 'size';
   }
 

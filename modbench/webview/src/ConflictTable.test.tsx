@@ -299,4 +299,15 @@ describe('the conflict table\'s cell values', () => {
   it('names the mod, the state in xEdit\'s words, the size and the date modified in the tooltip', () => {
     expect(cellsOf()[1]?.title).toBe(['Opened', 'Conflict winner', '1,572,864 bytes', new Date(MODIFIED).toLocaleString()].join('\n'));
   });
+
+  it('names the state as not known on a readable copy in a row where another could not be read', () => {
+    const unknown: ConflictRow = {
+      kind: 'file', name: 'u.dds', path: 'u.dds', state: null,
+      cells: [{ state: null, unreadable: 'in use' }, { state: null, value: '2 KB', size: 2048, modified: MODIFIED }, null],
+    };
+    show({ kind: 'table', columns, rows: [unknown] });
+
+    const [reason, readable] = Array.from(rowOf('u.dds').querySelectorAll('td')).slice(1);
+    expect([reason?.title, readable?.title]).toEqual(['in use', ['Opened', 'State not known', '2,048 bytes', new Date(MODIFIED).toLocaleString()].join('\n')]);
+  });
 });

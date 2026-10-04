@@ -32,8 +32,8 @@ function cellContext({ origin }: ConflictColumn, path: string, cell: ConflictCel
 function cellTooltip(column: ConflictColumn, cell: ConflictCell | null): string | undefined {
   if (cell === null) return undefined;
   if (cell.unreadable !== undefined) return cell.unreadable;
-  if (cell.state === null || cell.size === undefined || cell.modified === undefined) return undefined;
-  return [column.name, conflictStateName(cell.state), `${cell.size.toLocaleString()} bytes`, new Date(cell.modified).toLocaleString()].join('\n');
+  if (cell.size === undefined || cell.modified === undefined) return undefined;
+  return [column.name, cell.state === null ? 'State not known' : conflictStateName(cell.state), `${cell.size.toLocaleString()} bytes`, new Date(cell.modified).toLocaleString()].join('\n');
 }
 
 // A collapsed folder shows the worst state beneath it, and an expanded one none (mods-conflicts.md, Cells, story 1).

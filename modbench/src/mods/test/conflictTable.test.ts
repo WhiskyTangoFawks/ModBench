@@ -297,6 +297,23 @@ describe('the conflict table\'s cell values', () => {
     expect((await cellsOf(copies, 'dateModified')).map((cell) => cell?.value)).toEqual(['1970-01-01', '2020-09-13', '2023-11-14']);
   });
 
+  it('shows the day in the local time, as the tooltip\'s date does', async () => {
+    const was = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
+    try {
+      const evening = copiesOf(stamped(0, 9n, BigInt(Date.UTC(2023, 10, 15, 3) / 1000)));
+      expect((await cellsOf(evening, 'dateModified')).map((cell) => cell?.value)).toEqual([undefined, undefined, '2023-11-14']);
+    } finally {
+      if (was === undefined) delete process.env.TZ;
+      else process.env.TZ = was;
+    }
+  });
+
+  it('keeps A for the master\'s contents: with the master unreadable the letters start at B, equal letters still equal bytes', async () => {
+    const unreadableMaster = [winningFirstCopies('a.dds', { High: 1, Middle: 0, Low: 'locked' })];
+    expect((await cellsOf(unreadableMaster, 'contents')).map((cell) => cell?.value)).toEqual([undefined, 'B', 'C']);
+  });
+
   it('shows a letter for the contents: A for the master\'s, so two cells with one letter hold one file', async () => {
     const same = copiesOf(stamped(1, 9n, 0n), stamped(0, 9n, 0n), stamped(0, 9n, 0n));
     expect((await cellsOf(same, 'contents')).map((cell) => cell?.value)).toEqual(['A', 'A', 'B']);

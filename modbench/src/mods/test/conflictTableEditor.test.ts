@@ -219,10 +219,10 @@ describe('a mod\'s conflict table, open in a tab', () => {
       return row?.kind === 'file' ? row.cells.map((cell) => cell?.value) : [];
     };
 
-    it('shows the size when it is unset, or names a value there is not', async () => {
+    it.each([['unset', undefined], ['not a value it offers', 'colour']])('shows the size when the setting is %s', async (_, setting) => {
       const instance = new FakeInstance(await shared());
       stamped(instance);
-      cellValueSetting = 'colour';
+      cellValueSetting = setting;
       const panel = openTable(instance, 'High');
       panel.webview.receive?.(ready);
       await posted(panel, 1);
@@ -247,15 +247,20 @@ describe('a mod\'s conflict table, open in a tab', () => {
       expect(settingListeners).toEqual([]);
     });
 
-    it('stays as it is for a setting that is not this one', async () => {
+    it('shows again for this setting only, not for another', async () => {
       const instance = new FakeInstance(await shared());
+      stamped(instance);
       const panel = openTable(instance, 'High');
       panel.webview.receive?.(ready);
       await posted(panel, 1);
 
       settingListeners.forEach((listener) => listener({ affectsConfiguration: (section) => section === 'modbench.scriptsPath' }));
+      cellValueSetting = 'contents';
+      settingListeners.forEach((listener) => listener({ affectsConfiguration: (section) => section === CELL_VALUE_SETTING }));
+      await posted(panel, 2);
 
-      expect(instance.askedForCopies).toHaveLength(1);
+      expect([values(panel, 0), values(panel, 1)]).toEqual([['512 B', '2 KB'], ['A', 'B']]);
+      expect(shownTables(panel)).toHaveLength(2);
     });
   });
 
