@@ -5,7 +5,7 @@ import ts from 'typescript';
 import { present } from '../ports/present';
 import { tsFiles } from './tsFiles';
 
-const BYTE_READS = new Set(['open', 'openSync', 'createReadStream', 'read', 'readSync', 'readv', 'readvSync']);
+const BYTE_READS = new Set(['open', 'openSync', 'openAsBlob', 'createReadStream', 'read', 'readSync', 'readv', 'readvSync']);
 
 const FS_MODULES = new Set(['node:fs', 'node:fs/promises', 'fs', 'fs/promises']);
 
@@ -174,21 +174,66 @@ function scan(sourceText: string, fileName: string): Offences {
   return { byteReads, undecodedReads };
 }
 
+const DIGEST_IMPORTS: Readonly<Record<string, ReadonlySet<string>>> = {
+  'node:fs': new Set(['createReadStream']),
+  'node:crypto': new Set(['createHash']),
+};
+const DIGEST_EXPORT = 'digestOf';
+const DIGEST_RETURNS = 'Promise<string>';
+
+const isExported = (node: ts.Node): boolean =>
+  ts.canHaveModifiers(node) && (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+
+const firstLine = (node: ts.Node): string => present(node.getText().split('\n')[0], 'a statement\'s first line');
+
+function importOffences(statement: ts.ImportDeclaration): string[] {
+  const from = ts.isStringLiteralLike(statement.moduleSpecifier) ? statement.moduleSpecifier.text : firstLine(statement);
+  const allowed = DIGEST_IMPORTS[from];
+  if (allowed === undefined) return [`imports ${from}`];
+  const bindings = statement.importClause?.namedBindings;
+  if (statement.importClause?.name || bindings === undefined || !ts.isNamedImports(bindings)) return [`imports ${from} whole`];
+  return bindings.elements.map((e) => (e.propertyName ?? e.name).text).filter((name) => !allowed.has(name))
+    .map((name) => `imports ${name} from ${from}`);
+}
+
+function digestModuleOffences(sourceText: string, fileName: string): string[] {
+  const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
+  const offences: string[] = [];
+  for (const statement of source.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      offences.push(...importOffences(statement));
+    } else if (ts.isFunctionDeclaration(statement) && statement.name?.text === DIGEST_EXPORT && isExported(statement)) {
+      const returns = statement.type?.getText() ?? 'nothing declared';
+      if (returns !== DIGEST_RETURNS) offences.push(`${DIGEST_EXPORT} returns ${returns}, not ${DIGEST_RETURNS}`);
+    } else if (ts.isExportAssignment(statement) || ts.isExportDeclaration(statement) || isExported(statement)) {
+      offences.push(firstLine(statement));
+    }
+  }
+  walk(source, (node) => {
+    if (!ts.isCallExpression(node)) return;
+    const acquires = node.expression.kind === ts.SyntaxKind.ImportKeyword
+      || (ts.isIdentifier(node.expression) && node.expression.text === 'require');
+    if (acquires) offences.push(`imports ${node.arguments[0] !== undefined ? firstLine(node.arguments[0]).replace(/^['"]|['"]$/g, '') : ''}`);
+  });
+  return offences;
+}
+
 export function isTestSupport(path: string): boolean {
   return basename(path).includes('.test.') || path.split(sep).includes('test');
 }
 
 const SRC = join(__dirname, '..');
+const THE_DIGEST = join(SRC, 'instanceAdapter', 'contentDigest.ts');
 
-describe('the extension opens no plugin file for reading, through the bindings a static scan follows', () => {
+describe('the extension interprets no plugin binary (ADR-0004): its one byte-level read feeds a hash, through the bindings a static scan follows', () => {
   it('covers the whole extension source tree', () => {
     expect(tsFiles(SRC, { exclude: ['generated'] }).length).toBeGreaterThan(100);
   });
 
-  it('reaches no byte-level fs read anywhere in src', () => {
+  it('reaches no byte-level fs read anywhere in src but the Instance adapter\'s digest', () => {
     const offenders: Record<string, string[]> = {};
     for (const path of tsFiles(SRC, { exclude: ['generated'] })) {
-      if (basename(path) === THIS_FILE_QUOTING_THE_PATTERNS) continue;
+      if (basename(path) === THIS_FILE_QUOTING_THE_PATTERNS || path === THE_DIGEST) continue;
       const { byteReads } = scan(readFileSync(path, 'utf8'), path);
       if (byteReads.length > 0) offenders[path] = byteReads;
     }
@@ -203,6 +248,42 @@ describe('the extension opens no plugin file for reading, through the bindings a
       if (undecodedReads.length > 0) offenders[path] = undecodedReads;
     }
     expect(offenders).toEqual({});
+  });
+
+  it('holds the digest module to node:fs, node:crypto and one exported function, so its bytes reach only a hash', () => {
+    expect(digestModuleOffences(readFileSync(THE_DIGEST, 'utf8'), THE_DIGEST)).toEqual([]);
+  });
+
+  it('flags a digest module that imports anything but createReadStream and createHash, which could carry the bytes elsewhere', () => {
+    const other = "import { createHash } from 'node:crypto';\nimport { createReadStream } from 'node:fs';\nimport { keep } from './layout';\nexport async function digestOf(p): Promise<string> { keep(p); }\n";
+    expect(digestModuleOffences(other, 'contentDigest.ts')).toEqual(['imports ./layout']);
+    const sibling = "import { createReadStream, writeFileSync } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n";
+    expect(digestModuleOffences(sibling, 'contentDigest.ts')).toEqual(['imports writeFileSync from node:fs']);
+    const whole = "import * as fs from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n";
+    expect(digestModuleOffences(whole, 'contentDigest.ts')).toEqual(['imports node:fs whole']);
+  });
+
+  it('flags an import acquired in the body, which the import list does not show', () => {
+    const dynamic = "export async function digestOf(p): Promise<string> { const { keep } = await import('./layout'); }\n";
+    expect(digestModuleOffences(dynamic, 'contentDigest.ts')).toEqual(['imports ./layout']);
+    const required = "export async function digestOf(p): Promise<string> { const { keep } = require('./layout'); }\n";
+    expect(digestModuleOffences(required, 'contentDigest.ts')).toEqual(['imports ./layout']);
+  });
+
+  it('flags a second export of any form, which is a second way out for the bytes', () => {
+    const named = "import { createReadStream } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\nexport const bytesOf = (p) => createReadStream(p);\n";
+    expect(digestModuleOffences(named, 'contentDigest.ts')).toEqual(['export const bytesOf = (p) => createReadStream(p);']);
+    const assigned = "import { createReadStream } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\nexport default createReadStream;\n";
+    expect(digestModuleOffences(assigned, 'contentDigest.ts')).toEqual(['export default createReadStream;']);
+    const reExported = "export async function digestOf(p): Promise<string> {}\nexport { createReadStream } from 'node:fs';\n";
+    expect(digestModuleOffences(reExported, 'contentDigest.ts')).toEqual(["export { createReadStream } from 'node:fs';"]);
+  });
+
+  it('flags a digestOf that does not declare Promise<string>, so the bytes cannot leave as its answer', () => {
+    const undeclared = "export async function digestOf(p) {}\n";
+    expect(digestModuleOffences(undeclared, 'contentDigest.ts')).toEqual(['digestOf returns nothing declared, not Promise<string>']);
+    const buffer = "export function digestOf(p): Promise<Buffer> {}\n";
+    expect(digestModuleOffences(buffer, 'contentDigest.ts')).toEqual(['digestOf returns Promise<Buffer>, not Promise<string>']);
   });
 
   it('flags a restored header read through an fs handle', () => {
@@ -282,6 +363,11 @@ describe('the extension opens no plugin file for reading, through the bindings a
     expect(scan(callback, 'masterReader.ts').byteReads).toEqual(['dynamic node:fs']);
     const returned = "export const load = () => import('node:fs/promises');\n";
     expect(scan(returned, 'masterReader.ts').byteReads).toEqual(['dynamic node:fs/promises']);
+  });
+
+  it('flags openAsBlob, which yields a file\'s bytes through a Blob', () => {
+    const planted = "import { openAsBlob } from 'node:fs';\nexport const h = async () => (await openAsBlob(p)).stream();\n";
+    expect(scan(planted, 'masterReader.ts').byteReads).toEqual(['openAsBlob']);
   });
 
   it('does not flag a type-only import, which calls nothing', () => {
