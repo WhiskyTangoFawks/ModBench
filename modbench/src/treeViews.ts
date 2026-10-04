@@ -2,7 +2,7 @@
 // the composition root's, so they sit beside it rather than in the views they render.
 
 import * as vscode from 'vscode';
-import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './mods/ModListProvider';
+import { ModListProvider, ModNode, OverwriteNode, type ModlistNode } from './mods/ModListProvider';
 import type { NexusModRow } from './mods/modManagementCommands';
 import { errorMessage } from './ports/errorMessage';
 import {
@@ -73,9 +73,8 @@ export function createModListView(
   return { modListView, modListFilter };
 }
 
-// VS Code keeps the expansion it remembers for a known row identity over the provider's
-// collapsible state, so only a reveal opens a row the filter shows for its matches, from the
-// separator down. A reveal also opens a hidden view.
+// VS Code keeps the expansion it remembers for a known row identity over the provider's state, so
+// only a reveal opens a row the filter shows for its matches. A reveal also opens a hidden view.
 async function expandFilteredRows(
   view: vscode.TreeView<ModlistNode>, provider: ModListProvider, log: (line: string) => void, parent?: ModlistNode,
 ): Promise<void> {
@@ -85,7 +84,7 @@ async function expandFilteredRows(
     try {
       await view.reveal(row, { select: false, focus: false, expand: true });
     } catch (e) {
-      log(`Could not expand "${String(row.label)}" for the filter: ${errorMessage(e)}`);
+      log(`Could not expand "${typeof row.label === 'string' ? row.label : row.label?.label}" for the filter: ${errorMessage(e)}`);
       continue;
     }
     await expandFilteredRows(view, provider, log, row);
