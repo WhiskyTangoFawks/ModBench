@@ -9,8 +9,8 @@ public class WorldspaceQueryServiceTests
 {
     private sealed class StubReader(
         IReadOnlyList<CellLocationSummary> cells,
-        IReadOnlyList<RecordSummary>? records = null,
-        CellChildRecords? cellRefs = null) : IRecordReads
+        IReadOnlyList<Index.RecordSummary>? records = null,
+        Index.CellChildRecords? cellRefs = null) : IRecordReads
     {
         public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey)
         {
@@ -23,7 +23,7 @@ public class WorldspaceQueryServiceTests
         public string? LastGetInteriorCellsOrigin { get; private set; }
         public string? LastGetCellChildRecordsOrigin { get; private set; }
 
-        public PagedResult<RecordSummary> Search(RecordQuery query)
+        public Index.PagedResult<Index.RecordSummary> Search(RecordQuery query)
         {
             LastSearchOrigin = query.Origin;
             return new(records ?? [], (records ?? []).Count);
@@ -48,7 +48,7 @@ public class WorldspaceQueryServiceTests
             return cells;
         }
         public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();
-        public CellChildRecords GetCellChildRecords(PluginAddress plugin, string fk)
+        public Index.CellChildRecords GetCellChildRecords(PluginAddress plugin, string fk)
         {
             LastGetCellChildRecordsOrigin = plugin.Origin;
             return cellRefs ?? new([], []);
@@ -61,6 +61,27 @@ public class WorldspaceQueryServiceTests
 
     private static WorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>
         new(new StubIndex(new StubReader(cells)));
+
+    [Fact]
+    public void GetCellChildRecords_AnswersEveryChildFact_InQueriesOwnTypes()
+    {
+        var persistent = new Index.ChildRecordSummary(
+            "p1:M.esp", "PersistentEditor", "base1:M.esp", "REFR", HasParseFailure: true,
+            FullName: "PersistentFull", BaseEditorId: "PersistentBase", ParseDiagnosis: "persistent diagnosis");
+        var temporary = new Index.ChildRecordSummary(
+            "t1:M.esp", "TemporaryEditor", "base2:M.esp", "ACHR", HasParseFailure: false,
+            FullName: "TemporaryFull", BaseEditorId: "TemporaryBase", ParseDiagnosis: "temporary diagnosis");
+        var svc = new WorldspaceQueryService(new StubIndex(new StubReader([], cellRefs: new Index.CellChildRecords([persistent], [temporary]))));
+
+        var result = svc.GetCellChildRecords("M.esp", "cell:M.esp", "Data");
+
+        Assert.Equal(
+            new ChildRecordSummary("p1:M.esp", "PersistentEditor", "base1:M.esp", "REFR", true, "PersistentFull", "PersistentBase", "persistent diagnosis"),
+            Assert.Single(result.Persistent));
+        Assert.Equal(
+            new ChildRecordSummary("t1:M.esp", "TemporaryEditor", "base2:M.esp", "ACHR", false, "TemporaryFull", "TemporaryBase", "temporary diagnosis"),
+            Assert.Single(result.Temporary));
+    }
 
     [Fact]
     public void GetWorldspaceBlocks_GroupsCellsIntoBlocksAndSubBlocks()
@@ -116,8 +137,8 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaces_MapsRecordsToSummaries()
     {
         var reader = new StubReader([], [
-            new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
-            new RecordSummary("0002:M.esp", "M.esp", 0, true, null, "Data"),
+            new Index.RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
+            new Index.RecordSummary("0002:M.esp", "M.esp", 0, true, null, "Data"),
         ]);
         var svc = new WorldspaceQueryService(new StubIndex(reader));
 
@@ -244,8 +265,8 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaces_MarksOnlyTheWorldspaceTheIndexFindsAFailureBeneath()
     {
         var reader = new StubReader([], [
-            new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data", HasParseFailure: true),
-            new RecordSummary("0002:M.esp", "M.esp", 0, true, "WorldB", "Data"),
+            new Index.RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data", HasParseFailure: true),
+            new Index.RecordSummary("0002:M.esp", "M.esp", 0, true, "WorldB", "Data"),
         ]);
         var svc = new WorldspaceQueryService(new StubIndex(reader));
 

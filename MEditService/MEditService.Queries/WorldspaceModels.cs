@@ -1,5 +1,3 @@
-using MEditService.Index;
-
 namespace MEditService.Queries;
 
 // DTOs for the per-plugin worldspace / cell / placed-object tree.

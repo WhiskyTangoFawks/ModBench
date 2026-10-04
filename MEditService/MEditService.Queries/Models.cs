@@ -1,6 +1,5 @@
 using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
-using MEditService.Index;
 using MEditService.LoadOrder;
 
 namespace MEditService.Queries;

@@ -95,15 +95,11 @@ public sealed class WriteSideIndexScanTests
 
     private const string EndpointRoot = "MEditService.Http/Endpoints";
 
-    private static readonly string[] IndexExceptionsCrossingQueriesUnchanged = ["IndexHeldElsewhereException"];
-
-    private static string[] IndexTypesNoQuerySignatureCarries() =>
+    private static string[] IndexTypesAnEndpointCannotNameByTheirOwnWord() =>
         [.. typeof(Indexer).Assembly.GetExportedTypes().Select(SourceName)
-            .Except(typeof(IRecordQueryService).Assembly.GetExportedTypes()
-                .SelectMany(SignatureTypes)
-                .SelectMany(Unwrapped)
-                .Select(SourceName), StringComparer.Ordinal)
-            .Except(IndexExceptionsCrossingQueriesUnchanged, StringComparer.Ordinal)
+            .Except(typeof(IRecordQueryService).Assembly.GetExportedTypes().Select(SourceName), StringComparer.Ordinal)
+            .Append("MEditService.Index")
+            .Append(@"Index\.[A-Z]\w*")
             .Distinct(StringComparer.Ordinal)];
 
     private static IEnumerable<Type> SignatureTypes(Type type) =>
@@ -119,10 +115,28 @@ public sealed class WriteSideIndexScanTests
     private static string SourceName(Type type) => type.Name.Split('`')[0];
 
     [Fact]
-    public void NoEndpoint_NamesAnIndexType_ButWhatAQueryServiceHandsIt()
+    public void NoQueryService_HandsBackAnIndexType()
+    {
+        var leaked = typeof(IRecordQueryService).Assembly.GetExportedTypes()
+            .SelectMany(SignatureTypes)
+            .SelectMany(Unwrapped)
+            .Where(t => t.Assembly == typeof(Indexer).Assembly)
+            .Select(t => t.FullName)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(
+            leaked.Count == 0,
+            "A query service's public surface carries an Index type. Queries hide the read model's "
+            + "types (ADR-0014): the face answers in its own:\n" + string.Join("\n", leaked));
+    }
+
+    [Fact]
+    public void NoEndpoint_NamesAnIndexType()
     {
         var root = ArchitectureTests.SolutionDirectory();
-        var forbidden = IndexTypesNoQuerySignatureCarries();
+        var forbidden = IndexTypesAnEndpointCannotNameByTheirOwnWord();
 
         var walked = ScannedFiles(root, [EndpointRoot], []).Count;
         var named = Counts(root, [EndpointRoot], [], forbidden);
@@ -131,9 +145,9 @@ public sealed class WriteSideIndexScanTests
         Assert.Contains("Indexer", forbidden);
         Assert.True(
             named.Count == 0,
-            "An endpoint names an Index type no query service hands it. A route takes a gesture's "
-            + "handler or a query service: Queries are the only readers of the read model (ADR-0014), "
-            + "and no arrow runs from the HTTP endpoints to the Index:\n"
+            "An endpoint names the Index. A route takes a gesture's handler or a query service: "
+            + "Queries are the only readers of the read model (ADR-0014), and no arrow runs from the "
+            + "HTTP endpoints to the Index:\n"
             + string.Join("\n", named));
     }
 
