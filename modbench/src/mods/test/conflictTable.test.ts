@@ -133,8 +133,7 @@ describe('the conflict table\'s states', () => {
   });
 });
 
-// Winning first, as the Instance loader answers: a number is a group of same bytes, a string the reason a copy is unreadable.
-const copiesOf = (relativePath: string, copies: Record<string, number | string>): FileCopies => ({
+const winningFirstCopies = (relativePath: string, copies: Record<string, number | string>): FileCopies => ({
   relativePath,
   copies: Object.entries(copies).map(([name, answer]): Copy => ({
     origin: { kind: 'mod', name },
@@ -158,21 +157,21 @@ async function threeMods(copies: FileCopies[], paths = ['a.dds']) {
 
 describe('the conflict table\'s colours, the record panel\'s read for a file', () => {
   it('gives a row whose every copy is the same no colour: the master, and copies identical to it', async () => {
-    expect(await threeMods([copiesOf('a.dds', { High: 0, Middle: 0, Low: 0 })])).toEqual({
+    expect(await threeMods([winningFirstCopies('a.dds', { High: 0, Middle: 0, Low: 0 })])).toEqual({
       columns: ['Master', 'IdenticalToMaster', 'IdenticalToMaster'],
       rows: [{ file: 'a.dds', state: 'NoConflict', cells: ['Master', 'IdenticalToMaster', 'IdenticalToMaster'] }],
     });
   });
 
   it('makes a row an Override when every copy that differs from the master is the winning copy\'s', async () => {
-    expect(await threeMods([copiesOf('a.dds', { High: 1, Middle: 1, Low: 0 })])).toEqual({
+    expect(await threeMods([winningFirstCopies('a.dds', { High: 1, Middle: 1, Low: 0 })])).toEqual({
       columns: ['Master', 'Override', 'Override'],
       rows: [{ file: 'a.dds', state: 'Override', cells: ['Master', 'Override', 'Override'] }],
     });
   });
 
   it('makes a row a Conflict when a copy differs from both the master and the winner: the winner wins, that copy loses', async () => {
-    expect(await threeMods([copiesOf('a.dds', { High: 2, Middle: 1, Low: 0 })])).toEqual({
+    expect(await threeMods([winningFirstCopies('a.dds', { High: 2, Middle: 1, Low: 0 })])).toEqual({
       columns: ['Master', 'ConflictLoses', 'ConflictWins'],
       rows: [{ file: 'a.dds', state: 'Conflict', cells: ['Master', 'ConflictLoses', 'ConflictWins'] }],
     });
@@ -182,7 +181,7 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
     const value = await indexedValueOf([mod('A'), mod('B'), mod('C'), mod('D'), mod('E')], Object.fromEntries(
       ['A', 'B', 'C', 'D', 'E'].map((name) => [name, { files: [file(name, 'a.dds')] }])));
 
-    const table = colours(conflictTable(read(value), 'A', [copiesOf('a.dds', { A: 1, B: 2, C: 1, D: 0, E: 0 })]));
+    const table = colours(conflictTable(read(value), 'A', [winningFirstCopies('a.dds', { A: 1, B: 2, C: 1, D: 0, E: 0 })]));
 
     expect(table.rows).toEqual([
       { file: 'a.dds', state: 'Conflict', cells: ['Master', 'IdenticalToMaster', 'ConflictWins', 'ConflictLoses', 'ConflictWins'] },
@@ -196,7 +195,7 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
       Low: { files: [file('Low', 'b.dds')] },
     });
 
-    const table = colours(conflictTable(read(value), 'Middle', [copiesOf('a.dds', { High: 1, Middle: 0 }), copiesOf('b.dds', { Middle: 0, Low: 0 })]));
+    const table = colours(conflictTable(read(value), 'Middle', [winningFirstCopies('a.dds', { High: 1, Middle: 0 }), winningFirstCopies('b.dds', { Middle: 0, Low: 0 })]));
 
     expect(table.rows).toEqual([
       { file: 'a.dds', state: 'Override', cells: [null, 'Master', 'Override'] },
@@ -206,9 +205,9 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
 
   it('colours each column\'s header with its worst cell, and a folder with the worst row beneath it', async () => {
     const table = await threeMods([
-      copiesOf('f/a.dds', { High: 1, Middle: 1, Low: 0 }),
-      copiesOf('f/b.dds', { High: 2, Middle: 1, Low: 0 }),
-      copiesOf('c.dds', { High: 0, Middle: 0, Low: 0 }),
+      winningFirstCopies('f/a.dds', { High: 1, Middle: 1, Low: 0 }),
+      winningFirstCopies('f/b.dds', { High: 2, Middle: 1, Low: 0 }),
+      winningFirstCopies('c.dds', { High: 0, Middle: 0, Low: 0 }),
     ], ['f/a.dds', 'f/b.dds', 'c.dds']);
 
     expect(table.columns).toEqual(['Master', 'ConflictLoses', 'ConflictWins']);
@@ -220,7 +219,7 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
       High: { files: [file('High', 'a.dds')] }, Low: { files: [file('Low', 'a.dds')] },
     });
 
-    const table = conflictTable(read(value), 'High', [copiesOf('a.dds', { High: 'in use', Low: 0 })]);
+    const table = conflictTable(read(value), 'High', [winningFirstCopies('a.dds', { High: 'in use', Low: 0 })]);
 
     expect(table).toMatchObject({
       columns: [{ state: null }, { state: null }],
