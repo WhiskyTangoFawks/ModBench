@@ -73,6 +73,41 @@ public sealed class LinkResolutionTests
         Assert.All(moreLinkedKeywords, k => Assert.Equal("kywd", resolve(k)?.RecordType));
     }
 
+    private const string ResolverPlugin = "Fixture.esp";
+
+    // One resolver is one response: what it answered, found or absent, it keeps answering however
+    // the index moves on, and a resolver asked afterwards sees the new rows.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AResolverKeepsItsFirstAnswer_AfterTheIndexMovesOn_AndAFreshOneSeesTheNewRows(bool found)
+    {
+        var late = FormKey.Factory($"000900:{ResolverPlugin}");
+        using var fixture = new PluginFixtureBuilder($"link-resolver-response-{found}")
+            .WithPlugin(ResolverPlugin, mod =>
+            {
+                mod.Npcs.AddNew("Asker");
+                if (found) mod.Races.Add(new Race(late, Fallout4Release.Fallout4) { EditorID = "Before" });
+            }, origin: "FixtureMod")
+            .BuildScattered();
+        using var index = Indexes.Reconciled(fixture);
+        var plugin = fixture.Plugins.Single();
+        var asker = index.RequireReads().GetDocuments(plugin.KeyOf()).Single(d => d.RecordType == "npc_").FormKey;
+        var resolve = index.RequireReads().LinkResolver(asker);
+        var first = resolve(late.ToString())?.EditorId;
+        Assert.Equal(found ? "Before" : null, first);
+
+        PluginBinaries.Rewrite(plugin.Path, mod =>
+        {
+            mod.Npcs.AddNew("Asker");
+            mod.Races.Add(new Race(late, Fallout4Release.Fallout4) { EditorID = "After" });
+        });
+        Assert.True(index.Revalidate());
+
+        Assert.Equal(first, resolve(late.ToString())?.EditorId);
+        Assert.Equal("After", index.RequireReads().LinkResolver(asker)(late.ToString())?.EditorId);
+    }
+
     private static string? KeywordErrors(RecordDocument document) =>
         document.Fields.Single(f => f.Metadata.Name == "Keywords").CheckError;
 }

@@ -3,10 +3,17 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.TestSupport;
 
-/// <summary>Rewrites a fixture plugin so its bytes differ while its record set does not: the
-/// external change a validation re-derives on, without moving any record a test asserts on.</summary>
+/// <summary>An external change to a fixture plugin that a validation re-derives on: a rewrite
+/// with other records, or a touch that moves no record a test asserts on.</summary>
 public static class PluginBinaries
 {
+    public static void Rewrite(string pluginPath, Action<Fallout4Mod> fill)
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName(Path.GetFileName(pluginPath)), Fallout4Release.Fallout4);
+        fill(mod);
+        mod.WriteToBinary(pluginPath);
+    }
+
     public static void Touch(string pluginPath)
     {
         var name = Path.GetFileName(pluginPath);
