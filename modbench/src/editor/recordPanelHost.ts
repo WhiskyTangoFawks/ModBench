@@ -42,7 +42,7 @@ export interface EditorCommandDeps {
     | 'editRecord' | 'searchRecords'
     | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'
-    | 'getComparison' | 'subscribe' | 'onStatusChanged' | 'onReconnected'>;
+    | 'getComparison' | 'subscribe' | 'onStatusChanged' | 'onReconnected' | 'getRecordOwner'>;
   // Every open panel re-reads the way a completed reconcile makes it (the plugins mEdit cannot
   // read changed).
   refreshPanels: () => void;
