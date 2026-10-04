@@ -20,10 +20,9 @@ public sealed class InternalsVisibleToScanTests
         Assert.True(
             grants.Count == 0,
             $"{grants.Count} InternalsVisibleTo grant(s) remain. Delete the grant, then drive the box "
-            + "through the interface its caption in docs/architecture/target-architecture.d2 names; a "
-            + "test that cannot reach the behaviour from there is a test of the wrong shape, and a "
-            + "behaviour the caption cannot express is a caption question for the maintainer, never a "
-            + "grant:\n"
+            + "through its public interface; a test that cannot reach the behaviour from there is a "
+            + "test of the wrong shape, and a behaviour the interface cannot reach is a design question "
+            + "for the maintainer, never a grant:\n"
             + string.Join("\n", grants));
     }
 

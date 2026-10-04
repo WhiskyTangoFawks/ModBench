@@ -37,7 +37,7 @@ principle > ADR > spec (`docs/architecture/`) > code. The higher level wins. An 
 - Strategy is the maintainer's; tactics are yours. Code that disagrees with a document is a defect: fix it. Everything the list below does not name is tactical: decide it, and give the reason in the commit message.
 - Stop and ask when the work does one of these:
   - It adds or changes a gesture, an entry point, or a state, row or status that a view shows and no spec draws.
-  - It needs a module, arrow or port that `docs/architecture/` does not draw, other than a band's lib, or an interface item that a box's caption does not list.
+  - It needs a module, arrow or port that `docs/architecture/` does not draw, other than a band's lib, or a public member that exposes what its box's caption hides or does what another box owns.
   - It meets two documents at one level that disagree.
 - A copy of another box's code is never the way around a stop; ADR-0014 rejects it.
 - Report every break: two documents in the chain that disagree about the work. Build to the higher one. A break report and a stop quote the texts at stake, name their levels and say what you built; the maintainer decides every change to their documents.
