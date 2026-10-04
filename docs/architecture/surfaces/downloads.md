@@ -41,7 +41,7 @@ The status, first match wins:
 
 A mod in the instance decides Installed. The row stays right when I or another tool remove a mod. *ADR-0003*
 
-Install and uninstall keep MO2's own Downloads tab in agreement. *Modbench owns nothing*
+Install and uninstall keep MO2's own Downloads tab in agreement. *Never break the instance for its owner*
 
 ## Order and view state
 

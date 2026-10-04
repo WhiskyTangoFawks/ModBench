@@ -1,6 +1,6 @@
 # Edits reach the read model through the watcher
 
-Modbench never assumes exclusive ownership of a file ([ADR-0003](0003-modbench-never-assumes-exclusive-ownership-of-a-file.md)), so a watcher and validation must exist for every file it reads. Once they exist, Modbench's own write can take the same path as another tool's: a command writes a system of record and returns, and the change comes back to the read model through the watcher. Both processes have that shape. In mEdit the read model is the record index, over the plugin files and the source tree. In Modbench it is the instance value, over the mod manager's files. One architecture on both sides of the HTTP boundary is worth more than either side's local optimum.
+Modbench never assumes exclusive ownership of a file ([ADR-0003](0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)), so a watcher and validation must exist for every file it reads. Once they exist, Modbench's own write can take the same path as another tool's: a command writes a system of record and returns, and the change comes back to the read model through the watcher. Both processes have that shape. In mEdit the read model is the record index, over the plugin files and the source tree. In Modbench it is the instance value, over the mod manager's files. One architecture on both sides of the HTTP boundary is worth more than either side's local optimum.
 
 ## Consequences
 
