@@ -29,7 +29,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     private static readonly PublicView[] PublicViews =
     [
         new("records", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true),
-        new("records_committed", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: false),
         new("form_references", "source_plugin", "source_origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("form_lookup", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true),
         new("placement", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
@@ -77,7 +76,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateRegistrationsTable(connection);
         CreateActiveTable(connection);
         CreateWinnersTable(connection);
-        CreateCommittedRecordsTable(connection);
         CreateFilesTable(connection);
         CreatePluginDerivationTable(connection);
         CreatePluginDiagnosisTable(connection);
@@ -89,9 +87,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateSequenceTable(connection);
         Execute(connection, $"CREATE TABLE IF NOT EXISTS {MirrorSchema}.index_version (value VARCHAR NOT NULL)");
 
-        // Views after tables: the public views over every mirror table, then the head_rows view.
+        // Views after tables: the public views over every mirror table.
         CreatePublicViews(connection);
-        CreateHeadRowsView(connection);
     }
 
     // ADR-0015: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional,
@@ -146,8 +143,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     }
 
     // `body` is VARCHAR, never DuckDB's JSON type, which normalizes what it stores: "the same bytes
-    // as the source file" is what lets content_hash stamp them. `ref` is quoted
-    // everywhere: REF is a DuckDB keyword.
+    // as the source file" is what lets content_hash stamp them.
     private static void CreateRecordsTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
@@ -157,7 +153,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 origin          VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 record_type     VARCHAR NOT NULL,
                 editor_id       VARCHAR,
-                "ref"           VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
+                working_tree_state VARCHAR NOT NULL DEFAULT '{WorkingTreeState.None.Stored()}',
                 body            VARCHAR NOT NULL,
                 content_hash    VARCHAR NOT NULL,
                 parse_diagnosis VARCHAR
@@ -171,48 +167,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
         Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_records_plugin ON {MirrorSchema}.records(plugin, origin)
-            """);
-    }
-
-    // The committed half of the ref dimension: only the snapshot of a record whose working tree
-    // diverged, nothing for the clean majority. A column-for-column mirror of `records` so
-    // `head_rows` is a plain UNION ALL of one shape.
-    private static void CreateCommittedRecordsTable(DuckDBConnection connection)
-    {
-        Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {MirrorSchema}.records_committed (
-                form_key        VARCHAR {FilenameIdentity} NOT NULL,
-                plugin          VARCHAR {FilenameIdentity} NOT NULL,
-                origin          VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                record_type     VARCHAR NOT NULL,
-                editor_id       VARCHAR,
-                "ref"           VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
-                body            VARCHAR NOT NULL,
-                content_hash    VARCHAR NOT NULL,
-                parse_diagnosis VARCHAR
-            )
-            """);
-
-        Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_records_committed_form_key ON {MirrorSchema}.records_committed(form_key)
-            """);
-    }
-
-    /// <summary>What Head holds, for every indexed plugin, with no winner column. Outside the SQL
-    /// door: the projection and the overlay read this one definition.</summary>
-    internal const string HeadRowsRelation = $"{MirrorSchema}.head_rows";
-
-    private static void CreateHeadRowsView(DuckDBConnection connection)
-    {
-        // Disjoint halves by construction (the snapshot write and the `ref` flip share one
-        // transaction), so UNION ALL is exact.
-        Execute(connection, $"""
-            CREATE OR REPLACE VIEW {HeadRowsRelation} AS
-            SELECT form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash, parse_diagnosis
-            FROM {MirrorSchema}.records_committed
-            UNION ALL
-            SELECT form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash, parse_diagnosis
-            FROM {MirrorSchema}.records WHERE "ref" = '{SourceRef.Committed}'
             """);
     }
 

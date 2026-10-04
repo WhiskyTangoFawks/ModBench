@@ -69,4 +69,20 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         Assert.Equal(WorkingTreeState.Added, SummaryFor(page, created).WorkingTreeState);
         Assert.Equal(WorkingTreeState.None, SummaryFor(page, _untouchedFormKey.ToString()).WorkingTreeState);
     }
+
+    [Fact]
+    public void Search_AfterACommitMadeOutsideModbench_ReportsNone_OnTheNextArrival()
+    {
+        using var index = Indexes.Reconciled(_fixture);
+        var edited = _editedFormKey.ToString();
+        var committed = index.RequireReads().DocumentOf(edited, _baseKey);
+        index.Edit(_base, committed, committed.BodyOf().Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal));
+        Assert.Equal(WorkingTreeState.Modified, SummaryFor(Listing(index), edited).WorkingTreeState);
+
+        _base.Git("add", "-A");
+        _base.Git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "outside");
+        index.NextSnapshot();
+
+        Assert.Equal(WorkingTreeState.None, SummaryFor(Listing(index), edited).WorkingTreeState);
+    }
 }

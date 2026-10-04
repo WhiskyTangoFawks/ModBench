@@ -14,13 +14,6 @@ namespace MEditService.Index;
 /// derived rows cannot drift from ingest's.</summary>
 internal sealed class WorkingTreeOverlay
 {
-    private const string HeadRelation = TableDdlBuilder.HeadRowsRelation;
-
-    // The columns `records` and `records_committed` share, in declaration order. Every read, copy
-    // and insert here names it, so no column is silently dropped from a row.
-    internal const string RecordColumnList =
-        "form_key, plugin, origin, record_type, editor_id, \"ref\", body, content_hash, parse_diagnosis";
-
     private readonly DuckDBConnection _connection;
     private readonly ILogger _logger;
     private readonly RecordTextCodec _codec;
@@ -59,30 +52,20 @@ internal sealed class WorkingTreeOverlay
     // that can move winner status. touched collects every key whose rows this call moved.
     private bool ApplyOneWorkingTreeChange(PluginAddress key, string formKey, string? body, ICollection<string> touched)
     {
-        // The committed bytes, wherever they currently live: the snapshot if this record already
-        // diverged, else the still-clean Effective row itself. Reading through the Head relation is
-        // what makes those two cases one question rather than two branches.
-        var committedBody = DuckDbSql.ScalarString(_connection,
-            $"SELECT body FROM {HeadRelation} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
-
-        // Computed ahead of the guard because the guard must consult Effective too: a record that
-        // never reached Head (straight off a materialization) is exactly as real here, and "no
-        // Head answer" must not silently drop its delete or edit.
         var existedBefore = RowExistsAtEffective(key, formKey);
 
-        if (committedBody == null && !existedBefore)
+        if (!existedBefore)
         {
-            // Neither ref knows this record. A create is its own gesture and there is nothing here to
-            // derive its record_type from, so this is a caller mistake: logged, skipped, never thrown
-            // (the seam's missing-data rule).
-            _logger.LogWarning(
-                "Ignoring a working-tree change for {FormKey}, which {Plugin} ({Origin}) does not hold at any ref",
-                formKey, key.Name, key.Origin);
+            // A create is its own gesture and there is nothing here to derive its record_type from, so
+            // this is a caller mistake: logged, skipped, never thrown (the seam's missing-data rule).
+            if (body != null)
+            {
+                _logger.LogWarning(
+                    "Ignoring a working-tree change for {FormKey}, which {Plugin} ({Origin}) does not hold",
+                    formKey, key.Name, key.Origin);
+            }
             return false;
         }
-
-        SnapshotCommittedIfFirstDivergence(key, formKey);
 
         if (body == null)
         {
@@ -97,43 +80,25 @@ internal sealed class WorkingTreeOverlay
                 }
             }
 
-            // Deleted in the working tree: gone at Effective — document, lookup row and outgoing
-            // references alike — while still answered at Head out of the snapshot. Dropping only the
-            // document would leave the record resolvable and in the reference graph.
+            // Gone: document, lookup row and outgoing references alike. Dropping only the document
+            // would leave the record resolvable and in the reference graph.
             DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin);
             DeleteDerivationsForRecord(key, formKey);
-            return existedBefore;
+            return true;
         }
 
-        if (string.Equals(body, committedBody, StringComparison.Ordinal))
-        {
-            // Convergence, not a change (byte compare is the detection). The record goes clean again
-            // — including one deleted in the working tree whose file came back, which is why the row
-            // is restored from the snapshot rather than updated.
-            RestoreFromSnapshot(key, formKey);
-            DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-                formKey, key.Name, key.Origin);
-        }
-        else
-        {
-            UpsertEffectiveBody(key, formKey, body);
-        }
-
+        UpsertEffectiveBody(key, formKey, body);
         RederiveIndexRowsForRecord(key, formKey, body, touched);
-        return !existedBefore;
+        return false;
     }
 
     internal bool RowExistsAtEffective(PluginAddress key, string formKey) =>
         DuckDbSql.ScalarString(_connection, "SELECT form_key FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin) != null;
 
-    internal bool RowExistsAtHead(PluginAddress key, string formKey) =>
-        DuckDbSql.ScalarString(_connection, $"SELECT form_key FROM {HeadRelation} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin) != null;
-
-    // A record at neither ref, materialized: the shape an embedded child re-derived out of a
-    // container's document arrives in. Its caller has already established that neither ref holds it.
+    // A record the index does not hold, materialized: the shape an embedded child re-derived out of a
+    // container's document arrives in.
     private void MaterializeRecord(
         PluginAddress key, string formKey, string recordType, string body, ICollection<string> touched)
     {
@@ -141,9 +106,6 @@ internal sealed class WorkingTreeOverlay
         RederiveIndexRowsForRecord(key, formKey, body, touched);
     }
 
-    // A create writes a row straight to `ref = working-tree` with nothing in records_committed; that
-    // omission is what makes head_rows answer nothing for this FormKey without the view knowing
-    // about creation.
     private void InsertNewWorkingTreeRow(PluginAddress key, string formKey, string recordType, string body)
     {
         // ADR-0012: no load_order_idx to carry into the row; this check only refuses a
@@ -151,22 +113,10 @@ internal sealed class WorkingTreeOverlay
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
-        InsertRecordRow(key, "mirror.records", SourceRef.WorkingTree, formKey, recordType, body, parseDiagnosis: null);
-
-        // form_lookup's insert-if-absent branch in RederiveIndexRowsForRecord below reads this row
-        // back out of `records`, which is why the insert above must land first.
-    }
-
-    // Both InsertNewWorkingTreeRow and SeedOneCommittedOnly write through this one column list in
-    // one $-binding order, so the two cannot drift apart or leave a column off a row.
-    private void InsertRecordRow(
-        PluginAddress key, string table, string refValue, string formKey, string recordType, string body,
-        string? parseDiagnosis)
-    {
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = $"""
-            INSERT INTO {table} ({RecordColumnList})
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), '{refValue}', $5, $6, $7)
+        cmd.CommandText = """
+            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $5, $6)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
@@ -174,145 +124,26 @@ internal sealed class WorkingTreeOverlay
         cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
         cmd.Parameters.Add(new DuckDBParameter { Value = body });
         cmd.Parameters.Add(new DuckDBParameter { Value = SourceRepository.ContentStamp(body) });
-        cmd.Parameters.Add(new DuckDBParameter { Value = (object?)parseDiagnosis ?? DBNull.Value });
         cmd.ExecuteNonQuery();
+
+        // form_lookup's insert-if-absent branch in RederiveIndexRowsForRecord reads this row back out
+        // of `records`, which is why the insert above must land first.
     }
 
     private bool IsRegisteredPlugin(PluginAddress key) =>
         DuckDbSql.ScalarString(_connection,
             $"SELECT plugin FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin) != null;
 
-    /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
-    public void SetCommittedBaseline(PluginAddress key, IReadOnlyList<(string FormKey, string Body)> baselines)
-    {
-        foreach (var (formKey, body) in baselines)
-            SetOneCommittedBaseline(key, formKey, body);
-    }
-
-    private void SetOneCommittedBaseline(PluginAddress key, string formKey, string body)
-    {
-        var effectiveBody = DuckDbSql.ScalarString(_connection,
-            "SELECT body FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
-        if (effectiveBody == null) return;
-
-        if (string.Equals(effectiveBody, body, StringComparison.Ordinal))
-        {
-            // The working tree agrees with the new commit, so the record is clean and there is no
-            // snapshot to keep — the ordinary "the user committed their edit in a terminal" case.
-            DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-                formKey, key.Name, key.Origin);
-            DuckDbSql.ExecuteFor(_connection, $"""
-                UPDATE mirror.records SET "ref" = '{SourceRef.Committed}'
-                WHERE form_key = $1 AND plugin = $2 AND origin = $3
-                """, formKey, key.Name, key.Origin);
-            return;
-        }
-
-        // Still dirty against a different baseline. The snapshot may not exist yet (the record was
-        // clean and HEAD moved past it), so it is seeded from the Effective row and then overwritten
-        // with the committed bytes.
-        SnapshotCommittedIfFirstDivergence(key, formKey);
-        DuckDbSql.ExecuteFor(_connection, """
-            UPDATE mirror.records_committed
-            SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID')
-            WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin, body, SourceRepository.ContentStamp(body));
-        DuckDbSql.ExecuteFor(_connection, $"""
-            UPDATE mirror.records SET "ref" = '{SourceRef.WorkingTree}'
-            WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin);
-    }
-
-    /// <summary>See <see cref="IRecordIndex.MarkWorkingTreeOnly"/>.</summary>
-    public void MarkWorkingTreeOnly(PluginAddress key, IReadOnlyList<string> formKeys)
-    {
-        foreach (var formKey in formKeys)
-        {
-            // The snapshot delete is not padding: a record that diverged earlier in the same load order
-            // has one, and a stale snapshot would keep answering at Head through head_rows's UNION —
-            // the state this method exists to end.
-            DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-                formKey, key.Name, key.Origin);
-            DuckDbSql.ExecuteFor(_connection, $"""
-                UPDATE mirror.records SET "ref" = '{SourceRef.WorkingTree}'
-                WHERE form_key = $1 AND plugin = $2 AND origin = $3
-                """, formKey, key.Name, key.Origin);
-        }
-    }
-
-    /// <summary>See <see cref="IRecordIndex.SeedCommittedOnly"/>.</summary>
-    public void SeedCommittedOnly(PluginAddress key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records)
-    {
-        foreach (var (formKey, recordType, body) in records)
-            SeedOneCommittedOnly(key, formKey, recordType, body);
-    }
-
-    private void SeedOneCommittedOnly(PluginAddress key, string formKey, string recordType, string body)
-    {
-        if (RowExistsAtEffective(key, formKey) || RowExistsAtHead(key, formKey)) return;
-
-        // Same refusal as InsertNewWorkingTreeRow's.
-        if (!IsRegisteredPlugin(key))
-            throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
-
-        // Straight into records_committed with no `records` counterpart — the inverse of
-        // InsertNewWorkingTreeRow — which falls out of head_rows's definition with no change to
-        // that view.
-        InsertRecordRow(key, "mirror.records_committed", SourceRef.Committed, formKey, recordType, body, parseDiagnosis: null);
-    }
-
-    // Copies the still-clean Effective row aside the first time a record diverges, and does nothing
-    // on every later edit of the same record — so the snapshot always holds the *committed* bytes,
-    // never the previous working-tree ones.
-    private void SnapshotCommittedIfFirstDivergence(PluginAddress key, string formKey)
-    {
-        DuckDbSql.ExecuteFor(_connection, $"""
-            INSERT INTO mirror.records_committed ({RecordColumnList})
-            SELECT {RecordColumnList} FROM mirror.records r
-            WHERE r.form_key = $1 AND r.plugin = $2 AND r.origin = $3 AND r."ref" = '{SourceRef.Committed}'
-              AND NOT EXISTS (
-                SELECT 1 FROM mirror.records_committed c
-                WHERE c.form_key = r.form_key AND c.plugin = r.plugin AND c.origin = r.origin)
-            """, formKey, key.Name, key.Origin);
-    }
-
-    private void RestoreFromSnapshot(PluginAddress key, string formKey)
-    {
-        DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
-        DuckDbSql.ExecuteFor(_connection, $"""
-            INSERT INTO mirror.records ({RecordColumnList})
-            SELECT {RecordColumnList} FROM mirror.records_committed
-            WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin);
-    }
-
     private void UpsertEffectiveBody(PluginAddress key, string formKey, string body)
     {
-        var contentHash = SourceRepository.ContentStamp(body);
-
-        // An UPDATE alone would silently do nothing for a record deleted in the working tree (no
-        // Effective row) and then edited back to a different value, so the row is restored from the
-        // snapshot first when missing.
-        if (DuckDbSql.ScalarString(_connection, "SELECT body FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-                formKey, key.Name, key.Origin) == null)
-        {
-            RestoreFromSnapshot(key, formKey);
-        }
-
         // editor_id follows the body: it is a projection of the document; otherwise a renamed record
         // would keep listing under its old EditorID. record_type is not re-derived: a record cannot
         // change type.
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = $"""
+        DuckDbSql.ExecuteFor(_connection, """
             UPDATE mirror.records
-            SET body = $4, content_hash = $5, "ref" = '{SourceRef.WorkingTree}',
-                editor_id = json_extract_string($4, '$.EditorID')
+            SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """;
-        DuckDbSql.AddParams(cmd, [formKey, key.Name, key.Origin, body, contentHash]);
-        cmd.ExecuteNonQuery();
+            """, formKey, key.Name, key.Origin, body, SourceRepository.ContentStamp(body));
     }
 
     // Rebuilt for one record through the same collectors ingest uses, so an edit cannot
@@ -451,7 +282,7 @@ internal sealed class WorkingTreeOverlay
             if (string.Equals(childBody, EffectiveBody(key, child.FormKey), StringComparison.Ordinal)) continue;
 
             touched.Add(child.FormKey);
-            if (RowExistsAtEffective(key, child.FormKey) || RowExistsAtHead(key, child.FormKey))
+            if (RowExistsAtEffective(key, child.FormKey))
                 ApplyOneWorkingTreeChange(key, child.FormKey, childBody, touched);
             else
                 MaterializeRecord(key, child.FormKey, child.RecordType, childBody, touched);

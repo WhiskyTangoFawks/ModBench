@@ -68,6 +68,8 @@ internal sealed class SourceValidation(
             index.RefreshByKeys(key, modFolder, drifted);
         }
 
+        var moved = index.LearnWorkingTreeStates(key, modFolder);
+        if (moved.Count > 0) index.PublishRowsChanged(key, moved);
         return new ValidationReport([], NeedsRebuild: false, failures);
     }
 

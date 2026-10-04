@@ -329,11 +329,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // --- Working-tree changes ---
 
     /// <summary>The Indexer's landing of re-derived documents: one transaction for the batch, so a
-    /// throw partway cannot leave the rows half-projected. A null body is the document
-    /// gone.</summary>
-    internal void ProjectDocuments(PluginAddress key, IReadOnlyList<(string FormKey, string? Body)> deltas)
+    /// throw partway cannot leave the rows half-projected. A null body is the document gone. Returns
+    /// every key whose rows moved, embedded children included, for the caller to announce (ADR-0015).</summary>
+    private List<string> ProjectDocuments(PluginAddress key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
-        if (deltas.Count == 0) return;
+        if (deltas.Count == 0) return [];
 
         List<string> touched;
         using (var tx = Connection.BeginTransaction())
@@ -348,45 +348,55 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             tx.Commit();
         }
 
-        // ADR-0015: after the commit, so a subscriber re-reading on receipt sees the rows
-        // this names — embedded children included, since a record panel open on a placed ref inside a
-        // refreshed cell has no other signal.
-        _store.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, touched, Sequence)));
+        return touched;
     }
 
-    /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
-    public void SetCommittedBaseline(PluginAddress key, IReadOnlyList<(string FormKey, string Body)> baselines)
+    /// <summary>See <see cref="IRecordIndex.LearnWorkingTreeStates"/>.</summary>
+    public IReadOnlyList<string> LearnWorkingTreeStates(PluginAddress key, string modFolder)
     {
-        if (baselines.Count == 0) return;
+        var changes = SourceRepository.Over(modFolder, _release)
+            .ChangedSinceLastCommit(key, _schemaReflector.GetSchemas(_release));
 
-        using var tx = Connection.BeginTransaction();
-        RequireWorkingTreeOverlay().SetCommittedBaseline(key, baselines);
-        _store.BumpSequence();
-        tx.Commit();
+        var learned = changes
+            .Where(change => change.Value != RecordChange.Deleted)
+            .ToDictionary(
+                change => change.Key,
+                change => change.Value == RecordChange.Added ? WorkingTreeState.Added : WorkingTreeState.Modified,
+                StringComparer.Ordinal);
+        var held = HeldWorkingTreeStates(key);
+        var moved = held.Keys.Except(learned.Keys, StringComparer.Ordinal)
+            .Select(formKey => (FormKey: formKey, State: WorkingTreeState.None))
+            .Concat(learned.Where(l => held.GetValueOrDefault(l.Key) != l.Value).Select(l => (FormKey: l.Key, State: l.Value)))
+            .ToList();
+        if (moved.Count == 0) return [];
+
+        using (var tx = Connection.BeginTransaction())
+        {
+            foreach (var (formKey, state) in moved)
+            {
+                DuckDbSql.ExecuteFor(Connection, $"""
+                    UPDATE {EffectiveRows} SET working_tree_state = $4
+                    WHERE form_key = $1 AND plugin = $2 AND origin = $3
+                    """, formKey, key.Name, key.Origin, state.Stored());
+            }
+            _store.BumpSequence();
+            tx.Commit();
+        }
+        return [.. moved.Select(m => m.FormKey)];
     }
 
-    /// <summary>See <see cref="IRecordIndex.MarkWorkingTreeOnly"/>.</summary>
-    public void MarkWorkingTreeOnly(PluginAddress key, IReadOnlyList<string> formKeys)
+    private Dictionary<string, WorkingTreeState> HeldWorkingTreeStates(PluginAddress key)
     {
-        if (formKeys.Count == 0) return;
-
-        using var tx = Connection.BeginTransaction();
-        RequireWorkingTreeOverlay().MarkWorkingTreeOnly(key, formKeys);
-        _store.BumpSequence();
-        tx.Commit();
-    }
-
-    /// <summary>See <see cref="IRecordIndex.SeedCommittedOnly"/>. One transaction for the whole batch:
-    /// the three head-state writes are all-or-nothing together, so a throw partway through a
-    /// reconciliation pass cannot leave half of one applied.</summary>
-    public void SeedCommittedOnly(PluginAddress key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records)
-    {
-        if (records.Count == 0) return;
-
-        using var tx = Connection.BeginTransaction();
-        RequireWorkingTreeOverlay().SeedCommittedOnly(key, records);
-        _store.BumpSequence();
-        tx.Commit();
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT form_key, working_tree_state FROM {EffectiveRows}
+            WHERE plugin = $1 AND origin = $2 AND working_tree_state <> '{WorkingTreeState.None.Stored()}'
+            """;
+        DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
+        using var reader = cmd.ExecuteReader();
+        var held = new Dictionary<string, WorkingTreeState>(StringComparer.Ordinal);
+        while (reader.Read()) held[reader.GetString(0)] = WorkingTreeStates.FromStored(reader.GetString(1));
+        return held;
     }
 
     // --- Refresh ---
@@ -403,10 +413,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (SourceRepository.HoldsTreeFor(modFolder, key.Name))
             _store.RestampDerivation(key, DerivedFrom.SourceTree);
 
-        // A key at neither ref is a record the tree has gained, and no document says where the tree
-        // puts it: a new exterior cell's block is a directory, not a field.
-        if (formKeys.Any(formKey => StoredRow(EffectiveRows, key, formKey) == null
-                                    && StoredRow(TableDdlBuilder.HeadRowsRelation, key, formKey) == null))
+        // A key the index does not hold is a record the tree has gained or got back, and no document
+        // says where the tree puts it: a new exterior cell's block is a directory, not a field.
+        if (formKeys.Any(formKey => StoredRow(key, formKey) == null))
         {
             RederiveWholePluginFromSource(key, modFolder, formKeys);
             return;
@@ -415,21 +424,25 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // One repository for the batch, so its listing memo and embedded-owner map are built once
         // rather than once per key.
         var repository = SourceRepository.Over(modFolder, _release);
+        var touched = new List<string>();
         foreach (var formKey in formKeys)
-            RefreshOneKey(repository, key, formKey);
+            touched.AddRange(RefreshOneKey(repository, key, formKey));
+        touched.AddRange(LearnWorkingTreeStates(key, modFolder));
+
+        // ADR-0015: after the commit, so a subscriber re-reading on receipt sees the rows this names.
+        // Embedded children are named, since a record panel open on a placed ref inside a refreshed
+        // cell has no other signal.
+        if (touched.Count > 0) PublishRowsChanged(key, [.. touched.Distinct(StringComparer.Ordinal)]);
     }
 
     // Re-derives one key's rows. Called again with the same bytes, nothing below fires.
-    private void RefreshOneKey(SourceRepository repository, PluginAddress key, string formKey)
+    private List<string> RefreshOneKey(SourceRepository repository, PluginAddress key, string formKey)
     {
-        var effective = StoredRow(EffectiveRows, key, formKey);
-        var head = StoredRow(TableDdlBuilder.HeadRowsRelation, key, formKey);
-        // Gone from both refs since the batch was read: another key's projection in this same batch
-        // took it (a container's document carries its children's rows).
-        var recordType = effective?.RecordType ?? head?.RecordType;
-        if (recordType == null) return;
+        // Gone since the batch was read: another key's projection in this same batch took it (a
+        // container's document carries its children's rows).
+        if (StoredRow(key, formKey) is not { } effective) return [];
 
-        var identity = new RecordIdentity(formKey, recordType, effective?.EditorId ?? head?.EditorId);
+        var identity = new RecordIdentity(formKey, effective.RecordType, effective.EditorId);
         var workingTreeText = repository.Get(key, identity)?.Body;
 
         // Never exclusive owners of the file: it can be caught mid-save, or hand-edited into
@@ -441,17 +454,18 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 $"The source of {formKey} in {key.Name} ({key.Origin}) is not a readable document.");
         }
 
-        if (!string.Equals(workingTreeText, effective?.Body, StringComparison.Ordinal))
-            ProjectDocuments(key, [(formKey, workingTreeText)]);
+        return string.Equals(workingTreeText, effective.Body, StringComparison.Ordinal)
+            ? []
+            : ProjectDocuments(key, [(formKey, workingTreeText)]);
     }
 
     private const string EffectiveRows = $"{TableDdlBuilder.MirrorSchema}.records";
 
     // The projection reads the plugin's rows whether it is active or not (ADR-0012).
-    private (string RecordType, string? EditorId, string Body)? StoredRow(string relation, PluginAddress key, string formKey)
+    private (string RecordType, string? EditorId, string Body)? StoredRow(PluginAddress key, string formKey)
     {
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT record_type, editor_id, body FROM {relation} WHERE form_key = $1 AND plugin = $2 AND origin = $3";
+        cmd.CommandText = $"SELECT record_type, editor_id, body FROM {EffectiveRows} WHERE form_key = $1 AND plugin = $2 AND origin = $3";
         DuckDbSql.AddParams(cmd, [formKey, key.Name, key.Origin]);
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
@@ -483,6 +497,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // Ingest, head reconcile and winner sweep are one whole-plugin projection, so they are one
         // advance and the notification below carries the number a subscriber can await.
         var before = EffectiveContentHashes(key);
+        var statesBefore = HeldWorkingTreeStates(key);
         using (BeginProjection())
         {
             SourceIngest.Ingest(
@@ -491,11 +506,15 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             ResweepWinners();
         }
         var after = EffectiveContentHashes(key);
+        var statesAfter = HeldWorkingTreeStates(key);
 
         // ADR-0015: the keys asked about, and every row the tree read again moved, gone
         // or gained, at the sequence it landed on.
         var moved = before.Keys.Union(after.Keys, StringComparer.Ordinal)
-            .Where(formKey => !before.TryGetValue(formKey, out var was) || !after.TryGetValue(formKey, out var now) || was != now);
+            .Where(formKey => !before.TryGetValue(formKey, out var was) || !after.TryGetValue(formKey, out var now) || was != now)
+            .Union(statesBefore.Keys.Union(statesAfter.Keys, StringComparer.Ordinal)
+                .Where(formKey => statesBefore.GetValueOrDefault(formKey) != statesAfter.GetValueOrDefault(formKey)),
+                StringComparer.Ordinal);
         PublishRowsChanged(key, [.. formKeys.Union(moved, StringComparer.Ordinal)]);
     }
 
@@ -539,7 +558,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     internal void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom) =>
         _store.RestampDerivation(key, derivedFrom);
 
-    private void PublishRowsChanged(PluginAddress key, IReadOnlyList<string> formKeys) =>
+    internal void PublishRowsChanged(PluginAddress key, IReadOnlyList<string> formKeys) =>
         _store.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence)));
 
     // ADR-0003, asked of one plugin. A binary has no smaller unit, so a mismatch is a
@@ -663,7 +682,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             var resolve = LinkResolution.ForLinksOf(connection, formKey);
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
-                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, "ref"
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, working_tree_state
                 FROM records
                 WHERE form_key = $1 AND record_type = $2
                 ORDER BY load_order_idx
@@ -676,7 +695,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             while (reader.Read())
             {
                 var doc = owner.ReadDocumentFromBody(reader, schema, resolve);
-                var isDirty = reader.GetString(8) == SourceRef.WorkingTree;
+                var isDirty = WorkingTreeStates.FromStored(reader.GetString(8)) != WorkingTreeState.None;
                 entries.Add(new OverrideStackEntry(doc.Plugin, doc.LoadOrderIndex, doc.IsWinner, doc, isDirty));
             }
 
@@ -703,15 +722,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 query.GroupOnly ? NavigatorSql.NotHeld("r") : null, query.SearchFormKey);
             var dataParams = new List<string>(paramValues);
             var holdings = HoldingsOf(query.Plugin?.Name, query.Origin, dataParams);
-            // Modified is ref='working-tree' with a committed snapshot; Added is the same ref with no
-            // snapshot (a create writes nothing into records_committed). has_container_children is the
-            // same correlated-EXISTS shape against container_child, which is never duplicated per ref.
             var cols = $"""
-                form_key, plugin, load_order_idx, is_winner, editor_id, origin, r."ref",
-                EXISTS (
-                    SELECT 1 FROM records_committed rc
-                    WHERE rc.form_key = r.form_key AND rc.plugin = r.plugin AND rc.origin = r.origin
-                ) AS has_committed_snapshot,
+                form_key, plugin, load_order_idx, is_winner, editor_id, origin, r.working_tree_state,
                 EXISTS (
                     SELECT 1 FROM container_child cc
                     WHERE cc.parent_form_key = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
@@ -1106,23 +1118,15 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return GetContainerParent(connection, plugin.Name, plugin.Origin, childFormKey);
         }
 
-        // Column 6 is "ref", column 7 the correlated records_committed EXISTS Search's SELECT adds.
-        // Decided in C# rather than as SQL string literals the reader would parse.
-        private static WorkingTreeState ReadWorkingTreeState(DuckDBDataReader reader)
-        {
-            if (reader.GetString(6) != SourceRef.WorkingTree) return WorkingTreeState.None;
-            return reader.GetBoolean(7) ? WorkingTreeState.Modified : WorkingTreeState.Added;
-        }
-
-        // Column 8 is the correlated container_child EXISTS Search's SELECT adds, 9 this record's
-        // own diagnosis, 10 the same fact widened to its children and 11 its FULL, read
-        // positionally like 6/7.
+        // Column 6 is the row's working_tree_state, 7 the correlated container_child EXISTS Search's
+        // SELECT adds, 8 this record's own diagnosis, 9 the same fact widened to its children and 10
+        // its FULL, read positionally.
         private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
             new(reader.GetString(0), reader.GetString(1), LoadOrderSortKey(reader, 2),
                 reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5),
-                ReadWorkingTreeState(reader), reader.GetBoolean(8),
-                reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetBoolean(10),
-                FullName: reader.IsDBNull(11) ? null : reader.GetString(11));
+                WorkingTreeStates.FromStored(reader.GetString(6)), reader.GetBoolean(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8), reader.GetBoolean(9),
+                FullName: reader.IsDBNull(10) ? null : reader.GetString(10));
 
         private static string FullNameOf(string alias) =>
             $"NULLIF({TranslatedStringSql.Resolved($"{alias}.body", "$.Name")}, '')";

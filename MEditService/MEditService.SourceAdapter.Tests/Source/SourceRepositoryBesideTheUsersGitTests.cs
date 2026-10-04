@@ -21,7 +21,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
     private static string IndexOf(string modFolder) => Path.Combine(modFolder, ".git", "index");
 
     [Fact]
-    public void ReadingTheDirt_LeavesAStatDirtyIndexUnwritten_WhichAPlainGitStatusWouldRewriteUnderIndexLock()
+    public void ReadingTheChanges_LeavesAStatDirtyIndexUnwritten_WhichAPlainGitStatusWouldRewriteUnderIndexLock()
     {
         using var modFolder = TrackedMod();
         File.SetLastWriteTimeUtc(Path.Combine(modFolder, Document), new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
@@ -29,7 +29,8 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
 
         var repository = SourceRepository.Open(modFolder, GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{modFolder}' to be tracked.");
-        Assert.Empty(repository.DirtOf(new PluginAddress(Plugin, "TestMod")).Documents);
+        Assert.Empty(repository.ChangedSinceLastCommit(
+            new PluginAddress(Plugin, "TestMod"), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)));
 
         Assert.Equal(before, File.ReadAllBytes(IndexOf(modFolder)));
 

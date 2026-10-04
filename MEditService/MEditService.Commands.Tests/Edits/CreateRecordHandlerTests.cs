@@ -101,7 +101,7 @@ public sealed class CreateRecordHandlerTests
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
 
         Assert.NotNull(result.NewFormKey);
-        Assert.Null(mod.CommittedDocument(result.NewFormKey));
+        Assert.False(mod.CommittedHolds(result.NewFormKey));
     }
 
     [Fact]

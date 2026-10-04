@@ -27,14 +27,10 @@ internal static class TrackedTree
         Document(modFolder, plugin, formKey)?.Body
             ?? throw new InvalidOperationException($"Expected '{formKey}' to have a tracked document in '{modFolder}'.");
 
-    /// <summary>What the last commit holds for the record, which a working-tree change does not
-    /// alter: its own document, or the owner's when the record is embedded in it.</summary>
-    internal static SourceDocument? CommittedDocument(string modFolder, PluginAddress plugin, string formKey)
-    {
-        var committed = Repository(modFolder).ReadAll(plugin, "HEAD");
-        return committed.FirstOrDefault(document => document.FormKey == formKey)
-            ?? committed.FirstOrDefault(document => document.Body.Contains($"\"FormKey\": \"{formKey}\"", StringComparison.Ordinal));
-    }
+    /// <summary>Whether the last commit holds the record, which a working-tree change does not
+    /// alter.</summary>
+    internal static bool CommittedHolds(string modFolder, PluginAddress plugin, string formKey) =>
+        Repository(modFolder).NativeFormKeysHeldAt(plugin, "HEAD").Contains(formKey);
 
     internal static bool IsPartialForm(this SourceDocument document)
     {
@@ -44,19 +40,34 @@ internal static class TrackedTree
                && (flags.GetInt32() & PartialFormFlag.Bit) != 0;
     }
 
-    /// <summary>The FormKeys whose document differs between the last commit and the working tree,
-    /// one that has appeared or gone included.</summary>
-    internal static IReadOnlyList<string> ChangedFormKeys(string modFolder, PluginAddress plugin)
+    /// <summary>The FormKeys the tree changed since the last commit, one that has appeared or gone
+    /// included.</summary>
+    internal static IReadOnlyList<string> ChangedFormKeys(string modFolder, PluginAddress plugin) =>
+        [.. Repository(modFolder)
+            .ChangedSinceLastCommit(plugin, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4))
+            .Keys.Order(StringComparer.Ordinal)];
+
+    /// <summary>The files holding a record the tree changed since the last commit: an embedded child
+    /// answers with its owner's file, and a record the tree lost with none.</summary>
+    internal static IReadOnlyList<string> ChangedDocumentFiles(string modFolder, PluginAddress plugin)
     {
         var repository = Repository(modFolder);
-        var committed = repository.ReadAll(plugin, "HEAD").ToDictionary(document => document.FormKey, document => document.Body);
-        var working = repository.ReadAll(plugin).ToDictionary(document => document.FormKey, document => document.Body);
+        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         return
         [
-            .. committed.Keys.Union(working.Keys)
-                .Where(formKey => !committed.TryGetValue(formKey, out var was) || !working.TryGetValue(formKey, out var now) || was != now)
-                .Order(StringComparer.Ordinal),
+            .. repository.ChangedSinceLastCommit(plugin, schemas)
+                .Where(change => change.Value != RecordChange.Deleted)
+                .Select(change => DocumentFile(modFolder, plugin, change.Key))
+                .OfType<string>().Distinct().Order(StringComparer.Ordinal),
         ];
+    }
+
+    /// <summary>The file holding the record: its own document, or its owner's when it is embedded.</summary>
+    internal static string? DocumentFile(string modFolder, PluginAddress plugin, string formKey)
+    {
+        var repository = Repository(modFolder);
+        var identity = repository.IdentityOf(plugin, formKey, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4));
+        return identity is { } held ? repository.UnitHolding(plugin, held)?.RelativePath : null;
     }
 
     /// <summary>Every document the plugin's tree holds, as a comparable value: the tree is unchanged
@@ -106,15 +117,21 @@ public static class TrackedPluginTree
     public static SourceDocument? Document(this ITrackedPlugin tracked, string formKey) =>
         TrackedTree.Document(tracked.ModFolder, tracked.Plugin, formKey);
 
-    public static SourceDocument? CommittedDocument(this ITrackedPlugin tracked, string formKey) =>
-        TrackedTree.CommittedDocument(tracked.ModFolder, tracked.Plugin, formKey);
+    public static bool CommittedHolds(this ITrackedPlugin tracked, string formKey) =>
+        TrackedTree.CommittedHolds(tracked.ModFolder, tracked.Plugin, formKey);
 
     public static SourceDocument DocumentCarrying(this ITrackedPlugin tracked, string editorId) =>
         TrackedTree.DocumentCarrying(tracked.ModFolder, tracked.Plugin, editorId);
 
-    /// <summary>The FormKeys whose document differs from the last commit.</summary>
+    /// <summary>The FormKeys the tree changed since the last commit.</summary>
     public static IReadOnlyList<string> ChangedFormKeys(this ITrackedPlugin tracked) =>
         TrackedTree.ChangedFormKeys(tracked.ModFolder, tracked.Plugin);
+
+    public static IReadOnlyList<string> ChangedDocumentFiles(this ITrackedPlugin tracked) =>
+        TrackedTree.ChangedDocumentFiles(tracked.ModFolder, tracked.Plugin);
+
+    public static string? DocumentFile(this ITrackedPlugin tracked, string formKey) =>
+        TrackedTree.DocumentFile(tracked.ModFolder, tracked.Plugin, formKey);
 
     public static void Overwrite(this ITrackedPlugin tracked, SourceDocument document) =>
         TrackedTree.Overwrite(tracked.ModFolder, tracked.Plugin, document);

@@ -63,37 +63,27 @@ internal interface IRecordIndex : IDisposable
     /// remain and answer nothing. Winner state is stale until the next sweep.</summary>
     void Unregister(PluginAddress key);
 
-    /// <summary>Rebuilds every ref's winners among <paramref name="active"/>, in load order
+    /// <summary>Rebuilds the winners among <paramref name="active"/>, in load order
     /// (ADR-0013), remembered for the re-sweeps a working-tree write triggers.</summary>
     void UpdateWinners(IReadOnlyList<RegisteredPlugin> active);
 
-    /// <summary>Re-establishes what "committed" means for these records after <c>HEAD</c> moved under
-    /// the working tree (a commit, rebase or checkout made outside Modbench, ADR-0007).
-    /// Records the plugin does not hold are skipped.</summary>
-    void SetCommittedBaseline(PluginAddress key, IReadOnlyList<(string FormKey, string Body)> baselines);
-
-    /// <summary>These already-ingested records exist at no committed ref. Needed because
-    /// ingest-from-source seeds both refs from one whole-tree read, so an uncommitted record arrives
-    /// looking committed. Idempotent; unknown records are skipped.</summary>
-    void MarkWorkingTreeOnly(PluginAddress key, IReadOnlyList<string> formKeys);
-
-    /// <summary>Seeds a record at <c>HEAD</c> but not in the working tree, so the user can see and
-    /// diff a deletion (ADR-0007). Writes no extracted rows: those track Effective. Skipped when
-    /// held at either ref.</summary>
-    void SeedCommittedOnly(PluginAddress key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
+    /// <summary>Sets each of <paramref name="key"/>'s rows to how the Source repository says its record
+    /// stands against the last commit (ADR-0007), and returns the keys of the rows that moved for the
+    /// caller to announce. A commit made outside Modbench clears them.</summary>
+    IReadOnlyList<string> LearnWorkingTreeStates(PluginAddress key, string modFolder);
 
     /// <summary>Materializes <paramref name="sql"/>'s matches and the records holding them (null
     /// clears both), the one door SQL crosses this seam through. Throws if
     /// the SQL returns no <c>form_key</c> column.</summary>
     void SetFilter(string? sql);
 
-    /// <summary>ADR-0015: the one projection verb. Re-derives <paramref name="formKeys"/>' rows at
-    /// both refs from the Source repository, idempotent by content. A key held at neither ref
-    /// re-derives the whole plugin.</summary>
+    /// <summary>ADR-0015: the one projection verb. Re-derives <paramref name="formKeys"/>' rows
+    /// from the Source repository, idempotent by content. A key the index does not hold re-derives
+    /// the whole plugin.</summary>
     void RefreshByKeys(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys);
 
     /// <summary>ADR-0015: compares <paramref name="key"/>'s rows against the system of
-    /// record they came from — source documents at both refs when <paramref name="modFolder"/> holds
+    /// record they came from — source documents when <paramref name="modFolder"/> holds
     /// its tree, the binary otherwise — and refreshes what differs.</summary>
     ValidationReport Validate(PluginAddress key, string? modFolder);
 }
