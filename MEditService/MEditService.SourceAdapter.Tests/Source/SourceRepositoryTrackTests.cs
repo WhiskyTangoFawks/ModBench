@@ -37,6 +37,25 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     }
 
     [Fact]
+    public void Track_WithAnUpstreamVersion_NamesItInEachPluginsSubjectAndTrailers_UnderTheModsOwnCommit()
+    {
+        SourceRepository.Track(
+            _modFolder, SourcePreset.Edits,
+            [
+                (SourceOf("First.esp"), new BaselineTrailers("First.esp", "1.2.3", "AAAA")),
+                (SourceOf("Second.esp"), new BaselineTrailers("Second.esp", "1.2.3", "BBBB")),
+            ]);
+
+        Assert.Equal(["Track SomeMod", "Track First.esp 1.2.3", "Track Second.esp 1.2.3"], SubjectsOnMain());
+        Assert.Equal(
+            "Plugin: First.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: AAAA",
+            Git("log", "-1", "--format=%(trailers:only,unfold)", "main~1").Trim());
+        Assert.Equal(
+            "Plugin: Second.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: BBBB",
+            Git("log", "-1", "--format=%(trailers:only,unfold)", "main").Trim());
+    }
+
+    [Fact]
     public void Track_CommitsEachPluginsSourceOnlyInItsOwnBaseline()
     {
         PluginBaselines.Track(_modFolder, SourcePreset.Edits, [.. SourceOf("A.esp"), .. SourceOf("B.esp")]);

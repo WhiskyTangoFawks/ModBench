@@ -33,8 +33,7 @@ public static class CutDownPluginFixture
 
     /// <summary>Every document of the plugin's tree, keyed by FormKey.</summary>
     public static Dictionary<string, byte[]> ReadSourceTree(string modFolder) =>
-        DocumentsOf(SourceRepository.Open(modFolder, GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked."));
+        DocumentsOf(TrackedTree.Repository(modFolder));
 
     private static Dictionary<string, byte[]> DocumentsOf(SourceRepository repository) =>
         repository.ReadAll(Plugin).ToDictionary(document => document.FormKey, document => Encoding.UTF8.GetBytes(document.Body));

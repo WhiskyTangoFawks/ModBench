@@ -5,6 +5,7 @@ using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -44,8 +45,7 @@ internal static class TrackedTree
     /// one that has appeared or gone included.</summary>
     internal static IReadOnlyList<string> ChangedFormKeys(string modFolder, PluginAddress plugin)
     {
-        var repository = SourceRepository.Open(modFolder, GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
+        var repository = Repository(modFolder);
         var committed = repository.ReadAll(plugin, "HEAD").ToDictionary(document => document.FormKey, document => document.Body);
         var working = repository.ReadAll(plugin).ToDictionary(document => document.FormKey, document => document.Body);
         return
@@ -87,7 +87,66 @@ internal static class TrackedTree
         GitProbe.Run(gitDirectory, modFolder, "commit", "-q", "-m", "seed");
     }
 
-    private static SourceRepository Repository(string modFolder) =>
-        SourceRepository.Open(modFolder, GameRelease.Fallout4)
-        ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
+    internal static SourceRepository Repository(string modFolder) =>
+        SourceRepository.Open(modFolder, GameRelease.Fallout4).Require();
+}
+
+/// <summary>A fixture whose mod folder tracks one plugin: the tree reads below answer for it.</summary>
+public interface ITrackedPlugin
+{
+    string ModFolder { get; }
+    PluginAddress Plugin { get; }
+}
+
+public static class TrackedPluginTree
+{
+    public static SourceDocument? Document(this ITrackedPlugin tracked, string formKey) =>
+        TrackedTree.Document(tracked.ModFolder, tracked.Plugin, formKey);
+
+    public static SourceDocument? CommittedDocument(
+        this ITrackedPlugin tracked, string formKey, string recordType, string? editorId) =>
+        TrackedTree.CommittedDocument(tracked.ModFolder, tracked.Plugin, new RecordIdentity(formKey, recordType, editorId));
+
+    public static SourceDocument DocumentCarrying(this ITrackedPlugin tracked, string editorId) =>
+        TrackedTree.DocumentCarrying(tracked.ModFolder, tracked.Plugin, editorId);
+
+    /// <summary>The FormKeys whose document differs from the last commit.</summary>
+    public static IReadOnlyList<string> ChangedFormKeys(this ITrackedPlugin tracked) =>
+        TrackedTree.ChangedFormKeys(tracked.ModFolder, tracked.Plugin);
+
+    public static void Overwrite(this ITrackedPlugin tracked, SourceDocument document) =>
+        TrackedTree.Overwrite(tracked.ModFolder, tracked.Plugin, document);
+
+    public static void Overwrite(this ITrackedPlugin tracked, RecordIdentity identity, string body) =>
+        TrackedTree.Overwrite(tracked.ModFolder, tracked.Plugin, identity, body);
+
+    public static void Remove(this ITrackedPlugin tracked, RecordIdentity identity) =>
+        TrackedTree.Remove(tracked.ModFolder, tracked.Plugin, identity);
+}
+
+/// <summary>A fixture whose plugins sit in several mod folders: the tree reads take the plugin.</summary>
+public interface ITrackedPlugins
+{
+    string ModFolderOf(PluginAddress plugin);
+}
+
+public static class TrackedPluginsTree
+{
+    public static SourceDocument? Document(this ITrackedPlugins tracked, PluginAddress plugin, string formKey) =>
+        TrackedTree.Document(tracked.ModFolderOf(plugin), plugin, formKey);
+
+    public static SourceDocument? Document(this ITrackedPlugins tracked, PluginAddress plugin, FormKey formKey) =>
+        tracked.Document(plugin, formKey.ToString());
+
+    public static SourceDocument? CommittedDocument(this ITrackedPlugins tracked, PluginAddress plugin, RecordIdentity identity) =>
+        TrackedTree.CommittedDocument(tracked.ModFolderOf(plugin), plugin, identity);
+
+    public static SourceDocument DocumentCarrying(this ITrackedPlugins tracked, PluginAddress plugin, string editorId) =>
+        TrackedTree.DocumentCarrying(tracked.ModFolderOf(plugin), plugin, editorId);
+
+    public static IReadOnlyList<string> ChangedFormKeys(this ITrackedPlugins tracked, PluginAddress plugin) =>
+        TrackedTree.ChangedFormKeys(tracked.ModFolderOf(plugin), plugin);
+
+    public static void Overwrite(this ITrackedPlugins tracked, PluginAddress plugin, SourceDocument document) =>
+        TrackedTree.Overwrite(tracked.ModFolderOf(plugin), plugin, document);
 }

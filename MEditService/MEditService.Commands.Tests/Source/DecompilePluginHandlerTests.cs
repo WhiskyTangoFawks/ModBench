@@ -44,14 +44,18 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     public void Dispose() => _root.Dispose();
 
     [Fact]
-    public async Task Decompile_OfAnUntrackedPluginInATrackedMod_WritesItsSourceToTheWorkingTree_HoldingNothingAtHead()
+    public async Task Decompile_OfAnUntrackedPluginInATrackedMod_WritesItsSourceToTheWorkingTree_AndCommitsNothing()
     {
+        var headBefore = Repository.ChangesSince(Tracked("First.esp"), validatedHead: null).Head;
+        Assert.NotNull(headBefore);
+
         var result = await Decompile(Tracked("Second.esp"));
 
         Assert.Equal([Tracked("Second.esp")], result.Landed);
         Assert.Empty(result.Refused);
         Assert.Contains("SecondNpc", SourceTextOf("Second.esp"), StringComparison.Ordinal);
         Assert.Empty(Repository.ReadAll(Tracked("Second.esp"), "HEAD"));
+        Assert.Equal(headBefore, Repository.ChangesSince(Tracked("First.esp"), validatedHead: null).Head);
     }
 
     [Fact]

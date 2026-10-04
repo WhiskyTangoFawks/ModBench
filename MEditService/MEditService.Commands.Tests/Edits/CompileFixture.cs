@@ -14,7 +14,7 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>A real tracked mod folder and the load order value over it, and nothing else: compile
 /// reads only those (ADR-0015). A change to the tree here goes through the repository,
 /// never the edit service.</summary>
-public sealed class CompileFixture : IDisposable
+public sealed class CompileFixture : IDisposable, ITrackedPlugin
 {
     public const string Origin = "CompileMod";
     public const string PluginName = "Compile.esp";
@@ -103,10 +103,6 @@ public sealed class CompileFixture : IDisposable
         Repository.Remove(Plugin, new RecordIdentity(formKey.ToString(), recordType, editorId));
 
     public RecordIdentity NpcIdentity => new(Npc.ToString(), NpcRecordType, NpcEditorId);
-
-    public SourceDocument Document(string formKey) => TrackedTree.Document(ModFolder, Plugin, formKey).Require();
-
-    public void Overwrite(RecordIdentity identity, string body) => TrackedTree.Overwrite(ModFolder, Plugin, identity, body);
 
     public void Dispose()
     {

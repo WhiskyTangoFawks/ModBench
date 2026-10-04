@@ -74,7 +74,7 @@ public sealed class CopyReplaceTests : IDisposable
             _fixture.SourcePlugin, _fixture.InteriorCell.ToString(), _fixture.DestinationPlugin, replace: true);
 
         Assert.True(result.Applied, result.Message);
-        var cellText = _fixture.DestinationDocumentCarrying(ContainerCopyFixture.InteriorCellEditorId).Body;
+        var cellText = _fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.InteriorCellEditorId).Body;
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, cellText, StringComparison.Ordinal);
         Assert.NotNull(_fixture.Document(_fixture.DestinationPlugin, _fixture.PersistentRef.ToString()));
     }
@@ -105,7 +105,7 @@ public sealed class CopyReplaceTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(_fixture.Document(_fixture.DestinationPlugin, _fixture.PersistentRef.ToString()));
-        var occurrences = _fixture.DestinationDocumentCarrying(ContainerCopyFixture.PersistentRefEditorId).Body.Split(ContainerCopyFixture.PersistentRefEditorId).Length - 1;
+        var occurrences = _fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.PersistentRefEditorId).Body.Split(ContainerCopyFixture.PersistentRefEditorId).Length - 1;
         Assert.Equal(1, occurrences);
     }
 

@@ -1,7 +1,5 @@
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -12,7 +10,7 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>The container counterpart to SourceEditFixture, which holds only flat records. No
 /// index anywhere in it (ADR-0015); the handlers below still need Commands, unlike
 /// the shared container shape.</summary>
-public sealed class ContainerModFixture : IDisposable
+public sealed class ContainerModFixture : IDisposable, ITrackedPlugin
 {
     public const string ModFolderOrigin = "ContainerFixtureMod";
     public const string PluginName = "ContainerFixture.esp";
@@ -140,23 +138,6 @@ public sealed class ContainerModFixture : IDisposable
     }
 
     private readonly string _instanceRoot;
-
-    /// <summary>What the tree holds for a FormKey, read back through the same repository the write
-    /// side wrote through — an embedded child cut back out of its owner's document included.</summary>
-    public SourceDocument? Document(string formKey) => TrackedTree.Document(ModFolder, Plugin, formKey);
-
-    /// <summary>The same question at HEAD: what the last commit holds, which a working-tree change
-    /// does not alter.</summary>
-    public SourceDocument? CommittedDocument(string formKey, string recordType, string? editorId) =>
-        TrackedTree.CommittedDocument(ModFolder, Plugin, new RecordIdentity(formKey, recordType, editorId));
-
-    public SourceDocument DocumentCarrying(string editorId) => TrackedTree.DocumentCarrying(ModFolder, Plugin, editorId);
-
-    public void Overwrite(SourceDocument document) => TrackedTree.Overwrite(ModFolder, Plugin, document);
-
-    public void Remove(RecordIdentity identity) => TrackedTree.Remove(ModFolder, Plugin, identity);
-
-    public IReadOnlyList<string> ChangedFormKeys() => TrackedTree.ChangedFormKeys(ModFolder, Plugin);
 
     // A tracked mod folder holds a .git tree whose object files are read-only on some filesystems,
     // and a test failing on cleanup would mask the real assertion that already ran.

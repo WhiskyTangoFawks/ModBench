@@ -13,7 +13,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Two mod folders, because the interesting question — does a FormID edit rewrite a FormLink
 /// in a different mod folder's own repo — cannot be asked of one. No index anywhere in it.</summary>
-public sealed class TwoModReferenceFixture : IDisposable
+public sealed class TwoModReferenceFixture : IDisposable, ITrackedPlugins
 {
     public const string ReferencerPluginName = "Winner.esp";
     public const string TargetPluginName = "Base.esm";
@@ -87,13 +87,6 @@ public sealed class TwoModReferenceFixture : IDisposable
 
     public string ModFolderOf(PluginAddress plugin) =>
         plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder;
-
-    /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
-    public SourceDocument? Document(PluginAddress plugin, FormKey formKey) =>
-        TrackedTree.Document(ModFolderOf(plugin), plugin, formKey.ToString());
-
-    public SourceDocument? Document(PluginAddress plugin, string formKey) =>
-        TrackedTree.Document(ModFolderOf(plugin), plugin, formKey);
 
     public void Dispose()
     {

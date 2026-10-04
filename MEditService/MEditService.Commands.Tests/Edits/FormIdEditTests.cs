@@ -175,10 +175,7 @@ public sealed class FormIdEditTests
         });
         var oldFormKey = race.ToString();
         var before = mod.Body(race);
-        var referencer = Directory
-            .EnumerateFiles(Path.Combine(mod.ModFolder, SourceRepository.RootFor(pluginName)), "*.json", SearchOption.AllDirectories)
-            .Single(file => File.ReadAllText(file).Contains("SamePluginNpc", StringComparison.Ordinal));
-        var referencerBefore = File.ReadAllText(referencer);
+        var referencerBefore = TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "SamePluginNpc").Body;
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, oldFormKey, newFormKey);
 
@@ -189,7 +186,7 @@ public sealed class FormIdEditTests
         Assert.Equal(
             before.Replace(formKeyLine, $"\"FormKey\": \"{newFormKey}\"", StringComparison.Ordinal),
             mod.Body(FormKey.Factory(newFormKey)));
-        Assert.Equal(referencerBefore, File.ReadAllText(referencer));
+        Assert.Equal(referencerBefore, TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "SamePluginNpc").Body);
     }
 
     [Fact]

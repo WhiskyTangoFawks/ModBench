@@ -224,7 +224,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
             Assert.Single(JsonDocument.Parse(quest.Body).RootElement.GetProperty("Scenes").EnumerateArray())
                 .GetProperty("FormKey").GetString());
 
-        Assert.Equal(fixture.Quest.ToString(), fixture.DestinationDocumentCarrying(ContainerCopyFixture.SceneEditorId).FormKey);
+        Assert.Equal(fixture.Quest.ToString(), fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.SceneEditorId).FormKey);
 
         var compiled = (await CompileAndImport(fixture)).Quests.Single(q => q.FormKey == fixture.Quest);
         Assert.Equal(ContainerCopyFixture.SceneEditorId, Assert.Single(compiled.Scenes).EditorID);
@@ -276,7 +276,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
             Assert.Single(JsonDocument.Parse(topic.Body).RootElement.GetProperty("Responses").EnumerateArray())
                 .GetProperty("FormKey").GetString());
 
-        Assert.Equal(fixture.Quest.ToString(), fixture.DestinationDocumentCarrying(ContainerCopyFixture.Response2EditorId).FormKey);
+        Assert.Equal(fixture.Quest.ToString(), fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response2EditorId).FormKey);
 
         var compiledTopic = Assert.Single((await CompileAndImport(fixture)).Quests.Single(q => q.FormKey == fixture.Quest).DialogTopics);
         Assert.Equal(ContainerCopyFixture.Response2EditorId, Assert.Single(compiledTopic.Responses).EditorID);

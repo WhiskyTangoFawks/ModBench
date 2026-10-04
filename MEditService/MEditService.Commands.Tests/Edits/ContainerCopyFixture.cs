@@ -13,7 +13,7 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>Two mod folders, because one cannot ask whether a copy crosses plugins. The source
 /// defaults untracked, so its records come through the Plugin adapter; no index anywhere in
 /// it.</summary>
-public sealed class ContainerCopyFixture : IDisposable
+public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
 {
     public const string SourcePluginName = "ContainerSource.esm";
     public const string SourceOrigin = "ContainerSourceMod";
@@ -281,13 +281,7 @@ public sealed class ContainerCopyFixture : IDisposable
     public static ContainerCopyFixture CreateWithDestinationLoadingFirst() =>
         new(destinationLoadsFirst: true, trackSource: false);
 
-    /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
-    public SourceDocument? Document(PluginAddress plugin, string formKey) =>
-        TrackedTree.Document(ModFolder(plugin), plugin, formKey);
-
-    private string ModFolder(PluginAddress plugin) => plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder;
-
-    public IReadOnlyList<string> DestinationChangedFormKeys() => TrackedTree.ChangedFormKeys(DestinationModFolder, DestinationPlugin);
+    public string ModFolderOf(PluginAddress plugin) => plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder;
 
     /// <summary>Where the destination's tree puts a cell it holds — the block directories the mint
     /// wrote, read back the one way the write side reads them.</summary>
@@ -305,17 +299,6 @@ public sealed class ContainerCopyFixture : IDisposable
         block.SubBlocks.Add(subBlock);
         mod.Cells.Records.Add(block);
     }
-
-    public SourceDocument DestinationDocumentCarrying(string editorId) =>
-        DocumentCarrying(DestinationPlugin, editorId);
-
-    /// <summary>The one document in a tracked plugin's tree carrying an EditorID: a record's own, or
-    /// its owner's when it is embedded.</summary>
-    public SourceDocument DocumentCarrying(PluginAddress plugin, string editorId) =>
-        TrackedTree.DocumentCarrying(ModFolder(plugin), plugin, editorId);
-
-    public void Overwrite(PluginAddress plugin, SourceDocument document) =>
-        TrackedTree.Overwrite(ModFolder(plugin), plugin, document);
 
     public void Dispose()
     {

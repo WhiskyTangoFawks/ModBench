@@ -11,7 +11,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The write side as ADR-0015 has it: a temporary tracked tree, a load order
 /// value, the codec and the schema. No index and no factory anywhere in it.</summary>
-public sealed class SourceEditFixture : IDisposable
+public sealed class SourceEditFixture : IDisposable, ITrackedPlugin
 {
     public const string ModFolderOrigin = "FixtureMod";
     public const string PluginName = "Fixture.esp";
@@ -85,15 +85,6 @@ public sealed class SourceEditFixture : IDisposable
 
     public static SourceEditFixture Untracked() => new(track: false, PluginName, isLight: false);
 
-    /// <summary>What the tree holds for a FormKey, read back through the same repository the write
-    /// side wrote through — the whole read model these suites have.</summary>
-    public SourceDocument? Document(string formKey) => TrackedTree.Document(ModFolder, Plugin, formKey);
-
-    /// <summary>The same question at HEAD: what the last commit holds, which a working-tree deletion
-    /// does not change.</summary>
-    public SourceDocument? CommittedDocument(string formKey, string recordType, string? editorId) =>
-        TrackedTree.CommittedDocument(ModFolder, Plugin, new RecordIdentity(formKey, recordType, editorId));
-
     public SourceRepository? Repository => SourceRepository.Open(ModFolder, GameRelease.Fallout4);
 
     /// <summary>Another tool rewrites the plugin: its bytes differ from what Modbench last wrote.</summary>
@@ -101,14 +92,6 @@ public sealed class SourceEditFixture : IDisposable
         File.WriteAllBytes(Path.Combine(ModFolder, ActualPluginName), "changed-by-xedit"u8.ToArray());
 
     public RecordIdentity NpcIdentity => new(Npc.ToString(), "npc_", NpcEditorId);
-
-    /// <summary>The FormKeys whose document differs from the last commit.</summary>
-    public IReadOnlyList<string> ChangedFormKeys() => TrackedTree.ChangedFormKeys(ModFolder, Plugin);
-
-    public void Overwrite(RecordIdentity identity, string body) =>
-        TrackedTree.Overwrite(ModFolder, Plugin, identity, body);
-
-    public void Remove(RecordIdentity identity) => TrackedTree.Remove(ModFolder, Plugin, identity);
 
     public void Dispose() => TryDelete(InstanceRoot);
 

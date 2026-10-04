@@ -1,6 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -11,7 +10,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A tracked mod holding the one shape a flat record cannot show: a worldspace, whose
 /// directory a FormID edit moves whole, subtree and all. No index anywhere in it.</summary>
-public sealed class SourceContainerFixture : IDisposable
+public sealed class SourceContainerFixture : IDisposable, ITrackedPlugin
 {
     public const string PluginName = "SourceContainer.esp";
     public const string Origin = "SourceContainerMod";
@@ -64,12 +63,6 @@ public sealed class SourceContainerFixture : IDisposable
     }
 
     private readonly string _instanceRoot;
-
-    public SourceDocument DocumentCarrying(string editorId) => TrackedTree.DocumentCarrying(ModFolder, Plugin, editorId);
-
-    public void Overwrite(SourceDocument document) => TrackedTree.Overwrite(ModFolder, Plugin, document);
-
-    public IReadOnlyList<string> ChangedFormKeys() => TrackedTree.ChangedFormKeys(ModFolder, Plugin);
 
     public void Dispose()
     {

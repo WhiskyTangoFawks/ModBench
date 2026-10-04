@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -39,5 +40,5 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
     private void Corrupt() =>
         _mod.Overwrite(
             _mod.NpcIdentity,
-            _mod.Document(_mod.Npc.ToString()).Body.Replace(_mod.Race.ToString(), "NOT-A-FORMKEY", StringComparison.Ordinal));
+            _mod.Document(_mod.Npc.ToString()).Require().Body.Replace(_mod.Race.ToString(), "NOT-A-FORMKEY", StringComparison.Ordinal));
 }

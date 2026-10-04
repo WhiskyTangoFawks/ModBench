@@ -128,7 +128,7 @@ public sealed class ResponseWriteApiTests : IDisposable
             Assert.Single(JsonDocument.Parse(mintedTopic.Body).RootElement.GetProperty("Responses").EnumerateArray())
                 .GetProperty("FormKey").GetString());
 
-        Assert.Equal(fixture.Quest.ToString(), fixture.DestinationDocumentCarrying(ContainerCopyFixture.Response1EditorId).FormKey);
+        Assert.Equal(fixture.Quest.ToString(), fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response1EditorId).FormKey);
 
         var compile = await CompileServices.Over(fixture.LoadOrder)
             .CompileAsync(fixture.DestinationPlugin);

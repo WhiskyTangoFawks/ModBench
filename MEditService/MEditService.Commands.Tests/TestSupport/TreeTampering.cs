@@ -1,7 +1,5 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
-using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -11,9 +9,7 @@ internal static class TreeTampering
 {
     internal static string FileOf(string modFolder, PluginAddress plugin, RecordIdentity identity)
     {
-        var repository = SourceRepository.Open(modFolder, GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
-        var unit = repository.UnitHolding(plugin, identity)
+        var unit = TrackedTree.Repository(modFolder).UnitHolding(plugin, identity)
             ?? throw new InvalidOperationException($"Expected a document in '{modFolder}' to hold {identity.FormKey}.");
         return Path.Combine(modFolder, unit.RelativePath);
     }
@@ -34,6 +30,25 @@ internal static class TreeTampering
         File.Copy(original, copy);
         return copy;
     }
+
+    /// <summary>The record's container document copied under a sibling directory, so two container
+    /// directories claim one FormKey.</summary>
+    internal static string DuplicateInSiblingDirectory(string modFolder, PluginAddress plugin, RecordIdentity identity)
+    {
+        var original = FileOf(modFolder, plugin, identity);
+        var directory = FolderOf(original);
+        var sibling = Path.Combine(
+            FolderOf(directory), "Impostor - " + Path.GetFileName(directory).Split(" - ")[1]);
+        Directory.CreateDirectory(sibling);
+        var copy = Path.Combine(sibling, Path.GetFileName(original));
+        File.Copy(original, copy);
+        return copy;
+    }
+
+    /// <summary>A group document in the record's folder: the shape of a file Track never writes
+    /// there.</summary>
+    internal static string StrayGroupDocument(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
+        Stray(modFolder, plugin, identity, "GroupRecordData.json", "{}");
 
     /// <summary>A file in the record's folder that no record occupies.</summary>
     internal static string Stray(string modFolder, PluginAddress plugin, RecordIdentity identity, string fileName, string text)

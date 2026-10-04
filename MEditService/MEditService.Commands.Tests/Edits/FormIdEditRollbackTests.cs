@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceAdapter;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -55,11 +54,7 @@ public sealed class FormIdEditRollbackTests
         var cell = TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "TwoUnitsRef");
         var cellIdentity = new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId);
         var cellFile = TreeTampering.FileOf(mod.ModFolder, mod.Plugin, cellIdentity);
-        var cellDirectory = Path.GetDirectoryName(cellFile).Require();
-        var impostor = Path.Combine(
-            Path.GetDirectoryName(cellDirectory).Require(), "Impostor - " + Path.GetFileName(cellDirectory).Split(" - ")[1]);
-        Directory.CreateDirectory(impostor);
-        File.Copy(cellFile, Path.Combine(impostor, Path.GetFileName(cellFile)));
+        var impostorFile = TreeTampering.DuplicateInSiblingDirectory(mod.ModFolder, mod.Plugin, cellIdentity);
         var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, placed.ToString(), $"000F00:{pluginName}");
@@ -67,7 +62,7 @@ public sealed class FormIdEditRollbackTests
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, result.Refusal);
         Assert.Contains(Path.GetRelativePath(mod.ModFolder, cellFile), result.Message, StringComparison.Ordinal);
-        Assert.Contains(Path.GetRelativePath(mod.ModFolder, Path.Combine(impostor, Path.GetFileName(cellFile))), result.Message, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(mod.ModFolder, impostorFile), result.Message, StringComparison.Ordinal);
         Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
     }
 

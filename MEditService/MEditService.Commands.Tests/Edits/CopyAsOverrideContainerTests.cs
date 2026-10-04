@@ -26,7 +26,7 @@ public sealed class CopyAsOverrideContainerTests
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString()));
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.Scene.ToString()));
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.DialogBranch.ToString()));
-        var questText = fixture.DestinationDocumentCarrying(ContainerCopyFixture.QuestEditorId).Body;
+        var questText = fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.QuestEditorId).Body;
         foreach (var slot in new[] { "DialogTopics", "DialogBranches", "Scenes" })
             Assert.DoesNotContain($"\"{slot}\"", questText, StringComparison.Ordinal);
     }
@@ -46,13 +46,13 @@ public sealed class CopyAsOverrideContainerTests
         Assert.Equal(ContainerCopyFixture.InteriorCellEditorId, document.EditorId);
         Assert.Contains(
             $"\"WaterHeight\": {ContainerCopyFixture.InteriorCellWaterHeight:0.0}",
-            fixture.DestinationDocumentCarrying(ContainerCopyFixture.InteriorCellEditorId).Body,
+            fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.InteriorCellEditorId).Body,
             StringComparison.Ordinal);
 
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.PersistentRef.ToString()));
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.TemporaryRef.ToString()));
 
-        var text = fixture.DestinationDocumentCarrying(ContainerCopyFixture.InteriorCellEditorId).Body;
+        var text = fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.InteriorCellEditorId).Body;
         Assert.DoesNotContain(ContainerCopyFixture.PersistentRefEditorId, text, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.TemporaryRefEditorId, text, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.NavmeshEditorId, text, StringComparison.Ordinal);
@@ -76,7 +76,7 @@ public sealed class CopyAsOverrideContainerTests
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.TopCell.ToString()));
         Assert.DoesNotContain(
             ContainerCopyFixture.TopCellEditorId,
-            fixture.DestinationDocumentCarrying(ContainerCopyFixture.WorldspaceEditorId).Body,
+            fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.WorldspaceEditorId).Body,
             StringComparison.Ordinal);
     }
 
@@ -96,7 +96,7 @@ public sealed class CopyAsOverrideContainerTests
         Assert.NotNull(child);
         Assert.Equal(ContainerCopyFixture.PersistentRefEditorId, child.EditorId);
 
-        var cellText = fixture.DestinationDocumentCarrying(ContainerCopyFixture.InteriorCellEditorId).Body;
+        var cellText = fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.InteriorCellEditorId).Body;
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, cellText, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.TemporaryRefEditorId, cellText, StringComparison.Ordinal);
 
@@ -149,7 +149,7 @@ public sealed class CopyAsOverrideContainerTests
         Assert.NotNull(placed);
         Assert.Equal(ContainerCopyFixture.ExteriorPersistentRefEditorId, placed.EditorId);
 
-        var cellText = fixture.DestinationDocumentCarrying(ContainerCopyFixture.ExteriorPersistentRefEditorId).Body;
+        var cellText = fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.ExteriorPersistentRefEditorId).Body;
         Assert.Contains(ContainerCopyFixture.ExteriorPersistentRefEditorId, cellText, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.ExteriorTemporaryRefEditorId, cellText, StringComparison.Ordinal);
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorTemporaryRef.ToString()));
@@ -183,7 +183,7 @@ public sealed class CopyAsOverrideContainerTests
             fixture.DestinationCellPlacement(fixture.ExteriorCell.ToString(), editorId: null));
         Assert.Contains(
             ContainerCopyFixture.ExteriorPersistentRefEditorId,
-            fixture.DestinationDocumentCarrying(ContainerCopyFixture.ExteriorPersistentRefEditorId).Body,
+            fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.ExteriorPersistentRefEditorId).Body,
             StringComparison.Ordinal);
     }
 
@@ -252,7 +252,7 @@ public sealed class CopyAsOverrideContainerTests
         Assert.NotNull(mintedCell);
         Assert.True(mintedCell.IsPartialForm());
 
-        var cellText = fixture.DestinationDocumentCarrying(ContainerCopyFixture.PersistentRefEditorId).Body;
+        var cellText = fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.PersistentRefEditorId).Body;
         Assert.DoesNotContain(
             $"\"WaterHeight\": {ContainerCopyFixture.InteriorCellWaterHeight:0.0}", cellText, StringComparison.Ordinal);
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, cellText, StringComparison.Ordinal);
@@ -268,7 +268,7 @@ public sealed class CopyAsOverrideContainerTests
         Assert.True(service.CopyAsOverride(
             fixture.SourcePlugin, fixture.Response2.ToString(), fixture.DestinationPlugin).Applied);
 
-        var before = JsonNode.Parse(fixture.DestinationDocumentCarrying(ContainerCopyFixture.Response2EditorId).Body).Require();
+        var before = JsonNode.Parse(fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response2EditorId).Body).Require();
         var topicBefore = Assert.Single(before["DialogTopics"].Require().AsArray()).Require().AsObject();
         var existingResponse = topicBefore["Responses"].Require()[0].Require().ToJsonString();
         topicBefore.Remove("Responses");
@@ -277,7 +277,7 @@ public sealed class CopyAsOverrideContainerTests
             fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var after = JsonNode.Parse(fixture.DestinationDocumentCarrying(ContainerCopyFixture.Response2EditorId).Body).Require();
+        var after = JsonNode.Parse(fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response2EditorId).Body).Require();
         var topicAfter = Assert.Single(after["DialogTopics"].Require().AsArray()).Require().AsObject();
         var responsesAfter = topicAfter["Responses"].Require().AsArray();
 

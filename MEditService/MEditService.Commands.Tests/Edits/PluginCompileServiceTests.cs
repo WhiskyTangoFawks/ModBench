@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -81,7 +82,7 @@ public sealed class PluginCompileServiceTests : IDisposable
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = result.Diagnostics.First(d => d.FormKey == _mod.Race.ToString());
-        var race = _mod.Document(_mod.Race.ToString());
+        var race = _mod.Document(_mod.Race.ToString()).Require();
         Assert.Equal(
             TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, new RecordIdentity(race.FormKey, race.RecordType, race.EditorId)),
             Path.Combine(_mod.ModFolder, diagnostic.SourceRelativePath));
@@ -107,7 +108,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     public async Task Compile_AfterChangingTheFormIdOfTheFirstOfTwo_Succeeds_WithBothRecordsPresent()
     {
         var moved = _mod.ChangeFormId(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, MovedNpcId);
-        Assert.Equal(moved.ToString(), _mod.Document(moved.ToString()).FormKey);
+        Assert.Equal(moved.ToString(), _mod.Document(moved.ToString()).Require().FormKey);
         Assert.NotNull(_mod.Document(_mod.OtherNpc.ToString()));
 
         var (mod, handle) = await CompileAndReimport();
@@ -143,7 +144,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     [Fact]
     public async Task Compile_OfATreeHoldingADocumentTheCodecDoesNotProduce_RefusesNamingItAndDecompile()
     {
-        var stray = TreeTampering.Stray(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity, "GroupRecordData.json", "{}");
+        var stray = TreeTampering.StrayGroupDocument(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
         var result = await CompileService().CompileAsync(_mod.Plugin);
 

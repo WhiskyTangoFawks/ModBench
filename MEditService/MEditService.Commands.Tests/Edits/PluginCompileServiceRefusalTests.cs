@@ -1,6 +1,7 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -73,7 +74,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     [Fact]
     public async Task Compile_WithSourceFieldRenamedToOneTheCodecDoesNotRead_RefusesNamingTheFileAndDecompile()
     {
-        var npcSourceText = _mod.Document(_mod.Npc.ToString()).Body;
+        var npcSourceText = _mod.Document(_mod.Npc.ToString()).Require().Body;
         Assert.Contains("\"Race\"", npcSourceText);
         _mod.Overwrite(_mod.NpcIdentity, npcSourceText.Replace("\"Race\"", "\"RaceOld\""));
 

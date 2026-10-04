@@ -29,8 +29,8 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains(Diagnosis, result.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.DestinationChangedFormKeys());
-        Assert.Null(_mod.DestinationDocument(UnreadablePerk));
+        Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
+        Assert.Null(_mod.Document(_mod.DestinationPlugin, UnreadablePerk));
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains(Diagnosis, result.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.DestinationChangedFormKeys());
+        Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
 
     [Fact]
@@ -52,7 +52,8 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         var result = _mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotNull(_mod.DestinationDocument(readable));
+        Assert.NotNull(_mod.Document(_mod.DestinationPlugin, readable));
+        Assert.Equal([readable], _mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
 
     [Fact]
@@ -63,10 +64,11 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         var result = _mod.CopyHandler.CopyAsNew(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotNull(_mod.DestinationDocument(result.NewFormKey.Require()));
+        Assert.NotNull(_mod.Document(_mod.DestinationPlugin, result.NewFormKey.Require()));
+        Assert.Equal([result.NewFormKey.Require()], _mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
 
-    private sealed class ParseFailedCopyFixture : IDisposable
+    private sealed class ParseFailedCopyFixture : IDisposable, ITrackedPlugins
     {
         private const string SourcePluginName = "SKI_PlasmaAutocannon.esp";
         private const string SourceOrigin = "ParseFailedFixtureMod";
@@ -115,8 +117,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             CopyHandler = TestEditService.CopyHandler(holder);
         }
 
-        public SourceDocument? DestinationDocument(string formKey) =>
-            TrackedTree.Document(_destinationModFolder, DestinationPlugin, formKey);
+        public string ModFolderOf(PluginAddress plugin) => plugin == DestinationPlugin ? _destinationModFolder : _sourceModFolder;
 
         public string PerkTheCodecReads()
         {
@@ -175,7 +176,7 @@ public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains("Unable to cast", result.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.DestinationChangedFormKeys());
+        Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
         Assert.Null(_mod.Document(_mod.DestinationPlugin, _mod.Quest.ToString()));
     }
 }

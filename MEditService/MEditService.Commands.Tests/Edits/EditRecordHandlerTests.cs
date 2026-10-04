@@ -29,7 +29,7 @@ public sealed class EditRecordHandlerTests : IDisposable
     }
 
     [Fact]
-    public void EditField_OnATrackedPlugin_LeavesTheRecordsSourceFileDirtyInTheSourceControlPanel()
+    public void EditField_OnATrackedPlugin_LeavesTheRecordChangedSinceTheLastCommit()
     {
         Assert.Empty(_mod.ChangedFormKeys());
 

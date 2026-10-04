@@ -31,25 +31,6 @@ public sealed class TrackCommitShapeTests : IDisposable
     public void Dispose() => _root.Dispose();
 
     [Fact]
-    public async Task Track_OfBothPluginsOfAMod_CommitsTheModsOwnFiles_ThenEachPluginOnItsOwn()
-    {
-        var first = WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        var second = WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
-
-        var result = await Track(UpstreamVersion("1.2.3"), "First.esp", "Second.esp");
-
-        Assert.Empty(result.Refused);
-        Assert.Equal(["Track TwoPluginMod", "Track First.esp 1.2.3", "Track Second.esp 1.2.3"], SubjectsOnMain());
-        Assert.Equal(
-            $"Plugin: First.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: {first}\n",
-            TrailersAsGitsOwnParserReads("main~1"));
-        Assert.Equal(
-            $"Plugin: Second.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: {second}\n",
-            TrailersAsGitsOwnParserReads("main"));
-        Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
-    }
-
-    [Fact]
     public async Task Track_ParksEachPluginsBinary_UnderItsOwnName()
     {
         var first = WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
@@ -172,18 +153,9 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private static PluginAddress Key(string plugin) => new(plugin, ModName);
 
-    private static Dictionary<string, string> UpstreamVersion(string version) => new() { [ModName] = version };
-
     private Task<TrackSelectionResult> Track(params string[] plugins) => Track(TestAdapters.Mutagen(), plugins);
 
-    private Task<TrackSelectionResult> Track(IReadOnlyDictionary<string, string> upstreamVersionByOrigin, params string[] plugins) =>
-        Track(TestAdapters.Mutagen(), upstreamVersionByOrigin, plugins);
-
-    private Task<TrackSelectionResult> Track(IPluginAdapter adapter, params string[] plugins) =>
-        Track(adapter, new Dictionary<string, string>(), plugins);
-
-    private Task<TrackSelectionResult> Track(
-        IPluginAdapter adapter, IReadOnlyDictionary<string, string> upstreamVersionByOrigin, params string[] plugins)
+    private Task<TrackSelectionResult> Track(IPluginAdapter adapter, params string[] plugins)
     {
         var entries = Directory.GetFiles(_modFolder, "*.esp")
             .Order(StringComparer.Ordinal)
@@ -191,17 +163,11 @@ public sealed class TrackCommitShapeTests : IDisposable
             .ToList();
         var loadOrder = SnapshotPlugins.Snapshot(_gameDir, _gameDir, GameRelease.Fallout4, entries);
         return new TrackService(NullLogger<TrackService>.Instance, adapter)
-            .TrackAsync(loadOrder, [.. plugins.Select(Key)], SourcePreset.Edits, upstreamVersionByOrigin);
+            .TrackAsync(loadOrder, [.. plugins.Select(Key)], SourcePreset.Edits, new Dictionary<string, string>());
     }
 
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
-    private string[] SubjectsOnMain() =>
-        Git("log", "--reverse", "--format=%s", "refs/heads/main").Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
     private IReadOnlyList<SourceDocument> HeldBy(string plugin) =>
         SourceRepository.Over(_modFolder, GameRelease.Fallout4).ReadAll(Key(plugin));
-
-    private string TrailersAsGitsOwnParserReads(string revision) =>
-        Git("show", "-s", "--format=%(trailers:only,unfold)", revision).TrimEnd('\n') + "\n";
 }
