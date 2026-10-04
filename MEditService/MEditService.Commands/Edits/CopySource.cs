@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -25,18 +24,16 @@ internal sealed class CopySource(
         ? SourceRepository.Open(modFolder, loadOrder.GameRelease)
         : null;
 
-    private readonly Lazy<ContainerDocuments> _containers = new(
-        () => new ContainerDocuments(loadOrder.GameRelease, schemaReflector.GetSchemas(loadOrder.GameRelease)));
-
     private IPluginRecordLookup? _loaded;
     private bool _opened;
 
     internal PluginAddress Plugin => plugin;
 
     /// <summary>The record type and EditorID this plugin's copy names <paramref name="formKey"/>, or
-    /// null when it holds nothing under that key.</summary>
+    /// null when it holds nothing under that key. A tracked plugin's document that is no record
+    /// document refuses rather than reading as none.</summary>
     internal RecordIdentity? Identity(string formKey) =>
-        _tree != null ? _tree.IdentityOf(plugin, formKey, _schemas) : Loaded()?.IdentityOf(formKey);
+        _tree != null ? _tree.Get(plugin, formKey, _schemas)?.Identity : Loaded()?.IdentityOf(formKey);
 
     /// <summary>The record header's flags, read without the record's fields.</summary>
     internal long RecordFlags(RecordIdentity identity)
@@ -45,9 +42,6 @@ internal sealed class CopySource(
         var body = _tree.Get(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey);
         return JsonNode.Parse(body) is JsonObject document ? RecordFlagsWrite.HeldBy(document) : 0;
     }
-
-    /// <summary>The working tree a tracked plugin answers from; null for an untracked one.</summary>
-    internal SourceRepository? Tree => _tree;
 
     /// <summary>The record's own text: the working tree's own bytes when tracked, otherwise the loaded
     /// plugin's record through the codec — byte for byte what Track would have written.</summary>
@@ -73,39 +67,30 @@ internal sealed class CopySource(
         _tree != null ? ex.Message : PluginDiagnosis.FromParseException(ex).Describe();
 
     /// <summary>The container carrying this record, or null when it has a document of its own. A cell
-    /// always answers null: its place is <see cref="CellPlacementOf"/>'s, never a slot's.</summary>
+    /// always answers null: its place is <see cref="WorldspaceOf"/>'s, never a slot's.</summary>
     internal DocumentContainment? ContainerOf(RecordIdentity identity)
     {
         if (RecordTypeDispatch.For(_release).IsCell(identity.RecordType)) return null;
-        if (_tree == null) return Loaded()?.ContainmentOf(identity.FormKey);
-
-        // A document of its own answers itself, the same identity handed in — the tell that it
-        // carries no container.
-        if (_tree.ContainerDocument(plugin, identity, _schemas) is not { } document
-            || document.FormKey.Equals(identity.FormKey, StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        using var parsed = JsonDocument.Parse(document.Body);
-        return _containers.Value.ContainmentOf(document.RecordType, parsed.RootElement, identity.FormKey);
+        return _tree != null ? _tree.ContainerOf(plugin, identity, _schemas) : Loaded()?.ContainmentOf(identity.FormKey);
     }
 
-    /// <summary>Where this plugin puts the cell <paramref name="identity"/> names, or null when it is
-    /// not a cell this plugin holds.</summary>
-    internal CellPlacement? CellPlacementOf(RecordIdentity identity)
+    /// <summary>The worldspace the cell <paramref name="identity"/> names sits in, or null for an interior
+    /// cell or a cell this plugin does not hold.</summary>
+    internal string? WorldspaceOf(RecordIdentity identity) =>
+        _tree != null ? _tree.WorldspaceOf(plugin, identity) : Loaded()?.CellStructureOf(identity.FormKey)?.ParentWorldspace;
+
+    /// <summary>Whether the cell's own document says which grid it sits at: a numbered exterior cell does,
+    /// and a worldspace's own persistent cell does not.</summary>
+    internal bool SitsAtAGrid(RecordIdentity identity) =>
+        JsonNode.Parse(Body(identity)) is JsonObject cell && PlacedCell.Grid(cell) != null;
+
+    /// <summary>The exterior cell this plugin holds at grid (<paramref name="x"/>, <paramref name="y"/>)
+    /// of <paramref name="worldspace"/>, or null when it holds none there.</summary>
+    internal RecordIdentity? CellAt(string worldspace, int x, int y)
     {
-        if (_tree != null) return _tree.CellPlacementOf(plugin, identity);
-
-        return Loaded()?.CellStructureOf(identity.FormKey) is { } cell
-            ? new CellPlacement(cell.ParentWorldspace, cell.BlockX, cell.BlockY, cell.SubX, cell.SubY, cell.IsInterior)
-            : null;
+        if (_tree != null) return _tree.GetCellAt(plugin, worldspace, x, y, _schemas)?.Identity;
+        return Loaded()?.CellAt(worldspace, x, y) is { } formKey ? Loaded()?.IdentityOf(formKey) : null;
     }
-
-    /// <summary>The FormKey of the exterior cell this plugin holds at grid (<paramref name="x"/>,
-    /// <paramref name="y"/>) of <paramref name="worldspace"/>, or null when it holds none there.</summary>
-    internal string? CellAt(string worldspace, int x, int y) =>
-        _tree != null ? _tree.CellAt(plugin, worldspace, x, y) : Loaded()?.CellAt(worldspace, x, y);
 
     public void Dispose() => _loaded?.Dispose();
 

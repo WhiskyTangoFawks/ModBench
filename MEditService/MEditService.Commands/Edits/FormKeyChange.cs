@@ -25,9 +25,9 @@ internal sealed class FormKeyChange(
     /// <summary>A delete+create pair in source terms, written through a
     /// <see cref="SourceRepository.SourceTransaction"/> that restores the tree on failure.</summary>
     internal RecordEditResult Change(
-        PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, JsonElement? value)
+        PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, HoldingUnit unit, JsonElement? value)
     {
-        var (release, identity, unit, repository) = editTarget;
+        var (release, identity, repository) = editTarget;
         if (identity.RecordType == PluginHeader.RecordType)
         {
             return DocumentEdit.ReadOnlyRefusal(Member, Member, PluginHeader.FormIdReadOnly);
@@ -96,8 +96,7 @@ internal sealed class FormKeyChange(
 
         if (unit.IsEmbedded)
         {
-            if (repository.IdentityOf(plugin, unit.OwnerFormKey, schemaReflector.GetSchemas(release)) is not { } ownerIdentity
-                || repository.Get(plugin, ownerIdentity) is not { } ownerDocument)
+            if (repository.Get(plugin, unit.OwnerFormKey, schemaReflector.GetSchemas(release)) is not { } ownerDocument)
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound,
@@ -115,7 +114,7 @@ internal sealed class FormKeyChange(
                     "Nothing was written.");
             }
 
-            target = new ComputedTarget(repository, unit, ownerIdentity, identity, ownerText);
+            target = new ComputedTarget(repository, unit, ownerDocument.Identity, identity, ownerText);
             return null;
         }
 

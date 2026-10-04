@@ -42,8 +42,15 @@ public sealed class EditRecordHandler
     public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var editTarget) is { } blocked) return blocked;
-        if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, envelope.Value);
-        var (release, identity, unit, repository) = editTarget;
+        var (release, identity, repository) = editTarget;
+        if (repository.UnitHolding(plugin, identity) is not { } unit)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.SourceUnitNotFound,
+                $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document " +
+                "carries it. Something moved or removed it outside Modbench \u2014 check the Source Control panel.");
+        }
+        if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, unit, envelope.Value);
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
 
         var schemas = _schemaReflector.GetSchemas(release);
@@ -57,8 +64,8 @@ public sealed class EditRecordHandler
 
         // An embedded child is patched inside the document that carries it, so the identity written
         // back is that document's — its own for every other shape, the header included.
-        var written = unit.IsEmbedded ? repository.IdentityOf(plugin, unit.OwnerFormKey, schemas) : identity;
-        if (written is not { } target || repository.Get(plugin, target) is not { } document)
+        var written = unit.IsEmbedded ? repository.Get(plugin, unit.OwnerFormKey, schemas) : repository.Get(plugin, identity);
+        if (written is not { } document)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
@@ -68,6 +75,7 @@ public sealed class EditRecordHandler
 
         // The parent is what the file holds and what the codec reads, so every untouched byte of it
         // comes back intact.
+        var target = document.Identity;
         var text = document.Body;
         IReadOnlyList<PathHop> prefix = [];
         string? cellToLookUp = null;

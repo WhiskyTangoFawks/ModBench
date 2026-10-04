@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -94,6 +95,19 @@ public sealed partial class SourceRepository
         return body == null ? null : new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body);
     }
 
+    /// <summary>The record the tree holds at <paramref name="formKey"/> — one with a document of its
+    /// own, an embedded child, or the header — or null when nothing carries it. A document named for
+    /// the key whose text is no document refuses with the reader's words, since that is present and
+    /// not absent.</summary>
+    public SourceDocument? Get(
+        PluginAddress plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (IdentityOf(plugin, formKey, schemas) is { } identity) return Get(plugin, identity);
+        return UnreadableDocumentFor(plugin, formKey) is { } why
+            ? throw new UnreadableSourceDocumentException($"{plugin.Name}'s document for {formKey} is no record document: {why}")
+            : null;
+    }
+
     /// <summary>Creates or replaces the record's document, placing an absent one from its identity
     /// alone and minting the levels above it. A record another document carries is replaced at its
     /// own slot, every other byte untouched.</summary>
@@ -125,6 +139,17 @@ public sealed partial class SourceRepository
             PathShape.DirectoryOf(unit.FullPath), () => WriteTextAtomic(unit.FullPath, document.Body));
         Forget();
     }
+
+    /// <summary>The put of an exterior cell, which lands in the block its own grid falls in inside
+    /// <paramref name="worldspace"/>'s directory. A cell the plugin already holds is replaced where it is.</summary>
+    public void PutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
+        Put(plugin, cell, PlacementIn(worldspace, cell));
+
+    internal static CellPlacement PlacementIn(string worldspace, SourceDocument cell) =>
+        JsonNode.Parse(cell.Body) is JsonObject document && PlacedCell.Grid(document) is var (x, y)
+            ? CellPlacement.AtGrid(worldspace, x, y)
+            : throw new InvalidOperationException(
+                $"{cell.FormKey}'s document carries no grid, so it has no place in worldspace {worldspace}.");
 
     /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
     /// record's document. Already gone is the state asked for; the other two outcomes say what
@@ -530,4 +555,7 @@ public enum SourceRemoval
 
 /// <summary>One record as the Source tree holds it: its identity and its own text, byte for byte
 /// (ADR-0005).</summary>
-public sealed record SourceDocument(string FormKey, string RecordType, string? EditorId, string Body);
+public sealed record SourceDocument(string FormKey, string RecordType, string? EditorId, string Body)
+{
+    public RecordIdentity Identity => new(FormKey, RecordType, EditorId);
+}

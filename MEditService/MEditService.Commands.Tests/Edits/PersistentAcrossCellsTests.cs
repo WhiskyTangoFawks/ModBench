@@ -192,12 +192,11 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
         SetFlags("Wanderer", 0);
 
-        var created = Tree.CellAt(Address(Override), World.ToString(), 9, 9).Require();
-        Assert.Equal(Override.ModKey, FormKey.Factory(created).ModKey);
-        Assert.Equal(["Wanderer"], Group(Document(FormKey.Factory(created)), "Temporary"));
+        var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)).Require();
+        Assert.Equal(Override.ModKey, FormKey.Factory(created.FormKey).ModKey);
+        Assert.Equal(["Wanderer"], Group(Document(FormKey.Factory(created.FormKey)), "Temporary"));
         Assert.Equal(["Leaver"], Group(Document(_keys["Here"]), "Persistent"));
-        var identity = Tree.IdentityOf(Address(Override), created, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)) ?? throw new InvalidOperationException("Expected the created cell to be held.");
-        Assert.Equal(new CellPlacement(World.ToString(), 0, 0, 1, 1, IsInterior: false), Tree.CellPlacementOf(Address(Override), identity));
+        Assert.Equal(new CellPlacement(World.ToString(), 0, 0, 1, 1, IsInterior: false), Tree.CellPlacementOf(Address(Override), created.Identity));
     }
 
     [Fact]
@@ -255,9 +254,9 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
         SetFlags("Wanderer", 0);
 
-        var created = Tree.CellAt(Address(Override), World.ToString(), 9, 9).Require();
-        Assert.Equal(Override.ModKey, FormKey.Factory(created).ModKey);
-        Assert.Equal(["Wanderer"], Group(Document(FormKey.Factory(created)), "Temporary"));
+        var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)).Require();
+        Assert.Equal(Override.ModKey, FormKey.Factory(created.FormKey).ModKey);
+        Assert.Equal(["Wanderer"], Group(Document(FormKey.Factory(created.FormKey)), "Temporary"));
     }
 
     [Fact]

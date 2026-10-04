@@ -92,15 +92,13 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
     public const string TopCellRefEditorId = "SourceTopCellRef";
     public FormKey TopCellRef { get; }
 
-    // A real SubCells cell, distinct in every coordinate and not reproducible by a naive
-    // floor(grid/N) formula, so an implementation that recomputed rather than copied
-    // CellLocationRow's numbers cannot pass by coincidence.
-    public const int ExteriorBlockX = 3;
-    public const int ExteriorBlockY = -2;
+    // A real SubCells cell: each cell's block and sub-block are the ones its own grid falls in.
+    public const int ExteriorBlockX = 0;
+    public const int ExteriorBlockY = -1;
     public const int ExteriorSubX = 0;
     public const int ExteriorSubY = -1;
-    public const int ExteriorGridX = 200;
-    public const int ExteriorGridY = -199;
+    public const int ExteriorGridX = 1;
+    public const int ExteriorGridY = -2;
 
     public const string ExteriorCellEditorId = "SourceExteriorCell";
     public FormKey ExteriorCell { get; }
@@ -110,13 +108,17 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
     // destination already overrides the WRLD (and maybe the block, and maybe the sub-block)".
     public const int OtherBlockX = 5;
     public const int OtherBlockY = 1;
-    public const int OtherSubX = 2;
-    public const int OtherSubY = 3;
+    public const int OtherSubX = 21;
+    public const int OtherSubY = 5;
+    public const int OtherGridX = 170;
+    public const int OtherGridY = 42;
     public const string OtherBlockCellEditorId = "SourceOtherBlockCell";
     public FormKey OtherBlockCell { get; }
 
-    public const int SameBlockOtherSubX = -4;
-    public const int SameBlockOtherSubY = 6;
+    public const int SameBlockOtherSubX = 2;
+    public const int SameBlockOtherSubY = -3;
+    public const int SameBlockGridX = 17;
+    public const int SameBlockGridY = -20;
     public const string SameBlockCellEditorId = "SourceSameBlockCell";
     public FormKey SameBlockCell { get; }
 
@@ -222,7 +224,7 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
         var sameBlockCell = new Cell(sourceMod)
         {
             EditorID = SameBlockCellEditorId,
-            Grid = new CellGrid { Point = new P2Int(ExteriorGridX + 2, ExteriorGridY + 2) },
+            Grid = new CellGrid { Point = new P2Int(SameBlockGridX, SameBlockGridY) },
         };
         var sameBlockOtherSub = new WorldspaceSubBlock { BlockNumberX = (short)SameBlockOtherSubX, BlockNumberY = (short)SameBlockOtherSubY };
         sameBlockOtherSub.Items.Add(sameBlockCell);
@@ -231,7 +233,7 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
         var otherBlockCell = new Cell(sourceMod)
         {
             EditorID = OtherBlockCellEditorId,
-            Grid = new CellGrid { Point = new P2Int(ExteriorGridX + 3, ExteriorGridY + 3) },
+            Grid = new CellGrid { Point = new P2Int(OtherGridX, OtherGridY) },
         };
         var otherSub = new WorldspaceSubBlock { BlockNumberX = (short)OtherSubX, BlockNumberY = (short)OtherSubY };
         otherSub.Items.Add(otherBlockCell);

@@ -362,9 +362,25 @@ public sealed partial class SourceRepository
         return new CellPlacement(worldspace, blockX, blockY, subX, subY, IsInterior: false);
     }
 
-    /// <summary>The FormKey of the exterior cell this plugin's tree holds at grid (<paramref name="x"/>,
+    /// <summary>The worldspace whose subtree carries the cell <paramref name="identity"/> names; null for
+    /// an interior cell, and for a cell the plugin does not hold. A tree that files an exterior cell
+    /// outside every worldspace's blocks refuses with the reader's words.</summary>
+    public string? WorldspaceOf(PluginAddress plugin, RecordIdentity identity)
+    {
+        if (Locate(plugin, identity) is null) return null;
+        if (CellPlacementOf(plugin, identity) is { } placement) return placement.ParentWorldspace;
+
+        throw new UnreadableSourceDocumentException(
+            $"{identity.FormKey} sits under neither a cell group nor a worldspace's blocks, so the tree names no worldspace for it.");
+    }
+
+    /// <summary>The exterior cell this plugin's tree holds at grid (<paramref name="x"/>,
     /// <paramref name="y"/>) of <paramref name="worldspace"/>, or null when it holds none there.</summary>
-    public string? CellAt(PluginAddress plugin, string worldspace, int x, int y)
+    public SourceDocument? GetCellAt(
+        PluginAddress plugin, string worldspace, int x, int y, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        CellFormKeyAt(plugin, worldspace, x, y) is { } formKey ? Get(plugin, formKey, schemas) : null;
+
+    private string? CellFormKeyAt(PluginAddress plugin, string worldspace, int x, int y)
     {
         if (FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), plugin.Name, worldspace) is not { } worldspaceDocument)
             return null;

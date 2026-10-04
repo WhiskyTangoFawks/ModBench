@@ -42,6 +42,22 @@ public sealed class UnreadableCopySourceTests : IDisposable
     }
 
     [Fact]
+    public void CopyAsOverride_OfAChildIntoADestinationWhoseContainerDocumentIsNoJsonDocument_IsRefused_AndLeavesItAlone()
+    {
+        Assert.True(_mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, _mod.DialogTopic.ToString(), _mod.DestinationPlugin).Applied);
+        var container = _mod.Document(_mod.DestinationPlugin, _mod.Quest.ToString()).Require();
+        var file = TreeTampering.FileOf(_mod.DestinationModFolder, _mod.DestinationPlugin, container.Identity);
+        var broken = container.Body.Replace('{', '[');
+        File.WriteAllText(file, broken);
+
+        var result = _mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, _mod.Scene.ToString(), _mod.DestinationPlugin);
+
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Contains($"{ContainerCopyFixture.DestinationPluginName}'s document for {_mod.Quest} is no record document", result.Message, StringComparison.Ordinal);
+        Assert.Equal(broken, File.ReadAllText(file));
+    }
+
+    [Fact]
     public void CopyAsOverride_OfAnExteriorCellWhoseWorldspaceDocumentIsNoJsonDocument_IsRefusedNamingIt_AndWritesNothing()
     {
         MakeNoJsonDocument(_mod.Worldspace);

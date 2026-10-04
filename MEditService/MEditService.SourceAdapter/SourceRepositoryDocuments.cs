@@ -31,6 +31,21 @@ public sealed partial class SourceRepository
         return new SourceDocument(owner.FormKey, owner.RecordType, owner.EditorId, text);
     }
 
+    /// <summary>The record that carries <paramref name="identity"/> inline, and the slot it sits in; null
+    /// for a record with a document of its own.</summary>
+    public DocumentContainment? ContainerOf(
+        PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (ContainerDocument(plugin, identity, schemas) is not { } owner
+            || owner.FormKey.Equals(identity.FormKey, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        using var parsed = JsonDocument.Parse(owner.Body);
+        return new ContainerDocuments(_release, schemas).ContainmentOf(owner.RecordType, parsed.RootElement, identity.FormKey);
+    }
+
     /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
     /// owner's, since the file is the owner's document. Null when it cannot be read or declares
     /// none.</summary>

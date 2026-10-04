@@ -12,7 +12,7 @@ namespace MEditService.SourceAdapter;
 public sealed partial class SourceRepository
 {
     /// <summary>Every document one plugin's tree holds right now, each as the record at its root. An
-    /// embedded child belongs to its owner's document; <see cref="Get"/> answers with the child's own
+    /// embedded child belongs to its owner's document; <see cref="Get(PluginAddress, RecordIdentity)"/> answers with the child's own
     /// text.</summary>
     public IReadOnlyList<SourceDocument> ReadAll(PluginAddress plugin)
     {

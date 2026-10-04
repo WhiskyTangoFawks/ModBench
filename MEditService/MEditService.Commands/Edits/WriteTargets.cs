@@ -25,10 +25,7 @@ internal sealed class WriteTargets(
     /// naming a command the user cannot find is worse than none.</summary>
     internal const string TrackCommandTitle = "Modbench: Track Mod\u2026";
 
-    // The unit is read before anything is written, so a rename or a delete this gesture performs
-    // cannot change the document its messages and logs name.
-    internal readonly record struct EditTarget(
-        GameRelease Release, RecordIdentity Identity, HoldingUnit Unit, SourceRepository Repository);
+    internal readonly record struct EditTarget(GameRelease Release, RecordIdentity Identity, SourceRepository Repository);
 
     // The working tree is the only thing asked (ADR-0015), so a second edit builds on
     // the first. The copy gestures read the source instead.
@@ -55,40 +52,28 @@ internal sealed class WriteTargets(
         PluginAddress plugin, string formKey, SourceRepository repository, GameRelease release, out EditTarget target)
     {
         target = default;
-        RecordIdentity? found;
+        SourceDocument? found;
         try
         {
-            found = repository.IdentityOf(plugin, formKey, schemaReflector.GetSchemas(release));
+            found = repository.Get(plugin, formKey, schemaReflector.GetSchemas(release));
         }
         catch (Exception ex) when (ex is not (OutOfMemoryException or AmbiguousSourceUnitException))
         {
             // Naming this record means reading the document that carries it, and the codec is the only
-            // reader of one: its own words are the reason.
+            // reader of one: its own words are the reason. A document named for the record whose text
+            // is not one is present, so this is not absence.
             return RefuseUnreadable(formKey, ex.Message);
         }
 
-        if (found is not { } identity)
+        if (found is not { } document)
         {
-            // A document named after this record whose text is not one: present, so this is not
-            // absence, and the reader's words are the whole reason.
-            if (repository.UnreadableDocumentFor(plugin, formKey) is { } why) return RefuseUnreadable(formKey, why);
-
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordNotFound,
                 $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document " +
                 "carries it.");
         }
 
-        // An embedded child (a placed ref, landscape, navmesh, top cell) resolves to its parent's file.
-        if (repository.UnitHolding(plugin, identity) is not { } unit)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.SourceUnitNotFound,
-                $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document " +
-                "carries it. Something moved or removed it outside Modbench \u2014 check the Source Control panel.");
-        }
-
-        target = new EditTarget(release, identity, unit, repository);
+        target = new EditTarget(release, document.Identity, repository);
         return null;
     }
 
@@ -113,7 +98,7 @@ internal sealed class WriteTargets(
         CopySource? owned = source;
         try
         {
-            if (IdentityIn(source, formKey) is not { } identity)
+            if (source.Identity(formKey) is not { } identity)
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.RecordNotFound, $"{sourcePlugin.Name} does not hold record {formKey}.");
@@ -352,13 +337,6 @@ internal sealed class WriteTargets(
         new(false, RecordEditRefusal.RecordParseFailed,
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);
 
-    // A tree file named for the record that is no document refuses rather than reading as none.
-    private static RecordIdentity? IdentityIn(CopySource source, string formKey) =>
-        source.Identity(formKey)
-        ?? (source.Tree?.UnreadableDocumentFor(source.Plugin, formKey) is { } why
-            ? throw new InvalidDataException($"{source.Plugin.Name}'s document for {formKey} is no record document: {why}")
-            : null);
-
     /// <summary>The nearest copy left of <paramref name="plugin"/>, among <paramref name="among"/> if given,
     /// that <paramref name="says"/> accepts, passing over one whose header holds a flag of
     /// <paramref name="passOver"/>. An unreadable copy ends the walk.</summary>
@@ -366,7 +344,7 @@ internal sealed class WriteTargets(
         PluginAddress plugin, string formKey, Func<JsonObject, bool> says, long passOver = 0, IReadOnlySet<string>? among = null) =>
         NearestToTheLeft(plugin, formKey, among, source =>
         {
-            if (IdentityIn(source, formKey) is not { } identity) return null;
+            if (source.Identity(formKey) is not { } identity) return null;
             if (passOver != 0 && (source.RecordFlags(identity) & passOver) != 0) return null;
             var body = source.Body(identity);
             return JsonNode.Parse(body) is JsonObject copy && says(copy) ? body : null;
@@ -376,7 +354,7 @@ internal sealed class WriteTargets(
     /// exterior cell at grid (<paramref name="x"/>, <paramref name="y"/>) of <paramref name="worldspace"/>.</summary>
     internal LeftCopy NearestCellToTheLeft(PluginAddress plugin, string worldspace, int x, int y, IReadOnlySet<string> among) =>
         NearestToTheLeft(plugin, worldspace, among, source =>
-            source.CellAt(worldspace, x, y) is { } cell && IdentityIn(source, cell) is { } identity ? source.Body(identity) : null);
+            source.CellAt(worldspace, x, y) is { } identity ? source.Body(identity) : null);
 
     // The plugins left of this one, nearest first, until one answers a text. An unreadable one ends the
     // walk, named by what it was asked about.

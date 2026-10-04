@@ -12,8 +12,8 @@ namespace MEditService.Commands.Edits;
 /// cell the plugin lacks is copied in from the nearest of its masters to hold it, or created, as xEdit's Add does.</summary>
 internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, SchemaReflector schemaReflector, ILogger logger)
 {
-    // The cell document that takes the record in, and where a new one goes.
-    private sealed record Landed(SourceDocument Cell, CellPlacement? Placement);
+    // The cell document that takes the record in, and the worldspace a new one goes in.
+    private sealed record Landed(SourceDocument Cell, string? NewInWorldspace);
 
     private sealed record Move(
         PluginAddress Plugin, SourceRepository Repository, GameRelease Release, RecordIdentity Moved, string Worldspace,
@@ -61,7 +61,7 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         SourceRepository.SourceTransaction transaction, PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder,
         string written, CellCrossing crossing, string spelled)
     {
-        var (release, moved, _, repository) = edit;
+        var (release, moved, repository) = edit;
         var root = Parsed(written, holder.FormKey);
         var group = EmbeddedChildPath.Walk(root, [.. crossing.Prefix.Take(crossing.Prefix.Count - 1)]) as JsonArray
             ?? throw new InvalidOperationException($"{holder.FormKey}'s document has no group at {RecordEditEnvelope.Spell(crossing.Prefix)}.");
@@ -72,7 +72,7 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
 
         var worldspace = crossing.Prefix is [{ Name: PlacedCell.WorldspacePersistentCellMember }, ..]
             ? holder.FormKey
-            : repository.CellPlacementOf(plugin, holder)?.ParentWorldspace;
+            : repository.WorldspaceOf(plugin, holder);
         if (worldspace is null)
             return CellGroupMove.Unknown(spelled, moved.FormKey, $"{plugin.Name} holds no worldspace above its cell {holder.FormKey}");
 
@@ -86,7 +86,7 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
     private RecordEditResult? Write(SourceRepository.SourceTransaction transaction, Move move, SourceDocument given, Landed landed)
     {
         transaction.Put(move.Repository, move.Plugin, given);
-        if (landed.Placement is { } placement) transaction.Put(move.Repository, move.Plugin, landed.Cell, placement);
+        if (landed.NewInWorldspace is { } worldspace) transaction.PutInWorldspace(move.Repository, move.Plugin, landed.Cell, worldspace);
         else transaction.Put(move.Repository, move.Plugin, landed.Cell);
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -100,8 +100,7 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
 
     private Step<Landed> IntoPersistentCell(Move move, JsonNode record)
     {
-        if (move.Repository.IdentityOf(move.Plugin, move.Worldspace, schemaReflector.GetSchemas(move.Release)) is not { } identity
-            || move.Repository.Get(move.Plugin, identity) is not { } document)
+        if (move.Repository.Get(move.Plugin, move.Worldspace, schemaReflector.GetSchemas(move.Release)) is not { } document)
         {
             return new Step<Landed>.Refused(CellGroupMove.Unknown(
                 move.Spelled, move.Moved.FormKey, $"{move.Plugin.Name} holds no document for its worldspace {move.Worldspace}"));
@@ -128,22 +127,22 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         {
             TakeIn(landing, PersistentFlag.PersistentGroup, record);
             return new Step<Landed>.Done(
-                new(Document(identity, codec.RoundTrip(worldspace.ToJsonString(), move.Release, identity.RecordType)), null));
+                new(Document(document.Identity, codec.RoundTrip(worldspace.ToJsonString(), move.Release, document.RecordType)), null));
         });
     }
 
     private Step<Landed> IntoGridCell(Move move, AnotherCell.GridCell grid, JsonNode record)
     {
-        if (move.Repository.CellAt(move.Plugin, move.Worldspace, grid.X, grid.Y) is { } held)
+        if (move.Repository.GetCellAt(move.Plugin, move.Worldspace, grid.X, grid.Y, schemaReflector.GetSchemas(move.Release)) is { } held)
             return new Step<Landed>.Done(IntoHeldCell(move, held, record));
 
         return MastersOf(move).Then(masters =>
         {
             var left = targets.NearestCellToTheLeft(move.Plugin, move.Worldspace, grid.X, grid.Y, masters);
             if (left.FoundText is { } copy && FormKeyOf(Parsed(copy, move.Worldspace)) is var copied
-                && move.Repository.IdentityOf(move.Plugin, copied, schemaReflector.GetSchemas(move.Release)) is not null)
+                && move.Repository.Get(move.Plugin, copied, schemaReflector.GetSchemas(move.Release)) is { } heldCopy)
             {
-                return new Step<Landed>.Done(IntoHeldCell(move, copied, record));
+                return new Step<Landed>.Done(IntoHeldCell(move, heldCopy, record));
             }
 
             return CopiedOrNew(move, left, copy => JsonNode.Parse(copy), 0, (grid.X, grid.Y)).Then<Landed>(cell =>
@@ -152,20 +151,16 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
                 var text = codec.RoundTrip(cell.ToJsonString(), move.Release, move.CellType);
                 return new Step<Landed>.Done(new(
                     new SourceDocument(FormKeyOf(cell), move.CellType, WriteTargets.EditorIdOf(text), text),
-                    CellPlacement.AtGrid(move.Worldspace, grid.X, grid.Y)));
+                    move.Worldspace));
             });
         });
     }
 
-    private Landed IntoHeldCell(Move move, string formKey, JsonNode record)
+    private Landed IntoHeldCell(Move move, SourceDocument held, JsonNode record)
     {
-        var identity = move.Repository.IdentityOf(move.Plugin, formKey, schemaReflector.GetSchemas(move.Release))
-            ?? throw new InvalidOperationException($"{move.Plugin.Name} named {formKey} as the cell at a grid, but holds no record under it.");
-        var document = move.Repository.Get(move.Plugin, identity)
-            ?? throw new InvalidOperationException($"{move.Plugin.Name} holds {formKey}, but no document in its source tree carries it.");
-        var cell = Parsed(document.Body, formKey);
+        var cell = Parsed(held.Body, held.FormKey);
         TakeIn(cell, PersistentFlag.TemporaryGroup, record);
-        return new(Document(identity, codec.RoundTrip(cell.ToJsonString(), move.Release, identity.RecordType)), null);
+        return new(Document(held.Identity, codec.RoundTrip(cell.ToJsonString(), move.Release, held.RecordType)), null);
     }
 
     // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile; ADR-0018).

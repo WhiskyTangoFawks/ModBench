@@ -59,19 +59,19 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         Destination destination, GameRelease release)
     {
         var containerFormKey = container.ParentFormKey;
-        if (Identity(destination, containerFormKey, release) is not { } destinationContainer)
+        if (destination.Repository.Get(destination.Plugin, containerFormKey, schemaReflector.GetSchemas(release))
+            is not { } containerDocument)
+        {
             return MintContainerAround(source, container, child, destination, release);
+        }
 
-        // The container may itself be embedded (a topic inside its quest's document); its container
-        // document is whichever file's root actually holds it.
-        var containerDocument = destination.Repository.ContainerDocument(
-                destination.Plugin, destinationContainer, schemaReflector.GetSchemas(release))
-            ?? throw NoDocumentCarries(destination.Plugin, containerFormKey);
+        // The container may itself be embedded (a topic inside its quest's document); its put lands
+        // wherever the tree holds it.
         var withChild = ContainerDocumentEdits.WithChildAppended(
                 codec, containerDocument.Body, release, containerDocument.RecordType, containerFormKey,
                 container.SlotName, child.Body, child.RecordType)
             ?? throw new InvalidOperationException(
-                $"{containerDocument.FormKey} was found holding {containerFormKey}, but its own text does not carry it.");
+                $"{containerFormKey} was found, but its own text does not carry it.");
 
         destination.Repository.Put(destination.Plugin, containerDocument with { Body = withChild });
         return RecordEditResult.Success();
@@ -136,21 +136,18 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         return RecordEditResult.Success();
     }
 
-    // A top-level container the destination lacks: a block-placed exterior cell lands through the
-    // spatial mint with its worldspace; everything else is a put, which places it.
+    // A top-level container the destination lacks: an exterior cell lands through the spatial mint
+    // with its worldspace; everything else is a put, which places it.
     private RecordEditResult PlaceMintedContainer(
         CopySource source, SourceDocument container, Destination destination, GameRelease release)
     {
         var formKey = container.FormKey;
-        var placement = RecordTypeDispatch.For(release).IsCell(container.RecordType)
-            && source.Identity(formKey) is { } identity
-                ? source.CellPlacementOf(identity)
-                : null;
-        if (placement is { IsInterior: false } exterior)
+        var sourceCell = RecordTypeDispatch.For(release).IsCell(container.RecordType) ? source.Identity(formKey) : null;
+        if (sourceCell is { } cell && source.WorldspaceOf(cell) is { } worldspace)
         {
-            // Only a genuine SubCells cell has a block to mint at; a worldspace's own persistent cell
-            // carries none.
-            if (exterior.BlockX == null)
+            // Only a numbered cell has a grid to mint at; a worldspace's own persistent cell carries
+            // none.
+            if (!source.SitsAtAGrid(cell))
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ContainerParentMissingInDestination,
@@ -158,7 +155,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
                     $"{formKey} is an exterior cell with no worldspace grid position of its own — a worldspace's " +
                     "persistent cell, not one of its numbered blocks — so mEdit cannot auto-create an override of it here.");
             }
-            return MintExteriorCell(source, exterior, container, destination, release);
+            return MintExteriorCell(source, worldspace, container, destination, release);
         }
 
         destination.Repository.Put(destination.Plugin, container);
@@ -173,22 +170,15 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         return RecordEditResult.Success();
     }
 
-    /// <summary>Lands an exterior CELL at its worldspace's block and sub-block, minting a bare Partial
+    /// <summary>Lands an exterior CELL in <paramref name="worldspaceFormKey"/>, minting a bare Partial
     /// Form WRLD first when the destination has none: the put of a cell whose worldspace is absent
     /// refuses.</summary>
     internal RecordEditResult MintExteriorCell(
-        CopySource source, CellPlacement placement, SourceDocument cell, Destination destination, GameRelease release)
+        CopySource source, string worldspaceFormKey, SourceDocument cell, Destination destination, GameRelease release)
     {
         var cellFormKey = cell.FormKey;
         if (destination.Repository.HoldsAtEitherRef(destination.Plugin, cellFormKey))
             return RefuseHeldOnlyAtHead(cellFormKey, destination.Plugin);
-
-        if (placement.ParentWorldspace is not { } worldspaceFormKey)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ContainerParentMissingInDestination,
-                $"{cellFormKey} has no recorded parent worldspace — cannot place it.");
-        }
 
         if (Identity(destination, worldspaceFormKey, release) is null)
         {
@@ -202,13 +192,13 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
 
         var sourceCell = source.Identity(cellFormKey)
             ?? throw new InvalidOperationException(
-                $"{source.Plugin.Name} does not hold {cellFormKey} — its own placement named it.");
+                $"{source.Plugin.Name} does not hold {cellFormKey} — its own worldspace named it.");
         var placed = cell with { RecordType = sourceCell.RecordType };
 
-        destination.Repository.Put(
+        destination.Repository.PutInWorldspace(
             destination.Plugin,
             placed with { Body = WithGridFrom(source.Body(sourceCell), placed, release) },
-            placement);
+            worldspaceFormKey);
 
         return RecordEditResult.Success();
     }
@@ -231,7 +221,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
     /// <summary>What the destination's tree names at <paramref name="formKey"/>, or null when nothing
     /// in it carries that key at the working tree.</summary>
     internal RecordIdentity? Identity(Destination destination, string formKey, GameRelease release) =>
-        destination.Repository.IdentityOf(destination.Plugin, formKey, schemaReflector.GetSchemas(release));
+        destination.Repository.Get(destination.Plugin, formKey, schemaReflector.GetSchemas(release))?.Identity;
 
     internal static RecordEditResult RefuseHeldWithoutReplace(string formKey, PluginAddress destination) =>
         RecordEditResult.Refused(
@@ -245,7 +235,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
             $"{destination.Name} ({destination.Origin}) holds {formKey} at HEAD, and its working tree deletes " +
             "it. Commit or discard that deletion in Source Control, then copy it again.");
 
-    // The destination's own IdentityOf named this FormKey, so a document ought to carry it; only a
+    // The destination's own tree named this FormKey, so a document ought to carry it; only a
     // concurrent external edit to the tree closes that gap.
     private static InvalidOperationException NoDocumentCarries(PluginAddress plugin, string formKey) =>
         new($"{plugin.Name} holds {formKey}, but no document in its source tree carries it.");
