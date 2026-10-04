@@ -6,8 +6,8 @@ Findings from `xeMainForm.pas`, `wbInterface.pas` and `wbImplementation.pas`.
 
 ## Two independent axes
 
-- **ConflictThis**: this plugin's version of the record relative to the rest of the stack. Classifies each cell in the compare grid.
-- **ConflictAll**: the summary classification for the whole override stack. Classifies each row.
+- ConflictThis: this plugin's version of the record relative to the rest of the stack. Classifies each cell in the compare grid.
+- ConflictAll: the summary classification for the whole override stack. Classifies each row.
 
 A record may be `caConflict` overall while the master plugin's version is `ctMaster` and the winning plugin's version is `ctConflictWins`.
 
