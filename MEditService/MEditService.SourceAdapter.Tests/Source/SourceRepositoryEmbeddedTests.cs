@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
@@ -217,6 +218,84 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Equal(
             new RecordIdentity(_topCellRef.FormKey.ToString(), "refr", "TopCellRef"),
             IdentityOf(_topCellRef));
+    }
+
+    private static IReadOnlyDictionary<string, RecordTableSchema> Schemas => SharedSchemaReflector.Instance.GetSchemas(Release);
+
+    [Fact]
+    public void Get_ByFormKey_OfAChildAnotherRecordsDocumentCarries_IsTheChildsOwnTextUnderItsIdentity()
+    {
+        var document = Repository.Get(Plugin, _topic.FormKey.ToString(), Schemas);
+
+        Assert.Equal(Identity(_topic, "dial"), document?.Identity);
+        Assert.Equal(Repository.Get(Plugin, Identity(_topic, "dial"))?.Body, document?.Body);
+    }
+
+    [Fact]
+    public void Get_ByFormKey_OfAKeyNothingCarries_IsNull()
+    {
+        Assert.Null(Repository.Get(Plugin, "00FFFF:Embedded.esp", Schemas));
+    }
+
+    [Fact]
+    public void Get_ByFormKey_OfAKeyWhoseDocumentIsNoRecordDocument_RefusesWithTheReadersWords()
+    {
+        File.WriteAllText(FullPath(Path.Combine(Root, "Quests", "Broken - 000FFF_Embedded.esp.json")), "[1]");
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.Get(Plugin, "000FFF:Embedded.esp", Schemas));
+
+        Assert.Contains("000FFF:Embedded.esp", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("its root is not a JSON object", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ContainerOf_APlacedReferenceInsideItsCell_NamesTheCellAndTheSlot()
+    {
+        var container = Repository.ContainerOf(Plugin, Identity(_persistentRef, "refr"), Schemas);
+
+        Assert.Equal(_interiorCell.FormKey.ToString(), container?.ParentFormKey);
+        Assert.Equal("Persistent", container?.SlotName);
+    }
+
+    [Fact]
+    public void ContainerOf_ATopicInsideItsQuest_NamesTheQuestAndTheSlot()
+    {
+        var container = Repository.ContainerOf(Plugin, Identity(_topic, "dial"), Schemas);
+
+        Assert.Equal(_quest.FormKey.ToString(), container?.ParentFormKey);
+        Assert.Equal("DialogTopics", container?.SlotName);
+    }
+
+    private void GiveTheInteriorCellsDocumentNoFormKey()
+    {
+        var path = FullPath(InteriorCellPath);
+        File.WriteAllText(path, File.ReadAllText(path).Replace(_interiorCell.FormKey.ToString(), "NotAFormKey", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ContainerDocument_OfAChildWhoseOwnerDocumentNamesNoRecord_IsNull()
+    {
+        GiveTheInteriorCellsDocumentNoFormKey();
+
+        Assert.Null(Repository.ContainerDocument(Plugin, Identity(_temporaryRef, "refr"), Schemas));
+    }
+
+    [Fact]
+    public void ContainerOf_AChildWhoseOwnerDocumentNamesNoRecord_RefusesWithTheReadersWords()
+    {
+        GiveTheInteriorCellsDocumentNoFormKey();
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.ContainerOf(Plugin, Identity(_temporaryRef, "refr"), Schemas));
+
+        Assert.Contains("names no document of its own", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ContainerOf_ARecordWithADocumentOfItsOwn_IsNull()
+    {
+        Assert.Null(Repository.ContainerOf(Plugin, Identity(_quest, "qust"), Schemas));
     }
 
     [Fact]

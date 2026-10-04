@@ -78,15 +78,14 @@ internal sealed class OverrideCopy
             return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
         }
 
-        // IsInterior is false for both a genuine SubCells cell and a Worldspace's TopCell. Only the
-        // SubCells case has block coordinates to mint from; a TopCell falls through to the refusal,
-        // its placement being a follow-up.
+        // A worldspace has both its numbered cells and its TopCell. Only a numbered cell has a grid
+        // to mint at; a TopCell falls through to the refusal, its placement being a follow-up.
         var isCell = RecordTypeDispatch.For(release).IsCell(identity.RecordType);
-        var placement = isCell ? source.CellPlacementOf(identity) : null;
-        if (isCell && placement?.IsInterior == false && placement.Value.BlockX != null)
+        var worldspace = isCell ? source.WorldspaceOf(identity) : null;
+        if (worldspace != null && source.SitsAtAGrid(identity))
         {
             var mintResult = _recordCopy.MintExteriorCell(
-                source, placement.Value,
+                source, worldspace,
                 new SourceDocument(
                     formKey, identity.RecordType, identity.EditorId,
                     StripEmbeddedChildrenForShallowCopy(body, identity.RecordType, release)),
@@ -100,7 +99,7 @@ internal sealed class OverrideCopy
             }
             return mintResult;
         }
-        if (isCell && placement?.IsInterior != true)
+        if (worldspace != null)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.ContainerParentMissingInDestination,
