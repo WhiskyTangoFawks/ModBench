@@ -16,11 +16,9 @@ function show(table: ConflictTable): void {
   act(() => { window.dispatchEvent(new MessageEvent('message', { data: { type: CONFLICT_TABLE_SHOWN, table } })); });
 }
 
-const columns: ConflictColumn[] = [
-  { name: 'Low', isMod: true, opened: false },
-  { name: 'Opened', isMod: true, opened: true },
-  { name: 'Overwrite', isMod: false, opened: false },
-];
+const modColumn = (name: string, opened = false): ConflictColumn => ({ name, origin: { kind: 'mod', name }, opened });
+const overwriteColumn: ConflictColumn = { name: 'Overwrite', origin: { kind: 'runtimeOutput' }, opened: false };
+const columns: ConflictColumn[] = [modColumn('Low'), modColumn('Opened', true), overwriteColumn];
 const copyFile = (path: string): ConflictRow =>
   ({ kind: 'file', name: path.split('/').at(-1) ?? path, path, cells: [{}, {}, null] });
 const folder = (path: string, rows: ConflictRow[]): ConflictRow =>
@@ -83,6 +81,20 @@ describe('the conflict table\'s columns', () => {
   });
 });
 
+describe('a mod named as Overwrite is', () => {
+  it('a column of its own beside Overwrite\'s, its header\'s menu handed the mod, as the columns change', () => {
+    show({ kind: 'table', columns: [modColumn('Overwrite'), overwriteColumn], rows: [] });
+    show({ kind: 'table', columns: [modColumn('Low'), overwriteColumn, modColumn('Overwrite')], rows: [] });
+
+    const headers = Array.from(document.querySelectorAll('thead th')).slice(1);
+    expect(headers.map((header) => [header.textContent, header.getAttribute('data-vscode-context')])).toEqual([
+      ['Low', JSON.stringify({ webviewSection: 'conflictColumn', mod: 'Low', preventDefaultContextMenuItems: true })],
+      ['Overwrite', null],
+      ['Overwrite', JSON.stringify({ webviewSection: 'conflictColumn', mod: 'Overwrite', preventDefaultContextMenuItems: true })],
+    ]);
+  });
+});
+
 describe('the conflict table\'s rows', () => {
   beforeEach(() => show({ kind: 'table', columns, rows: tree }));
 
@@ -104,6 +116,16 @@ describe('the conflict table\'s rows', () => {
     show({ kind: 'table', columns, rows: [...tree, folder('meshes', [copyFile('meshes/m.nif')])] });
 
     expect(rowNames()).toEqual(['▼textures', '▶armor', 'b.dds', 'c.ini', '▼meshes', 'm.nif']);
+  });
+
+  it('keeps the scroll as the table follows the disk', () => {
+    const scroller = required(document.querySelector('table')?.parentElement, 'the table\'s scroller');
+    scroller.scrollTop = 40;
+
+    show({ kind: 'table', columns, rows: [...tree, copyFile('d.ini')] });
+
+    expect(scroller.scrollTop).toBe(40);
+    expect(document.querySelector('table')?.parentElement).toBe(scroller);
   });
 });
 

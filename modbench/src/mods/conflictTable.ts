@@ -1,7 +1,7 @@
 // mods-conflicts.md: one mod's file order conflicts, as a table.
 
 import type { FileOrigin, InstanceValue, InstanceView, Mod, OriginFile } from '../instanceLoader/instance';
-import { goToModCandidates, modOrigin, originLabel, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { inFileOrderConflict, modOrigin, originLabel, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import type { ConflictCell, ConflictColumn, ConflictRow, ConflictTable } from '../wire/conflictTable';
 import { byLevel, byName } from './fileTree';
 
@@ -11,7 +11,7 @@ const message = (text: string): ConflictTable => ({ kind: 'message', text });
 export function filesInConflict(value: Pick<InstanceValue, 'files' | 'filesByMod'>, name: string): OriginFile[] {
   const own = modOrigin(name);
   return (value.filesByMod.get(name) ?? [])
-    .filter((file) => goToModCandidates(value.files.get(file.relativePath), own).length > 0);
+    .filter((file) => inFileOrderConflict(value.files.get(file.relativePath), own));
 }
 
 // Overwrite wins over every mod.
@@ -51,7 +51,7 @@ export function conflictTable({ value, sequence }: Pick<InstanceView, 'value' | 
   origins.sort((a, b) => winningRank(value, b) - winningRank(value, a));
   const opened = modOrigin(name);
   const columns: ConflictColumn[] = origins.map((origin) =>
-    ({ name: originLabel(origin), isMod: origin.kind === 'mod', opened: sameOrigin(origin, opened) }));
+    ({ name: originLabel(origin), origin, opened: sameOrigin(origin, opened) }));
   const cellsOf = (file: OriginFile) => {
     const providers = providersOf(value, file);
     return origins.map((origin) => (providers.some((provider) => sameOrigin(provider, origin)) ? {} : null));

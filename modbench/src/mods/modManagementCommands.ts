@@ -30,6 +30,7 @@ import { FILE_MARKS, fileLabel } from './modFiles';
 import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
 import { installNameRefusal } from '../install/install';
 import { errorMessage } from '../ports/errorMessage';
+import { reportFailure } from '../drivingLib/reportFailure';
 import { applyOrThrow } from '../ports/applyOrThrow';
 
 /** The Mods tree's view direction writes no instance file, so it lives with the view it flips. It
@@ -337,14 +338,6 @@ export function registerOpenFolderCommand(
       await vscode.commands.executeCommand('revealInExplorer', target.folder);
     });
   });
-}
-
-export async function reportFailure(reporter: Reporter, failMessage: string, action: () => Promise<void>): Promise<void> {
-  try {
-    await action();
-  } catch (err) {
-    reporter.report('error', failMessage, errorMessage(err));
-  }
 }
 
 // The value's own path for each row, never a path joined here: the Instance adapter owns every

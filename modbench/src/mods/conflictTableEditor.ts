@@ -10,6 +10,8 @@ import {
 import { conflictTable } from './conflictTable';
 import { modsGestureEntry, singularArgument } from './gestureEntry';
 import type { ModlistNode } from './ModListProvider';
+import type { Reporter } from '../ports/reporter';
+import { reportFailure } from '../drivingLib/reportFailure';
 
 export const CONFLICT_TABLE_VIEW_TYPE = 'modbench.conflicts';
 
@@ -19,24 +21,19 @@ const SUFFIX = '.modbench-conflicts';
 export const conflictTableUri = (mod: string): vscode.Uri =>
   vscode.Uri.from({ scheme: SCHEME, path: `/${encodeURIComponent(mod)}${SUFFIX}` });
 
-class ConflictTableDocument implements vscode.CustomDocument {
-  readonly mod: string;
-  constructor(readonly uri: vscode.Uri) {
-    this.mod = decodeURIComponent(uri.path.slice(1, -SUFFIX.length));
-  }
-  dispose(): void { /* no owned resources */ }
-}
+const modOfUri = (uri: vscode.Uri): string => decodeURIComponent(uri.path.slice(1, -SUFFIX.length));
 
 type TableInstance = Pick<InstanceView, 'value' | 'sequence' | 'subscribe'>;
 
-class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider<ConflictTableDocument> {
+class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider {
   constructor(private readonly instance: TableInstance, private readonly extensionUri: vscode.Uri) {}
 
-  openCustomDocument(uri: vscode.Uri): ConflictTableDocument {
-    return new ConflictTableDocument(uri);
+  openCustomDocument(uri: vscode.Uri): vscode.CustomDocument {
+    return { uri, dispose: () => undefined };
   }
 
-  resolveCustomEditor({ mod }: ConflictTableDocument, panel: vscode.WebviewPanel): void {
+  resolveCustomEditor({ uri }: vscode.CustomDocument, panel: vscode.WebviewPanel): void {
+    const mod = modOfUri(uri);
     panel.title = `Conflicts: ${mod}`;
     const show = (table: ConflictTable) => {
       const message: ConflictTableShown = { type: CONFLICT_TABLE_SHOWN, table };
@@ -54,7 +51,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
 /** commands.md, `open conflicts`: the mod of a Mods row, a column header, or the palette's one
  *  selected mod. */
 export function registerConflictTable(
-  instance: TableInstance, extensionUri: vscode.Uri, viewSelection: () => readonly ModlistNode[],
+  instance: TableInstance, extensionUri: vscode.Uri, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   return [
     vscode.window.registerCustomEditorProvider(
@@ -64,7 +61,9 @@ export function registerConflictTable(
       const mod = modOfConflictColumn(clicked)
         ?? singularArgument(modsGestureEntry(clicked, selected, viewSelection), 'mod')?.mod.name;
       if (mod === undefined) return;
-      await vscode.commands.executeCommand('vscode.openWith', conflictTableUri(mod), CONFLICT_TABLE_VIEW_TYPE, { preview: true });
+      await reportFailure(reporter, `Failed to open the conflicts of "${mod}".`, async () => {
+        await vscode.commands.executeCommand('vscode.openWith', conflictTableUri(mod), CONFLICT_TABLE_VIEW_TYPE, { preview: true });
+      });
     }),
   ];
 }

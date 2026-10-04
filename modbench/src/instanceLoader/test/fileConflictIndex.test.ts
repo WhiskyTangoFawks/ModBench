@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import type { Mod, Separator, ModlistEntry } from '../instance';
 import {
-  buildFileConflictIndex, modOrigin, rootLevelWinners, goToModCandidates, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, modOrigin, rootLevelWinners, goToModCandidates, inFileOrderConflict, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
 import type { InstanceAdapter, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../loadOrderSnapshot';
@@ -265,5 +265,19 @@ describe('the origins go to mod can name for a copy of a file', () => {
   it('tells a mod folder named overwrite from Overwrite', () => {
     const folderNamedOverwrite = modOrigin('overwrite');
     expect(goToModCandidates(entryOf(RUNTIME_OUTPUT, folderNamedOverwrite), folderNamedOverwrite)).toEqual([RUNTIME_OUTPUT]);
+  });
+});
+
+describe('whether a copy of a file is in a file order conflict', () => {
+  it('is, for a copy another enabled copy or Overwrite also provides, winning or losing', () => {
+    expect(inFileOrderConflict(entryOf(high, low), high)).toBe(true);
+    expect(inFileOrderConflict(entryOf(high, low), low)).toBe(true);
+    expect(inFileOrderConflict(entryOf(RUNTIME_OUTPUT, low), low)).toBe(true);
+  });
+
+  it('is not, for a copy nothing else provides, a copy that is no provider, and a path no one provides', () => {
+    expect(inFileOrderConflict(entryOf(high), high)).toBe(false);
+    expect(inFileOrderConflict(entryOf(high, middle), low)).toBe(false);
+    expect(inFileOrderConflict(undefined, high)).toBe(false);
   });
 });

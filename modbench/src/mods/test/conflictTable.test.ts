@@ -23,9 +23,9 @@ describe('the conflict table\'s columns, over a mod order listed winning-first',
     const table = conflictTable(read(value), 'Middle');
 
     expect(table.kind === 'table' && table.columns).toEqual([
-      { name: 'Low', isMod: true, opened: false },
-      { name: 'Middle', isMod: true, opened: true },
-      { name: 'High', isMod: true, opened: false },
+      { name: 'Low', origin: { kind: 'mod', name: 'Low' }, opened: false },
+      { name: 'Middle', origin: { kind: 'mod', name: 'Middle' }, opened: true },
+      { name: 'High', origin: { kind: 'mod', name: 'High' }, opened: false },
     ]);
   });
 });
@@ -91,9 +91,9 @@ describe('the conflict table\'s rows', () => {
     const table = conflictTable(read(value), 'Opened');
 
     expect(table.kind === 'table' && table.columns).toEqual([
-      { name: 'Opened', isMod: true, opened: true },
-      { name: 'High', isMod: true, opened: false },
-      { name: 'Overwrite', isMod: false, opened: false },
+      { name: 'Opened', origin: { kind: 'mod', name: 'Opened' }, opened: true },
+      { name: 'High', origin: { kind: 'mod', name: 'High' }, opened: false },
+      { name: 'Overwrite', origin: { kind: 'runtimeOutput' }, opened: false },
     ]);
     expect(table.kind === 'table' && shape(table.rows)).toEqual([
       { file: 'a.dds', cells: [true, false, true] },

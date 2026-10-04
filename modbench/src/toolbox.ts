@@ -34,7 +34,8 @@ import { exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
 import { registerGoToModCommand } from './mods/goToMod';
 import { registerConflictTable } from './mods/conflictTableEditor';
-import { registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
+import { registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText } from './mods/modManagementCommands';
+import { reportFailure } from './drivingLib/reportFailure';
 import { createModListView, lastSelectedViewSelection, nexusRowInLastSelectedView } from './treeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { modRepositoryContext } from './modRepositories';
@@ -354,7 +355,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     rowFor: (origin) => modListProvider.rowFor(origin),
     reveal: (row) => modListView.reveal(row, { select: true, focus: true }),
   }));
-  ownAll(own, registerConflictTable(instance, deps.extensionUri, () => modListView.selection));
+  ownAll(own, registerConflictTable(instance, deps.extensionUri, () => modListView.selection, reporterFor('mod.openConflicts')));
   own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
   own(vscode.commands.registerCommand('modbench.plugin.sync', runPluginSync));
   const { provider: downloadsProvider, view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({

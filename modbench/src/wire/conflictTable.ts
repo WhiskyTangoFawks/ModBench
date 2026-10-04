@@ -1,10 +1,13 @@
 // mods-conflicts.md: the conflict table as Mods builds it, and the messages between the extension
 // and the table's webview.
 
+/** Whose copies a column holds: a mod, by its name, or Overwrite, which a mod's name never names
+ *  (ADR-0012). */
+export type ConflictOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
+
 export interface ConflictColumn {
   readonly name: string;
-  /** Overwrite's column is not a mod's, and open conflicts takes only a mod. */
-  readonly isMod: boolean;
+  readonly origin: ConflictOrigin;
   readonly opened: boolean;
 }
 

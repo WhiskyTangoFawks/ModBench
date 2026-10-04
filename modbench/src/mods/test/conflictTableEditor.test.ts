@@ -21,15 +21,17 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { file, indexedValueOf, mod } from './indexedValue';
 import { CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN } from '../../wire/conflictTable';
+import { recordingReporter } from '../../test/surfacingDoubles';
 
 const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 
 function setup(instance = new FakeInstance(instanceValueFixture()), selection: readonly ModlistNode[] = []) {
-  registerConflictTable(instance, vscode.Uri.file('/extension'), () => selection);
+  const reporter = recordingReporter();
+  registerConflictTable(instance, vscode.Uri.file('/extension'), () => selection, reporter);
   const openConflicts = (...args: unknown[]) =>
     registerCommand.mock.calls.find(([id]) => id === 'modbench.mod.openConflicts')?.[1](...args);
   const opened = () => executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith');
-  return { openConflicts, opened };
+  return { openConflicts, opened, reporter };
 }
 
 describe('open conflicts', () => {
@@ -69,9 +71,18 @@ describe('open conflicts', () => {
     expect(opened()).toEqual([]);
   });
 
-  it('gives each mod one address, so VS Code shows an open tab rather than opening it twice', () => {
+  it('addresses a mod\'s table by the mod alone: the same mod the same way every time, two mods apart', () => {
     expect(conflictTableUri('Textures')).toEqual(conflictTableUri('Textures'));
     expect(conflictTableUri('Textures')).not.toEqual(conflictTableUri('Meshes'));
+  });
+
+  it('reports a table VS Code could not open, naming the mod', async () => {
+    const { openConflicts, reporter } = setup();
+    executeCommand.mockRejectedValueOnce(new Error('no editor'));
+
+    await openConflicts(modRow('Textures'));
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to open the conflicts of "Textures".', detail: 'no editor' }]);
   });
 });
 
@@ -146,7 +157,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
       type: CONFLICT_TABLE_SHOWN,
       table: {
         kind: 'table',
-        columns: [{ name: 'Low', isMod: true, opened: false }, { name: 'High', isMod: true, opened: true }],
+        columns: [{ name: 'Low', origin: { kind: 'mod', name: 'Low' }, opened: false }, { name: 'High', origin: { kind: 'mod', name: 'High' }, opened: true }],
         rows: [{ kind: 'file', name: 'a.dds', path: 'a.dds', cells: [{}, {}] }],
       },
     }]);

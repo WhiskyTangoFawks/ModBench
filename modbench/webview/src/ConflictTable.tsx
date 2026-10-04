@@ -17,11 +17,13 @@ const outline = 'var(--vscode-focusBorder, #007fd4)';
 const openedColumnStyle: React.CSSProperties = { boxShadow: `inset 2px 0 0 ${outline}, inset -2px 0 0 ${outline}` };
 const columnStyle = (column: ConflictColumn): React.CSSProperties => (column.opened ? openedColumnStyle : {});
 
-function headerContext(column: ConflictColumn): string | undefined {
-  if (!column.isMod) return undefined;
-  const context: ConflictColumnContext = { webviewSection: 'conflictColumn', mod: column.name, preventDefaultContextMenuItems: true };
+function headerContext({ origin }: ConflictColumn): string | undefined {
+  if (origin.kind !== 'mod') return undefined;
+  const context: ConflictColumnContext = { webviewSection: 'conflictColumn', mod: origin.name, preventDefaultContextMenuItems: true };
   return JSON.stringify(context);
 }
+
+const columnKey = ({ origin }: ConflictColumn): string => (origin.kind === 'mod' ? `mod/${origin.name}` : origin.kind);
 
 interface ShownRow { row: ConflictRow; depth: number; nav: NavRow }
 
@@ -86,7 +88,7 @@ export function ConflictTableView() {
           <tr ref={headerRow}>
             <th style={headerCell} />
             {table.columns.map((column) => (
-              <th key={column.name} style={{ ...headerCell, ...columnStyle(column) }} data-vscode-context={headerContext(column)}>
+              <th key={columnKey(column)} style={{ ...headerCell, ...columnStyle(column) }} data-vscode-context={headerContext(column)}>
                 {column.name}
               </th>
             ))}
@@ -108,7 +110,7 @@ export function ConflictTableView() {
                 {row.kind === 'folder' && <ExpandArrow expanded={nav.expanded} />}
                 {row.name}
               </td>
-              {table.columns.map((column) => <td key={column.name} style={{ ...baseCell, ...columnStyle(column) }} />)}
+              {table.columns.map((column) => <td key={columnKey(column)} style={{ ...baseCell, ...columnStyle(column) }} />)}
             </tr>
           ))}
         </tbody>

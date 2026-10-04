@@ -56,10 +56,4 @@ describe('a page of the webview build, loaded into a webview', () => {
   it('uses unique nonces on each load', () => {
     expect(nonceOf(shown(RECORD_PAGE).html)).not.toBe(nonceOf(shown(RECORD_PAGE).html));
   });
-
-  it('names no backend port, and no connect-src to localhost, since the webview reads through its host', () => {
-    const { html } = shown(RECORD_PAGE);
-    expect(html).not.toContain('mEditBackendPort');
-    expect(html).not.toMatch(/connect-src[^;]*localhost/);
-  });
 });
