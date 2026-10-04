@@ -9,17 +9,17 @@ const ZOOM_OUT = join(SRC, '..', '..', 'docs', 'architecture', 'target-architect
 
 function boxIdsByBand(): Record<string, string[]> {
   const bands: Record<string, string[]> = {};
-  let band: string | undefined;
+  let current: string[] | undefined;
   for (const line of readFileSync(ZOOM_OUT, 'utf8').split('\n')) {
-    const container = /^modbench_(\w+): "/.exec(line);
-    if (container) {
-      band = container[1];
-      bands[band] = [];
+    const container = /^modbench_(\w+): "/.exec(line)?.[1];
+    if (container !== undefined) {
+      current = [];
+      bands[container] = current;
       continue;
     }
-    if (/^\w/.test(line)) band = undefined;
-    const member = /^ {2}(\w+): "/.exec(line);
-    if (member && band) bands[band].push(member[1]);
+    if (/^\w/.test(line)) current = undefined;
+    const member = /^ {2}(\w+): "/.exec(line)?.[1];
+    if (member !== undefined && current !== undefined) current.push(member);
   }
   return bands;
 }
