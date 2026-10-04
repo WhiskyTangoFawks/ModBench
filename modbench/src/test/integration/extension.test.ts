@@ -730,7 +730,7 @@ function takeFromTrash(original: string, before: ReadonlySet<string>): number {
   return taken;
 }
 
-describe('A Mods gesture\'s write reaches the Mods view through the watch alone', () => {
+describe('A Mods gesture\'s write reaches the Mods view through the Instance loader\'s read', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const modlistPath = root ? path.join(root, 'profiles', 'Default', 'modlist.txt') : '';
   const provider = () => present(ext?.exports.modListProvider, "the activated extension's modListProvider export");
@@ -760,7 +760,7 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
     });
   });
 
-  it('delete separator asks the Instance and the view for no refresh, and its row goes when the watch lands the new value', async function () {
+  it('delete separator asks the Instance for one re-read and the view for none, and its row goes when that read lands', async function () {
     if (!root) this.skip();
     const doomed = present(await separatorRow('Doomed'), 'the Doomed separator row');
     let unexplainedInvalidates = 0;
@@ -791,8 +791,8 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
         assert.strictEqual(takeFromTrash(doomedDir, trashedBefore), 1, 'the separator\'s folder should be in the OS trash');
       }
       await waitFor('the watch to take the Doomed row away', async () => (await separatorRow('Doomed')) === undefined);
-      assert.strictEqual(instanceRefreshes, 0, 'the gesture asked the Instance to re-read');
-      assert.strictEqual(unexplainedInvalidates, 0, 'the gesture asked the view to re-pull a value no watch landed');
+      assert.strictEqual(instanceRefreshes, 1, 'the gesture should ask the Instance for one re-read');
+      assert.strictEqual(unexplainedInvalidates, 0, 'the gesture asked the view to re-pull a value no read landed');
     } finally {
       target.refresh = refresh;
       (vscode.window as { showWarningMessage: unknown }).showWarningMessage = warn;
