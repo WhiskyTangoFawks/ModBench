@@ -7,9 +7,6 @@ public static class SourceTree
     public static IEnumerable<string> CSharpFiles(string root) =>
         Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories).Where(IsNotBuildOutput);
 
-    public static IEnumerable<string> MarkdownFiles(string root) =>
-        Directory.EnumerateFiles(root, "*.md", SearchOption.AllDirectories).Where(IsNotBuildOutput);
-
     public static bool IsNotBuildOutput(string file) =>
         !file.Split(Path.DirectorySeparatorChar).Any(segment => segment is "obj" or "bin");
 

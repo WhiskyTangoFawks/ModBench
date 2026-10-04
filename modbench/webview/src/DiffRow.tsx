@@ -19,7 +19,7 @@ import {
 } from './recordUtils';
 import type { ColumnKey, ConflictThis, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 import { LABEL_COLUMN } from './columnKey';
-import type { ArrayParentContext } from './messages';
+import type { ArrayParentContext } from '../../src/wire/messages';
 import type { CellDrag } from './cellDrag';
 
 interface RenderCellExtras {

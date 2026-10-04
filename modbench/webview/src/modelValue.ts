@@ -110,7 +110,7 @@ export function flagsValue(names: readonly string[], meta: FieldMetadata): unkno
 }
 
 // The codec spells a translated string as an object whose `Value` is the text.
-export function translatedText(value: unknown): string | undefined {
+function translatedText(value: unknown): string | undefined {
   const text = (value as { Value?: unknown } | null | undefined)?.Value;
   return typeof text === 'string' ? text : undefined;
 }

@@ -1,4 +1,4 @@
-import type { CompiledPlugin, NotificationEvent, PluginMetadata, PluginRecordTypeCount, RecordSummary, ReferenceResult } from '../index';
+import type { CompiledPlugin, NotificationEvent, PluginMetadata, PluginRecordTypeCount, RecordSummary } from '../index';
 import type { InMemoryMEditClient } from '../InMemoryMEditClient';
 
 /** A `PluginMetadata` with every required wire member at its neutral value — a test naming only
@@ -19,20 +19,6 @@ export function pluginMetadataFixture(overrides: Partial<PluginMetadata> & { nam
     hasMatchingRecords: true,
     isTracked: false,
     hasParseFailure: false,
-    ...overrides,
-  };
-}
-
-/** A `ReferenceResult` with every required wire member at its neutral value. */
-export function referenceResultFixture(
-  overrides: Partial<ReferenceResult> & { formKey: string },
-): ReferenceResult {
-  return {
-    plugin: 'MyPatch.esp',
-    fieldPath: 'FNAM',
-    recordType: 'npc_',
-    recordTypeName: 'Non-Player Character',
-    origin: 'SomeMod',
     ...overrides,
   };
 }

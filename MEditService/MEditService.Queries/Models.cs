@@ -83,21 +83,21 @@ public record CompareOverride(
 
 public record FieldDiff(
     string FieldName,
-    [property: ColumnKeyed] Dictionary<string, object?> Values,
+    Dictionary<string, object?> Values,
     string WinnerColumn,
-    [property: ColumnKeyed] IReadOnlyDictionary<string, ConflictThis> CellStates,
+    IReadOnlyDictionary<string, ConflictThis> CellStates,
     // This subtree's own aggregate, distinct from the record-wide ClassifyResult.ConflictAll; drives
     // the compare grid's per-row background (ADR-0018): a struct's aggregate while collapsed.
     ConflictAll ConflictAll,
     IReadOnlyList<FieldDiff>? Children = null,
     // Only on a scalar formKey leaf (ADR-0005), keyed like Values; never aggregated up from Children,
     // so a dangling sibling can't hide a live hyperlink on the leaf next to it.
-    [property: ColumnKeyed] IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null,
+    IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null,
     // This node's own subtree's link check, per column — a struct row states the errors under it
     // rather than the whole record's, which FieldValue.CheckError on the root field states.
-    [property: ColumnKeyed] IReadOnlyDictionary<string, string>? CheckErrors = null,
+    IReadOnlyDictionary<string, string>? CheckErrors = null,
     // An array element's own index in each column's array that holds it; null on any other node.
-    [property: ColumnKeyed] IReadOnlyDictionary<string, int>? Indexes = null);
+    IReadOnlyDictionary<string, int>? Indexes = null);
 
 public record ClassifyResult(
     ConflictAll ConflictAll,

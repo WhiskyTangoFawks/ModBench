@@ -1,4 +1,4 @@
-import { type WebviewToExtension } from './messages';
+import { type WebviewToExtension } from '../../src/wire/messages';
 
 interface VsCodeApi {
   // An arrow-typed property, not a method: `postMessage` never needs its own `this`, and this

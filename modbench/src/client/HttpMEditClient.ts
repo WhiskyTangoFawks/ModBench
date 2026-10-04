@@ -21,7 +21,7 @@ import type { SelectionOutcome } from '../ports/selectionOutcome';
 
 // 30s is an ordinary HTTP-client default. A slow call and a hung one look the same to the tree,
 // so nothing tries to tell them apart.
-export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
+const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
 export interface HttpMEditClientDeps {
   /** The process this client is the front of; nothing outside this module configures it. */

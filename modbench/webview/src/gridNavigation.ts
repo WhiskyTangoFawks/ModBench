@@ -10,7 +10,7 @@ export interface NavRow {
 
 export type Navigation = { focus: FocusedCell } | { toggle: string } | null;
 
-export function visibleRowKey(rows: readonly NavRow[], rowKey: string): string | undefined {
+function visibleRowKey(rows: readonly NavRow[], rowKey: string): string | undefined {
   return rows
     .filter(r => rowKey === r.key || rowKey.startsWith(`${r.key}.`))
     .reduce<string | undefined>((nearest, r) => (nearest === undefined || r.key.length > nearest.length ? r.key : nearest), undefined);

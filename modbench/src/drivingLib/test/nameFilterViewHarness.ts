@@ -6,13 +6,18 @@ export class FakeInputBox {
   value = '';
   placeholder = '';
   buttons: { iconPath: unknown; tooltip: string }[] = [];
+  disposed = false;
   private changeHandlers: ((v: string) => void)[] = [];
+  private hideHandlers: (() => void)[] = [];
+  private buttonHandlers: ((b: unknown) => void)[] = [];
   onDidChangeValue(cb: (v: string) => void) { this.changeHandlers.push(cb); return { dispose: () => undefined }; }
-  onDidHide() { return { dispose: () => undefined }; }
-  onDidTriggerButton() { return { dispose: () => undefined }; }
+  onDidHide(cb: () => void) { this.hideHandlers.push(cb); return { dispose: () => undefined }; }
+  onDidTriggerButton(cb: (b: unknown) => void) { this.buttonHandlers.push(cb); return { dispose: () => undefined }; }
   show(): void { /* no-op */ }
-  dispose(): void { /* no-op */ }
+  dispose(): void { this.disposed = true; }
   type(text: string): void { this.value = text; this.changeHandlers.forEach((cb) => cb(text)); }
+  hide(): void { this.hideHandlers.forEach((cb) => cb()); }
+  pressButton(): void { this.buttonHandlers.forEach((cb) => cb(this.buttons[0])); }
 }
 
 export interface FilterBoxState {

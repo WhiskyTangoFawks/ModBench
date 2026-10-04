@@ -33,7 +33,7 @@ export const lineContent = (line: string): string => line.replace(/\r\n$|\r$|\n$
 export const splitLinesKeepEol = (text: string): string[] =>
   [...lineRanges(text)].map((r) => text.slice(r.start, r.end));
 
-export const BOM = '﻿';
+const BOM = '﻿';
 
 export const stripBom = (text: string): string => (text.startsWith(BOM) ? text.slice(BOM.length) : text);
 

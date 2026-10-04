@@ -1,45 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+  filterBoxCommandsMock, filterBoxWindowMock, currentBoxOf, type FilterBoxState,
+} from './nameFilterViewHarness';
 
 const h = vi.hoisted(() => {
-  class FakeInputBox {
-    value = '';
-    placeholder = '';
-    buttons: { iconPath: unknown; tooltip: string }[] = [];
-    shown = false;
-    disposed = false;
-    private changeHandlers: ((v: string) => void)[] = [];
-    private hideHandlers: (() => void)[] = [];
-    private buttonHandlers: ((b: unknown) => void)[] = [];
-    onDidChangeValue(cb: (v: string) => void) { this.changeHandlers.push(cb); return { dispose: () => undefined }; }
-    onDidHide(cb: () => void) { this.hideHandlers.push(cb); return { dispose: () => undefined }; }
-    onDidTriggerButton(cb: (b: unknown) => void) { this.buttonHandlers.push(cb); return { dispose: () => undefined }; }
-    show() { this.shown = true; }
-    dispose() { this.disposed = true; }
-    type(text: string) { this.value = text; this.changeHandlers.forEach((cb) => cb(text)); }
-    hide() { this.hideHandlers.forEach((cb) => cb()); }
-    pressButton() { this.buttonHandlers.forEach((cb) => cb(this.buttons[0])); }
-  }
-  const state = {
-    commands: new Map<string, (...args: unknown[]) => unknown>(),
-    contextKeys: new Map<string, unknown>(),
-    boxes: [] as FakeInputBox[],
+  const state: FilterBoxState & { contextKeys: Map<string, unknown> } = {
+    commands: new Map(), contextKeys: new Map(), boxes: [],
   };
-  return { FakeInputBox, state };
+  return { state };
 });
 
 vi.mock('vscode', () => ({
-  window: {
-    createInputBox: () => {
-      const box = new h.FakeInputBox();
-      h.state.boxes.push(box);
-      return box;
-    },
-  },
+  window: filterBoxWindowMock(h.state),
   commands: {
-    registerCommand: (id: string, cb: (...args: unknown[]) => unknown) => {
-      h.state.commands.set(id, cb);
-      return { dispose: () => h.state.commands.delete(id) };
-    },
+    ...filterBoxCommandsMock(h.state),
     executeCommand: (command: string, ...args: unknown[]) => {
       if (command === 'setContext' && typeof args[0] === 'string') h.state.contextKeys.set(args[0], args[1]);
       return Promise.resolve(h.state.commands.get(command)?.(...args));
@@ -89,7 +63,7 @@ function fakeRowsChangedEvent() {
     fire: () => handlers.forEach((cb) => cb(undefined)),
   };
 }
-const currentBox = () => present(h.state.boxes.at(-1), 'the most recently created input box');
+const currentBox = currentBoxOf(h.state);
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 beforeEach(() => {

@@ -17,7 +17,7 @@ import type {
 } from './types';
 import { columnKey, LABEL_COLUMN } from './columnKey';
 import { addElement, editField, focusCell, focusedCellContext, logWarning } from './nativeBridge';
-import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview } from './messages';
+import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview } from '../../src/wire/messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';

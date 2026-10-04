@@ -47,7 +47,7 @@ export function reportSyncFailures(
   const settle = (next: string | undefined): void => {
     if (next === reason) return;
     reason = next;
-    if (next !== undefined) log(`[modmanager] ${command} failed: ${next}`);
+    if (next !== undefined) log(`${command} failed: ${next}`);
     for (const listener of [...listeners]) listener();
   };
   const landed = <T extends SyncOutcome>(outcome: T): outcome is Extract<T, { applied: true }> => outcome.applied;
