@@ -97,20 +97,30 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     }
 
     [Fact]
-    public void NativeFormKeysHeldAt_TheParkedCompileRef_DoesNotSeeARecordCreatedSince()
+    public void FormKeysUsed_AKeyTheWorkingTreeDeleted_StaysUsedWhileTheCommitHoldsIt()
+    {
+        var repository = Tracked();
+        repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId));
+
+        Assert.Empty(repository.ReadAll(Plugin));
+        Assert.Contains(NpcFormKey, repository.FormKeysUsed(Plugin));
+    }
+
+    [Fact]
+    public void FormKeysUsed_AKeyCreatedSinceTheLastCommit_IsUsed()
     {
         var repository = Tracked();
         repository.Put(Plugin, new SourceDocument("000900:Fixture.esp", "weap", "Later", LaterBody));
 
-        var parked = repository.NativeFormKeysHeldAt(Plugin, SourceRepository.LastCompileRef(PluginName));
-
-        Assert.Equal([NpcFormKey], parked.ToList());
+        Assert.Equal(
+            [NpcFormKey, "000900:Fixture.esp"],
+            repository.FormKeysUsed(Plugin).Order(StringComparer.Ordinal).ToList());
     }
 
     [Fact]
-    public void NativeFormKeysHeldAt_ARefThatHoldsNothingForThisPlugin_IsEmpty()
+    public void FormKeysUsed_APluginWithNoSourceOfItsOwn_IsEmpty()
     {
-        Assert.Empty(Tracked().NativeFormKeysHeldAt(new PluginAddress("Other.esp", "FixtureMod"), "refs/heads/main"));
+        Assert.Empty(Tracked().FormKeysUsed(new PluginAddress("Other.esp", "FixtureMod")));
     }
 
     [Fact]
