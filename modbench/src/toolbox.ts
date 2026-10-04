@@ -25,7 +25,7 @@ import { registerFilterCommands, type NameFilter } from './drivingLib/nameFilter
 import { registerCopyValueCommand } from './drivingLib/copyValue';
 import type { FocusedView } from './drivingLib/focusedView';
 import { pluginSyncOver } from './pluginsCommands/plugins';
-import { modSyncOnEachValue, modSyncCommand, pluginSyncCommand, pluginSyncOnEachValue } from './syncWiring';
+import { modSyncOnEachValue, pluginSyncOnEachValue } from './syncWiring';
 import { modSyncOver } from './modlist/modlist';
 import { installNameRefusal } from './install/install';
 import { exitEditing } from './editingTeardown';
@@ -350,8 +350,8 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   }));
   own(registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => modListView.selection));
   ownAll(own, registerConflictTable(instance, deps.extensionUri, () => modListView.selection, reporterFor('mod.openConflicts'), vscode.workspace));
-  own(vscode.commands.registerCommand('modbench.mod.sync', modSyncCommand(modSync)));
-  own(vscode.commands.registerCommand('modbench.plugin.sync', pluginSyncCommand(plugins.pluginSync)));
+  own(vscode.commands.registerCommand('modbench.mod.sync', (value: InstanceValue) => modSync.run(value.modSyncArguments)));
+  own(vscode.commands.registerCommand('modbench.plugin.sync', (value: InstanceValue) => plugins.pluginSync.run(value.pluginSyncArguments)));
   const { provider: downloadsProvider, view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
     access, instance, reporter: reporterFor('downloadList'), ask, trash,
     install: {

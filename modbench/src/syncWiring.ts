@@ -1,5 +1,5 @@
 import type { Sync } from './drivingLib/syncFailureReport';
-import type { Instance, InstanceValue, ModSyncArguments, PluginSyncArguments } from './instanceLoader/instance';
+import type { Instance, ModSyncArguments, PluginSyncArguments } from './instanceLoader/instance';
 
 type ModSync = Pick<Sync<ModSyncArguments>, 'run'>;
 type PluginSync = Pick<Sync<PluginSyncArguments>, 'run'>;
@@ -13,13 +13,3 @@ export function modSyncOnEachValue(instance: Pick<Instance, 'subscribe'>, modSyn
 export function pluginSyncOnEachValue(instance: Pick<Instance, 'subscribe'>, pluginSync: PluginSync) {
   return instance.subscribe((value) => { void pluginSync.run(value.pluginSyncArguments); });
 }
-
-/** The command's Argument is the instance value. Without one there is no value to sync, so it does
- *  nothing: a command never reads the Instance loader. */
-export const modSyncCommand = (modSync: ModSync) => async (value?: InstanceValue): Promise<void> => {
-  if (value !== undefined) await modSync.run(value.modSyncArguments);
-};
-
-export const pluginSyncCommand = (pluginSync: PluginSync) => async (value?: InstanceValue): Promise<void> => {
-  if (value !== undefined) await pluginSync.run(value.pluginSyncArguments);
-};
