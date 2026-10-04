@@ -3,7 +3,7 @@
 import * as vscode from 'vscode';
 import type { InstanceValue, InstanceView, OriginFile } from '../instanceLoader/instance';
 import { modOrigin, sameOrigin } from '../instanceLoader/fileConflictIndex';
-import type { WorkspaceSettings } from './inactiveFiles';
+import type { WorkspaceSettings } from './workspaceSettings';
 
 /** Each indicator in the order mods.md's table lists them, with its name there. */
 export const MOD_INDICATORS = [
@@ -18,28 +18,29 @@ export type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 type IndicatorsValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod'>;
 
 function indicatorsOf(value: IndicatorsValue, name: string, files: readonly OriginFile[]): ModIndicator[] {
-  const gettable = files.filter((own) => !own.excluded);
   let wins = false;
   let loses = false;
   let gets = false;
-  for (const { relativePath } of gettable) {
+  let provides = false;
+  for (const { relativePath } of files.filter((own) => !own.excluded)) {
     const providers = value.files.get(relativePath)?.providers ?? [];
     const at = providers.findIndex((provider) => sameOrigin(provider, modOrigin(name)));
+    if (at === -1) continue;
+    provides = true;
     if (at < providers.length - 1) wins = true;
     if (at > 0) loses = true;
     else gets = true;
   }
-  const redundant = gettable.length > 0 && !gets;
+  const redundant = provides && !gets;
   const holds: Record<ModIndicator, boolean> = {
     overwritesLooseFiles: wins,
     overwrittenLooseFiles: loses && !redundant,
     redundant,
-    containsExcludedFiles: gettable.length < files.length,
+    containsExcludedFiles: files.some((own) => own.excluded),
   };
   return MOD_INDICATORS.flatMap(({ id }) => (holds[id] ? [id] : []));
 }
 
-/** The indicators each enabled mod carries, by its name, in the table's order. */
 export function modIndicators(value: IndicatorsValue): ReadonlyMap<string, readonly ModIndicator[]> {
   const carriers = new Map<string, readonly ModIndicator[]>();
   for (const entry of value.mods) {
@@ -52,7 +53,6 @@ export function modIndicators(value: IndicatorsValue): ReadonlyMap<string, reado
 // Not `file:`: a decoration on a `file:` URI shows on the mod's folder in the Explorer too.
 const MOD_ROW_SCHEME = 'modbench-mod';
 
-/** The URI of a mod's row, which its indicators decorate. */
 export const modRowUri = (name: string): vscode.Uri => vscode.Uri.from({ scheme: MOD_ROW_SCHEME, path: `/${name}` });
 
 export const indicatorSetting = (id: ModIndicator, part: 'badge' | 'colour'): string => `modbench.mods.indicators.${id}.${part}`;

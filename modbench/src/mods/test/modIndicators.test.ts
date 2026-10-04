@@ -17,7 +17,7 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { accessTo } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
 import { ModListProvider, ModNode } from '../ModListProvider';
-import { indicatorSetting, ModIndicatorDecorations, modIndicators, type ModIndicator } from '../modIndicators';
+import { indicatorSetting, MOD_INDICATORS, ModIndicatorDecorations, modIndicators, type ModIndicator } from '../modIndicators';
 import { file, indexedValueOf, mod } from './indexedValue';
 
 const carriedBy = (value: InstanceValue, name: string) => modIndicators(value).get(name) ?? [];
@@ -82,6 +82,29 @@ describe('the indicators each mod carries (mods.md, Indicators)', () => {
 
     expect([carriedBy(value, 'Off'), carriedBy(value, 'Empty')]).toEqual([[], []]);
   });
+
+  it('a disabled mod carries none though an enabled separator shares its name', async () => {
+    const value = await indexedValueOf([mod('Winner'), mod('Shared', false), { kind: 'separator', name: 'Shared', enabled: true }], {
+      Winner: { files: [file('Winner', 'a.dds')] }, Shared: { files: [file('Shared', 'a.dds'), file('Shared', 'b.dds', true)] },
+    });
+
+    expect(carriedBy(value, 'Shared')).toEqual([]);
+  });
+
+  it('a file whose path\'s copies do not name its mod is neither a win nor a loss, and not one the game could get', async () => {
+    const listed = await indexedValueOf([mod('A')], { A: { files: [file('A', 'a.dds'), file('A', 'b.dds')] } });
+    const othersOnly = await indexedValueOf([mod('B'), mod('A')], {
+      A: { files: [file('A', 'b.dds')] }, B: { files: [file('B', 'a.dds'), file('B', 'b.dds')] },
+    });
+
+    expect(carriedBy({ ...listed, files: othersOnly.files }, 'A')).toEqual(['redundant']);
+  });
+
+  it('a mod shipping two case variants of one path wins over no copy of its own', async () => {
+    const value = await indexedValueOf([mod('A')], { A: { files: [file('A', 'Textures/Foo.dds'), file('A', 'textures/foo.dds')] } });
+
+    expect(carriedBy(value, 'A')).toEqual([]);
+  });
 });
 
 const settingsOf = (on: Partial<Record<string, boolean>>) => {
@@ -92,8 +115,8 @@ const settingsOf = (on: Partial<Record<string, boolean>>) => {
   };
 };
 
-const allOn = Object.fromEntries((['overwritesLooseFiles', 'overwrittenLooseFiles', 'redundant', 'containsExcludedFiles'] as const)
-  .flatMap((id) => [[indicatorSetting(id, 'badge'), true], [indicatorSetting(id, 'colour'), true]]));
+const allOn = Object.fromEntries(MOD_INDICATORS
+  .flatMap(({ id }) => [[indicatorSetting(id, 'badge'), true], [indicatorSetting(id, 'colour'), true]]));
 
 async function rowUriOf(instance: FakeInstance, name: string): Promise<vscode.Uri> {
   const rows = new ModListProvider({ instance, access: accessTo('/instance'), log: () => undefined });

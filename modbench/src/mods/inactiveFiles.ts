@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFile, OriginFolder } from '../instanceLoader/instance';
 import { modOrigin, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import { fileRowUri } from './modFiles';
+import type { WorkspaceSettings } from './workspaceSettings';
 
 /** Why the game does not get a file: another copy wins its path, it is excluded, or its mod is
  *  disabled. A folder never loses: the game merges folders. */
@@ -46,12 +47,6 @@ export function inactiveFiles(value: FilesValue): ReadonlyMap<string, InactiveRe
     for (const file of files) add(origin, file, whyFileNotGotten(value, origin, enabled, file));
   }
   return reasons;
-}
-
-/** The slice of VS Code's workspace the Mods view's settings are read through. */
-export interface WorkspaceSettings {
-  getConfiguration(): { get(key: string): unknown };
-  readonly onDidChangeConfiguration: vscode.Event<{ affectsConfiguration(section: string): boolean }>;
 }
 
 /** VS Code never re-queries a decoration provider on its own, so this one fires on every new

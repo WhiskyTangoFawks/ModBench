@@ -133,6 +133,25 @@ describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine 
     expect(flipped.files.get('textures/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModB'));
   });
 
+  it('names a mod or Overwrite once among a path\'s providers, though it ships two case variants of it', async () => {
+    const variant = (root: string, relativePath: string) => ({ relativePath, path: `${root}/${relativePath}`, sourcePath: `${root}/${relativePath}`, excluded: false });
+    const index = await buildFileConflictIndex(
+      [mod('ModA'), mod('ModB')],
+      [variant('/overwrite', 'Textures/Foo.dds'), variant('/overwrite', 'textures/foo.dds')],
+      { originFiles: (origin) => Promise.resolve({
+        origin: origin.kind === 'mod' ? origin.name : 'overwrite', folder: '/mods', folders: [], notes: [],
+        files: origin.kind === 'mod' && origin.name === 'ModA'
+          ? [variant('/mods/ModA', 'Textures/Foo.dds'), variant('/mods/ModA', 'textures/foo.dds')]
+          : [variant('/mods/ModB', 'textures/foo.dds')],
+      }) },
+      () => {},
+    );
+
+    expect(index.files.get('textures/foo.dds')).toMatchObject({
+      winner: '/overwrite/Textures/Foo.dds', providers: [{ kind: 'runtimeOutput' }, modOrigin('ModA'), modOrigin('ModB')],
+    });
+  });
+
   it('keeps the winner\'s own original casing in relativePath and winner, regardless of lookup casing', async () => {
     const index = await buildFileConflictIndex([mod('ModA'), mod('ModB')], [], caseFixture, () => {});
 
