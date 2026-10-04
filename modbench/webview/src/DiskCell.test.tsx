@@ -12,7 +12,7 @@ import { DiskCell } from './DiskCell';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { fieldMeta, parseJsonRecord, tellPanel } from './test/fixtures';
-import { EXTENSION_TO_WEBVIEW } from './messages';
+import { EXTENSION_TO_WEBVIEW } from '../../src/wire/messages';
 
 const renderCell = (props: Partial<React.ComponentProps<typeof DiskCell>> = {}, child: React.ReactNode = <span>cell</span>) =>
   render(

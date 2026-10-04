@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { focusedCellStyle } from './gridStyles';
 import { beginDrag, currentDrag, endDrag, type CellDrag } from './cellDrag';
 import { cellContext, combineVscodeContexts } from './recordUtils';
-import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview, type ExtensionToWebview } from './messages';
+import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview, type ExtensionToWebview } from '../../src/wire/messages';
 
 // `tabIndex` plus the effect below make the focused cell a really focused DOM element, not just
 // painted state: the arrow keys' `keydown` lands on it, and the panel reads an open editor from

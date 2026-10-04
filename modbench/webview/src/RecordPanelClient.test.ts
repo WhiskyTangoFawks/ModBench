@@ -6,7 +6,7 @@ vi.mock('./vscode', () => ({ vscode: vscodeBridgeAcquiredAtModuleLoad }));
 import { createRecordPanelClient } from './RecordPanelClient';
 import { columnKey } from './columnKey';
 import { vscode } from './vscode';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 
 function lastRequestId(): string {
   const msg = vi.mocked(vscode.postMessage).mock.calls.at(-1)?.[0];

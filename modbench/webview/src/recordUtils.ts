@@ -43,11 +43,11 @@ export function offersArrayAdd(meta: FieldMetadata | undefined): boolean {
 export type {
   ArrayElementContext, ArrayParentContext, ColumnHeaderContext, EditableCellContext, ReferenceContext,
   StringValueContext,
-} from './messages';
+} from '../../src/wire/messages';
 import type {
   ArrayElementContext, ArrayParentContext, ColumnHeaderContext, EditableCellContext, ReferenceContext,
   StringValueContext,
-} from './messages';
+} from '../../src/wire/messages';
 
 // `siblings` is the length of the array in this column's own document. xedit.md, divergence 14: a
 // keyed array takes no move.

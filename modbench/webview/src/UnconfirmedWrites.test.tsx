@@ -7,7 +7,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 import { compareOverride, compareResultFixture, diffNode, fieldMeta, panelClient, required, type PanelOpts } from './test/fixtures';
 import type { CompareResult, PluginLoadFailure } from './types';
 
