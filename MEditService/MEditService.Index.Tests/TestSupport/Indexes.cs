@@ -72,14 +72,12 @@ internal static class Indexes
     }
 
     /// <summary>The held load order arriving again (ADR-0013), answered once
-    /// <paramref name="announced"/> holds and the arrival has ended: its status is out when it
-    /// re-derived, and its validation is over when it only validated.</summary>
+    /// <paramref name="announced"/> holds and the arrival's status is out.</summary>
     internal static void NextSnapshotUntil(this OpenedIndex index, Func<bool> announced, string what)
     {
         index.Holder.Apply(index.Holder.Current);
         Waits.Reached(announced, what);
         Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the arrival's status");
-        index.Settled();
     }
 
     /// <summary>The held load order arriving again, answered once the rows it changed are announced
