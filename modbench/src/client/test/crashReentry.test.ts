@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { enterEditingAcrossRestarts } from '../backendStatus';
-import { InMemoryMEditClient } from '../../client';
+import { enterEditingAcrossRestarts } from '../crashReentry';
+import { InMemoryMEditClient } from '../InMemoryMEditClient';
 
 describe('enterEditingAcrossRestarts', () => {
   it('re-enters editing when the backend attaches again after a crash', async () => {

@@ -4,6 +4,8 @@ import {
   toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
+import { bundledBackendPath, spawnPiped } from './bundledBackend';
+import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } from './backendLog';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import {
@@ -24,14 +26,27 @@ import type { SelectionOutcome } from '../ports/selectionOutcome';
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
 export interface HttpMEditClientDeps {
-  /** The process this client is the front of; nothing outside this module configures it. */
-  backend: BackendLifecycleOptions;
+  /** The process this client is the front of. It spawns the bundled backend unless told otherwise. */
+  backend?: Omit<BackendLifecycleOptions, 'onOutput' | 'serilogLevelArgs' | 'log'>;
+  /** Where the spawned backend's output goes, and whose level it is spawned at. */
+  backendLog: BackendLogChannel;
   /** Overrides the production fetch (undici, unlimited timeouts) — a test scripts the backend's
    *  HTTP responses through this. */
   fetch?: (input: Request) => Promise<Response>;
   log?: (msg: string) => void;
   timeoutMs?: number;
   reconnectDelayMs?: number;
+}
+
+function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
+  return {
+    executablePath: bundledBackendPath(process.platform, __dirname),
+    spawn: spawnPiped,
+    ...deps.backend,
+    log: deps.log,
+    onOutput: makeBackendLogForwarder(deps.backendLog),
+    serilogLevelArgs: () => backendLogLevelArgs(deps.backendLog.logLevel),
+  };
 }
 
 /** The HTTP adapter the mEdit client hides (target-architecture.d2): the generated client,
@@ -52,7 +67,7 @@ export class HttpMEditClient implements MEditClient {
       log: deps.log,
       reconnectDelayMs: deps.reconnectDelayMs,
     });
-    this.lifecycle = new BackendLifecycle(deps.backend);
+    this.lifecycle = new BackendLifecycle(backendOptions(deps));
     // The stream is open exactly while the backend is attached, so no module outside this one
     // starts or stops it.
     this.lifecycle.onStatusChanged((status) => {
