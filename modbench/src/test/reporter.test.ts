@@ -58,7 +58,7 @@ describe('makeReporter', () => {
 
   it('writes a failure inside a dialog to the Output, what and why, and shows no notification', () => {
     const channel = fakeChannelOfEveryLevel();
-    makeReporter(channel, 'recordLifecycle').insideDialog('warning', 'Could not fetch a suggested FormKey.', 'backend down');
+    makeReporter(channel, 'recordLifecycle').shownOnSurface('warning', 'Could not fetch a suggested FormKey.', 'backend down');
     expect(channelWrites(channel)).toEqual([
       ['[recordLifecycle] warning: Could not fetch a suggested FormKey. — backend down'],
     ]);

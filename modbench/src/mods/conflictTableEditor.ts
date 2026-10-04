@@ -48,7 +48,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
           (copy.kind === 'unreadable' ? [{ key: `${originLabel(copy.origin)}/${relativePath}`, relativePath, copy }] : [])));
         for (const { key, relativePath, copy } of unreadable) {
           if (!told.has(key)) {
-            this.reporter.insideDialog('warning', `Conflicts: "${originLabel(copy.origin)}"'s copy of ${relativePath} could not be read.`, copy.reason);
+            this.reporter.shownOnSurface('warning', `Conflicts: "${originLabel(copy.origin)}"'s copy of ${relativePath} could not be read.`, copy.reason);
           }
         }
         told = new Set(unreadable.map(({ key }) => key));

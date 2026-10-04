@@ -5,7 +5,7 @@ import { errorMessage } from '../ports/errorMessage';
 
 export interface RecordPickerDeps {
   meditClient: Pick<MEditClient, 'searchRecords'>;
-  reporter: Pick<Reporter, 'insideDialog'>;
+  reporter: Pick<Reporter, 'shownOnSurface'>;
 }
 
 type PickItem = vscode.QuickPickItem & { formKey?: string };
@@ -55,7 +55,7 @@ export async function pickRecord(
     } catch (err) {
       if (mySeq !== seq) return;
       quickPick.items = [failureItem(err)];
-      deps.reporter.insideDialog('error', 'The record search failed.', errorMessage(err));
+      deps.reporter.shownOnSurface('error', 'The record search failed.', errorMessage(err));
     } finally {
       if (mySeq === seq) quickPick.busy = false;
     }

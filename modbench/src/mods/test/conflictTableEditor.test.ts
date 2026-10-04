@@ -242,7 +242,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
       instance.publish(await shared());
       await flush();
 
-      expect(reporter.dialogFailures).toEqual([
+      expect(reporter.shownFailures).toEqual([
         { severity: 'warning', message: 'Conflicts: "High"\'s copy of a.dds could not be read.', detail: 'in use' },
       ]);
       expect(reporter.reports).toEqual([]);
@@ -263,7 +263,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
       instance.publish(await shared());
       await flush();
 
-      expect(reporter.dialogFailures).toHaveLength(2);
+      expect(reporter.shownFailures).toHaveLength(2);
     });
   });
 
