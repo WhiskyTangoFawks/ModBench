@@ -19,7 +19,7 @@ import type { Own } from './session';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
-import { messageLine, registerNameFilter, type NameFilter } from './nameFilter';
+import { messageLine, registerNameFilter, type NameFilter } from './drivingLib/nameFilter';
 import { modsKeyContext } from './mods/gestureEntry';
 import type { SyncMessage } from './syncFailureReport';
 
@@ -123,25 +123,6 @@ export function lastSelectedViewSelection(
     }));
   }
   return () => last?.selection ?? [];
-}
-
-export interface FocusedView {
-  id(): string | undefined;
-  /** Selecting in `view` makes it the focused one. */
-  follow(id: string, view: SelectableView): vscode.Disposable;
-  /** A surface that is no tree says it has the focus. */
-  enter(id: string): void;
-}
-
-/** No stable API names the focused view, so it is the one last selected in or entered: copy
- *  value and the name filter, which every list offers, act on it. */
-export function createFocusedView(): FocusedView {
-  let last: string | undefined;
-  return {
-    id: () => last,
-    follow: (id, view) => view.onDidChangeSelection(() => { last = id; }),
-    enter: (id) => { last = id; },
-  };
 }
 
 export interface DownloadsViewDeps {

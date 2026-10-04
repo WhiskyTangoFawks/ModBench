@@ -1,4 +1,4 @@
-import { present } from '../ports/present';
+import { present } from '../../ports/present';
 
 /** The InputBox double every per-view name filter test needs — enough of `vscode.InputBox` for
  *  `registerNameFilter`'s `openBox`, nothing else. */

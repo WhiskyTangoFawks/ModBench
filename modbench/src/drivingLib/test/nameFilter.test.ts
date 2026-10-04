@@ -49,7 +49,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { registerFilterCommands, registerNameFilter, type NameFilterDeps } from '../nameFilter';
-import { present } from '../ports/present';
+import { present } from '../../ports/present';
 
 const OBJECT = 'test.thing';
 const KEY = `${OBJECT}.filterActive`;
