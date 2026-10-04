@@ -1,11 +1,11 @@
 # Index the load order.
 ...@../styles
 shape: sequence_diagram
-instanceloader: @../target-architecture.modbench_driven.instanceloader
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 instancecommands: @../target-architecture.modbench_core.instancecommands
 instancecommands.label: instance commands
-client: @../target-architecture.modbench_driven.client
+client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
@@ -13,15 +13,15 @@ commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 loadorder: @../target-architecture.medit_kernel.loadorder
 loadorder.label: Load order state
-indexer: @../target-architecture.medit_driven.index.indexer
+indexer: @../target-architecture.medit_readmodel.index.indexer
 indexer.label: Indexer
 codec: @../target-architecture.medit_kernel.codec
 codec.label: Codec + schema
-sourceadapter: @../target-architecture.medit_driven.sourceadapter
+sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
-pluginadapter: @../target-architecture.medit_driven.pluginadapter
+pluginadapter: @../target-architecture.medit_repositories.pluginadapter
 pluginadapter.label: Plugin adapter
-store: @../target-architecture.medit_driven.index.store
+store: @../target-architecture.medit_readmodel.index.store
 store.label: Store
 port: @../target-architecture.medit_kernel.ports
 port.label: Ports

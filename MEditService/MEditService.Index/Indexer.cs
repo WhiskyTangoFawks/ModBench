@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Index;
 
 /// <summary>ADR-0014: the Index's other half (target-architecture.d2
-/// medit_driven.index.indexer). Ingest, the registration sweep and the validation of every
+/// medit_readmodel.index.indexer). Ingest, the registration sweep and the validation of every
 /// plugin.</summary>
 public sealed class Indexer : IQueryIndex, IDisposable
 {

@@ -1,5 +1,5 @@
-"""Pins check-layers.py: the reference view against docs/architecture/layers.d2, and every
-trace message against the reference view."""
+"""Pins check_layers.py: every project reference on both sides against docs/architecture/layers.d2,
+and every trace message against the same rule."""
 import pathlib
 import sys
 import tempfile
@@ -11,32 +11,106 @@ import check_layers as cl  # noqa: E402
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 LAYERS_D2 = """...@styles
-grid-rows: 6
+grid-rows: 7
 drivers: "Drivers" {class: band}
 driving: "Driving adapters" {class: band}
 core: "Core" {class: band}
 kernel: "Kernel" {class: band}
-driven: "Driven adapters" {class: band}
+readmodel: "Read model" {class: band}
+repositories: "Repositories" {class: band}
 data: "Systems of record" {class: band}
 
 drivers -> driving: {class: ref}
 drivers -> core: {class: ref}
 drivers -> kernel: {class: ref}
-drivers -> driven: {class: ref}
-drivers -> data: {class: ref}
+drivers -> readmodel: {class: ref}
+drivers -> repositories: {class: ref}
 driving -> core: {class: ref}
 driving -> kernel: {class: ref}
-driving -> driven: {class: ref}
-driving -> data: {class: ref}
+driving -> readmodel: {class: ref}
+driving -> repositories: {class: ref}
 core -> kernel: {class: ref}
-core -> driven: {class: ref}
-core -> data: {class: ref}
-driven -> data: {class: ref}
+core -> readmodel: {class: ref}
+core -> repositories: {class: ref}
+readmodel -> kernel: {class: ref}
+readmodel -> repositories: {class: ref}
+repositories -> kernel: {class: ref}
+repositories -> data: {class: ref}
 
-data -> driving: "watch" {class: signal}
+data -> repositories: "watch" {class: signal}
+kernel -> readmodel: "watch" {class: signal}
 kernel -> driving: "push" {class: push}
 
-fx_driven.index -> fx_driven.sourceadapter: "same band"
+medit_kernel.ports -> medit_kernel.loadorder: "same band"
+modbench_repositories.client -> medit_driving.http: "the wire" {class: outside}
+"""
+
+ZOOM_OUT_D2 = """...@styles
+grid-rows: 7
+medit_driving: "MEDIT · Driving adapters" {
+  class: band; grid-rows: 1
+  http: "HTTP endpoints" {class: driving}
+}
+modbench_drivers: "MODBENCH · Drivers" {
+  class: band; grid-rows: 1
+  activation: "Activation" {class: driving}
+}
+modbench_driving: "MODBENCH · Driving adapters" {
+  class: band; grid-rows: 1
+  mods: "Mods" {class: driving}
+  plugins: "Plugins" {class: driving}
+  drivinglib: "driving lib" {class: driving}
+}
+medit_core: "MEDIT · Core" {
+  class: band; grid-rows: 1
+  commands: "Commands" {class: core}
+  queries: "Queries" {class: core}
+}
+modbench_core: "MODBENCH · Core" {
+  class: band; grid-rows: 1
+  modlist: "modlist commands" {class: core}
+}
+medit_kernel: "MEDIT · Kernel" {
+  class: band; grid-rows: 1
+  loadorder: "Load order state" {class: kernel}
+  codec: "Codec + schema" {class: kernel}
+  ports: "Ports" {class: kernel}
+}
+modbench_kernel: "MODBENCH · Kernel" {
+  class: band; grid-rows: 1
+  ports: "Ports" {class: kernel}
+  tables: "per-release tables" {class: kernel}
+}
+medit_readmodel: "MEDIT · Read model" {
+  class: band; grid-rows: 1
+  index: "Record index" {
+    indexer: "Indexer" {class: readmodel}
+    store: "Store" {class: derived}
+  }
+}
+modbench_readmodel: "MODBENCH · Read model" {
+  class: band; grid-rows: 1
+  instanceloader: "Instance loader" {class: readmodel}
+}
+medit_repositories: "MEDIT · Repositories" {
+  class: band; grid-rows: 1
+  sourceadapter: "Source adapter" {class: repositories}
+  pluginadapter: "Plugin adapter" {class: repositories}
+}
+modbench_repositories: "MODBENCH · Repositories" {
+  class: band; grid-rows: 1
+  instanceadapter: "Instance adapter" {class: repositories}
+  client: "mEdit client" {class: repositories}
+  deployment: "deployment" {class: repositories}
+}
+medit_data: "MEDIT · Systems of record" {
+  class: band; grid-rows: 1
+  source: "Source tree in git" {class: sor}
+}
+modbench_data: "MODBENCH · Systems of record" {
+  class: band; grid-rows: 1
+  instance: "Instance" {class: sor}
+}
 """
 
 
@@ -47,309 +121,240 @@ def write(root: pathlib.Path, relpath: str, content: str) -> pathlib.Path:
     return path
 
 
-def make_fixture(tmp: pathlib.Path, reference_body: str, trace_files: dict):
-    write(tmp, "docs/architecture/layers.d2", LAYERS_D2)
-    write(
-        tmp,
-        "docs/architecture/target-architecture-references.d2",
-        "...@target-architecture\n" + reference_body,
+def tsconfig(root: pathlib.Path, folder: str, references):
+    """A Modbench box project; folder '' is the composition root at modbench/src."""
+    prefix = './' if folder == '' else '../'
+    refs = ',\n'.join(f'    {{ "path": "{prefix}{r}" }}' for r in references)
+    body = (
+        '{\n  "extends": "../tsconfig.box.json",\n'
+        '  // a comment, as the real files carry\n'
+        f'  "references": [\n{refs}\n  ],\n  "include": ["**/*.ts"]\n}}\n'
     )
-    for name, body in trace_files.items():
-        write(tmp, f"docs/architecture/traces/{name}.d2", body)
+    rel = 'modbench/src/tsconfig.json' if folder == '' else f'modbench/src/{folder}/tsconfig.json'
+    write(root, rel, body)
+
+
+def csproj(root: pathlib.Path, name: str, references):
+    refs = '\n'.join(
+        f'    <ProjectReference Include="..\\MEditService.{r}\\MEditService.{r}.csproj" />' for r in references
+    )
+    body = f'<Project Sdk="Microsoft.NET.Sdk">\n  <ItemGroup>\n{refs}\n  </ItemGroup>\n</Project>\n'
+    write(root, f'MEditService/MEditService.{name}/MEditService.{name}.csproj', body)
+
+
+def fixture(tmp: pathlib.Path, traces=None):
+    write(tmp, 'docs/architecture/layers.d2', LAYERS_D2)
+    write(tmp, 'docs/architecture/target-architecture.d2', ZOOM_OUT_D2)
+    for name, body in (traces or {}).items():
+        write(tmp, f'docs/architecture/traces/{name}.d2', body)
     return tmp
 
 
-class ReferenceViewAgainstLayers(unittest.TestCase):
-    def test_reference_pointing_to_a_lower_band_passes(self):
+class ModbenchProjectReferencesAgainstLayers(unittest.TestCase):
+    def test_a_reference_to_a_lower_band_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_driving.a -> fx_core.b {class: ref}\n",
-                {},
-            )
+            root = fixture(pathlib.Path(tmp))
+            tsconfig(root, 'mods', ['modlist', 'instanceLoader'])
             self.assertEqual(cl.run(root), [])
 
-    def test_reference_into_its_own_columns_kernel_passes(self):
+    def test_a_reference_pointing_up_fails_naming_the_project_file_and_the_pair(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_driven.a -> fx_kernel.b {class: ref}\n",
-                {},
-            )
-            self.assertEqual(cl.run(root), [])
-
-    def test_named_same_band_exception_passes(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_driven.index -> fx_driven.sourceadapter {class: ref}\n",
-                {},
-            )
-            self.assertEqual(cl.run(root), [])
-
-    def test_reference_into_its_own_bands_lib_passes(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = make_fixture(pathlib.Path(tmp), "fx_driving.mods -> fx_driving.lib {class: ref}\n", {})
-            self.assertEqual(cl.run(root), [])
-
-    def test_reference_into_another_columns_lib_fails(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = make_fixture(pathlib.Path(tmp), "fx_driving.mods -> gx_driving.lib {class: ref}\n", {})
-            self.assertEqual(len(cl.run(root)), 1)
-
-    def test_reference_pointing_up_fails_naming_the_file_and_the_arrow(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_data.a -> fx_driving.b {class: ref}\n",
-                {},
-            )
+            root = fixture(pathlib.Path(tmp))
+            tsconfig(root, 'instanceAdapter', ['mods'])
             failures = cl.run(root)
             self.assertEqual(len(failures), 1)
-            failure = failures[0]
-            self.assertIn("target-architecture-references.d2", failure)
-            self.assertIn("fx_data.a -> fx_driving.b", failure)
-            self.assertIn("layers.d2", failure)
+            self.assertIn('modbench/src/instanceAdapter/tsconfig.json', failures[0])
+            self.assertIn('instanceadapter -> mods', failures[0])
+            self.assertIn('layers.d2', failures[0])
 
-    def test_same_band_pair_not_named_in_layers_still_fails(self):
+    def test_a_same_band_reference_not_named_in_layers_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_driving.a -> fx_driving.b {class: ref}\n",
-                {},
-            )
+            root = fixture(pathlib.Path(tmp))
+            tsconfig(root, 'mods', ['plugins'])
             failures = cl.run(root)
             self.assertEqual(len(failures), 1)
-            self.assertIn("fx_driving.a -> fx_driving.b", failures[0])
+            self.assertIn('mods -> plugins', failures[0])
 
-    def test_store_and_outside_arrows_are_not_reference_direction_checked(self):
+    def test_a_reference_to_its_bands_lib_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_driven.a -> fx_data.a {class: store}\n"
-                "fx_core.a -> fx_driving.a {class: outside}\n",
-                {},
-            )
+            root = fixture(pathlib.Path(tmp))
+            tsconfig(root, 'mods', ['drivingLib'])
             self.assertEqual(cl.run(root), [])
 
-
-class TraceMessagesAgainstReferenceView(unittest.TestCase):
-    def actor_block(self, alias, full_id, label=None):
-        lines = [f"{alias}: @../target-architecture.{full_id}"]
-        if label:
-            lines.append(f"{alias}.label: {label}")
-        return "\n".join(lines)
-
-    def test_message_with_a_drawn_reference_passes(self):
+    def test_the_composition_root_is_the_activation_box(self):
         with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + self.actor_block("a", "fx_driving.a")
-                + "\n"
-                + self.actor_block("b", "fx_core.b")
-                + "\na -> b: envelope {class: edit}\n"
-            )
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_driving.a -> fx_core.b {class: ref}\n",
-                {"one": trace},
-            )
+            root = fixture(pathlib.Path(tmp))
+            tsconfig(root, '', ['mods', 'modlist', 'instanceAdapter', 'tables'])
             self.assertEqual(cl.run(root), [])
 
-    def test_message_with_no_allowed_pair_fails_naming_the_arrow(self):
+    def test_a_project_the_zoom_out_does_not_draw_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + self.actor_block("a", "fx_driving.a")
-                + "\n"
-                + self.actor_block("b", "fx_driving.c")
-                + "\na -> b: a stray call {class: edit}\n"
-            )
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_driving.a -> fx_core.b {class: ref}\n",
-                {"one": trace},
-            )
+            root = fixture(pathlib.Path(tmp))
+            tsconfig(root, 'helpers', [])
             failures = cl.run(root)
             self.assertEqual(len(failures), 1)
-            failure = failures[0]
-            self.assertIn("traces/one.d2", failure)
-            self.assertIn("a -> b", failure)
+            self.assertIn('modbench/src/helpers/tsconfig.json', failures[0])
+            self.assertIn('target-architecture.d2', failures[0])
 
-    def test_message_classed_outside_always_passes(self):
+    def test_a_box_the_code_has_not_built_yet_is_no_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + self.actor_block("a", "fx_driving.a")
-                + "\n"
-                + self.actor_block("b", "fx_driving.c")
-                + "\na -> b: bytes, at any time {class: outside}\n"
-            )
-            root = make_fixture(pathlib.Path(tmp), "", {"one": trace})
+            root = fixture(pathlib.Path(tmp))
+            tsconfig(root, 'mods', [])
             self.assertEqual(cl.run(root), [])
 
-    def test_composition_root_passes_with_anything(self):
+
+class MEditProjectReferencesAgainstLayers(unittest.TestCase):
+    def test_a_reference_to_the_kernel_and_a_repository_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + self.actor_block("http", "medit_driving.http")
-                + "\n"
-                + self.actor_block("b", "fx_driving.c")
-                + "\nb -> http: envelope {class: edit}\n"
-            )
-            root = make_fixture(pathlib.Path(tmp), "", {"one": trace})
+            root = fixture(pathlib.Path(tmp))
+            csproj(root, 'Commands', ['Codec', 'Ports', 'SourceAdapter'])
             self.assertEqual(cl.run(root), [])
 
-    def test_core_or_driven_box_reaches_any_kernel_box_of_its_column(self):
+    def test_a_named_same_band_exception_passes_and_its_sibling_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + self.actor_block("commands", "fx_core.commands")
-                + "\n"
-                + self.actor_block("codec", "fx_kernel.codec")
-                + "\ncommands -> codec: schema {class: query}\n"
-            )
-            root = make_fixture(pathlib.Path(tmp), "", {"one": trace})
+            root = fixture(pathlib.Path(tmp))
+            csproj(root, 'Ports', ['LoadOrder'])
+            csproj(root, 'Codec', ['LoadOrder'])
+            failures = cl.run(root)
+            self.assertEqual(len(failures), 1)
+            self.assertIn('MEditService.Codec.csproj', failures[0])
+            self.assertIn('codec -> loadorder', failures[0])
+
+    def test_test_side_projects_are_not_boxes_and_are_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = fixture(pathlib.Path(tmp))
+            csproj(root, 'Commands.Tests', ['Commands', 'TestSupport'])
+            csproj(root, 'TestSupport', ['Codec'])
             self.assertEqual(cl.run(root), [])
 
-    def test_a_box_and_its_bands_lib_pass(self):
+    def test_a_reference_across_the_columns_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + self.actor_block("mods", "fx_driving.mods")
-                + "\n"
-                + self.actor_block("lib", "fx_driving.lib")
-                + "\nmods -> lib: rows {class: query}\n"
+            root = fixture(pathlib.Path(tmp))
+            csproj(root, 'Commands', ['Tables'])
+            failures = cl.run(root)
+            self.assertEqual(len(failures), 1)
+            self.assertIn('commands -> tables', failures[0])
+
+
+class TraceMessagesAgainstLayers(unittest.TestCase):
+    def actor(self, alias, full_id):
+        return f"{alias}: @../target-architecture.{full_id}\n"
+
+    def trace(self, *lines):
+        return "...@../styles\nshape: sequence_diagram\n" + "".join(lines)
+
+    def test_a_message_the_rule_permits_passes_in_both_directions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            body = self.trace(
+                self.actor('mods', 'modbench_driving.mods'),
+                self.actor('modlist', 'modbench_core.modlist'),
+                "mods -> modlist: the gesture {class: edit}\n",
+                "modlist -> mods: applied or refusal {class: edit}\n",
             )
-            root = make_fixture(pathlib.Path(tmp), "", {"one": trace})
+            root = fixture(pathlib.Path(tmp), {'one': body})
+            self.assertEqual(cl.run(root), [])
+
+    def test_a_message_between_two_boxes_no_rule_joins_fails_naming_the_trace(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            body = self.trace(
+                self.actor('mods', 'modbench_driving.mods'),
+                self.actor('plugins', 'modbench_driving.plugins'),
+                "mods -> plugins: a stray call {class: edit}\n",
+            )
+            root = fixture(pathlib.Path(tmp), {'one': body})
+            failures = cl.run(root)
+            self.assertEqual(len(failures), 1)
+            self.assertIn('traces/one.d2', failures[0])
+            self.assertIn('mods -> plugins', failures[0])
+
+    def test_an_actor_with_no_project_yet_is_checked_against_the_rule(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            body = self.trace(
+                self.actor('modlist', 'modbench_core.modlist'),
+                self.actor('deployment', 'modbench_repositories.deployment'),
+                "modlist -> deployment: the winners {class: deploy}\n",
+            )
+            root = fixture(pathlib.Path(tmp), {'one': body})
+            self.assertEqual(cl.run(root), [])
+
+    def test_a_watch_runs_from_a_system_of_record_into_a_repository(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            body = self.trace(
+                self.actor('instance', 'modbench_data.instance'),
+                self.actor('adapter', 'modbench_repositories.instanceadapter'),
+                "instance -> adapter: changed {class: signal}\n",
+            )
+            root = fixture(pathlib.Path(tmp), {'one': body})
+            self.assertEqual(cl.run(root), [])
+
+    def test_the_wire_between_the_processes_is_a_named_exception(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            body = self.trace(
+                self.actor('client', 'modbench_repositories.client'),
+                self.actor('http', 'medit_driving.http'),
+                "client -> http: the edit {class: edit}\n",
+                "http -> client: applied or refusal {class: edit}\n",
+            )
+            root = fixture(pathlib.Path(tmp), {'one': body})
+            self.assertEqual(cl.run(root), [])
+
+    def test_a_message_classed_outside_always_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            body = self.trace(
+                self.actor('mods', 'modbench_driving.mods'),
+                self.actor('plugins', 'modbench_driving.plugins'),
+                "mods -> plugins: bytes, at any time {class: outside}\n",
+            )
+            root = fixture(pathlib.Path(tmp), {'one': body})
             self.assertEqual(cl.run(root), [])
 
     def test_two_sub_boxes_of_one_box_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + self.actor_block("projector", "fx_driven.index.projector")
-                + "\n"
-                + self.actor_block("store", "fx_driven.index.store")
-                + "\nprojector -> store: rows {class: query}\n"
+            body = self.trace(
+                self.actor('indexer', 'medit_readmodel.index.indexer'),
+                self.actor('store', 'medit_readmodel.index.store'),
+                "indexer -> store: rows {class: query}\n",
             )
-            root = make_fixture(pathlib.Path(tmp), "", {"one": trace})
+            root = fixture(pathlib.Path(tmp), {'one': body})
             self.assertEqual(cl.run(root), [])
 
-    def test_a_box_with_a_store_arrow_passes_either_direction(self):
+    def test_a_wildcard_actor_takes_its_bands_reach(self):
         with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + self.actor_block("a", "fx_driven.a")
-                + "\n"
-                + self.actor_block("d", "fx_data.d")
-                + "\nd -> a: bytes {class: signal}\n"
+            body = self.trace(
+                self.actor('loader', 'modbench_readmodel.instanceloader'),
+                'views: "every view" {class: driving}\n',
+                "loader -> views: value {class: loadorder}\n",
+                "views -> loader: refresh {class: signal}\n",
             )
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_driven.a -> fx_data.d {class: store}\n",
-                {"one": trace},
-            )
+            root = fixture(pathlib.Path(tmp), {'one': body})
             self.assertEqual(cl.run(root), [])
 
-    def test_wildcard_actor_resolves_via_its_band(self):
+    def test_a_wildcard_actor_reaching_across_its_own_band_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + self.actor_block("a", "fx_driven.a")
-                + '\nviews: "every view" {class: driving}\n'
-                + "a -> views: value {class: loadout}\n"
+            body = self.trace(
+                self.actor('mods', 'modbench_driving.mods'),
+                'views: "every view" {class: driving}\n',
+                "views -> mods: a stray call {class: edit}\n",
             )
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_driving.b -> fx_driven.a {class: ref}\n",
-                {"one": trace},
-            )
-            self.assertEqual(cl.run(root), [])
-
-    def test_wildcard_actor_with_no_matching_box_fails(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + self.actor_block("a", "fx_driven.a")
-                + '\nviews: "every view" {class: driving}\n'
-                + "a -> views: value {class: loadout}\n"
-            )
-            root = make_fixture(pathlib.Path(tmp), "", {"one": trace})
+            root = fixture(pathlib.Path(tmp), {'one': body})
             failures = cl.run(root)
             self.assertEqual(len(failures), 1)
-            self.assertIn("a -> views", failures[0])
+            self.assertIn('views -> mods', failures[0])
 
-    def test_wildcard_core_actor_reaches_a_kernel_box_of_its_column(self):
+    def test_an_undeclared_actor_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + '\ncmds: "every commands box" {class: core}\n'
-                + self.actor_block("codec", "fx_kernel.codec")
-                + "\ncmds -> codec: the lines {class: loadorder}\n"
-                + "codec -> cmds: bytes {class: loadorder}\n"
+            body = self.trace(
+                self.actor('mods', 'modbench_driving.mods'),
+                "mods -> ghost: a call {class: edit}\n",
             )
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_core.commands -> fx_driven.files {class: ref}\n",
-                {"one": trace},
-            )
-            self.assertEqual(cl.run(root), [])
-
-    def test_two_wildcard_actors_pass_when_a_drawn_arrow_joins_a_member_of_each(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + 'surfaces: "every view" {class: driving}\n'
-                + 'cmds: "every commands box" {class: core}\n'
-                + "surfaces -> cmds: the gesture {class: loadorder}\n"
-                + "cmds -> surfaces: applied or refusal {class: loadorder}\n"
-            )
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_driving.mods -> fx_core.modcommands {class: ref}\n",
-                {"one": trace},
-            )
-            self.assertEqual(cl.run(root), [])
-
-    def test_two_wildcard_actors_with_no_arrow_between_their_members_fail(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + 'surfaces: "every view" {class: driving}\n'
-                + 'cmds: "every commands box" {class: core}\n'
-                + "surfaces -> cmds: the gesture {class: loadorder}\n"
-            )
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_driving.mods -> fx_driven.files {class: ref}\n"
-                "fx_core.modcommands -> fx_driven.files {class: ref}\n",
-                {"one": trace},
-            )
+            root = fixture(pathlib.Path(tmp), {'one': body})
             failures = cl.run(root)
             self.assertEqual(len(failures), 1)
-            self.assertIn("surfaces -> cmds", failures[0])
-
-    def test_a_composition_root_in_a_wildcard_does_not_let_it_reach_everything(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + 'views: "every view" {class: driving}\n'
-                + self.actor_block("a", "fx_driven.a")
-                + "\nviews -> a: a stray call {class: edit}\n"
-            )
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "medit_driving.http -> fx_core.b {class: ref}\n",
-                {"one": trace},
-            )
-            failures = cl.run(root)
-            self.assertEqual(len(failures), 1)
-            self.assertIn("views -> a", failures[0])
+            self.assertIn('undeclared actor', failures[0])
 
 
-class RealRepoDiagrams(unittest.TestCase):
-    def test_the_committed_diagrams_pass_the_checker(self):
+class RealRepo(unittest.TestCase):
+    def test_the_committed_projects_and_diagrams_pass_the_checker(self):
         self.assertEqual(cl.run(REPO_ROOT), [])
         self.assertEqual(cl.main([str(REPO_ROOT)]), 0)
 

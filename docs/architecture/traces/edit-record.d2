@@ -2,7 +2,7 @@
 ...@../styles
 shape: sequence_diagram
 editor: "Plugins · Editor" {class: driving}
-client: @../target-architecture.modbench_driven.client
+client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
@@ -10,10 +10,10 @@ commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 queries: @../target-architecture.medit_core.queries
 queries.label: Queries
-sourceadapter: @../target-architecture.medit_driven.sourceadapter
+sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
-indexer: @../target-architecture.medit_driven.index.indexer
+indexer: @../target-architecture.medit_readmodel.index.indexer
 indexer.label: Indexer
 
 create: "create, on a plugin: the type pick first" {

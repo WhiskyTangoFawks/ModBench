@@ -4,9 +4,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
-import { present } from '../ports/present';
 import { tsFiles } from './tsFiles';
-import { CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, REFERENCING_BOXES } from './boxes';
+import { CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, REFERENCING_BOXES, referencesOf } from './boxes';
 
 const SRC = join(__dirname, '..');
 
@@ -69,17 +68,17 @@ const ADAPTER_INTERFACE = join(boxRoot('instanceAdapter'), 'instanceAdapter');
 
 function isAllowedDrivenSpecifier(spec: string, fromFile: string, box: string): boolean {
   if (spec.startsWith('node:')) return true;
-  if (spec === 'vscode') return box in DRIVING_BOXES || fromFile === ADAPTER_WATCH;
+  if (spec === 'vscode') return DRIVING_BOXES.includes(box) || fromFile === ADAPTER_WATCH;
   if (!spec.startsWith('.')) return PACKAGE_IMPORTERS.has(box);
   const resolved = resolve(dirname(fromFile), spec);
   if (box !== 'instanceAdapter' && isIn(boxRoot('instanceAdapter'), resolved)) return resolved === ADAPTER_INTERFACE;
-  const roots = [boxRoot(box), ...present(REFERENCING_BOXES[box], `a reference list for "${box}"`).map(boxRoot)];
+  const roots = [boxRoot(box), ...referencesOf(box).map(boxRoot)];
   return roots.some((root) => isIn(root, resolved));
 }
 
 function drivenOffenders(): Record<string, string[]> {
   const found: Record<string, string[]> = {};
-  for (const box of Object.keys(REFERENCING_BOXES)) {
+  for (const box of REFERENCING_BOXES) {
     for (const path of productionFiles(boxRoot(box))) {
       const bad = importSpecifiers(readFileSync(path, 'utf8'), path)
         .filter((spec) => !isAllowedDrivenSpecifier(spec, path, box));
@@ -165,9 +164,9 @@ describe('a kernel box references nothing', () => {
   });
 });
 
-describe('a driven or core box reaches only the boxes the diagram draws an arrow to', () => {
+describe('a box reaches only the boxes its project references', () => {
   it('every box is a real directory holding production files', () => {
-    for (const box of Object.keys(REFERENCING_BOXES)) {
+    for (const box of REFERENCING_BOXES) {
       expect(existsSync(boxRoot(box))).toBe(true);
       expect(productionFiles(boxRoot(box)).length).toBeGreaterThan(0);
     }
@@ -177,7 +176,7 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
     expect(drivenOffenders()).toEqual({});
   });
 
-  it('flags an import of a box no arrow reaches', () => {
+  it('flags an import of a box the project does not reference', () => {
     const planted = join(boxRoot('instanceLoader'), 'planted.ts');
     expect(isAllowedDrivenSpecifier('../modmanager/ModListProvider', planted, 'instanceLoader')).toBe(false);
     expect(isAllowedDrivenSpecifier('../client/MEditClient', planted, 'instanceLoader')).toBe(false);
@@ -191,7 +190,7 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
   });
 
   it('refuses vscode in the mEdit client and in every command box', () => {
-    for (const box of Object.keys(CORE_BOXES)) {
+    for (const box of CORE_BOXES) {
       expect(isAllowedDrivenSpecifier('vscode', join(boxRoot(box), 'planted.ts'), box)).toBe(false);
     }
   });
@@ -202,14 +201,14 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
   });
 
   it('refuses a codec and a table in every driving box', () => {
-    for (const box of Object.keys(DRIVING_BOXES)) {
+    for (const box of DRIVING_BOXES) {
       expect(isAllowedDrivenSpecifier('../loadOrderFileCodec/pluginsText', join(boxRoot(box), 'p.ts'), box)).toBe(false);
       expect(isAllowedDrivenSpecifier('../tables/gamePaths', join(boxRoot(box), 'p.ts'), box)).toBe(false);
     }
   });
 
   it('allows vscode in every driving box', () => {
-    for (const box of Object.keys(DRIVING_BOXES)) {
+    for (const box of DRIVING_BOXES) {
       expect(isAllowedDrivenSpecifier('vscode', join(boxRoot(box), 'p.ts'), box)).toBe(true);
     }
   });
@@ -221,7 +220,7 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
   });
 
   it('refuses every box but the Instance adapter anything of the adapter\'s beyond its interface', () => {
-    for (const box of Object.keys(REFERENCING_BOXES).filter((b) => b !== 'instanceAdapter')) {
+    for (const box of REFERENCING_BOXES.filter((b) => b !== 'instanceAdapter')) {
       const planted = join(boxRoot(box), 'p.ts');
       expect(isAllowedDrivenSpecifier('../instanceAdapter/codecs/modlistText', planted, box)).toBe(false);
       expect(isAllowedDrivenSpecifier('../instanceAdapter/layout', planted, box)).toBe(false);

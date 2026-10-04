@@ -3,20 +3,20 @@
 shape: sequence_diagram
 plugins: @../target-architecture.modbench_driving.plugins
 plugins.label: Plugins
-client: @../target-architecture.modbench_driven.client
+client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
 commands: @../target-architecture.medit_core.commands
 commands.label: Commands
-pluginadapter: @../target-architecture.medit_driven.pluginadapter
+pluginadapter: @../target-architecture.medit_repositories.pluginadapter
 pluginadapter.label: Plugin adapter
 plugin: @../target-architecture.medit_data.plugin
 instance: @../target-architecture.modbench_data.instance
 instance.label: "Instance\nplugins.txt · mods · Overwrite"
-instanceadapter: @../target-architecture.modbench_driven.instanceadapter
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
-instanceloader: @../target-architecture.modbench_driven.instanceloader
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 pluginscommands: @../target-architecture.modbench_core.pluginscommands
 pluginscommands.label: plugins commands

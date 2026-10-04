@@ -1,11 +1,11 @@
 # Open a mod's conflict table, and follow the disk while it is open.
 ...@../styles
 shape: sequence_diagram
-instanceloader: @../target-architecture.modbench_driven.instanceloader
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 mods: @../target-architecture.modbench_driving.mods
 mods.label: Mods
-instanceadapter: @../target-architecture.modbench_driven.instanceadapter
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 
 instanceloader -> mods: "value: mod order, each path's providers, Overwrite's files" {class: loadorder}
