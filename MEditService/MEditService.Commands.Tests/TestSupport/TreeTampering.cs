@@ -14,6 +14,24 @@ internal static class TreeTampering
         return Path.Combine(modFolder, unit.RelativePath);
     }
 
+    /// <summary>The directory holding the record's document: a container's own directory.</summary>
+    internal static string DirectoryOf(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
+        FolderOf(FileOf(modFolder, plugin, identity));
+
+    /// <summary>The block directory holding an exterior cell's sub-block, cell directory and document.</summary>
+    internal static string BlockDirectoryOf(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
+        FolderOf(FolderOf(DirectoryOf(modFolder, plugin, identity)));
+
+    internal static DateTime LastWrittenAt(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
+        File.GetLastWriteTimeUtc(FileOf(modFolder, plugin, identity));
+
+    /// <summary>Every file under <paramref name="directory"/> with its text, by path within it.</summary>
+    internal static SortedDictionary<string, string> FilesUnder(string directory) =>
+        Directory.Exists(directory)
+            ? new(Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
+                .ToDictionary(file => Path.GetRelativePath(directory, file), File.ReadAllText), StringComparer.Ordinal)
+            : new(StringComparer.Ordinal);
+
     /// <summary>A directory where the record's document would be written, so the write fails.</summary>
     internal static void BlockWrite(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
         Directory.CreateDirectory(FileOf(modFolder, plugin, identity) + ".tmp");

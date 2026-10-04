@@ -76,11 +76,10 @@ public sealed class DeleteRecordHandlerTests
     public void DeleteRecords_WhenAContainersRemovalFailsPartway_PutsItsWholeTreeBack_RefusesIt_AndLandsTheRest()
     {
         using var mod = WorldspaceWithALockedCell(out var npcAt, out var worldAt, out var otherNpcAt);
-        var worldDirectory = Path.GetDirectoryName(DocumentCarrying(mod, "\"LockedWorld\"")).Require();
-        var cellDirectory = Path.GetDirectoryName(DocumentCarrying(mod, "\"LockedCell\"")).Require();
-        var before = FilesUnder(worldDirectory);
+        var worldDirectory = DirectoryOf(mod, "\"LockedWorld\"");
+        var before = TreeTampering.FilesUnder(worldDirectory);
 
-        var result = DeleteWhileLocked(mod, cellDirectory, [npcAt, worldAt, otherNpcAt]);
+        var result = DeleteWhileLocked(mod, DirectoryOf(mod, "\"LockedCell\""), [npcAt, worldAt, otherNpcAt]);
 
         Assert.Equal([npcAt, otherNpcAt], result.Applied);
         Assert.Empty(DocumentsCarrying(mod, "\"FirstNpc\""));
@@ -89,32 +88,32 @@ public sealed class DeleteRecordHandlerTests
         Assert.Equal(worldAt, refused.Record);
         Assert.Equal(RecordEditRefusal.SourceWriteFailed, refused.Refusal);
         Assert.Contains(worldAt.FormKey, refused.Message, StringComparison.Ordinal);
-        Assert.Equal(before, FilesUnder(worldDirectory));
+        Assert.Equal(before, TreeTampering.FilesUnder(worldDirectory));
     }
 
     [Fact]
     public void DeleteRecords_WhenAContainersRemovalFailsPartway_NeverWritesTheDocumentsItDidNotRemove()
     {
         using var mod = WorldspaceWithALockedCell(out _, out var worldAt, out _);
-        var standing = DocumentCarrying(mod, "\"LockedCell\"");
-        var writtenAt = File.GetLastWriteTimeUtc(standing);
+        var standing = IdentityCarrying(mod, "\"LockedCell\"");
+        var writtenAt = TreeTampering.LastWrittenAt(mod.ModFolder, mod.Plugin, standing);
 
-        var result = DeleteWhileLocked(mod, Path.GetDirectoryName(standing).Require(), [worldAt]);
+        var result = DeleteWhileLocked(mod, DirectoryOf(mod, "\"LockedCell\""), [worldAt]);
 
         Assert.Equal(worldAt, Assert.Single(result.Refused).Record);
-        Assert.Equal(writtenAt, File.GetLastWriteTimeUtc(standing));
+        Assert.Equal(writtenAt, TreeTampering.LastWrittenAt(mod.ModFolder, mod.Plugin, standing));
     }
 
     [Fact]
     public void DeleteRecords_WhenAPathCannotBePutBack_PutsBackTheRest_AndRefusesWithTheCauseAndThatPath()
     {
         using var mod = WorldspaceWithALockedCell(out _, out var worldAt, out _);
-        var cellDirectory = Path.GetDirectoryName(DocumentCarrying(mod, "\"LockedCell\"")).Require();
-        var freeBlock = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(DocumentCarrying(mod, "\"FreeCell\"")))).Require();
+        var cellDirectory = DirectoryOf(mod, "\"LockedCell\"");
+        var freeBlock = TreeTampering.BlockDirectoryOf(mod.ModFolder, mod.Plugin, IdentityCarrying(mod, "\"FreeCell\""));
         var notes = Directory.CreateDirectory(Path.Combine(freeBlock, "Notes")).FullName;
         File.WriteAllText(Path.Combine(notes, "note.txt"), "another tool's");
         var link = Directory.CreateSymbolicLink(Path.Combine(cellDirectory, "NotesLink"), notes).FullName;
-        var before = FilesUnder(freeBlock);
+        var before = TreeTampering.FilesUnder(freeBlock);
 
         var result = DeleteWhileLocked(mod, cellDirectory, [worldAt]);
 
@@ -123,7 +122,7 @@ public sealed class DeleteRecordHandlerTests
         Assert.Contains(
             $"{Path.GetRelativePath(mod.ModFolder, link)} could not be put back", refused.Message, StringComparison.Ordinal);
         Assert.Single(DocumentsCarrying(mod, "\"LockedWorld\""));
-        Assert.Equal(before, FilesUnder(freeBlock));
+        Assert.Equal(before, TreeTampering.FilesUnder(freeBlock));
     }
 
     private static SourceModFixture WorldspaceWithALockedCell(out RecordAt npc, out RecordAt worldspace, out RecordAt otherNpc)
@@ -167,22 +166,18 @@ public sealed class DeleteRecordHandlerTests
         return block;
     }
 
-    private static string DocumentCarrying(SourceModFixture mod, string text)
+    private static RecordIdentity IdentityCarrying(SourceModFixture mod, string text)
     {
         var document = DocumentsCarrying(mod, text).Single();
-        return TreeTampering.FileOf(
-            mod.ModFolder, mod.Plugin, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
+        return new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
     }
+
+    private static string DirectoryOf(SourceModFixture mod, string text) =>
+        TreeTampering.DirectoryOf(mod.ModFolder, mod.Plugin, IdentityCarrying(mod, text));
 
     private static List<SourceDocument> DocumentsCarrying(SourceModFixture mod, string text) =>
         [.. SourceRepository.Over(mod.ModFolder, GameRelease.Fallout4).ReadAll(mod.Plugin)
             .Where(document => document.Body.Contains(text, StringComparison.Ordinal))];
-
-    private static SortedDictionary<string, string> FilesUnder(string directory) =>
-        Directory.Exists(directory)
-            ? new(Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
-                .ToDictionary(file => Path.GetRelativePath(directory, file), File.ReadAllText), StringComparer.Ordinal)
-            : new(StringComparer.Ordinal);
 
     [Fact]
     public void DeleteRecords_OnTheHeader_RefusesWithoutTouchingTheSourceTree()

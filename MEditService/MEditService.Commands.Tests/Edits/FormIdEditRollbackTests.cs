@@ -112,9 +112,7 @@ public sealed class FormIdEditRollbackTests
         var repository = SourceRepository.Over(fixture.ModFolder, GameRelease.Fallout4);
         var identity = new RecordIdentity(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId);
         repository.Put(fixture.Plugin, new SourceDocument(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId, "{}"));
-        var documentPath = TreeTampering.FileOf(fixture.ModFolder, fixture.Plugin, identity);
-        var directory = Path.GetDirectoryName(documentPath)
-            ?? throw new InvalidOperationException($"Expected '{documentPath}' to have a parent directory.");
+        var directory = TreeTampering.DirectoryOf(fixture.ModFolder, fixture.Plugin, identity);
         repository.Remove(fixture.Plugin, identity);
         return directory;
     }
