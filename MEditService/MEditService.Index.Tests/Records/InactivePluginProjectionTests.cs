@@ -60,9 +60,10 @@ public sealed class InactivePluginProjectionTests : IDisposable
         _index.NextSnapshot();
         var projected = _index.Sequence;
 
-        _index.NextSnapshot();
+        _holder.Apply(_holder.Current);
+        Reconcile(active: true);
 
-        Assert.Equal(projected, _index.Sequence);
+        Assert.Equal(projected + 1, _index.Sequence);
     }
 
     [Fact]
@@ -79,8 +80,9 @@ public sealed class InactivePluginProjectionTests : IDisposable
         Reconcile(active: false);
         var settled = _index.Sequence;
 
-        Reconcile(active: false);
+        _holder.Apply(_holder.Current);
+        Reconcile(active: true);
 
-        Assert.Equal(settled, _index.Sequence);
+        Assert.Equal(settled + 1, _index.Sequence);
     }
 }

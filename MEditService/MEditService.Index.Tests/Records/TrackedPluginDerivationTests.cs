@@ -46,21 +46,21 @@ public sealed class TrackedPluginDerivationTests : IDisposable
         Assert.False(ReadsAsTracked());
         TrackedMods.Track(_mod, _fixture.GameDirectory);
 
-        ReconcileTheSnapshotAlreadyHeldSinceOnlyThePluginsFolderMoved();
+        _holder.Apply(_holder.Current);
 
-        Assert.True(ReadsAsTracked());
+        Waits.Reached(ReadsAsTracked, "the plugin reading as tracked", TimeSpan.FromSeconds(30));
     }
 
     [Fact]
     public void ATrackedPluginWhoseRepositoryWentAway_ReadsAsUntracked_AfterTheNextSnapshot()
     {
         TrackedMods.Track(_mod, _fixture.GameDirectory);
-        ReconcileTheSnapshotAlreadyHeldSinceOnlyThePluginsFolderMoved();
-        Assert.True(ReadsAsTracked());
+        _holder.Apply(_holder.Current);
+        Waits.Reached(ReadsAsTracked, "the plugin reading as tracked", TimeSpan.FromSeconds(30));
 
         Directory.Delete(Path.Combine(_mod.ModFolderOf(), ".git"), recursive: true);
-        ReconcileTheSnapshotAlreadyHeldSinceOnlyThePluginsFolderMoved();
+        _holder.Apply(_holder.Current);
 
-        Assert.False(ReadsAsTracked());
+        Waits.Reached(() => !ReadsAsTracked(), "the plugin reading as untracked", TimeSpan.FromSeconds(30));
     }
 }

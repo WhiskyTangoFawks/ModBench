@@ -62,10 +62,11 @@ public sealed class ReconcileScatteredTests
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-explicit-replace")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
+            .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .BuildScattered();
 
         using var manager = MakeIndexer(holder);
-        manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        manager.Reconcile(holder, fx.GameDirectory, [fx.Plugins[0]], GameRelease.Fallout4);
         var firstRepo = manager.RequireReads();
 
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);

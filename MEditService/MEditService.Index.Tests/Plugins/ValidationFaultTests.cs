@@ -33,11 +33,8 @@ public sealed class ValidationFaultTests : IDisposable
     private Indexer Subscribed(INotificationPublisher? notifications = null, IndexWriteGate? writeGate = null)
     {
         var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
-        var index = new Indexer(
-            _holder, TestAdapters.Mutagen(), SharedSchemaReflector.Instance, _loggerFactory, notifications, clock,
-            writeGate: writeGate);
+        var index = Indexes.Open(_holder, loggerFactory: _loggerFactory, notifications: notifications, timeProvider: clock, writeGate: writeGate);
         index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        index.Subscribe();
         return index;
     }
 

@@ -21,11 +21,12 @@ internal static class Indexes
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null,
-        TaskScheduler? refillScheduler = null)
+        TaskScheduler? refillScheduler = null,
+        IndexWriteGate? writeGate = null)
     {
         var index = new Indexer(
             holder, adapter ?? TestAdapters.Mutagen(), SharedSchemaReflector.Instance, loggerFactory, notifications, timeProvider,
-            refillScheduler);
+            refillScheduler, writeGate);
         Holders.Add(index, holder);
         index.Subscribe();
         return index;

@@ -74,7 +74,8 @@ public class PluginParticipationTests
         index.Reconcile(holder, fixture.DataFolder, WithBDisabled(fixture), GameRelease.Fallout4);
         var afterFirstFlip = WinnersByPlugin(index, npcKey);
 
-        index.Reconcile(holder, fixture.DataFolder, WithBDisabled(fixture), GameRelease.Fallout4);
+        PluginBinaries.Touch(fixture.Plugins[0].Path);
+        Assert.True(index.Revalidate());
         var afterSecondFlip = WinnersByPlugin(index, npcKey);
 
         Assert.Equal(afterFirstFlip, afterSecondFlip);

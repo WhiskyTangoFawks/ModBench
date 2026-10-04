@@ -60,9 +60,11 @@ public sealed class ReconcileDiffTests
         var sequenceAfterFirst = index.Sequence;
         Assert.True(statusAfterFirst.ConflictsComputed);
 
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        holder.Apply(holder.Current);
+        var swapped = fx.Plugins.Select(p => p with { Slot = p.Name == "A.esm" ? 1 : 0 }).ToList();
+        index.Reconcile(holder, fx.GameDirectory, swapped, GameRelease.Fallout4);
 
-        Assert.Equal(sequenceAfterFirst, index.Sequence);
+        Assert.Equal(sequenceAfterFirst + 1, index.Sequence);
         Assert.Equal(openedAfterFirst, opens.OpenedTotal);
         Assert.Equal(statusAfterFirst.IndexedPlugins, index.Status.IndexedPlugins);
         Assert.Equal(statusAfterFirst.State, index.Status.State);
@@ -228,13 +230,15 @@ public sealed class ReconcileDiffTests
         Assert.DoesNotContain(ReadsOf(index).OpenedPlugins.Keys, k => k.Name == "Bad.esp");
 
         var sequence = index.Sequence;
-        index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
-        Assert.Equal(sequence, index.Sequence);
+        PluginBinaries.Touch(fx.Plugins[0].Path);
+        holder.Apply(holder.Current);
+        Waits.Reached(() => index.Sequence > sequence, "the touched plugin's projection", TimeSpan.FromSeconds(30));
+        Assert.Equal(sequence + 1, index.Sequence);
 
         new Fallout4Mod(ModKey.FromFileName("Bad.esp"), Fallout4Release.Fallout4).WriteToBinary(badPath);
-        index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
+        holder.Apply(holder.Current);
 
-        Assert.Empty(index.Status.Failures);
+        Waits.Reached(() => index.Status.Failures.Count == 0, "the status without the recovered plugin's failure", TimeSpan.FromSeconds(30));
         Assert.Contains(ReadsOf(index).OpenedPlugins.Keys, k => k.Name == "Bad.esp");
     }
 

@@ -80,10 +80,13 @@ public sealed class UnreadableBinaryTests : IDisposable
     {
         UntrackedOverAnUnreadableBinary();
         var before = _notifications.Notifications.Count;
+        var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
+        other.Npcs.AddNew("OtherNpcChangedBesideTheUnreadableOne");
+        other.WriteToBinary(OtherPluginPath);
 
-        Reconcile(Entry, OtherEntry);
+        Assert.True(_index.Revalidate());
 
-        Assert.Equal(before, _notifications.Notifications.Count);
+        Assert.DoesNotContain(_notifications.Notifications.Skip(before), n => n is LoadOrderStatusNotification);
     }
 
     [Fact]
@@ -92,7 +95,7 @@ public sealed class UnreadableBinaryTests : IDisposable
         UntrackedOverAnUnreadableBinary();
 
         WriteValidPlugin(_pluginPath);
-        Reconcile(Entry, OtherEntry);
+        Assert.True(_index.Revalidate());
 
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == PluginName);
         Assert.Contains(_index.RequireReads().GetDocuments(_key), d => d.EditorId == "FreshlyAppearedNpc");
@@ -106,7 +109,10 @@ public sealed class UnreadableBinaryTests : IDisposable
         var before = _notifications.Notifications.Count;
 
         File.WriteAllText(_pluginPath, "still not a plugin");
-        Reconcile(Entry);
+        _holder.Apply(_holder.Current);
+        Waits.Reached(
+            () => _notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>().Any(),
+            "the status naming the failure again", TimeSpan.FromSeconds(30));
 
         var published = _notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>().Last();
         Assert.Contains(published.Status.Failures, f => f.Name == PluginName);
