@@ -1082,8 +1082,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     }
 
     /// <summary>ADR-0010: drops the index file, floors its sequence at what this process
-    /// handed out, and returns the refill against the load order held, run off the caller's thread,
-    /// or the refusal when another window holds the file.</summary>
+    /// handed out, and refills it off the caller's thread; a file another window holds is refused.</summary>
     public StoreRebuild RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         var previousSequence = Sequence;
