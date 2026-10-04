@@ -65,30 +65,11 @@ public static class ContainerChildFields
     internal readonly record struct EmbeddedChild(IMajorRecordGetter Parent, string SlotName, int SlotIndex, IMajorRecord Child);
 
     /// <summary>The child through Mutagen's own object model, not a JSON pointer, so existing writers
-    /// apply unchanged. Descends through <see cref="EmbeddedSlotsFor(Type)"/> at every level.</summary>
-    internal static EmbeddedChild? FindEmbeddedChild(IMajorRecordGetter parent, string formKey) =>
-        FindEmbeddedChildSlot(parent, formKey) is { } slot
-            ? new EmbeddedChild(slot.Parent, slot.SlotName, slot.SlotIndex, slot.Child)
-            : null;
-
-    /// <summary>Removes the child from wherever <see cref="FindEmbeddedChild"/> would find it: a list slot
-    /// is spliced by index, a single-value slot set to null. False when nothing matched, never a throw.</summary>
-    internal static bool RemoveEmbeddedChild(IMajorRecordGetter parent, string formKey)
-    {
-        if (FindEmbeddedChildSlot(parent, formKey) is not { } slot) return false;
-
-        RemoveFromSlot(slot.Parent, slot.SlotName, slot.SlotIndex);
-        return true;
-    }
-
-    // Carries the direct parent (a nested TopCell, not the top-level record) so a remove mutates the
-    // right object.
-    private readonly record struct EmbeddedChildSlot(IMajorRecordGetter Parent, string SlotName, int SlotIndex, IMajorRecord Child);
-
-    // Descends through embedded slots at every level: a worldspace embeds its TopCell, which embeds its
-    // placed references; a quest embeds its topics, which embed their responses. Bounded to
-    // EmbeddedSlots: a worldspace's blocks have directories.
-    private static EmbeddedChildSlot? FindEmbeddedChildSlot(IMajorRecordGetter parent, string formKey)
+    /// apply unchanged. Descends through <see cref="EmbeddedSlotsFor(Type)"/> at every level: a
+    /// worldspace embeds its TopCell, which embeds its placed references; a quest embeds its topics,
+    /// which embed their responses. Bounded to the embedded slots: a worldspace's blocks have
+    /// directories.</summary>
+    internal static EmbeddedChild? FindEmbeddedChild(IMajorRecordGetter parent, string formKey)
     {
         var parentType = NormalizedTypeName(parent.GetType());
         var embeddedSlots = EmbeddedSlotsFor(parent.GetType());
@@ -98,11 +79,11 @@ public static class ContainerChildFields
             if (child.FormKey.ToString().Equals(formKey, StringComparison.Ordinal))
             {
                 // Guarded rather than cast so a read-only graph (a binary overlay) declines instead of throwing.
-                return child is IMajorRecord settable ? new EmbeddedChildSlot(parent, slotName, slotIndex, settable) : null;
+                return child is IMajorRecord settable ? new EmbeddedChild(parent, slotName, slotIndex, settable) : null;
             }
 
             if (!embeddedSlots.Contains((parentType, slotName))) continue;
-            if (FindEmbeddedChildSlot(child, formKey) is { } deeper) return deeper;
+            if (FindEmbeddedChild(child, formKey) is { } deeper) return deeper;
         }
 
         return null;
@@ -157,26 +138,6 @@ public static class ContainerChildFields
             if (value is System.Collections.IEnumerable and not string) ((dynamic)value).Add((dynamic)child);
             else property.SetValue(to, child);
         }
-    }
-
-    // Reflection plus dynamic so one path cannot drift from the derived members; RemoveAt resolves against the
-    // slot's runtime list type.
-    private static void RemoveFromSlot(IMajorRecordGetter parent, string slotName, int slotIndex)
-    {
-        var property = parent.GetType().GetProperty(slotName)
-            ?? throw new InvalidOperationException(
-                $"{parent.GetType().Name} has no property '{slotName}' to remove a child from — its child members are the assembly's own.");
-
-        var value = property.GetValue(parent)
-            ?? throw new InvalidOperationException(
-                $"Expected {parent.GetType().Name}.{slotName} to hold a value or a collection to remove a child from.");
-        if (value is IMajorRecordGetter)
-        {
-            property.SetValue(parent, null);
-            return;
-        }
-
-        ((dynamic)value).RemoveAt(slotIndex);
     }
 
     /// <summary>Child major records read non-destructively off a getter, so ingest captures parentage in

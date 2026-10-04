@@ -57,17 +57,6 @@ public static class HeaderDocument
                 streamCreator: new SupplyRootDocument(rootPath, body)));
     }
 
-    /// <summary>The document with the ESL (<c>Small</c>) flag set or cleared, as a document-to-document
-    /// transform through the same two doors so no third dialect of the header exists.</summary>
-    internal static byte[] WithLightFlag(byte[] body, bool isLight)
-    {
-        var source = (IFallout4ModGetter)Read(body);
-        var clone = new Fallout4Mod(source.ModKey, source.GameRelease.ToFallout4Release());
-        clone.ModHeader.DeepCopyIn(source.ModHeader);
-        clone.IsSmallMaster = isLight;
-        return Write(clone);
-    }
-
     /// <summary>Whether the document's header carries the ESL flag — read through <see cref="Read"/>,
     /// never string-matched out of the JSON, so the answer is the door's own.</summary>
     public static bool IsLight(byte[] body) => Read(body) is IModFlagsGetter flags && flags.IsSmallMaster;
