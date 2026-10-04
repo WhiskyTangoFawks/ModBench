@@ -7,7 +7,9 @@ const pickRecord = vi.fn<(...args: unknown[]) => Promise<string | null>>();
 
 vi.mock('../recordPicker', () => ({ pickRecord: (...args: unknown[]) => pickRecord(...args) }));
 
-vi.mock('vscode', () => ({
+vi.mock('vscode', async () => ({
+  TreeItem: (await import('../../test/vscodeMock')).TreeItem,
+  TreeItemCollapsibleState: (await import('../../test/vscodeMock')).TreeItemCollapsibleState,
   EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { return undefined; } dispose() { return undefined; } },
   Uri: { from: (parts: { path: string }) => parts.path, joinPath: vi.fn() },
   ViewColumn: { Active: -1, One: 1, Beside: -2 },

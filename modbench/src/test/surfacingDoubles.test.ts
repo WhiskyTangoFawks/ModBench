@@ -4,7 +4,9 @@ const { showErrorMessage, handlers } = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
   handlers: new Map<string, (...args: unknown[]) => Promise<void>>(),
 }));
-vi.mock('vscode', () => ({
+vi.mock('vscode', async () => ({
+  TreeItem: (await import('./vscodeMock')).TreeItem,
+  TreeItemCollapsibleState: (await import('./vscodeMock')).TreeItemCollapsibleState,
   window: { showErrorMessage },
   commands: { registerCommand: (id: string, handler: (...args: unknown[]) => Promise<void>) => { handlers.set(id, handler); return { dispose: () => {} }; } },
 }));
