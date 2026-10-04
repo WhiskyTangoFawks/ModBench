@@ -103,26 +103,7 @@ public sealed class SourceIngestTests : IDisposable
     }
 
     [Fact]
-    public void AnUncommittedEdit_LeavesHeadOnTheCommittedBytes_ServedAsGitShowServesThem()
-    {
-        string relativePath;
-        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
-        {
-            var document = live.RequireReads().DocumentOf(_npc, Plugin);
-            relativePath = Path.GetRelativePath(ModFolder, _entry.SourceFileOf(document));
-            _entry.HandEdit(document, NpcEditorId, "ExternallyRenamed");
-        }
-
-        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
-
-        var head = reloaded.RequireReads().HeadDocument(_npc, Plugin);
-        Assert.NotNull(head);
-        Assert.Equal(NpcEditorId, head.EditorId);
-        Assert.Equal(_entry.Git("show", $"HEAD:{relativePath.Replace('\\', '/')}"), head.Body);
-    }
-
-    [Fact]
-    public void AnUncommittedEdit_LeavesHeadOnTheCommittedBytes_AndEffectiveOnTheWorkingTree()
+    public void AnUncommittedEdit_IsServedFromTheWorkingTree()
     {
         using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
             _entry.HandEdit(live.RequireReads().DocumentOf(_npc, Plugin), NpcEditorId, "ExternallyRenamed");
@@ -130,13 +111,10 @@ public sealed class SourceIngestTests : IDisposable
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         Assert.Equal("ExternallyRenamed", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
-        var head = reloaded.RequireReads().HeadDocument(_npc, Plugin);
-        Assert.NotNull(head);
-        Assert.Equal(NpcEditorId, head.EditorId);
     }
 
     [Fact]
-    public void AnUncommittedHeaderEdit_LeavesHeadOnTheCommittedBytes_AndEffectiveOnTheWorkingTree()
+    public void AnUncommittedHeaderEdit_IsServedFromTheWorkingTree()
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));
 
@@ -147,18 +125,14 @@ public sealed class SourceIngestTests : IDisposable
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         var effective = reloaded.RequireReads().GetDocument(headerFormKey, Plugin);
-        var head = reloaded.RequireReads().HeadDocument(headerFormKey, Plugin);
 
         Assert.NotNull(effective);
-        Assert.NotNull(head);
         Assert.NotNull(effective.Body);
-        Assert.NotNull(head.Body);
         Assert.Contains("RenamedByHand", effective.Body, StringComparison.Ordinal);
-        Assert.DoesNotContain("RenamedByHand", head.Body, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AnEditCommittedOutsideModbench_LeavesBothRefsOnTheNewBytes_NotPermanentlyDirty()
+    public void AnEditCommittedOutsideModbench_IsNotPermanentlyDirty()
     {
         using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
             _entry.HandEdit(live.RequireReads().DocumentOf(_npc, Plugin), NpcEditorId, "CommittedRename");
@@ -168,9 +142,6 @@ public sealed class SourceIngestTests : IDisposable
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         Assert.Equal("CommittedRename", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
-        var head = reloaded.RequireReads().HeadDocument(_npc, Plugin);
-        Assert.NotNull(head);
-        Assert.Equal("CommittedRename", head.EditorId);
         Assert.False(reloaded.RequireReads().StackEntry(_npc, Plugin).Require().HasWorkingTreeChange);
     }
 
@@ -325,14 +296,10 @@ public sealed class SourceIngestTests : IDisposable
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         Assert.Equal("RenamedAcrossReload", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
-
-        var head = reloaded.RequireReads().HeadDocument(_npc, Plugin);
-        Assert.NotNull(head);
-        Assert.Equal(NpcEditorId, head.EditorId);
     }
 
     [Fact]
-    public void AnEditorIdRename_LeavesExactlyOneEntry_WithTheOldNameCommitted()
+    public void AnEditorIdRename_LeavesExactlyOneEntry()
     {
         RenameTheNpc("RenamedOnce");
 
@@ -340,8 +307,7 @@ public sealed class SourceIngestTests : IDisposable
 
         var stack = reloaded.RequireReads().GetOverrideStack(_npc);
         Assert.NotNull(stack);
-        var entry = Assert.Single(stack.Entries);
-        Assert.Equal(NpcEditorId, entry.Head.EditorId);
+        Assert.Single(stack.Entries);
     }
 
     private void RenameTheNpc(string newEditorId)

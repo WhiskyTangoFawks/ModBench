@@ -64,7 +64,6 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         var restored = reads.StackEntry(_raceA, _baseKey);
         Assert.NotNull(restored);
         Assert.False(restored.HasWorkingTreeChange);
-        Assert.Equal("RaceA", restored.Head.EditorId);
     }
 
     [Fact]
@@ -88,7 +87,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     }
 
     [Fact]
-    public void RestoringADeletedOverride_MakesItTheEffectiveWinnerAgain_WithoutMovingHead()
+    public void RestoringADeletedOverride_MakesItTheEffectiveWinnerAgain()
     {
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
@@ -115,7 +114,6 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         Assert.Equal([("Base.esm", false), ("Winner.esp", true)], stack.Entries.Select(e => (e.Plugin.Name, e.IsWinner)));
         var winnerEntry = stack.Entries.Single(e => e.Plugin.Name == "Winner.esp");
         Assert.True(winnerEntry.HasWorkingTreeChange);
-        Assert.Equal("TestNpc", winnerEntry.Head.EditorId);
     }
 
     [Fact]

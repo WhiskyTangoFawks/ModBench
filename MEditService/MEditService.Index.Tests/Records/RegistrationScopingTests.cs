@@ -200,7 +200,7 @@ public class RegistrationScopingTests
         using var fx = Build("registration-inactive-door");
         string[] relations =
         [
-            "records", "records_head", "form_lookup", "form_references", "placement", "cell_location",
+            "records", "form_lookup", "form_references", "placement", "cell_location",
             "container_child", "npc_",
         ];
         bool HoldsBeta(string relation)

@@ -68,7 +68,6 @@ public sealed class SqlDoorSchemaTests : IDisposable
     [Theory]
     [InlineData("records", true)]
     [InlineData("form_lookup", true)]
-    [InlineData("records_head", true)]
     [InlineData("records_committed", false)]
     public void ARelation_ExposesWinner_OnlyWhereAReaderAsksForIt(string relation, bool exposesWinner)
     {

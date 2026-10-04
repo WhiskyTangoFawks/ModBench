@@ -31,7 +31,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
         document.EditorId ?? throw new InvalidOperationException("The fixture record has no EditorID.");
 
     [Fact]
-    public void RefreshKeys_EffectiveServesTheNewBody_WhileHeadKeepsTheCommittedOne()
+    public void RefreshKeys_EffectiveServesTheNewBody()
     {
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
@@ -45,11 +45,6 @@ public sealed class WorkingTreeChangeTests : IDisposable
         var effective = reads.DocumentOf(_formKey, _baseKey);
         Assert.Equal(editedBody, effective.Body);
         Assert.Equal("EditedName", EditorIdColumnOf(effective));
-
-        var head = reads.HeadDocument(_formKey, _baseKey);
-        Assert.NotNull(head);
-        Assert.Equal(committedBody, head.Body);
-        Assert.Equal("OriginalName", EditorIdColumnOf(head));
     }
 
     [Fact]
@@ -62,7 +57,6 @@ public sealed class WorkingTreeChangeTests : IDisposable
         var clean = reads.StackEntry(_formKey, _baseKey);
         Assert.NotNull(clean);
         Assert.False(clean.HasWorkingTreeChange);
-        Assert.Equal(clean.Effective.Body, clean.Head.Body);
 
         index.Edit(_base, committed, committed.BodyOf().Replace("OriginalName", "EditedName", StringComparison.Ordinal));
 
@@ -70,7 +64,6 @@ public sealed class WorkingTreeChangeTests : IDisposable
         Assert.NotNull(dirty);
         Assert.True(dirty.HasWorkingTreeChange);
         Assert.Equal("EditedName", EditorIdColumnOf(dirty.Effective));
-        Assert.Equal("OriginalName", EditorIdColumnOf(dirty.Head));
     }
 
     [Fact]
@@ -92,6 +85,5 @@ public sealed class WorkingTreeChangeTests : IDisposable
         Assert.NotNull(reverted);
         Assert.False(reverted.HasWorkingTreeChange);
         Assert.Equal(committedBody, reverted.Effective.Body);
-        Assert.Equal(committedBody, reverted.Head.Body);
     }
 }
