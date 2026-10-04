@@ -52,16 +52,43 @@ public sealed class SourceRepositoryStampsTests : IDisposable
         Assert.Empty(stamps.Unreadable);
     }
 
+    private static Task PastTheSettleWindow() => Task.Delay(TimeSpan.FromSeconds(2.2));
+
     [Fact]
-    public void StampsOf_AfterAHandEditOfTheSameLengthKeepingTheModificationTime_NamesTheNewBytes()
+    public async Task StampsOf_AfterAHandEditOfTheSameLengthKeepingTheModificationTime_NamesTheNewBytes_OfASettledFile()
     {
         var file = NpcFile;
-        var modified = File.GetLastWriteTimeUtc(file);
+        var modified = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(file, modified);
+        await PastTheSettleWindow();
+        _repository.StampsOf(Plugin);
         var edited = NpcBody.Replace("FixtureNpc", "FixtureNpX", StringComparison.Ordinal);
         File.WriteAllText(file, edited);
         File.SetLastWriteTimeUtc(file, modified);
 
         Assert.Equal(StampOf(edited), _repository.StampsOf(Plugin).ByFormKey[NpcFormKey]);
+    }
+
+    [Fact]
+    public async Task StampsOf_AFileUnchangedAndSettled_IsNotReadAgain()
+    {
+        await PastTheSettleWindow();
+        _repository.StampsOf(Plugin);
+        using var denyingSharingSoAnyReadWouldFail = new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var stamps = _repository.StampsOf(Plugin);
+
+        Assert.Empty(stamps.Unreadable);
+        Assert.Equal(StampOf(NpcBody), stamps.ByFormKey[NpcFormKey]);
+    }
+
+    [Fact]
+    public void StampsOf_AFileChangedWithinTheSettleWindow_IsReadAgain()
+    {
+        _repository.StampsOf(Plugin);
+        using var denyingSharingSoAnyReadWouldFail = new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        Assert.Single(_repository.StampsOf(Plugin).Unreadable);
     }
 
     [Fact]
