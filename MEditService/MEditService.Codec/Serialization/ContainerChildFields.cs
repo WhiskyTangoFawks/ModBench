@@ -65,10 +65,8 @@ public static class ContainerChildFields
     internal readonly record struct EmbeddedChild(IMajorRecordGetter Parent, string SlotName, int SlotIndex, IMajorRecord Child);
 
     /// <summary>The child through Mutagen's own object model, not a JSON pointer, so existing writers
-    /// apply unchanged. Descends through <see cref="EmbeddedSlotsFor(Type)"/> at every level: a
-    /// worldspace embeds its TopCell, which embeds its placed references; a quest embeds its topics,
-    /// which embed their responses. Bounded to the embedded slots: a worldspace's blocks have
-    /// directories.</summary>
+    /// apply unchanged. Descends only through <see cref="EmbeddedSlotsFor(Type)"/>: a worldspace's
+    /// blocks have directories.</summary>
     internal static EmbeddedChild? FindEmbeddedChild(IMajorRecordGetter parent, string formKey)
     {
         var parentType = NormalizedTypeName(parent.GetType());
