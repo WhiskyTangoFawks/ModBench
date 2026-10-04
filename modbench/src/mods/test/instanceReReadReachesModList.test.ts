@@ -17,7 +17,7 @@ vi.mock('vscode', () => ({
 import { Instance } from '../../instanceLoader/instance';
 import { ModListProvider, ModNode } from '../ModListProvider';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { accessTo, adapterOver, NO_DOWNLOADS, STEADY_WINDOW } from '../../test/mo2/adapterOver';
+import { adapterOver, NO_DOWNLOADS, STEADY_WINDOW } from '../../test/mo2/adapterOver';
 
 async function setup() {
   const root = cloneCorpusFixture();
@@ -28,7 +28,7 @@ async function setup() {
     logReadFailure: () => {},
   });
   await instance.refresh();
-  const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
+  const provider = new ModListProvider({ instance });
   await populateTheCacheOffTheFirstValue(provider);
   return { root, instance, provider };
 }

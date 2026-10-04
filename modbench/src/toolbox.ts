@@ -264,7 +264,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   // this kicks off the first real read. The Plugins tree's own `sequence === 0` guard is
   // what keeps activation from being blocking here.
   void instance.refresh();
-  const modListProvider = own(new ModListProvider({ instance, access, log: (line) => outputChannel.warn(`[modList] ${line}`) }));
+  const modListProvider = own(new ModListProvider({ instance }));
   own(vscode.window.registerFileDecorationProvider(own(new InactiveFileDecorationProvider(instance, vscode.workspace))));
   for (const provider of own(new ModIndicatorDecorations(instance, vscode.workspace)).providers) {
     own(vscode.window.registerFileDecorationProvider(provider));
@@ -333,23 +333,22 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
   ));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putCurrentLoadOrder));
-  own(modListView.onDidChangeCheckboxState((e) =>
-    onModCheckboxChanged(e, modListProvider, reporterFor('modList.checkbox'))));
+  own(modListView.onDidChangeCheckboxState(onModCheckboxChanged));
   ownAll(own, registerModListCoreCommands(modListProvider));
   const toolboxProvider = own(new ToolboxProvider({ instance }));
   ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor }));
   ownAll(own, registerModContextCommands({
     access, instance, viewSelection: () => modListView.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
-    log: (line) => outputChannel.warn(`[modList] ${line}`), marks: modListProvider,
+    log: (line) => outputChannel.warn(`[modList] ${line}`),
   }));
-  ownAll(own, registerModEnableCommands(access, instance, () => modListView.selection, reporterFor('mod.enableDisable'), modListProvider));
-  ownAll(own, registerFileExclusionCommands(access, () => modListView.selection, reporterFor('mod.excludeFile'), modListProvider));
+  ownAll(own, registerModEnableCommands(access, instance, () => modListView.selection, reporterFor('mod.enableDisable')));
+  ownAll(own, registerFileExclusionCommands(access, instance, () => modListView.selection, reporterFor('mod.excludeFile')));
   own(registerModMoveCommand(
     access, instance,
     { selection: () => modListView.selection, direction: () => modListProvider.viewDirection() },
-    reporterFor('mod.move'), modListProvider));
-  ownAll(own, registerSeparatorCommands(access, instance, reporterFor('separator'), ask, trash, () => modListView.selection, modListProvider));
-  own(registerCreateEmptyModCommand(access, instance, reporterFor('mod.createEmpty'), modListProvider));
+    reporterFor('mod.move')));
+  ownAll(own, registerSeparatorCommands(access, instance, reporterFor('separator'), ask, trash, () => modListView.selection));
+  own(registerCreateEmptyModCommand(access, instance, reporterFor('mod.createEmpty')));
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => modListView.selection));
   own(registerGoToModCommand(instance, reporterFor('mod.goToMod'), {
     selection: () => modListView.selection,
