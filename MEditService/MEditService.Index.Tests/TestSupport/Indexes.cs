@@ -70,9 +70,8 @@ internal static class Indexes
     }
 
     /// <summary>The held load order arriving again (ADR-0013), answered once
-    /// <paramref name="announced"/> holds and the arrival has ended. An arrival that re-derived
-    /// ends with its status published, and one that only validated announces inside its write-gate
-    /// hold, so waiting out the status and then the gate covers both.</summary>
+    /// <paramref name="announced"/> holds and the arrival has ended: its status is out when it
+    /// re-derived, and its write-gate hold is over when it only validated.</summary>
     internal static void NextSnapshotUntil(this Indexer index, Func<bool> announced, string what)
     {
         if (!Holders.TryGetValue(index, out var holder))
