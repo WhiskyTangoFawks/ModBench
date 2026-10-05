@@ -124,11 +124,48 @@ public static class ContainerChildFields
         }
 
         if (property.GetValue(parent) is IMajorRecordGetter held)
-        {
-            throw new InvalidOperationException(
-                $"{parent.GetType().Name}.{slotName} already holds {held.FormKey}, so {child.FormKey} cannot take its place.");
-        }
+            throw new ChildSlotHeldByAnotherRecordException(parent.GetType().Name, slotName, held.FormKey.ToString(), child.FormKey.ToString());
         property.SetValue(parent, child);
+    }
+
+    /// <summary>Each incoming child overwrites the held child with its FormKey, at its slot
+    /// position, or is added to the slot's end. What only the target holds stays, at every depth.</summary>
+    internal static void MergeChildren(IMajorRecordGetter target, IReadOnlyList<(string SlotName, IMajorRecordGetter Child)> incoming)
+    {
+        foreach (var (slotName, child) in incoming)
+        {
+            var property = target.GetType().GetProperty(slotName)
+                ?? throw new InvalidOperationException(
+                    $"{target.GetType().Name} has no property '{slotName}' to merge a child into — its child members are the assembly's own.");
+
+            var current = property.GetValue(target);
+            if (current is System.Collections.IEnumerable and not string)
+            {
+                var held = ((System.Collections.IEnumerable)current).Cast<IMajorRecordGetter>().ToList();
+                var at = held.FindIndex(record => record.FormKey == child.FormKey);
+                if (at < 0) AddChildToSlot(target, slotName, (IMajorRecord)child);
+                else ((dynamic)current)[at] = (dynamic)Overwritten(held[at], child);
+            }
+            else if (current is IMajorRecordGetter single && single.FormKey == child.FormKey)
+            {
+                property.SetValue(target, Overwritten(single, child));
+            }
+            else
+            {
+                AddChildToSlot(target, slotName, (IMajorRecord)child);
+            }
+        }
+    }
+
+    /// <summary>The incoming record's own fields over the held record's children, the incoming
+    /// children merged in.</summary>
+    internal static IMajorRecord Overwritten(IMajorRecordGetter held, IMajorRecordGetter incoming)
+    {
+        var incomingChildren = EnumerateChildren(incoming).Select(c => (c.SlotName, c.Child)).ToList();
+        ClearAllChildSlots(incoming);
+        TransplantChildSlots(held, incoming);
+        MergeChildren(incoming, incomingChildren);
+        return (IMajorRecord)incoming;
     }
 
     /// <summary>The own-fields-replace half: the replacing record arrives child-stripped, and

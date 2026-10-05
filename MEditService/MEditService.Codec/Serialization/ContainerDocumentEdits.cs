@@ -53,18 +53,30 @@ public static class ContainerDocumentEdits
         RecordTextCodec codec, string text, GameRelease release, string? recordType) =>
         [.. DescendantsOf(codec.Deserialize(text, release, recordType)).Select(child => child.FormKey.ToString())];
 
-    /// <summary><paramref name="destinationText"/> with <paramref name="sourceText"/>'s child records
-    /// added, its own fields and children kept. Throws <see cref="InvalidOperationException"/> when a
-    /// single-valued slot is filled.</summary>
-    public static string WithChildrenAdded(
+    /// <summary>The destination's own fields, with each of the source's child records overwriting the
+    /// one it holds or added, at any depth; its other children stay. Throws
+    /// <see cref="ChildSlotHeldByAnotherRecordException"/>.</summary>
+    public static string WithChildRecordsMerged(
         RecordTextCodec codec, string destinationText, string? destinationRecordType,
         string sourceText, string? sourceRecordType, GameRelease release)
     {
         var source = codec.Deserialize(sourceText, release, sourceRecordType);
         var destination = codec.Deserialize(destinationText, release, destinationRecordType);
-        foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(source).ToList())
-            ContainerChildFields.AddChildToSlot(destination, slotName, (IMajorRecord)child);
+        ContainerChildFields.MergeChildren(
+            destination, [.. ContainerChildFields.EnumerateChildren(source).Select(c => (c.SlotName, c.Child))]);
         return codec.SerializeToText(destination, release);
+    }
+
+    /// <summary>A record the destination holds as a child record of the one copied: the source's own
+    /// fields, the children of both merged.</summary>
+    public static NamedDocument WithRecordOverwritten(
+        RecordTextCodec codec, string destinationText, string? destinationRecordType,
+        string sourceText, string? sourceRecordType, GameRelease release)
+    {
+        var overwritten = ContainerChildFields.Overwritten(
+            codec.Deserialize(destinationText, release, destinationRecordType),
+            codec.Deserialize(sourceText, release, sourceRecordType));
+        return new NamedDocument(codec.SerializeToText(overwritten, release), overwritten.EditorID);
     }
 
     private static IEnumerable<IMajorRecordGetter> DescendantsOf(IMajorRecordGetter record) =>

@@ -31,7 +31,7 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
         if (destination.Repository.FormKeysUsed(destination.Plugin).Contains(formKey))
         {
             if (Identity(destination, formKey, release) is not { } existing) return RefuseKeyWithNoDocument(destination, formKey);
-            if (withChildren) return AddChildrenToHeldCopy(source.Plugin, existing, child.Body, child.RecordType, destination, release);
+            if (withChildren) return MergeChildrenIntoHeldCopy(source.Plugin, existing, child.Body, child.RecordType, destination, release);
             if (!replace) return RefuseHeldWithoutReplace(formKey, destination.Plugin);
 
             // Replaced in place, never duplicated.
@@ -111,8 +111,7 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
         return landed;
     }
 
-    /// <summary>A deep copy into a destination that holds any of the record's child records is
-    /// refused: it does not replace them.</summary>
+    /// <summary>A deep copy overwrites the child records a destination holds, so it asks first.</summary>
     internal static RecordEditResult? RefuseIfHoldsChildRecords(
         Destination destination, string formKey, IEnumerable<string> childKeys)
     {
@@ -123,19 +122,19 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
             : RecordEditResult.Refused(
                 RecordEditRefusal.DestinationHoldsRecord,
                 $"{destination.Plugin.Name} ({destination.Plugin.Origin}) already holds {held}, a child record of " +
-                $"{formKey}. A deep copy does not replace the child records a destination holds, so it copies none of them.");
+                $"{formKey}. Copy it again and confirm the replacement to overwrite the child records it holds.");
     }
 
-    /// <summary>The destination keeps its own copy of the record, and the source's child records are
-    /// added to it.</summary>
-    internal RecordEditResult AddChildrenToHeldCopy(
+    /// <summary>The destination keeps its own copy of the record: each child record it holds is
+    /// overwritten, the others are added, and the ones only it holds stay.</summary>
+    internal RecordEditResult MergeChildrenIntoHeldCopy(
         PluginAddress sourcePlugin, RecordIdentity existing, string sourceBody, string sourceRecordType,
         Destination destination, GameRelease release)
     {
         var existingDocument = destination.Repository.Get(destination.Plugin, existing)
             ?? throw NoDocumentCarries(destination.Plugin, existing.FormKey);
 
-        var withChildren = ContainerDocumentEdits.WithChildrenAdded(
+        var withChildren = ContainerDocumentEdits.WithChildRecordsMerged(
             codec, existingDocument.Body, existing.RecordType, sourceBody, sourceRecordType, release);
 
         destination.Repository.Put(
@@ -145,7 +144,7 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
         {
             logger.LogInformation(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
-                "({DestinationOrigin}) — kept the copy it held and added the child records",
+                "({DestinationOrigin}) — kept the copy it held and merged the child records into it",
                 existing.FormKey, sourcePlugin.Name, sourcePlugin.Origin, destination.Plugin.Name, destination.Plugin.Origin);
         }
         return RecordEditResult.Success();
@@ -235,6 +234,22 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
         string worldspaceFormKey, SourceDocument cell, string sourceCellText, Destination destination, GameRelease release) =>
         destination.Repository.PutInWorldspace(
             destination.Plugin, cell with { Body = WithGridFrom(sourceCellText, cell, release) }, worldspaceFormKey);
+
+    /// <summary>A cell the destination holds takes the source's own fields, its children kept and the
+    /// source's merged into them, at the place it already has.</summary>
+    internal void OverwriteHeldCell(
+        SourceDocument sourceCell, Destination destination, GameRelease release)
+    {
+        var existing = Identity(destination, sourceCell.FormKey, release)
+            ?? throw NoDocumentCarries(destination.Plugin, sourceCell.FormKey);
+        var existingDocument = destination.Repository.Get(destination.Plugin, existing)
+            ?? throw NoDocumentCarries(destination.Plugin, sourceCell.FormKey);
+
+        var overwritten = ContainerDocumentEdits.WithRecordOverwritten(
+            codec, existingDocument.Body, existing.RecordType, sourceCell.Body, sourceCell.RecordType, release);
+        destination.Repository.Put(
+            destination.Plugin, new SourceDocument(sourceCell.FormKey, existing.RecordType, overwritten.EditorId, overwritten.Text));
+    }
 
     private static JsonNode RequireParsed(string text) =>
         JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a document's text to parse as JSON.");

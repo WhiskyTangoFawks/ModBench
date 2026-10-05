@@ -5,6 +5,7 @@ using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -154,31 +155,99 @@ public sealed class CopyAsDeepOverrideTests
         Assert.All(ChildrenOfAQuest(fixture), child => Assert.NotNull(fixture.Document(fixture.DestinationPlugin, child)));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ADeepCopyIntoADestinationHoldingAChildRecord_IsRefusedAndWritesNothing(bool replace)
+    [Fact]
+    public void ADeepCopyIntoADestinationHoldingAChildRecord_AsksForReplaceAndWritesNothing()
     {
         using var fixture = ContainerCopyFixture.Create();
         Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin).Applied);
         var before = TreeSnapshot.Of(fixture.DestinationModFolder);
 
-        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin, replace);
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin);
 
         Assert.Equal(RecordEditRefusal.DestinationHoldsRecord, result.Refusal);
         Assert.Equal(before, TreeSnapshot.Of(fixture.DestinationModFolder));
     }
 
     [Fact]
-    public void ADeepCopyOfAWorldspaceIntoADestinationHoldingOneOfItsCells_IsRefusedAndWritesNothing()
+    public void ADeepCopyOfAWorldspaceIntoADestinationHoldingOneOfItsCells_AsksForReplaceAndWritesNothing()
     {
         using var fixture = ContainerCopyFixture.Create();
         Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.OtherBlockCell.ToString(), fixture.DestinationPlugin).Applied);
         var before = TreeSnapshot.Of(fixture.DestinationModFolder);
 
-        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin, replace: true);
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin);
 
         Assert.Equal(RecordEditRefusal.DestinationHoldsRecord, result.Refusal);
+        Assert.Equal(before, TreeSnapshot.Of(fixture.DestinationModFolder));
+    }
+
+    [Fact]
+    public void AReplacingDeepCopyOfAQuest_OverwritesTheChildRecordsTheDestinationHolds_KeepsItsCopyOfTheQuestAndItsOwnChildren_AndAddsTheRest()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin).Applied);
+        var destination = TrackedTree.Repository(fixture.DestinationModFolder);
+        var ownResponse = FormKey.Factory($"0ABCDE:{ContainerCopyFixture.DestinationPluginName}");
+        SourceEdits.Rewrite<Quest>(
+            destination, fixture.DestinationPlugin, new RecordIdentity(fixture.Quest.ToString(), "qust", ContainerCopyFixture.QuestEditorId),
+            GameRelease.Fallout4, quest => quest.EditorID = "DestinationsOwnQuest");
+        SourceEdits.Rewrite<DialogTopic>(
+            destination, fixture.DestinationPlugin, new RecordIdentity(fixture.DialogTopic.ToString(), "dial", ContainerCopyFixture.DialogTopicEditorId),
+            GameRelease.Fallout4, topic =>
+            {
+                topic.Responses.Add(new DialogResponses(ownResponse, Fallout4Release.Fallout4) { EditorID = "DestinationsOwnResponse" });
+                topic.Responses.Single(response => response.FormKey == fixture.Response1).EditorID = "EditedResponse1";
+            });
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin, replace: true);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal("DestinationsOwnQuest", fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require().EditorId);
+        Assert.Equal(ContainerCopyFixture.Response1EditorId, fixture.Document(fixture.DestinationPlugin, fixture.Response1.ToString()).Require().EditorId);
+        Assert.Equal("DestinationsOwnResponse", fixture.Document(fixture.DestinationPlugin, ownResponse.ToString()).Require().EditorId);
+        Assert.All(ChildrenOfAQuest(fixture), child => Assert.NotNull(fixture.Document(fixture.DestinationPlugin, child)));
+    }
+
+    [Fact]
+    public void AReplacingDeepCopyOfAWorldspace_OverwritesTheCellsTheDestinationHolds_KeepingTheirOwnChildRecords_AndAddsTheRest()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin).Applied);
+        var ownRef = FormKey.Factory($"0ABCDE:{ContainerCopyFixture.DestinationPluginName}");
+        SourceEdits.Rewrite<Cell>(
+            TrackedTree.Repository(fixture.DestinationModFolder), fixture.DestinationPlugin,
+            new RecordIdentity(fixture.ExteriorCell.ToString(), "cell", ContainerCopyFixture.ExteriorCellEditorId),
+            GameRelease.Fallout4, cell =>
+            {
+                cell.EditorID = "EditedCell";
+                cell.Temporary.Add(new PlacedObject(ownRef, Fallout4Release.Fallout4) { EditorID = "DestinationsOwnRef" });
+            });
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin, replace: true);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(ContainerCopyFixture.ExteriorCellEditorId, fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString()).Require().EditorId);
+        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, ownRef.ToString()));
+        Assert.All(
+            new[] { fixture.ExteriorPersistentRef, fixture.ExteriorTemporaryRef, fixture.TopCell, fixture.OtherBlockCell },
+            record => Assert.NotNull(fixture.Document(fixture.DestinationPlugin, record)));
+    }
+
+    [Fact]
+    public void ADeepCopyOfAWorldspaceIntoADestinationWhosePersistentCellIsAnother_IsRefusedAsACollisionAndWritesNothing()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin).Applied);
+        SourceEdits.Rewrite<Worldspace>(
+            TrackedTree.Repository(fixture.DestinationModFolder), fixture.DestinationPlugin,
+            new RecordIdentity(fixture.Worldspace.ToString(), "wrld", ContainerCopyFixture.WorldspaceEditorId),
+            GameRelease.Fallout4,
+            worldspace => worldspace.TopCell = new Cell(FormKey.Factory($"0ABCDE:{ContainerCopyFixture.DestinationPluginName}"), Fallout4Release.Fallout4));
+        var before = TreeSnapshot.Of(fixture.DestinationModFolder);
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin, replace: true);
+
+        Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
         Assert.Equal(before, TreeSnapshot.Of(fixture.DestinationModFolder));
     }
 
