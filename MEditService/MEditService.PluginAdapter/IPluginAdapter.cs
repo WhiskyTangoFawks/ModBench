@@ -69,8 +69,7 @@ public interface IPluginAdapter
         ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default);
 
-    /// <summary>The same binary re-serialized with no localization check: what a re-baseline of an
-    /// already tracked plugin commits.</summary>
+    /// <summary>The same binary re-serialized with no localization check.</summary>
     Task<IReadOnlyList<TreeFile>> ReadPristineFilesAsync(
         ModPath modPath, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default);

@@ -35,7 +35,7 @@ internal static class PluginTrees
     }
 
     /// <summary>A plugin's binary re-serialized as its whole source tree, with no localization
-    /// check: what a re-baseline of an already tracked plugin commits.</summary>
+    /// check.</summary>
     internal static Task<IReadOnlyList<TreeFile>> ReadPristineFilesAsync(
         ModPath modPath, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default) =>
@@ -46,7 +46,7 @@ internal static class PluginTrees
 
     /// <summary>One plugin's complete tree, ready to commit — the one implementation of the door's
     /// write. A second serializer that dropped the root RecordData.json would delete the header from
-    /// the baseline.</summary>
+    /// the commit.</summary>
     internal static async Task<IReadOnlyList<TreeFile>> SerializeTree(
         IModGetter mod, CancellationToken cancel = default)
     {
