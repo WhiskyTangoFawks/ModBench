@@ -89,8 +89,7 @@ public static class RecordEndpoints
         .ProducesProblem(422)
         // The source file is not ours exclusively — an I/O failure mid-edit is a real answer this
         // route can give, so it is declared like every other (endpoint invariant).
-        .ProducesProblem(500)
-        .ProducesProblem(503);
+        .ProducesProblem(500);
 
         app.MapPost("/records/delete", (RecordDeleteRequest request, DeleteRecordHandler edits) =>
             DeleteRecord(request, edits, logger))
@@ -195,14 +194,7 @@ public static class RecordEndpoints
             execute: () => edits.Edit(
                 new PluginAddress(request.Plugin, request.Origin), decoded,
                 new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value)),
-            onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled, result.NewFormKey)),
-            onNoLoadOrder: ex =>
-            {
-                // 503, matching every sibling's own mapping for it: the load order went away
-                // underneath the request, which is a "not right now", never a bad request.
-                logger.LogError(ex, "No usable loadOrder while editing {FormKey} at {Path}", decoded, spelled);
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            });
+            onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled, result.NewFormKey)));
     }
 
     internal static Task<IResult> DeleteRecord(RecordDeleteRequest request, DeleteRecordHandler edits, ILogger logger)

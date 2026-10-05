@@ -98,6 +98,10 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [InlineData("getFilter", 503)]
     [InlineData("track", 503)]
     [InlineData("deleteRecord", 503)]
+    [InlineData("setFilter", 503)]
+    [InlineData("getPluginDiagnoses", 503)]
+    [InlineData("decompilePlugin", 503)]
+    [InlineData("copyRecord", 503)]
     public async Task Endpoint_WithAValidRequestAndNoLoadOrder_ReturnsProblemDetails(string op, int expectedStatus)
     {
         await using var app = new MEditHost();
@@ -110,6 +114,10 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "createPlugin" => await client.PostAsJsonAsync(
                 "/plugins/create", new { origin = "NoLoadOrderMod", name = "New.esp", folder = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod") }),
             "getFilter" => await client.GetAsync("/load-order/filter"),
+            "setFilter" => await client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" }),
+            "getPluginDiagnoses" => await client.GetAsync("/plugins/diagnoses"),
+            "decompilePlugin" => await client.Decompile([("New.esp", "NoLoadOrderMod")]),
+            "copyRecord" => await client.Copy("000800:New.esp", ("New.esp", "NoLoadOrderMod"), "Override", ("Dest.esp", "DestMod")),
             "track" => await client.PostAsJsonAsync("/plugins/track", new { mods = new[] { "NoLoadOrderMod" } }),
             "deleteRecord" => await client.PostAsJsonAsync("/records/delete", new
             {
