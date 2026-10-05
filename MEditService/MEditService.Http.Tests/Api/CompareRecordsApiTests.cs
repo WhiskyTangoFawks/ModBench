@@ -99,6 +99,7 @@ public sealed class CompareRecordsApiTests : HostedTests
 
         response.EnsureSuccessStatusCode();
         var column = (await response.Body()).GetProperty("overrides").EnumerateArray().Single();
+        Assert.Equal((WithNpc, WithNpcMod), (column.GetProperty("plugin").GetString(), column.GetProperty("origin").GetString()));
         Assert.False(string.IsNullOrWhiteSpace(column.GetProperty("parseDiagnosis").GetString()));
     }
 

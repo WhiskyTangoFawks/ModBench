@@ -6,11 +6,37 @@ export interface CopyModeItem extends vscode.QuickPickItem {
   readonly mode: CopyMode;
 }
 
-/** plugins.md, Pickers, Copy: the mode first, in xEdit's navigator order. */
-export const COPY_MODE_ITEMS: readonly CopyModeItem[] = [
-  { label: 'Override', detail: 'The record itself, under its own FormKey, in each plugin you pick.', mode: 'Override' },
-  { label: 'New record', detail: 'A duplicate under the next free FormID of each plugin you pick.', mode: 'New' },
-];
+const OVERRIDE_ITEM: CopyModeItem = {
+  label: 'Override', detail: 'The record itself, under its own FormKey, in each plugin you pick.', mode: 'Override',
+};
+const NEW_ITEM: CopyModeItem = {
+  label: 'New record', detail: 'A duplicate under the next free FormID of each plugin you pick.', mode: 'New',
+};
+const DEEP_ITEM: CopyModeItem = {
+  label: 'Deep copy as override',
+  detail: 'The record itself and all its child records, under their own FormKeys, in each plugin you pick.',
+  mode: 'DeepOverride',
+};
+
+/** xEdit's menu order: override, deep copy as override, new record. */
+export function copyModeItems(offerDeep: boolean): readonly CopyModeItem[] {
+  return offerDeep ? [OVERRIDE_ITEM, DEEP_ITEM, NEW_ITEM] : [OVERRIDE_ITEM, NEW_ITEM];
+}
+
+export const isOverride = (mode: CopyMode): boolean => mode === 'Override' || mode === 'DeepOverride';
+
+export const runsUnderPluginsBar = (mode: CopyMode): boolean => mode === 'DeepOverride';
+
+/** A deep copy keeps the destination's own copy of a record that has child records, whatever
+ *  replace says, so only the other records' held copies are asked about. */
+export function recordsAskedToReplace(
+  mode: CopyMode, records: readonly RecordAddress[], withChildren: readonly RecordAddress[],
+): readonly RecordAddress[] {
+  if (mode !== 'DeepOverride') return records;
+  const hasChildren = (record: RecordAddress) => withChildren.some((w) =>
+    w.formKey === record.formKey && samePluginAddress(pluginAddressOf(w), pluginAddressOf(record)));
+  return records.filter((record) => !hasChildren(record));
+}
 
 export interface CopyDestinationItem extends vscode.QuickPickItem {
   readonly plugin: PluginAddress;
@@ -24,7 +50,7 @@ export function copyDestinationItems(
   const livesInEveryRecord = (p: PluginMetadata) => records.every((r) => samePluginAddress(pluginAddressOf(r), p));
   return plugins
     .filter((p) => p.isTracked && !p.isImmutable)
-    .filter((p) => mode !== 'Override' || !livesInEveryRecord(p))
+    .filter((p) => !isOverride(mode) || !livesInEveryRecord(p))
     .map((p) => ({
       label: p.name,
       description: p.loadOrderIndex === null || p.loadOrderIndex === undefined ? undefined : `[${p.loadOrderIndex}]`,
@@ -38,7 +64,7 @@ const intoItsOwnPlugin = ({ record, destination }: CopyItem): boolean => samePlu
 /** The landed items that wrote a copy: mEdit writes nothing for an override into the record's own
  *  plugin, and nothing is said of it (commands.md, Doing nothing is not an error). */
 export function copiesWritten(landed: readonly CopyItem[], mode: CopyMode): CopyItem[] {
-  return mode === 'Override' ? landed.filter((item) => !intoItsOwnPlugin(item)) : [...landed];
+  return isOverride(mode) ? landed.filter((item) => !intoItsOwnPlugin(item)) : [...landed];
 }
 
 /** Each record and picked destination where the destination already holds a copy of the record:

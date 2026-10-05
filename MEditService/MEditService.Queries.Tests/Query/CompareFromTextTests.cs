@@ -57,33 +57,43 @@ public sealed class CompareFromTextTests
         _service.GetCompare(_chest.FormKey.ToString(), new CopyText(plugin, text))
         ?? throw new InvalidOperationException("Expected the record to compare.");
 
-    [Fact]
-    public void WithoutText_TheCopiesAreTheIndexs_AndAgree()
-    {
-        var compare = _service.GetCompare(_chest.FormKey.ToString()) ?? throw new InvalidOperationException();
+    private static PluginAddress AddressOf(CompareOverride column) => new(column.Plugin, column.Origin);
 
-        Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
-    }
+    private static string KeyOf(PluginAddress plugin) => ColumnKey.Of(plugin.Name, plugin.Origin);
+
+    private static IEnumerable<FieldDiff> Flatten(IEnumerable<FieldDiff> diffs) =>
+        diffs.SelectMany(d => new[] { d }.Concat(Flatten(d.Children ?? [])));
+
+    private static IEnumerable<(string Field, string Winner, string States)> StatesOf(IEnumerable<FieldDiff> diffs) =>
+        Flatten(diffs).Select(d => (d.FieldName, d.WinnerColumn, string.Join(",", d.CellStates.OrderBy(c => c.Key).Select(c => $"{c.Key}={c.Value}"))));
 
     [Fact]
     public void ThePluginsColumnReadsTheText_AndTheConflictStatesFollowIt()
     {
         var compare = Compare(ModPlugin, RealDocuments.BodyOf(_otherChest, Release));
 
-        Assert.Equal([BasePlugin.Name, ModPlugin.Name], compare.Overrides.Select(o => o.Plugin));
+        Assert.Equal([BasePlugin, ModPlugin], compare.Overrides.Select(AddressOf));
         Assert.NotEqual(ConflictAll.NoConflict, compare.ConflictAll);
         var items = compare.Diffs.Single(d => d.FieldName == "Items");
-        Assert.NotEqual(items.Values[ColumnKey.Of(BasePlugin.Name, BasePlugin.Origin)]?.ToString(), items.Values[ColumnKey.Of(ModPlugin.Name, ModPlugin.Origin)]?.ToString());
+        Assert.NotEqual(items.Values[KeyOf(BasePlugin)]?.ToString(), items.Values[KeyOf(ModPlugin)]?.ToString());
     }
 
     [Fact]
-    public void ACopyWhosePluginIsNotActive_IsAColumnReadFromTheText()
+    public void ACopyWhosePluginIsNotActive_IsAColumnOutsideTheComparison_TheActiveCopiesClassifyAsWithoutIt()
     {
+        var without = _service.GetCompare(_chest.FormKey.ToString()) ?? throw new InvalidOperationException();
+
         var compare = Compare(InactivePlugin, RealDocuments.BodyOf(_otherChest, Release));
 
-        Assert.Equal([BasePlugin.Name, ModPlugin.Name, InactivePlugin.Name], compare.Overrides.Select(o => o.Plugin));
-        Assert.Equal(InactivePlugin.Name, compare.Overrides[^1].Plugin);
-        Assert.NotEqual(ConflictAll.NoConflict, compare.ConflictAll);
+        Assert.Equal([BasePlugin, ModPlugin, InactivePlugin], compare.Overrides.Select(AddressOf));
+        var items = compare.Diffs.Single(d => d.FieldName == "Items");
+        Assert.NotNull(items.Values[KeyOf(InactivePlugin)]);
+        Assert.All(Flatten(compare.Diffs), d => Assert.DoesNotContain(KeyOf(InactivePlugin), d.CellStates.Keys));
+        Assert.Null(compare.Overrides[^1].ConflictThis);
+        Assert.Equal(without.ConflictAll, compare.ConflictAll);
+        Assert.Equal(
+            without.Overrides.Select(o => o.ConflictThis), compare.Overrides.Take(2).Select(o => o.ConflictThis));
+        Assert.Equal(StatesOf(without.Diffs), StatesOf(compare.Diffs));
     }
 
     [Fact]
@@ -91,7 +101,7 @@ public sealed class CompareFromTextTests
     {
         var compare = Compare(ModPlugin, "{ not json");
 
-        var column = compare.Overrides.Single(o => o.Plugin == ModPlugin.Name);
+        var column = compare.Overrides.Single(o => AddressOf(o) == ModPlugin);
         Assert.False(string.IsNullOrWhiteSpace(column.ParseDiagnosis));
         Assert.All(compare.Overrides.Where(o => o != column), o => Assert.Null(o.ParseDiagnosis));
     }

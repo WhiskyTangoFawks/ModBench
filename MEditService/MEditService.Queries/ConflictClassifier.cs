@@ -13,11 +13,14 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
 
     // resolveFormKey (ADR-0005), batched once per Classify so every formKey leaf's
     // Resolutions fills in this pass. loadOrderFormIds orders a keyed array's FormKeys.
+    // outsideTheComparison are columns shown beside the rest that take no part in it: they win no
+    // cell and carry no state.
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         GameRelease release,
         Func<string, RecordLookupEntry?> resolveFormKey,
-        Func<string, uint?> loadOrderFormIds)
+        Func<string, uint?> loadOrderFormIds,
+        IReadOnlyList<RecordDetail>? outsideTheComparison = null)
     {
         // The fallback for a field no column carries; a lone override is its own winner whatever
         // its IsWinner flag says.
@@ -27,11 +30,14 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
                 $"No winner in {conflictingRecords.Count} overrides for FormKey '{conflictingRecords[0].FormKey}'");
 
         var columns = conflictingRecords.Select(Column).ToList();
+        var shown = conflictingRecords.Concat(outsideTheComparison ?? []).ToList();
+        var shownColumns = shown.Select(Column).ToList();
         var ctx = ContextOf(
-            conflictingRecords, columns, winner, release, resolveFormKey, loadOrderFormIds,
-            shadowed: conflictingRecords.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal),
-            cellStates: (values, same) => ConflictRules.ComputeCellStates(values, columns[0], OrderOf(conflictingRecords, columns), same));
-        var diffs = RecordChildren(conflictingRecords, ctx);
+            shown, shownColumns, winner, release, resolveFormKey, loadOrderFormIds,
+            shadowed: shown.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal),
+            cellStates: (values, same) => ConflictRules.ComputeCellStates(values, columns[0], OrderOf(conflictingRecords, columns), same),
+            comparedCount: conflictingRecords.Count);
+        var diffs = RecordChildren(shown, ctx);
 
         if (conflictingRecords.Count == 1)
             return new ClassifyResult(
@@ -72,12 +78,12 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
     private DiffContext ContextOf(
         IReadOnlyList<RecordDetail> records, IReadOnlyList<string> columns, int winner, GameRelease release,
         Func<string, RecordLookupEntry?> resolveFormKey, Func<string, uint?> loadOrderFormIds,
-        IReadOnlySet<string> shadowed, CellStatesOf cellStates) =>
+        IReadOnlySet<string> shadowed, CellStatesOf cellStates, int? comparedCount = null) =>
         new(
             MasterColumn: columns[0],
             RecordWinnerColumn: columns[winner],
             Columns: columns,
-            ColumnOrder: OrderOf(records, columns),
+            ColumnOrder: OrderOf([.. records.Take(comparedCount ?? records.Count)], columns),
             PartialFormColumns: records.Select((r, i) => (r, i)).Where(t => t.r.IsPartialForm).Select(t => columns[t.i]).ToHashSet(StringComparer.Ordinal),
             ShadowedColumns: shadowed,
             StatesOf: cellStates,

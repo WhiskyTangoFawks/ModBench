@@ -353,6 +353,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
+    client.setQueryAnswer('getRecordsWithChildren', []);
     registerRecordCopyCommands(client, reporter, ask, () => viewSelection, write);
     return { reporter, ask, writing, viewsAskedFor };
   }
@@ -368,7 +369,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     ]);
   }
 
-  function pick(mode: 'Override' | 'New' | undefined, picked?: readonly { name: string; origin: string }[]) {
+  function pick(mode: 'Override' | 'New' | 'DeepOverride' | undefined, picked?: readonly { name: string; origin: string }[]) {
     showQuickPick.mockImplementationOnce((items) =>
       Promise.resolve(items.find((item) => item.mode === mode)));
     showQuickPick.mockImplementationOnce((items) =>
@@ -656,6 +657,152 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     await copy(holder);
 
     expect(viewsAskedFor).toEqual([REFERENCED_BY_VIEW]);
+  });
+
+  describe('deep copy as override, offered when a selected record has child records', () => {
+    const modes = () => present(showQuickPick.mock.calls[0], 'the mode pick')[0].map((item) => item.mode);
+
+    it('is not in the mode pick when no selected record has child records', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      pick(undefined);
+      invoke(client);
+
+      await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
+
+      expect(modes()).toEqual(['Override', 'New']);
+    });
+
+    it('is in the mode pick when any one selected record has child records, asked of mEdit for the whole selection', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      pick(undefined);
+      invoke(client);
+      client.setQueryAnswerOnce('getRecordsWithChildren', [SECOND]);
+
+      await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
+
+      expect(modes()).toEqual(['Override', 'DeepOverride', 'New']);
+      expect(client.calls.filter((c) => c.method === 'getRecordsWithChildren').map((c) => c.args))
+        .toEqual([[[SOURCE, SECOND]]]);
+    });
+
+    it('is offered from the record panel\'s column header as from the Plugins view', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      pick(undefined);
+      invoke(client);
+      client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
+
+      await copy(HEADER);
+
+      expect(modes()).toContain('DeepOverride');
+    });
+
+    it('copies in the deep mode, into destinations that exclude the record\'s own plugin', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      client.setQueryAnswer('getRecordHolders', []);
+      client.setCommandResult('copyRecords', { landed: [], refused: [] });
+      pick('DeepOverride', [PATCH]);
+      invoke(client);
+      client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
+
+      await copy(RECORD_NODE);
+
+      expect(present(showQuickPick.mock.calls[1], 'the destination pick')[0].map((item) => item.label))
+        .toEqual(['Patch.esp', 'Other.esp']);
+      expect(copyCalls(client)).toEqual([[[SOURCE], 'DeepOverride', [PATCH], false]]);
+    });
+
+    it('asks nothing of a held record that has child records, whose own copy a deep copy keeps', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      client.setQueryAnswer('getRecordHolders', [PATCH]);
+      client.setCommandResult('copyRecords', { landed: [], refused: [] });
+      pick('DeepOverride', [PATCH]);
+      const { ask } = invoke(client);
+      client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
+
+      await copy(RECORD_NODE);
+
+      expect(ask.asked).toEqual([]);
+      expect(copyCalls(client)).toEqual([[[SOURCE], 'DeepOverride', [PATCH], false]]);
+    });
+
+    it('still asks to replace the held copy of a record with child records in a plain override, which replaces it', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      client.setQueryAnswer('getRecordHolders', [PATCH]);
+      client.setCommandResult('copyRecords', { landed: [], refused: [] });
+      pick('Override', [PATCH]);
+      const { ask } = invoke(client, 'Replace');
+      client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
+
+      await copy(RECORD_NODE);
+
+      expect(ask.asked).toHaveLength(1);
+    });
+
+    it('asks to replace only the held copies of records without child records, which copy as overrides', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      client.setQueryAnswer('getRecordHolders', [PATCH]);
+      client.setCommandResult('copyRecords', { landed: [], refused: [] });
+      pick('DeepOverride', [PATCH]);
+      const { ask } = invoke(client, 'Replace');
+      client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
+
+      await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
+
+      expect(ask.asked).toHaveLength(1);
+      expect(present(ask.asked[0], 'the replace question').detail).toBe('Second [000802:MyPatch.esp] in Patch.esp (PatchMod)');
+      expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'DeepOverride', [PATCH], true]]);
+    });
+
+    it('says nothing of a deep copy into the record\'s own plugin, which wrote nothing', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      client.setQueryAnswer('getRecordHolders', []);
+      client.setCommandResult('copyRecords', { landed: [{ record: SOURCE, destination: { name: 'MyPatch.esp', origin: 'ModA' } }], refused: [] });
+      pick('DeepOverride', [PATCH]);
+      const { reporter } = invoke(client);
+      client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
+
+      await copy(RECORD_NODE);
+
+      expect(reporter.landings).toEqual([]);
+    });
+
+    it('runs under the Plugins view\'s bar from Referenced By\'s rows, which a deep copy never uses', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      client.setQueryAnswer('getRecordHolders', []);
+      client.setCommandResult('copyRecords', { landed: [], refused: [] });
+      pick('DeepOverride', [PATCH]);
+      const { viewsAskedFor } = invoke(client);
+      client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
+      const holder = new ReferencedByHolderNode('000001:A.esp', SOURCE.formKey, undefined, { name: 'MyPatch.esp', origin: 'ModA' }, []);
+
+      await copy(holder);
+
+      expect(viewsAskedFor).toEqual([undefined]);
+    });
+
+    it('says why it could not ask which records have child records, and copies nothing', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      const { reporter } = invoke(client);
+      client.setQueryFailureOnce('getRecordsWithChildren', new Error('The index is not ready.'));
+
+      await copy(RECORD_NODE);
+
+      expect(reporter.reports).toEqual([{
+        severity: 'error', message: 'Could not look up which records have child records.', detail: 'The index is not ready.',
+      }]);
+      expect(showQuickPick).not.toHaveBeenCalled();
+      expect(copyCalls(client)).toEqual([]);
+    });
   });
 
   it('opens no write when the pick is left with Esc', async () => {

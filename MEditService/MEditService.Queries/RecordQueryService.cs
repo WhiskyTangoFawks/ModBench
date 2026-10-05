@@ -84,35 +84,38 @@ public sealed class RecordQueryService(
     {
         var reads = RequireReads();
         var stack = reads.GetOverrideStack(formKey);
+        if (stack == null && text == null) return null;
         var snapshot = _loadOrder.Require();
 
-        var copies = stack?.Entries.Select(e => e.Effective).ToList() ?? [];
+        var active = stack?.Entries.Select(e => e.Effective).ToList() ?? [];
+        var outside = new List<RecordDocument>();
         if (text is not null)
         {
-            var at = copies.FindIndex(c => PluginAddress.Comparer.Equals(c.Plugin, text.Plugin));
-            var loadOrderIndex = at >= 0 ? copies[at].LoadOrderIndex : snapshot.LoadOrderIndex(text.Plugin) ?? NotInLoadOrder;
+            var at = active.FindIndex(c => PluginAddress.Comparer.Equals(c.Plugin, text.Plugin));
+            var loadOrderIndex = at >= 0 ? active[at].LoadOrderIndex : snapshot.LoadOrderIndex(text.Plugin) ?? NotInLoadOrder;
             var fromText = reads.DocumentFromText(formKey, text.Plugin, loadOrderIndex, text.DocumentText);
             if (fromText is null) return null;
-            if (at >= 0) copies[at] = fromText with { IsWinner = copies[at].IsWinner };
-            else copies = [.. copies.Append(fromText).OrderBy(c => c.LoadOrderIndex)];
+            if (at >= 0) active[at] = fromText with { IsWinner = active[at].IsWinner };
+            else outside.Add(fromText);
         }
-        if (copies.Count == 0) return null;
+        var recordType = (active.Count > 0 ? active[0] : outside[0]).RecordType;
 
         // One memoizing cache per response (ADR-0005): a FormKey repeated across sibling
         // cells/plugins/leaves (generic fields and VMAD alike) is resolved at most once.
         var resolveFormKey = reads.LinkResolver(formKey);
-        var committedOverrides = copies.ConvertAll(ToRecordDetail);
-        var (classification, conflictAll) = ClassifyStack(
-            committedOverrides, resolveFormKey, LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins));
+        var formIds = LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins);
+        var overrides = active.ConvertAll(ToRecordDetail);
+        var outsideTheComparison = outside.ConvertAll(ToRecordDetail);
+        var (classification, conflictAll) = ClassifyStack(overrides, resolveFormKey, formIds, outsideTheComparison);
         // PluginStates is keyed by ColumnKey.Of (ADR-0012), so a bare-plugin lookup
         // would miss for any non-Data-origin column and silently drop its ConflictThis.
-        var annotated = committedOverrides
-            .ConvertAll(o => ToCompareOverride(
+        var annotated = overrides.Concat(outsideTheComparison)
+            .Select(o => ToCompareOverride(
                 o, classification.PluginStates.TryGetValue(ColumnKey.Of(o.Plugin, o.Origin), out var state) ? state : null,
-                column: null, snapshot, reads));
+                column: null, snapshot, reads))
+            .ToList();
 
-        return new CompareResult(
-            annotated, classification.Diffs, conflictAll, RequireSchemas().DisplayNameFor(copies[0].RecordType));
+        return new CompareResult(annotated, classification.Diffs, conflictAll, RequireSchemas().DisplayNameFor(recordType));
     }
 
     public CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies)
@@ -150,12 +153,20 @@ public sealed class RecordQueryService(
             Column: column);
 
     private (ClassifyResult Classification, ConflictAll ConflictAll) ClassifyStack(
-        IReadOnlyList<RecordDetail> committedOverrides,
+        List<RecordDetail> committedOverrides,
         Func<string, RecordLookupEntry?> resolveFormKey,
-        Func<string, uint?> loadOrderFormIds)
+        Func<string, uint?> loadOrderFormIds,
+        List<RecordDetail> outsideTheComparison)
     {
-        var classification = _conflictClassifier.Classify(
-            committedOverrides, _loadOrder.Require().GameRelease, resolveFormKey, loadOrderFormIds);
+        var release = _loadOrder.Require().GameRelease;
+        // With no active copy there is nothing to compare: the copy outside it stands alone.
+        var classification = committedOverrides.Count > 0
+            ? _conflictClassifier.Classify(committedOverrides, release, resolveFormKey, loadOrderFormIds, outsideTheComparison)
+            : new ClassifyResult(
+                ConflictAll.NoConflict, new Dictionary<string, ConflictThis>(),
+                _conflictClassifier.Align(
+                    outsideTheComparison, [.. (outsideTheComparison).Select(r => ColumnKey.Of(r.Plugin, r.Origin))],
+                    release, resolveFormKey, loadOrderFormIds));
         return (classification, classification.ConflictAll);
     }
 
