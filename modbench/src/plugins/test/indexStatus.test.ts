@@ -140,7 +140,7 @@ function followed() {
     client,
     tree: {
       applyIndexed: vi.fn(), applyRefused: vi.fn(), applyBackendUnreachable: vi.fn(),
-      applyReconciled: vi.fn().mockResolvedValue([]), refreshFacts: vi.fn().mockResolvedValue([]),
+      applyReconciled: vi.fn().mockResolvedValue(0), refreshFacts: vi.fn().mockResolvedValue(undefined),
     },
     recordBrowser: { refresh: vi.fn() },
     progress: { while: vi.fn((work: () => Promise<void>) => work()), say: vi.fn() },
@@ -164,6 +164,16 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
 
     expect(deps.tree.applyReconciled).toHaveBeenCalledOnce();
     expect(statusBarText()).toBe('$(check) mEdit: Ready (2 plugins)');
+  });
+
+  it('logs how many plugins the tree holds next to the failures and the snapshot\'s total', async () => {
+    const { client, deps } = followed();
+    deps.tree.applyReconciled.mockResolvedValue(3);
+
+    client.emit(statusEvent({ activePlugins: 2 }));
+    await flushed();
+
+    expect(deps.log).toHaveBeenCalledWith('info', expect.stringContaining('3 in the load order, 0 failed'));
   });
 
   it.each([

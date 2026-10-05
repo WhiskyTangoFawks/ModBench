@@ -133,5 +133,5 @@ async function applyReconciled(
   }
   // Do not remove as logging noise: `held.length + failures.length` landing close to
   // `totalPlugins` is what tells a stuck-tail reconcile here from one broken upstream.
-  log('info', `[loadOrder] applying reconciled load order to tree: ${held.length} in the load order, ${failures.length} failed, of ${totalPlugins} plugins`);
+  log('info', `[loadOrder] applying reconciled load order to tree: ${held} in the load order, ${failures.length} failed, of ${totalPlugins} plugins`);
 }
