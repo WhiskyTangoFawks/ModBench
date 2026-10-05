@@ -1,6 +1,6 @@
-using MEditService.LoadOrder;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;

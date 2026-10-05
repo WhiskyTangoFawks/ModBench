@@ -1,7 +1,7 @@
 using System.Reflection;
 using MEditService.Commands;
-using MEditService.Queries;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.Queries;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -62,8 +62,6 @@ public sealed class WriteRouteHandlerTests
             writes);
     }
 
-    // Queries owns reads and Commands owns writes: a route is a read when its handler takes a
-    // Queries service and no Commands handler, whatever its HTTP method.
     private static bool IsWrite(string method, string pattern, IReadOnlyList<Type> parameters) =>
         parameters.Any(IsHandler)
         || (method != "GET"

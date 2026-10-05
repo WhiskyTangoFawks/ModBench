@@ -1,8 +1,8 @@
-using MEditService.LoadOrder;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
