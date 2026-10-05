@@ -128,9 +128,8 @@ export const separatorNameRefusal = (
   access: ModlistAccess, profile: string, requested: string, own?: string,
 ): Promise<string | undefined> => entryNameRefusal(access, profile, 'separator', requested, SEPARATOR_NAME_CLASH, own);
 
-/** Why `requested` cannot rename mod `own`, or `undefined` when it can: it holds a path separator,
- *  or another mod of that name is listed or has a folder, matched as the instance matches names.
- *  `own` in another case is no clash. */
+/** Why `requested` cannot rename mod `own`, or `undefined` when it can: it holds a path separator, or
+ *  another mod of that name is listed or has a folder, matched as the instance matches names. */
 export const renameModNameRefusal = (
   access: ModlistAccess, profile: string, requested: string, own: string,
 ): Promise<string | undefined> =>
