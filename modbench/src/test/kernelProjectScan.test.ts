@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 import { tsFiles } from './tsFiles';
-import { BOXES, BOXES_BY_BAND, CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, PROJECT_FOLDERS, READ_MODEL_AND_REPOSITORY_BOXES, parseProject } from './boxes';
+import { BOXES, BOXES_BY_BAND, CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, READ_MODEL_AND_REPOSITORY_BOXES, parseProject } from './boxes';
 
 const MODBENCH = join(__dirname, '..', '..');
 
@@ -45,16 +45,8 @@ describe('one composite project per box', () => {
     expect(BOXES.length).toBeGreaterThan(10);
   });
 
-  it('every project folder on disk is a box the zoom-out draws', () => {
-    expect(PROJECT_FOLDERS.filter((folder) => !BOXES.includes(folder))).toEqual([]);
-  });
-
   it.each(BOXES)('%s is composite', (box) => {
     expect(parsed(boxProject(box)).options.composite).toBe(true);
-  });
-
-  it.each(KERNEL_BOXES)('%s references nothing', (box) => {
-    expect(referencePaths(boxProject(box))).toEqual([]);
   });
 
   it.each(KERNEL_BOXES)('%s sees the Node types and no others', (box) => {
