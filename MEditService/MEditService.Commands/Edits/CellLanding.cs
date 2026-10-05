@@ -164,22 +164,12 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
     }
 
     // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile; ADR-0018).
-    // An unreadable document refuses.
-    private Step<IReadOnlySet<string>> MastersOf(Move move)
-    {
-        try
-        {
-            return new Step<IReadOnlySet<string>>.Done(
-                RequiredMasters.InTheTree(move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release)));
-        }
-        catch (UnreadableSourceDocumentException ex)
-        {
-            return new Step<IReadOnlySet<string>>.Refused(RecordEditResult.RefusedAt(
-                RecordEditRefusal.RecordParseFailed, move.Spelled,
-                $"'{move.Spelled}': the cell {move.Moved.FormKey} moves into comes only from a master of {move.Plugin.Name}, " +
-                $"which its source tree names, and that tree cannot be read: {ex.Message.TrimEnd('.')}. Nothing was written."));
-        }
-    }
+    private Step<IReadOnlySet<string>> MastersOf(Move move) =>
+        RequiredMasters.InTheTree(
+            move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release), move.Spelled,
+            $"the cell {move.Moved.FormKey} moves into", out var masters) is { } unreadable
+            ? new Step<IReadOnlySet<string>>.Refused(unreadable)
+            : new Step<IReadOnlySet<string>>.Done(masters);
 
     // The own fields of the nearest master's copy, as an override, or else a new cell native to the plugin.
     private Step<JsonObject> CopiedOrNew(Move move, LeftCopy left, Func<string, JsonNode?> cellIn, long flags, (int X, int Y) grid)

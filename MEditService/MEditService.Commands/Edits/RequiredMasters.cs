@@ -15,13 +15,28 @@ internal sealed class RequiredMasters(PluginAddress plugin)
     private readonly HashSet<string> _links = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The masters <paramref name="plugin"/>'s working tree requires (ADR-0008).</summary>
-    internal static IReadOnlySet<string> InTheTree(
-        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    /// <remarks>An unreadable tree refuses, with nothing written. <paramref name="comesFromTheMasters"/>
+    /// names what the caller reads from a master of the plugin.</remarks>
+    internal static RecordEditResult? InTheTree(
+        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        string spelled, string comesFromTheMasters, out IReadOnlySet<string> masters)
     {
         var required = new RequiredMasters(plugin);
-        using var documents = repository.OpenDocuments(plugin, schemas);
-        foreach (var document in documents.Records) required.Add(document, schemas[document.RecordType]);
-        return required.Masters;
+        try
+        {
+            using var documents = repository.OpenDocuments(plugin, schemas);
+            foreach (var document in documents.Records) required.Add(document, schemas[document.RecordType]);
+        }
+        catch (UnreadableSourceDocumentException ex)
+        {
+            masters = required.Masters;
+            return RecordEditResult.RefusedAt(
+                RecordEditRefusal.RecordParseFailed, spelled,
+                $"'{spelled}': {comesFromTheMasters} comes only from a master of {plugin.Name}, " +
+                $"which its source tree names, and that tree cannot be read: {ex.Message.TrimEnd('.')}. Nothing was written.");
+        }
+        masters = required.Masters;
+        return null;
     }
 
     internal IReadOnlySet<string> Masters => _masters;
