@@ -52,6 +52,7 @@ import { assertAskedOnce, recordingReporter, scriptedDialog } from '../../test/s
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
 import { pluginMetadataFixture, compiledPluginFixture } from '../../client/test/fixtures';
 import { present } from '../../ports/present';
+import { quickPickChoosing } from '../../drivingLib/test/quickPickDouble';
 
 beforeEach(() => {
   handlers.clear();
@@ -490,35 +491,53 @@ describe('modbench.plugin.compile', () => {
     expect(compileCalls(client)).toEqual([[[OTHER]]]);
   });
 
-  it('from the palette, picks among the tracked plugins, read-only included, the selected one first, and compiles the pick', async () => {
+  type CompileItem = { label: string; description?: string };
+  const scriptCompilePick = (choose: (items: readonly CompileItem[]) => CompileItem | undefined) => {
+    const pick = quickPickChoosing<CompileItem>(choose);
+    createQuickPick.mockImplementationOnce(() => pick);
+    return pick;
+  };
+  const OTHER_ITEM = { label: 'Other.esp', description: 'ModB' };
+  const ALL_ITEMS = [OTHER_ITEM, { label: 'MyPatch.esp', description: 'ModA' }, { label: 'ReadOnly.esp', description: 'ModD' }];
+
+  it('from the palette, picks among the tracked plugins, read-only included, the selected one first and marked, and compiles the pick', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('compile', { landed: [compiledPluginFixture({ plugin: OTHER })], refused: [] });
-    showQuickPick.mockResolvedValue({ label: 'Other.esp', description: 'ModB' });
+    const pick = scriptCompilePick((items) => items.find((i) => i.label === 'Other.esp'));
     const { handler } = registered(client, { viewSelection: [row(OTHER)] });
 
     await handler();
 
-    expect(showQuickPick).toHaveBeenCalledWith(
-      [{ label: 'Other.esp', description: 'ModB' }, { label: 'MyPatch.esp', description: 'ModA' }, { label: 'ReadOnly.esp', description: 'ModD' }],
-      { placeHolder: 'Compile which plugin?' });
+    expect(pick.items).toEqual(ALL_ITEMS);
+    expect(pick.activeItems).toEqual([OTHER_ITEM]);
+    expect(pick.placeholder).toBe('Compile which plugin?');
     expect(compileCalls(client)).toEqual([[[OTHER]]]);
   });
 
   it('from the palette, leads with the selected plugin whatever the case of its row\'s name and origin', async () => {
     const client = new InMemoryMEditClient();
-    showQuickPick.mockResolvedValue(undefined);
+    const pick = scriptCompilePick(() => undefined);
     const { handler } = registered(client, { viewSelection: [row({ name: 'other.ESP', origin: 'modb' })] });
 
     await handler();
 
-    expect(showQuickPick).toHaveBeenCalledWith(
-      [{ label: 'Other.esp', description: 'ModB' }, { label: 'MyPatch.esp', description: 'ModA' }, { label: 'ReadOnly.esp', description: 'ModD' }],
-      { placeHolder: 'Compile which plugin?' });
+    expect(pick.items).toEqual(ALL_ITEMS);
+    expect(pick.activeItems).toEqual([OTHER_ITEM]);
+  });
+
+  it('from the palette, marks nothing when no compilable plugin is selected', async () => {
+    const client = new InMemoryMEditClient();
+    const pick = scriptCompilePick(() => undefined);
+    const { handler } = registered(client);
+
+    await handler();
+
+    expect(pick.activeItems).toEqual([]);
   });
 
   it('from the palette, compiles nothing when the pick is dismissed', async () => {
     const client = new InMemoryMEditClient();
-    showQuickPick.mockResolvedValue(undefined);
+    scriptCompilePick(() => undefined);
     const { handler, reporter } = registered(client);
 
     await handler();
