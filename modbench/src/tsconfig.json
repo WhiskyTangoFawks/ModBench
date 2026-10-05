@@ -26,6 +26,6 @@
     { "path": "./plugins" },
     { "path": "./editor" }
   ],
-  "include": ["*.ts", "medit/*.ts"],
+  "include": ["*.ts"],
   "exclude": ["**/*.test.ts"]
 }

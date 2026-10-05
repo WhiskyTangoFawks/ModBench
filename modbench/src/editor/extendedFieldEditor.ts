@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
-import { mkdir, writeFile, chmod, unlink } from 'node:fs/promises';
 import type { Reporter } from '../ports/reporter';
-import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 
 /** Which cell a tab edits: the record, the field and the plugin (ADR-0012). */
@@ -12,110 +10,108 @@ export interface ExtendedFieldIdentity {
   origin: string;
 }
 
-/** Where a cell's tab is written: the file, and the folder that must exist for it. */
-export interface ExtendedFieldFile {
-  folder: string;
-  file: string;
-}
-
 export interface OpenExtendedFieldEditorParams extends ExtendedFieldIdentity {
   value: string;
   readOnly: boolean;
 }
 
 export interface ExtendedFieldEditorDeps {
-  // The composition root's answer for where a cell's tab is written: this view builds no path.
-  fieldFile: (field: ExtendedFieldIdentity) => ExtendedFieldFile;
   // Runs once per save, not once per tab: a tab can be saved any number of times while open, and
   // each save is its own commit of the leaf.
   onCommit: (value: string) => Promise<void> | void;
-  log: (msg: string) => void;
   reporter: Reporter;
 }
 
-async function showBeside(path: string): Promise<void> {
-  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(path));
-  await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: false });
+export const EDITABLE_FIELD_SCHEME = 'modbench-field';
+export const READONLY_FIELD_SCHEME = 'modbench-field-readonly';
+
+interface OpenField {
+  content: Uint8Array;
+  version: number;
+  onCommit: ExtendedFieldEditorDeps['onCommit'];
 }
 
-// Keyed by the temp path, which carries the origin, and claimed before the first await so two
-// quick opens share one. Resolves to whether the tab opened.
-const openTabs = new Map<string, Promise<boolean>>();
+// A scheme's registration is read-only or not as a whole, so the two schemes are two providers.
+class FieldFileSystem implements vscode.FileSystemProvider {
+  readonly onDidChangeFile = new vscode.EventEmitter<vscode.FileChangeEvent[]>().event;
+  readonly fields = new Map<string, OpenField>();
 
-function reportOpenFailure(deps: ExtendedFieldEditorDeps, err: unknown): void {
-  // The user opened it from a cell's menu, an explicit action (ADR-0019).
-  deps.reporter.report('error', 'Could not open the extended editor.', errorMessage(err));
+  constructor(private readonly readOnly: boolean) {}
+
+  watch(): vscode.Disposable { return new vscode.Disposable(() => undefined); }
+
+  stat(uri: vscode.Uri): vscode.FileStat {
+    const { content, version } = this.fieldAt(uri);
+    return { type: vscode.FileType.File, ctime: 0, mtime: version, size: content.byteLength };
+  }
+
+  readFile(uri: vscode.Uri): Uint8Array { return this.fieldAt(uri).content; }
+
+  async writeFile(uri: vscode.Uri, content: Uint8Array): Promise<void> {
+    if (this.readOnly) throw vscode.FileSystemError.NoPermissions(uri);
+    const field = this.fieldAt(uri);
+    field.content = content;
+    field.version += 1;
+    await field.onCommit(new TextDecoder().decode(content));
+  }
+
+  readDirectory(): [string, vscode.FileType][] { return []; }
+  createDirectory(uri: vscode.Uri): void { throw vscode.FileSystemError.NoPermissions(uri); }
+  delete(uri: vscode.Uri): void { throw vscode.FileSystemError.NoPermissions(uri); }
+  rename(oldUri: vscode.Uri): void { throw vscode.FileSystemError.NoPermissions(oldUri); }
+
+  private fieldAt(uri: vscode.Uri): OpenField {
+    const field = this.fields.get(uri.toString());
+    if (!field) throw vscode.FileSystemError.FileNotFound(uri);
+    return field;
+  }
 }
 
-// A temp file, not a FileSystemProvider: a real file gets native dirty-tracking and the native
-// close prompt for free, so abandoning it commits nothing, and read-only is the OS permission bit
-// VS Code already honors.
-export async function openExtendedFieldEditor(
-  params: OpenExtendedFieldEditorParams, deps: ExtendedFieldEditorDeps,
-): Promise<void> {
-  const { folder, file: path } = deps.fieldFile(params);
-  const claimed = openTabs.get(path);
-  if (claimed) {
-    const opened = await claimed;
-    if (!opened) return;
-    await showBeside(path).catch((err: unknown) => reportOpenFailure(deps, err));
-    return;
-  }
-  const first = openFirst(params, deps, folder, path);
-  openTabs.set(path, first);
-  await first;
+const asSegment = (text: string): string => text.replaceAll('/', '_');
+
+// The origin rides in the query, so two columns that share a filename (ADR-0012) are two
+// documents; the last path segment is the tab's title.
+function fieldUri(field: ExtendedFieldIdentity, readOnly: boolean): vscode.Uri {
+  return vscode.Uri.from({
+    scheme: readOnly ? READONLY_FIELD_SCHEME : EDITABLE_FIELD_SCHEME,
+    path: `/${asSegment(field.recordLabel)}/${asSegment(field.fieldName)} [${asSegment(field.plugin)}]`,
+    query: field.origin,
+  });
 }
 
-async function openFirst(
-  params: OpenExtendedFieldEditorParams, deps: ExtendedFieldEditorDeps, folder: string, path: string,
-): Promise<boolean> {
-  const listeners: vscode.Disposable[] = [];
-  try {
-    await mkdir(folder, { recursive: true });
-    // A leftover file from a crashed session may be `chmod`-ed 0o444, and writeFile against a
-    // non-writable file throws EACCES. ENOENT is the one error to ignore — nothing exists to
-    // chmod yet.
-    await chmod(path, 0o644).catch((err: unknown) => {
-      if (errnoCode(err) !== 'ENOENT') throw err;
-    });
-    await writeFile(path, params.value, 'utf8');
-    // Read-only, not absent — a read-only tab is still the only way to read a long value in full,
-    // and the OS permission bit is enforcement VS Code already honors. Applied after the write,
-    // which needs it writable.
-    await chmod(path, params.readOnly ? 0o444 : 0o644);
+/** The documents behind "Open field value": each cell's text is a file of the Editor's own
+ *  schemes, so VS Code tracks dirtiness and the close prompt, and a save is the write. */
+export class ExtendedFieldDocuments implements vscode.Disposable {
+  private readonly editable = new FieldFileSystem(false);
+  private readonly readOnly = new FieldFileSystem(true);
+  private readonly registrations: vscode.Disposable[] = [
+    vscode.workspace.registerFileSystemProvider(EDITABLE_FIELD_SCHEME, this.editable),
+    vscode.workspace.registerFileSystemProvider(READONLY_FIELD_SCHEME, this.readOnly, { isReadonly: true }),
+    vscode.workspace.onDidCloseTextDocument(doc => {
+      this.editable.fields.delete(doc.uri.toString());
+      this.readOnly.fields.delete(doc.uri.toString());
+    }),
+  ];
 
-    const uri = vscode.Uri.file(path);
-    const saveListener = vscode.workspace.onDidSaveTextDocument(async savedDoc => {
-      if (savedDoc.uri.fsPath !== uri.fsPath) return;
-      await deps.onCommit(savedDoc.getText());
-    });
-    listeners.push(saveListener);
-    const closeListener = vscode.workspace.onDidCloseTextDocument(async closedDoc => {
-      if (closedDoc.uri.fsPath !== uri.fsPath) return;
-      openTabs.delete(path);
-      saveListener.dispose();
-      closeListener.dispose();
-      // Best-effort: the OS reclaims the temp dir regardless, so this is logged, not surfaced.
-      // Awaited so the listener's promise settles only once the file is gone — an
-      // orphaned unlink races anything observing the path.
-      await unlink(path).catch((err: unknown) => {
-        deps.log(`[extendedFieldEditor] could not delete temp file ${path}: ${errorMessage(err)}`);
-      });
-    });
-    listeners.push(closeListener);
-    await showBeside(path);
-  } catch (err) {
-    openTabs.delete(path);
-    for (const listener of listeners) listener.dispose();
-    reportOpenFailure(deps, err);
-    return false;
+  async open(params: OpenExtendedFieldEditorParams, deps: ExtendedFieldEditorDeps): Promise<void> {
+    const uri = fieldUri(params, params.readOnly);
+    const fields = params.readOnly ? this.readOnly.fields : this.editable.fields;
+    const key = uri.toString();
+    const alreadyOpen = fields.has(key);
+    if (!alreadyOpen) {
+      fields.set(key, { content: new TextEncoder().encode(params.value), version: 1, onCommit: deps.onCommit });
+    }
+    try {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: false });
+    } catch (err) {
+      if (!alreadyOpen) fields.delete(key);
+      // The user opened it from a cell's menu, an explicit action (ADR-0019).
+      deps.reporter.report('error', 'Could not open the extended editor.', errorMessage(err));
+    }
   }
-  try {
-    // files.readonlyFromPermissions is off by default, so the permission bit alone does not make
-    // the tab read-only.
-    if (params.readOnly) await vscode.commands.executeCommand('workbench.action.files.setActiveEditorReadonlyInSession');
-  } catch (err) {
-    reportOpenFailure(deps, err);
+
+  dispose(): void {
+    for (const registration of this.registrations) registration.dispose();
   }
-  return true;
 }

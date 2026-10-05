@@ -2,14 +2,13 @@ import * as vscode from 'vscode';
 import { hasSection, isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type ArrayParentContext, type ReferenceContext, type StringValueContext } from '../wire/messages';
 import type { RecordEditEnvelope } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
-import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
+import type { ExtendedFieldDocuments } from './extendedFieldEditor';
 import type { EditAddress, EditGate } from './followRecord';
 import type { FocusedCellContext } from './focusedCells';
 
 export interface RecordPanelContextCommandDeps extends RecordWriteDeps {
-  // Load order-static: the same field files and channel every panel's tabs would get.
-  fieldFile: ExtendedFieldEditorDeps['fieldFile'];
-  log: (msg: string) => void;
+  // The one set of extended-field documents every panel's tabs open into.
+  extendedFields: Pick<ExtendedFieldDocuments, 'open'>;
   // An edit's gate is that of the panels showing the record it is addressed to.
   editGateOf: (address: EditAddress) => EditGate;
   // The palette hands a field gesture no cell: it acts on the record tab in focus's focused cell.
@@ -87,14 +86,12 @@ async function promptedSet(address: object): Promise<RecordEditEnvelope | undefi
 // (editor.md, Menus and keys, story 2).
 function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringValueContext): Promise<void> {
   const gate = deps.editGateOf(ctx);
-  return openExtendedFieldEditor(
+  return deps.extendedFields.open(
     {
       value: ctx.value, recordLabel: ctx.recordLabel, fieldName: ctx.fieldName,
       plugin: ctx.plugin, origin: ctx.origin, readOnly: ctx.readOnly,
     },
     {
-      fieldFile: deps.fieldFile,
-      log: deps.log,
       reporter: deps.reporter,
       onCommit: value => gate(ctx, formKey =>
         applyRecordEdit(deps, formKey, ctx.plugin, ctx.origin, { op: 'set', path: ctx.path, value })),

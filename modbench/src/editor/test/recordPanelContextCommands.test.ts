@@ -19,10 +19,6 @@ import type { ExtendedFieldEditorDeps, OpenExtendedFieldEditorParams } from '../
 
 const openExtendedFieldEditor =
   vi.fn<(params: OpenExtendedFieldEditorParams, deps: ExtendedFieldEditorDeps) => Promise<void>>();
-vi.mock('../extendedFieldEditor', () => ({
-  openExtendedFieldEditor: (...args: [OpenExtendedFieldEditorParams, ExtendedFieldEditorDeps]) =>
-    openExtendedFieldEditor(...args),
-}));
 
 import { registerRecordPanelContextCommands, type RecordPanelContextCommandDeps } from '../recordPanelContextCommands';
 import { EXTENSION_TO_WEBVIEW, type ArrayElementContext, type ArrayParentContext, type ExtensionToWebview, type StringValueContext } from '../../wire/messages';
@@ -45,8 +41,7 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
     refreshSourceControlFor,
     tellPanels,
     reporter: { report, landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() },
-    fieldFile: () => ({ folder: '/tmp/does-not-open-here', file: '/tmp/does-not-open-here/field.txt' }),
-    log: vi.fn(),
+    extendedFields: { open: openExtendedFieldEditor },
     editGateOf: gateSendingEachWriteWhereItWasAddressed,
     focusedCell: () => undefined,
     ...overrides,
