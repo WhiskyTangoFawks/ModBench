@@ -16,7 +16,7 @@ public sealed class SourceRepositoryRefEncodingTests
         PluginBaselines.Track(
             modFolder, SourcePreset.Edits, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
 
-        Assert.Equal("Track " + plugin, GitProbeSubject(modFolder));
+        Assert.Equal("Track " + Path.GetFileName(modFolder), GitProbeSubject(modFolder));
     }
 
     [Theory]

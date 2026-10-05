@@ -2,8 +2,7 @@ using MEditService.Codec.Serialization;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>One plugin's facts as its baseline commit's trailers carry them (ADR-0007),
-/// on the write side and the read side alike. A fact with no value is left out of the commit.</summary>
+/// <summary>One plugin's facts as Track hands them in (ADR-0007).</summary>
 public sealed record BaselineTrailers(string Plugin, string? UpstreamVersion, string? BinarySha256);
 
 /// <summary>The two <c>.gitignore</c> presets (plugins.md, Track, story 2).</summary>
@@ -13,11 +12,11 @@ public enum SourcePreset
     Everything,
 }
 
-/// <summary>Makes a mod's repository: <c>Track &lt;mod&gt;</c>, then one baseline commit per plugin on
-/// <c>main</c>, which stays checked out.</summary>
+/// <summary>Makes a mod's repository: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>. A track that
+/// lands no plugin restores what it found and never deletes a repository it did not make (ADR-0003).</summary>
 internal static class GitTracking
 {
-    /// <summary>Answers each plugin whose commit failed.</summary>
+    /// <summary>Answers each plugin whose files could not be written.</summary>
     internal static IReadOnlyList<(string Plugin, string Reason)> Track(
         string modFolder, SourcePreset preset,
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
@@ -26,39 +25,64 @@ internal static class GitTracking
         if (SourceRepositoryGit.IsTracked(modFolder) || SourceRepositoryGit.HoldsAnotherRepository(modFolder))
             throw new InvalidOperationException($"'{modFolder}' already holds a repository.");
 
-        var git = new SourceRepositoryGit(modFolder);
-        CreateRepository(git, modFolder, preset);
-        var refused = CommitEachBaseline(git, modFolder, baselines);
-        // The baselines were committed through a scratch index, so the real one catches up with main.
-        git.Run("reset", "-q");
-        return refused;
-    }
+        WriteLog log = new();
+        var (written, refused) = WriteEachPlugin(modFolder, baselines, log);
+        if (written.Count == 0) return refused;
 
-    // No rollback beyond git's: the commits before a failed one stand, and git's own clean takes the
-    // failed plugin's files back out of the work tree.
-    private static List<(string Plugin, string Reason)> CommitEachBaseline(
-        SourceRepositoryGit git, string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
-    {
-        var refused = new List<(string Plugin, string Reason)>();
-        foreach (var (files, trailers) in baselines)
+        var git = new SourceRepositoryGit(modFolder);
+        var gitignorePath = Path.Combine(modFolder, ".gitignore");
+        var gitignoreBefore = File.Exists(gitignorePath) ? File.ReadAllBytes(gitignorePath) : null;
+        var repositoryExisted = git.Exists;
+        try
         {
-            try
+            CreateRepository(git);
+            File.WriteAllText(gitignorePath, GitignoreContent(preset));
+            git.Run("add", "-A");
+            git.Run("commit", "-q", "-m", $"Track {SourceRepositoryLayout.ModNameIn(modFolder)}");
+            foreach (var plugin in written)
             {
-                PristineFileWriter.WriteAll(files, workTree);
-                git.ParkBaseline(trailers.Plugin, CommitToMain(
-                    git, [SourceRepositoryGit.LiteralPathspec(SourceRepositoryLayout.RootFor(trailers.Plugin))],
-                    BaselineMessage(TrackSubject(trailers), trailers)));
+                if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Plugin, binarySha256);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-            {
-                git.Run("clean", "-fdq", "--", SourceRepositoryGit.LiteralPathspec(SourceRepositoryLayout.RootFor(trailers.Plugin)));
-                refused.Add((trailers.Plugin, ex.Message));
-            }
+        }
+        catch
+        {
+            if (!repositoryExisted && git.Exists) git.Delete();
+            if (gitignoreBefore is null) File.Delete(gitignorePath);
+            else File.WriteAllBytes(gitignorePath, gitignoreBefore);
+            log.UndoSince(0);
+            throw;
         }
         return refused;
     }
 
-    private static void CreateRepository(SourceRepositoryGit git, string modFolder, SourcePreset preset)
+    private static (List<BaselineTrailers> Written, List<(string Plugin, string Reason)> Refused) WriteEachPlugin(
+        string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines, WriteLog log)
+    {
+        List<BaselineTrailers> written = [];
+        List<(string Plugin, string Reason)> refused = [];
+        foreach (var (files, trailers) in baselines)
+        {
+            var mark = log.Mark;
+            try
+            {
+                PristineFileWriter.WriteAll(files, workTree, log);
+                written.Add(trailers);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                log.UndoSince(mark);
+                refused.Add((trailers.Plugin, ex.Message));
+            }
+            catch
+            {
+                log.UndoSince(0);
+                throw;
+            }
+        }
+        return (written, refused);
+    }
+
+    private static void CreateRepository(SourceRepositoryGit git)
     {
         git.Run("init", "-q", "-b", "main");
         git.Run("config", "core.autocrlf", "false");
@@ -68,46 +92,6 @@ internal static class GitTracking
         // and every porcelain reader here expects the raw path.
         git.Run("config", "core.quotePath", "false");
         EnsureCommitIdentity(git);
-
-        File.WriteAllText(Path.Combine(modFolder, ".gitignore"), GitignoreContent(preset));
-        git.Run("add", "-A");
-        git.Run("commit", "-q", "-m", $"Track {SourceRepositoryLayout.ModNameIn(modFolder)}");
-    }
-
-    // main's own tree with just the pathspecs restaged from the work tree, through a scratch index:
-    // another tool, such as VS Code's own git, may hold the real one's lock on the repository (ADR-0003).
-    private static string CommitToMain(SourceRepositoryGit git, string[] pathspecs, string message)
-    {
-        var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-main-index-{Guid.NewGuid():N}");
-        try
-        {
-            var parentSha = git.Run("rev-parse", "refs/heads/main").Trim();
-            git.RunWithIndex(scratchIndex, "read-tree", parentSha);
-            git.RunWithIndex(scratchIndex, ["add", "-A", "--", .. pathspecs]);
-            var treeSha = git.RunWithIndex(scratchIndex, "write-tree").Trim();
-            var commitSha = git.Run("commit-tree", treeSha, "-p", parentSha, "-m", message).Trim();
-            // The old value makes the move conditional, so a main another tool moved in between is not
-            // overwritten (ADR-0003).
-            git.Run("update-ref", "refs/heads/main", commitSha, parentSha);
-            return commitSha;
-        }
-        finally
-        {
-            if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
-        }
-    }
-
-    private static string TrackSubject(BaselineTrailers trailers) =>
-        trailers.UpstreamVersion is { } version ? $"Track {trailers.Plugin} {version}" : $"Track {trailers.Plugin}";
-
-    // git's message convention: the subject, a blank line, then the trailer block. commit-tree is
-    // plumbing with no --trailer flag, so the block is written here.
-    private static string BaselineMessage(string subject, BaselineTrailers trailers)
-    {
-        List<string> lines = [subject, "", $"Plugin: {trailers.Plugin}"];
-        if (trailers.UpstreamVersion is { } upstreamVersion) lines.Add($"Upstream-Version: {upstreamVersion}");
-        if (trailers.BinarySha256 is { } binarySha256) lines.Add($"Binary-SHA256: {binarySha256}");
-        return string.Join('\n', lines) + "\n";
     }
 
     // Pins a repo-local identity only when the global one is unset; never overwrites a real identity.
@@ -141,16 +125,50 @@ internal static class GitTracking
     };
 }
 
+/// <summary>What a write made or replaced, in order, so a rollback restores exactly that and nothing a
+/// third party wrote (ADR-0003).</summary>
+internal sealed class WriteLog
+{
+    private readonly List<(string Path, byte[]? Original)> _entries = [];
+
+    internal int Mark => _entries.Count;
+
+    internal void Created(string path) => _entries.Add((path, null));
+
+    internal void Replaced(string path, byte[] original) => _entries.Add((path, original));
+
+    internal void UndoSince(int mark)
+    {
+        for (var i = _entries.Count - 1; i >= mark; i--)
+        {
+            var (path, original) = _entries[i];
+            if (original is not null) File.WriteAllBytes(path, original);
+            else if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+            else if (File.Exists(path)) File.Delete(path);
+        }
+        _entries.RemoveRange(mark, _entries.Count - mark);
+    }
+}
+
 /// <summary>The one way a list of <see cref="TreeFile"/>s becomes real files under a base
 /// directory, shared so the call sites cannot drift.</summary>
 internal static class PristineFileWriter
 {
-    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory)
+    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory) => WriteAll(files, baseDirectory, new WriteLog());
+
+    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory, WriteLog log)
     {
         foreach (var file in files)
         {
             var fullPath = Path.Combine(baseDirectory, file.RelativePath);
-            Directory.CreateDirectory(PathShape.DirectoryOf(fullPath));
+            var directory = PathShape.DirectoryOf(fullPath);
+            var missing = new Stack<string>();
+            for (var ancestor = directory; !Directory.Exists(ancestor); ancestor = PathShape.DirectoryOf(ancestor))
+                missing.Push(ancestor);
+            foreach (var created in missing) log.Created(created);
+            Directory.CreateDirectory(directory);
+            if (File.Exists(fullPath)) log.Replaced(fullPath, File.ReadAllBytes(fullPath));
+            else log.Created(fullPath);
             File.WriteAllBytes(fullPath, file.Content);
         }
     }

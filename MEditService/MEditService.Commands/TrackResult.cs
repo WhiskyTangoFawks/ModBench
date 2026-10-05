@@ -30,7 +30,7 @@ public enum TrackRefusal
     /// <summary>A localized plugin whose strings file is missing; the way out is restoring it.</summary>
     MissingLocalizationStrings,
 
-    /// <summary>The plugin passed its gate, and git or the file system refused its baseline commit.</summary>
+    /// <summary>The plugin passed its gate, and the file system refused its source files, or git refused the track's one commit.</summary>
     CommitFailed,
 
     /// <summary>git is not on PATH, so no repository can be created at all (ADR-0007).</summary>

@@ -18,7 +18,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
 
     public SourceRepositoryStampsTests()
     {
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits, []);
+        PluginBaselines.TrackWithNoRecords(_modFolder);
         _repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be tracked.");
         _repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody));
