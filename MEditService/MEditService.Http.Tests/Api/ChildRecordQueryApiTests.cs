@@ -108,10 +108,12 @@ public sealed class ChildRecordQueryApiTests : HostedTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    [Fact]
-    public async Task AQueryWithNoLoadOrder_Is503()
+    [Theory]
+    [InlineData("/records/with-children")]
+    [InlineData("/records/children-in-destinations")]
+    public async Task AQueryWithNoLoadOrder_Is503(string route)
     {
-        var response = await Client.PostAsJsonAsync("/records/with-children", new { records = new[] { Record("000800:Source.esp") } });
+        var response = await Client.PostAsJsonAsync(route, new { records = new[] { Record("000800:Source.esp") } });
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }

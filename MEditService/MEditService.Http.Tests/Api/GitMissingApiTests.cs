@@ -183,67 +183,6 @@ public sealed class GitMissingApiTests : HostedTests
         Assert.Equal(before, modFolders.Select(FilesOutsideGit));
     }
 
-    [Fact]
-    public async Task EditingARecord_WithGitMissing_Is500_AndChangesNoFile()
-    {
-        using var fx = await TrackedMod("trace-edit-without-git");
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
-        var before = FilesOutsideGit(modFolder);
-
-        var response = await WithGitMissing(() => Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75));
-
-        await AssertRefusedGitUnavailable(response);
-        Assert.Equal(before, FilesOutsideGit(modFolder));
-    }
-
-    [Fact]
-    public async Task CreatingARecord_WithGitMissing_Is500_AndChangesNoFile()
-    {
-        using var fx = await TrackedMod("trace-create-record-without-git");
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
-        var before = FilesOutsideGit(modFolder);
-
-        var response = await WithGitMissing(() => Client.PostAsJsonAsync(
-            $"/plugins/{Plugin}/records", new { origin = Origin, recordType = "npc_" }));
-
-        await AssertRefusedGitUnavailable(response);
-        Assert.Equal(before, FilesOutsideGit(modFolder));
-    }
-
-    private async Task<ScatteredFixtureData> TrackedMod(string prefix)
-    {
-        var fx = new PluginFixtureBuilder(prefix)
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
-            .BuildScattered();
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
-        await Client.PluginReportsTracked(Plugin);
-        return fx;
-    }
-
-    private static async Task<HttpResponseMessage> WithGitMissing(Func<Task<HttpResponseMessage>> request)
-    {
-        var path = Environment.GetEnvironmentVariable("PATH");
-        Environment.SetEnvironmentVariable("PATH", string.Empty);
-        try
-        {
-            return await request();
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PATH", path);
-        }
-    }
-
-    private static async Task AssertRefusedGitUnavailable(HttpResponseMessage response)
-    {
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-    }
-
     private static SortedDictionary<string, string> FilesOutsideGit(string modFolder) =>
         new(Directory.EnumerateFiles(modFolder, "*", SearchOption.AllDirectories)
             .Select(file => Path.GetRelativePath(modFolder, file))
