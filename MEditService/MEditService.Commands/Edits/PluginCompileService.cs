@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>ADR-0007's compile, for one plugin.</summary>
-public sealed class PluginCompileService(
+internal sealed class PluginCompileService(
     LoadOrderHolder loadOrderHolder,
     SchemaReflector schemaReflector,
     RecordTextCodec codec,

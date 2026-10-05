@@ -1,5 +1,4 @@
 using System.Text.Json;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -19,11 +18,11 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
     private EditRecordHandler EditService() => _fixture.EditHandler;
 
-    private PluginCompileService CompileService() => CompileServices.Over(_fixture.LoadOrder);
+    private CompilePluginHandler CompileService() => CompileServices.Over(_fixture.LoadOrder);
 
     private async Task<IFallout4ModGetter> CompileAndReparse()
     {
-        var result = await CompileService().CompileAsync(_fixture.Plugin);
+        var result = await CompileService().CompileOneAsync(_fixture.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_fixture.ModFolder, AbstractUnionCompileFixture.PluginName);

@@ -54,7 +54,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     {
         var compileService = CompileServices.Over(_loadOrder);
 
-        var result = await compileService.CompileAsync(_plugin);
+        var result = await compileService.CompileOneAsync(_plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains("DiaQ_LLInjector_SpadeyAMR", result.RefusalReason);

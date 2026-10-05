@@ -129,7 +129,7 @@ public sealed class GitUnavailableException : Exception
 
 /// <summary>git ran and refused: a state of the repository, never a broken invariant of Modbench's
 /// own.</summary>
-internal sealed class GitCommandFailedException : InvalidOperationException
+public sealed class GitCommandFailedException : InvalidOperationException
 {
     public GitCommandFailedException()
     {

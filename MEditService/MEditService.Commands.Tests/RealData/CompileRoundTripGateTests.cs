@@ -1,3 +1,4 @@
+using MEditService.Commands.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -37,7 +38,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     [Fact]
     public async Task Compile_OfAnUnchangedTree_WritesTheSameBytesAgain()
     {
-        var result = await fixture.CompileService().CompileAsync(fixture.Plugin);
+        var result = await fixture.CompileService().CompileOneAsync(fixture.Plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.True(File.ReadAllBytes(fixture.CompiledPluginPath).AsSpan().SequenceEqual(File.ReadAllBytes(fixture.PluginPath)),

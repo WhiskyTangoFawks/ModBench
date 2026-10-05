@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
@@ -50,7 +49,7 @@ public sealed class CompileFixture : TestInstance, ITrackedPlugin
 
     private SourceRepository Repository => RepositoryOf(Plugin).Require();
 
-    public PluginCompileService CompileService() => CompileServices.Over(LoadOrder);
+    public CompilePluginHandler CompileService() => CompileServices.Over(LoadOrder);
 
     public IFallout4ModGetter Reimport(out IDisposable handle)
     {

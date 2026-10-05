@@ -80,13 +80,13 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         _gameDirectory.Dispose();
     }
 
-    private PluginCompileService CompileService() =>
+    private CompilePluginHandler CompileService() =>
         CompileServices.Over(_loadOrder);
 
     [Fact]
     public async Task Compile_ForALinkIntoAPluginTheLoadOrderHolds_ReportsNoUnresolvedDiagnostic()
     {
-        var result = await CompileService().CompileAsync(_plugin);
+        var result = await CompileService().CompileOneAsync(_plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.DoesNotContain(
@@ -101,7 +101,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
             new Keyword(_deltaKeyword, Fallout4Release.Fallout4) { EditorID = "DeltaKeyword" },
             "kywd", GameRelease.Fallout4);
 
-        var result = await CompileService().CompileAsync(_plugin);
+        var result = await CompileService().CompileOneAsync(_plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -120,7 +120,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
             npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_bravoRace)));
 
-        var result = await CompileService().CompileAsync(_plugin);
+        var result = await CompileService().CompileOneAsync(_plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = Assert.Single(
@@ -132,7 +132,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     [Fact]
     public async Task Compile_WritesMasters_InCurrentLoadOrder_NotAlphabetical()
     {
-        var result = await CompileService().CompileAsync(_plugin);
+        var result = await CompileService().CompileOneAsync(_plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);
@@ -152,7 +152,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
             npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_deltaKeyword)));
 
-        var result = await CompileService().CompileAsync(_plugin);
+        var result = await CompileService().CompileOneAsync(_plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);

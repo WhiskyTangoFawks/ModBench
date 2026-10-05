@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 
@@ -11,7 +10,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private PluginCompileService CompileService() =>
+    private CompilePluginHandler CompileService() =>
         _mod.CompileService();
 
     private IReadOnlyList<string> Parked() => LastWriteRecord.Of(_mod.ModFolder, CompileFixture.PluginName);
@@ -24,7 +23,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         var baselineParked = Parked();
 
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        var result = await CompileService().CompileAsync(_mod.Plugin);
+        var result = await CompileService().CompileOneAsync(_mod.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
@@ -38,14 +37,14 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
         var baselineParked = Parked();
-        var result = await CompileService().CompileAsync(_mod.Plugin);
+        var result = await CompileService().CompileOneAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Equal(baselineParked, Parked());
     }
 
     [Fact]
-    public async Task Compile_ThatCannotParkItsRecord_LeavesTheOldBinary()
+    public async Task Compile_ThatCannotParkItsRecord_IsRefusedAsAFailedWrite_AndLeavesTheOldBinary()
     {
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var before = File.ReadAllBytes(pluginPath);
@@ -54,7 +53,9 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         File.WriteAllText(refLock, "");
         try
         {
-            await Assert.ThrowsAnyAsync<InvalidOperationException>(() => CompileService().CompileAsync(_mod.Plugin));
+            var result = await CompileService().CompileOneAsync(_mod.Plugin);
+
+            Assert.Equal(CompileRefusal.WriteFailed, result.Refusal);
         }
         finally
         {

@@ -68,7 +68,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
             JsonDocument.Parse(JsonSerializer.Serialize(RenamedResponseEditorId)).RootElement));
         EditedTree = CutDownPluginFixture.ReadSourceTree(ModFolder);
 
-        Compiled = CompileService().CompileAsync(Plugin).GetAwaiter().GetResult();
+        Compiled = CompileService().CompileOneAsync(Plugin).GetAwaiter().GetResult();
         File.Copy(PluginPath, CompiledPluginPath);
     }
 
@@ -77,7 +77,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
         if (!result.Applied) throw new InvalidOperationException($"Expected the fixture's edit to land: {result.Message}");
     }
 
-    public PluginCompileService CompileService() => CompileServices.Over(Holder.Current);
+    public CompilePluginHandler CompileService() => CompileServices.Over(Holder.Current);
 
     public void Dispose()
     {
