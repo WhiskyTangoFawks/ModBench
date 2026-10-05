@@ -85,6 +85,7 @@ A gesture that fits none of these stays in the tables. A new reason is added to 
 | Plugins | navigator | plugin list | [plugins.md](surfaces/plugins.md) |
 | Downloads | - | Downloads tab | [downloads.md](surfaces/downloads.md) |
 | Editor | View grid, Referenced By | - | [editor.md](surfaces/editor.md) |
+| Plugin source | Referenced By, Ctrl + click | - | [plugin-source.md](surfaces/plugin-source.md) |
 
 The xEdit Messages tab is not a surface. Failures go to the Output and the surface their severity calls for (ADR-0019); diagnostics go to the Problems panel.
 
@@ -99,6 +100,7 @@ The xEdit Messages tab is not a surface. Failures go to the Output and the surfa
 | Editor, the record panel | an editor tab | - | opened by the user |
 | Editor, Referenced By | Panel (`modbenchReferencedBy`) | - | follows the active record |
 | Mods, the conflict table | an editor tab | - | opened by the user |
+| Plugin source, the text editor | an editor tab | - | opened by the user |
 
 No view defaults to the Secondary Side Bar: it is the home of chat. A user can still move any view there.
 
@@ -183,7 +185,7 @@ A field gesture from the palette acts on the focused cell of the record tab in f
 | create | writes | `modbench.record.create` | plugin, or a container record | record type; grid position, for an exterior cell | xEdit navigator | Add a record to a plugin, or a child record to a record. | edit-record |
 | delete | writes | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | edit-record |
 | copy | writes | `modbench.record.copy` | records | mode: new, override, or, for a record with child records, deep copy as override; destination plugins; replace, for a destination that holds the record, or in a deep copy one of its child records | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirmation asks whether to replace it. | edit-record |
-| open | reads | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open each in a tab of their own. A plugin header is a record. The Go to Record menu item on a reference field opens the record it points to. With no Argument, a picker finds a record by EditorID, FormID or FormKey. | query-index |
+| open | reads | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open one grid: the first record's file, with the others as its columns. A plugin header is a record. The Go to Record menu item on a reference field opens the record it points to. With no Argument, a picker finds a record by EditorID, FormID or FormKey. | query-index |
 | open field value | reads | `modbench.record.openFieldValue` | record, plugin, field path | - | xEdit View grid | Open a field value in an editor tab. | none |
 | filter | reads | `modbench.record.filter`, `modbench.record.clearFilter` | - | query: a `.sql` file, or a new document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-index |
 
