@@ -21,13 +21,8 @@ public sealed class CommandHandlerConventionTests
 
     private static readonly Type[] Carriers =
     [
-        typeof(CompiledPlugin),
-        typeof(CompileRefused),
-        typeof(CompileSelectionResult),
+        typeof(CompileRefusal),
         typeof(DecompileRefusal),
-        typeof(DecompileRefused),
-        typeof(DecompileSelectionRefusal),
-        typeof(DecompileSelectionResult),
         typeof(PluginCreateRefusal),
         typeof(PluginCreateResult),
         typeof(PutLoadOrderRefusal),

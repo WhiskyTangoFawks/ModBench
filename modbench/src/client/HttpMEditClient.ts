@@ -365,11 +365,7 @@ export class HttpMEditClient implements MEditClient {
       failMsg: `Could not decompile ${counted}`,
       post: () => this.apiClient.POST('/plugins/decompile', { body: { plugins: [...plugins] } }),
     });
-    if (isRefused(answer)) return answer;
-    return {
-      landed: answer.applied,
-      refused: answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
-    };
+    return isRefused(answer) ? answer : selectionOutcome(answer);
   }
 
   /** Each plugin compiles or is refused on its own. A cause no plugin escapes, no load order,
@@ -387,7 +383,7 @@ export class HttpMEditClient implements MEditClient {
     if (isRefused(answer)) return answer;
     return {
       landed: answer.applied,
-      refused: answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
+      refused: answer.refused.map((r) => ({ item: r.item, reason: r.message })),
     };
   }
 

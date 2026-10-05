@@ -9,7 +9,7 @@ internal static class ItemWrite
 {
     /// <summary>Git is checked once, before any item is written. <paramref name="failure"/> says what
     /// could not be written for an item; the file system's words follow it.</summary>
-    internal static SelectionResult<TItem> Over<TItem>(
+    internal static SelectionResult<TItem, RecordEditRefusal, string?> Over<TItem>(
         IEnumerable<TItem> items, IEqualityComparer<TItem> sameItem,
         Func<TItem, RecordEditResult> write, Func<TItem, string> failure, ILogger logger)
     {
@@ -19,18 +19,18 @@ internal static class ItemWrite
         }
         catch (GitUnavailableException ex)
         {
-            return SelectionResult<TItem>.WholeSelectionRefused(RecordEditRefusal.GitUnavailable, ex.Message);
+            return SelectionResult<TItem, RecordEditRefusal, string?>.WholeSelectionRefused(RecordEditRefusal.GitUnavailable, ex.Message);
         }
 
-        var landed = new List<ItemLanded<TItem>>();
-        var refused = new List<ItemRefused<TItem>>();
+        var landed = new List<ItemLanded<TItem, string?>>();
+        var refused = new List<ItemRefused<TItem, RecordEditRefusal>>();
         foreach (var item in items.Distinct(sameItem))
         {
             var result = RefusingTheWriteFailure(() => write(item), failure(item), logger);
-            if (result.Applied) landed.Add(new ItemLanded<TItem>(item, result.NewFormKey));
-            else refused.Add(new ItemRefused<TItem>(item, result.Refusal, result.Message));
+            if (result.Applied) landed.Add(new ItemLanded<TItem, string?>(item, result.NewFormKey));
+            else refused.Add(new ItemRefused<TItem, RecordEditRefusal>(item, result.Refusal, result.Message));
         }
-        return SelectionResult<TItem>.PerItem(landed, refused);
+        return SelectionResult<TItem, RecordEditRefusal, string?>.PerItem(landed, refused);
     }
 
     private static RecordEditResult RefusingTheWriteFailure(Func<RecordEditResult> write, string failure, ILogger logger)

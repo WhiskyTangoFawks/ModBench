@@ -212,7 +212,7 @@ public static class RecordEndpoints
         {
             return Answered(
                 edits.Copy(addressed, request.Mode, destinations, request.Replace),
-                landed => new RecordCopyLanded(Addressed(landed.Item.Record), landed.Item.Destination, landed.NewFormKey),
+                landed => new RecordCopyLanded(Addressed(landed.Item.Record), landed.Item.Destination, landed.Outcome),
                 refused => new RecordCopyRefusal(
                     new RecordCopyItem(Addressed(refused.Item.Record), refused.Item.Destination), refused.Refusal, refused.Message),
                 (applied, refused) => new RecordCopyResponse(applied, refused));
@@ -244,9 +244,9 @@ public static class RecordEndpoints
     }
 
     private static IResult Answered<TItem, TLanded, TRefused>(
-        SelectionResult<TItem> result,
-        Func<ItemLanded<TItem>, TLanded> landed,
-        Func<ItemRefused<TItem>, TRefused> refused,
+        SelectionResult<TItem, RecordEditRefusal, string?> result,
+        Func<ItemLanded<TItem, string?>, TLanded> landed,
+        Func<ItemRefused<TItem, RecordEditRefusal>, TRefused> refused,
         Func<IReadOnlyList<TLanded>, IReadOnlyList<TRefused>, object> response) =>
         result.SelectionRefusal is { } selectionRefusal
             ? WriteEndpointMapping.Refusal(selectionRefusal)

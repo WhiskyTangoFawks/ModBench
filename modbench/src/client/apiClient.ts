@@ -23,8 +23,8 @@ export type CompareResult = Schemas['CompareResult'];
 export type TrackPhase = Schemas['TrackPhase'];
 export type TrackStatus = Schemas['TrackProgress'];
 
-/** A plugin compile wrote — `POST /plugins/compile` — with the masters its content needs and the
- *  diagnostics the reference check left. */
+/** A plugin compile wrote — `POST /plugins/compile` — with the diagnostics the reference check
+ *  left. */
 export type CompiledPlugin = Schemas['CompiledPlugin'];
 export type CompileDiagnostic = Schemas['CompileDiagnostic'];
 

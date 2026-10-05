@@ -143,7 +143,7 @@ public sealed class DeleteRecordHandlerTests
         return mod;
     }
 
-    private static SelectionResult<RecordAt> DeleteWhileLocked(SourceModFixture mod, string directory, IReadOnlyList<RecordAt> records)
+    private static SelectionResult<RecordAt, RecordEditRefusal, string?> DeleteWhileLocked(SourceModFixture mod, string directory, IReadOnlyList<RecordAt> records)
     {
         FileModes.Set(directory, "500");
         try

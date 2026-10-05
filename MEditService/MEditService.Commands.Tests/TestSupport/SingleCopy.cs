@@ -15,10 +15,10 @@ internal static class SingleCopy
         this CopyRecordHandler handler, PluginAddress source, string formKey, PluginAddress destination) =>
         OnlyItem(handler.Copy([new RecordAt(source, formKey)], CopyMode.New, [destination], replace: false));
 
-    private static RecordEditResult OnlyItem(SelectionResult<CopyItem> result)
+    private static RecordEditResult OnlyItem(SelectionResult<CopyItem, RecordEditRefusal, string?> result)
     {
         if (result.Landed is [var landed])
-            return landed.NewFormKey is { } newFormKey ? RecordEditResult.Success(newFormKey) : RecordEditResult.Success();
+            return landed.Outcome is { } newFormKey ? RecordEditResult.Success(newFormKey) : RecordEditResult.Success();
 
         var refused = Assert.Single(result.Refused);
         return RecordEditResult.Refused(refused.Refusal, refused.Message);

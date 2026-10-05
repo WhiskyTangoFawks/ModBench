@@ -26,11 +26,11 @@ public sealed class PluginCompileService(
     {
         var loadOrder = loadOrderHolder.Current;
         if (loadOrder.Plugins.Count == 0)
-            return CompileResult.Refused("No load order has been received.");
+            return CompileResult.Refused(CompileRefusal.PluginNotInLoadOrder, "No load order has been received.");
         if (loadOrder.Plugin(plugin) is not { } registered)
-            return CompileResult.Refused($"{plugin.Name} is not in the load order.");
+            return CompileResult.Refused(CompileRefusal.PluginNotInLoadOrder, $"{plugin.Name} is not in the load order.");
         if (SourceRepository.TrackedModOf(loadOrder, plugin) is not { } mod)
-            return CompileResult.Refused($"{plugin.Name} is not tracked, so there is no source to compile.");
+            return CompileResult.Refused(CompileRefusal.PluginNotTracked, $"{plugin.Name} is not tracked, so there is no source to compile.");
 
         // One repository for the whole pass, so the tree it answers from is read once.
         var repository = SourceRepository.Over(mod, loadOrder.GameRelease);
@@ -42,6 +42,7 @@ public sealed class PluginCompileService(
         if (sourceFiles.Unreadable is { } unreadable)
         {
             return CompileResult.Refused(
+                CompileRefusal.SourceUnreadable,
                 $"{plugin.Name} could not be read from its source: {unreadable} could not be opened. " +
                 "Another program may be holding it; close it and compile again.");
         }
@@ -50,12 +51,13 @@ public sealed class PluginCompileService(
         if (files.Count == 0)
         {
             return CompileResult.Refused(
+                CompileRefusal.NoSource,
                 $"{plugin.Name} has no source tree in the working tree, so there is nothing to compile.");
         }
 
         var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin.Name, loadOrder.GameRelease);
         if (deserializeRefusal != null)
-            return CompileResult.Refused(deserializeRefusal);
+            return CompileResult.Refused(CompileRefusal.SourceDoesNotParse, deserializeRefusal);
         var tree = parsedTree
             ?? throw new InvalidOperationException("Expected DeserializeSource to produce a tree when it does not refuse.");
 
@@ -71,6 +73,7 @@ public sealed class PluginCompileService(
             if (outOfRange.Count > 0)
             {
                 return CompileResult.Refused(
+                    CompileRefusal.LightFormIdOutOfRange,
                     $"{plugin.Name} is a light plugin but holds native FormID(s) outside the light range " +
                     $"(0x{lightRange.Min:X}-0x{lightRange.Max:X}): {string.Join(", ", outOfRange.Take(4))}" +
                     (outOfRange.Count > 4 ? $" and {outOfRange.Count - 4} more" : "") +
@@ -85,13 +88,14 @@ public sealed class PluginCompileService(
         if (collidingFormKeys.Count > 0)
         {
             return CompileResult.Refused(
+                CompileRefusal.FormKeyCollision,
                 $"{plugin.Name} cannot be compiled: more than one source file claims the same FormKey — " +
                 $"{string.Join(", ", collidingFormKeys)}.");
         }
 
         var roundTripRefusal = await RefuseIfSourceDoesNotRoundTrip(tree, plugin, repository);
         if (roundTripRefusal != null)
-            return CompileResult.Refused(roundTripRefusal);
+            return CompileResult.Refused(CompileRefusal.SourceDoesNotRoundTrip, roundTripRefusal);
 
         var content = ContentFacts(tree, plugin, loadOrder);
 
@@ -108,6 +112,7 @@ public sealed class PluginCompileService(
             // (Mutagen issue 688), so the content-derived master pass (ADR-0008) prunes a
             // master this write still needs. Every other write failure propagates raw.
             return CompileResult.Refused(
+                CompileRefusal.FormIdUnmappable,
                 $"{plugin.Name} could not be compiled: {PluginDiagnosis.FromWriteException(ex).Describe()}");
         }
         using (save)
@@ -120,14 +125,12 @@ public sealed class PluginCompileService(
             logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
                 plugin.Name, plugin.Origin, tree.FormKeys.Count);
         }
-        return CompileResult.Success(_links.Report(new LinkCheckScope(plugin, registered, loadOrder, repository), content.Records, content.Links), content.Masters);
+        return CompileResult.Success(_links.Report(new LinkCheckScope(plugin, registered, loadOrder, repository), content.Records, content.Links));
     }
 
-    private sealed record Content(
-        IReadOnlyList<SourceRecord> Records, IReadOnlyList<string> Masters, IReadOnlyCollection<string> Links);
+    private sealed record Content(IReadOnlyList<SourceRecord> Records, IReadOnlyCollection<string> Links);
 
-    // The masters come from the records here, through the collector and the schema
-    // (ADR-0008; ADR-0015).
+    // The links come from the records here, through the collector and the schema.
     private Content ContentFacts(CompiledTree tree, PluginAddress plugin, LoadOrderSnapshot loadOrder)
     {
         // One walk, and the record type is the one RecordTableName gives, so what compile files a
@@ -143,22 +146,7 @@ public sealed class PluginCompileService(
             required.Add(document, schema);
         }
 
-        return new Content(records, InLoadOrderOrder(required.Masters, loadOrder), required.Links);
-    }
-
-    // An active master sorts by its load index; one that is not falls after every active master,
-    // alphabetically among themselves, so the result is stable either way.
-    private static IReadOnlyList<string> InLoadOrderOrder(IReadOnlySet<string> masters, LoadOrderSnapshot loadOrder)
-    {
-        if (masters.Count == 0) return [];
-
-        var loadIndex = loadOrder.Active
-            .Select((plugin, index) => (plugin.Name, index))
-            .ToDictionary(p => p.Name, p => p.index, StringComparer.OrdinalIgnoreCase);
-
-        return [.. masters
-            .OrderBy(m => loadIndex.GetValueOrDefault(m, int.MaxValue))
-            .ThenBy(m => m, StringComparer.OrdinalIgnoreCase)];
+        return new Content(records, required.Links);
     }
 
     private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(

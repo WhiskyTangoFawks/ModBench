@@ -8,13 +8,13 @@ public sealed record CompileDiagnostic(string FormKey, string SourceRelativePath
 /// FormKey collision). Everything else compiles with <see cref="Diagnostics"/>.</summary>
 public sealed record CompileResult(
     bool Succeeded,
+    CompileRefusal Refusal,
     string? RefusalReason,
-    IReadOnlyList<CompileDiagnostic> Diagnostics,
-    IReadOnlyList<string> Masters)
+    IReadOnlyList<CompileDiagnostic> Diagnostics)
 {
-    public static CompileResult Refused(string reason) =>
-        new(false, reason, [], []);
+    public static CompileResult Refused(CompileRefusal refusal, string reason) =>
+        new(false, refusal, reason, []);
 
-    public static CompileResult Success(IReadOnlyList<CompileDiagnostic> diagnostics, IReadOnlyList<string> masters) =>
-        new(true, null, diagnostics, masters);
+    public static CompileResult Success(IReadOnlyList<CompileDiagnostic> diagnostics) =>
+        new(true, CompileRefusal.None, null, diagnostics);
 }

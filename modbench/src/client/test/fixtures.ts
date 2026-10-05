@@ -62,10 +62,10 @@ export function listsForThePluginAsked(client: InMemoryMEditClient): InMemoryMEd
   return client;
 }
 
-/** A `CompiledPlugin` with every required wire member at its neutral (no-master, no-diagnostic)
+/** A `CompiledPlugin` with every required wire member at its neutral no-diagnostic
  *  value. */
 export function compiledPluginFixture(overrides: Partial<CompiledPlugin> & Pick<CompiledPlugin, 'plugin'>): CompiledPlugin {
-  return { masters: [], diagnostics: [], ...overrides };
+  return { diagnostics: [], ...overrides };
 }
 
 /** A `NotificationEvent` with every required wire member at its neutral value. */

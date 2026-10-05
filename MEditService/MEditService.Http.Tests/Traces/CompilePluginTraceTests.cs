@@ -71,12 +71,24 @@ public sealed class CompilePluginTraceTests : HostedTests
         var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
         Assert.Equal(
             (UntrackedPlugin, UntrackedOrigin),
-            (refused.GetProperty("plugin").GetProperty("name").GetString(), refused.GetProperty("plugin").GetProperty("origin").GetString()));
+            (refused.GetProperty("item").GetProperty("name").GetString(), refused.GetProperty("item").GetProperty("origin").GetString()));
+        Assert.Equal("PluginNotTracked", refused.GetProperty("refusal").GetString());
         Assert.Equal(
             $"{UntrackedPlugin} is not tracked, so there is no source to compile.",
             refused.GetProperty("message").GetString());
         Assert.Equal(0.75, await HeightMaxOfTheWrittenBytes(fx, Plugin, Origin, formKey), 3);
         Assert.Equal(0.5, await HeightMaxOfTheWrittenBytes(fx, OtherPlugin, OtherOrigin, otherFormKey), 3);
+    }
+
+    [Fact]
+    public async Task CompilingASelectionNamingAPluginTwice_AnswersItAppliedOnce()
+    {
+        using var fx = await LoadedAndTracked();
+
+        var answer = await Answer(await Client.Compile([(Plugin, Origin), (Plugin, Origin)]));
+
+        Assert.Empty(answer.GetProperty("refused").EnumerateArray());
+        Assert.Single(answer.GetProperty("applied").EnumerateArray());
     }
 
     [Fact]
@@ -163,7 +175,8 @@ public sealed class CompilePluginTraceTests : HostedTests
                 [OtherPlugin],
                 answer.GetProperty("applied").EnumerateArray().Select(a => a.GetProperty("plugin").GetProperty("name").GetString()));
             var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
-            Assert.Equal(Plugin, refused.GetProperty("plugin").GetProperty("name").GetString());
+            Assert.Equal(Plugin, refused.GetProperty("item").GetProperty("name").GetString());
+            Assert.Equal("WriteFailed", refused.GetProperty("refusal").GetString());
             Assert.StartsWith($"Could not write {Plugin}: ", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
         }
         finally

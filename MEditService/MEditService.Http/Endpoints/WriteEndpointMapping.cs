@@ -28,26 +28,10 @@ internal static class WriteEndpointMapping
 
     /// <summary>The status code says what kind of problem; the refusal and path extensions say
     /// exactly which (ADR-0019).</summary>
-    internal static IResult Refusal(RecordEditResult result) => Results.Problem(
-        detail: result.Message,
-        statusCode: result.Refusal switch
-        {
-            // The request is sound; the plugin's present state refuses it until that state changes.
-            RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder
-                or RecordEditRefusal.PluginNotActive => 409,
-            RecordEditRefusal.RecordNotFound or RecordEditRefusal.FieldNotFound or RecordEditRefusal.PluginNotInLoadOrder => 404,
-            // The envelope itself could not be read as a write: the request is malformed.
-            RecordEditRefusal.InvalidEnvelope => 400,
-            // The request is sound; the machine it runs on lacks git.
-            RecordEditRefusal.GitUnavailable => 500,
-            // Well-formed, addressed at something real, and still not something we will write.
-            _ => 422,
-        },
-        extensions: new Dictionary<string, object?>
-        {
-            ["refusal"] = result.Refusal.ToString(),
-            ["path"] = result.Path,
-        });
+    internal static IResult Refusal(RecordEditResult result) => RecordEditProblem(result.Refusal, result.Message, result.Path);
+
+    internal static IResult Refusal(SelectionRefusal<RecordEditRefusal> refusal) =>
+        RecordEditProblem(refusal.Refusal, refusal.Message, path: null);
 
     /// <summary>Track's own refusal-to-status map, the same posture the record edits' has: the status
     /// says what kind of problem, the refusal extension says exactly which (ADR-0019).</summary>
@@ -65,7 +49,7 @@ internal static class WriteEndpointMapping
 
     /// <summary>Decompile's refusal of a whole selection: the refusal extension says which cause no
     /// plugin escaped (ADR-0019).</summary>
-    internal static IResult Refusal(DecompileSelectionRefusal refusal) => Results.Problem(
+    internal static IResult Refusal(SelectionRefusal<DecompileRefusal> refusal) => Results.Problem(
         detail: refusal.Message,
         statusCode: refusal.Refusal switch
         {
@@ -94,6 +78,27 @@ internal static class WriteEndpointMapping
         detail: result.Message,
         statusCode: 400,
         extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
+
+    private static IResult RecordEditProblem(RecordEditRefusal refusal, string message, string? path) => Results.Problem(
+        detail: message,
+        statusCode: refusal switch
+        {
+            // The request is sound; the plugin's present state refuses it until that state changes.
+            RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder
+                or RecordEditRefusal.PluginNotActive => 409,
+            RecordEditRefusal.RecordNotFound or RecordEditRefusal.FieldNotFound or RecordEditRefusal.PluginNotInLoadOrder => 404,
+            // The envelope itself could not be read as a write: the request is malformed.
+            RecordEditRefusal.InvalidEnvelope => 400,
+            // The request is sound; the machine it runs on lacks git.
+            RecordEditRefusal.GitUnavailable => 500,
+            // Well-formed, addressed at something real, and still not something we will write.
+            _ => 422,
+        },
+        extensions: new Dictionary<string, object?>
+        {
+            ["refusal"] = refusal.ToString(),
+            ["path"] = path,
+        });
 
     /// <summary>A write to a working tree Modbench does not own exclusively can fail; the caller
     /// builds <paramref name="detail"/> because it is wire body that differs per site, so one shared

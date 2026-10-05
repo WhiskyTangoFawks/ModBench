@@ -382,15 +382,15 @@ describe('HttpMEditClient — compiling plugins answers per plugin', () => {
 
   it('sends the whole selection as one call, and reads each compiled plugin and each refusal with its message', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      applied: [{ plugin: first, masters: ['Fallout4.esm'], diagnostics: [diagnostic] }],
-      refused: [{ plugin: second, refusal: 'None', message: 'Second.esp is not tracked, so there is no source to compile.' }],
+      applied: [{ plugin: first, diagnostics: [diagnostic] }],
+      refused: [{ item: second, refusal: 'PluginNotTracked', message: 'Second.esp is not tracked, so there is no source to compile.' }],
     })));
     const client = makeClient(fetch);
 
     const outcome = await client.compile([first, second]);
 
     expect(outcome).toEqual({
-      landed: [{ plugin: first, masters: ['Fallout4.esm'], diagnostics: [diagnostic] }],
+      landed: [{ plugin: first, diagnostics: [diagnostic] }],
       refused: [{ item: second, reason: 'Second.esp is not tracked, so there is no source to compile.' }],
     });
     const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/compile$/.test(req.url));
@@ -414,7 +414,7 @@ describe('HttpMEditClient — decompiling plugins answers per plugin', () => {
   it('sends the whole selection as one call, and reads each decompiled plugin and each refusal with its message', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
       applied: [first],
-      refused: [{ plugin: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }],
+      refused: [{ item: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }],
     })));
     const client = makeClient(fetch);
 
