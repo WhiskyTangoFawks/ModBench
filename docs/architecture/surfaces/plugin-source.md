@@ -27,3 +27,17 @@ The source is files, and any tool can change them. As a user, I want:
 1. A change made outside Modbench to compile like any other: a deleted file deletes its record, and an added file adds one. Source: ADR-0003
 2. A file compile cannot read, or two files that claim one FormKey, to stop compile, naming the files, so a broken change never becomes a broken plugin. Source: Never silently wrong
 3. A record file in the wrong place to compile, with a warning naming where it belongs. Modbench's next write to that record moves it there. Source: Never silently wrong
+
+## In the text editor
+
+A FormKey is a symbol, and the index answers for it ([ADR-0001](../../adr/0001-modbench-is-a-vscode-extension.md)). The gestures are VS Code's own, under VS Code's names and keys, so none is a catalog row.
+
+As a user, I want:
+
+1. Go to Definition on a FormKey to open the record, as Opening in [editor.md](editor.md) opens a record given without a plugin. Source: VS Code; xEdit Ctrl + click
+2. Find All References on a FormKey to list every record that references it, one entry for each plugin's copy, in the peek and in the References view. Source: VS Code; [editor-referenced-by.md](editor-referenced-by.md), The tree, stories 1 to 4
+3. Hovering a FormKey to show `EditorID [FormKey]`, the record type, and the plugin whose copy wins. Source: xedit.md, divergence 10
+4. Go to Symbol in Workspace to find a record by EditorID or FormKey across every tracked plugin, and to open it. Source: VS Code; catalog `open` with no Argument
+5. Completion inside a reference field to offer records by EditorID and insert the FormKey, and inside an enum field to offer its values. Source: VS Code; ADR-0005
+6. The Problems panel to carry, on the file, what compile would refuse and a reference to a record no active plugin holds. A problem appears when the file is saved and clears the same way, since the index reads the file. Source: Changes outside Modbench, story 2; ADR-0015
+7. Rename Symbol and the quick fixes to offer nothing on plugin source: changing a FormKey is editing the FormID field, and updating the references is a script. Source: xedit.md, divergence 9
