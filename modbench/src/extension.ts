@@ -25,10 +25,11 @@ import { FocusedCells, GRID_VIEW, publishFocusedCell, gridCopyValueText, type Fo
 import { meditConfig, gameDirectoryOverrides } from './workspaceConfig';
 import {
   registerTrackCommand, registerDecompileCommand, registerCompileCommand, CompileProblems, type CompileDeps, type TrackDeps,
-  conflictsComputedOver, refreshSourceControlFor, type PluginsViewProgress, type MinimalRepository,
+  type PluginsViewProgress,
 } from './plugins/pluginRowCommands';
 import { registerFilterCommands } from './plugins/recordFilterCommands';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
+import { trackedRepositoriesOver } from './plugins/trackedRepositories';
 import { registerRecordCreateCommand } from './plugins/createRecordCommand';
 import { createdRecordSelection } from './plugins/createdRecordSelection';
 import { recordWriteOver } from './plugins/recordWrite';
@@ -72,7 +73,6 @@ import type { MoveToTrash } from './ports/trash';
 
 interface ExtensionSession {
   loadOrderSender?: LoadOrderSender;
-  pluginRepositories?: Map<string, MinimalRepository>;
 }
 
 // Records a disposable against its owner's teardown and hands it back. `src/test/toolboxScan.test.ts`
@@ -351,13 +351,14 @@ export function activate(context: vscode.ExtensionContext) {
     (cell) => { publishFocusedCell(cell, (key, value) => { void vscode.commands.executeCommand('setContext', key, value); }); },
     () => focusedView.enter(GRID_VIEW));
 
-  const conflictsComputed = conflictsComputedOver(() => announceConflictsComputed(recordPanels, editsInFlight), {
+  const trackedRepositories = trackedRepositoriesOver({
     client: meditClient,
     outputChannel,
-    setPluginRepositories: (repos) => { session.pluginRepositories = repos; },
     trackedMods: () => views.facts.trackedMods(),
     modDirs: () => views.facts.modDirs(),
   });
+  const conflictsComputed = trackedRepositories.conflictsComputedOver(
+    () => announceConflictsComputed(recordPanels, editsInFlight));
   const notifyConflictsComputed = () => { void conflictsComputed(); };
   const referencedBy = createReferencedByView(meditClient, log, registerNameFilter);
   const { provider: referencedByTreeProvider, view: referencedByTreeView } = referencedBy;
@@ -420,7 +421,7 @@ export function activate(context: vscode.ExtensionContext) {
         recordViews.map(({ id }) => id), 'modbench.record.selectionIn'),
       viewSelections: new Map(recordViews.map(({ id, selection }) => [id, selection])),
       recordWrite,
-      refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
+      refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
     }),
     launchBackend({
       setting: GAME_FOLDER_SETTING, client: meditClient, enterEditing: views.enterEditing,
