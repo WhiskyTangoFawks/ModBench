@@ -7,7 +7,7 @@ import { NotificationListenerRegistry } from '../notificationStream';
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getLightPluginsSupported'
   | 'getRecords' | 'searchRecords'
-  | 'getRecordOwner' | 'getRecordHolders' | 'getComparison' | 'getReferences'
+  | 'getRecordOwner' | 'getRecordHolders' | 'getComparison' | 'getRecordsComparison' | 'getReferences'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
@@ -243,6 +243,11 @@ export class InMemoryMEditClient implements MEditClient {
   }
   getComparison(...args: Parameters<MEditClient['getComparison']>): ReturnType<MEditClient['getComparison']> {
     return this.query('getComparison', args);
+  }
+  getRecordsComparison(
+    ...args: Parameters<MEditClient['getRecordsComparison']>
+  ): ReturnType<MEditClient['getRecordsComparison']> {
+    return this.query('getRecordsComparison', args);
   }
   getReferences(...args: Parameters<MEditClient['getReferences']>): ReturnType<MEditClient['getReferences']> {
     return this.query('getReferences', args);

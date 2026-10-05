@@ -18,6 +18,10 @@ export type PluginDiagnosisReport = Schemas['PluginDiagnosisReport'];
  *  untransformed — the record panel's own consumer narrows `FieldMetadata.type` further. */
 export type CompareResult = Schemas['CompareResult'];
 
+/** One column of `POST /records/compare`: the copy a plugin holds, or the one `documentText` spells
+ *  in its place. */
+export type RecordCopy = Schemas['RecordCopy'];
+
 /** The `track-progress` notification's payload, subscribed alongside the in-flight
  *  `POST /plugins/track`. Counts are of *plugins*, not records. */
 export type TrackStatus = Schemas['TrackProgress'];
