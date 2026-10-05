@@ -4,7 +4,7 @@ const vscodeBridgeAcquiredAtModuleLoad = vi.hoisted(() => ({ postMessage: vi.fn(
 vi.mock('./vscode', () => ({ vscode: vscodeBridgeAcquiredAtModuleLoad }));
 
 import { createRecordPanelClient } from './RecordPanelClient';
-import { columnKey } from './columnKey';
+import { columnKey } from '../../src/wire/columnKey';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 
@@ -40,18 +40,18 @@ describe('RecordPanelClient.load', () => {
     expect(await promise).toMatchObject({ ok: true, result: null });
   });
 
-  it('returns a composite view on success, an origin-less entry keying immutableSet as the elided Data origin', async () => {
+  it('returns a composite view on success', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer(lastRequestId(), {
       ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' },
-      plugins: [{ name: 'A.esp', isImmutable: true, loadOrderIndex: 0 }], conflictsComputed: true, loadFailures: [],
+      plugins: [{ name: 'A.esp', origin: 'Data', isImmutable: true, loadOrderIndex: 0 }], conflictsComputed: true, loadFailures: [],
     });
 
     const r = await promise;
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.result?.conflictAll).toBe('OnlyOne');
-    expect(r.immutableSet).toEqual(new Set([columnKey('A.esp', null)]));
+    expect(r.immutableSet).toEqual(new Set([columnKey({ name: 'A.esp', origin: 'Data' })]));
     expect(r.conflictsComputed).toBe(true);
   });
 
@@ -69,8 +69,8 @@ describe('RecordPanelClient.load', () => {
     const r = await promise;
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.immutableSet).toEqual(new Set([columnKey('Shared.esp', 'ModA')]));
-    expect(r.immutableSet?.has(columnKey('Shared.esp', 'ModB'))).toBe(false);
+    expect(r.immutableSet).toEqual(new Set([columnKey({ name: 'Shared.esp', origin: 'ModA' })]));
+    expect(r.immutableSet?.has(columnKey({ name: 'Shared.esp', origin: 'ModB' }))).toBe(false);
   });
 
   it('fails the whole load when the host answers refused', async () => {

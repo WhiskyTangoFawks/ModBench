@@ -1,19 +1,20 @@
-import type { RecordAddress } from './recordUri';
+import type { RecordTabAddress } from './recordUri';
+import type { PluginAddress } from '../wire/pluginAddress';
 
 export interface RecordOpenPlan {
-  addresses: RecordAddress[];
+  addresses: RecordTabAddress[];
   beside: boolean;
   /** Only a lone record opened in place is a preview, which the next click replaces. */
   preview: boolean;
 }
 
 // A tree row states its record structurally, so a test can use literals shaped like the nodes.
-function addressOf(node: unknown): RecordAddress | undefined {
+function addressOf(node: unknown): RecordTabAddress | undefined {
   if (!node || typeof node !== 'object') return undefined;
-  const n = node as { kind?: string; record?: { formKey?: string }; formKey?: string; origin?: string };
+  const n = node as { kind?: string; record?: { formKey?: string }; formKey?: string; header?: PluginAddress };
+  if (n.header) return { header: n.header };
   const formKey = n.kind === 'record' ? n.record?.formKey : n.formKey;
-  if (!formKey) return undefined;
-  return n.kind === undefined && n.origin !== undefined ? { formKey, origin: n.origin } : { formKey };
+  return formKey ? { formKey } : undefined;
 }
 
 function asksBeside(argument: unknown): boolean {

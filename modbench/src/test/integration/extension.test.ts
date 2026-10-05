@@ -539,7 +539,7 @@ describe('a click on a plugin row opens its header', () => {
     const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.record.open', [
-      { formKey: '000000:Twin.esp', origin: 'ModA' }, { formKey: '000000:Twin.esp', origin: 'ModB' },
+      { header: { name: 'Twin.esp', origin: 'ModA' } }, { header: { name: 'Twin.esp', origin: 'ModB' } },
     ]);
     await waitFor('both Twin.esp tabs', () => openTabs().filter(t => t.label === 'Twin.esp').length === 2 || undefined);
 

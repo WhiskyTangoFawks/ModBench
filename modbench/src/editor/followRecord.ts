@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
-import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
+import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 
 export type FollowedPanel = { title: string; webview: Pick<vscode.Webview, 'postMessage'> };
 
@@ -9,9 +9,8 @@ interface FormKeyTracker<Panel> {
   setFormKey(panel: Panel, formKey: string): void;
 }
 
-/** Where an edit is addressed: the record, and the plugin whose column it was made in
- *  (ADR-0012). */
-export interface EditAddress { formKey: string; plugin: string; origin: string }
+/** Where an edit is addressed: the record, and the plugin whose column it was made in. */
+export interface EditAddress { formKey: string; plugin: PluginAddress }
 
 /** One edit a panel makes: the write, sent to the FormKey the record is at now. */
 export type EditGate = (address: EditAddress, write: (formKey: string) => Promise<string | undefined>) => Promise<void>;
@@ -20,7 +19,7 @@ interface InFlight { writes: number; reported: Set<string>; refreshed: boolean }
 
 // One plugin's record moved by an edit of its FormID. `asked` is whether the tab was told to read
 // `to`. `readAt` is when that read was answered: an address taken after it names what it means.
-interface Move { plugin: string; origin: string; from: string; to: string; asked: boolean; readAt: number | undefined }
+interface Move { plugin: PluginAddress; from: string; to: string; asked: boolean; readAt: number | undefined }
 
 /** The one place a record tab reads again. With an edit in flight, it reads once after the
  *  answer, under the FormKey it then shows, and only on mEdit's report, which may land first
@@ -104,7 +103,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
       for (const move of ended) move.readAt = readAt;
       const reached = ended;
       ended = moves.filter(move => move.readAt === undefined && reached.some(later =>
-        later.from === move.to && samePluginAddress(pluginAddressOf(later), pluginAddressOf(move))));
+        later.from === move.to && samePluginAddress(later.plugin, move.plugin)));
     }
   }
 
@@ -136,7 +135,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   // The record header, story 2).
   private follow(panel: Panel, target: EditAddress, newFormKey: string): void {
     const moves = this.moves.get(panel) ?? [];
-    moves.push({ plugin: target.plugin, origin: target.origin, from: target.formKey, to: newFormKey, asked: false, readAt: undefined });
+    moves.push({ plugin: target.plugin, from: target.formKey, to: newFormKey, asked: false, readAt: undefined });
     this.moves.set(panel, moves);
     if (this.tracker.formKeyOf(panel) !== target.formKey) return;
     this.tracker.setFormKey(panel, newFormKey);
@@ -160,7 +159,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   private targetOf(panel: Panel, address: EditAddress, addressedAt: number): string {
     let formKey = address.formKey;
     for (const move of this.moves.get(panel) ?? []) {
-      const samePlugin = samePluginAddress(pluginAddressOf(move), pluginAddressOf(address));
+      const samePlugin = samePluginAddress(move.plugin, address.plugin);
       if (samePlugin && move.from === formKey && (move.readAt === undefined || addressedAt < move.readAt)) formKey = move.to;
     }
     return formKey;

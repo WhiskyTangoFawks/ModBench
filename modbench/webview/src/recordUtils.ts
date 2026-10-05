@@ -1,5 +1,6 @@
 import { isFieldType, type ColumnKey, type CompareOverride, type FieldMetadata, type FieldValue, type PathHop, type PathSegment } from './types';
-import { columnKey } from './columnKey';
+import { columnKey } from '../../src/wire/columnKey';
+import { pluginAddressOf } from '../../src/wire/pluginAddress';
 
 export function toStr(v: unknown): string {
   if (v == null) return '';
@@ -16,7 +17,7 @@ export type Column = { key: ColumnKey; override: CompareOverride };
 // xEdit's own layout: load order ascending, master leftmost, winner rightmost — the wire order
 // itself (GetOverrideStack's ORDER BY load_order_idx), trusted rather than re-sorted here.
 export function buildColumns(overrides: CompareOverride[]): Column[] {
-  return overrides.map(o => ({ key: columnKey(o.plugin, o.origin), override: o }));
+  return overrides.map(o => ({ key: columnKey(pluginAddressOf(o)), override: o }));
 }
 
 /** The record as the panel names it: the EditorID and the FormKey, or the FormKey alone. */

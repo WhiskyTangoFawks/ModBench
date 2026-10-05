@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
   window: { showInputBox: (options: { value?: string }) => showInputBox(options) },
 }));
 
-import type { OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
+import type { FieldAddress, OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
 
 const openExtendedFieldEditor =
   vi.fn<(params: OpenExtendedFieldEditorParams) => Promise<void>>();
@@ -184,6 +184,8 @@ describe('right-click array ops write one envelope from the host', () => {
   });
 });
 
+const fieldOf = ({ formKey, plugin, origin, path }: StringValueContext): FieldAddress => ({ formKey, plugin: { name: plugin, origin }, path });
+
 describe('right-click edits go through the gate of the panels showing the record, which holds its reads and sends the write to the FormKey the record is at now', () => {
   const movedGate = (gated: string[]): RecordPanelContextCommandDeps['editGateOf'] =>
     () => async (address, write) => { gated.push(address.formKey); await write('000900:Fallout4.esm'); };
@@ -216,7 +218,7 @@ describe('right-click edits go through the gate of the panels showing the record
     const { deps, meditClient } = makeDeps({ editGateOf: movedGate(gated) });
     registerRecordPanelContextCommands(deps);
 
-    await commitField(deps, stringContext(), 'saved');
+    await commitField(deps, fieldOf(stringContext()), 'saved');
 
     expect(gated).toEqual([IDENTITY.formKey]);
     expect(editRecordCalls(meditClient).map(c => c.args[0])).toEqual(['000900:Fallout4.esm']);
@@ -249,7 +251,7 @@ describe('the extended editor opens and saves from the host, from the context it
       { kind: 'member', name: 'Container' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' },
     ] as StringValueContext['path'];
 
-    await commitField(deps, stringContext({ path }), 'edited in the tab');
+    await commitField(deps, fieldOf(stringContext({ path })), 'edited in the tab');
 
     expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
       IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
@@ -262,8 +264,8 @@ describe('the extended editor opens and saves from the host, from the context it
     const { deps, meditClient } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
-    await commitField(deps, stringContext(), 'first save');
-    await commitField(deps, stringContext(), 'second save');
+    await commitField(deps, fieldOf(stringContext()), 'first save');
+    await commitField(deps, fieldOf(stringContext()), 'second save');
 
     expect(editRecordCalls(meditClient).map(c => envelopeValueNarrowedFromUnknownCallArgs(c.args))).toEqual(['first save', 'second save']);
   });

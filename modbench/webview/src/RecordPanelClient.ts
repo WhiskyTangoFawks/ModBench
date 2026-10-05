@@ -1,5 +1,5 @@
 import type { ColumnKey, CompareResult, PluginLoadFailure } from './types';
-import { columnKey } from './columnKey';
+import { columnKey } from '../../src/wire/columnKey';
 import { parseCompareResult } from './parseCompareResult';
 import { requestRecordLoad } from './nativeBridge';
 
@@ -41,8 +41,8 @@ export function createRecordPanelClient(): RecordPanelClient {
       return {
         ok: true,
         result: answer.compare && parseCompareResult(answer.compare),
-        immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))) : null,
-        trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p.name, p.origin))) : null,
+        immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p))) : null,
+        trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p))) : null,
         conflictsComputed: answer.conflictsComputed,
         loadFailures: answer.loadFailures,
       };

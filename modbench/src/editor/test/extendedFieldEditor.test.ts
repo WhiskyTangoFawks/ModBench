@@ -218,6 +218,14 @@ describe('the extended-field documents', () => {
     await expect(textOf(shownUri())).rejects.toThrow('has no such field');
   });
 
+  it('a plugin copy held only by a plugin of the same filename from another origin reads as gone', async () => {
+    client.setQueryAnswer('getComparison', comparison(
+      [diff('Description', { 'Shared.esp|ModA': 'x' })], [['Shared.esp', 'ModA']]));
+    await documents.open({ ...deacon, plugin: 'Shared.esp', origin: 'ModB' });
+
+    await expect(textOf(shownUri())).rejects.toThrow('has no such field');
+  });
+
   it('reads a nested leaf at its own index in the column', async () => {
     const leaf = diff('Name', { 'Fallout4.esm': 'second' });
     client.setQueryAnswer('getComparison', comparison([
@@ -241,7 +249,7 @@ describe('the extended-field documents', () => {
     await provider().writeFile(shownUri(), encode('first'));
     await provider().writeFile(shownUri(), encode('second'));
 
-    const address = { formKey: deacon.formKey, plugin: 'Fallout4.esm', origin: 'Data', path: deacon.path };
+    const address = { formKey: deacon.formKey, plugin: { name: 'Fallout4.esm', origin: 'Data' }, path: deacon.path };
     expect(commit.mock.calls).toEqual([[address, 'first'], [address, 'second']]);
   });
 
