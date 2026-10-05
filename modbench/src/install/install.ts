@@ -72,8 +72,7 @@ export type InstallCommandResult =
   | { applied: false; refusal: string };
 
 export interface InstallOptions {
-  /** ModOrganizer.ini's `gameName`, handed in from the value: meta.ini's own key, so nothing
-   *  here re-reads the ini. */
+  /** The instance's game name, handed in from the value, so nothing here re-reads the instance. */
   gameName: string;
   /** Extraction runner; defaults to spawning a system 7-Zip. */
   run?: Runner;

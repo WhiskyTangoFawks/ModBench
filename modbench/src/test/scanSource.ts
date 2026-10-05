@@ -6,6 +6,12 @@ export const SRC = join(__dirname, '..');
 export const WEBVIEW_SRC = join(SRC, '..', 'webview', 'src');
 export const SOURCE_ROOTS = [SRC, WEBVIEW_SRC];
 
+export const MO2_NAMES = {
+  anywhere: [/mo2/i, /modorganizer/i, /\bMod Organizer\b/i],
+  files: ['modlist.txt', 'ModOrganizer.ini', 'meta.ini', '.mohidden'],
+  directories: ['profiles', 'mods', 'overwrite', 'downloads'],
+} as const;
+
 export const MO2_CONSTRUCTION = { file: 'extension.ts', module: join('instanceAdapter', 'mo2Instance') };
 
 /** `relativePath` is relative to a source root, so a test directory above the root counts for nothing. */
@@ -46,3 +52,27 @@ export function importSpecifiers(sourceText: string, fileName: string): string[]
   visit(source);
   return found;
 }
+
+function isNotAPath(node: ts.Node): boolean {
+  const parent = node.parent as ts.Node | undefined;
+  if (!parent) return false;
+  if (ts.isLiteralTypeNode(parent)) return true;
+  if ((ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) && parent.moduleSpecifier === node) return true;
+  if (ts.isExternalModuleReference(parent)) return true;
+  return ts.isCallExpression(parent) && parent.expression.kind === ts.SyntaxKind.ImportKeyword;
+}
+
+export function pathLiterals(sourceText: string, fileName: string): string[] {
+  const scriptKind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, scriptKind);
+  const found: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if ((ts.isStringLiteralLike(node) || ts.isTemplateHead(node)) && !isNotAPath(node)) found.push(node.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+export const pathSegments = (sourceText: string, fileName: string): Set<string> =>
+  new Set(pathLiterals(sourceText, fileName).flatMap((literal) => literal.split(/[/\\]/)));
