@@ -176,9 +176,8 @@ export class PluginFacts {
     for (const address of [...this.changedByMod.values()].flat()) this.changed.set(address, true);
   }
 
-  /** The read could not say which plugins match: show every row rather than freeze behind a
-   *  stale answer. */
-  matchesUnknown(): void {
+  /** The record filter changed, so the last answer belongs to another filter. */
+  forgetMatches(): void {
     this.matches = undefined;
   }
 

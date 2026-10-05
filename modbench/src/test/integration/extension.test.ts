@@ -84,7 +84,7 @@ const MOCK_PLUGINS: MockPlugin[] = [
   mockPlugin({ name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', inLoadOrder: true }),
   mockPlugin({ name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', inLoadOrder: true }),
   mockPlugin({ name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', inLoadOrder: false }),
-  mockPlugin({ name: 'MissingMaster.esp', path: '/data/MissingMaster.esp', origin: 'Data', inLoadOrder: true }),
+  mockPlugin({ name: 'Second.esp', path: '/data/Second.esp', origin: 'Data', inLoadOrder: true }),
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
@@ -1065,7 +1065,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
   async function swapPluginOrder(): Promise<void> {
     swapped = !swapped;
-    await writePluginsTxt(swapped ? '*MissingMaster.esp\n*TestMod.esp\n' : '*TestMod.esp\n*MissingMaster.esp\n');
+    await writePluginsTxt(swapped ? '*Second.esp\n*TestMod.esp\n' : '*TestMod.esp\n*Second.esp\n');
   }
 
   async function writePluginsTxt(text: string): Promise<void> {
@@ -1081,11 +1081,11 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     await resetMockBackendDetached();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-reconcile-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['TestMod.esp', 'MissingMaster.esp']) {
+    for (const name of ['TestMod.esp', 'Second.esp']) {
       fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     }
     await setGameDirectory(gameDir);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n'));
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Second.esp\n'));
     pluginsTree().invalidate();
     await enterEditing();
   });
@@ -1108,7 +1108,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
   it('a plugins.txt write that leaves the load order equal puts it again', async () => {
     const sent = putLoadOrders.length;
-    const order = swapped ? ['MissingMaster.esp', 'TestMod.esp'] : ['TestMod.esp', 'MissingMaster.esp'];
+    const order = swapped ? ['Second.esp', 'TestMod.esp'] : ['TestMod.esp', 'Second.esp'];
 
     await writePluginsTxt(`${fs.readFileSync(pluginsTxtPath, 'utf8')}\n`);
 
