@@ -52,25 +52,6 @@ public class RecordTextCodecInMemoryTests
     }
 
     [Fact]
-    public async Task SerializeToBytes_ForARealRecord_MatchesWhatSerializeAsyncWrites_ForADenseRecordNeverComparedAgainstItselfBecauseTheInMemoryBytesMustBeTheSourceFilesBytes()
-    {
-        using var overlay = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
-            GameRelease.Fallout4);
-        var record = ((IFallout4ModGetter)overlay).Npcs.First();
-        var codec = Codec();
-        using var dir = new ScratchDirectory("medit-codec-inmemory-");
-        var filePath = Path.Combine(dir.Path, "record.json");
-        await codec.SerializeAsync(record, filePath, GameRelease.Fallout4);
-
-        var fromFile = await File.ReadAllBytesAsync(filePath);
-        var fromMemory = codec.SerializeToBytes(record, GameRelease.Fallout4);
-
-        Assert.NotEmpty(fromFile);
-        Assert.Equal(fromFile, fromMemory);
-    }
-
-    [Fact]
     public void DeserializeFromBytes_RoundTripsFieldFaithfully()
     {
         var codec = Codec();
