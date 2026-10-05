@@ -363,6 +363,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/records/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Several records side by side: one column per copy, in the order given, with no conflict state.
+         * @description A copy's DocumentText, when given, is the document that column is read from, whether or not its plugin is active; the copy is otherwise the one its plugin holds.
+         */
+        post: operations["CompareRecords"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/records/{formKey}/references": {
         parameters: {
             query?: never;
@@ -601,6 +621,10 @@ export interface components {
             conflictThis?: components["schemas"]["ConflictThis"] | null;
             loadIndex: string;
             isInOverwrite: boolean;
+            column?: string | null;
+        };
+        CompareRecordsRequest: {
+            copies: components["schemas"]["RecordCopy"][];
         };
         CompareResult: {
             overrides: components["schemas"]["CompareOverride"][];
@@ -912,6 +936,11 @@ export interface components {
         RecordChildHolders: {
             record: components["schemas"]["RecordAddress"];
             destinations: components["schemas"]["PluginAddress"][];
+        };
+        RecordCopy: {
+            formKey: string;
+            plugin: components["schemas"]["PluginAddress"];
+            documentText?: string | null;
         };
         RecordCopyItem: {
             record: components["schemas"]["RecordAddress"];
@@ -1992,6 +2021,57 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    CompareRecords: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompareRecordsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompareResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

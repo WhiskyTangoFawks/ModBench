@@ -6,7 +6,7 @@ import {
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
   type ChildRecordSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
-  type PluginLoadFailure, type CompareResult,
+  type PluginLoadFailure, type CompareResult, type RecordCopy,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -205,6 +205,9 @@ export interface MEditClient {
    *  to the webview untransformed (target-architecture.d2 `modbench_driving.editor`). Null is a
    *  record held by no active plugin. */
   getComparison(formKey: string): Promise<CompareResult | null>;
+  /** Several records side by side: one column per copy, in the order given, with no conflict
+   *  state on any cell or row. Null is a copy no plugin holds and no `documentText` gives. */
+  getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult | null>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
   getWorldspaces(plugin: PluginAddress): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: PluginAddress, worldspaceFormKey: string): Promise<WorldspaceBlocks>;
@@ -242,5 +245,5 @@ export type {
   TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic,
-  LoadOrderStatus, LoadOrderRefusal, PluginLoadFailure, CompareResult,
+  LoadOrderStatus, LoadOrderRefusal, PluginLoadFailure, CompareResult, RecordCopy,
 };

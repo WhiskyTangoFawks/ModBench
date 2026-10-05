@@ -33,6 +33,20 @@ internal sealed class RelationReads(
         return tableName == null ? null : ReadDocument(connection, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
     }
 
+    public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text)
+    {
+        using var connection = store.OpenReadConnection();
+        var tableName = FindRecordTypeInAnyPlugin(connection, formKey);
+        if (tableName == null) return null;
+        using var parsed = JsonDocument.Parse(text);
+        if (parsed.RootElement.ValueKind != JsonValueKind.Object)
+            throw new JsonException("A record's document is a JSON object.");
+        var editorId = DocumentNodes.At(parsed.RootElement, "EditorID")?.GetString();
+        return DocumentFromBody(
+            connection, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, text,
+            store.Schemas[tableName], LinkResolution.ForLinksOf(connection, formKey, Resolve), parseDiagnosis: null);
+    }
+
     // One query rather than two point queries per record. Rows are materialized before
     // reconstitution: resolving a FormKey opens its own command on this connection, which would
     // interleave two readers.
@@ -587,6 +601,15 @@ internal sealed class RelationReads(
 
         var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
         return (where, values);
+    }
+
+    // Inactive plugins are indexed too (ADR-0012): any plugin's row gives the type.
+    private static string? FindRecordTypeInAnyPlugin(DuckDBConnection connection, string formKey)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"SELECT record_type FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key = $1 LIMIT 1";
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        return cmd.ExecuteScalar() as string;
     }
 
     // Private: table-name dispatch is rejected from the seam; GetDocument and GetOverrideStack

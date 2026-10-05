@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
@@ -67,6 +68,19 @@ public static class RecordEndpoints
         .WithTags("Records")
         .Produces<CompareResult>()
         .ProducesProblem(404);
+
+        app.MapPost("/records/compare", (CompareRecordsRequest request, IRecordQueryService svc) =>
+            CompareRecords(request.Copies ?? [], svc, logger))
+        .WithName("CompareRecords")
+        .WithSummary("Several records side by side: one column per copy, in the order given, with no conflict state.")
+        .WithDescription(
+            "A copy's DocumentText, when given, is the document that column is read from, whether or not " +
+            "its plugin is active; the copy is otherwise the one its plugin holds.")
+        .WithTags("Records")
+        .Produces<CompareResult>()
+        .ProducesProblem(400)
+        .ProducesProblem(404)
+        .ProducesProblem(503);
 
         app.MapGet("/records/{formKey}/references", (string formKey, IRecordQueryService svc) =>
             GetReferences(formKey, svc, logger))
@@ -273,6 +287,30 @@ public static class RecordEndpoints
 
     private static RecordAddress Addressed(RecordAt record) =>
         new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);
+
+    internal static IResult CompareRecords(IReadOnlyList<RecordCopy> copies, IRecordQueryService svc, ILogger logger)
+    {
+        if (copies.Count == 0)
+            return Results.Problem("At least one record is required.", statusCode: 400);
+        if (copies.Any(c => string.IsNullOrWhiteSpace(c.FormKey)
+                || string.IsNullOrWhiteSpace(c.Plugin.Name) || string.IsNullOrWhiteSpace(c.Plugin.Origin)))
+            return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
+        try
+        {
+            return svc.GetCompareRecords(copies) is { } result
+                ? Results.Ok(result)
+                : Results.Problem("A record has no copy in the plugin named, and no document was given for it.", statusCode: 404);
+        }
+        catch (NoLoadOrderException ex)
+        {
+            logger.LogError(ex, "No load order for comparing {Count} records", copies.Count);
+            return WriteEndpointMapping.NoLoadOrder(ex);
+        }
+        catch (JsonException ex)
+        {
+            return Results.Problem($"A document text is not valid JSON: {ex.Message}", statusCode: 400);
+        }
+    }
 
     internal static IResult GetReferences(string formKey, IRecordQueryService svc, ILogger logger)
     {

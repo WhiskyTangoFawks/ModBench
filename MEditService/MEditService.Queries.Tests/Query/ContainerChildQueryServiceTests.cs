@@ -37,6 +37,7 @@ public class ContainerChildQueryServiceTests
         public RecordDocument? GetDocument(string formKey) => null;
         public RecordDocument? GetDocument(string formKey, PluginAddress plugin) => null;
         public IReadOnlyList<RecordDocument> GetDocuments(PluginAddress plugin) => [];
+        public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text) => null;
         public RecordOverrides? GetOverrideStack(string formKey) => null;
         public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin) => [];
         public RecordLookupEntry? Resolve(string formKey) => null;
