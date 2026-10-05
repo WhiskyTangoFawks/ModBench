@@ -160,3 +160,35 @@ describe('what the rows show of what is collapsed', () => {
     expect(navRows(nested, new Set([RECORD_HEADER_ROW])).map(r => r.key)).toEqual([RECORD_HEADER_ROW]);
   });
 });
+
+describe('a union element', () => {
+  it('its rows are its members, each cell reading the leaf its own column\'s element names', () => {
+    const refLocation = fieldMeta({ name: 'location', type: 'struct', displayLabel: 'Ref location' });
+    const location = fieldMeta({ name: 'location', type: 'struct', variants: { RefAlias: refLocation } });
+    const aliases = fieldMeta({
+      name: 'aliases', type: 'array', isArray: true,
+      elementType: fieldMeta({
+        name: '', type: 'struct',
+        fields: [fieldMeta({ name: 'Kind', type: 'string', isDiscriminator: true }), location],
+      }),
+    });
+    const master = { Kind: 'RefAlias', location: { id: 5 } };
+    const override = { Kind: 'LocAlias', location: null };
+    const rows = fieldRowsOf(rowsFor(answer([aliases], [diffNode({
+      fieldName: 'aliases', values: {},
+      children: [diffNode({
+        fieldName: '[0]', values: { [MASTER]: master, [MOD]: override },
+        children: [diffNode({ fieldName: 'location', values: { [MASTER]: { id: 5 }, [MOD]: null } })],
+      })],
+    })])));
+    const element = rows[1];
+    const member = rows[2];
+
+    expect(rows.map(r => r.key)).toEqual(['aliases', 'aliases.[0]', 'aliases.[0].location']);
+    expect(member?.depth).toBe(2);
+    expect(member?.cellMetas?.[MASTER]).toBe(refLocation);
+    expect(member?.cellMetas?.[MOD]).toBe(location);
+    expect(member?.meta).toBe(refLocation);
+    expect(element?.cellMetas).toBeUndefined();
+  });
+});

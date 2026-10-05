@@ -17,8 +17,6 @@ interface RowBase {
   expandable: boolean;
 }
 
-// `present` says which columns carry the object a row is a member of, and `editable` which columns
-// can write it.
 export interface FieldRow extends RowBase {
   kind: 'field';
   diff: FieldDiff;
@@ -39,7 +37,7 @@ export interface FormIdRow extends RowBase {
 
 export type RecordRow = FieldRow | FormIdRow;
 
-export interface RowsInput {
+interface RowsInput {
   result: CompareResult;
   columns: readonly Column[];
   editableColumns: ReadonlySet<ColumnKey>;
@@ -59,7 +57,7 @@ function withRowKeys(parent: string, children: readonly FieldDiff[]): [FieldDiff
   });
 }
 
-// Every row, expanded, in the order the grid shows them. A diff node naming a member no override's
+// A diff node naming a member no override's
 // schema declares has no shape to render against, so it and its subtree have no rows.
 export function recordRows({ result, columns, editableColumns, partialFormColumns }: RowsInput): RecordRow[] {
   const metaByName: Partial<Record<string, FieldMetadata>> = {};
@@ -138,7 +136,6 @@ export function recordRows({ result, columns, editableColumns, partialFormColumn
   return [...headerRows, ...fieldRows];
 }
 
-// The rows under no collapsed row, the Record Header's own members included.
 export function visibleRows(rows: readonly RecordRow[], collapsed: ReadonlySet<string>): RecordRow[] {
   const hidden = new Set<string>();
   return rows.filter(row => {
