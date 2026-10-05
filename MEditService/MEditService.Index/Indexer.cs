@@ -15,7 +15,7 @@ namespace MEditService.Index;
 /// <summary>ADR-0014: the Index's other half (target-architecture.d2
 /// medit_readmodel.index.indexer). Ingest, the registration sweep and the validation of every
 /// plugin.</summary>
-public sealed class Indexer : IQueryIndex, IDisposable
+internal sealed class Indexer : IQueryIndex, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger _logger;
@@ -25,8 +25,6 @@ public sealed class Indexer : IQueryIndex, IDisposable
     private readonly INotificationPublisher? _notifications;
     private readonly SchemaReflector _schemaReflector;
     private readonly TimeProvider _timeProvider;
-    // Where a rebuild's refill runs; a test holds it back to order it against a reconcile.
-    private readonly TaskScheduler _refillScheduler;
     // ADR-0013. The Indexer keeps no view of its own.
     private readonly LoadOrderHolder _holder;
     private HeldPlugins? _heldPlugins;
@@ -50,24 +48,20 @@ public sealed class Indexer : IQueryIndex, IDisposable
     // since that one returns before reaching its own update.
     private long _version;
 
-    /// <summary>The composition root's door: the Index opens its own store (ADR-0014).</summary>
+    /// <summary>The registration's door: the Index opens its own store (ADR-0014).</summary>
     public Indexer(
         LoadOrderHolder holder,
         IPluginAdapter adapter,
         SchemaReflector schemaReflector,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        TimeProvider? timeProvider = null,
-        TaskScheduler? refillScheduler = null,
-        IndexWriteGate? writeGate = null)
+        TimeProvider? timeProvider = null)
     {
         _holder = holder;
-        WriteGate = writeGate ?? new IndexWriteGate();
         _adapter = adapter;
         _schemaReflector = schemaReflector;
         _notifications = notifications;
         _timeProvider = timeProvider ?? TimeProvider.System;
-        _refillScheduler = refillScheduler ?? TaskScheduler.Default;
         _logger = loggerFactory?.CreateLogger<Indexer>() ?? NullLogger<Indexer>.Instance;
         _indexFactory = new DuckDbRecordIndexFactory(
             schemaReflector, new TableDdlBuilder(schemaReflector), notifications,
@@ -106,10 +100,10 @@ public sealed class Indexer : IQueryIndex, IDisposable
 
     private GameRelease _gameRelease;
 
-    /// <summary>One per Indexer, never replaced — a reconcile swaps the store underneath it, which
-    /// is when the ordering matters most. By construction the outer of the two locks: taking
-    /// <c>_lock</c> first and then waiting here would deadlock.</summary>
-    public IndexWriteGate WriteGate { get; }
+    // One per Indexer, never replaced — a reconcile swaps the store underneath it, which
+    // is when the ordering matters most. By construction the outer of the two locks: taking
+    // _lock first and then waiting here would deadlock.
+    private readonly IndexWriteGate _writeGate = new();
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
@@ -136,8 +130,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
         {
             lock (_lock)
             {
-                // Whatever this attempt still holds — usually nothing, since the two known
-                // refusals throw before EnsureScope holds anything new — with State/Message
+                // Whatever this attempt still holds — usually nothing, since a refused
+                // open leaves EnsureScope holding nothing new — with State/Message
                 // overlaid rather than discarded, so a mid-reconcile unknown failure keeps
                 // reporting what had already landed.
                 LoadOrderStatus held;
@@ -199,9 +193,11 @@ public sealed class Indexer : IQueryIndex, IDisposable
     {
         long version = 0;
         bool changed;
+        string? heldElsewhere = null;
+        string? failure = null;
         try
         {
-            if (ReconcileOrRefuse(arrival, ref version) is not { } reconciled) return;
+            if (ReconcileOrRefuse(arrival, ref version, ref heldElsewhere, ref failure) is not { } reconciled) return;
             changed = reconciled;
         }
         catch (OperationCanceledException)
@@ -210,22 +206,19 @@ public sealed class Indexer : IQueryIndex, IDisposable
             // higher, so nothing here is ever the last word for it.
             return;
         }
-        catch (IndexHeldElsewhereException ex)
-        {
-            lock (_lock) _heldElsewhereMessage = ex.Message;
-            changed = true;
-        }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // ReconcileOrRefuse already logged this at error; there is nothing further up to raise
             // it to, so it becomes status data instead of only a log line.
-            lock (_lock) _failureMessage = ex.Message;
+            failure = ex.Message;
             changed = true;
         }
         // Max, not assign: the exclusive lock is released before this runs, so a newer version's
         // own stamp can land first, and this one must never answer for it downward.
         lock (_lock)
         {
+            if (heldElsewhere is not null) _heldElsewhereMessage = heldElsewhere;
+            if (failure is not null) _failureMessage = failure;
             changed |= version > _version;
             _version = Math.Max(_version, version);
             _validating = false;
@@ -234,9 +227,11 @@ public sealed class Indexer : IQueryIndex, IDisposable
     }
 
     // A superseded reconcile throws OperationCanceledException, leaving its work for its
-    // successor; a second window's hold throws IndexHeldElsewhereException. Null when the arrival
+    // successor; a second window's hold is answered in heldElsewhere. Null when the arrival
     // resolved to none, and false when the reconcile changed nothing Status reports.
-    private bool? ReconcileOrRefuse(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version)
+    private bool? ReconcileOrRefuse(
+        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version,
+        ref string? heldElsewhere, ref string? failure)
     {
         EnterExclusive();
         try
@@ -260,22 +255,22 @@ public sealed class Indexer : IQueryIndex, IDisposable
                 _failureMessage = null;
             }
             var token = BeginReconcile();
-            var (held, index) = EnsureScope(snapshot);
+            if (EnsureScope(snapshot, out heldElsewhere) is not { } scope)
+            {
+                // Refused, not failed — the user has two windows on one instance, and nothing is
+                // held here (EnsureScope tore the previous scope down before the open that refused).
+                return true;
+            }
+            var (held, index) = (scope.Held, scope.Index);
             var reconciled = ReconcileProgressively(held, index, snapshot, token) || refusalCleared;
-            return ValidateHeld(token) || reconciled;
+            failure = ValidateHeld(token);
+            return failure is not null || reconciled;
         }
         catch (OperationCanceledException ex)
         {
             // Superseded: whatever landed stays held and registered, and the reconcile that
             // cancelled this one owns the rest. Normal, not a failure — Information, not Warning.
             _logger.LogInformation(ex, "Load order reconcile was superseded before it completed");
-            throw;
-        }
-        catch (IndexHeldElsewhereException ex)
-        {
-            // Refused, not failed — the user has two windows on one instance, and nothing is
-            // held here (EnsureScope tore the previous scope down before the open that refused).
-            _logger.LogWarning(ex, "Load order refused: the index at {Path} is held by another window", ex.IndexPath);
             throw;
         }
         catch (Exception ex)
@@ -310,12 +305,13 @@ public sealed class Indexer : IQueryIndex, IDisposable
 
     // ADR-0010.
     // Published before any plugin is opened, which is what makes the reconcile progressive.
-    private (HeldPlugins Held, IRecordIndex Index) EnsureScope(LoadOrderSnapshot snapshot)
+    private OpenScope? EnsureScope(LoadOrderSnapshot snapshot, out string? heldElsewhere)
     {
+        heldElsewhere = null;
         lock (_lock)
         {
             if (_heldPlugins is { } current && _index is { } index && SameScope(ScopeOf(current), snapshot))
-                return (current, index);
+                return new OpenScope(current, index);
             DisposeCurrent();
             if (_filter is { } filter && !SameScope(filter.Scope, snapshot)) _filter = null;
         }
@@ -323,6 +319,12 @@ public sealed class Indexer : IQueryIndex, IDisposable
         _logger.LogDebug("Initializing DuckDB record index");
         var createTimer = Stopwatch.StartNew();
         var fresh = _indexFactory.Create(snapshot.GameRelease, snapshot.InstanceRoot);
+        if (fresh.HeldElsewhere is { } refusal)
+        {
+            fresh.Dispose();
+            heldElsewhere = refusal;
+            return null;
+        }
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("DuckDB record index initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
@@ -344,8 +346,10 @@ public sealed class Indexer : IQueryIndex, IDisposable
             ReapplyFilter();
         }
         PublishStatus();
-        return (held, fresh);
+        return new OpenScope(held, fresh);
     }
+
+    private sealed record OpenScope(HeldPlugins Held, IRecordIndex Index);
 
     private readonly record struct IndexScope(GameRelease GameRelease, string DataFolderPath, string? InstanceRoot);
 
@@ -744,7 +748,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     {
         // Outside _lock, as every mutation door here is: validate refreshes rows through the index's
         // own verbs, and the gate is reentrant so the rebuild below can take it again.
-        using var _ = WriteGate.Enter();
+        using var _ = _writeGate.Enter();
 
         var (held, index) = RequireScopeCore();
         // One advance for everything this validate re-derives.
@@ -820,32 +824,31 @@ public sealed class Indexer : IQueryIndex, IDisposable
         "what was last read from it.";
 
     // ADR-0003: the status answering the version is published once the plugins are validated, and a
-    // reconcile that changed the status reads Reconciling until then. True when validation failed
-    // outright and became status data.
-    private bool ValidateHeld(CancellationToken token)
+    // reconcile that changed the status reads Reconciling until then. The message when validation
+    // failed outright, which becomes status data.
+    private string? ValidateHeld(CancellationToken token)
     {
         lock (_lock)
         {
-            if (_disposed || _heldPlugins is null) return false;
+            if (_disposed || _heldPlugins is null) return null;
         }
         try
         {
             ValidateIndex(token);
-            return false;
+            return null;
         }
         catch (IndexWriteGateTimeoutException ex)
         {
             // Busy, not broken: validation is idempotent, and the next snapshot validates again.
             _logger.LogWarning(ex, "Could not validate the index while another write held it; it is re-checked at the next snapshot");
-            return false;
+            return null;
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
             // The failure becomes status data (plugins.md, States, story 6), and the next snapshot
             // tries again.
             _logger.LogError(ex, "Validating the index failed unexpectedly");
-            lock (_lock) _failureMessage = ex.Message;
-            return true;
+            return ex.Message;
         }
     }
 
@@ -872,7 +875,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     {
         // Taken before anything reaches _lock. IndexWriteGate is a Lock, thread-affine, so nothing
         // under this scope may await — the thread that exits must be the one that entered.
-        using var _ = WriteGate.Enter();
+        using var _ = _writeGate.Enter();
 
         var (metadata, index, gameRelease, dataFolderPath) = RequireHeldPlugin(key);
         // ADR-0015: a whole plugin re-derived is one projection, so it is one advance
@@ -897,7 +900,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     {
         // Outside _lock, always. It takes the gate for itself rather than trusting its caller; the
         // reentrant gate makes that free.
-        using var _ = WriteGate.Enter();
+        using var _ = _writeGate.Enter();
 
         var (metadata, index, gameRelease, _) = RequireHeldPlugin(key);
         using var projection = index.BeginProjection();
@@ -981,7 +984,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     private void UnindexGonePlugin(PluginAddress key)
     {
         // Gated like its sibling above. Outside _lock, never inside it.
-        using var _ = WriteGate.Enter();
+        using var _ = _writeGate.Enter();
 
         IRecordIndex index;
         lock (_lock)
@@ -1027,7 +1030,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         // ReapplyFilter is deliberately not gated: every call site is already inside a gated write,
         // or inside the reconcile, which holds the exclusive lock instead. Gating there would newly
         // make a reconcile wait on an edit.
-        using var _ = WriteGate.Enter();
+        using var _ = _writeGate.Enter();
 
         lock (_lock)
         {
@@ -1073,19 +1076,14 @@ public sealed class Indexer : IQueryIndex, IDisposable
     {
         var previousSequence = Sequence;
         Close();
-        try
-        {
-            // Released before the reconcile below opens the same file for its own scope.
-            _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence).Dispose();
-        }
-        catch (IndexHeldElsewhereException ex)
-        {
-            _logger.LogWarning(ex, "Refused to rebuild: the index at {Path} is held by another window", ex.IndexPath);
-            return new StoreRebuild(Task.CompletedTask, ex.Message);
-        }
+        string? refusal;
+        // Released before the reconcile below opens the same file for its own scope.
+        using (var rebuilt = _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence))
+            refusal = rebuilt.HeldElsewhere;
+        if (refusal is not null) return new StoreRebuild(Task.CompletedTask, refusal);
 
         return new StoreRebuild(Task.Factory.StartNew(
-            ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, _refillScheduler));
+            ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default));
     }
 
     /// <summary>Reconciles every arrival of the load order, changed or not, on a thread of its own

@@ -9,7 +9,7 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class ProgressiveIndexingTests
 {
-    private static (Indexer Manager, GatedPluginAdapter Gate) MakeGatedManager(LoadOrderHolder holder, string gateBefore)
+    private static (OpenedIndex Manager, GatedPluginAdapter Gate) MakeGatedManager(LoadOrderHolder holder, string gateBefore)
     {
         var gate = new GatedPluginAdapter(gateBefore);
         return (Indexes.Open(holder, gate), gate);

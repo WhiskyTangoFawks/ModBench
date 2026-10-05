@@ -3,7 +3,7 @@ namespace MEditService.Index;
 /// <summary>The one gate every index write passes through; reads never take it. A reentrant
 /// <see cref="Lock"/>, not a SemaphoreSlim, because doors nest on the ordinary path. Always taken
 /// outside <c>Indexer._lock</c>, never inside.</summary>
-public sealed class IndexWriteGate(TimeSpan? timeout = null)
+internal sealed class IndexWriteGate
 {
     // On one DuckDBConnection a second BeginTransaction throws and an unwrapped statement joins the
     // other caller's transaction, dying with its rollback. Reads skip the gate: listing during an
@@ -11,16 +11,15 @@ public sealed class IndexWriteGate(TimeSpan? timeout = null)
 
     /// <summary>Long enough that no legitimate write hits it (a whole-plugin re-derivation is tens of
     /// seconds on a large plugin), short enough that a stuck one is reported rather than hung on.</summary>
-    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(2);
+    public static readonly TimeSpan HoldLimit = TimeSpan.FromMinutes(2);
 
     private readonly Lock _gate = new();
-    private readonly TimeSpan _timeout = timeout ?? DefaultTimeout;
 
     /// <summary>Throws <see cref="IndexWriteGateTimeoutException"/> rather than returning false: every
     /// caller's answer is the same (do not write), and a boolean would let one forget.</summary>
     public Holding Enter()
     {
-        if (!_gate.TryEnter(_timeout)) throw new IndexWriteGateTimeoutException(_timeout);
+        if (!_gate.TryEnter(HoldLimit)) throw new IndexWriteGateTimeoutException(HoldLimit);
         return new Holding(_gate);
     }
 
@@ -32,9 +31,8 @@ public sealed class IndexWriteGate(TimeSpan? timeout = null)
 }
 
 /// <summary>A projection waited out the gate: busy, not broken. No caller offers a retry: a record
-/// gesture never takes the gate (ADR-0015), and a snapshot's validation logs it
-/// (ADR-0015).</summary>
-public sealed class IndexWriteGateTimeoutException : TimeoutException
+/// gesture never takes the gate (ADR-0015).</summary>
+internal sealed class IndexWriteGateTimeoutException : TimeoutException
 {
     private const string DefaultMessage = "Another write to the record index is still in progress.";
 

@@ -8,7 +8,7 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class SecondWindowRefusedTests
 {
-    private static Indexer MakeIndex(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static OpenedIndex MakeIndex(LoadOrderHolder holder) => Indexes.Open(holder);
 
     [ForeignIndexHolderFact]
     public void ASecondWindowOnTheSameInstance_IsAnsweredHeldElsewhereByName_ReadsNothing_MintsNoFile_AndLoadsOnceTheFirstCloses()

@@ -79,7 +79,7 @@ internal static class TrackedMods
 
     /// <summary>The working tree's copy of <paramref name="document"/> replaced by
     /// <paramref name="body"/>, then the next snapshot.</summary>
-    internal static void Edit(this Indexer index, LoadOrderEntry entry, RecordDocument document, string body)
+    internal static void Edit(this OpenedIndex index, LoadOrderEntry entry, RecordDocument document, string body)
     {
         RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, document.EditorId, body));
         index.NextSnapshot();
@@ -88,7 +88,7 @@ internal static class TrackedMods
     /// <summary>The working tree's copy of <paramref name="document"/> put under
     /// <paramref name="newEditorId"/>, which moves it to the name that computes, then the next snapshot.</summary>
     internal static void Rename(
-        this Indexer index, LoadOrderEntry entry, RecordDocument document, string newEditorId, string body)
+        this OpenedIndex index, LoadOrderEntry entry, RecordDocument document, string newEditorId, string body)
     {
         RepositoryOf(entry).Put(
             entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, newEditorId, body));
@@ -96,7 +96,7 @@ internal static class TrackedMods
     }
 
     /// <summary>A document the working tree gains, then the next snapshot.</summary>
-    internal static void Create(this Indexer index, LoadOrderEntry entry, string formKey, string recordType, string? editorId, string body)
+    internal static void Create(this OpenedIndex index, LoadOrderEntry entry, string formKey, string recordType, string? editorId, string body)
     {
         RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(formKey, recordType, editorId, body));
         index.NextSnapshot();
@@ -105,7 +105,7 @@ internal static class TrackedMods
     /// <summary>Several working-tree changes made the Source repository's own way, then the next
     /// snapshot's one validation (ADR-0003). A null body is the document taken out.</summary>
     internal static void Project(
-        this Indexer index, LoadOrderEntry entry, IReadOnlyList<(string FormKey, string? Body)> deltas)
+        this OpenedIndex index, LoadOrderEntry entry, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
         var repository = RepositoryOf(entry);
         var reads = index.RequireReads();
@@ -122,7 +122,7 @@ internal static class TrackedMods
 
     /// <summary>The working tree's copy of <paramref name="document"/> taken out, then the next
     /// snapshot.</summary>
-    internal static void Delete(this Indexer index, LoadOrderEntry entry, RecordDocument document)
+    internal static void Delete(this OpenedIndex index, LoadOrderEntry entry, RecordDocument document)
     {
         var removed = RepositoryOf(entry).Remove(
             entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));

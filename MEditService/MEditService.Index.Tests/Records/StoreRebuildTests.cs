@@ -14,7 +14,7 @@ public sealed class StoreRebuildTests : IDisposable
 
     private readonly LoadOrderHolder _holder = new();
     private readonly GatedPluginAdapter _opens = new();
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
 
     public StoreRebuildTests() => _index = Indexes.Open(_holder, _opens);
 
@@ -74,7 +74,7 @@ public sealed class StoreRebuildTests : IDisposable
         .WithPlugin("B.esp", mod => mod.Npcs.AddNew("NpcB"))
         .Build();
 
-    private static string[] ListedNpcs(Indexer index) =>
+    private static string[] ListedNpcs(OpenedIndex index) =>
         [.. index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Items.Select(i => i.EditorId ?? "")];
 
     [Fact]
@@ -114,22 +114,57 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public async Task AFilterKeptThroughARebuild_ClearsBeforeTheRefillOpensAStore()
+    public async Task AFilterClearedWhileARebuildRefills_LeavesTheRefilledRowsUnfiltered()
     {
         using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-clear");
-        var refills = new HeldBackScheduler();
+        using var gate = new GatedPluginAdapter();
         var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, _opens, refillScheduler: refills);
+        using var index = Indexes.Open(holder, gate);
         index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         index.SetFilter(MatchesNpcA, "npc-a.sql");
+        gate.ParkNextOpenOf("B.esp");
         var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot).Refill;
+        await gate.WaitUntilParkedAsync();
 
-        index.ClearFilter();
-        refills.RunHeldBack();
-        await refill;
+        var clear = Task.Run(index.ClearFilter);
+        gate.Release();
+        await Task.WhenAll(refill, clear).WaitAsync(Waits.Patience);
 
         Assert.Null(index.ActiveFilter);
         Assert.Equal(["NpcA", "NpcB", "NpcOther"], ListedNpcs(index).Order());
+    }
+
+    [ForeignIndexHolderFact]
+    public void AFilterKeptThroughARefusedRebuild_StillClears()
+    {
+        using var otherWindow = new HoldsTheFileOnceTheRebuildClosesTheStore(() => IndexFiles.In(_fixture.InstanceRoot));
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, notifications: otherWindow);
+        index.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        index.SetFilter(MatchesNpcA, "npc-a.sql");
+        otherWindow.Armed = true;
+
+        var rebuild = index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
+        Assert.NotNull(rebuild.Refusal);
+        Assert.NotNull(index.ActiveFilter);
+        index.ClearFilter();
+
+        Assert.Null(index.ActiveFilter);
+    }
+
+    private sealed class HoldsTheFileOnceTheRebuildClosesTheStore(Func<string> indexPath) : INotificationPublisher, IDisposable
+    {
+        private ForeignIndexHolder? _holder;
+
+        public bool Armed { get; set; }
+
+        public void Publish(Notification notification)
+        {
+            if (Armed && _holder is null && notification is LoadOrderStatusNotification)
+                _holder = ForeignIndexHolder.Hold(indexPath());
+        }
+
+        public void Dispose() => _holder?.Dispose();
     }
 
     [Fact]
@@ -144,26 +179,24 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public async Task ARefill_FillsTheLoadOrderHeldWhenItRuns_NotTheOneHeldWhenTheRebuildStarted_EvenWhenTheRefillCancelledThatArrivalsOwnReconcile()
+    public async Task ARebuildRacingANewerArrival_EndsOnTheNewerLoadOrder()
     {
         using var data = new PluginFixtureBuilder("store-rebuild-race").WithPlugin("A.esp").WithPlugin("B.esp").Build();
         using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
-        var refills = new HeldBackScheduler();
         var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, gate, refillScheduler: refills);
+        using var index = Indexes.Open(holder, gate);
         index.Reconcile(holder, data.DataFolder, [data.Plugins[0]], GameRelease.Fallout4, data.InstanceRoot);
 
         var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot).Refill;
         var version = holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
         await gate.WaitUntilParkedAsync();
-        var refilling = Task.Run(refills.RunHeldBack);
         gate.Release();
-        await Task.WhenAll(refilling, refill);
+        await refill.WaitAsync(Waits.Patience);
         index.AwaitVersion(version);
 
         Assert.Equal(version, index.Status.Version);
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.True(index.RequireReads().OpenedPlugins.ContainsKey(data.Plugins[1].KeyOf()), "the refill filled the load order held when it ran");
+        Assert.True(index.RequireReads().OpenedPlugins.ContainsKey(data.Plugins[1].KeyOf()), "the rebuild ended on the newer load order");
     }
 
     [Fact]

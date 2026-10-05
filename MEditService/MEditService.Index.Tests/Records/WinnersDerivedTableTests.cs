@@ -16,7 +16,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
 
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderHolder _holder = new();
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
     private readonly string _npc;
 
     public WinnersDerivedTableTests()

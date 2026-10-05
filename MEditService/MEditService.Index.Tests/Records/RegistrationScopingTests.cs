@@ -45,7 +45,7 @@ public class RegistrationScopingTests
         }
 
         public ScatteredFixtureData Plugins { get; }
-        public Indexer Index { get; }
+        public OpenedIndex Index { get; }
         public GatedPluginAdapter Opens { get; }
         public LoadOrderHolder Holder { get; }
         public string SharedNpcFk { get; }

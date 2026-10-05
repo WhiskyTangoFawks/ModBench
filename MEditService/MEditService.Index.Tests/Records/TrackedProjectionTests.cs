@@ -15,7 +15,7 @@ public sealed class TrackedProjectionTests : IDisposable
     private readonly LoadOrderEntry _mod;
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly List<(long Sequence, string? EditorId)> _seenWhenPublished = [];
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
     private readonly string _npc;
     private readonly string _otherNpc;
 

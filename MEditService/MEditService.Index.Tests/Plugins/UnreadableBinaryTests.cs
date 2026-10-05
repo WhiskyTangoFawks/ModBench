@@ -12,7 +12,7 @@ public sealed class UnreadableBinaryTests : IDisposable
 {
     private readonly LoadOrderHolder _holder = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-unreadable-binary-game-").FullName;
     private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-unreadable-binary-instance-").FullName;
     private const string PluginName = "Untracked.esp";

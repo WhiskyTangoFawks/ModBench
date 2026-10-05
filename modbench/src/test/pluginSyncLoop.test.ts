@@ -3,9 +3,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVscodeWatcher';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './vscodeMock';
 import { accessTo, adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
 
-vi.mock('vscode', () => fakeVscodeModule());
+vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import { wireModSync, wirePluginSync } from './syncWiring';
@@ -13,7 +14,7 @@ import { syncPlugins, setPluginsEnabled, type PluginSyncResult } from '../plugin
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
-import { logGameFolderNotFound } from '../toolbox/gameFolderNotFoundLog';
+import { ToolboxProvider } from '../toolbox/ToolboxProvider';
 import { modSyncOver } from '../modlist/modlist';
 
 const PROFILE = 'Default';
@@ -22,8 +23,10 @@ const INI = '[General]\r\nselected_profile=@ByteArray(Default)\r\ngameName=Fallo
 
 const roots: string[] = [];
 const instances: Instance[] = [];
+const toolboxes: ToolboxProvider[] = [];
 
 afterEach(async () => {
+  for (const toolbox of toolboxes.splice(0)) toolbox.dispose();
   for (const instance of instances.splice(0)) instance.dispose();
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
   watchers.length = 0;
@@ -185,7 +188,7 @@ describe('the game folder not found, across the whole instance', () => {
       adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }), log: write, logReadFailure: write,
     });
     instances.push(instance);
-    logGameFolderNotFound(instance, (line) => channel.warn(line));
+    toolboxes.push(new ToolboxProvider({ instance, channel }));
     const pluginSync = wirePluginSync(instance, ({ profile, provided, inData, loadedWithNoLine }) => {
       return syncPlugins(accessTo(root), profile, provided, inData, loadedWithNoLine);
     }, channel);

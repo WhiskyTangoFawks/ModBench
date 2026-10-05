@@ -27,7 +27,7 @@ public sealed class DiagnosedContainerTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private Indexer Indexed(string? cellDiagnosis) =>
+    private OpenedIndex Indexed(string? cellDiagnosis) =>
         Indexes.Reconciled(_fixture, adapter: new StubbedDocumentsAdapter(cellDiagnosis));
 
     [Fact]

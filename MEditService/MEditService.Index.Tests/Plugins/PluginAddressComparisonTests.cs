@@ -11,7 +11,7 @@ public sealed class PluginAddressComparisonTests : IDisposable
         .WithPlugin("Cased.esp", mod => mod.Npcs.AddNew("FromCased").Race.SetTo(mod.Races.AddNew("CasedRace")), origin: "CasedMod")
         .BuildScattered();
 
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
 
     public PluginAddressComparisonTests() => _index = Indexes.Reconciled(_fixture);
 

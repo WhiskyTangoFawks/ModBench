@@ -17,7 +17,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     private readonly FormKey _npc1;
     private readonly FormKey _npc2;
     private readonly LoadOrderHolder _holder = new();
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
 
     public ProjectionSequenceTests()
     {

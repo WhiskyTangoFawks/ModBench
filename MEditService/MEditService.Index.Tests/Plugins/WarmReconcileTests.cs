@@ -12,7 +12,7 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class WarmReconcileTests
 {
-    private static Indexer MakeIndexer(LoadOrderHolder holder, ILoggerFactory? loggerFactory = null) =>
+    private static OpenedIndex MakeIndexer(LoadOrderHolder holder, ILoggerFactory? loggerFactory = null) =>
         Indexes.Open(holder, loggerFactory: loggerFactory);
 
     private static (ILoggerFactory Factory, List<LogEntry> Entries) Capturing()
@@ -78,7 +78,7 @@ public sealed class WarmReconcileTests
 
     private sealed class ProgressWatchingAdapter(List<int> observed) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public Indexer? Index { get; set; }
+        public OpenedIndex? Index { get; set; }
 
         public override (PluginContent Content, Exception? Unreachable) ReadContent(
             ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)

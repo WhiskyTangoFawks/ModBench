@@ -16,7 +16,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     private readonly PluginAddress _plugin = new(PluginName, Origin);
     private readonly ScratchDirectory _modFolder = new("medit-cell-fullname-mod-");
     private readonly ScratchDirectory _gameDirectory = new("medit-cell-fullname-game-");
-    private readonly Indexer _index;
+    private readonly OpenedIndex _index;
     private readonly string _worldspaceFormKey;
 
     public WorldspaceCellFullNameIndexingTests()

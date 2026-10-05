@@ -10,7 +10,7 @@ public class SearchRecordsTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private Indexer MakeLoadedManager(LoadOrderHolder holder)
+    private OpenedIndex MakeLoadedManager(LoadOrderHolder holder)
     {
         var manager = Indexes.Open(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);

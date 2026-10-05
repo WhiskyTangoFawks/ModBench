@@ -30,10 +30,10 @@ public sealed class ValidationFaultTests : IDisposable
 
     private LoadOrderEntry Plugin => _fixture.Plugins.Single();
 
-    private Indexer Subscribed(INotificationPublisher? notifications = null, IndexWriteGate? writeGate = null)
+    private OpenedIndex Subscribed(INotificationPublisher? notifications = null)
     {
         var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
-        var index = Indexes.Open(_holder, loggerFactory: _loggerFactory, notifications: notifications, timeProvider: clock, writeGate: writeGate);
+        var index = Indexes.Open(_holder, loggerFactory: _loggerFactory, notifications: notifications, timeProvider: clock);
         index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         return index;
     }
@@ -44,23 +44,6 @@ public sealed class ValidationFaultTests : IDisposable
     private bool Logged(LogLevel level, Func<LogEntry, bool> matches)
     {
         lock (_log) return _log.Exists(e => e.Level == level && matches(e));
-    }
-
-    [Fact]
-    public void AValidationThatWaitsOutTheWriteGate_IsLogged_AndReCheckedAtTheNextSnapshot()
-    {
-        using var index = Subscribed(writeGate: new IndexWriteGate(TimeSpan.FromMilliseconds(100)));
-        RewriteThePlugin();
-        using (new GateHeld(index.WriteGate))
-        {
-            _holder.Apply(_holder.Current);
-            Waits.Reached(
-                () => Logged(LogLevel.Warning, e => e.Message.Contains("re-checked", StringComparison.Ordinal)), "the timed-out validation's log");
-        }
-
-        index.NextSnapshotUntil(
-            () => index.RequireReads().GetDocuments(Plugin.KeyOf()).Any(d => d.EditorId == "WrittenByAnotherTool"),
-            "the next snapshot validating the plugin again");
     }
 
     [Fact]
@@ -82,31 +65,6 @@ public sealed class ValidationFaultTests : IDisposable
         public void Publish(Notification notification)
         {
             if (notification is PluginChangedNotification) throw new InvalidOperationException(Reason);
-        }
-    }
-
-    private sealed class GateHeld : IDisposable
-    {
-        private readonly ManualResetEventSlim _release = new();
-        private readonly Task _holder;
-
-        public GateHeld(IndexWriteGate gate)
-        {
-            using var held = new ManualResetEventSlim();
-            _holder = Task.Run(() =>
-            {
-                using var _ = gate.Enter();
-                held.Set();
-                _release.Wait(TimeSpan.FromSeconds(30));
-            });
-            if (!held.Wait(TimeSpan.FromSeconds(10))) throw new InvalidOperationException("The gate was never taken.");
-        }
-
-        public void Dispose()
-        {
-            _release.Set();
-            _holder.GetAwaiter().GetResult();
-            _release.Dispose();
         }
     }
 }
