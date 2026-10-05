@@ -744,9 +744,8 @@ internal sealed class RelationReads(
             reader.GetString(6), schema, resolveFormKey, reader.IsDBNull(7) ? null : reader.GetString(7));
 
     // The construction half of ReadDocumentFromBody, split out so the bulk read can build documents
-    // from rows materialized before reading any. The fields are the document's own nodes at each
-    // column's path (ADR-0005): nothing is reconstituted. A header's masters are no document's node
-    // (ADR-0008), so they are answered from the plugin's rows.
+    // from rows materialized first. The fields are the document's own nodes (ADR-0005), except a
+    // header's masters, which no document holds (ADR-0008).
     private RecordDocument DocumentFromBody(
         DuckDBConnection connection, string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
         string? editorId, string body, RecordTableSchema schema,
