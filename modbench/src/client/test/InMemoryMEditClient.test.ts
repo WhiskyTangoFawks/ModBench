@@ -156,3 +156,30 @@ describe('InMemoryMEditClient — subscribe/emit', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 });
+
+describe('InMemoryMEditClient — onNotification', () => {
+  it('feeds a typed listener its kind\'s payload from the same emit as the flat one', () => {
+    const client = new InMemoryMEditClient();
+    const flat = vi.fn();
+    const typed = vi.fn();
+    client.subscribe('rows-changed', flat);
+    client.onNotification('rows-changed', typed);
+
+    client.emit(notificationEventFixture({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: ['k'] }));
+
+    expect(flat).toHaveBeenCalledTimes(1);
+    expect(typed).toHaveBeenCalledWith({ plugin: 'A.esp', origin: 'ModA', keys: ['k'] });
+  });
+
+  it('skips a track-progress emit missing its payload, and unsubscribe stops delivery', () => {
+    const client = new InMemoryMEditClient();
+    const listener = vi.fn();
+    const off = client.onNotification('track-progress', listener);
+    client.emit(notificationEventFixture({ kind: 'track-progress' }));
+    off();
+    client.emit(notificationEventFixture({
+      kind: 'track-progress', trackProgress: { mod: 'M', phase: 'Parsing', pluginsDone: 0, pluginsTotal: 1 },
+    }));
+    expect(listener).not.toHaveBeenCalled();
+  });
+});

@@ -863,3 +863,22 @@ describe('HttpMEditClient, the backend process it hides', () => {
     await vi.waitFor(() => expect(channel.warn).toHaveBeenCalledWith('[backend] slow'));
   });
 });
+
+describe('HttpMEditClient — onNotification', () => {
+  it('hands a typed listener the payload of a frame the stream carries', async () => {
+    const frame = { kind: 'plugin-changed', plugin: 'A.esp', origin: 'ModA', keys: [], sequence: 1 };
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`event: plugin-changed\ndata: ${JSON.stringify(frame)}\n\n`));
+      },
+    });
+    const client = makeClient(() => Promise.resolve(new Response(body, { status: 200 })));
+    const heard: unknown[] = [];
+    client.onNotification('plugin-changed', (p) => heard.push(p));
+
+    await client.start();
+
+    await vi.waitFor(() => expect(heard).toEqual([{ plugin: 'A.esp', origin: 'ModA' }]));
+    await client.stop();
+  });
+});
