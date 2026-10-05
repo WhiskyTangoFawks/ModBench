@@ -125,7 +125,7 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     it('an mEdit-client import planted in a Downloads-shaped file is caught', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'downloads'), { recursive: true });
-        writeFileSync(join(root, 'downloads', 'DownloadsProvider.ts'), "import { HttpMEditClient } from '../client';\n");
+        writeFileSync(join(root, 'downloads', 'DownloadsProvider.ts'), "import { createMEditClient } from '../client';\n");
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('downloads', 'DownloadsProvider.ts')]);
       });
     });
@@ -133,7 +133,7 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     it('an mEdit-client import planted in the Instance file itself is caught, at its real nested depth', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'instanceLoader'), { recursive: true });
-        writeFileSync(join(root, 'instanceLoader', 'instance.ts'), "import { HttpMEditClient } from '../client';\n");
+        writeFileSync(join(root, 'instanceLoader', 'instance.ts'), "import { createMEditClient } from '../client';\n");
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('instanceLoader', 'instance.ts')]);
       });
     });
