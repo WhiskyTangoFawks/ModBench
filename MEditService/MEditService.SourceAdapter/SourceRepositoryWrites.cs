@@ -296,12 +296,12 @@ internal sealed class SourceRepositoryWrites(
     // found by FormKey.
     private void MoveToItsLeafName(SourceUnit unit, SourceDocument document)
     {
-        if (LeafMove(unit, document) is not var (from, to)) return;
-
-        // A file whose text is not a document is something else's, and moving it over drops what it wrote.
-        if (SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
+        // A file whose text is not a document is something else's, and writing over it drops what it wrote.
+        if (document.RecordType != PluginHeader.RecordType && !unit.IsEmbedded && File.Exists(unit.FullPath)
+            && SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
             throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
 
+        if (LeafMove(unit, document) is not var (from, to)) return;
         SourceRepositoryLayout.MoveEntry(from, to);
         locator.Forget();
     }
