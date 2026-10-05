@@ -8,7 +8,7 @@ public sealed class CodecReadsNoFilesScanTests
     private const string CodecRoot = "MEditService.Codec";
 
     private static readonly string[] FileSystemNames =
-        [@"File\.", @"Directory\.", "ModPath", "RecordLocator", "CreateTempSubdirectory"];
+        [@"File\.", @"Directory\.", "ModPath", "RecordLocator", @"CreateTempSubdirector[y]"];
 
     [Fact]
     public void TheCodec_NamesNoFileSystemAndNoPluginPath()
