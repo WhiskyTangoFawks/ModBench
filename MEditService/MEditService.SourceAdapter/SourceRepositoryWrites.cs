@@ -240,7 +240,7 @@ internal sealed class SourceRepositoryWrites(
         var to = Path.Combine(PathShape.DirectoryOf(from), LayoutLeafName(unit, document));
 
         if (unit.IsDirectoryPerRecord) Directory.Move(from, to);
-        else File.Move(from, to, overwrite: true);
+        else File.Move(from, to);
         locator.Forget();
     }
 

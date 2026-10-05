@@ -226,7 +226,7 @@ describe('modSync — outcome handling', () => {
   });
 
   it('names the file mod order is kept in as the value names it', async () => {
-    const instance = fakeInstance(instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt' } }));
+    const instance = fakeInstance(instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' } }));
     const channel = channelDouble();
     const trigger = wireModSync(instance, () => Promise.resolve<ModSyncResult>(
       { applied: true, added: ['New Mod'], dropped: [] }), channel);

@@ -151,7 +151,7 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     showInputBox.mockResolvedValueOnce('New Mod');
     createEmptyMod.mockResolvedValueOnce({ applied: true, wrote: false, lineRefusal: 'disk full' });
     const reporter = recordingReporter();
-    const another = { ...instanceThatReads, value: instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt' } }) };
+    const another = { ...instanceThatReads, value: instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' } }) };
 
     registerCreateEmptyModCommand(access, another, reporter);
     await invoke('modbench.mod.createEmpty');
