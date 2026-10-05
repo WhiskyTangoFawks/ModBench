@@ -20,9 +20,8 @@ public sealed class CopyRecordHandler
         (_override, _new, _loadOrder, _logger) = (overrideCopy, newRecordCopy, loadOrder, logger);
 
     /// <summary>Each record lands in each destination or is refused on its own; <paramref name="replace"/>
-    /// lets an override copy over the one a destination holds. A record or destination named twice is
-    /// copied once: a second override would be refused as already held, and a second new record would
-    /// be a duplicate nobody asked for. Throws <see cref="NoLoadOrderException"/> with no load order held.</summary>
+    /// lets an override copy over the one a destination holds. A pair named twice copies once. Throws
+    /// <see cref="NoLoadOrderException"/> with no load order held.</summary>
     public SelectionResult<CopyItem> Copy(
         IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace)
     {
