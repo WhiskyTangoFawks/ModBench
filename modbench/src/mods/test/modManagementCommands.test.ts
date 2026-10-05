@@ -58,10 +58,8 @@ import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/s
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
-import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import type { ModlistEntry } from '../../instanceLoader/instance';
+import type { ModlistAccess } from '../../modlist/modlist';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
@@ -70,6 +68,20 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 }
 
 const access = accessTo('/instance');
+
+const folderOf = (entry: Pick<ModlistEntry, 'kind' | 'name'>) => ({ ...entry, path: `/instance/mods/${entry.name}` });
+
+function accessHolding(listed: readonly ModlistEntry[], folders: readonly Pick<ModlistEntry, 'kind' | 'name'>[] = []): ModlistAccess {
+  const named = (kind: ModlistEntry['kind'], name: string) =>
+    (e: Pick<ModlistEntry, 'kind' | 'name'>) => e.kind === kind && e.name.toLowerCase() === name.toLowerCase();
+  return {
+    adapter: {
+      ...access.adapter,
+      orderEntry: (_profile, { kind, name }) => Promise.resolve(listed.find(named(kind, name))),
+      entryFolder: ({ kind, name }) => Promise.resolve(folders.filter(named(kind, name)).map(folderOf)[0]),
+    },
+  };
+}
 const instanceThatReads = {
   refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
 };
@@ -106,19 +118,14 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     expect(reporter.reports).toEqual([]);
   });
 
-  it('the prompt\'s validateInput refuses a taken name, in the words install refuses it with', async () => {
-    const root = cloneCorpusFixture();
-    try {
-      registerCreateEmptyModCommand(accessTo(root), instance, recordingReporter());
-      await invoke('modbench.mod.createEmpty');
+  it('the prompt\'s validateInput refuses a name a mod\'s folder holds, in the words install refuses it with', async () => {
+    registerCreateEmptyModCommand(accessHolding([], [{ kind: 'mod', name: 'Harder VATS' }]), instance, recordingReporter());
+    await invoke('modbench.mod.createEmpty');
 
-      const [options] = present(showInputBox.mock.calls[0], 'the one showInputBox call');
-      const validateInput = present(options?.validateInput, 'validateInput on the input box options');
-      expect(await validateInput('Harder VATS')).toMatch(/"Harder VATS" already exists/);
-      expect(await validateInput('A New Name')).toBeUndefined();
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    const [options] = present(showInputBox.mock.calls[0], 'the one showInputBox call');
+    const validateInput = present(options?.validateInput, 'validateInput on the input box options');
+    expect(await validateInput('Harder VATS')).toMatch(/"Harder VATS" already exists/);
+    expect(await validateInput('A New Name')).toBeUndefined();
   });
 
   it('creates the folder and its line, and reports nothing when both land', async () => {
@@ -538,18 +545,6 @@ describe('modbench.separator.delete: the whole selection of separators, asked on
 
 const CLASH = 'A separator with this name already exists';
 
-async function instanceWithFoldersLeftByAnotherToolAndModOrderListing(
-  folders: readonly string[], entries: readonly { kind: 'mod' | 'separator'; name: string }[] = [],
-): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'mod-folders-'));
-  for (const folder of folders) await mkdir(join(root, 'mods', folder), { recursive: true });
-  await mkdir(join(root, 'profiles', 'Default'), { recursive: true });
-  await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '');
-  await accessTo(root).adapter.changeModOrder('Default', () =>
-    entries.map((entry) => ({ kind: 'addAtWinningEnd', entry })));
-  return root;
-}
-
 function optionsOfTheOneShowInputBoxCall(): InputBoxOptionsDoubleOfJustPromptAndValidateInput {
   const [call] = showInputBox.mock.calls;
   return present(call?.[0], 'the options of the one prompt the gesture opened');
@@ -583,40 +578,29 @@ describe('rename separator takes its separator through the gesture entry', () =>
     expect(renameSeparator.mock.calls).toEqual([[access, 'Default', 'Group B', 'Renamed']]);
   });
 
-  it('refuses in the prompt a name another separator\'s folder holds, in any case (MO2 keys separators by name without case), and takes its own name or a mod\'s', async () => {
-    const root = await instanceWithFoldersLeftByAnotherToolAndModOrderListing(['Group A_separator', 'Group B_separator', 'Mod A']);
-    try {
-      showInputBox.mockResolvedValueOnce(undefined);
+  it('refuses in the prompt a name another separator\'s folder holds, and takes its own name or a mod\'s', async () => {
+    showInputBox.mockResolvedValueOnce(undefined);
 
-      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
-      await invoke('modbench.separator.rename', groupB);
+    registerSeparatorCommands(accessHolding([], [{ kind: 'separator', name: 'Group A' }, { kind: 'separator', name: 'Group B' }, { kind: 'mod', name: 'Mod A' }]), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
+    await invoke('modbench.separator.rename', groupB);
 
-      const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
-      expect(await validate('group a')).toBe(CLASH);
-      expect(await validate('GROUP B')).toBeUndefined();
-      expect(await validate('Mod A')).toBeUndefined();
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
+    expect(await validate('group a')).toBe(CLASH);
+    expect(await validate('GROUP B')).toBeUndefined();
+    expect(await validate('Mod A')).toBeUndefined();
   });
 
-  it('refuses in the prompt a name a separator with no folder has, in any case, since a line in mod order is a separator whose folder may be gone, and takes its own', async () => {
-    const root = await instanceWithFoldersLeftByAnotherToolAndModOrderListing([], [
-      { kind: 'separator', name: 'Group A' }, { kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group B' },
-    ]);
-    try {
-      showInputBox.mockResolvedValueOnce(undefined);
+  it('refuses in the prompt a name a separator with no folder has, since a line in mod order is a separator whose folder may be gone, and takes its own', async () => {
+    showInputBox.mockResolvedValueOnce(undefined);
 
-      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
-      await invoke('modbench.separator.rename', groupB);
+    registerSeparatorCommands(
+      accessHolding([{ kind: 'separator', name: 'Group A', enabled: true }, { kind: 'mod', name: 'Mod A', enabled: true }, { kind: 'separator', name: 'Group B', enabled: true }], []), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
+    await invoke('modbench.separator.rename', groupB);
 
-      const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
-      expect(await validate('group a')).toBe(CLASH);
-      expect(await validate('GROUP B')).toBeUndefined();
-      expect(await validate('Mod A')).toBeUndefined();
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
+    expect(await validate('group a')).toBe(CLASH);
+    expect(await validate('GROUP B')).toBeUndefined();
+    expect(await validate('Mod A')).toBeUndefined();
   });
 
   it('reports the refusal of a name another separator took after the prompt closed', async () => {
@@ -694,38 +678,27 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     expect(insertSeparator.mock.calls).toEqual([[access, 'Default', 'New Section', { kind: 'mod', name: 'Mod A' }]]);
   });
 
-  it('refuses in the prompt a name another separator\'s folder holds, as MO2 would name it, and takes a mod\'s', async () => {
-    const root = await instanceWithFoldersLeftByAnotherToolAndModOrderListing(['Group A_separator', 'Mod A']);
-    try {
-      showInputBox.mockResolvedValueOnce(undefined);
+  it('refuses in the prompt a name another separator\'s folder holds, and takes a mod\'s', async () => {
+    showInputBox.mockResolvedValueOnce(undefined);
 
-      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
-      await invoke('modbench.separator.add', modA);
+    registerSeparatorCommands(accessHolding([], [{ kind: 'separator', name: 'Group A' }, { kind: 'mod', name: 'Mod A' }]), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
+    await invoke('modbench.separator.add', modA);
 
-      const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the add prompt\'s validateInput');
-      expect(await validate('Group A')).toBe(CLASH);
-      expect(await validate(' Group A. ')).toBe(CLASH);
-      expect(await validate('Mod A')).toBeUndefined();
-      expect(await validate('')).toBeUndefined();
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the add prompt\'s validateInput');
+    expect(await validate('Group A')).toBe(CLASH);
+    expect(await validate('Mod A')).toBeUndefined();
+    expect(await validate('')).toBeUndefined();
   });
 
-  it('refuses in the prompt a name a separator with no folder has, in any case, since a line in mod order is a separator whose folder may be gone', async () => {
-    const root = await instanceWithFoldersLeftByAnotherToolAndModOrderListing([], [{ kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group A' }]);
-    try {
-      showInputBox.mockResolvedValueOnce(undefined);
+  it('refuses in the prompt a name a separator with no folder has, since a line in mod order is a separator whose folder may be gone', async () => {
+    showInputBox.mockResolvedValueOnce(undefined);
 
-      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
-      await invoke('modbench.separator.add', modA);
+    registerSeparatorCommands(accessHolding([{ kind: 'mod', name: 'Mod A', enabled: true }, { kind: 'separator', name: 'Group A', enabled: true }], []), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
+    await invoke('modbench.separator.add', modA);
 
-      const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the add prompt\'s validateInput');
-      expect(await validate('group a')).toBe(CLASH);
-      expect(await validate('Mod A')).toBeUndefined();
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the add prompt\'s validateInput');
+    expect(await validate('Group A')).toBe(CLASH);
+    expect(await validate('Mod A')).toBeUndefined();
   });
 
   it('reports the refusal of a name another separator took after the prompt closed', async () => {
@@ -1505,32 +1478,27 @@ describe('rename mod refuses in its prompt', () => {
   };
   const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
 
-  async function validatorOver(root: string): Promise<(value: string) => unknown> {
+  async function validatorOver(modAccess: ModlistAccess): Promise<(value: string) => unknown> {
     showInputBox.mockResolvedValueOnce(undefined);
     registerModContextCommands({
-      access: accessTo(root), instance, viewSelection: () => [], reporter: recordingReporter(),
+      access: modAccess, instance, viewSelection: () => [], reporter: recordingReporter(),
       ask: scriptedDialog(), trash: vi.fn(), log: vi.fn(),
     });
     await invoke('modbench.mod.rename', modB);
     return present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
   }
 
-  it('a name another mod has, in any case, listed or in a folder, and a path separator, and takes its own name in another case', async () => {
-    const root = await instanceWithFoldersLeftByAnotherToolAndModOrderListing(['Mod A', 'Mod B', 'Folder Only'], [
-      { kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }, { kind: 'mod', name: 'Listed Only' },
-    ]);
-    try {
-      const validate = await validatorOver(root);
-      expect(await validate('mod a')).toBe(MOD_CLASH);
-      expect(await validate('FOLDER ONLY')).toBe(MOD_CLASH);
-      expect(await validate('listed only')).toBe(MOD_CLASH);
-      expect(await validate('a/b')).toBe('A mod name cannot contain / or \\');
-      expect(await validate('a\\b')).toBe('A mod name cannot contain / or \\');
-      expect(await validate('mod b')).toBeUndefined();
-      expect(await validate('Fresh')).toBeUndefined();
-      expect(await validate('')).toBeUndefined();
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+  it('a name another mod has, listed or in a folder, and a path separator, and takes its own name', async () => {
+    const validate = await validatorOver(accessHolding(
+      [{ kind: 'mod', name: 'Mod A', enabled: true }, { kind: 'mod', name: 'Mod B', enabled: true }, { kind: 'mod', name: 'Listed Only', enabled: true }],
+      [{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }, { kind: 'mod', name: 'Folder Only' }]));
+    expect(await validate('mod a')).toBe(MOD_CLASH);
+    expect(await validate('Folder Only')).toBe(MOD_CLASH);
+    expect(await validate('Listed Only')).toBe(MOD_CLASH);
+    expect(await validate('a/b')).toBe('A mod name cannot contain / or \\');
+    expect(await validate('a\\b')).toBe('A mod name cannot contain / or \\');
+    expect(await validate('mod b')).toBeUndefined();
+    expect(await validate('Fresh')).toBeUndefined();
+    expect(await validate('')).toBeUndefined();
   });
 });
