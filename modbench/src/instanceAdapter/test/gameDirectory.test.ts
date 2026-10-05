@@ -182,21 +182,6 @@ describe('the game directory resolver', () => {
     expect(resolved).toEqual({ kind: 'found', root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data' });
   });
 
-  it('falls through a resolved-but-invalid ini gamePath (no Data/) to autodetect, rather than trusting it', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
-    dirs.push(dir);
-    const staleGameRoot = join(dir, 'Stale Game Folder');
-    await mkdir(staleGameRoot, { recursive: true });
-    const detectors: GameDetectors = {
-      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
-      winePrefix: noDetectPrefix,
-    };
-
-    const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(staleGameRoot));
-
-    expect(resolved).toMatchObject({ root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data' });
-  });
-
   it('answers not found, naming each place looked, when nothing resolves — setting unset, no gamePath, autodetect finds nothing', async () => {
     expect(await resolverWith()(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts())).toEqual({
       kind: 'notFound',
@@ -209,20 +194,24 @@ describe('the game directory resolver', () => {
     });
   });
 
-  it('names the ini gamePath it tried when that folder has no Data/ and Steam finds nothing', async () => {
+  it('refuses, naming the folder, when the ini names a game folder with no Data/, rather than falling through to a Steam install', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
     dirs.push(dir);
     const staleGameRoot = join(dir, 'Stale Game Folder');
     await mkdir(staleGameRoot, { recursive: true });
+    const detectors: GameDetectors = {
+      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
+      winePrefix: noDetectPrefix,
+    };
 
-    const resolved = await resolverWith()(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(staleGameRoot));
+    const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(staleGameRoot));
 
-    expect(resolved).toMatchObject({
+    expect(resolved).toEqual({
       kind: 'notFound',
+      setting: 'modbench.mods.gameDirectory',
       looked: [
         { place: SETTING_PLACE, answer: 'not set' },
         { place: GAME_PATH_PLACE, answer: `${staleGameRoot} has no Data folder` },
-        { place: STEAM_PLACE, answer: 'the game is in no Steam library' },
       ],
     });
   });
