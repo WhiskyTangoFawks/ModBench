@@ -55,7 +55,6 @@ internal static class WriteEndpointMapping
         detail: result.Message,
         statusCode: result.Refusal switch
         {
-            TrackRefusal.ModProvidesNoPlugin => 404,
             TrackRefusal.AlreadyTracked => 409,
             // The request is sound; the machine lacks git, or git or the disk refused the write.
             TrackRefusal.GitUnavailable or TrackRefusal.CommitFailed => 500,

@@ -81,16 +81,18 @@ public sealed class DecompilePluginTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task TrackingAModThatProvidesNoPlugin_RefusesTheSelection_Is404()
+    public async Task TrackingAModThatProvidesNoPlugin_RefusesThatMod_AndTracksTheOthers()
     {
         await Loaded();
 
         var response = await Client.Track([Origin, "NoSuchMod"]);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("ModProvidesNoPlugin", problem.GetProperty("refusal").GetString());
-        Assert.Contains("NoSuchMod", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal([Plugin], body.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
+        var refused = Assert.Single(body.GetProperty("refusedMods").EnumerateArray());
+        Assert.Equal(("NoSuchMod", "ModProvidesNoPlugin"), (refused.GetProperty("mod").GetString(), refused.GetProperty("refusal").GetString()));
+        Assert.Contains("NoSuchMod", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -218,6 +218,8 @@ public static class PluginEndpoints
                 return WriteEndpointMapping.Refusal(selectionRefusal);
             }
 
+            foreach (var refusedMod in result.RefusedMods)
+                logger.LogWarning("Refused to track {Mod}: {Refusal} — {Message}", refusedMod.Mod, refusedMod.Refusal, refusedMod.Message);
             foreach (var refused in result.Refused)
             {
                 logger.LogWarning("Refused to track {Plugin} ({Origin}): {Refusal} — {Message}",
@@ -225,7 +227,8 @@ public static class PluginEndpoints
             }
             return Results.Ok(new TrackResponse(
                 result.Landed,
-                [.. result.Refused.Select(r => new PluginAddressRefusal(r.Plugin, r.Refusal, r.Message))]));
+                [.. result.Refused.Select(r => new PluginAddressRefusal(r.Plugin, r.Refusal, r.Message))],
+                result.RefusedMods));
         }
         catch (NoLoadOrderException ex)
         {
@@ -345,8 +348,9 @@ public record PluginAddressRefusal(PluginAddress Plugin, TrackRefusal Refusal, s
 /// <summary>The mods by name; the load order says each one's plugins and folder.</summary>
 public record TrackRequest(IReadOnlyList<string> Mods);
 
-/// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
-public record TrackResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused);
+/// <summary>Applied or refusal, per plugin and per mod that provides no plugin (ADR-0019), never the status of the call.</summary>
+public record TrackResponse(
+    IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused, IReadOnlyList<TrackRefusedMod> RefusedMods);
 
 public record DecompileRequest(IReadOnlyList<PluginAddress> Plugins);
 

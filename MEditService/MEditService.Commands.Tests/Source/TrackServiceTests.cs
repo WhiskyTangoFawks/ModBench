@@ -18,7 +18,7 @@ namespace MEditService.Commands.Tests.Source;
 public sealed class TrackServiceTests
 {
     [Fact]
-    public async Task TrackAsync_OfAModThatProvidesNoPlugin_RefusesTheSelectionWithoutThrowing()
+    public async Task TrackAsync_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
     {
         using var gameDir = new ScratchDirectory("medit-track-noorigin-game-");
         var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], []);
@@ -26,8 +26,9 @@ public sealed class TrackServiceTests
         var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackAsync(loadOrder, ["NoSuchMod"]);
 
-        var refusal = Assert.IsType<TrackResult>(result.SelectionRefusal);
-        Assert.Equal(TrackRefusal.ModProvidesNoPlugin, refusal.Refusal);
+        Assert.Null(result.SelectionRefusal);
+        var refusal = Assert.Single(result.RefusedMods);
+        Assert.Equal(("NoSuchMod", TrackRefusal.ModProvidesNoPlugin), (refusal.Mod, refusal.Refusal));
         Assert.Contains("NoSuchMod", refusal.Message, StringComparison.Ordinal);
     }
 

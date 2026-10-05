@@ -36,12 +36,11 @@ public sealed class TrackService(
         }
 
         var modNames = mods.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (modNames.FirstOrDefault(mod => ProvidedBy(loadOrder, mod).Count == 0) is { } pluginless)
-        {
-            return TrackSelectionResult.WholeSelectionRefused(TrackRefusal.ModProvidesNoPlugin,
-                $"'{pluginless}' provides no plugin in the load order, so there is nothing to track.");
-        }
-
+        var refusedMods = modNames
+            .Where(mod => ProvidedBy(loadOrder, mod).Count == 0)
+            .Select(mod => new TrackRefusedMod(mod, TrackRefusal.ModProvidesNoPlugin,
+                $"'{mod}' provides no plugin in the load order, so there is nothing to track."))
+            .ToList();
         var selection = modNames.SelectMany(mod => ProvidedBy(loadOrder, mod)).ToList();
         var refused = new List<TrackRefused>();
         var verified = new List<VerifiedPlugin>();
@@ -65,7 +64,7 @@ public sealed class TrackService(
             foreach (var mod in verified.GroupBy(v => v.ModFolder, StringComparer.Ordinal))
                 Commit(mod.Key, [.. mod], landed, refused);
 
-            return TrackSelectionResult.PerPlugin(InSelectionOrder(landed, p => p), InSelectionOrder(refused, r => r.Plugin));
+            return TrackSelectionResult.PerPlugin(InSelectionOrder(landed, p => p), InSelectionOrder(refused, r => r.Plugin), refusedMods);
         }
         finally
         {
