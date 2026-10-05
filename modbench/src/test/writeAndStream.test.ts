@@ -9,6 +9,7 @@ import { applyRecordEdit } from '../editor/applyRecordEdit';
 import { RecordDecorationProvider } from '../plugins/RecordDecorationProvider';
 import { PluginTreeProvider, RecordNode, RecordTypeNode } from '../plugins/PluginTreeProvider';
 import { subscribeRecordPanelsToNotifications } from '../editor/notificationWiring';
+import { EditsInFlight } from '../editor/followRecord';
 import { subscribeTreeToNotifications } from '../plugins/treeNotifications';
 import { InMemoryMEditClient, type RecordSummary } from '../client';
 import { recordingReporter } from './surfacingDoubles';
@@ -16,8 +17,8 @@ import { recordTypeCountFixture } from '../client/test/fixtures';
 import { expectInstanceOf } from './expectInstanceOf';
 import { present } from '../ports/present';
 
-function fakePanel(): { webview: { postMessage: ReturnType<typeof vi.fn> } } {
-  return { webview: { postMessage: vi.fn() } };
+function fakePanel(): { title: string; webview: { postMessage: ReturnType<typeof vi.fn> } } {
+  return { title: '', webview: { postMessage: vi.fn() } };
 }
 
 function fakeActiveRecordTracker() {
@@ -49,7 +50,7 @@ describe('a write and the stream, together: the write\'s own callback is silent 
     const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, FORM_KEY);
-    subscribeRecordPanelsToNotifications(meditClient, recordPanels, tracker, { holds: () => false, waitingFor: () => undefined, release: () => false });
+    subscribeRecordPanelsToNotifications(meditClient, recordPanels, new EditsInFlight(tracker));
     await applyRecordEdit(
       { meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter() }, FORM_KEY, 'Test.esp', 'ModA', { op: 'set', path: [] });
     expect(panel.webview.postMessage).not.toHaveBeenCalled();

@@ -17,13 +17,13 @@ export type EditGate = (address: EditAddress, write: (formKey: string) => Promis
 
 interface InFlight { writes: number; reported: Set<string>; refreshed: boolean }
 
-// One plugin's record moved by an edit of its FormID. `readAt` is when the tab read `to`: an
-// address taken after it names what it means.
-interface Move { plugin: string; origin: string; from: string; to: string; readAt: number | undefined }
+// One plugin's record moved by an edit of its FormID. `asked` is whether the tab was told to read
+// `to`. `readAt` is when that read was answered: an address taken after it names what it means.
+interface Move { plugin: string; origin: string; from: string; to: string; asked: boolean; readAt: number | undefined }
 
-/** A panel with an edit in flight reads again once, after the answer, under the FormKey it then
- *  shows, and only on mEdit's report of the change, which may land first (editor.md, States,
- *  story 5). */
+/** The one place a record tab reads again. With an edit in flight, it reads once after the
+ *  answer, under the FormKey it then shows, and only on mEdit's report, which may land first
+ *  (editor.md, States, story 5). */
 export class EditsInFlight<Panel extends FollowedPanel> {
   private readonly inFlight = new Map<Panel, InFlight>();
   private readonly moves = new Map<Panel, Move[]>();
@@ -56,39 +56,55 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     return async (address, write) => { await through(0, address, address.formKey, write); };
   }
 
-  /** The notification wiring's gate: true holds the panel's read, keeping the keys reported. */
-  holds(panel: Panel, keys: readonly string[]): boolean {
+  /** mEdit reported `keys` changed: the panel reads again when it shows one of them, unless an edit
+   *  of it is in flight, which keeps the keys for its answer. A FormKey spans its override chain, so
+   *  matching it is enough. */
+  reported(panel: Panel, keys: readonly string[]): void {
     const entry = this.inFlight.get(panel);
     if (entry) {
       for (const key of keys) entry.reported.add(key);
-      return true;
+      return;
     }
     const shown = this.tracker.formKeyOf(panel);
-    if (shown && keys.includes(shown)) this.markRead(panel, shown);
-    return false;
+    if (!shown || !keys.includes(shown)) return;
+    for (const move of this.moves.get(panel) ?? []) if (move.to === shown) move.asked = true;
+    this.read(panel, shown);
   }
 
-  /** True holds a refresh of the panel's comparison: one waits on the answer, and one waits on the
-   *  report that reads the record's new FormKey. */
-  holdsRefresh(panel: Panel): boolean {
+  /** The comparison may have changed: the panel reads again, unless it waits on the answer or on
+   *  the report that reads the record's new FormKey. */
+  refresh(panel: Panel): void {
     const entry = this.inFlight.get(panel);
     if (entry) {
       entry.refreshed = true;
-      return true;
+      return;
     }
-    return this.awaitsRead(panel);
+    const shown = this.tracker.formKeyOf(panel);
+    if (shown && !this.awaitsReport(panel)) this.read(panel, shown);
   }
 
   /** The FormKey a panel waits on a report for, when no edit of it is in flight. */
   waitingFor(panel: Panel): string | undefined {
-    return this.inFlight.has(panel) || !this.awaitsRead(panel) ? undefined : this.tracker.formKeyOf(panel);
+    return this.inFlight.has(panel) || !this.awaitsReport(panel) ? undefined : this.tracker.formKeyOf(panel);
   }
 
-  /** True when the panel still waited on `formKey`, which it now reads, marked read. */
-  release(panel: Panel, formKey: string): boolean {
-    if (this.waitingFor(panel) !== formKey) return false;
-    this.markRead(panel, formKey);
-    return true;
+  /** mEdit holds `formKey`: the panel reads it if it still waits on it. */
+  release(panel: Panel, formKey: string): void {
+    if (this.waitingFor(panel) === formKey) this.reported(panel, [formKey]);
+  }
+
+  /** The tab's read of `formKey` is answered: it shows that record from now on. Reading a chain's
+   *  last key ends every move in it, back to the key the tab last read. */
+  answered(panel: Panel, formKey: string): void {
+    const moves = this.moves.get(panel) ?? [];
+    const readAt = ++this.clock;
+    let ended = moves.filter(move => move.readAt === undefined && move.to === formKey);
+    while (ended.length > 0) {
+      for (const move of ended) move.readAt = readAt;
+      const reached = ended;
+      ended = moves.filter(move => move.readAt === undefined && reached.some(later =>
+        later.from === move.to && later.plugin === move.plugin && later.origin === move.origin));
+    }
   }
 
   /** A closed panel: nothing of it is held any longer. */
@@ -119,7 +135,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   // The record header, story 2).
   private follow(panel: Panel, target: EditAddress, newFormKey: string): void {
     const moves = this.moves.get(panel) ?? [];
-    moves.push({ plugin: target.plugin, origin: target.origin, from: target.formKey, to: newFormKey, readAt: undefined });
+    moves.push({ plugin: target.plugin, origin: target.origin, from: target.formKey, to: newFormKey, asked: false, readAt: undefined });
     this.moves.set(panel, moves);
     if (this.tracker.formKeyOf(panel) !== target.formKey) return;
     this.tracker.setFormKey(panel, newFormKey);
@@ -129,30 +145,13 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   // The last answer in: what the held reports and refreshes asked for, once.
   private settle(panel: Panel, entry: InFlight): void {
     const shown = this.tracker.formKeyOf(panel);
-    if (shown && entry.reported.has(shown)) {
-      this.markRead(panel, shown);
-      this.post(panel, { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: shown });
-    } else if (entry.refreshed && !this.awaitsRead(panel)) {
-      this.post(panel, { type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
-    }
+    if (shown && entry.reported.has(shown)) this.reported(panel, [shown]);
+    else if (entry.refreshed) this.refresh(panel);
   }
 
-  private awaitsRead(panel: Panel): boolean {
+  private awaitsReport(panel: Panel): boolean {
     const shown = this.tracker.formKeyOf(panel);
-    return (this.moves.get(panel) ?? []).some(move => move.to === shown && move.readAt === undefined);
-  }
-
-  // Reading a chain's last key ends every move in it, back to the key the tab last read.
-  private markRead(panel: Panel, formKey: string): void {
-    const moves = this.moves.get(panel) ?? [];
-    const readAt = ++this.clock;
-    let ended = moves.filter(move => move.readAt === undefined && move.to === formKey);
-    while (ended.length > 0) {
-      for (const move of ended) move.readAt = readAt;
-      const reached = ended;
-      ended = moves.filter(move => move.readAt === undefined && reached.some(later =>
-        later.from === move.to && later.plugin === move.plugin && later.origin === move.origin));
-    }
+    return (this.moves.get(panel) ?? []).some(move => move.to === shown && !move.asked);
   }
 
   // The same plugin's record, addressed before the tab read where it moved to, is where it
@@ -166,7 +165,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     return formKey;
   }
 
-  private post(panel: Panel, message: ExtensionToWebview): void {
-    void panel.webview.postMessage(message);
+  private read(panel: Panel, formKey: string): void {
+    void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey } satisfies ExtensionToWebview);
   }
 }

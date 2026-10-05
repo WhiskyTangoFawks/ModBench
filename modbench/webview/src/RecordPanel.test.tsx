@@ -938,7 +938,7 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText(/Showing the last good read/));
 
-    sendMessage({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
+    loadRecord();
 
     await waitFor(() => expect(screen.queryByText(/Showing the last good read/)).not.toBeInTheDocument());
   });
@@ -963,7 +963,7 @@ describe('RecordPanel — incomplete-comparison banner', () => {
     expect(screen.queryByText(incompleteMessage)).not.toBeInTheDocument();
   });
 
-  it('a panel already open when the sweep lands refetches and reflects settled data when CONFLICTS_COMPUTED arrives, not just clears its banner over stale content', async () => {
+  it('a panel already open when the sweep lands reads again and reflects settled data, not just clears its banner over stale content', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce({
         ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
@@ -976,24 +976,10 @@ describe('RecordPanel — incomplete-comparison banner', () => {
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText(incompleteMessage));
 
-    act(() => {
-      window.dispatchEvent(new MessageEvent('message', { data: { type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED } }));
-    });
+    loadRecord();
 
     await waitFor(() => expect(screen.queryByText(incompleteMessage)).not.toBeInTheDocument());
     expect(load).toHaveBeenCalledTimes(2);
-  });
-
-  it('does nothing when CONFLICTS_COMPUTED arrives before any record is loaded', () => {
-    vi.stubGlobal('mEditFormKey', '');
-    const load = vi.fn();
-    renderPanel(compareResult, { load });
-
-    act(() => {
-      window.dispatchEvent(new MessageEvent('message', { data: { type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED } }));
-    });
-
-    expect(load).not.toHaveBeenCalled();
   });
 });
 
@@ -1087,6 +1073,26 @@ describe('RecordPanel — states', () => {
     pending.resolve(loaded(structCompareResult));
     await waitFor(() => screen.getByText('▶', { selector: 'button' }));
     expect(screen.queryByText('X')).not.toBeInTheDocument();
+  });
+
+  it('keeps the grid and the focused cell while it reads the record under the FormKey it moved to', async () => {
+    const pending = deferred<ReturnType<typeof loaded>>();
+    const load = vi.fn()
+      .mockResolvedValueOnce(loaded(structCompareResult))
+      .mockReturnValueOnce(pending.promise);
+    const { container } = renderPanel(structCompareResult, { load });
+    await waitFor(() => screen.getByText('Bounds'));
+    const focused = required(screen.getByText('Bounds').closest('td'), 'the Bounds label cell');
+    fireEvent.click(focused);
+
+    loadRecord('000002:Fallout4.esm');
+
+    await waitFor(() => expect(load).toHaveBeenLastCalledWith('000002:Fallout4.esm'));
+    expect(screen.getByText('Bounds').closest('td')).toBe(focused);
+    pending.resolve(loaded(structCompareResult));
+    await act(async () => { await Promise.resolve(); });
+    expect(Array.from(container.querySelectorAll('[data-focused-cell]'))).toEqual([screen.getByText('Bounds').closest('td')]);
+    expect(load).toHaveBeenCalledTimes(2);
   });
 
   it('says the record is gone, naming it, in place of the grid', async () => {
@@ -1200,7 +1206,7 @@ describe('RecordPanel — column collapse', () => {
     expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
   });
 
-  it('collapsed state survives a LOAD_RECORD navigation to a different formKey', async () => {
+  it('collapsed state survives a read of the record under the FormKey it moved to', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
     fireEvent.click(screen.getByText('MyMod.esp'));

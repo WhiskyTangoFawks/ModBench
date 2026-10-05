@@ -75,26 +75,29 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 interface FakePanel {
   title: string;
   active: boolean;
-  webview: { postMessage: ReturnType<typeof vi.fn>; options?: unknown; html?: string; cspSource: string; asWebviewUri: (uri: unknown) => unknown; onDidReceiveMessage: () => { dispose(): void } };
+  webview: { postMessage: ReturnType<typeof vi.fn>; options?: unknown; html?: string; cspSource: string; asWebviewUri: (uri: unknown) => unknown; onDidReceiveMessage: (listener: (message: unknown) => void) => { dispose(): void } };
   onDidDispose: (listener: () => void) => { dispose(): void };
   onDidChangeViewState: (listener: () => void) => { dispose(): void };
   focus(): void;
   close(): void;
+  receive(message: unknown): void;
 }
 
 function fakePanel(): FakePanel {
   const disposed: (() => void)[] = [];
   const viewState: (() => void)[] = [];
+  const received: ((message: unknown) => void)[] = [];
   const panel: FakePanel = {
     title: '', active: true,
     webview: {
       postMessage: vi.fn(() => Promise.resolve(true)), cspSource: 'csp', asWebviewUri: (uri) => uri,
-      onDidReceiveMessage: () => ({ dispose: () => undefined }),
+      onDidReceiveMessage: (listener) => { received.push(listener); return { dispose: () => undefined }; },
     },
     onDidDispose: (listener) => { disposed.push(listener); return { dispose: () => undefined }; },
     onDidChangeViewState: (listener) => { viewState.push(listener); return { dispose: () => undefined }; },
     focus: () => { viewState.forEach((listener) => { listener(); }); },
     close: () => { disposed.forEach((listener) => { listener(); }); },
+    receive: (message) => { received.forEach((listener) => { listener(message); }); },
   };
   return panel;
 }
@@ -229,13 +232,44 @@ describe('the Referenced By selection', () => {
 });
 
 describe('conflicts computed', () => {
-  it('has every open record tab refresh its comparison', () => {
+  it('has every open record tab read its record again', () => {
     const { editor, open } = makeEditor();
     const tabs = [open('000801:A.esp'), open('000802:A.esp')];
 
     editor.announceConflictsComputed();
 
-    expect(tabs.map((tab) => tab.webview.postMessage.mock.calls)).toEqual([[[{ type: 'conflictsComputed' }]], [[{ type: 'conflictsComputed' }]]]);
+    expect(tabs.map((tab) => tab.webview.postMessage.mock.calls)).toEqual([
+      [[{ type: 'loadRecord', formKey: '000801:A.esp' }]],
+      [[{ type: 'loadRecord', formKey: '000802:A.esp' }]],
+    ]);
+  });
+});
+
+describe('a record tab whose record an edit of its FormID moved', () => {
+  const [OLD, MOVED] = ['000800:Mod.esp', '000900:Mod.esp'];
+  const editField = (formKey: string) => h.commands.get('modbench.record.editField')?.(
+    { formKey, plugin: 'Mod.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'Name' }], value: 'x' });
+  const editedFormKeys = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'editRecord').map(c => c.args[0]);
+
+  it('sends an edit of the moved plugin addressed with the old FormKey to the new one until the tab\'s read of it is answered, and not after', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    client.setQueryAnswer('getComparison', null);
+    client.setQueryAnswer('getPlugins', []);
+    const { open } = makeEditor(client);
+    const tab = open(OLD);
+    client.setCommandResult('editRecord', { applied: true, newFormKey: MOVED });
+    await editField(OLD);
+    client.setCommandResult('editRecord', { applied: true });
+    client.emit({ kind: 'rows-changed', plugin: 'Mod.esp', origin: 'ModA', keys: [OLD, MOVED], sequence: 2 });
+    expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: MOVED }]]);
+
+    await editField(OLD);
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: MOVED });
+    await settle();
+    await editField(OLD);
+
+    expect(editedFormKeys(client)).toEqual([OLD, MOVED, OLD]);
   });
 });
 

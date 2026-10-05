@@ -41,6 +41,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     focusCell: vi.fn(),
     reply: vi.fn(),
     setTitle: vi.fn(),
+    readAnswered: vi.fn(),
     conflictsComputed: () => true,
     loadFailures: () => [],
     ...overrides,
@@ -217,6 +218,20 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdi
     await routeRecordPanelMessage(loadMessage, makeDeps({ setTitle }));
 
     expect(setTitle).not.toHaveBeenCalled();
+  });
+
+  it('tells the tab\'s read answered under the FormKey it read, and not when the read fails', async () => {
+    meditClient.setQueryAnswer('getComparison', compare);
+    meditClient.setQueryAnswer('getPlugins', plugins);
+    const answered = vi.fn();
+    const failed = vi.fn();
+
+    await routeRecordPanelMessage(loadMessage, makeDeps({ readAnswered: answered }));
+    meditClient.setQueryFailure('getComparison', new Error('ECONNREFUSED'));
+    await routeRecordPanelMessage(loadMessage, makeDeps({ readAnswered: failed }));
+
+    expect(answered.mock.calls).toEqual([['000001:A.esp']]);
+    expect(failed).not.toHaveBeenCalled();
   });
 
   it('asks the comparison by the message\'s own formKey', async () => {

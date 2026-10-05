@@ -31,8 +31,8 @@ export interface EditorCommandDeps {
   // Which of recordPanels is active, and what FormKey each shows — the Referenced By view
   // retargets from it, not from a command argument.
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
-  // Each panel's edits in flight, which hold its reads until the answer; the same instance gates
-  // the notification wiring.
+  // Each panel's edits in flight, which hold its reads until the answer; the one place a panel
+  // reads again.
   editsInFlight: EditsInFlight<vscode.WebviewPanel>;
   // Each panel's focused cell, which a field gesture from the palette acts on.
   focusedCells: FocusedCells<vscode.WebviewPanel>;
@@ -119,7 +119,7 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
     panel.webview.onDidReceiveMessage((msg: unknown) => {
       // A reply and a follow reach the one panel that asked, never a broadcast; `routerDeps` is
       // shared across panels, so the per-panel fields are rebuilt with the panel this closure holds.
-      void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells));
+      void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight));
     });
 
     showWebviewPage(panel.webview, context.extensionUri, {
@@ -152,7 +152,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   });
 
   return [
-    { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker, editsInFlight) },
+    { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, editsInFlight) },
     extendedFields,
     { dispose: () => { loadOrderStatusTracker.dispose(); } },
     vscode.window.registerCustomEditorProvider(
