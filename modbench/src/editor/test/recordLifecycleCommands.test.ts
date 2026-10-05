@@ -682,7 +682,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
 
       await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
 
-      expect(modes()).toEqual(['Override', 'New', 'DeepOverride']);
+      expect(modes()).toEqual(['Override', 'DeepOverride', 'New']);
       expect(client.calls.filter((c) => c.method === 'getRecordsWithChildren').map((c) => c.args))
         .toEqual([[[SOURCE, SECOND]]]);
     });
@@ -715,7 +715,36 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       expect(copyCalls(client)).toEqual([[[SOURCE], 'DeepOverride', [PATCH], false]]);
     });
 
-    it('asks to replace a copy of the record a destination holds, as an override does', async () => {
+    it('asks nothing of a held record that has child records, whose own copy a deep copy keeps', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      client.setQueryAnswer('getRecordHolders', [PATCH]);
+      client.setCommandResult('copyRecords', { landed: [], refused: [] });
+      pick('DeepOverride', [PATCH]);
+      const { ask } = invoke(client);
+      client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
+
+      await copy(RECORD_NODE);
+
+      expect(ask.asked).toEqual([]);
+      expect(copyCalls(client)).toEqual([[[SOURCE], 'DeepOverride', [PATCH], false]]);
+    });
+
+    it('still asks to replace the held copy of a record with child records in a plain override, which replaces it', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      client.setQueryAnswer('getRecordHolders', [PATCH]);
+      client.setCommandResult('copyRecords', { landed: [], refused: [] });
+      pick('Override', [PATCH]);
+      const { ask } = invoke(client, 'Replace');
+      client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
+
+      await copy(RECORD_NODE);
+
+      expect(ask.asked).toHaveLength(1);
+    });
+
+    it('asks to replace only the held copies of records without child records, which copy as overrides', async () => {
       const client = new InMemoryMEditClient();
       destinations(client);
       client.setQueryAnswer('getRecordHolders', [PATCH]);
@@ -724,10 +753,11 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       const { ask } = invoke(client, 'Replace');
       client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
 
-      await copy(RECORD_NODE);
+      await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
 
       expect(ask.asked).toHaveLength(1);
-      expect(copyCalls(client)).toEqual([[[SOURCE], 'DeepOverride', [PATCH], true]]);
+      expect(present(ask.asked[0], 'the replace question').detail).toBe('Second [000802:MyPatch.esp] in Patch.esp (PatchMod)');
+      expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'DeepOverride', [PATCH], true]]);
     });
 
     it('says nothing of a deep copy into the record\'s own plugin, which wrote nothing', async () => {

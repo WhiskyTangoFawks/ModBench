@@ -18,14 +18,25 @@ const DEEP_ITEM: CopyModeItem = {
   mode: 'DeepOverride',
 };
 
-/** plugins.md, Copy, story 4: the mode first, in xEdit's navigator order; deep copy only when a
- *  selected record has child records. */
+/** xEdit's menu order: override, deep copy as override, new record. */
 export function copyModeItems(offerDeep: boolean): readonly CopyModeItem[] {
-  return offerDeep ? [OVERRIDE_ITEM, NEW_ITEM, DEEP_ITEM] : [OVERRIDE_ITEM, NEW_ITEM];
+  return offerDeep ? [OVERRIDE_ITEM, DEEP_ITEM, NEW_ITEM] : [OVERRIDE_ITEM, NEW_ITEM];
 }
 
-/** A deep copy is an override of the record and its child records, so it takes every override branch. */
-export const isOverride = (mode: CopyMode): boolean => mode !== 'New';
+export const isOverride = (mode: CopyMode): boolean => mode === 'Override' || mode === 'DeepOverride';
+
+export const runsUnderPluginsBar = (mode: CopyMode): boolean => mode === 'DeepOverride';
+
+/** A deep copy keeps the destination's own copy of a record that has child records, whatever
+ *  replace says, so only the other records' held copies are asked about. */
+export function recordsAskedToReplace(
+  mode: CopyMode, records: readonly RecordAddress[], withChildren: readonly RecordAddress[],
+): readonly RecordAddress[] {
+  if (mode !== 'DeepOverride') return records;
+  const hasChildren = (record: RecordAddress) => withChildren.some((w) =>
+    w.formKey === record.formKey && samePluginAddress(pluginAddressOf(w), pluginAddressOf(record)));
+  return records.filter((record) => !hasChildren(record));
+}
 
 export interface CopyDestinationItem extends vscode.QuickPickItem {
   readonly plugin: PluginAddress;

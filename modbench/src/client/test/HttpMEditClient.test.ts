@@ -366,10 +366,13 @@ describe('HttpMEditClient — child records', () => {
     expect(await request?.json()).toEqual({ records: [quest], destinations: [patch] });
   });
 
-  it('fails a query the service refuses, as the other queries do', async () => {
+  it.each([
+    ['getRecordsWithChildren', (c: HttpMEditClient) => c.getRecordsWithChildren([quest])],
+    ['getChildrenInDestinations', (c: HttpMEditClient) => c.getChildrenInDestinations([quest], [patch])],
+  ])('fails %s when the service refuses, naming the call', async (name, call) => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'The index is not ready.' })));
 
-    await expect(makeClient(fetch).getRecordsWithChildren([quest])).rejects.toThrow();
+    await expect(call(makeClient(fetch))).rejects.toThrow(new RegExp(name));
   });
 });
 
