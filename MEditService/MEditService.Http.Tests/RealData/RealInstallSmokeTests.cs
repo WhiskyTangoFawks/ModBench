@@ -19,7 +19,18 @@ public sealed class RealInstallSmokeTests
         GameRelease.Starfield,
     ];
 
-    private static readonly SchemaReflector ReleaseSupportProbe = new SchemaReflector();
+    private static bool IsReferenced(GameRelease release)
+    {
+        try
+        {
+            SharedSchemaReflector.Instance.GetSchemas(release);
+            return true;
+        }
+        catch (UnsupportedGameReleaseException)
+        {
+            return false;
+        }
+    }
 
     [SmokeFact("run the real-install smoke test")]
     public async Task DiscoveredInstalls_LoadAndIndex()
@@ -29,7 +40,7 @@ public sealed class RealInstallSmokeTests
 
         foreach (var release in CandidateGames)
         {
-            if (!ReleaseSupportProbe.IsSupported(release))
+            if (!IsReferenced(release))
                 continue;
 
             if (!locator.TryGetDataDirectory(release, out var dataDir))
