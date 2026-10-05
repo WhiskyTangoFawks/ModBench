@@ -133,9 +133,9 @@ export function resolvePluginPaths(
 }
 
 // The files the game wrote at run time win over every mod, so a plugin among them wins path
-// resolution too, not just origin classification. Only their root holds plugins.
+// resolution too. Only their root holds plugins, and an excluded file provides none.
 function overwriteRootFiles(runtimeOutput: readonly OriginFile[]): Map<string, OriginFile> {
-  return new Map(runtimeOutput.filter((file) => isRootLevel(file.relativePath)).map((file) => [foldPath(file.relativePath), file]));
+  return new Map(runtimeOutput.filter((file) => !file.excluded && isRootLevel(file.relativePath)).map((file) => [foldPath(file.relativePath), file]));
 }
 
 /** A disabled plugins.txt line is still sent (ADR-0013), `enabled: false`. A listed
