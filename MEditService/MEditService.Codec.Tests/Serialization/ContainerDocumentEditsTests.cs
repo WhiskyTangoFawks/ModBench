@@ -45,4 +45,21 @@ public sealed class ContainerDocumentEditsTests
         Assert.Contains(held.FormKey.ToString(), refusal.Message, StringComparison.Ordinal);
         Assert.Contains(other.FormKey.ToString(), refusal.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void AddingChildrenToAWorldspaceWhoseSingleValuedSlotIsFilled_ThrowsNamingBoth()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Append.esp"), Fallout4Release.Fallout4);
+        var held = new Cell(mod) { EditorID = "Held" };
+        var destination = new Worldspace(mod) { EditorID = "World", TopCell = held };
+        var incoming = new Cell(mod) { EditorID = "Incoming" };
+        var source = new Worldspace(mod) { EditorID = "World", TopCell = incoming };
+        var type = RecordTableName.Of(source, Schemas);
+
+        var refusal = Assert.Throws<InvalidOperationException>(() => ContainerDocumentEdits.WithChildrenAdded(
+            Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4));
+
+        Assert.Contains(held.FormKey.ToString(), refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(incoming.FormKey.ToString(), refusal.Message, StringComparison.Ordinal);
+    }
 }

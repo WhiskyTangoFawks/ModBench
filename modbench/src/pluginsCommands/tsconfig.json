@@ -7,6 +7,8 @@
   "references": [
     { "path": "../loadOrderFileCodec" },
     { "path": "../instanceAdapter" },
+    { "path": "../client" },
+    { "path": "../wire" },
     { "path": "../ports" }
   ],
   "include": ["**/*.ts"],

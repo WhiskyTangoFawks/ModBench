@@ -4,6 +4,7 @@ import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import type { ModlistNode } from './ModListProvider';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
+import { promptRename } from '../drivingLib/promptRename';
 import { isModsKeyArgs, isRowOf, runModsWriting, openFolderArgument } from './gestureEntry';
 import {
   gestureEntry, pluralArgument, registerGesture, selectionArgument, singularArgument, type GestureEntry, type RowOf,
@@ -224,14 +225,6 @@ async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion
     ? `Delete separator "${names[0]}"? Its mods stay.`
     : `Delete separators ${names.map((n) => `"${n}"`).join(', ')}? Their mods stay.`;
   return (await ask(question, { modal: true }, 'Delete')) === 'Delete';
-}
-
-/** The new name for a row, prefilled with the current one; undefined on Esc, an empty name or the same name. */
-export async function promptRename(
-  prompt: string, oldName: string, validateInput: NonNullable<vscode.InputBoxOptions['validateInput']>,
-): Promise<string | undefined> {
-  const newName = await vscode.window.showInputBox({ prompt, value: oldName, validateInput });
-  return !newName || newName === oldName ? undefined : newName;
 }
 
 export function registerSeparatorCommands(

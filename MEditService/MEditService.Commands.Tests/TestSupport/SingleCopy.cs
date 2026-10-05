@@ -11,6 +11,11 @@ internal static class SingleCopy
         bool replace = false) =>
         OnlyItem(handler.CopySync([new RecordAt(source, formKey)], CopyMode.Override, [destination], replace));
 
+    internal static RecordEditResult CopyAsDeepOverride(
+        this CopyRecordHandler handler, PluginAddress source, string formKey, PluginAddress destination,
+        bool replace = false) =>
+        OnlyItem(handler.CopySync([new RecordAt(source, formKey)], CopyMode.DeepOverride, [destination], replace));
+
     internal static RecordEditResult CopyAsNew(
         this CopyRecordHandler handler, PluginAddress source, string formKey, PluginAddress destination) =>
         OnlyItem(handler.CopySync([new RecordAt(source, formKey)], CopyMode.New, [destination], replace: false));

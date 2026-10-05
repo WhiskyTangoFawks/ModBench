@@ -48,6 +48,29 @@ public static class ContainerDocumentEdits
         return new NamedDocument(codec.SerializeToText(replacement, release), replacement.EditorID);
     }
 
+    /// <summary>The FormKey of every child record the text carries, at any depth.</summary>
+    public static IReadOnlyList<string> ChildFormKeys(
+        RecordTextCodec codec, string text, GameRelease release, string? recordType) =>
+        [.. DescendantsOf(codec.Deserialize(text, release, recordType)).Select(child => child.FormKey.ToString())];
+
+    /// <summary><paramref name="destinationText"/> with <paramref name="sourceText"/>'s child records
+    /// added, its own fields and children kept. Throws <see cref="InvalidOperationException"/> when a
+    /// single-valued slot is filled.</summary>
+    public static string WithChildrenAdded(
+        RecordTextCodec codec, string destinationText, string? destinationRecordType,
+        string sourceText, string? sourceRecordType, GameRelease release)
+    {
+        var source = codec.Deserialize(sourceText, release, sourceRecordType);
+        var destination = codec.Deserialize(destinationText, release, destinationRecordType);
+        foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(source).ToList())
+            ContainerChildFields.AddChildToSlot(destination, slotName, (IMajorRecord)child);
+        return codec.SerializeToText(destination, release);
+    }
+
+    private static IEnumerable<IMajorRecordGetter> DescendantsOf(IMajorRecordGetter record) =>
+        ContainerChildFields.EnumerateChildren(record)
+            .SelectMany(child => DescendantsOf(child.Child).Prepend(child.Child));
+
     private static IMajorRecordGetter? ContainerIn(IMajorRecord owner, string containerFormKey) =>
         owner.FormKey.ToString().Equals(containerFormKey, StringComparison.Ordinal)
             ? owner

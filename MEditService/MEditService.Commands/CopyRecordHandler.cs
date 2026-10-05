@@ -6,7 +6,8 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands;
 
 /// <summary>The Copy gesture's handler (ADR-0014): each record into each destination,
-/// in the mode picked, as xEdit's Copy as Override Into… and Copy as New Record Into… do.</summary>
+/// in the mode picked, as xEdit's Copy as Override Into… and Copy as New Record Into… do. A deep copy
+/// brings every child record.</summary>
 public sealed class CopyRecordHandler
 {
     private readonly OverrideCopy _override;
@@ -34,15 +35,10 @@ public sealed class CopyRecordHandler
             {
                 CopyMode.Override => _override.Copy(item.Record.Plugin, item.Record.FormKey, item.Destination, replace),
                 CopyMode.New => _new.Copy(item.Record.Plugin, item.Record.FormKey, item.Destination),
-                CopyMode.DeepOverride => RefuseDeepCopy(),
+                CopyMode.DeepOverride => _override.Copy(item.Record.Plugin, item.Record.FormKey, item.Destination, replace, deep: true),
                 _ => throw new InvalidEnumArgumentException(nameof(mode), (int)mode, typeof(CopyMode)),
             },
             item => $"Could not write the copy of {item.Record.FormKey} into {item.Destination.Name} ({item.Destination.Origin})",
             _logger);
     }
-
-    private static RecordEditResult RefuseDeepCopy() =>
-        RecordEditResult.Refused(
-            RecordEditRefusal.ContainerRecordNotYetSupported,
-            "A deep copy as override is not supported yet.");
 }
