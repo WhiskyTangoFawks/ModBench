@@ -25,7 +25,7 @@ internal static class PluginSourceRename
             : new TreeFile(renamedPath, bytes);
     }
 
-    // The layout's leaf grammar, "[<EditorID> - ]<hex6>_<originModKey>", with ".json" on a flat file.
+    // The layout's leaf grammar, "[<EditorID> - ]<hex6>_<originModKey>", with the JSON suffix on a flat file.
     private static string RenamedLeaf(string leaf, ModKey from, ModKey to)
     {
         var extension = leaf.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)
