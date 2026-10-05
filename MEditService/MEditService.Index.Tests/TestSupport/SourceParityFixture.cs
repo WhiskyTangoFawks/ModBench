@@ -9,18 +9,23 @@ public sealed class SourceParityFixture : IDisposable
 {
     public const string Origin = "FixtureMod";
 
-    public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-source-parity-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-source-parity-");
+    private readonly ScratchDirectory _binaryInstance = new("medit-source-parity-binary-");
+    private readonly ScratchDirectory _sourceInstance = new("medit-source-parity-source-");
+    private readonly ScratchDirectory _game = new("medit-source-parity-game-");
+
+    public string ModFolder => _modFolder.Path;
 
     internal OpenedIndex FromBinary { get; }
     internal OpenedIndex FromSource { get; }
 
     // One store file per launch, so each side's rows stand on their own.
-    public string BinaryInstanceRoot { get; } = Directory.CreateTempSubdirectory("medit-source-parity-binary-").FullName;
-    public string SourceInstanceRoot { get; } = Directory.CreateTempSubdirectory("medit-source-parity-source-").FullName;
+    public string BinaryInstanceRoot => _binaryInstance.Path;
+    public string SourceInstanceRoot => _sourceInstance.Path;
 
     public PluginAddress Plugin { get; } = new(RealDataPlugin.PluginFileName, Origin);
 
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-source-parity-game-").FullName;
+    private string _gameDirectory => _game.Path;
 
     public SourceParityFixture()
     {
@@ -42,16 +47,9 @@ public sealed class SourceParityFixture : IDisposable
     {
         FromSource.Dispose();
         FromBinary.Dispose();
-        TryDelete(ModFolder);
-        TryDelete(_gameDirectory);
-        TryDelete(BinaryInstanceRoot);
-        TryDelete(SourceInstanceRoot);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
+        _modFolder.Dispose();
+        _game.Dispose();
+        _binaryInstance.Dispose();
+        _sourceInstance.Dispose();
     }
 }

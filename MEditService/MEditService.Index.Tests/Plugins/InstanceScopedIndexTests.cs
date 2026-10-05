@@ -14,12 +14,11 @@ public sealed class InstanceScopedIndexTests : IDisposable
     private const string Plugin = "UFO4P.esp";
     private static readonly PluginAddress Key = new(Plugin, Origin);
 
-    private readonly string _root = Path.Combine(Path.GetTempPath(), $"medit-instances-{Guid.NewGuid():N}");
+    private readonly ScratchDirectory _scratch = new("medit-instances-");
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
-    }
+    private string _root => _scratch.Path;
+
+    public void Dispose() => _scratch.Dispose();
 
     private string GameDirectory => Directory.CreateDirectory(Path.Combine(_root, "GameDir")).FullName;
 

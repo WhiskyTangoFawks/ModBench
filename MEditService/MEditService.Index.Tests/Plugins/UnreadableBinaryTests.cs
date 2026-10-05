@@ -13,8 +13,10 @@ public sealed class UnreadableBinaryTests : IDisposable
     private readonly LoadOrderHolder _holder = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly OpenedIndex _index;
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-unreadable-binary-game-").FullName;
-    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-unreadable-binary-instance-").FullName;
+    private readonly ScratchDirectory _game = new("medit-unreadable-binary-game-");
+    private readonly ScratchDirectory _instance = new("medit-unreadable-binary-instance-");
+    private string _gameDirectory => _game.Path;
+    private string _instanceRoot => _instance.Path;
     private const string PluginName = "Untracked.esp";
     private const string Origin = "UntrackedMod";
     private readonly string _modFolder;
@@ -31,8 +33,8 @@ public sealed class UnreadableBinaryTests : IDisposable
     public void Dispose()
     {
         _index.Dispose();
-        Directory.Delete(_gameDirectory, recursive: true);
-        Directory.Delete(_instanceRoot, recursive: true);
+        _game.Dispose();
+        _instance.Dispose();
     }
 
     private LoadOrderEntry Entry => new(PluginName, _pluginPath, Origin, 0, Enabled: true, Winning: true);

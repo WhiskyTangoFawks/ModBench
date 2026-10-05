@@ -10,7 +10,9 @@ public sealed class CutDownPluginFixture : IDisposable
 {
     public static readonly PluginAddress Plugin = new(RealDataPlugin.PluginFileName, PluginOrigin.DataDirectory);
 
-    public string InstanceRoot { get; } = Directory.CreateTempSubdirectory("medit-cutdown-instance-").FullName;
+    private readonly ScratchDirectory _instance = new("medit-cutdown-instance-");
+
+    public string InstanceRoot => _instance.Path;
 
     internal OpenedIndex Index { get; }
 
@@ -32,7 +34,7 @@ public sealed class CutDownPluginFixture : IDisposable
     public void Dispose()
     {
         Index.Dispose();
-        try { Directory.Delete(InstanceRoot, recursive: true); } catch (IOException) { /* scratch, best effort */ }
+        _instance.Dispose();
     }
 }
 
