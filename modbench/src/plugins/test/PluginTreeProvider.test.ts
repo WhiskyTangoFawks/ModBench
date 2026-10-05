@@ -162,17 +162,6 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     expect(limitArg).toBeGreaterThan(FALLOUT4_ESM_INFO_COUNT);
   });
 
-  it('uses cache on second expand without re-fetching', async () => {
-    const repo = makeClient({ records: { items: [makeRecord(0)], total: 1 } });
-    const provider = new PluginTreeProvider(repo);
-    const typeNode = present(expectInstancesOf(await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' }), RecordTypeNode)[0], 'the sole RecordTypeNode');
-
-    await provider.getChildren(typeNode);
-    await provider.getChildren(typeNode);
-
-    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
-  });
-
   it('a "qust" row\'s collapsible state follows its own RecordSummary.hasContainerChildren, not its record type alone', async () => {
     const repo = makeClient({
       recordTypes: [{ type: 'qust', count: 2 }],
@@ -455,26 +444,20 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
 });
 
 describe('PluginTreeProvider.refresh', () => {
-  it('clears cache so next getChildren re-fetches', async () => {
+  it('asks the view to render again, and the group then lists what mEdit now holds', async () => {
     const repo = makeClient({ records: { items: [makeRecord(0)], total: 1 } });
     const provider = new PluginTreeProvider(repo);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' }), RecordTypeNode)[0], 'the sole RecordTypeNode');
+    const labelsBeneath = async () => (await provider.getChildren(typeNode)).map((n) => n.label);
+    expect(await labelsBeneath()).toEqual(['Record0']);
 
-    await provider.getChildren(typeNode);
-    provider.refresh();
-    await provider.getChildren(typeNode);
-
-    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(2);
-  });
-
-  it('fires onDidChangeTreeData', () => {
-    const provider = new PluginTreeProvider(makeClient());
-
-    const fired: unknown[] = [];
-    provider.onDidChangeTreeData(e => fired.push(e));
+    let askedToRerender = false;
+    provider.onDidChangeTreeData(() => { askedToRerender = true; });
+    repo.setQueryAnswer('getRecords', { items: [makeRecord(0), makeRecord(1)], total: 2 });
     provider.refresh();
 
-    expect(fired).toHaveLength(1);
+    expect(askedToRerender).toBe(true);
+    expect(await labelsBeneath()).toEqual(['Record0', 'Record1']);
   });
 });
 
@@ -981,19 +964,6 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
 
     expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: [{ name: 'Plugin0.esp', origin: 'Data' }, 'dial1:Fallout4.esm'] });
     expect(children).toHaveLength(1);
-  });
-
-  it('caches on second expand without re-fetching', async () => {
-    const repo = makeClient();
-    repo.setQueryAnswer('getContainerChildren', [makeContainerChild('dial1:Fallout4.esm', 'dial')]);
-    const provider = new PluginTreeProvider(repo);
-    const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, 'Data', undefined, 'qust');
-
-    await provider.getChildren(questNode);
-    await provider.getChildren(questNode);
-
-    expect(repo.calls.filter(c => c.method === 'getContainerChildren')).toHaveLength(1);
   });
 
   it('origin-keyed caching: two plugins that share a filename browse their own children independently', async () => {

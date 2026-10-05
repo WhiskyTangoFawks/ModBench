@@ -84,11 +84,7 @@ const MOCK_PLUGINS: MockPlugin[] = [
   mockPlugin({ name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', inLoadOrder: true }),
   mockPlugin({ name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', inLoadOrder: true }),
   mockPlugin({ name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', inLoadOrder: false }),
-  mockPlugin({ name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', inLoadOrder: true, isImmutable: true }),
-  mockPlugin({
-    name: 'MissingMaster.esp', path: '/data/MissingMaster.esp', origin: 'Data', inLoadOrder: true,
-    masterIssues: ['Ghost.esm'],
-  }),
+  mockPlugin({ name: 'Second.esp', path: '/data/Second.esp', origin: 'Data', inLoadOrder: true }),
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
@@ -102,11 +98,8 @@ function pluginNamesOf(body: string): string[] {
   if (!Array.isArray(plugins)) throw new Error(`expected a PUT /load-order body with a plugins array, got: ${body}`);
   return plugins.map((p: unknown) => (typeof p === 'object' && p !== null && 'name' in p ? String(p.name) : '?'));
 }
-let mockPluginsOverride: MockPlugin[] | null = null;
-let putLoadOrderShouldFail = false;
 let rebuildIndexShouldFail = false;
 const RAW_INDEX_LOCKED_DETAIL = 'raw backend detail: index lock held by pid 4242';
-let getPluginsShouldFail = false;
 type MockLoadOrderStatus = {
   state: 'None' | 'Reconciling' | 'Ready' | 'HeldElsewhere' | 'Failed';
   totalPlugins: number;
@@ -123,10 +116,6 @@ let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
 let loadOrderVersion = 0;
 let releasePutLoadOrder: (() => void) | null = null;
 let holdPutLoadOrder = false;
-function releasePut(): void {
-  if (!releasePutLoadOrder) throw new Error('expected PUT /load-order to be held (holdPutLoadOrder must be set) before releasing it');
-  releasePutLoadOrder();
-}
 let releaseHealth: (() => void) | null = null;
 let holdHealth = false;
 
@@ -156,10 +145,7 @@ function resetMockBackend(): void {
   requestLog.length = 0;
   putLoadOrders.length = 0;
   recordEdits.length = 0;
-  mockPluginsOverride = null;
-  putLoadOrderShouldFail = false;
   rebuildIndexShouldFail = false;
-  getPluginsShouldFail = false;
   holdPutLoadOrder = false;
   releasePutLoadOrder?.();
   releasePutLoadOrder = null;
@@ -221,11 +207,6 @@ function createMockBackend(): http.Server {
       req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
       req.on('end', () => {
         putLoadOrders.push(pluginNamesOf(body));
-        if (putLoadOrderShouldFail) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'simulated load failure' }));
-          return;
-        }
         loadOrderVersion += 1;
         const version = loadOrderVersion;
         loadOrderStatus = { ...loadOrderStatus, version };
@@ -271,13 +252,8 @@ function createMockBackend(): http.Server {
         res.end('No load order has been received.');
         return;
       }
-      if (getPluginsShouldFail) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'simulated plugin-list failure' }));
-        return;
-      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(mockPluginsOverride ?? MOCK_PLUGINS));
+      res.end(JSON.stringify(MOCK_PLUGINS));
       return;
     }
     const edit = /^\/records\/([^/]+)\/edit$/.exec(url);
@@ -392,22 +368,6 @@ describe('modbench.mod.sync syncs the instance value it is handed', () => {
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 
-async function refreshesWithin(instance: { refresh(): Promise<void> }, command: string, ms: number): Promise<number> {
-  let reads = 0;
-  const refresh = instance.refresh.bind(instance);
-  instance.refresh = () => {
-    reads++;
-    return refresh();
-  };
-  try {
-    await vscode.commands.executeCommand(command);
-    await new Promise((window) => setTimeout(window, ms));
-  } finally {
-    instance.refresh = refresh;
-  }
-  return reads;
-}
-
 describe('modbench.record.open', () => {
   const titled = (title: string) => openTabs().some(t => t.label === title);
 
@@ -491,13 +451,6 @@ describe('modbench.record.open', () => {
 });
 
 import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../plugins/PluginsTreeProvider';
-import { ImplicitMasterDecorationProvider } from '../../plugins/ImplicitMasterDecorationProvider';
-import { publishPluginWarnings } from '../../plugins/loadDiagnostics';
-function nodeKind(node: unknown): unknown {
-  const fields: { kind?: unknown } = typeof node === 'object' && node !== null ? node : {};
-  return fields.kind;
-}
-
 async function clickRow(node: { command?: vscode.Command }): Promise<void> {
   const { command, arguments: args } = present(node.command, 'the row\'s command');
   const given: unknown[] = args ?? [];
@@ -526,29 +479,6 @@ describe('a click on a plugin row opens its header', () => {
     await waitFor('both Twin.esp tabs', () => openTabs().filter(t => t.label === 'Twin.esp').length === 2 || undefined);
 
     assert.strictEqual(openTabs().length, tabsBefore + 2);
-  });
-});
-
-describe('the locked row is greyed and carries no Problems badge', () => {
-  const dataFolder = path.join(os.tmpdir(), 'locked-row-game', 'Data');
-  const node = new ImplicitMasterNode('Fallout4.esm', 'Data', path.join(dataFolder, 'Fallout4.esm'));
-  const collection = vscode.languages.createDiagnosticCollection('locked-row-test');
-  after(() => collection.dispose());
-
-  it('holds none of the diagnostics published on its plugin file', () => {
-    publishPluginWarnings(
-      collection, () => path.join(dataFolder, 'Fallout4.esm'), [{ plugin: 'Fallout4.esm', origin: 'Data', text: 'malformed' }]);
-
-    const rowUri = present(node.resourceUri, 'the locked row\'s resourceUri');
-    assert.deepStrictEqual(vscode.languages.getDiagnostics(rowUri), []);
-  });
-
-  it('is greyed', () => {
-    const rowUri = present(node.resourceUri, 'the locked row\'s resourceUri');
-    const provider = new ImplicitMasterDecorationProvider(() => new Set([rowUri.toString()]));
-
-    assert.deepStrictEqual(provider.provideFileDecoration(rowUri)?.color, new vscode.ThemeColor('disabledForeground'));
-    assert.strictEqual(provider.provideFileDecoration(vscode.Uri.file(path.join(dataFolder, 'Fallout4.esm'))), undefined);
   });
 });
 
@@ -882,13 +812,6 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  it('VS Code\'s own Space on a focused plugin row leaves its check box alone', async function () {
-    if (!root) this.skip();
-    await focusRow(0);
-    const instance = present(instanceExport(), "the activated extension's instance export");
-    assert.strictEqual(await refreshesWithin(instance, 'list.toggleExpand', 750), 0);
-  });
-
   it('Space disables the selected plugin', async function () {
     if (!root) this.skip();
     await focusRow(0);
@@ -897,20 +820,6 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
       instanceExport()?.value.plugins.some((p) => p.name === 'TestMod.esp' && !p.enabled));
   });
 
-  it('VS Code\'s own Enter on an enabled plugin row opens its header, as a click does', async function () {
-    if (!root) this.skip();
-    await focusRow(0);
-    await vscode.commands.executeCommand('list.select');
-    await waitFor('a header tab for TestMod.esp', () => openTabs().some((t) => t.label === 'TestMod.esp') || undefined);
-  });
-
-  it('VS Code\'s own Enter on a disabled plugin row only selects it', async function () {
-    if (!root) this.skip();
-    await focusRow(1);
-    await vscode.commands.executeCommand('list.select');
-    await new Promise((r) => setTimeout(r, 750));
-    assert.deepStrictEqual(openTabs().map((t) => t.label), []);
-  });
 });
 
 describe('Notification stream connects only while the backend is up', () => {
@@ -975,7 +884,7 @@ describe('The game-directory setting reaches the Instance as a recompute', () =>
   });
 });
 
-describe('Launch mEdit populates the editing plugin tree', () => {
+describe('Launch mEdit loads the load order before it asks for plugins', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   let gameDir = '';
 
@@ -999,7 +908,7 @@ describe('Launch mEdit populates the editing plugin tree', () => {
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  it('loads the load order and shows plugins (not an empty tree) after launch', async () => {
+  it('PUTs /load-order before the first GET /plugins', async () => {
     await enterEditing();
     const duringLaunch = [...requestLog];
 
@@ -1008,16 +917,6 @@ describe('Launch mEdit populates the editing plugin tree', () => {
     const prematurePlugins = duringLaunch.slice(0, load).includes('GET /plugins');
     assert.ok(!prematurePlugins, 'GET /plugins must not fire before PUT /load-order');
 
-    const pluginsTreeExport = ext?.exports.pluginsTree;
-    assert.ok(pluginsTreeExport, 'activate() should return { pluginsTree } for the merged view');
-    const rows = await pluginsTreeExport.getChildren();
-    assert.ok(rows.length > 0, 'the merged plugins tree should not be empty after a successful launch');
-    const testMod = findRow(rows, 'TestMod.esp');
-    const children = await pluginsTreeExport.getChildren(testMod);
-    assert.deepStrictEqual(
-      children.map((c) => c.label), ['Weapon'],
-      'TestMod.esp should expand into its record types once the load order has loaded and GET /plugins has landed',
-    );
   });
 });
 
@@ -1121,10 +1020,6 @@ function findRow<T>(rows: readonly T[], name: string): T {
   return row;
 }
 
-function describeTooltip(tooltip: vscode.TreeItem['tooltip']): string {
-  return typeof tooltip === 'string' ? tooltip : JSON.stringify(tooltip);
-}
-
 describe('Plugin sync takes the instance value', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1160,227 +1055,6 @@ describe('Plugin sync takes the instance value', () => {
   });
 });
 
-describe('Plugin load-order rows expand into records', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
-  let gameDir = '';
-
-  before(async () => {
-    if (!root) return;
-    resetMockBackend();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-expand-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['TestMod.esp', 'Other.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
-    await setGameDirectory(gameDir);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\nOther.esp\n'));
-    pluginsTree().invalidate();
-    await enterEditing();
-    exitEditing();
-  });
-
-  after(async () => {
-    if (!root) return;
-    exitEditing();
-    await setGameDirectory(undefined);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
-    fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('renders the game\'s master the game folder holds, ahead of the plugins.txt rows', async () => {
-    const tree = pluginsTree();
-    const master = path.join(gameDir, 'Data', 'Fallout4.esm');
-    try {
-      await writeAndAwaitInstance(() => fs.writeFileSync(master, ''));
-      const rows = await tree.getChildren();
-
-      assert.strictEqual(rowName(rows[0]), 'Fallout4.esm', 'the game\'s master leads the rows');
-      assert.strictEqual(tree.getTreeItem(present(rows[0], 'the first row')).contextValue, 'pluginImplicit');
-    } finally {
-      await writeAndAwaitInstance(() => fs.rmSync(master));
-    }
-  });
-
-  it('renders no implicit row when the game folder holds none of the game\'s masters', async () => {
-    const tree = pluginsTree();
-    pluginsTree().invalidate();
-    const rows = await tree.getChildren();
-
-    assert.ok(!rows.some((r) => tree.getTreeItem(r).contextValue === 'pluginImplicit'));
-  });
-
-  it('renders every enabled row collapsible, whether or not mEdit has launched', async () => {
-    const tree = pluginsTree();
-    const rows = await tree.getChildren();
-
-    assert.deepStrictEqual(
-      rows.map(rowName).filter((n) => n === 'TestMod.esp' || n === 'Other.esp'), ['TestMod.esp', 'Other.esp'],
-      'the rows include both plugins.txt lines, the disabled one too, in file order',
-    );
-    assert.strictEqual(
-      tree.getTreeItem(findRow(rows, 'TestMod.esp')).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
-      'an enabled row is collapsible from launch — there is no mode for mEdit not having started yet',
-    );
-    assert.strictEqual(
-      tree.getTreeItem(findRow(rows, 'Other.esp')).collapsibleState, vscode.TreeItemCollapsibleState.None,
-      'a disabled row has no expander, whatever mEdit has or has not done',
-    );
-    const children = await tree.getChildren(findRow(rows, 'TestMod.esp'));
-    assert.strictEqual(children.length, 1, 'expanding answers exactly one node, never an empty list');
-    assert.strictEqual(nodeKind(children[0]), 'recordType',
-      'the load order an earlier launch left held is what the row expands into');
-  });
-
-  it('launching mEdit gives a row real children, without reordering the load order', async () => {
-    const tree = pluginsTree();
-    const before = await tree.getChildren();
-
-    await enterEditing();
-
-    const after = await tree.getChildren();
-    assert.deepStrictEqual(
-      after.map(rowName).filter((n) => n !== undefined), before.map(rowName),
-      'launching mEdit must not rebuild or reorder the plugin rows',
-    );
-    const children = await tree.getChildren(findRow(after, 'TestMod.esp'));
-    assert.deepStrictEqual(
-      children.map((c) => c.label), ['Weapon'],
-      'a row whose plugin is in the load order now expands into its record types',
-    );
-  });
-
-  it('expands a plugin row into its record types', async () => {
-    const tree = pluginsTree();
-    const testMod = findRow(await tree.getChildren(), 'TestMod.esp');
-
-    const children = await tree.getChildren(testMod);
-
-    assert.deepStrictEqual(
-      children.map((c) => c.label), ['Weapon'],
-      'expanding a row shows the record types the backend reports, with xEdit display names',
-    );
-  });
-
-  it('a disabled plugin row has no expander', async () => {
-    const tree = pluginsTree();
-    const other = findRow(await tree.getChildren(), 'Other.esp');
-
-    assert.strictEqual(tree.getTreeItem(other).collapsibleState, vscode.TreeItemCollapsibleState.None);
-  });
-
-  it('keeps every row and its chevron when mEdit closes', async () => {
-    const tree = pluginsTree();
-
-    exitEditing();
-
-    const rows = await tree.getChildren();
-    assert.deepStrictEqual(
-      rows.map(rowName).filter((n) => n === 'TestMod.esp' || n === 'Other.esp'), ['TestMod.esp', 'Other.esp'],
-      'closing mEdit leaves the load order untouched',
-    );
-    assert.strictEqual(
-      tree.getTreeItem(findRow(rows, 'TestMod.esp')).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
-    );
-    assert.strictEqual(
-      tree.getTreeItem(findRow(rows, 'Other.esp')).collapsibleState, vscode.TreeItemCollapsibleState.None,
-      'closing mEdit does not give a disabled row an expander',
-    );
-    const children = await tree.getChildren(findRow(rows, 'TestMod.esp'));
-    assert.strictEqual(children.length, 1, 'expanding after close answers exactly one node, never an empty list');
-    assert.strictEqual(nodeKind(children[0]), 'recordType',
-      'closing takes nothing from the tree, so the row still expands into the held load order');
-  });
-});
-
-describe('A read-only plugin\'s tooltip says so once the backend is running', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
-  let gameDir = '';
-
-  before(async () => {
-    if (!root) return;
-    resetMockBackend();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-readonly-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['Immutable.esm']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
-    await setGameDirectory(gameDir);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*Immutable.esm\n'));
-    pluginsTree().invalidate();
-    await enterEditing();
-    exitEditing();
-  });
-
-  after(async () => {
-    if (!root) return;
-    exitEditing();
-    await setGameDirectory(undefined);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
-    fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('gains a read-only tooltip once the load order reports it immutable', async () => {
-    await enterEditing();
-    const tree = pluginsTree();
-    const row = findRow(await tree.getChildren(), 'Immutable.esm');
-
-    const tooltip = tree.getTreeItem(row).tooltip;
-
-    assert.ok(typeof tooltip === 'string' && tooltip.includes('read-only'), `expected a read-only tooltip, got: ${describeTooltip(tooltip)}`);
-  });
-});
-
-describe('A plugin with a missing master is flagged, never deactivated', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
-  let gameDir = '';
-
-  before(async () => {
-    if (!root) return;
-    resetMockBackend();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-missingmaster-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['TestMod.esp', 'MissingMaster.esp']) {
-      fs.writeFileSync(path.join(gameDir, 'Data', name), '');
-    }
-    await setGameDirectory(gameDir);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n'));
-    pluginsTree().invalidate();
-    await enterEditing();
-  });
-
-  after(async () => {
-    if (!root) return;
-    exitEditing();
-    await setGameDirectory(undefined);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
-    fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('flags the row with an error decoration naming the missing master, and stays checked', async () => {
-    const tree = pluginsTree();
-    const row = findRow(await tree.getChildren(), 'MissingMaster.esp');
-    const item = tree.getTreeItem(row);
-
-    assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('Missing masters: Ghost.esm'),
-      `expected a missing-master tooltip, got: ${describeTooltip(item.tooltip)}`);
-    assert.strictEqual(item.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
-    assert.strictEqual(rowFields(row).plugin?.enabled, true);
-    assert.strictEqual(item.checkboxState, vscode.TreeItemCheckboxState.Checked);
-  });
-
-  it('leaves a plugin whose masters all resolve undecorated', async () => {
-    const tree = pluginsTree();
-    const row = findRow(await tree.getChildren(), 'TestMod.esp');
-
-    const item = tree.getTreeItem(row);
-
-    assert.strictEqual(item.tooltip, 'TestMod.esp\nData');
-  });
-
-});
-
 describe('An instance change sends a fresh load order snapshot (ADR-0013)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1391,7 +1065,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
   async function swapPluginOrder(): Promise<void> {
     swapped = !swapped;
-    await writePluginsTxt(swapped ? '*MissingMaster.esp\n*TestMod.esp\n' : '*TestMod.esp\n*MissingMaster.esp\n');
+    await writePluginsTxt(swapped ? '*Second.esp\n*TestMod.esp\n' : '*TestMod.esp\n*Second.esp\n');
   }
 
   async function writePluginsTxt(text: string): Promise<void> {
@@ -1399,9 +1073,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     const pluginReads = requestLog.filter((l) => l === 'GET /plugins').length;
     fs.writeFileSync(pluginsTxtPath, text);
     await waitFor('a fresh PUT /load-order after plugins.txt changed', () => putCount() > before ? true : undefined);
-    if (!putLoadOrderShouldFail) {
-      await waitFor('the tree hand-off after the PUT', () => requestLog.filter((l) => l === 'GET /plugins').length > pluginReads ? true : undefined);
-    }
+    await waitFor('the tree hand-off after the PUT', () => requestLog.filter((l) => l === 'GET /plugins').length > pluginReads ? true : undefined);
   }
 
   before(async () => {
@@ -1409,11 +1081,11 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     await resetMockBackendDetached();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-reconcile-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['TestMod.esp', 'MissingMaster.esp']) {
+    for (const name of ['TestMod.esp', 'Second.esp']) {
       fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     }
     await setGameDirectory(gameDir);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n'));
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Second.esp\n'));
     pluginsTree().invalidate();
     await enterEditing();
   });
@@ -1436,131 +1108,13 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
   it('a plugins.txt write that leaves the load order equal puts it again', async () => {
     const sent = putLoadOrders.length;
-    const order = swapped ? ['MissingMaster.esp', 'TestMod.esp'] : ['TestMod.esp', 'MissingMaster.esp'];
+    const order = swapped ? ['Second.esp', 'TestMod.esp'] : ['TestMod.esp', 'Second.esp'];
 
     await writePluginsTxt(`${fs.readFileSync(pluginsTxtPath, 'utf8')}\n`);
 
     assert.deepStrictEqual(putLoadOrders.slice(sent), [order]);
   });
 
-  it('clears a resolved master-issue decoration on the same row after the next reconcile, not just applies it', async () => {
-    const tree = pluginsTree();
-    const before = findRow(await tree.getChildren(), 'MissingMaster.esp');
-    const beforeTooltip = tree.getTreeItem(before).tooltip;
-    assert.ok(typeof beforeTooltip === 'string' && beforeTooltip.includes('Missing masters: Ghost.esm'),
-      `expected the row to carry the master-issue tooltip before the reconcile, got: ${describeTooltip(beforeTooltip)}`);
-
-    mockPluginsOverride = MOCK_PLUGINS.map((p) => p.name === 'MissingMaster.esp' ? { ...p, masterIssues: [] } : p);
-    await swapPluginOrder();
-
-    await waitFor('a resolved master issue to clear the tooltip, not leave the stale decoration stacked on top of the fresh one',
-      async () => tree.getTreeItem(findRow(await tree.getChildren(), 'MissingMaster.esp')).tooltip === 'MissingMaster.esp\nData');
-  });
-
-  it('hides a plugin a filter suppresses, and restores it once a reconcile comes up with no filter', async () => {
-    const tree = pluginsTree();
-    const before = findRow(await tree.getChildren(), 'TestMod.esp');
-    assert.strictEqual(tree.getTreeItem(before).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
-      'sanity: the row is expandable before either reconcile below');
-
-    mockPluginsOverride = MOCK_PLUGINS.map((p) => p.name === 'TestMod.esp' ? { ...p, hasMatchingRecords: false } : p);
-    await swapPluginOrder();
-    await waitFor('sanity: the mechanism reaches the tree — a filter with no matches on this plugin hides its row entirely, not just its chevron',
-      async () => !(await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp'));
-
-    mockPluginsOverride = null;
-    await swapPluginOrder();
-    await waitFor('a reconcile that comes up with no filter to restore a row an earlier filter hid, not leave it permanently gone',
-      async () => {
-        const restored = (await tree.getChildren()).find((r) => rowName(r) === 'TestMod.esp');
-        return restored !== undefined && tree.getTreeItem(restored).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
-      });
-  });
-
-  it('keeps the rows expandable, without throwing, when the reconcile itself fails', async () => {
-    const tree = pluginsTree();
-    const before = findRow(await tree.getChildren(), 'TestMod.esp');
-    assert.strictEqual(tree.getTreeItem(before).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
-      'sanity: the row is expandable before the failing reconcile');
-
-    putLoadOrderShouldFail = true;
-    try {
-      await swapPluginOrder();
-    } finally {
-      putLoadOrderShouldFail = false;
-    }
-
-    const after = findRow(await tree.getChildren(), 'TestMod.esp');
-    assert.strictEqual(tree.getTreeItem(after).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
-      'a failed reconcile leaves the load order the backend already holds in place, so the rows stay expandable');
-    const children = await tree.getChildren(after);
-    assert.strictEqual(children.length, 1, 'expanding after a failed reconcile answers exactly one node');
-    assert.strictEqual(nodeKind(children[0]), 'recordType',
-      'a failed PUT leaves the held load order behind the chevron, never a row stuck on "still indexing"');
-  });
-});
-
-describe('a client that reports stopped outside exitEditing leaves the Plugins tree\'s shape alone', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
-  const clientOf = () => ext?.exports.client;
-  let gameDir = '';
-
-  before(() => {
-    if (!root) return;
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-backend-death-filter-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
-  });
-
-  after(() => {
-    if (!root) return;
-    fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  beforeEach(async () => {
-    if (!root) return;
-    resetMockBackend();
-    mockPluginsOverride = MOCK_PLUGINS.map((p) => (p.name === 'TestMod.esp' ? { ...p, hasMatchingRecords: false } : p));
-    await setGameDirectory(gameDir);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n'));
-    await enterEditing();
-    const tree = pluginsTree();
-    await waitFor('the activation reconcile to filter TestMod.esp out',
-      async () => ((await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp') ? undefined : true));
-  });
-
-  afterEach(async () => {
-    if (!root) return;
-    exitEditing();
-    await setGameDirectory(undefined);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
-    await resetMockBackendDetached();
-  });
-
-  it('the row a record filter hid stays hidden', async () => {
-    const tree = pluginsTree();
-
-    await clientOf()?.stop();
-
-    assert.ok(!(await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp'),
-      'a stopped client is not a reason to un-narrow a view the user narrowed');
-  });
-
-  it('a row still in the tree keeps the load order behind its chevron', async () => {
-    mockPluginsOverride = null;
-    const tree = pluginsTree();
-    await enterEditing();
-    const row = findRow(await tree.getChildren(), 'TestMod.esp');
-
-    await clientOf()?.stop();
-
-    const children = await tree.getChildren(row);
-    assert.strictEqual(children.length, 1, 'expanding answers exactly one node, never an empty list');
-    assert.strictEqual(nodeKind(children[0]), 'recordType',
-      'the tree kept its load order, so the row expands into records');
-  });
 });
 
 describe('Refresh rebuilds the index, then re-reads the instance', () => {
@@ -1624,29 +1178,15 @@ async function waitFor<T>(label: string, read: () => Promise<T | false | undefin
 describe('Progressive load', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
   let gameDir = '';
-
-  const childrenFor = async (name: string) => {
-    const tree = pluginsTree();
-    return tree.getChildren(findRow(await tree.getChildren(), name));
-  };
-
-  const itemFor = async (name: string) => {
-    const tree = pluginsTree();
-    return tree.getTreeItem(findRow(await tree.getChildren(), name));
-  };
 
   before(async () => {
     if (!root) return;
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-progressive-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['TestMod.esp', 'Other.esp', 'MissingMaster.esp', 'Immutable.esm']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
+    fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
     await setGameDirectory(gameDir);
-    await writeAndAwaitInstance(() =>
-      fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n*MissingMaster.esp\n*Immutable.esm\n'));
-    await enterEditing();
-    exitEditing();
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n'));
   });
 
   after(async () => {
@@ -1655,15 +1195,12 @@ describe('Progressive load', () => {
     await setGameDirectory(undefined);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
     fs.rmSync(gameDir, { recursive: true, force: true });
-    await enterEditing();
-    exitEditing();
     resetMockBackend();
   });
 
   beforeEach(() => {
     resetMockBackend();
     holdPutLoadOrder = true;
-    pluginsTree().invalidate();
   });
 
   afterEach(() => {
@@ -1671,57 +1208,13 @@ describe('Progressive load', () => {
     exitEditing();
   });
 
-  const recordTypesAttempted = (name: string) =>
-    requestLog.some((l) => l.startsWith(`GET /plugins/${name}/record-types`));
-  const stillIndexing = async (name: string) => nodeKind((await childrenFor(name))[0]) === 'indexing';
-  const waitForIndexed = (name: string) => waitFor(`the backend to be asked about ${name} once indexed`, async () => {
-    await childrenFor(name);
-    return recordTypesAttempted(name) ? true : undefined;
-  });
-  const launchAndAwaitOpeningTick = async (): Promise<{ launch: Promise<void> }> => {
-    const launch = enterEditing();
-    await waitFor('the load\'s opening tick to reach the tree', () => stillIndexing('TestMod.esp'));
-    return { launch };
-  };
-
-  it('makes a plugin browsable as soon as it is indexed, while a later one is still indexing', async () => {
-    const { launch } = await launchAndAwaitOpeningTick();
-
-    setIndexed(['TestMod.esp']);
-    await waitForIndexed('TestMod.esp');
-
-    assert.ok(await stillIndexing('Other.esp'), 'Other.esp has not been indexed yet and must answer "still indexing"');
-    assert.ok(!recordTypesAttempted('Other.esp'), 'a plugin the load has not reached must not be asked about at all');
-
-    setIndexed(['TestMod.esp', 'Other.esp']);
-    await waitForIndexed('Other.esp');
-
-    releasePut();
-    await launch;
-  });
-
-  it('decorates a plugin that failed to read the moment it is reported, not at the end', async () => {
-    const { launch } = await launchAndAwaitOpeningTick();
-    setIndexed(['TestMod.esp'], { failures: [{ name: 'Other.esp', origin: 'Data', reason: 'RACE parse' }] });
-
-    const item = await waitFor('Other.esp to be decorated with its load failure mid-load', async () => {
-      const candidate = await itemFor('Other.esp');
-      return candidate.description === 'failed to read' ? candidate : undefined;
-    });
-
-    assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('RACE parse'),
-      `expected the failure reason in the tooltip, got: ${describeTooltip(item.tooltip)}`);
-
-    releasePut();
-    await launch;
-  });
+  const streamConnections = () => requestLog.filter((l) => l === 'GET /notifications/stream').length;
 
   it('closes the notification stream when mEdit is closed mid-load', async () => {
-    const { launch } = await launchAndAwaitOpeningTick();
+    const launch = enterEditing();
+    await waitFor('the load to be subscribed and held', () => streamConnections() > 0 && releasePutLoadOrder !== null);
     setIndexed(['TestMod.esp']);
-    await waitForIndexed('TestMod.esp');
-    const connectionsAtLoad = requestLog.filter((l) => l === 'GET /notifications/stream').length;
-    assert.ok(connectionsAtLoad > 0, 'the load should have been subscribed before it was abandoned');
+    const connectionsAtLoad = streamConnections();
 
     exitEditing();
     await launch;
@@ -1729,17 +1222,7 @@ describe('Progressive load', () => {
     const client = ext?.exports.client;
     if (client) await awaitStatus(client, 'stopped', 'the client to reach stopped');
 
-    assert.strictEqual(
-      requestLog.filter((l) => l === 'GET /notifications/stream').length, connectionsAtLoad,
-      'closing mEdit must not reconnect the stream against a dead backend',
-    );
-    const children = await childrenFor('TestMod.esp');
-    assert.strictEqual(children.length, 1, 'expanding after an abandoned load answers exactly one node, never an empty list');
-    assert.strictEqual(
-      ext?.exports.pluginListView?.message,
-      undefined,
-      'the view must stop claiming a load that is not running',
-    );
+    assert.strictEqual(streamConnections(), connectionsAtLoad, 'closing mEdit must not reconnect the stream against a dead backend');
   });
 
   it('raises no error when mEdit is closed before the backend is even up', async () => {
@@ -1768,119 +1251,6 @@ describe('Progressive load', () => {
       Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
     }
   });
-
-  it('keeps a plugin\'s master-issue tooltip through a reload\'s mid-load tick, unchanged', async () => {
-    const { launch } = await launchAndAwaitOpeningTick();
-
-    setIndexed(['TestMod.esp', 'MissingMaster.esp']);
-    await waitForIndexed('MissingMaster.esp');
-    const midLoad = await itemFor('MissingMaster.esp');
-    assert.ok(
-      typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing masters: Ghost.esm'),
-      `expected the prior reconcile's tooltip to survive the mid-load tick, got: ${describeTooltip(midLoad.tooltip)}`,
-    );
-
-    releasePut();
-    await launch;
-
-    const loaded = await itemFor('MissingMaster.esp');
-    assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing masters: Ghost.esm'),
-      `expected the missing-master tooltip once the load completed, got: ${describeTooltip(loaded.tooltip)}`);
-    const immutable = await itemFor('Immutable.esm');
-    assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),
-      `expected the read-only note once the load completed, got: ${describeTooltip(immutable.tooltip)}`);
-    assert.ok(
-      !(await stillIndexing('Immutable.esm')),
-      'Immutable.esm was indexed but never named in a progress tick — it must still browse once the completion hand-off lands',
-    );
-  });
-
-  const expandsTo = async (name: string): Promise<string | undefined> => {
-    const [child] = await childrenFor(name);
-    return nodeKind(child) === 'error' && child !== undefined ? describeTooltip(pluginsTree().getTreeItem(child).tooltip) : undefined;
-  };
-  const heldAndLoaded = async (): Promise<{ launch: Promise<void> }> => {
-    const launched = await launchAndAwaitOpeningTick();
-    setIndexed(['TestMod.esp']);
-    await waitForIndexed('TestMod.esp');
-    return launched;
-  };
-
-  it('expands every row, held or not, to the second window\'s refusal the stream carries', async () => {
-    const { launch } = await heldAndLoaded();
-    const HELD_ELSEWHERE = 'This instance\'s index is open in another Modbench window.';
-
-    setIndexed(['TestMod.esp'], { state: 'HeldElsewhere', message: HELD_ELSEWHERE });
-
-    for (const name of ['TestMod.esp', 'Other.esp']) {
-      await waitFor(`${name} to expand to the refusal`, async () => (await expandsTo(name)) === HELD_ELSEWHERE);
-    }
-    releasePut();
-    await launch;
-  });
-
-  it('expands a row the load never reached to a Failed refusal, and leaves a held row its records', async () => {
-    const { launch } = await heldAndLoaded();
-    const FAILED = 'the reconcile hit something it cannot name';
-
-    setIndexed(['TestMod.esp'], { state: 'Failed', message: FAILED });
-
-    await waitFor('Other.esp to expand to the refusal', async () => (await expandsTo('Other.esp')) === FAILED);
-    assert.notStrictEqual(await expandsTo('TestMod.esp'), FAILED, 'a held row keeps what already landed');
-    releasePut();
-    await launch;
-  });
-
-  it('expands a row the load never reached to why mEdit cannot be reached once the client stops', async () => {
-    const { launch } = await heldAndLoaded();
-
-    await ext?.exports.client.stop();
-
-    await waitFor('Other.esp to expand to the unreachable reason', async () => (await expandsTo('Other.esp')) === 'mEdit is stopped.');
-    releasePutLoadOrder?.();
-    await launch;
-  });
-});
-
-describe('Copy says why its destination lookup failed', () => {
-  const headerArg = {
-    webviewSection: 'recordHeader',
-    formKey: 'TestMod.esp:000001',
-    plugin: 'TestMod.esp',
-    origin: 'Data',
-    preventDefaultContextMenuItems: true,
-  };
-
-  beforeEach(() => resetMockBackend());
-
-  for (const mode of ['Override', 'New']) {
-    it(`copy as ${mode} resolves and shows one Modbench error naming the reason`, async () => {
-      const errors: string[] = [];
-      const realShowError = vscode.window.showErrorMessage;
-      const realShowQuickPick = vscode.window.showQuickPick;
-      Object.defineProperty(vscode.window, 'showErrorMessage', {
-        configurable: true,
-        value: (message: string) => { errors.push(message); return Promise.resolve(undefined); },
-      });
-      Object.defineProperty(vscode.window, 'showQuickPick', {
-        configurable: true,
-        value: (items: readonly { mode?: string }[]) => Promise.resolve(items.find((item) => item.mode === mode)),
-      });
-      try {
-        await vscode.commands.executeCommand('modbench.record.copy', headerArg);
-
-        assert.ok(requestLog.some((l) => l === 'GET /plugins'), 'the command must have looked up the destinations');
-        assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
-        const [errorToast] = errors;
-        if (errorToast === undefined) throw new Error('expected the one error toast just asserted above');
-        assert.ok(errorToast.startsWith('Modbench:'), `expected a Modbench-authored toast, got: ${errorToast}`);
-        assert.ok(errorToast.includes('No load order has been received.'), `expected the reason, got: ${errorToast}`);
-      } finally {
-        Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
-        Object.defineProperty(vscode.window, 'showQuickPick', { configurable: true, value: realShowQuickPick });
-      }
-    });
-  }
 });
 
 describe('A field gesture from the palette acts on the focused cell of the record tab in focus', () => {

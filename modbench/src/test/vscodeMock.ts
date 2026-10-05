@@ -62,7 +62,7 @@ export class Diagnostic {
 // by `.path`.
 export const uriFile = (p: string) => {
   const path = p.replaceAll('\\', '/');
-  return { fsPath: p, path, toString: () => `file://${path}` };
+  return { scheme: 'file', fsPath: p, path, toString: () => `file://${path}` };
 };
 
 export const uriFrom = (opts: { scheme: string; path: string; query?: string }) =>
