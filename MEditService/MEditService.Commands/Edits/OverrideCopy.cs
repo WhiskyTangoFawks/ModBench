@@ -53,7 +53,7 @@ internal sealed class OverrideCopy
 
     private static RecordEditResult RefuseSlotHeldByAnotherRecord(PluginAddress destinationPlugin, ChildSlotHeldByAnotherRecordException ex) =>
         RecordEditResult.Refused(
-            RecordEditRefusal.FormKeyCollision,
+            RecordEditRefusal.ChildSlotHeldByAnotherRecord,
             $"{destinationPlugin.Name} ({destinationPlugin.Origin}) holds another record where the copy puts one: {ex.Message}");
 
     private RecordEditResult CopyAsOverride(
@@ -127,7 +127,7 @@ internal sealed class OverrideCopy
     }
 
     // A failure leaves the cells before it in the working tree, and the answer names them. Only a
-    // fault of the tree or the file system is that answer; anything else is a bug.
+    // fault of the tree, the file system or a slot another record holds is that answer.
     private RecordEditResult LandCells(WriteTargets.CopyTarget copy, WorldspaceCells cells)
     {
         var (source, identity, destination, release, _) = copy;
@@ -139,7 +139,11 @@ internal sealed class OverrideCopy
             {
                 var document = source.Document(CellIdentity(source, cell));
                 if (held.Contains(cell)) _recordCopy.OverwriteHeldCell(document, destination, release);
-                else _recordCopy.PutExteriorCell(identity.FormKey, document, document.Body, destination, release);
+                else
+                {
+                    _recordCopy.RemoveChildrenHeldElsewhere(destination, document.Body, document.RecordType, null, release);
+                    _recordCopy.PutExteriorCell(identity.FormKey, document, document.Body, destination, release);
+                }
                 landed.Add(cell);
             }
             catch (Exception ex) when (ex is AmbiguousSourceUnitException or UnreadableSourceDocumentException
@@ -151,7 +155,7 @@ internal sealed class OverrideCopy
                     {
                         AmbiguousSourceUnitException => RecordEditRefusal.AmbiguousSourceUnit,
                         UnreadableSourceDocumentException => RecordEditRefusal.RecordParseFailed,
-                        ChildSlotHeldByAnotherRecordException => RecordEditRefusal.FormKeyCollision,
+                        ChildSlotHeldByAnotherRecordException => RecordEditRefusal.ChildSlotHeldByAnotherRecord,
                         _ => RecordEditRefusal.SourceWriteFailed,
                     },
                     $"{identity.FormKey} landed in {destination.Plugin.Name} ({destination.Plugin.Origin}) only in part, " +
@@ -180,6 +184,8 @@ internal sealed class OverrideCopy
             // carries stay.
             return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
         }
+
+        if (withChildren) _recordCopy.RemoveChildrenHeldElsewhere(destination, body, identity.RecordType, null, release);
 
         var isCell = RecordTypeDispatch.For(release).IsCell(identity.RecordType);
         if (isCell && source.WorldspaceOf(identity) is { } worldspace)

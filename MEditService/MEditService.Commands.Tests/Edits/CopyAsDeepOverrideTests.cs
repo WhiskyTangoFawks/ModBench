@@ -234,7 +234,55 @@ public sealed class CopyAsDeepOverrideTests
     }
 
     [Fact]
-    public void ADeepCopyOfAWorldspaceIntoADestinationWhosePersistentCellIsAnother_IsRefusedAsACollisionAndWritesNothing()
+    public void AReplacingDeepCopyOfAWorldspace_OverwritesARefHeldInAHeldCell_AndOverwritesAPersistentCellRefTheSourceKeepsInANumberedCell()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin).Applied);
+        var destination = TrackedTree.Repository(fixture.DestinationModFolder);
+        SourceEdits.Rewrite<Cell>(
+            destination, fixture.DestinationPlugin,
+            new RecordIdentity(fixture.ExteriorCell.ToString(), "cell", ContainerCopyFixture.ExteriorCellEditorId),
+            GameRelease.Fallout4,
+            cell => cell.Temporary.Add(new PlacedObject(fixture.ExteriorTemporaryRef, Fallout4Release.Fallout4) { EditorID = "EditedInCell" }));
+        SourceEdits.Rewrite<Worldspace>(
+            destination, fixture.DestinationPlugin,
+            new RecordIdentity(fixture.Worldspace.ToString(), "wrld", ContainerCopyFixture.WorldspaceEditorId),
+            GameRelease.Fallout4,
+            worldspace => worldspace.TopCell = new Cell(fixture.TopCell, Fallout4Release.Fallout4)
+            {
+                Persistent = { new PlacedObject(fixture.ExteriorPersistentRef, Fallout4Release.Fallout4) { EditorID = "EditedInPersistentCell" } },
+            });
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin, replace: true);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(ContainerCopyFixture.ExteriorTemporaryRefEditorId, fixture.Document(fixture.DestinationPlugin, fixture.ExteriorTemporaryRef).Require().EditorId);
+        Assert.Equal(ContainerCopyFixture.ExteriorPersistentRefEditorId, fixture.Document(fixture.DestinationPlugin, fixture.ExteriorPersistentRef).Require().EditorId);
+        Assert.DoesNotContain(
+            fixture.ExteriorPersistentRef.ToString(), fixture.Document(fixture.DestinationPlugin, fixture.Worldspace).Require().Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AReplacingDeepCopyOfAnInteriorCell_HoldsARefOnceWhenTheDestinationHasItInTheOtherGroup()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin).Applied);
+        SourceEdits.Rewrite<Cell>(
+            TrackedTree.Repository(fixture.DestinationModFolder), fixture.DestinationPlugin,
+            new RecordIdentity(fixture.InteriorCell.ToString(), "cell", ContainerCopyFixture.InteriorCellEditorId),
+            GameRelease.Fallout4,
+            cell => cell.Persistent.Add(new PlacedObject(fixture.TemporaryRef, Fallout4Release.Fallout4) { EditorID = "EditedInPersistent" }));
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin, replace: true);
+
+        Assert.True(result.Applied, result.Message);
+        var body = fixture.Document(fixture.DestinationPlugin, fixture.InteriorCell).Require().Body;
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(body, System.Text.RegularExpressions.Regex.Escape(fixture.TemporaryRef.ToString())));
+        Assert.Equal(ContainerCopyFixture.TemporaryRefEditorId, fixture.Document(fixture.DestinationPlugin, fixture.TemporaryRef).Require().EditorId);
+    }
+
+    [Fact]
+    public void ADeepCopyOfAWorldspaceIntoADestinationWhosePersistentCellIsAnother_IsRefusedAsASlotHeldByAnotherRecordAndWritesNothing()
     {
         using var fixture = ContainerCopyFixture.Create();
         Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin).Applied);
@@ -247,7 +295,7 @@ public sealed class CopyAsDeepOverrideTests
 
         var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin, replace: true);
 
-        Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
+        Assert.Equal(RecordEditRefusal.ChildSlotHeldByAnotherRecord, result.Refusal);
         Assert.Equal(before, TreeSnapshot.Of(fixture.DestinationModFolder));
     }
 

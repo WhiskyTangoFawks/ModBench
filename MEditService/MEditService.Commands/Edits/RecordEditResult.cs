@@ -95,6 +95,10 @@ public enum RecordEditRefusal
     /// then supplies the replace Option; the way out is confirming the replacement.</summary>
     DestinationHoldsRecord,
 
+    /// <summary>The slot a copied child takes holds another record, as a worldspace's persistent cell
+    /// does; the way out is outside the copy.</summary>
+    ChildSlotHeldByAnotherRecord,
+
     /// <summary>Deleting the header would remove the root <c>RecordData.json</c> the whole-mod door needs;
     /// its FormKey is synthetic. Refused before the adapter's container test, whose filename-only
     /// test would delete the whole source root.</summary>

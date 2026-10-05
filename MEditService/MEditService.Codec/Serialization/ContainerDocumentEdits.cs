@@ -53,9 +53,9 @@ public static class ContainerDocumentEdits
         RecordTextCodec codec, string text, GameRelease release, string? recordType) =>
         [.. DescendantsOf(codec.Deserialize(text, release, recordType)).Select(child => child.FormKey.ToString())];
 
-    /// <summary>The destination's own fields, with each of the source's child records overwriting the
-    /// one it holds or added, at any depth; its other children stay. Throws
-    /// <see cref="ChildSlotHeldByAnotherRecordException"/>.</summary>
+    /// <summary>The destination's own fields, each source child record overwriting the one held anywhere
+    /// in its subtree, or added. Throws <see cref="ChildSlotHeldByAnotherRecordException"/> when a
+    /// single-valued slot holds another record.</summary>
     public static string WithChildRecordsMerged(
         RecordTextCodec codec, string destinationText, string? destinationRecordType,
         string sourceText, string? sourceRecordType, GameRelease release)
@@ -63,12 +63,12 @@ public static class ContainerDocumentEdits
         var source = codec.Deserialize(sourceText, release, sourceRecordType);
         var destination = codec.Deserialize(destinationText, release, destinationRecordType);
         ContainerChildFields.MergeChildren(
-            destination, [.. ContainerChildFields.EnumerateChildren(source).Select(c => (c.SlotName, c.Child))]);
+            destination, destination, [.. ContainerChildFields.EnumerateChildren(source).Select(c => (c.SlotName, c.Child))]);
         return codec.SerializeToText(destination, release);
     }
 
     /// <summary>A record the destination holds as a child record of the one copied: the source's own
-    /// fields, the children of both merged.</summary>
+    /// fields, the children of both merged. Throws as <see cref="WithChildRecordsMerged"/> does.</summary>
     public static NamedDocument WithRecordOverwritten(
         RecordTextCodec codec, string destinationText, string? destinationRecordType,
         string sourceText, string? sourceRecordType, GameRelease release)

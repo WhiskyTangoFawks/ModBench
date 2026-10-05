@@ -95,9 +95,7 @@ public static class ContainerChildFields
         var slotNames = EnumerateChildren(record).Select(c => c.SlotName).Distinct(StringComparer.Ordinal).ToList();
         foreach (var slotName in slotNames)
         {
-            var property = record.GetType().GetProperty(slotName)
-                ?? throw new InvalidOperationException(
-                    $"{record.GetType().Name} has no property '{slotName}' to clear — its child members are the assembly's own.");
+            var property = SlotProperty(record.GetType(), slotName, "clear");
 
             var value = property.GetValue(record)
                 ?? throw new InvalidOperationException(
@@ -111,9 +109,7 @@ public static class ContainerChildFields
     /// cell) takes it as its value.</summary>
     internal static void AddChildToSlot(IMajorRecordGetter parent, string slotName, IMajorRecord child)
     {
-        var property = parent.GetType().GetProperty(slotName)
-            ?? throw new InvalidOperationException(
-                $"{parent.GetType().Name} has no property '{slotName}' to add a child to — its child members are the assembly's own.");
+        var property = SlotProperty(parent.GetType(), slotName, "add a child to");
 
         if (typeof(System.Collections.IEnumerable).IsAssignableFrom(property.PropertyType))
         {
@@ -128,32 +124,33 @@ public static class ContainerChildFields
         property.SetValue(parent, child);
     }
 
-    /// <summary>Each incoming child overwrites the held child with its FormKey, at its slot
-    /// position, or is added to the slot's end. What only the target holds stays, at every depth.</summary>
-    internal static void MergeChildren(IMajorRecordGetter target, IReadOnlyList<(string SlotName, IMajorRecordGetter Child)> incoming)
+    /// <summary>Each incoming child overwrites the one <paramref name="root"/> holds under its FormKey
+    /// anywhere in its subtree, landing in <paramref name="target"/>'s slot; with none held it is
+    /// added. What only the root holds stays.</summary>
+    internal static void MergeChildren(
+        IMajorRecordGetter root, IMajorRecordGetter target, IReadOnlyList<(string SlotName, IMajorRecordGetter Child)> incoming)
     {
-        foreach (var (slotName, child) in incoming)
+        foreach (var (slotName, source) in incoming)
         {
-            var property = target.GetType().GetProperty(slotName)
-                ?? throw new InvalidOperationException(
-                    $"{target.GetType().Name} has no property '{slotName}' to merge a child into — its child members are the assembly's own.");
+            var child = (IMajorRecord)source;
+            var childrenToMerge = EnumerateChildren(child).Select(c => (c.SlotName, c.Child)).ToList();
+            ClearAllChildSlots(child);
 
-            var current = property.GetValue(target);
-            if (current is System.Collections.IEnumerable and not string)
+            if (FindEmbeddedChild(root, child.FormKey.ToString()) is not { } held)
             {
-                var held = ((System.Collections.IEnumerable)current).Cast<IMajorRecordGetter>().ToList();
-                var at = held.FindIndex(record => record.FormKey == child.FormKey);
-                if (at < 0) AddChildToSlot(target, slotName, (IMajorRecord)child);
-                else ((dynamic)current)[at] = (dynamic)Overwritten(held[at], child);
-            }
-            else if (current is IMajorRecordGetter single && single.FormKey == child.FormKey)
-            {
-                property.SetValue(target, Overwritten(single, child));
+                AddChildToSlot(target, slotName, child);
             }
             else
             {
-                AddChildToSlot(target, slotName, (IMajorRecord)child);
+                TransplantChildSlots(held.Child, child);
+                if (ReferenceEquals(held.Parent, target) && held.SlotName == slotName) ReplaceInSlot(held, child);
+                else
+                {
+                    RemoveFromSlot(held);
+                    AddChildToSlot(target, slotName, child);
+                }
             }
+            MergeChildren(root, child, childrenToMerge);
         }
     }
 
@@ -164,9 +161,30 @@ public static class ContainerChildFields
         var incomingChildren = EnumerateChildren(incoming).Select(c => (c.SlotName, c.Child)).ToList();
         ClearAllChildSlots(incoming);
         TransplantChildSlots(held, incoming);
-        MergeChildren(incoming, incomingChildren);
+        MergeChildren(incoming, incoming, incomingChildren);
         return (IMajorRecord)incoming;
     }
+
+    private static void ReplaceInSlot(EmbeddedChild held, IMajorRecord replacement)
+    {
+        var property = SlotProperty(held.Parent.GetType(), held.SlotName, "replace a child in");
+        if (property.GetValue(held.Parent) is System.Collections.IEnumerable and not string and var list)
+            ((dynamic)list)[held.SlotIndex] = (dynamic)replacement;
+        else property.SetValue(held.Parent, replacement);
+    }
+
+    private static void RemoveFromSlot(EmbeddedChild held)
+    {
+        var property = SlotProperty(held.Parent.GetType(), held.SlotName, "remove a child from");
+        if (property.GetValue(held.Parent) is System.Collections.IEnumerable and not string and var list)
+            ((dynamic)list).RemoveAt(held.SlotIndex);
+        else property.SetValue(held.Parent, null);
+    }
+
+    private static PropertyInfo SlotProperty(Type recordType, string slotName, string purpose) =>
+        recordType.GetProperty(slotName)
+        ?? throw new InvalidOperationException(
+            $"{recordType.Name} has no property '{slotName}' to {purpose} — its child members are the assembly's own.");
 
     /// <summary>The own-fields-replace half: the replacing record arrives child-stripped, and
     /// the destination's embedded children are re-attached so an own-fields copy can never silently
@@ -175,9 +193,7 @@ public static class ContainerChildFields
     {
         foreach (var (slotName, _, child) in EnumerateChildren(from).ToList())
         {
-            var property = to.GetType().GetProperty(slotName)
-                ?? throw new InvalidOperationException(
-                    $"{to.GetType().Name} has no property '{slotName}' to transplant a child into — its child members are the assembly's own.");
+            var property = SlotProperty(to.GetType(), slotName, "transplant a child into");
             // Branch on the slot's shape, not the current value — a cleared list slot could in
             // principle be null, and SetValue'ing a single child into a list property would crash.
             var value = property.GetValue(to);
@@ -216,8 +232,6 @@ public static class ContainerChildFields
 
     private static IReadOnlyList<(string FieldName, PropertyInfo Property)> ChildPropertiesOf(Type recordType) =>
         EnumerateChildFieldsFor(recordType) is { } fields
-            ? [.. fields.Select(fieldName => (fieldName, recordType.GetProperty(fieldName)
-                ?? throw new InvalidOperationException(
-                    $"{recordType.Name} has no property '{fieldName}' to read children from — its child members are the assembly's own.")))]
+            ? [.. fields.Select(fieldName => (fieldName, SlotProperty(recordType, fieldName, "read children from")))]
             : [];
 }

@@ -131,12 +131,12 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
         PluginAddress sourcePlugin, RecordIdentity existing, string sourceBody, string sourceRecordType,
         Destination destination, GameRelease release)
     {
-        var existingDocument = destination.Repository.Get(destination.Plugin, existing)
-            ?? throw NoDocumentCarries(destination.Plugin, existing.FormKey);
+        var existingDocument = DocumentOf(destination, existing);
 
         var withChildren = ContainerDocumentEdits.WithChildRecordsMerged(
             codec, existingDocument.Body, existing.RecordType, sourceBody, sourceRecordType, release);
 
+        RemoveChildrenHeldElsewhere(destination, sourceBody, sourceRecordType, existingDocument, release);
         destination.Repository.Put(
             destination.Plugin, new SourceDocument(existing.FormKey, existing.RecordType, existing.EditorId, withChildren));
 
@@ -156,8 +156,7 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
         PluginAddress sourcePlugin, RecordIdentity existing, SourceDocument replacement,
         Destination destination, GameRelease release)
     {
-        var existingDocument = destination.Repository.Get(destination.Plugin, existing)
-            ?? throw NoDocumentCarries(destination.Plugin, existing.FormKey);
+        var existingDocument = DocumentOf(destination, existing);
 
         var withOwnFields = ContainerDocumentEdits.WithOwnFieldsReplaced(
             codec, existingDocument.Body, existing.RecordType, replacement.Body, replacement.RecordType, release);
@@ -242,13 +241,36 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
     {
         var existing = Identity(destination, sourceCell.FormKey, release)
             ?? throw NoDocumentCarries(destination.Plugin, sourceCell.FormKey);
-        var existingDocument = destination.Repository.Get(destination.Plugin, existing)
-            ?? throw NoDocumentCarries(destination.Plugin, sourceCell.FormKey);
+        var existingDocument = DocumentOf(destination, existing);
 
         var overwritten = ContainerDocumentEdits.WithRecordOverwritten(
             codec, existingDocument.Body, existing.RecordType, sourceCell.Body, sourceCell.RecordType, release);
+        RemoveChildrenHeldElsewhere(destination, sourceCell.Body, sourceCell.RecordType, existingDocument, release);
         destination.Repository.Put(
             destination.Plugin, new SourceDocument(sourceCell.FormKey, existing.RecordType, overwritten.EditorId, overwritten.Text));
+    }
+
+    private static SourceDocument DocumentOf(Destination destination, RecordIdentity existing) =>
+        destination.Repository.Get(destination.Plugin, existing) ?? throw NoDocumentCarries(destination.Plugin, existing.FormKey);
+
+    /// <summary>A child record the destination holds in another document moves with the copy: it
+    /// leaves that document, and the copy lands it where the source has it. A record that carries
+    /// children of its own stays where it is.</summary>
+    internal void RemoveChildrenHeldElsewhere(
+        Destination destination, string sourceBody, string sourceRecordType, SourceDocument? destinationUnit, GameRelease release)
+    {
+        var used = destination.Repository.FormKeysUsed(destination.Plugin);
+        var held = ContainerDocumentEdits.ChildFormKeys(codec, sourceBody, release, sourceRecordType).Where(used.Contains).ToList();
+        if (held.Count == 0) return;
+
+        var inUnit = destinationUnit is null
+            ? new HashSet<string>()
+            : ContainerDocumentEdits.ChildFormKeys(codec, destinationUnit.Body, release, destinationUnit.RecordType).ToHashSet();
+        foreach (var key in held.Where(key => !inUnit.Contains(key)))
+        {
+            if (Identity(destination, key, release) is { } elsewhere && !ContainerChildFields.HasChildFields(elsewhere.RecordType, release))
+                destination.Repository.Remove(destination.Plugin, elsewhere);
+        }
     }
 
     private static JsonNode RequireParsed(string text) =>

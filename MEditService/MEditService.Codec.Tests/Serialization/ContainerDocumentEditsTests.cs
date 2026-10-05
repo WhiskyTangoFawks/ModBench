@@ -83,7 +83,9 @@ public sealed class ContainerDocumentEditsTests
         var destination = new Quest(mod) { EditorID = "DestinationQuest" };
         destination.DialogTopics.Add(destinationTopic);
         var addedResponse = new DialogResponses(mod) { EditorID = "SourceResponse" };
+        var overwritingResponse = new DialogResponses(destinationResponse.FormKey, Fallout4Release.Fallout4) { EditorID = "SourceOverwrite" };
         var sourceTopic = new DialogTopic(destinationTopic.FormKey, Fallout4Release.Fallout4) { EditorID = "SourceTopic" };
+        sourceTopic.Responses.Add(overwritingResponse);
         sourceTopic.Responses.Add(addedResponse);
         var source = new Quest(destination.FormKey, Fallout4Release.Fallout4) { EditorID = "SourceQuest" };
         source.DialogTopics.Add(sourceTopic);
@@ -95,7 +97,7 @@ public sealed class ContainerDocumentEditsTests
 
         var topic = Assert.Single(merged.DialogTopics);
         Assert.Equal("SourceTopic", topic.EditorID);
-        Assert.Equal(["DestinationResponse", "SourceResponse"], topic.Responses.Select(response => response.EditorID));
+        Assert.Equal(["SourceOverwrite", "SourceResponse"], topic.Responses.Select(response => response.EditorID));
     }
 
     [Fact]
@@ -131,5 +133,44 @@ public sealed class ContainerDocumentEditsTests
 
         Assert.Contains(held.FormKey.ToString(), refusal.Message, StringComparison.Ordinal);
         Assert.Contains(incoming.FormKey.ToString(), refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MergingChildRecords_MovesAHeldChildHeldInAnotherSlotToTheSlotTheSourceHasIt_AndHoldsItOnce()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Merge.esp"), Fallout4Release.Fallout4);
+        var held = new PlacedObject(mod) { EditorID = "DestinationRef" };
+        var destination = new Cell(mod) { EditorID = "Cell" };
+        destination.Persistent.Add(held);
+        var source = new Cell(destination.FormKey, Fallout4Release.Fallout4) { EditorID = "Cell" };
+        source.Temporary.Add(new PlacedObject(held.FormKey, Fallout4Release.Fallout4) { EditorID = "SourceRef" });
+        var type = RecordTableName.Of(source, Schemas);
+
+        var merged = (Cell)Read(
+            ContainerDocumentEdits.WithChildRecordsMerged(Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4),
+            type);
+
+        Assert.Empty(merged.Persistent);
+        Assert.Equal(["SourceRef"], merged.Temporary.Select(placed => placed.EditorID));
+    }
+
+    [Fact]
+    public void MergingChildRecordsIntoAWorldspace_OverwritesThePersistentCellItHoldsUnderTheSameFormKey_KeepingItsOwnChildren()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Merge.esp"), Fallout4Release.Fallout4);
+        var heldCell = new Cell(mod) { EditorID = "DestinationCell" };
+        heldCell.Temporary.Add(new PlacedObject(mod) { EditorID = "DestinationRef" });
+        var destination = new Worldspace(mod) { EditorID = "World", TopCell = heldCell };
+        var incomingCell = new Cell(heldCell.FormKey, Fallout4Release.Fallout4) { EditorID = "SourceCell" };
+        var source = new Worldspace(mod) { EditorID = "World", TopCell = incomingCell };
+        var type = RecordTableName.Of(source, Schemas);
+
+        var merged = (Worldspace)Read(
+            ContainerDocumentEdits.WithChildRecordsMerged(Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4),
+            type);
+
+        var topCell = merged.TopCell.Require();
+        Assert.Equal("SourceCell", topCell.EditorID);
+        Assert.Equal(["DestinationRef"], topCell.Temporary.Select(placed => placed.EditorID));
     }
 }
