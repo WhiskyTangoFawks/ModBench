@@ -13,10 +13,6 @@ const ADAPTER_PATH = join(SRC, 'instanceAdapter', 'files.ts');
 const FS_SPECIFIERS = new Set(['node:fs', 'node:fs/promises', 'fs', 'fs/promises']);
 const QUEUE_NAMES = new Set(['createWriteQueue', 'WriteQueue']);
 
-const NOT_THE_INSTANCE = [
-  join('workspaceConfig.ts'),
-];
-
 const productionFiles = (dir: string): string[] =>
   tsFiles(dir, { exclude: ['generated', 'test'], tsx: false, includeTests: false });
 
@@ -90,8 +86,8 @@ describe('no file outside the Instance adapter imports the file system to read t
     expect(scanned).toContain(join('plugins', 'PluginsTreeProvider.ts'));
   });
 
-  it('every production file outside the box names node:fs nowhere, bar the two listed', () => {
-    expect(findOffenders(SRC, NOT_THE_INSTANCE)).toEqual({});
+  it('every production file outside the box names node:fs nowhere', () => {
+    expect(findOffenders(SRC, [])).toEqual({});
   });
 
   it('the walk itself catches a node:fs/promises import planted outside the box, in a real file under a real root so the walk is exercised too', async () => {
@@ -102,12 +98,6 @@ describe('no file outside the Instance adapter imports the file system to read t
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
-
-  it('the allowlist is exactly the file that opens storage of the extension’s own, the scripts folder under its storage path, and it imports the file system', () => {
-    expect(NOT_THE_INSTANCE).toEqual(['workspaceConfig.ts']);
-    const listedFilesImportingNoFileSystem = NOT_THE_INSTANCE.filter((rel) => fsImportsIn(join(SRC, rel)).length === 0);
-    expect(listedFilesImportingNoFileSystem).toEqual([]);
   });
 });
 

@@ -6,6 +6,7 @@ import sonarjs from 'eslint-plugin-sonarjs';
 import { noGestureResultUse } from './eslint-rules/noGestureResultUse.mjs';
 import { noLeadingMEdit } from './eslint-rules/noLeadingMEdit.mjs';
 import { noRereadAfterWrite } from './eslint-rules/noRereadAfterWrite.mjs';
+import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from './eslint-rules/activationDecides.mjs';
 
 // The message states ADR-0019's rule in full, because a developer who breaks it meets the rule only there.
 const SURFACING_GOES_THROUGH_THE_REPORTER =
@@ -131,6 +132,18 @@ export default defineConfig(
         rules: {
             'no-restricted-syntax': ['error',
                 ...MESSAGE_API_SITES.map((selector) => ({ selector, message: SURFACING_GOES_THROUGH_THE_REPORTER })),
+            ],
+        },
+    },
+
+    // ADR-0014: the activation file and its wiring decide nothing. A later block replaces the
+    // earlier no-restricted-syntax options, so the message API sites come along.
+    {
+        files: ['src/extension.ts', 'src/syncWiring.ts'],
+        rules: {
+            'no-restricted-syntax': ['error',
+                ...MESSAGE_API_SITES.map((selector) => ({ selector, message: SURFACING_GOES_THROUGH_THE_REPORTER })),
+                ...ACTIVATION_DECIDES_SELECTORS.map((selector) => ({ selector, message: ACTIVATION_DECIDES_MESSAGE })),
             ],
         },
     },

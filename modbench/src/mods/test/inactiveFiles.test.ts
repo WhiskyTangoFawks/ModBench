@@ -154,7 +154,7 @@ describe('the grey on a file the game does not get, in the Mods tree and the Exp
     const fired = vi.fn();
     decorations.onDidChangeFileDecorations(fired);
 
-    configuration.onDidChangeConfiguration.fire({ affectsConfiguration: (key) => key === 'modbench.scriptsPath' });
+    configuration.onDidChangeConfiguration.fire({ affectsConfiguration: (key) => key === 'modbench.something' });
     expect(fired).not.toHaveBeenCalled();
     configuration.onDidChangeConfiguration.fire({ affectsConfiguration: (key) => key === GREY_INACTIVE_FILES_SETTING });
     expect(fired).toHaveBeenCalledWith(undefined);

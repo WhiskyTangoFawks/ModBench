@@ -22,7 +22,7 @@ const WIRE_DIR = 'wire';
 
 const CLIENT_CALLERS = ['instanceCommands'];
 
-const COMPOSITION_ROOT = ['extension.ts', 'workspaceConfig.ts'];
+const COMPOSITION_ROOT = ['extension.ts'];
 
 function isTestSupport(relativePath: string): boolean {
   return relativePath.split(sep).some((seg) => seg === 'test' || seg === 'integration') || relativePath.includes('.test.');
@@ -113,8 +113,8 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(isExcluded(join('mods', 'modList.ts'))).toBe(false);
   });
 
-  it('the activation file and the workspace configuration are the files excluded as the composition root', () => {
-    expect(COMPOSITION_ROOT).toEqual(['extension.ts', 'workspaceConfig.ts']);
+  it('the activation file is the one file excluded as the composition root', () => {
+    expect(COMPOSITION_ROOT).toEqual(['extension.ts']);
   });
 
   describe('a plant in each MO2-side directory is caught, and the same plant inside an excluded one is not', () => {

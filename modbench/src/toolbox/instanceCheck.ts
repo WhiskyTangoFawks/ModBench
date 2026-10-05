@@ -22,6 +22,10 @@ export function openedFolder(isInstance: (root: string) => boolean, log: (messag
   return { folder: 'notAnInstance' };
 }
 
+export function whenOpened<T>(opened: OpenedFolder, on: { instance: (instanceRoot: string) => T; notAnInstance: () => T }): T {
+  return opened.folder === 'instance' ? on.instance(opened.instanceRoot) : on.notAnInstance();
+}
+
 export interface FirstReadMark extends vscode.Disposable {
   readonly landed: boolean;
 }

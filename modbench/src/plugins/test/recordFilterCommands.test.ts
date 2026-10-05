@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const {
-  handlers, registerCommand, executeCommand, showQuickPick, showTextDocument, openTextDocument, files,
+  handlers, registerCommand, executeCommand, showQuickPick, showTextDocument, openTextDocument, findFiles, files,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
@@ -14,6 +14,7 @@ const {
     showQuickPick: vi.fn<(items: { label: string }[]) => Promise<{ label: string } | undefined>>(),
     showTextDocument: vi.fn(),
     openTextDocument: vi.fn(),
+    findFiles: vi.fn(),
     files: new Map<string, string>(),
   };
 });
@@ -21,38 +22,36 @@ const {
 vi.mock('vscode', () => ({
   commands: { registerCommand, executeCommand },
   window: { showQuickPick, showTextDocument },
-  workspace: { openTextDocument },
+  workspace: { openTextDocument, findFiles, asRelativePath: (uri: { path: string }) => uri.path.replace(/^\/workspace\//, '') },
 }));
 
 import { makeShowRecordFilter, registerFilterCommands, type FilterCommandDeps } from '../recordFilterCommands';
 import { InMemoryMEditClient } from '../../client';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
-import { posix } from 'node:path';
 
 const ARMOR_SQL = 'SELECT form_key FROM "armo"';
+
+const workspaceUri = (name: string) => ({ scheme: 'file', path: `/workspace/${name}` });
 
 beforeEach(() => {
   handlers.clear();
   files.clear();
   vi.clearAllMocks();
+  findFiles.mockImplementation((glob: string) => Promise.resolve(
+    [...files.keys()].filter((name) => glob !== '**/*.sql' || name.endsWith('.sql')).map(workspaceUri)));
+  openTextDocument.mockImplementation((uri: { path: string }) => Promise.resolve({
+    uri, getText: () => present(files.get(uri.path.replace('/workspace/', '')), `the file ${uri.path}`),
+  }));
 });
 
-function registered(
-  client: InMemoryMEditClient, nameOf: (uri: { path: string }) => string = (uri) => posix.basename(uri.path),
-): FilterCommandDeps & {
+function registered(client: InMemoryMEditClient): FilterCommandDeps & {
   treeProvider: { refresh: ReturnType<typeof vi.fn> };
   refreshMatchingPlugins: ReturnType<typeof vi.fn>;
   showRecordFilter: ReturnType<typeof vi.fn>;
   reporter: RecordingReporter;
 } {
   const deps = {
-    scripts: {
-      folder: '/scripts',
-      sqlFiles: () => [...files.keys()].filter((name) => name.endsWith('.sql')),
-      read: (name: string) => present(files.get(name), `the script ${name}`),
-      nameOf,
-    },
     client,
     treeProvider: { refresh: vi.fn() },
     refreshMatchingPlugins: vi.fn(),
@@ -72,13 +71,14 @@ function pickedLabels(): string[] {
 }
 
 describe('modbench.record.filter, from the input box', () => {
-  it('lists the scripts folder\'s .sql files, then New filter… last', async () => {
+  it('lists the workspace\'s .sql files and no other, then New filter… last', async () => {
     files.set('armor.sql', ARMOR_SQL).set('notes.py', '').set('weapons.sql', '');
     registered(new InMemoryMEditClient());
 
     await filter();
 
     expect(pickedLabels()).toEqual(['armor.sql', 'weapons.sql', '$(add) New filter…']);
+    expect(findFiles).toHaveBeenCalledWith('**/*.sql');
   });
 
   it('applies nothing on Esc', async () => {
@@ -139,18 +139,6 @@ describe('modbench.record.filter, from a document', () => {
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(client.calls).toContainEqual({ method: 'setFilter', args: [{ sql: ARMOR_SQL, source: 'Untitled-1' }] });
     expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: ARMOR_SQL, source: 'Untitled-1' });
-  });
-
-  it('names a document by the name the composition root gives it', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('setFilter', null);
-    const deps = registered(client, () => 'from-the-root.sql');
-    const uri = { scheme: 'file', path: '/elsewhere/queries/armor.sql' };
-    openTextDocument.mockResolvedValue({ uri, fileName: '/elsewhere/queries/armor.sql', getText: () => ARMOR_SQL });
-
-    await filter(uri);
-
-    expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: ARMOR_SQL, source: 'from-the-root.sql' });
   });
 
   it('reports a refused set and touches nothing else', async () => {

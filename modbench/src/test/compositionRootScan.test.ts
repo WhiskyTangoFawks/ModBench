@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
+import { ESLint, Linter } from 'eslint';
+import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../eslint-rules/activationDecides.mjs';
 
 const SRC = join(__dirname, '..');
 
@@ -18,23 +20,6 @@ const rootFiles = (): string[] =>
 
 const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =>
   ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
-
-const BRANCHING = [
-  ts.isIfStatement, ts.isSwitchStatement, ts.isForStatement, ts.isForInStatement, ts.isForOfStatement,
-  ts.isWhileStatement, ts.isDoStatement, ts.isTryStatement,
-];
-
-function decisions(source: ts.SourceFile): string[] {
-  const found: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (BRANCHING.some((is) => is(node))) {
-      found.push(`${ts.SyntaxKind[node.kind]}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return found;
-}
 
 function exportedNames(source: ts.SourceFile): string[] {
   return source.statements.flatMap((statement) => {
@@ -53,9 +38,11 @@ describe('the composition root builds each box, registers it with VS Code and de
     expect(rootFiles()).toEqual([ACTIVATION, ...WIRING, ...PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API].sort());
   });
 
-  it.each([ACTIVATION, ...WIRING])('%s branches on nothing', (file) => {
-    expect(decisions(parse(join(SRC, file)))).toEqual([]);
-  });
+  it.each([ACTIVATION, ...WIRING])('lint holds %s to deciding nothing', async (file) => {
+    const [result] = await new ESLint({ cwd: join(SRC, '..') }).lintText('export const planted = (a: number) => (a ? 1 : 2);\n', { filePath: join(SRC, file) });
+    expect(result?.messages.filter((message) => message.ruleId === 'no-restricted-syntax').map((message) => message.message))
+      .toEqual([ACTIVATION_DECIDES_MESSAGE]);
+  }, 60_000);
 
   it('exports nothing from the activation file but what VS Code and the integration tests take', () => {
     expect(exportedNames(parse(join(SRC, ACTIVATION)))).toEqual(ACTIVATION_EXPORTS);
@@ -66,20 +53,28 @@ describe('the composition root builds each box, registers it with VS Code and de
   });
 
   describe('a plant is caught', () => {
-    const plant = (text: string) => decisions(parse('planted.ts', text));
+    const lint = (code: string) => new Linter().verify(code, {
+      rules: {
+        'no-restricted-syntax': ['error', ...ACTIVATION_DECIDES_SELECTORS.map((selector) => ({ selector, message: ACTIVATION_DECIDES_MESSAGE }))],
+      },
+    }).map((message) => message.message);
 
     it.each([
-      ['an if', 'function f(x: number) { if (x > 1) return 1; return 2; }'],
-      ['a switch', 'function f(x: number) { switch (x) { case 1: return 1; default: return 2; } }'],
-      ['a loop', 'function f(xs: number[]) { for (const x of xs) void x; }'],
+      ['an if', 'function f(x) { if (x > 1) return 1; return 2; }'],
+      ['a switch', 'function f(x) { switch (x) { case 1: return 1; default: return 2; } }'],
+      ['a loop', 'function f(xs) { for (const x of xs) void x; }'],
       ['a while', 'function f() { while (true) break; }'],
       ['a try', 'function f() { try { g(); } catch { return; } }'],
-    ])('%s', (_name, text) => {
-      expect(plant(text)).not.toEqual([]);
+      ['a ternary', 'const x = a ? 1 : 2;'],
+      ['a default', 'const x = a ?? 1;'],
+      ['an and', 'const x = a && b;'],
+      ['an or', 'const x = a || b;'],
+    ])('%s', (_name, code) => {
+      expect(lint(code)).toEqual([ACTIVATION_DECIDES_MESSAGE]);
     });
 
     it('and construction beside it is not', () => {
-      expect(plant('const x = a?.b ?? c; own(register(x)); const y = [1].map((n) => n);')).toEqual([]);
+      expect(lint('const x = a?.b; own(register(x)); const y = [1].map((n) => n);')).toEqual([]);
     });
 
     it('a second export from the activation file is named', () => {
