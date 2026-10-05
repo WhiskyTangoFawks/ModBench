@@ -94,7 +94,7 @@ public sealed class TrackedProjectionTests : IDisposable
 
     private sealed class Observing(INotificationPublisher inner, Action onRowsChanged) : INotificationPublisher
     {
-        public void Publish(Notification notification)
+        public void Publish(INotification notification)
         {
             if (notification is RowsChangedNotification) onRowsChanged();
             inner.Publish(notification);

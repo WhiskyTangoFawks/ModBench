@@ -7,14 +7,14 @@ namespace MEditService.TestSupport;
 public sealed class InMemoryNotificationPublisher : INotificationPublisher
 {
     private readonly object _gate = new();
-    private readonly List<Notification> _notifications = [];
+    private readonly List<INotification> _notifications = [];
 
-    public void Publish(Notification notification)
+    public void Publish(INotification notification)
     {
         lock (_gate) _notifications.Add(notification);
     }
 
-    public IReadOnlyList<Notification> Notifications
+    public IReadOnlyList<INotification> Notifications
     {
         get { lock (_gate) return [.. _notifications]; }
     }

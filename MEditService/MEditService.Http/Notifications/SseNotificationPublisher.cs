@@ -13,9 +13,9 @@ public sealed class SseNotificationPublisher : INotificationPublisher
 
     private readonly ConcurrentDictionary<Guid, Channel<NotificationEvent>> _subscribers = new();
 
-    public void Publish(Notification notification)
+    public void Publish(INotification notification)
     {
-        var wire = notification.ToEvent();
+        var wire = NotificationEvent.From(notification);
         foreach (var (id, channel) in _subscribers)
         {
             if (!channel.Writer.TryWrite(wire)) _subscribers.TryRemove(id, out _);
@@ -56,4 +56,24 @@ public sealed class SseNotificationPublisher : INotificationPublisher
             _subscribers.TryRemove(id, out _);
         }
     }
+}
+
+/// <summary>The one wire shape every notification kind serializes to. Kind is the SSE event name and the
+/// discriminator; the trailing groups are null except for the one kind that fills them.</summary>
+public sealed record NotificationEvent(
+    string Kind, string Plugin, string Origin, IReadOnlyList<string> Keys, long Sequence,
+    LoadOrderStatus? LoadOrderStatus = null,
+    TrackProgress? TrackProgress = null,
+    IReadOnlyList<ChangedPlugin>? ChangedPlugins = null)
+{
+    public static NotificationEvent From(INotification notification) => notification switch
+    {
+        RowsChangedNotification n => new("rows-changed", n.Plugin.Name, n.Plugin.Origin, n.Keys, n.Sequence),
+        PluginChangedNotification n => new("plugin-changed", n.Plugin.Name, n.Plugin.Origin, [], n.Sequence),
+        LoadOrderStatusNotification n => new("load-order-status", "", "", [], 0, LoadOrderStatus: n.Status),
+        TrackProgressNotification n => new("track-progress", "", n.Progress.Mod ?? "", [], 0, TrackProgress: n.Progress),
+        ExternalChangeNotification n => new("external-change", "", n.Origin, [], 0, ChangedPlugins: n.Plugins),
+        UntrackedPluginsNotification n => new("untracked-plugins", "", n.Origin, n.Plugins, 0),
+        _ => throw new ArgumentOutOfRangeException(nameof(notification), notification.GetType().Name, null),
+    };
 }

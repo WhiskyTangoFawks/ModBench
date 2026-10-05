@@ -189,7 +189,7 @@ public sealed class ReconcileDoorTests
 
     private sealed class SlowStatuses(INotificationPublisher inner) : INotificationPublisher
     {
-        public void Publish(Notification notification)
+        public void Publish(INotification notification)
         {
             if (notification is LoadOrderStatusNotification) Thread.Sleep(300);
             inner.Publish(notification);
