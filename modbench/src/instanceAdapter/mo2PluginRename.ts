@@ -1,6 +1,5 @@
-// MO2's rename of a plugin: its file and the files of its origin named for it move, and its line in
-// every profile's plugin order is renamed in place, all under the locks of every plugin order, and
-// put back if any write fails.
+// MO2's rename of a plugin: its files and its line in every profile's plugin order, under every
+// plugin order's lock, and put back if a write fails.
 
 import { extname } from 'node:path';
 import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCodec/pluginsText';
@@ -39,9 +38,8 @@ async function entriesIn(folder: string): Promise<Entry[]> {
   return dirents.map((d) => ({ name: d.name, isFolder: d.isDirectory() }));
 }
 
-// What the game names for a plugin: its own file, an ini of its name, its archives (`stem.ext` and
-// `stem - Part.ext`) and its strings in each language, matched without case as the game matches
-// them. A name keeps whatever follows the plugin's stem.
+// The plugin, its ini, its archives (`stem.ext`, `stem - Part.ext`) and its strings in each
+// language, matched without case.
 function namedForPlugin(
   names: readonly string[], stringsNames: readonly string[], plugin: string, companions: PluginCompanions,
 ): { root: string[]; strings: string[] } {

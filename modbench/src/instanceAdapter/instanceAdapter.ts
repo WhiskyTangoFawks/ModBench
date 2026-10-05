@@ -389,12 +389,9 @@ export interface InstanceAdapter {
    *  include on an unmarked name a folder excludes, and a mark replacing a file. Rejects a path
    *  outside the origin. */
   markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<OriginFileMarked>;
-  /** Renames the plugin `from` of `origin` to `to`, with the files of the origin named for it, as
-   *  the release names them, and its line in every profile's plugin order, which keeps its place
-   *  and enabled state. Every file lands in one write, and a write that fails puts back the ones
-   *  before it. Refuses, with nothing changed, a plugin not in the origin, a name that is no file
-   *  name, a name that a file of the origin or a profile's plugin order already holds, matched
-   *  without case, and a release the tables hold no row for. The plugin source is not touched. */
+  /** Renames plugin `from` of `origin`, its named files and its line in every profile, in one
+   *  write; a failed write puts every file back. Refuses, changing nothing, a taken name or a
+   *  plugin not there. */
   renamePlugin(origin: FileOrigin, from: string, to: string, gameRelease: string | undefined): Promise<void>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
