@@ -7,9 +7,6 @@ public abstract record PluginProvider
 
     public static readonly PluginProvider NoMod = new NoModProvider();
 
-    /// <summary>The folder of the mod, or null when no mod provides the plugin.</summary>
-    public string? ModFolder => (this as FromMod)?.Folder;
-
     public sealed record FromMod(string Name, string Folder) : PluginProvider;
 
     private sealed record GameProvider : PluginProvider;
@@ -20,6 +17,8 @@ public abstract record PluginProvider
     {
         if (PluginOrigin.IsDataDirectory(origin)) return Game;
         if (PluginOrigin.IsOverwrite(origin)) return NoMod;
-        return new FromMod(origin, Path.GetDirectoryName(pluginPath) ?? string.Empty);
+        var folder = Path.GetDirectoryName(pluginPath)
+            ?? throw new ArgumentException($"'{pluginPath}' is a root, and no root is a mod folder.", nameof(pluginPath));
+        return new FromMod(origin, folder);
     }
 }

@@ -93,8 +93,8 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// <summary>What provides the plugin, or null for a plugin none registered here names.</summary>
     public PluginProvider? ProviderOf(PluginAddress plugin) => Plugin(plugin)?.Provider;
 
-    /// <summary>The folder holding the plugin's file, every origin alike: unlike ModFolderOf, Data
-    /// and Overwrite answer their own folder rather than null.</summary>
+    /// <summary>The folder holding the plugin's file, every origin alike, Data and
+    /// Overwrite included.</summary>
     public static string? FileFolderOf(string pluginPath) => Path.GetDirectoryName(pluginPath);
 
     /// <summary>By identity, origin and filename together (ADR-0012).</summary>

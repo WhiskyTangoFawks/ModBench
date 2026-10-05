@@ -113,6 +113,17 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     }
 
     [Fact]
+    public void ARepositoryOpenedForAMod_RefusesToReplaceTheSourceOfAPluginAnotherModProvides()
+    {
+        using var modFolder = new ScratchDirectory("medit-last-written-");
+        TrackedOver(modFolder);
+        var repository = SourceRepository.Over(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
+
+        Assert.Throws<ArgumentException>(() => repository.ReplaceSourceFrom(new PluginAddress("Test.esp", "OtherMod"), [], "ABC"));
+        Assert.Empty(repository.LastWrittenBinarySha256s(Test));
+    }
+
+    [Fact]
     public void ARepositoryOpenedForAMod_AnswersThePluginsThatModProvides()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");

@@ -228,8 +228,11 @@ public sealed class SourceRepository
     /// <summary>The plugin's source in the working tree becomes <paramref name="files"/>, and the
     /// last-compile ref names only the binary they were read from. A failure leaves both as they
     /// were.</summary>
-    public void ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> files, string binarySha256) =>
+    public void ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> files, string binarySha256)
+    {
+        RefuseUnlessProvidedByThisMod(plugin);
         Writes.ReplaceSourceFrom(plugin.Name, files, binarySha256);
+    }
 
     /// <summary>Runs <paramref name="write"/>, which puts the plugin's binary on disk, recording
     /// <paramref name="binarySha256"/> as the one last written. An interrupted write leaves a record

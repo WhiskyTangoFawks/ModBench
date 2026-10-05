@@ -138,7 +138,13 @@ internal sealed class WriteTargets(
     {
         repository = null;
 
-        var provider = loadOrder.Current.ProviderOf(plugin);
+        if (loadOrder.Current.ProviderOf(plugin) is not { } provider)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.PluginNotLoaded,
+                $"{plugin.Name} from '{plugin.Origin}' is not in the load order, so there is nothing to edit.");
+        }
+
         if (provider is not PluginProvider.FromMod mod) return RefuseUntracked(plugin, provider);
         if (SourceRepository.Open(mod, loadOrder.Current.GameRelease) is not { } opened) return RefuseUntracked(plugin, provider);
 
@@ -157,7 +163,7 @@ internal sealed class WriteTargets(
 
     // Two refusals, because there are two different ways out and a message that named neither
     // would be silent dead UI.
-    private static RecordEditResult RefuseUntracked(PluginAddress plugin, PluginProvider? provider) =>
+    private static RecordEditResult RefuseUntracked(PluginAddress plugin, PluginProvider provider) =>
         provider is not PluginProvider.FromMod
             ? RecordEditResult.Refused(RecordEditRefusal.PluginHasNoModFolder, NoModFolderMessage(plugin, provider))
             : RecordEditResult.Refused(
@@ -167,7 +173,7 @@ internal sealed class WriteTargets(
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
     // Neither origin's way out is the other's.
-    private static string NoModFolderMessage(PluginAddress plugin, PluginProvider? provider) =>
+    private static string NoModFolderMessage(PluginAddress plugin, PluginProvider provider) =>
         provider == PluginProvider.NoMod
             ? $"{plugin.Name} is loaded from Overwrite, an origin and not a mod, so it has no mod " +
               "folder to hold its source. Move it into a mod, then edit it there."

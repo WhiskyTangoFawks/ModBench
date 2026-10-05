@@ -18,6 +18,9 @@ public enum RecordEditRefusal
     /// <summary>The game does not load the plugin (ADR-0012).</summary>
     PluginNotActive,
 
+    /// <summary>The load order names no such plugin.</summary>
+    PluginNotLoaded,
+
     RecordNotFound,
 
     /// <summary>The path resolves to no member of the schema, or to one the record's own class lacks

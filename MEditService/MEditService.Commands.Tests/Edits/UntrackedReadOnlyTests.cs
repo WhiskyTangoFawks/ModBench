@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda.Fallout4;
 
@@ -68,6 +69,19 @@ public sealed class UntrackedReadOnlyTests
         Assert.Equal(RecordEditRefusal.PluginHasNoModFolder, result.Refusal);
         Assert.Contains("Overwrite", result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("base-game", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("overwrite")]
+    [InlineData("GhostMod")]
+    public void EditingAPluginTheLoadOrderDoesNotName_IsRefusedAsNotLoaded(string origin)
+    {
+        using var mod = SourceModFixture.VanillaMaster(out var npc);
+
+        var result = mod.EditHandler.Set(new PluginAddress("Ghost.esp", origin), npc.ToString(), "HeightMax", Json("0.75"));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.PluginNotLoaded, result.Refusal);
     }
 
     [Fact]
