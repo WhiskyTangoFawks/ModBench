@@ -30,12 +30,35 @@ public sealed class CreateRecordHandler
             (targets, loadOrder, codec, schemaReflector, logger);
     }
 
-    public RecordEditResult CreateRecord(PluginAddress plugin, string recordType) =>
+    public RecordEditResult CreateRecord(
+        PluginAddress plugin, string recordType, string? container = null, GridPosition? position = null) =>
         WriteFailure.Refused(
-            () => MintRecord(plugin, recordType),
+            () => MintRecord(plugin, recordType, container, position),
             $"Could not write the source file for the new {recordType}", _logger);
 
-    private RecordEditResult MintRecord(PluginAddress plugin, string recordType)
+    private RecordEditResult? RouteByContainer(PluginAddress plugin, string? container, GridPosition? position)
+    {
+        if (container is null) return position is null ? null : MalformedPosition("names no container");
+
+        if (_targets.ResolveEditTarget(plugin, container, out var target) is { } unresolved) return unresolved;
+        var kind = target.Identity.RecordType;
+        if (position is not null && kind != "wrld") return MalformedPosition($"names {container}, which is not a worldspace");
+
+        return kind switch
+        {
+            "wrld" => NotYetSupported($"a record in the worldspace {container}"),
+            "cell" => NotYetSupported($"a record in the cell {container}"),
+            _ => NotYetSupported($"a child of the container {container}"),
+        };
+    }
+
+    private static RecordEditResult MalformedPosition(string why) =>
+        RecordEditResult.Refused(RecordEditRefusal.InvalidEnvelope, $"A grid position is for a cell in a worldspace, and the request {why}.");
+
+    private static RecordEditResult NotYetSupported(string what) =>
+        RecordEditResult.Refused(RecordEditRefusal.ContainerRecordNotYetSupported, $"Creating {what} is not supported yet.");
+
+    private RecordEditResult MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
         if (_targets.RefuseUnlessTrackedAndLoaded(plugin, out var openedRepository) is { } blocked) return blocked;
@@ -49,6 +72,7 @@ public sealed class CreateRecordHandler
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");
         }
+        if (RouteByContainer(plugin, container, position) is { } routed) return routed;
         if (WriteTargets.RefuseIfContainerType(recordType, release) is { } containerRefusal) return containerRefusal;
 
         if (FormKeyAllocator.Over(repository, plugin, release).Next(out var targetFormKey)
