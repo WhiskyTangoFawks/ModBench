@@ -2,6 +2,7 @@ import React from 'react';
 import type { CompareOverride } from './types';
 import { headerCell } from './gridStyles';
 import { ColumnEdge } from './ColumnEdge';
+import { ExpandArrow } from './ExpandArrow';
 
 interface PluginHeaderProps {
   override: CompareOverride;
@@ -45,12 +46,14 @@ export function PluginHeader({
 
   return (
     <th
-      style={{ ...headerCell, position: 'relative', textAlign: 'left', cursor: 'pointer', ...style }}
+      style={{ ...headerCell, position: 'relative', textAlign: 'left', ...style }}
       data-vscode-context={vscodeContext}
       title={`${o.plugin}\n${o.origin}\n${status.reason}`}
-      onClick={onToggleCollapse}
     >
-      <div>[{o.loadIndex}] <span>{o.plugin}</span></div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <ExpandArrow expanded={!collapsed} onToggle={onToggleCollapse} />
+        <div>[{o.loadIndex}] <span>{o.plugin}</span></div>
+      </div>
       {!collapsed && (
         <>
           <div style={{ marginTop: 3, fontSize: '10px', opacity: 0.55, fontStyle: 'italic' }}>{status.label}</div>
