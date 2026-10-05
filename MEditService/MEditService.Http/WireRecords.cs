@@ -15,7 +15,7 @@ public record LoadOrderResponse(bool Applied, long Version = 0);
 public record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, string GameDirectory, string InstanceRoot,
-    string GameRelease = "Fallout4");
+    string GameRelease);
 public record LoadOrderPlugin(string Name, string Path, string Origin, PluginProviderRequest Provider);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -36,7 +36,7 @@ public record PluginProviderRequest(PluginProviderKind Kind, string? Mod = null,
 
 // The Refresh rebuild's own request (ADR-0010), keyed on the instance as
 // LoadOrderRequest is.
-public record RebuildIndexRequest(string InstanceRoot, string GameRelease = "Fallout4");
+public record RebuildIndexRequest(string InstanceRoot, string GameRelease);
 
 public record HealthResponse(string Status);
 

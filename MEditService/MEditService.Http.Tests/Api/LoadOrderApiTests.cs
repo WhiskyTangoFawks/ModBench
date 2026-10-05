@@ -118,6 +118,21 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Fact]
+    public async Task PutLoadOrder_WithNoGameRelease_Returns400()
+    {
+        var response = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = _fixture.Plugins.Select(p => p.Wire),
+            active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PutLoadOrder_TwoActivePluginsOfOneFilename_Returns400()
     {
         var plugin = _fixture.Plugins[0];

@@ -29,7 +29,7 @@ describe('the Downloads view reads no file of its own: it names no filesystem ca
     expect(VIEW_FILES_WALKED_NOT_LISTED).toEqual(expect.arrayContaining([
       join('downloads', 'DownloadsPanel.ts'), join('downloads', 'DownloadsProvider.ts'),
       join('downloads', 'ExcludedDownloadDecorationProvider.ts'), join('downloads', 'downloadRows.ts'),
-      join('downloads', 'upgradeCandidates.ts'), join('drivingLib', 'errorNode.ts'),
+      join('downloads', 'installTarget.ts'), join('drivingLib', 'errorNode.ts'),
       join('drivingLib', 'instanceFirstRead.ts'),
     ]));
     expect(VIEW_FILES_WALKED_NOT_LISTED.filter((file) => read(file).length === 0)).toEqual([]);
