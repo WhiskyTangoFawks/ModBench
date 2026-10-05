@@ -1,5 +1,5 @@
+using System.Text.Json;
 using MEditService.Codec.Serialization;
-using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -9,24 +9,22 @@ using Noggog;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-public class ContainerSingleFileTests
+public class ContainerSingleDocumentTests
 {
     private static readonly Fallout4Mod Mod = new(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
 
     [Theory]
     [MemberData(nameof(PopulatedContainers))]
-    public async Task PopulatedContainer_SerializesToExactlyOneFile_AndRoundTripsAsItsOwnConcreteTypeFromTheStatedRecordType_PopulatedBecauseAChildlessContainerIsOneFileNoMatterWhat(
+    public void PopulatedContainer_SerializesToOneDocumentWithItsChildrenInline_AndRoundTripsAsItsOwnConcreteTypeFromTheStatedRecordType_PopulatedBecauseAChildlessContainerIsOneDocumentNoMatterWhat(
         IMajorRecord record, Type concreteType, string recordType)
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        using var dir = new ScratchDirectory("medit-container-single-file-");
-        var filePath = Path.Combine(dir.Path, "record.json");
-        await codec.SerializeAsync((IMajorRecordGetter)record, filePath, GameRelease.Fallout4);
+        var bytes = codec.SerializeToBytes((IMajorRecordGetter)record, GameRelease.Fallout4);
 
-        Assert.Equal([filePath], Directory.GetFiles(dir.Path, "*", SearchOption.AllDirectories));
-        Assert.Empty(Directory.GetDirectories(dir.Path, "*", SearchOption.AllDirectories));
+        using var document = JsonDocument.Parse(bytes);
+        Assert.Equal(JsonValueKind.Object, document.RootElement.ValueKind);
 
-        var roundTripped = codec.DeserializeFile(filePath, GameRelease.Fallout4, recordType);
+        var roundTripped = codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, recordType);
         Assert.IsType(concreteType, roundTripped);
     }
 

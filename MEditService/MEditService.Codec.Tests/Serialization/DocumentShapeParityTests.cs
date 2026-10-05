@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -44,14 +45,13 @@ public sealed class DocumentShapeParityTests
     }
 
     [Fact]
-    public async Task SerializeAsync_ForAQuest_WritesExactlyOneFileAndNoChildFolders()
+    public void SerializeToBytes_ForAQuest_CarriesItsTopicAndItsResponseInline()
     {
-        using var dir = new ScratchDirectory("medit-parity-quest-files-");
-        var filePath = Path.Combine(dir.Path, "quest.json");
-        await Codec().SerializeAsync(MakePopulatedQuest(NewMod()), filePath, GameRelease.Fallout4);
+        using var doc = JsonDocument.Parse(Codec().SerializeToBytes(MakePopulatedQuest(NewMod()), GameRelease.Fallout4));
 
-        Assert.Equal([filePath], Directory.GetFiles(dir.Path, "*", SearchOption.AllDirectories));
-        Assert.Empty(Directory.GetDirectories(dir.Path, "*", SearchOption.AllDirectories));
+        var topic = doc.RootElement.GetProperty("DialogTopics")[0];
+        Assert.Equal("ParityTopic", topic.GetProperty("EditorID").GetString());
+        Assert.Equal("ParityResponse", topic.GetProperty("Responses")[0].GetProperty("EditorID").GetString());
     }
 
     private static Quest MakePopulatedQuest(Fallout4Mod mod)

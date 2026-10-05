@@ -110,23 +110,4 @@ public static class HeaderDocument
             public override bool Exists(string? path) => string.Equals(path, rootPath, StringComparison.Ordinal);
         }
     }
-
-    // The door creates its target directory through SerializationMetaData.FileSystem rather than the
-    // stream creator, so redirecting streams alone still leaves directories on disk. A copy of
-    // RecordTextCodec's, which is private to that codec.
-    private sealed class NoRecordFolders : FileSystem
-    {
-        internal static readonly NoRecordFolders Instance = new();
-
-        private readonly Lazy<IDirectory> _directory;
-
-        private NoRecordFolders() => _directory = new Lazy<IDirectory>(() => new NonCreatingDirectory(this));
-
-        public override IDirectory Directory => _directory.Value;
-
-        private sealed class NonCreatingDirectory(IFileSystem fileSystem) : DirectoryWrapper(fileSystem)
-        {
-            public override IDirectoryInfo CreateDirectory(string path) => FileSystem.DirectoryInfo.New(path);
-        }
-    }
 }
