@@ -104,9 +104,9 @@ public sealed class TrackService(
         {
             if (failed.FirstOrDefault(f => string.Equals(f.Plugin, plugin.Name, StringComparison.OrdinalIgnoreCase)) is { Reason: { } reason })
             {
-                logger.LogWarning("Refused to track {Plugin} ({Origin}): its source could not be tracked —{Reason}", plugin.Name, plugin.Origin, reason);
+                logger.LogWarning("Refused to track {Plugin} ({Origin}): its source could not be tracked — {Reason}", plugin.Name, plugin.Origin, reason);
                 refused.Add(new TrackRefused(
-                    plugin, TrackRefusal.CommitFailed, $"{plugin.Name}'s source could not be tracked:{reason}"));
+                    plugin, TrackRefusal.CommitFailed, $"{plugin.Name}'s source could not be tracked: {reason}"));
             }
             else
             {
