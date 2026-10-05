@@ -246,6 +246,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         var result = WriteFlags(TheNpc, 0);
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Contains($"the copy of {TheNpc} read to its left comes only from a master of Override.esp", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _plugins.Text(Edited, TheNpc));
     }
 
