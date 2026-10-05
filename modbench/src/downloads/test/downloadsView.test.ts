@@ -172,7 +172,7 @@ describe('the Downloads view tells its palette entries, which are handed no row,
     for (const listener of h.selectionListeners) listener({ selection: rows });
   };
 
-  it('sets each key off the selection as it changes', async () => {
+  it('sets each key off the selection as it changes', () => {
     const { view: downloadsView } = viewOver(instanceOver());
 
     select(downloadsView, [new DownloadNode(downloadRowFixture('a.7z', { hasMeta: true }))]);
