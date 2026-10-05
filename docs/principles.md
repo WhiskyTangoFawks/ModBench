@@ -5,9 +5,6 @@ The maintainer's north star. Order is rank: when two principles pull apart, the 
 ## Orthogonality
 Each module owns one responsibility and hides how it does it behind its boundary. A change to one concern stays inside its module. A game, a mod manager or a deployment model is an implementation behind a boundary, never the shape of the design. Modbench grows by adding an implementation, such as a Vortex load order or MO2's deployment model, and the modules around it stay as they are.
 
-## Root cause
-Find the root problem and fix it where it lives, with the clean, minimal change. A good fix leaves less complexity than it found. A fix that leaves the root in place is a workaround. When the root lives in a maintainer's document, the fix is the maintainer's: bring the root to them.
-
 ## Minimal by default
 One gesture does one thing. A workflow of several gestures is a script, and the user writes it. Messages and prompts speak to a developer and skip what one already knows. Every extra gesture and prompt stands between the user and the work.
 

@@ -70,11 +70,11 @@ public sealed class TrackHandler
                 $"'{modFolder}' is already tracked. To put a plugin's source into its working tree, decompile it.");
         }
 
-        // A repository with history but no main is someone else's, never written to (ADR-0003).
+        // A .git with no main that Track did not mark is someone else's, never written to (ADR-0003).
         if (SourceRepository.HoldsAnotherRepository(modFolder))
         {
             return ItemAnswer<TrackRefusal, TrackedMod>.Refused(TrackRefusal.AlreadyTracked,
-                $"'{modFolder}' already holds a repository with no main branch.");
+                $"'{modFolder}' already holds a repository Track did not make, with no main branch.");
         }
 
         var verified = new List<(RegisteredPlugin Plugin, IReadOnlyList<TreeFile> Files)>();
