@@ -12,6 +12,8 @@ node_modules/**
 **/.eslintrc*
 eslint.config.*
 esbuild.mjs
+buildWebview.mjs
+package.mjs
 vitest.config.*
 **/*.test.*
 out/**
