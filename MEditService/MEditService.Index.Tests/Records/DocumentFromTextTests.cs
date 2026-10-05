@@ -34,7 +34,7 @@ public sealed class DocumentFromTextTests
     }
 
     [Fact]
-    public void AFormKeyNoActivePluginIndexes_HasNoCopyToRead()
+    public void AFormKeyNoPluginIndexes_HasNoCopyToRead()
     {
         using var fixture = new PluginFixtureBuilder("document-from-text-unknown")
             .WithPlugin("Fixture.esp", mod => mod.Npcs.AddNew("FixtureNpc"), origin: "FixtureMod")
@@ -42,5 +42,20 @@ public sealed class DocumentFromTextTests
         using var index = Indexes.Reconciled(fixture);
 
         Assert.Null(index.RequireReads().DocumentFromText("00DEAD:Nowhere.esp", Elsewhere, 7, "{}"));
+    }
+
+    [Theory]
+    [InlineData("{ not json")]
+    [InlineData("[]")]
+    public void TextThatIsNoJsonObject_IsAJsonException(string text)
+    {
+        FormKey npc = default;
+        using var fixture = new PluginFixtureBuilder("document-from-text-malformed")
+            .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
+            .BuildScattered();
+        using var index = Indexes.Reconciled(fixture);
+
+        Assert.ThrowsAny<System.Text.Json.JsonException>(
+            () => index.RequireReads().DocumentFromText(npc.ToString(), Elsewhere, 7, text));
     }
 }

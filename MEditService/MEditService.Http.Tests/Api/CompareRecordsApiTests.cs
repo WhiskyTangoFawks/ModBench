@@ -74,12 +74,14 @@ public sealed class CompareRecordsApiTests : HostedTests
         await response.AssertIsProblem(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
-    public async Task ADocumentTextThatIsNotJson_Is400()
+    [Theory]
+    [InlineData("{ not json")]
+    [InlineData("[]")]
+    public async Task ADocumentTextThatIsNoJsonObject_Is400(string text)
     {
         var (npc, _) = await Loaded();
 
-        var response = await Client.PostAsJsonAsync("/records/compare", new { copies = new[] { Copy(npc, WithNpc, WithNpcMod, "{ not json") } });
+        var response = await Client.PostAsJsonAsync("/records/compare", new { copies = new[] { Copy(npc, WithNpc, WithNpcMod, text) } });
 
         await response.AssertIsProblem(HttpStatusCode.BadRequest);
     }

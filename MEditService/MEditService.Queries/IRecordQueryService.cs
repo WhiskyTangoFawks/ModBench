@@ -14,8 +14,6 @@ public interface IRecordQueryService
 
     CompareResult? GetCompare(string formKey);
 
-    // One column per copy, in the order given, and no conflict state on any of them; null when a copy
-    // has no document to read.
     CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies);
 
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(PluginAddress plugin);

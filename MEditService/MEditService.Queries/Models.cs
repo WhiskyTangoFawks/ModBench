@@ -75,7 +75,10 @@ public record CompareOverride(
     string? ParseDiagnosis = null,
     // Overwrite (ADR-0012), computed here from what provides the plugin so the webview
     // never interprets Origin itself.
-    bool IsInOverwrite = false)
+    bool IsInOverwrite = false,
+    // The key this copy's cells carry in each FieldDiff map when it is not the plugin's own
+    // ColumnKey: several records compared may hold two copies from one plugin.
+    string? Column = null)
     : RecordDetail(
         FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType, IsPartialForm,
         ParseDiagnosis);

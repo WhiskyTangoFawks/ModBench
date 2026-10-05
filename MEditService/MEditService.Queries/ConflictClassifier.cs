@@ -21,13 +21,16 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
     {
         // The fallback for a field no column carries; a lone override is its own winner whatever
         // its IsWinner flag says.
-        var winner = conflictingRecords.Count == 1
-            ? conflictingRecords[0]
-            : conflictingRecords.FirstOrDefault(o => o.IsWinner)
-                ?? throw new InvalidOperationException(
-                    $"No winner in {conflictingRecords.Count} overrides for FormKey '{conflictingRecords[0].FormKey}'");
+        var winner = conflictingRecords.Count == 1 ? 0 : conflictingRecords.ToList().FindIndex(o => o.IsWinner);
+        if (winner < 0)
+            throw new InvalidOperationException(
+                $"No winner in {conflictingRecords.Count} overrides for FormKey '{conflictingRecords[0].FormKey}'");
 
-        var ctx = ContextOf(conflictingRecords, winner, release, resolveFormKey, loadOrderFormIds, coloured: true);
+        var columns = conflictingRecords.Select(Column).ToList();
+        var ctx = ContextOf(
+            conflictingRecords, columns, winner, release, resolveFormKey, loadOrderFormIds,
+            shadowed: conflictingRecords.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal),
+            cellStates: (values, same) => ConflictRules.ComputeCellStates(values, columns[0], OrderOf(conflictingRecords, columns), same));
         var diffs = RecordChildren(conflictingRecords, ctx);
 
         if (conflictingRecords.Count == 1)
@@ -50,29 +53,39 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
         return new ClassifyResult(conflictAll, pluginConflictThis, diffs);
     }
 
-    // The rows of copies that are no conflict of one another: the alignment Classify builds, with no
+    // The rows of copies that are no conflict of one another, one column named for each, with no
     // state on any cell or row.
     public IReadOnlyList<FieldDiff> Align(
         IReadOnlyList<RecordDetail> copies,
+        IReadOnlyList<string> columns,
         GameRelease release,
         Func<string, RecordLookupEntry?> resolveFormKey,
         Func<string, uint?> loadOrderFormIds) =>
-        RecordChildren(copies, ContextOf(copies, copies[0], release, resolveFormKey, loadOrderFormIds, coloured: false));
+        RecordChildren(copies, ContextOf(
+            copies, columns, 0, release, resolveFormKey, loadOrderFormIds,
+            shadowed: new HashSet<string>(), cellStates: (_, _) => new Dictionary<string, ConflictThis>()));
+
+    private static IReadOnlyList<(string Column, int LoadOrderIndex)> OrderOf(
+        IReadOnlyList<RecordDetail> records, IReadOnlyList<string> columns) =>
+        [.. records.Select((r, i) => (columns[i], r.LoadOrderIndex))];
 
     private DiffContext ContextOf(
-        IReadOnlyList<RecordDetail> records, RecordDetail winner, GameRelease release,
-        Func<string, RecordLookupEntry?> resolveFormKey, Func<string, uint?> loadOrderFormIds, bool coloured) =>
+        IReadOnlyList<RecordDetail> records, IReadOnlyList<string> columns, int winner, GameRelease release,
+        Func<string, RecordLookupEntry?> resolveFormKey, Func<string, uint?> loadOrderFormIds,
+        IReadOnlySet<string> shadowed, CellStatesOf cellStates) =>
         new(
-            MasterColumn: Column(records[0]),
-            RecordWinnerColumn: Column(winner),
-            ColumnOrder: [.. records.Select(r => (Column(r), r.LoadOrderIndex))],
-            PartialFormColumns: records.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal),
+            MasterColumn: columns[0],
+            RecordWinnerColumn: columns[winner],
+            Columns: columns,
+            ColumnOrder: OrderOf(records, columns),
+            PartialFormColumns: records.Select((r, i) => (r, i)).Where(t => t.r.IsPartialForm).Select(t => columns[t.i]).ToHashSet(StringComparer.Ordinal),
+            ShadowedColumns: shadowed,
+            StatesOf: cellStates,
             FormKey: records[0].FormKey,
             Logger: _logger,
             ResolveFormKey: resolveFormKey,
             LoadOrderFormIds: loadOrderFormIds,
-            Release: release,
-            Coloured: coloured);
+            Release: release);
 
     private static string Column(RecordDetail record) => ColumnKey.Of(record.Plugin, record.Origin);
 
@@ -83,14 +96,21 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
     private sealed record DiffContext(
         string MasterColumn,
         string RecordWinnerColumn,
+        IReadOnlyList<string> Columns,
         IReadOnlyList<(string Column, int LoadOrderIndex)> ColumnOrder,
         IReadOnlySet<string> PartialFormColumns,
+        IReadOnlySet<string> ShadowedColumns,
+        CellStatesOf StatesOf,
         string FormKey,
         ILogger Logger,
         Func<string, RecordLookupEntry?> ResolveFormKey,
         Func<string, uint?> LoadOrderFormIds,
-        GameRelease Release,
-        bool Coloured);
+        GameRelease Release);
+
+    // How a node's cells take their conflict state: ComputeCellStates, or none for copies that are
+    // no conflict of one another.
+    private delegate IReadOnlyDictionary<string, ConflictThis> CellStatesOf(
+        Dictionary<string, object?> values, Func<object?, object?, bool> same);
 
     // One node of the diff tree, at whatever depth the walk reached it. absentMeansDefault is false
     // for an array element, which the codec never omits for equalling its default.
@@ -106,11 +126,9 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
         var winnerColumn = carrying.Count > 0 ? carrying.MaxBy(c => c.LoadOrderIndex).Column : ctx.RecordWinnerColumn;
         var shape = shapes[winnerColumn];
 
-        var cellStates = ignoredInConflicts || !ctx.Coloured
-            ? []
-            : ConflictRules.ComputeCellStates(
-                values, ctx.MasterColumn, ctx.ColumnOrder,
-                (a, b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault));
+        var cellStates = ignoredInConflicts
+            ? new Dictionary<string, ConflictThis>()
+            : ctx.StatesOf(values, (a, b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault));
 
         List<FieldDiff>? children = null;
         if (shape.Fields is { } members) children = StructChildren(members, values, ctx);
@@ -131,18 +149,20 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
     // column whose type varies by class reads through it.
     private static List<FieldDiff> RecordChildren(IReadOnlyList<RecordDetail> records, DiffContext ctx)
     {
-        var recordClass = records.ToDictionary(
-            Column, r => FormReferences.ExtractString(MemberValue(r, LoquiUnions.UnionTypeDiscriminator)));
-        var membersOf = records.ToDictionary(Column, r => r.Fields.ToDictionary(f => f.Metadata.Name, f => f.Metadata));
+        var columns = ctx.Columns;
+        var recordClass = records.Select((r, i) => (Column: columns[i], Class: FormReferences.ExtractString(MemberValue(r, LoquiUnions.UnionTypeDiscriminator))))
+            .ToDictionary(t => t.Column, t => t.Class);
+        var membersOf = records.Select((r, i) => (Column: columns[i], Members: r.Fields.ToDictionary(f => f.Metadata.Name, f => f.Metadata)))
+            .ToDictionary(t => t.Column, t => t.Members);
         var diffs = new List<FieldDiff>();
         foreach (var member in records.SelectMany(r => r.Fields).Select(f => f.Metadata).DistinctBy(m => m.Name))
         {
             // A Partial Form override's own fields are excluded as if null (ADR-0018), so they fall
-            // through to the previous non-partial override; its header and EditorID take part. Copies
-            // compared with no conflict show them all.
+            // through to the previous non-partial override; its header and EditorID take part.
             var header = member.IsRecordHeaderMember;
             var ownField = !header && !member.IsEditorId;
-            var values = records.ToDictionary(Column, r => ctx.Coloured && r.IsPartialForm && ownField ? null : MemberValue(r, member.Name));
+            var values = records.Select((r, i) => (Column: columns[i], Value: ctx.ShadowedColumns.Contains(columns[i]) && ownField ? null : MemberValue(r, member.Name)))
+                .ToDictionary(t => t.Column, t => t.Value);
             if (!header && values.Values.All(v => v == null)) continue;
             var shapes = recordClass.ToDictionary(
                 kv => kv.Key, kv => DocumentNodes.Variant(membersOf[kv.Key].GetValueOrDefault(member.Name, member), kv.Value));

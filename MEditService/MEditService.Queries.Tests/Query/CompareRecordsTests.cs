@@ -59,6 +59,9 @@ public sealed class CompareRecordsTests
     private CompareResult Compare(params RecordCopy[] copies) =>
         _service.GetCompareRecords(copies) ?? throw new InvalidOperationException("Expected the copies to compare.");
 
+    private static string Column(CompareResult compare, int index) =>
+        compare.Overrides[index].Column ?? throw new InvalidOperationException("Expected the column to be named.");
+
     private static IEnumerable<FieldDiff> Flatten(IEnumerable<FieldDiff> diffs) =>
         diffs.SelectMany(d => new[] { d }.Concat(Flatten(d.Children ?? [])));
 
@@ -72,16 +75,35 @@ public sealed class CompareRecordsTests
     }
 
     [Fact]
+    public void TwoCopiesFromOnePlugin_AreTwoColumns_EachCarryingItsOwnCells()
+    {
+        var compare = Compare(Copy(_otherChest, ModPlugin), Copy(_sword, ModPlugin));
+
+        Assert.Equal(2, compare.Overrides.Select(o => o.Column).Distinct().Count());
+        var items = compare.Diffs.Single(d => d.FieldName == "Items");
+        Assert.NotNull(items.Values[Column(compare, 0)]);
+        Assert.Null(items.Values[Column(compare, 1)]);
+    }
+
+    [Fact]
+    public void TheSameCopyTwice_IsTwoColumns()
+    {
+        var compare = Compare(Copy(_chest, BasePlugin), Copy(_chest, BasePlugin));
+
+        Assert.Equal(2, compare.Overrides.Select(o => o.Column).Distinct().Count());
+    }
+
+    [Fact]
     public void RecordsOfDifferentTypes_HaveARowForEveryFieldAnyColumnHolds_EmptyWhereTheColumnLacksIt()
     {
         var compare = Compare(Copy(_sword, ModPlugin), Copy(_chest, BasePlugin));
 
         var rows = compare.Diffs.ToDictionary(d => d.FieldName);
         Assert.Equal(["Items", "Name"], rows.Keys.Order());
-        Assert.Null(rows["Items"].Values["Mod.esp"]);
-        Assert.NotNull(rows["Items"].Values["Base.esm"]);
-        Assert.NotNull(rows["Name"].Values["Base.esm"]);
-        Assert.NotNull(rows["Name"].Values["Mod.esp"]);
+        Assert.Null(rows["Items"].Values[Column(compare, 0)]);
+        Assert.NotNull(rows["Items"].Values[Column(compare, 1)]);
+        Assert.NotNull(rows["Name"].Values[Column(compare, 0)]);
+        Assert.NotNull(rows["Name"].Values[Column(compare, 1)]);
     }
 
     [Fact]
@@ -89,7 +111,7 @@ public sealed class CompareRecordsTests
     {
         var compare = Compare(Copy(_chest, BasePlugin), Copy(_otherChest, ModPlugin));
 
-        Assert.Contains(compare.Diffs, d => d.FieldName == "Items" && d.Values["Base.esm"] is not null && d.Values["Mod.esp"] is not null);
+        Assert.Contains(compare.Diffs, d => d.FieldName == "Items" && d.Values[Column(compare, 0)] is not null && d.Values[Column(compare, 1)] is not null);
         Assert.All(compare.Overrides, o => Assert.Null(o.ConflictThis));
         Assert.All(Flatten(compare.Diffs), d =>
         {
@@ -108,7 +130,7 @@ public sealed class CompareRecordsTests
 
         Assert.Equal([InactivePlugin.Name, BasePlugin.Name], compare.Overrides.Select(o => o.Plugin));
         var items = compare.Diffs.Single(d => d.FieldName == "Items");
-        Assert.NotEqual(items.Values[InactivePlugin.Name]?.ToString(), items.Values[BasePlugin.Name]?.ToString());
+        Assert.NotEqual(items.Values[Column(compare, 0)]?.ToString(), items.Values[Column(compare, 1)]?.ToString());
     }
 
     [Fact]

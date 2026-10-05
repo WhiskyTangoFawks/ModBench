@@ -621,6 +621,7 @@ export interface components {
             conflictThis?: components["schemas"]["ConflictThis"] | null;
             loadIndex: string;
             isInOverwrite: boolean;
+            column?: string | null;
         };
         CompareRecordsRequest: {
             copies: components["schemas"]["RecordCopy"][];

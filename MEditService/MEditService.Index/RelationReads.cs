@@ -36,9 +36,11 @@ internal sealed class RelationReads(
     public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text)
     {
         using var connection = store.OpenReadConnection();
-        var tableName = FindRecordType(connection, formKey);
+        var tableName = FindRecordTypeInAnyPlugin(connection, formKey);
         if (tableName == null) return null;
         using var parsed = JsonDocument.Parse(text);
+        if (parsed.RootElement.ValueKind != JsonValueKind.Object)
+            throw new JsonException("A record's document is a JSON object.");
         var editorId = DocumentNodes.At(parsed.RootElement, "EditorID")?.GetString();
         return DocumentFromBody(
             connection, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, text,
@@ -603,6 +605,16 @@ internal sealed class RelationReads(
 
     // Private: table-name dispatch is rejected from the seam; GetDocument and GetOverrideStack
     // resolve a FormKey's type themselves rather than being told it.
+    // Inactive plugins are indexed too (ADR-0012): a copy given as text is a column whichever plugin
+    // holds its record.
+    private static string? FindRecordTypeInAnyPlugin(DuckDBConnection connection, string formKey)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"SELECT record_type FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key = $1 LIMIT 1";
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        return cmd.ExecuteScalar() as string;
+    }
+
     private static string? FindRecordType(DuckDBConnection connection, string formKey)
     {
         using var cmd = connection.CreateCommand();

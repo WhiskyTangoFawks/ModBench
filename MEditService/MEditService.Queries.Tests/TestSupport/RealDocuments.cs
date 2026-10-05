@@ -67,6 +67,7 @@ internal static class RealDocuments
             .Select(n => FieldOf(schema, parsed.RootElement, n, release))
             .ToList();
         return new RecordDocument(
-            formKey, plugin, loadOrderIndex, false, DocumentNodes.At(parsed.RootElement, "EditorID")?.GetString(), recordType, body, fields);
+            formKey, plugin, loadOrderIndex, false, DocumentNodes.At(parsed.RootElement, "EditorID")?.GetString(), recordType, body, fields,
+            IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(parsed.RootElement, schema.RecordType));
     }
 }
