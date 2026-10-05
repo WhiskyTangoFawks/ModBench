@@ -78,7 +78,7 @@ export interface DownloadInstallDeps {
   /** `undefined` is the user declining to name it, which installs nothing. */
   nameNewMod: (defaultName: string) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
-  /** Install's failed-mark line, and delete's left-behind `.meta` line — no notification either way. */
+  /** Install's failed-mark line, and delete's left-behind metadata line — no notification either way. */
   log: (line: string) => void;
 }
 
@@ -130,7 +130,7 @@ export async function installDownloadedFile(
   return true;
 }
 
-// Every nav action can reject — a `.meta` raced away, an OS with no handler — so none may be
+// Every nav action can reject — a file raced away, an OS with no handler — so none may be
 // fire-and-forget. Failure surfacing is ADR-0019.
 async function runRowAction(
   label: string,
@@ -156,10 +156,10 @@ async function confirmDelete(names: readonly string[], ask: AskQuestion): Promis
 
 const NOTHING_CHANGED: SelectionOutcome<string> = { landed: [], refused: [] };
 
-// A `.meta` left behind is not a failure (downloads.md, Reporting story 2): the delete already
+// Metadata left behind is not a failure (downloads.md, Reporting story 2): the delete already
 // applied, so this is an Output-only line, never a notification.
 async function deleteSelection(
-  access: DownloadsAccess, instance: Pick<Instance, 'refresh'>, rows: readonly DownloadFile[], reporter: Reporter,
+  access: DownloadsAccess, instance: Pick<Instance, 'value' | 'refresh'>, rows: readonly DownloadFile[], reporter: Reporter,
   ask: AskQuestion, trash: MoveToTrash, log: (line: string) => void,
 ): Promise<SelectionOutcome<DeletedDownload>> {
   if (rows.length === 0 || !(await confirmDelete(rows.map((row) => row.name), ask))) return { landed: [], refused: [] };
@@ -167,8 +167,8 @@ async function deleteSelection(
   reporter.selectionOutcome(
     `Could not delete ${outcome.refused.length} of ${rows.length} downloaded files.`, outcome, (item) => item.name);
   for (const item of outcome.landed) {
-    if (item.metaLeftBehind !== undefined) {
-      log(`"${item.name}" was deleted, but its ".meta" could not be moved to the trash and was left behind: ${item.metaLeftBehind}`);
+    if (item.metadataLeftBehind !== undefined) {
+      log(`"${item.name}" was deleted, but its ${instance.value.managerNames.downloadMetadataFile} could not be moved to the trash and was left behind: ${item.metadataLeftBehind}`);
     }
   }
   return outcome;
@@ -189,7 +189,7 @@ async function changeExcluded(
 }
 
 /** Clicked row only, as five opened tabs help no one. The palette hands no row, so open and
- *  open .meta take the one selected row. */
+ *  open metadata take the one selected row. */
 export function registerDownloadsSingleRowCommands(
   reporter: Reporter, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
@@ -223,7 +223,7 @@ function selectionRows(clicked: DownloadNode | undefined, selected: DownloadNode
  *  tool's Hide All). `viewSelection` backs the Delete key and the palette, which get no row
  *  argument. */
 export function registerDownloadsMultiRowCommands(
-  access: DownloadsAccess, instance: Pick<Instance, 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  access: DownloadsAccess, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
   const rows = (clicked?: DownloadNode, selected?: DownloadNode[]) => {
