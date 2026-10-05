@@ -954,17 +954,19 @@ export interface components {
             pluginsTotal: number;
         };
         /** @enum {string} */
-        TrackRefusal: "None" | "PluginNotLoaded" | "AlreadyTracked" | "DataDirectoryOrigin" | "OverwriteOrigin" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "GitUnavailable";
+        TrackRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyTracked" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "GitUnavailable";
+        TrackRefusedMod: {
+            mod: string;
+            refusal: components["schemas"]["TrackRefusal"];
+            message: string;
+        };
         TrackRequest: {
-            plugins: components["schemas"]["PluginAddress"][];
-            preset: string;
-            upstreamVersionByOrigin: {
-                [key: string]: string;
-            };
+            mods: string[];
         };
         TrackResponse: {
             applied: components["schemas"]["PluginAddress"][];
             refused: components["schemas"]["PluginAddressRefusal"][];
+            refusedMods: components["schemas"]["TrackRefusedMod"][];
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
