@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { SCRIPT_EXTENDER_FOLDERS } from '../tables/gamePaths';
 import { present } from '../ports/present';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
@@ -6,9 +7,10 @@ import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
  *  (a game data subfolder), so a lone one of them must NOT be peeled as a wrapper. */
 export const DATA_DIRS = new Set([
   'meshes', 'textures', 'materials', 'sound', 'music', 'scripts', 'source',
-  'interface', 'strings', 'f4se', 'skse', 'mcm', 'seq', 'video', 'vis',
+  'interface', 'strings', 'mcm', 'seq', 'video', 'vis',
   'lodsettings', 'shadersfx', 'grass', 'terrain', 'planetdata', 'programs',
   'scaleform', 'facegen', 'actors', 'distantlod',
+  ...SCRIPT_EXTENDER_FOLDERS,
 ]);
 
 /** A `fomod/ModuleConfig.xml` marks a scripted installer: `isFomod` is set but the
