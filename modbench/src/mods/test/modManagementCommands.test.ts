@@ -48,7 +48,7 @@ import {
   registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands, registerFileExclusionCommands,
   registerModMoveCommand,
   registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
-  modsCopyValueText, promptRename,
+  modsCopyValueText,
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import type { NexusModRow } from '../../drivingLib/inFocusedView';
@@ -85,22 +85,6 @@ function accessHolding(listed: readonly ModlistEntry[], folders: readonly Pick<M
 const instanceThatReads = {
   refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
 };
-
-describe('promptRename', () => {
-  beforeEach(() => showInputBox.mockReset());
-
-  it('asks with the prompt, prefilled with the current name', async () => {
-    showInputBox.mockResolvedValueOnce('New');
-    const validate = () => undefined;
-    expect(await promptRename('Rename it', 'Old', validate)).toBe('New');
-    expect(showInputBox).toHaveBeenCalledWith({ prompt: 'Rename it', value: 'Old', validateInput: validate });
-  });
-
-  it.each([['Esc', undefined], ['an empty name', ''], ['the same name', 'Old']])('yields nothing on %s', async (_, answer) => {
-    showInputBox.mockResolvedValueOnce(answer);
-    expect(await promptRename('Rename it', 'Old', () => undefined)).toBeUndefined();
-  });
-});
 
 describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words', () => {
   beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });

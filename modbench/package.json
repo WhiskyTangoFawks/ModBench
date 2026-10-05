@@ -538,6 +538,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.plugin.rename",
+        "title": "Rename Plugin…",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.plugin.enable",
         "title": "Enable Plugin",
         "category": "Modbench"
@@ -701,6 +706,10 @@
         {
           "command": "modbench.plugin.reveal",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singlePlugin"
+        },
+        {
+          "command": "modbench.plugin.rename",
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleTracked"
         },
         {
           "command": "modbench.plugin.enable",
@@ -1212,6 +1221,11 @@
           "group": "2_change@1"
         },
         {
+          "command": "modbench.plugin.rename",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\btracked\\b/",
+          "group": "2_change@2"
+        },
+        {
           "command": "modbench.record.create",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
           "group": "3_create@1"
@@ -1428,6 +1442,11 @@
         "command": "modbench.plugin.disable",
         "key": "space",
         "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.selectionToggle == disable"
+      },
+      {
+        "command": "modbench.plugin.rename",
+        "key": "f2",
+        "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.singleTracked"
       },
       {
         "command": "modbench.pluginListTree.deleteHere",

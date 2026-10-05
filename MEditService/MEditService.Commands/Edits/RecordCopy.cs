@@ -17,25 +17,28 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
     /// write here is a put, and the repository decides where a document goes.</summary>
     internal readonly record struct Destination(SourceRepository Repository, PluginAddress Plugin);
 
-    /// <summary>Own fields only, like every plain Copy as Override: a copied topic lands with no
-    /// responses.</summary>
+    /// <summary>Own fields only unless <paramref name="withChildren"/>, as every plain Copy as
+    /// Override: a copied topic lands with no responses.</summary>
     internal RecordEditResult CopyEmbeddedChildAsOverride(
         CopySource source, SourceDocument child, DocumentContainment container,
-        Destination destination, GameRelease release, bool replace)
+        Destination destination, GameRelease release, bool replace, bool withChildren)
     {
         var formKey = child.FormKey;
-        var ownFields = child with { Body = ContainerDocumentEdits.WithoutChildren(codec, child.Body, release, child.RecordType) };
+        var landing = withChildren
+            ? child
+            : child with { Body = ContainerDocumentEdits.WithoutChildren(codec, child.Body, release, child.RecordType) };
 
         if (destination.Repository.FormKeysUsed(destination.Plugin).Contains(formKey))
         {
             if (Identity(destination, formKey, release) is not { } existing) return RefuseKeyWithNoDocument(destination, formKey);
+            if (withChildren) return AddChildrenToHeldCopy(source.Plugin, existing, child.Body, child.RecordType, destination, release);
             if (!replace) return RefuseHeldWithoutReplace(formKey, destination.Plugin);
 
             // Replaced in place, never duplicated.
-            return ReplaceEmbeddedChildInPlace(source.Plugin, existing, ownFields, destination, release);
+            return ReplaceEmbeddedChildInPlace(source.Plugin, existing, landing, destination, release);
         }
 
-        var appended = AppendEmbeddedChild(source, container, ownFields, destination, release);
+        var appended = AppendEmbeddedChild(source, container, landing, destination, release);
 
         if (appended.Applied && logger.IsEnabled(LogLevel.Information))
         {
@@ -106,6 +109,46 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
                 child.FormKey, destination.Plugin.Name, destination.Plugin.Origin, containerFormKey);
         }
         return landed;
+    }
+
+    /// <summary>A deep copy into a destination that holds any of the record's child records is
+    /// refused: it does not replace them.</summary>
+    internal static RecordEditResult? RefuseIfHoldsChildRecords(
+        Destination destination, string formKey, IEnumerable<string> childKeys)
+    {
+        var used = destination.Repository.FormKeysUsed(destination.Plugin);
+        var held = childKeys.FirstOrDefault(used.Contains);
+        return held is null
+            ? null
+            : RecordEditResult.Refused(
+                RecordEditRefusal.DestinationHoldsRecord,
+                $"{destination.Plugin.Name} ({destination.Plugin.Origin}) already holds {held}, a child record of " +
+                $"{formKey}. A deep copy does not replace the child records a destination holds, so it copies none of them.");
+    }
+
+    /// <summary>The destination keeps its own copy of the record, and the source's child records are
+    /// added to it.</summary>
+    internal RecordEditResult AddChildrenToHeldCopy(
+        PluginAddress sourcePlugin, RecordIdentity existing, string sourceBody, string sourceRecordType,
+        Destination destination, GameRelease release)
+    {
+        var existingDocument = destination.Repository.Get(destination.Plugin, existing)
+            ?? throw NoDocumentCarries(destination.Plugin, existing.FormKey);
+
+        var withChildren = ContainerDocumentEdits.WithChildrenAdded(
+            codec, existingDocument.Body, existing.RecordType, sourceBody, sourceRecordType, release);
+
+        destination.Repository.Put(
+            destination.Plugin, new SourceDocument(existing.FormKey, existing.RecordType, existing.EditorId, withChildren));
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
+                "({DestinationOrigin}) — kept the copy it held and added the child records",
+                existing.FormKey, sourcePlugin.Name, sourcePlugin.Origin, destination.Plugin.Name, destination.Plugin.Origin);
+        }
+        return RecordEditResult.Success();
     }
 
     // A GRUP's element order is binary-format position, so a replace must land at the record's
@@ -180,15 +223,18 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
         var sourceCell = source.Identity(cellFormKey)
             ?? throw new InvalidOperationException(
                 $"{source.Plugin.Name} does not hold {cellFormKey} — its own worldspace named it.");
-        var placed = cell with { RecordType = sourceCell.RecordType };
-
-        destination.Repository.PutInWorldspace(
-            destination.Plugin,
-            placed with { Body = WithGridFrom(source.Body(sourceCell), placed, release) },
-            worldspaceFormKey);
-
+        PutExteriorCell(
+            worldspaceFormKey, cell with { RecordType = sourceCell.RecordType }, source.Body(sourceCell), destination, release);
         return RecordEditResult.Success();
     }
+
+    /// <summary>The put alone, which is what each cell of a worldspace needs: no read of the
+    /// destination's tree to ask whether the cell or its worldspace is there. The grid is the one
+    /// <paramref name="sourceCellText"/> carries.</summary>
+    internal void PutExteriorCell(
+        string worldspaceFormKey, SourceDocument cell, string sourceCellText, Destination destination, GameRelease release) =>
+        destination.Repository.PutInWorldspace(
+            destination.Plugin, cell with { Body = WithGridFrom(sourceCellText, cell, release) }, worldspaceFormKey);
 
     private static JsonNode RequireParsed(string text) =>
         JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a document's text to parse as JSON.");

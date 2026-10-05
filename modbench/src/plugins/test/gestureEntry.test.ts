@@ -80,6 +80,15 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([])).toMatchObject({ allInTrackedMod: false });
   });
 
+  it('rename sees exactly one selected tracked plugin, editable or not', () => {
+    expect(context([compilable]).singleTracked).toBe(true);
+    expect(context([trackedReadOnly]).singleTracked).toBe(true);
+    expect(context([untracked]).singleTracked).toBe(false);
+    expect(context([compilable, trackedReadOnly]).singleTracked).toBe(false);
+    expect(context([weapons]).singleTracked).toBe(false);
+    expect(context([]).singleTracked).toBe(false);
+  });
+
   it('compile takes exactly one selected tracked, editable plugin', () => {
     expect(compilableSelected([compilable])).toBe(compilable);
     expect(compilableSelected([trackedReadOnly])).toBeUndefined();

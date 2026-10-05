@@ -270,6 +270,31 @@ describe('HttpMEditClient — creating a plugin', () => {
   });
 });
 
+describe('HttpMEditClient — renaming a plugin source', () => {
+  const plugin = { name: 'Old.esp', origin: 'ModA' };
+
+  it('sends the plugin and the new name, and answers renamed on a 204', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 204 })));
+    const client = makeClient(fetch);
+
+    const result = await client.renameSource(plugin, 'New.esp');
+
+    expect(result).toEqual({ renamed: true });
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/plugins\/rename-source$/);
+    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'Old.esp', newName: 'New.esp' });
+  });
+
+  it('resolves a WriteRefused carrying the name and the server text on a refusal', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(409, { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' })));
+    const client = makeClient(fetch);
+
+    const result = await client.renameSource(plugin, 'New.esp');
+
+    expect(result).toEqual({ refused: true, message: 'Could not rename the source of "Old.esp" — ModA already holds New.esp.' });
+  });
+});
+
 describe('HttpMEditClient — copying records answers per record and destination', () => {
   const npc = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };

@@ -12,7 +12,7 @@ type QueryMethod =
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecords'
+  | 'createPlugin' | 'renameSource' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecords'
   | 'copyRecords' | 'decompile' | 'compile' | 'editRecord' | 'putLoadOrder';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
@@ -191,6 +191,9 @@ export class InMemoryMEditClient implements MEditClient {
 
   createPlugin(...args: Parameters<MEditClient['createPlugin']>): ReturnType<MEditClient['createPlugin']> {
     return this.command('createPlugin', args);
+  }
+  renameSource(...args: Parameters<MEditClient['renameSource']>): ReturnType<MEditClient['renameSource']> {
+    return this.command('renameSource', args);
   }
   rebuildIndex(...args: Parameters<MEditClient['rebuildIndex']>): ReturnType<MEditClient['rebuildIndex']> {
     return this.command('rebuildIndex', args);
