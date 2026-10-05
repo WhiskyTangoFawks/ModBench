@@ -56,9 +56,8 @@ public interface IPluginAdapter
         GameRelease gameRelease,
         CancellationToken cancel = default);
 
-    /// <summary>The tree in <paramref name="files"/> compiled to bytes at
-    /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
-    /// replacement of the real plugin. The written master list follows
+    /// <summary>The tree in <paramref name="files"/> compiled to bytes at <paramref name="destinationPath"/>,
+    /// in place: a scratch verification, never a replacement. The master list follows
     /// <paramref name="masterOrder"/>, plugin file names (ADR-0008).</summary>
     Task WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
