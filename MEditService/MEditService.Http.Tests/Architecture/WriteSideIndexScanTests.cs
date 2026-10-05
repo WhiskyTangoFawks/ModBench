@@ -10,7 +10,7 @@ public sealed class WriteSideIndexScanTests
 {
     private static readonly string[] Symbols =
     [
-        "IRecordIndex", "IRecordIndexFactory", "DuckDbRecordIndex", "DuckDbRecordIndexFactory",
+        "DuckDbRecordIndex", "DuckDbRecordIndexFactory", "Reconciler", "Projector", "FailedReads", "FilterInForce",
         "IRecordReads", "Indexer", "IQueryIndex", "Store", "IndexWriteGate",
         "IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
         "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService",
@@ -71,18 +71,18 @@ public sealed class WriteSideIndexScanTests
             File.WriteAllText(
                 Path.Combine(root, "Edits", "EditService.cs"),
                 "IRecordReads reads = index.Reads!;\nvar rows = reads.Search(query);\n");
-            File.WriteAllText(Path.Combine(root, "Edits", "Factory.cs"), "new IRecordIndexFactory();");
-            File.WriteAllText(Path.Combine(root, "Edits", "obj", "Generated.cs"), "IRecordIndex index;");
+            File.WriteAllText(Path.Combine(root, "Edits", "Factory.cs"), "new DuckDbRecordIndexFactory();");
+            File.WriteAllText(Path.Combine(root, "Edits", "obj", "Generated.cs"), "DuckDbRecordIndex index;");
             File.WriteAllText(Path.Combine(root, "Edits", "Clean.cs"), "repository.Put(plugin, document);");
             Directory.CreateDirectory(Path.Combine(root, "Records"));
-            File.WriteAllText(Path.Combine(root, "Records", "Store.cs"), "IRecordIndex index;");
+            File.WriteAllText(Path.Combine(root, "Records", "Store.cs"), "DuckDbRecordIndex index;");
 
             var counts = Counts(root, [""], ["Records"], Symbols);
 
             Assert.Equal(
                 [
                     "Edits/EditService.cs: IRecordReads: 1",
-                    "Edits/Factory.cs: IRecordIndexFactory: 1",
+                    "Edits/Factory.cs: DuckDbRecordIndexFactory: 1",
                 ],
                 counts);
         }

@@ -5,11 +5,13 @@ namespace MEditService.Index;
 internal sealed class RecordFilter(Store store)
 {
     private const string Holders = "_filter_holders";
-    internal const string Matches = "_filter";
+    private const string Matches = "_filter";
 
     public bool Active { get; private set; }
 
     public string? Listing => Active ? KeptBy("r") : null;
+
+    public static string Matching => $"form_key IN (SELECT form_key FROM {Matches})";
 
     public string AlsoKeeps(string alias, string formKeyColumn = "form_key") =>
         Active ? $" AND {KeptBy(alias, formKeyColumn)}" : "";

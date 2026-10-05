@@ -15,6 +15,7 @@ public sealed class TrackedProjectionTests : IDisposable
     private readonly LoadOrderEntry _mod;
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly List<(long Sequence, string? EditorId)> _seenWhenPublished = [];
+    private readonly IRecordReads? _reads;
     private readonly OpenedIndex _index;
     private readonly string _npc;
     private readonly string _otherNpc;
@@ -33,6 +34,7 @@ public sealed class TrackedProjectionTests : IDisposable
         _mod = _fixture.Plugins.Single();
         (_npc, _otherNpc) = (npc.ToString(), otherNpc.ToString());
         _index = Indexes.Reconciled(_fixture, notifications: new Observing(_notifications, SeenNow));
+        _reads = _index.RequireReads();
     }
 
     public void Dispose()
@@ -42,7 +44,7 @@ public sealed class TrackedProjectionTests : IDisposable
     }
 
     private void SeenNow() =>
-        _seenWhenPublished.Add((_index.Sequence, _index.RequireReads().DocumentOf(_npc, _mod.KeyOf()).EditorId));
+        _seenWhenPublished.Add((_index.Sequence, _reads?.DocumentOf(_npc, _mod.KeyOf()).EditorId));
 
     private void RenameByHand(string formKey, string from, string to) =>
         _mod.HandEdit(_index.RequireReads().DocumentOf(formKey, _mod.KeyOf()), $"\"{from}\"", $"\"{to}\"");
