@@ -8,7 +8,7 @@ namespace MEditService.Commands.Tests.RealData;
 /// <summary>The cut-down plugin as Track leaves it, read and never written.</summary>
 public sealed class TrackedCutDownFixture : IDisposable
 {
-    public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-track-roundtrip-").FullName;
+    public ScratchDirectory ModFolder { get; } = new("medit-track-roundtrip-");
 
     public TrackedCutDownFixture() => CutDownPluginFixture.TrackedInto(ModFolder);
 
@@ -17,5 +17,5 @@ public sealed class TrackedCutDownFixture : IDisposable
 
     public Dictionary<string, byte[]> ReadSourceTree() => CutDownPluginFixture.ReadSourceTree(ModFolder);
 
-    public void Dispose() => TrackedTemplates.TryDelete(ModFolder);
+    public void Dispose() => ModFolder.Dispose();
 }

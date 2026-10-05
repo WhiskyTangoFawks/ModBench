@@ -25,7 +25,7 @@ internal static class OtherTool
     /// <summary>A folder holding one file, written outside the mod folder and moved in whole.</summary>
     internal static void MovesInAFolderHolding(string folder, string fileName, string contents)
     {
-        var aside = Path.Combine(Path.GetTempPath(), $"medit-aside-{Guid.NewGuid():n}");
+        using var aside = new ScratchDirectory("medit-aside-");
         WritesTheFile(Path.Combine(aside, fileName), contents);
         Directory.Move(aside, folder);
     }

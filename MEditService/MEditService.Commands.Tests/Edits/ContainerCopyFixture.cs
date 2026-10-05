@@ -19,9 +19,9 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
     public const string DestinationPluginName = "ContainerDestination.esp";
     public const string DestinationOrigin = "ContainerDestinationMod";
 
-    public string SourceModFolder { get; }
-    public string DestinationModFolder { get; }
-    public string GameDirectory { get; }
+    public ScratchDirectory SourceModFolder { get; } = new("medit-container-copy-source-");
+    public ScratchDirectory DestinationModFolder { get; } = new("medit-container-copy-dest-");
+    public ScratchDirectory GameDirectory { get; } = new("medit-container-copy-game-");
     /// <summary>The same snapshot as a list, for a test that reconciles an index over these trees.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
 
@@ -133,9 +133,6 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
     private ContainerCopyFixture(bool destinationLoadsFirst, bool trackSource)
     {
         var holder = new LoadOrderHolder();
-        SourceModFolder = Directory.CreateTempSubdirectory("medit-container-copy-source-").FullName;
-        DestinationModFolder = Directory.CreateTempSubdirectory("medit-container-copy-dest-").FullName;
-        GameDirectory = Directory.CreateTempSubdirectory("medit-container-copy-game-").FullName;
 
         var sourcePath = Path.Combine(SourceModFolder, SourcePluginName);
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
@@ -305,15 +302,8 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
 
     public void Dispose()
     {
-        TryDelete(SourceModFolder);
-        TryDelete(DestinationModFolder);
-        TryDelete(GameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
+        SourceModFolder.Dispose();
+        DestinationModFolder.Dispose();
+        GameDirectory.Dispose();
     }
 }

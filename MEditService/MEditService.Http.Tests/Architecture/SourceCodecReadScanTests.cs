@@ -51,35 +51,28 @@ public sealed class SourceCodecReadScanTests
     [Fact]
     public void TheScan_PermitsTypeDispatchAndBlankDocument_AndNamesAPlantedCodecReadOrWrite()
     {
-        var root = Directory.CreateTempSubdirectory("medit-source-codec-read-scan-").FullName;
-        try
-        {
-            Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceAdapter", "obj"));
-            File.WriteAllText(
-                Path.Combine(root, "MEditService.SourceAdapter", "Permitted.cs"),
-                "var folder = RecordTypeDispatch.For(release).FolderNameFor(recordType);\n"
-                + "var minted = RecordTextCodec.BlankDocument(loquiType, release, identity);\n");
-            File.WriteAllText(
-                Path.Combine(root, "MEditService.SourceAdapter", "Planted.cs"),
-                "internal sealed class Reader\n{\n"
-                + "    private readonly RecordTextCodec _codec = new(logger);\n"
-                + "    internal string Read(IMajorRecordGetter record, GameRelease release) =>\n"
-                + "        _codec.RoundTrip(text, release, null);\n}\n");
-            File.WriteAllText(
-                Path.Combine(root, "MEditService.SourceAdapter", "obj", "Generated.cs"),
-                "var codec = new RecordTextCodec(logger);\n");
+        using var root = new ScratchDirectory("medit-source-codec-read-scan-");
+        Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceAdapter", "obj"));
+        File.WriteAllText(
+            Path.Combine(root, "MEditService.SourceAdapter", "Permitted.cs"),
+            "var folder = RecordTypeDispatch.For(release).FolderNameFor(recordType);\n"
+            + "var minted = RecordTextCodec.BlankDocument(loquiType, release, identity);\n");
+        File.WriteAllText(
+            Path.Combine(root, "MEditService.SourceAdapter", "Planted.cs"),
+            "internal sealed class Reader\n{\n"
+            + "    private readonly RecordTextCodec _codec = new(logger);\n"
+            + "    internal string Read(IMajorRecordGetter record, GameRelease release) =>\n"
+            + "        _codec.RoundTrip(text, release, null);\n}\n");
+        File.WriteAllText(
+            Path.Combine(root, "MEditService.SourceAdapter", "obj", "Generated.cs"),
+            "var codec = new RecordTextCodec(logger);\n");
 
-            var counts = Counts(root, ["MEditService.SourceAdapter"]);
+        var counts = Counts(root, ["MEditService.SourceAdapter"]);
 
-            Assert.Equal(
-                ["MEditService.SourceAdapter/Planted.cs: RecordTextCodec: 1",
-                 "MEditService.SourceAdapter/Planted.cs: RoundTrip: 1"],
-                counts);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.Equal(
+            ["MEditService.SourceAdapter/Planted.cs: RecordTextCodec: 1",
+             "MEditService.SourceAdapter/Planted.cs: RoundTrip: 1"],
+            counts);
     }
 
     private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots) =>

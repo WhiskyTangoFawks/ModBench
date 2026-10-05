@@ -39,34 +39,26 @@ public sealed class RealInstallSmokeTests
                 .Select(master => master.FileName.String)
                 .Where(name => File.Exists(Path.Combine(dataDir.Path, name)))
                 .ToList();
-            var instanceRoot = Path.Combine(Path.GetTempPath(), $"medit-smoke-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(instanceRoot);
-            try
-            {
-                await using var app = new MEditHost();
-                var client = app.CreateClient();
-                client.Timeout = TimeSpan.FromMinutes(10);
+            using var instanceRoot = new ScratchDirectory("medit-smoke-");
+            await using var app = new MEditHost();
+            var client = app.CreateClient();
+            client.Timeout = TimeSpan.FromMinutes(10);
 
-                var load = await client.PutAsJsonAsync("/load-order", new
-                {
-                    plugins = masters.Select(name => new { name, path = Path.Combine(dataDir.Path, name), origin = PluginOrigin.DataDirectory }),
-                    active = masters.Select(name => new PluginAddress(name, PluginOrigin.DataDirectory)),
-                    loadedWithNoLine = masters.Select(name => new PluginAddress(name, PluginOrigin.DataDirectory)),
-                    gameDirectory = dataDir.Path,
-                    instanceRoot,
-                    gameRelease = release.ToString(),
-                });
-                Assert.Equal(HttpStatusCode.OK, load.StatusCode);
-
-                var plugins = await client.GetFromJsonAsync<List<PluginResponse>>("/plugins");
-                Assert.NotNull(plugins);
-                Assert.NotEmpty(plugins);
-                tested++;
-            }
-            finally
+            var load = await client.PutAsJsonAsync("/load-order", new
             {
-                Directory.Delete(instanceRoot, recursive: true);
-            }
+                plugins = masters.Select(name => new { name, path = Path.Combine(dataDir.Path, name), origin = PluginOrigin.DataDirectory }),
+                active = masters.Select(name => new PluginAddress(name, PluginOrigin.DataDirectory)),
+                loadedWithNoLine = masters.Select(name => new PluginAddress(name, PluginOrigin.DataDirectory)),
+                gameDirectory = dataDir.Path,
+                instanceRoot = instanceRoot.Path,
+                gameRelease = release.ToString(),
+            });
+            Assert.Equal(HttpStatusCode.OK, load.StatusCode);
+
+            var plugins = await client.GetFromJsonAsync<List<PluginResponse>>("/plugins");
+            Assert.NotNull(plugins);
+            Assert.NotEmpty(plugins);
+            tested++;
         }
 
         Assert.True(tested > 0,

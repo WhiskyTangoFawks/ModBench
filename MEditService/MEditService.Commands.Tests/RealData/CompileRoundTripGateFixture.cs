@@ -15,11 +15,11 @@ namespace MEditService.Commands.Tests.RealData;
 /// a later compile writes again.</summary>
 public sealed class CompileRoundTripGateFixture : IDisposable
 {
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-compile-roundtrip-game-").FullName;
-    private readonly string _compiledFolder = Directory.CreateTempSubdirectory("medit-compile-roundtrip-compiled-").FullName;
+    private readonly ScratchDirectory _gameDirectory = new("medit-compile-roundtrip-game-");
+    private readonly ScratchDirectory _compiledFolder = new("medit-compile-roundtrip-compiled-");
 
     public PluginAddress Plugin { get; } = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
-    public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-").FullName;
+    public ScratchDirectory ModFolder { get; } = new("medit-compile-roundtrip-");
     public string PluginPath => Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
     public LoadOrderHolder Holder { get; } = new();
 
@@ -81,8 +81,8 @@ public sealed class CompileRoundTripGateFixture : IDisposable
 
     public void Dispose()
     {
-        TrackedTemplates.TryDelete(ModFolder);
-        TrackedTemplates.TryDelete(_compiledFolder);
-        TrackedTemplates.TryDelete(_gameDirectory);
+        ModFolder.Dispose();
+        _compiledFolder.Dispose();
+        _gameDirectory.Dispose();
     }
 }

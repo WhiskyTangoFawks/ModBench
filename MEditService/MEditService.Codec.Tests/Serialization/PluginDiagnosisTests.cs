@@ -78,7 +78,7 @@ public sealed class PluginDiagnosisTests
     [Fact]
     public void FromSourceReadException_AnchorsOnTheFilePathRelativeToTheTree()
     {
-        var treeRoot = Path.Combine(Path.GetTempPath(), "medit-diagnosis-unit-tree");
+        var treeRoot = Path.GetFullPath("medit-diagnosis-unit-tree");
         var filePath = Path.Combine(treeRoot, "Npcs", "FixtureNpc - 000802_Fixture.esp.json");
         var ex = FilePathedException.Enrich(new ArgumentException("Malformed FormKey string: NOT-A-FORMKEY"), filePath);
 

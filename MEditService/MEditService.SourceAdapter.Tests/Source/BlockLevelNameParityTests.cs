@@ -23,31 +23,24 @@ public sealed class BlockLevelNameParityTests
     [Fact]
     public async Task TheDirectoriesTheWholeModSerializerWrites_AreNamedAsAPutPlacesThem()
     {
-        var scratch = Directory.CreateTempSubdirectory("medit-block-name-parity-").FullName;
-        try
-        {
-            await RecordTextCodecGeneratorSeed.SerializeWholeMod(
-                OneExteriorCell(), scratch, InlineWorkDropoff.Instance, CancellationToken.None);
+        using var scratch = new ScratchDirectory("medit-block-name-parity-");
+        await RecordTextCodecGeneratorSeed.SerializeWholeMod(
+            OneExteriorCell(), scratch, InlineWorkDropoff.Instance, CancellationToken.None);
 
-            var writtenWorldspace = Directory.EnumerateDirectories(Path.Combine(scratch, "Worldspaces")).Single();
-            var writtenBlock = Directory.EnumerateDirectories(writtenWorldspace).Single();
-            var writtenSubBlock = Directory.EnumerateDirectories(writtenBlock).Single();
-            var writtenCell = Directory.EnumerateDirectories(writtenSubBlock).Single();
+        var writtenWorldspace = Directory.EnumerateDirectories(Path.Combine(scratch, "Worldspaces")).Single();
+        var writtenBlock = Directory.EnumerateDirectories(writtenWorldspace).Single();
+        var writtenSubBlock = Directory.EnumerateDirectories(writtenBlock).Single();
+        var writtenCell = Directory.EnumerateDirectories(writtenSubBlock).Single();
 
-            var placedWorldspace = WorldspaceDirectoryAPutOfOneExteriorCellLeaves(scratch);
-            var placedBlock = Directory.EnumerateDirectories(placedWorldspace).Single();
-            var placedSubBlock = Directory.EnumerateDirectories(placedBlock).Single();
-            var placedCell = Directory.EnumerateDirectories(placedSubBlock).Single();
+        var placedWorldspace = WorldspaceDirectoryAPutOfOneExteriorCellLeaves(scratch);
+        var placedBlock = Directory.EnumerateDirectories(placedWorldspace).Single();
+        var placedSubBlock = Directory.EnumerateDirectories(placedBlock).Single();
+        var placedCell = Directory.EnumerateDirectories(placedSubBlock).Single();
 
-            Assert.Equal(Path.GetFileName(writtenWorldspace), Path.GetFileName(placedWorldspace));
-            Assert.Equal(Path.GetFileName(writtenBlock), Path.GetFileName(placedBlock));
-            Assert.Equal(Path.GetFileName(writtenSubBlock), Path.GetFileName(placedSubBlock));
-            Assert.Equal(Path.GetFileName(writtenCell), Path.GetFileName(placedCell));
-        }
-        finally
-        {
-            Directory.Delete(scratch, recursive: true);
-        }
+        Assert.Equal(Path.GetFileName(writtenWorldspace), Path.GetFileName(placedWorldspace));
+        Assert.Equal(Path.GetFileName(writtenBlock), Path.GetFileName(placedBlock));
+        Assert.Equal(Path.GetFileName(writtenSubBlock), Path.GetFileName(placedSubBlock));
+        Assert.Equal(Path.GetFileName(writtenCell), Path.GetFileName(placedCell));
     }
 
     private static string WorldspaceDirectoryAPutOfOneExteriorCellLeaves(string scratch)

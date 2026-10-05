@@ -48,22 +48,15 @@ public static class CutDownPluginFixture
         // differently parsed mod and call the difference a compile failure.
         var mod = ModFactory.ImportSetter(new ModPath(ModKey.FromFileName(PluginFileName), pluginPath), GameRelease.Fallout4);
 
-        var scratch = Directory.CreateTempSubdirectory("medit-compile-derived-").FullName;
-        try
-        {
-            var root = Path.Combine(scratch, PluginSourceRoot.For(PluginFileName));
-            Directory.CreateDirectory(root);
-            RecordTextCodecGeneratorSeed
-                .SerializeWholeMod((IFallout4ModGetter)mod, root, InlineWorkDropoff.Instance, CancellationToken.None)
-                .GetAwaiter().GetResult();
+        using var scratch = new ScratchDirectory("medit-compile-derived-");
+        var root = Path.Combine(scratch, PluginSourceRoot.For(PluginFileName));
+        Directory.CreateDirectory(root);
+        RecordTextCodecGeneratorSeed
+            .SerializeWholeMod((IFallout4ModGetter)mod, root, InlineWorkDropoff.Instance, CancellationToken.None)
+            .GetAwaiter().GetResult();
 
-            return DocumentsOf(SourceRepository.Over(scratch, GameRelease.Fallout4))
-                .ToDictionary(document => document.Key, document => StripCarriageReturns(document.Value));
-        }
-        finally
-        {
-            TrackedTemplates.TryDelete(scratch);
-        }
+        return DocumentsOf(SourceRepository.Over(scratch, GameRelease.Fallout4))
+            .ToDictionary(document => document.Key, document => StripCarriageReturns(document.Value));
     }
 
     // Production strips carriage returns when it writes a tree (PluginTrees), but that helper is

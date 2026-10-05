@@ -13,30 +13,23 @@ internal sealed class ForgedTreeWriteAdapter(string pluginFileName, TreeDeserial
     public override async Task WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default)
     {
-        var scratchDir = Directory.CreateTempSubdirectory("medit-forged-writetree-").FullName;
-        try
+        using var scratchDir = new ScratchDirectory("medit-forged-writetree-");
+        foreach (var file in files)
         {
-            foreach (var file in files)
-            {
-                var fullPath = Path.Combine(scratchDir, file.RelativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException($"Expected '{fullPath}' to have a parent directory."));
-                await File.WriteAllBytesAsync(fullPath, file.Content, cancel);
-            }
-
-            var treeRoot = Path.Combine(scratchDir, PluginSourceRoot.For(pluginFileName));
-            var recompiled = await deserialize(treeRoot, cancel);
-
-            await recompiled.BeginWrite
-                .ToPath(destinationPath)
-                .WithLoadOrderFromHeaderMasters()
-                .WithNoDataFolder()
-                .NoNextFormIDProcessing()
-                .WithRecordCount(RecordCountOption.NoCheck)
-                .WriteAsync();
+            var fullPath = Path.Combine(scratchDir, file.RelativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException($"Expected '{fullPath}' to have a parent directory."));
+            await File.WriteAllBytesAsync(fullPath, file.Content, cancel);
         }
-        finally
-        {
-            Directory.Delete(scratchDir, recursive: true);
-        }
+
+        var treeRoot = Path.Combine(scratchDir, PluginSourceRoot.For(pluginFileName));
+        var recompiled = await deserialize(treeRoot, cancel);
+
+        await recompiled.BeginWrite
+            .ToPath(destinationPath)
+            .WithLoadOrderFromHeaderMasters()
+            .WithNoDataFolder()
+            .NoNextFormIDProcessing()
+            .WithRecordCount(RecordCountOption.NoCheck)
+            .WriteAsync();
     }
 }

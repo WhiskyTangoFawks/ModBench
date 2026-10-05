@@ -40,28 +40,21 @@ public sealed class HandWrittenApplierScanTests
     [Fact]
     public void TheScan_NamesAMutagenConstruction_AndPassesBuildOutputAndOtherTypes()
     {
-        var root = Directory.CreateTempSubdirectory("medit-applier-scan-").FullName;
-        try
-        {
-            Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
-            File.WriteAllText(Path.Combine(root, "Layer", "Applier.cs"), "var made = new MemorySlice<byte>(bytes);");
-            File.WriteAllText(Path.Combine(root, "Layer", "Generated.cs"), "var made = new MemorySlice<byte>(bytes);");
-            File.Move(
-                Path.Combine(root, "Layer", "Generated.cs"),
-                Path.Combine(root, "Layer", "obj", "Generated.cs"));
-            File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "var made = new JsonObject();");
-            File.WriteAllText(Path.Combine(root, "Layer", "Initializer.cs"), "var made = new TranslatedString\n{\n    TargetLanguage = language,\n};");
+        using var root = new ScratchDirectory("medit-applier-scan-");
+        Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
+        File.WriteAllText(Path.Combine(root, "Layer", "Applier.cs"), "var made = new MemorySlice<byte>(bytes);");
+        File.WriteAllText(Path.Combine(root, "Layer", "Generated.cs"), "var made = new MemorySlice<byte>(bytes);");
+        File.Move(
+            Path.Combine(root, "Layer", "Generated.cs"),
+            Path.Combine(root, "Layer", "obj", "Generated.cs"));
+        File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "var made = new JsonObject();");
+        File.WriteAllText(Path.Combine(root, "Layer", "Initializer.cs"), "var made = new TranslatedString\n{\n    TargetLanguage = language,\n};");
 
-            var sites = Sites(root, ["Layer"]);
+        var sites = Sites(root, ["Layer"]);
 
-            Assert.Equal(
-                ["Layer/Applier.cs: var made = new MemorySlice<byte>(bytes);", "Layer/Initializer.cs: var made = new TranslatedString"],
-                sites);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.Equal(
+            ["Layer/Applier.cs: var made = new MemorySlice<byte>(bytes);", "Layer/Initializer.cs: var made = new TranslatedString"],
+            sites);
     }
 
     private static List<string> Sites(string root, IReadOnlyList<string> scannedRoots) =>

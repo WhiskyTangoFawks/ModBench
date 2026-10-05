@@ -65,6 +65,6 @@ public sealed class PluginTreeReadTests
         var absolutePathTheErrorNamesItsFileBy = Assert.IsType<FilePathedException>(error).Path;
         var scratch = Path.GetRelativePath(Path.GetTempPath(), absolutePathTheErrorNamesItsFileBy).Split(Path.DirectorySeparatorChar)[0];
         Assert.StartsWith(TheAdaptersOwnScratchPrefix, scratch, StringComparison.Ordinal);
-        Assert.False(Directory.Exists(Path.Combine(Path.GetTempPath(), scratch)));
+        Assert.False(Directory.Exists(Path.GetFullPath(scratch, Path.GetTempPath())));
     }
 }
