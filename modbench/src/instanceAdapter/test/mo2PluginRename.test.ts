@@ -1,16 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdir, readFile, rename as fsRename, rm, writeFile } from 'node:fs/promises';
-import type { PathLike } from 'node:fs';
+import { mkdir, readFile, readdir, rename as fsRename, rm, writeFile } from 'node:fs/promises';
+import type { Dirent, PathLike } from 'node:fs';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { present } from '../../ports/present';
 
 vi.mock('vscode', () => fakeVscodeModule());
-const real = vi.hoisted(() => ({ rename: undefined as typeof import('node:fs/promises').rename | undefined }));
+const real = vi.hoisted(() => ({
+  rename: undefined as typeof import('node:fs/promises').rename | undefined,
+  readdir: undefined as typeof import('node:fs/promises').readdir | undefined,
+}));
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   real.rename = actual.rename;
-  return { ...actual, rename: vi.fn(actual.rename) };
+  real.readdir = actual.readdir;
+  return { ...actual, rename: vi.fn(actual.rename), readdir: vi.fn(actual.readdir) };
 });
 const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
 
@@ -66,6 +70,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
   });
   afterEach(async () => {
     vi.mocked(fsRename).mockImplementation(actualRename);
+    vi.mocked(readdir).mockImplementation(present(real.readdir, 'the real readdir'));
     await rm(root, { recursive: true, force: true });
   });
 
@@ -176,8 +181,18 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     });
 
     it('refuses two files that the rename would put on one name, which on a file system that tells case apart would overwrite one with the other', async () => {
-      await put(`${MOD}/tracked patch mod.ini`);
-      await refused(() => rename(), /is in the way/);
+      const listing = present(real.readdir, 'the real readdir');
+      const withTwin = async (path: PathLike): Promise<Dirent[]> => {
+        const entries: Dirent[] = await listing(path, { withFileTypes: true });
+        const ini = entries.find((entry) => entry.name === 'Tracked Patch Mod.ini');
+        return String(path) === at(MOD) && ini !== undefined
+          ? [...entries, Object.create(ini, { name: { value: 'tracked patch mod.ini' } })]
+          : entries;
+      };
+      await refused(() => {
+        vi.mocked(readdir).mockImplementation(withTwin);
+        return rename().finally(() => vi.mocked(readdir).mockImplementation(listing));
+      }, /is in the way/);
     });
 
     it.each(['a/b.esp', 'a\\b.esp', '..', ''])('refuses the name "%s", which is no file of the origin', (name) =>
