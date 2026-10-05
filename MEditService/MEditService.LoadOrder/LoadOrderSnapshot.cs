@@ -16,7 +16,6 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     public static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], [], []);
 
     private readonly Dictionary<PluginAddress, int> _loadOrderIndex;
-    private readonly HashSet<PluginAddress> _loadedWithNoLine;
 
     public string DataFolderPath { get; }
 
@@ -49,7 +48,6 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
             .ToDictionary(a => a.address, a => a.index, PluginAddress.Comparer);
         Active = [.. active.Select(PluginRefusalOfVouchesFor)];
         LoadedWithNoLine = [.. loadedWithNoLine.Select(PluginRefusalOfVouchesFor)];
-        _loadedWithNoLine = loadedWithNoLine.ToHashSet(PluginAddress.Comparer);
     }
 
     private RegisteredPlugin PluginRefusalOfVouchesFor(PluginAddress address) => Plugin(address)
@@ -85,8 +83,8 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     public Registration RegistrationOf(PluginAddress address) => new(LoadOrderIndex(address));
 
     /// <summary>Records that cannot be edited: a plugin the game does not load (ADR-0012)
-    /// and one loaded with no line, the game's own (editor.md's read-only status).</summary>
-    public bool IsImmutable(PluginAddress address) => !IsActive(address) || _loadedWithNoLine.Contains(address);
+    /// and one the game provides (editor.md's read-only status).</summary>
+    public bool IsImmutable(PluginAddress address) => !IsActive(address) || ProviderOf(address) == PluginProvider.Game;
 
     /// <summary>What provides the plugin, or null for a plugin none registered here names.</summary>
     public PluginProvider? ProviderOf(PluginAddress plugin) => Plugin(plugin)?.Provider;
