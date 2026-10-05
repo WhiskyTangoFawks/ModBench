@@ -61,7 +61,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
         new(QuestPath, Serialize(_quest)),
     ];
 
-    private static string Root => SourceRepository.RootFor(PluginName);
+    private static string Root => PluginSourceRoot.For(PluginName);
 
     private string CellPath => Path.Combine(Root, "Cells", "0", "0", Leaf(_cell), "RecordData.json");
 

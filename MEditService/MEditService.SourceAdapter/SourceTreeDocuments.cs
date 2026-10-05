@@ -28,9 +28,9 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         _pluginFileName = pluginFileName;
         _release = release;
         _containers = new ContainerDocuments(release, schemas);
-        _root = SourceRepository.RootIn(modFolder, pluginFileName);
+        _root = SourceRepositoryLayout.RootIn(modFolder, pluginFileName);
         _headerRelativePath = Path.Combine(
-            SourceRepository.RootFor(pluginFileName), SourceRepository.RecordDataFileName);
+            SourceRepositoryLayout.RootFor(pluginFileName), SourceRepositoryLayout.RecordDataFileName);
     }
 
     /// <summary>Throws when the tree holds no readable root document: serving the binary instead of
@@ -43,7 +43,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             var text = Read(path)
                 ?? throw new FileNotFoundException(
                     $"'{_pluginFileName}' is tracked but its source tree holds no root " +
-                    $"{SourceRepository.RecordDataFileName}, so it describes no plugin.", path);
+                    $"{SourceRepositoryLayout.RecordDataFileName}, so it describes no plugin.", path);
 
             using var _ = JsonDocument.Parse(text);
             return new PluginDocument(
@@ -86,7 +86,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     // cell or a worldspace keeps its own directory directly under it.
     private IEnumerable<PluginDocument> FlatGroup(string groupDirectory, Dictionary<string, string> filedAt) =>
         Directory
-            .EnumerateFiles(groupDirectory, $"*{SourceRepository.JsonSuffix}", SearchOption.AllDirectories)
+            .EnumerateFiles(groupDirectory, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories)
             .SelectMany(file => DocumentsAt(file, cell: null, filedAt));
 
     // A block level's directory is named by its number, as the whole-mod serializer writes it.
@@ -100,7 +100,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
                 var structure = CellStructure.Interior(block, Number(Path.GetFileName(subBlockDirectory)));
                 foreach (var cellDirectory in Directory.EnumerateDirectories(subBlockDirectory))
                 {
-                    var cell = Path.Combine(cellDirectory, SourceRepository.RecordDataFileName);
+                    var cell = Path.Combine(cellDirectory, SourceRepositoryLayout.RecordDataFileName);
                     foreach (var document in DocumentsAt(cell, structure, filedAt)) yield return document;
                 }
             }
@@ -111,10 +111,10 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         foreach (var worldspaceDirectory in Directory.EnumerateDirectories(worldspacesDirectory))
         {
-            var own = Path.Combine(worldspaceDirectory, SourceRepository.RecordDataFileName);
+            var own = Path.Combine(worldspaceDirectory, SourceRepositoryLayout.RecordDataFileName);
             foreach (var document in DocumentsAt(own, cell: null, filedAt)) yield return document;
 
-            var worldspaceFormKey = SourceRepository.FormKeyDeclaredBy(own, _pluginFileName);
+            var worldspaceFormKey = DocumentText.FormKeyDeclaredBy(own, _pluginFileName);
             foreach (var blockDirectory in Directory.EnumerateDirectories(worldspaceDirectory))
             {
                 var (blockX, blockY) = Coordinates(Path.GetFileName(blockDirectory));
@@ -126,7 +126,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
                     foreach (var cellDirectory in Directory.EnumerateDirectories(subBlockDirectory))
                     {
-                        var cell = Path.Combine(cellDirectory, SourceRepository.RecordDataFileName);
+                        var cell = Path.Combine(cellDirectory, SourceRepositoryLayout.RecordDataFileName);
                         foreach (var document in DocumentsAt(cell, structure, filedAt)) yield return document;
                     }
                 }
@@ -138,7 +138,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     // member, and the index writes its row through a door of its own.
     private IEnumerable<PluginDocument> DocumentsAt(string file, CellStructure? cell, Dictionary<string, string> filedAt)
     {
-        if (SourceRepository.CarriesNoRecord(file)) yield break;
+        if (SourceRepositoryLayout.CarriesNoRecord(file)) yield break;
 
         var relativePath = Path.GetRelativePath(_modFolder, file);
         if (relativePath.Equals(_headerRelativePath, StringComparison.Ordinal)) yield break;
@@ -157,11 +157,11 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             throw new UnreadableSourceDocumentException(file, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
         }
 
-        var recordType = SourceRepository.RecordTypeOf(relativePath, _release)
-            ?? _containers.RecordTypeNamed(SourceRepository.RootStringIn(text, MutagenObjectTypeMember))
+        var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
+            ?? _containers.RecordTypeNamed(DocumentText.RootStringIn(text, MutagenObjectTypeMember))
             ?? throw new UnreadableSourceDocumentException(file, "neither its path nor its text names a record type");
 
-        var formKey = SourceRepository.FormKeyDeclaredIn(text, relativePath, _pluginFileName)
+        var formKey = DocumentText.FormKeyDeclaredIn(text, relativePath, _pluginFileName)
             ?? throw new UnreadableSourceDocumentException(file, "it declares no FormKey");
 
         OneDocumentPerFormKey.Claim(filedAt, formKey, file, _modFolder);
@@ -245,7 +245,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         try
         {
-            return Encoding.UTF8.GetString(SourceRepository.StripUtf8Bom(File.ReadAllBytes(path)));
+            return Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(File.ReadAllBytes(path)));
         }
         catch (FileNotFoundException)
         {

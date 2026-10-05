@@ -12,12 +12,12 @@ public static class SourceDocumentPath
         GameRelease release)
     {
         var repository = SourceRepository.Open(modFolder, release) ?? SourceRepository.Over(modFolder, release);
-        var unit = repository.UnitHolding(
+        var relativePath = repository.RelativePathOf(
             new PluginAddress(pluginFileName, "TestMod"), new RecordIdentity(formKey, recordType, editorId));
 
-        return unit is null
+        return relativePath is null
             ? throw new InvalidOperationException(
                 $"No document in {pluginFileName}'s tree under '{modFolder}' holds {formKey}.")
-            : Path.Combine(modFolder, unit.RelativePath);
+            : Path.Combine(modFolder, relativePath);
     }
 }

@@ -23,7 +23,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
         PluginBaselines.Track(
             _modFolder,
             SourcePreset.Edits,
-            [new TreeFile(SourceRepository.HeaderDocumentFor(PluginName), "{\"MasterReferences\": []}"u8.ToArray())]);
+            [new TreeFile(Path.Combine(PluginSourceRoot.For(PluginName), "RecordData.json"), "{\"MasterReferences\": []}"u8.ToArray())]);
         Repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody));
         CommitSoBothRefsHoldTheTree();
     }
@@ -51,7 +51,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
 
     private List<string> PathsOnDisk() =>
         [.. Directory.EnumerateFiles(
-                Path.Combine(_modFolder, SourceRepository.RootFor(PluginName)), "*", SearchOption.AllDirectories)
+                Path.Combine(_modFolder, PluginSourceRoot.For(PluginName)), "*", SearchOption.AllDirectories)
             .Select(file => Path.GetRelativePath(_modFolder, file))
             .Order(StringComparer.Ordinal)];
 

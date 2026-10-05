@@ -2,7 +2,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -154,12 +153,9 @@ public sealed class CopyAsOverrideContainerTests
         Assert.DoesNotContain(ContainerCopyFixture.ExteriorTemporaryRefEditorId, cellText, StringComparison.Ordinal);
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorTemporaryRef.ToString()));
 
-        Assert.Equal(
-            new CellPlacement(
-                fixture.Worldspace.ToString(),
-                ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY,
-                ContainerCopyFixture.ExteriorSubX, ContainerCopyFixture.ExteriorSubY, IsInterior: false),
-            fixture.DestinationCellPlacement(fixture.ExteriorCell.ToString(), editorId: null));
+        fixture.AssertDestinationCellSitsAt(
+            fixture.ExteriorCell.ToString(), editorId: null,
+            ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY, ContainerCopyFixture.ExteriorSubX, ContainerCopyFixture.ExteriorSubY);
         Assert.Contains(
             $"\"{ContainerCopyFixture.ExteriorGridX}, {ContainerCopyFixture.ExteriorGridY}\"",
             cell.Body, StringComparison.Ordinal);
@@ -175,12 +171,9 @@ public sealed class CopyAsOverrideContainerTests
 
         Assert.True(result.Applied, result.Message);
 
-        Assert.Equal(
-            new CellPlacement(
-                fixture.Worldspace.ToString(),
-                ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY,
-                ContainerCopyFixture.ExteriorSubX, ContainerCopyFixture.ExteriorSubY, IsInterior: false),
-            fixture.DestinationCellPlacement(fixture.ExteriorCell.ToString(), editorId: null));
+        fixture.AssertDestinationCellSitsAt(
+            fixture.ExteriorCell.ToString(), editorId: null,
+            ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY, ContainerCopyFixture.ExteriorSubX, ContainerCopyFixture.ExteriorSubY);
         Assert.Contains(
             ContainerCopyFixture.ExteriorPersistentRefEditorId,
             fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.ExteriorPersistentRefEditorId).Body,
@@ -229,13 +222,9 @@ public sealed class CopyAsOverrideContainerTests
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorPersistentRef.ToString()));
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorTemporaryRef.ToString()));
 
-        Assert.Equal(
-            new CellPlacement(
-                fixture.Worldspace.ToString(),
-                ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY,
-                ContainerCopyFixture.ExteriorSubX, ContainerCopyFixture.ExteriorSubY, IsInterior: false),
-            fixture.DestinationCellPlacement(
-                fixture.ExteriorCell.ToString(), ContainerCopyFixture.ExteriorCellEditorId));
+        fixture.AssertDestinationCellSitsAt(
+            fixture.ExteriorCell.ToString(), ContainerCopyFixture.ExteriorCellEditorId,
+            ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY, ContainerCopyFixture.ExteriorSubX, ContainerCopyFixture.ExteriorSubY);
     }
 
     [Fact]

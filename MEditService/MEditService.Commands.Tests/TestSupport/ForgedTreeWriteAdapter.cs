@@ -1,6 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.PluginAdapter;
-using MEditService.SourceAdapter;
+using MEditService.TestSupport;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
 namespace MEditService.Commands.Tests.TestSupport;
@@ -23,7 +23,7 @@ internal sealed class ForgedTreeWriteAdapter(string pluginFileName, TreeDeserial
                 await File.WriteAllBytesAsync(fullPath, file.Content, cancel);
             }
 
-            var treeRoot = Path.Combine(scratchDir, SourceRepository.RootFor(pluginFileName));
+            var treeRoot = Path.Combine(scratchDir, PluginSourceRoot.For(pluginFileName));
             var recompiled = await deserialize(treeRoot, cancel);
 
             await recompiled.BeginWrite

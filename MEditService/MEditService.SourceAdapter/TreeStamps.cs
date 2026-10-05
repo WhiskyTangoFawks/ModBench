@@ -22,7 +22,7 @@ public sealed record RecordStamps(IReadOnlyDictionary<string, string> ByFormKey,
 
 /// <summary>A record's content stamp: what the index remembers of a document, and what the tree is
 /// asked against (ADR-0003).</summary>
-public sealed partial class SourceRepository
+internal static class TreeStamps
 {
     // A file system stamps a change with a clock coarser than a hash is quick, and a network share's
     // clock is not this machine's: a stamp this recent may not change for a write that follows it.
@@ -33,20 +33,15 @@ public sealed partial class SourceRepository
 
     private readonly record struct KnownDocument(FileStamp Stamp, string FormKey, string Content);
 
-    /// <summary>The stamp of one document's text, as the UTF-8 the index stores it in: every side hashes
-    /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the index.</summary>
-    public static string ContentStamp(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+    internal static string ContentStamp(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
-    /// <summary>One listing of the plugin's tree. A file whose file-system stamp is unchanged and
-    /// settled is not read again. A FormKey two documents declare throws
-    /// <see cref="AmbiguousSourceUnitException"/>.</summary>
-    public RecordStamps StampsOf(PluginAddress plugin)
+    internal static RecordStamps StampsOf(string modFolder, PluginAddress plugin)
     {
         var unreadable = new List<string>();
         var filedAt = new Dictionary<string, string>(StringComparer.Ordinal);
         var stamps = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        var root = RootIn(_modFolder, plugin.Name);
+        var root = SourceRepositoryLayout.RootIn(modFolder, plugin.Name);
         foreach (var gone in Known.Keys.Where(tree => !Directory.Exists(tree))) Known.TryRemove(gone, out _);
         var known = Known.GetOrAdd(root, _ => new ConcurrentDictionary<string, KnownDocument>(StringComparer.Ordinal));
         var listed = new HashSet<string>(StringComparer.Ordinal);
@@ -54,13 +49,13 @@ public sealed partial class SourceRepository
         {
             // Keyed by the FormKey the document declares, never by its path: a file name carries an
             // EditorID that may contain the separator, so a path is not a decidable identity.
-            foreach (var file in Directory.EnumerateFiles(root, $"*{JsonSuffix}", SearchOption.AllDirectories))
+            foreach (var file in Directory.EnumerateFiles(root, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories))
             {
-                if (CarriesNoRecord(file)) continue;
+                if (SourceRepositoryLayout.CarriesNoRecord(file)) continue;
                 listed.Add(file);
 
                 if (KnownOrRead(known, file, plugin.Name, unreadable) is not { } document) continue;
-                OneDocumentPerFormKey.Claim(filedAt, document.FormKey, file, _modFolder);
+                OneDocumentPerFormKey.Claim(filedAt, document.FormKey, file, modFolder);
                 stamps[document.FormKey] = document.Content;
             }
         }
@@ -79,7 +74,7 @@ public sealed partial class SourceRepository
         byte[] bytes;
         try
         {
-            bytes = StripUtf8Bom(File.ReadAllBytes(file));
+            bytes = DocumentText.StripUtf8Bom(File.ReadAllBytes(file));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -91,7 +86,7 @@ public sealed partial class SourceRepository
         }
 
         var text = Encoding.UTF8.GetString(bytes);
-        if (FormKeyDeclaredIn(text, file, pluginName) is not { } formKey)
+        if (DocumentText.FormKeyDeclaredIn(text, file, pluginName) is not { } formKey)
         {
             known.TryRemove(file, out _);
             unreadable.Add($"'{file}' declares no FormKey, so the records it holds could not be validated.");

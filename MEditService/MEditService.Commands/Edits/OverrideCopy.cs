@@ -68,9 +68,8 @@ internal sealed class OverrideCopy
 
         if (destination.Repository.FormKeysUsed(destinationPlugin).Contains(formKey))
         {
-            // A record held only at Head has no document to replace, so no replacement is asked for.
             if (_recordCopy.Identity(destination, formKey, release) is not { } existingTarget)
-                return RecordCopy.RefuseHeldOnlyAtHead(formKey, destinationPlugin);
+                return RecordCopy.RefuseKeyWithNoDocument(destination, formKey);
             if (!replace) return RecordCopy.RefuseHeldWithoutReplace(formKey, destinationPlugin);
 
             // Own fields only, as xEdit's copy-into does: the children the destination's copy

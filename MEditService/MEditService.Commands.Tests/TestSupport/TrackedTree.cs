@@ -16,9 +16,7 @@ internal static class TrackedTree
     internal static SourceDocument? Document(string modFolder, PluginAddress plugin, string formKey)
     {
         if (SourceRepository.Open(modFolder, GameRelease.Fallout4) is not { } repository) return null;
-        var identity = repository.IdentityOf(
-            plugin, formKey, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4));
-        return identity is { } held ? repository.Get(plugin, held) : null;
+        return repository.Get(plugin, formKey, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4));
     }
 
     /// <summary>The document body for a record a fixture just wrote: absent here is a broken
@@ -63,19 +61,20 @@ internal static class TrackedTree
     internal static string? DocumentFile(string modFolder, PluginAddress plugin, string formKey)
     {
         var repository = Repository(modFolder);
-        var identity = repository.IdentityOf(plugin, formKey, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4));
-        return identity is { } held ? repository.UnitHolding(plugin, held)?.RelativePath : null;
+        return repository.Get(plugin, formKey, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)) is { } held
+            ? repository.RelativePathOf(plugin, held.Identity)
+            : null;
     }
 
     /// <summary>Every document the plugin's tree holds, as a comparable value: the tree is unchanged
     /// when this is.</summary>
     internal static IReadOnlyList<string> Records(string modFolder, PluginAddress plugin) =>
-        [.. Repository(modFolder).ReadAll(plugin).Select(document => $"{document.FormKey} {document.Body}").Order(StringComparer.Ordinal)];
+        [.. TreeDocuments.Of(Repository(modFolder), plugin).Select(document => $"{document.FormKey} {document.Body}").Order(StringComparer.Ordinal)];
 
     /// <summary>The one document carrying <paramref name="editorId"/>: a record's own, or the owner's
     /// when the record is embedded in it.</summary>
     internal static SourceDocument DocumentCarrying(string modFolder, PluginAddress plugin, string editorId) =>
-        Repository(modFolder).ReadAll(plugin)
+        TreeDocuments.Of(Repository(modFolder), plugin)
             .Single(document => document.Body.Contains($"\"{editorId}\"", StringComparison.Ordinal));
 
     internal static void Overwrite(string modFolder, PluginAddress plugin, SourceDocument document) =>

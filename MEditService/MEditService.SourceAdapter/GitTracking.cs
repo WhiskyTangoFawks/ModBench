@@ -2,21 +2,6 @@ using MEditService.Codec.Serialization;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>The one way a list of <see cref="TreeFile"/>s becomes real files under a base
-/// directory, shared so the call sites cannot drift.</summary>
-internal static class PristineFileWriter
-{
-    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory)
-    {
-        foreach (var file in files)
-        {
-            var fullPath = Path.Combine(baseDirectory, file.RelativePath);
-            Directory.CreateDirectory(PathShape.DirectoryOf(fullPath));
-            File.WriteAllBytes(fullPath, file.Content);
-        }
-    }
-}
-
 /// <summary>One plugin's facts as its baseline commit's trailers carry them (ADR-0007),
 /// on the write side and the read side alike. A fact with no value is left out of the commit.</summary>
 public sealed record BaselineTrailers(string Plugin, string? UpstreamVersion, string? BinarySha256);
@@ -28,31 +13,31 @@ public enum SourcePreset
     Everything,
 }
 
-public sealed partial class SourceRepository
+/// <summary>Makes a mod's repository: <c>Track &lt;mod&gt;</c>, then one baseline commit per plugin on
+/// <c>main</c>, which stays checked out.</summary>
+internal static class GitTracking
 {
-    /// <summary>A repository for a mod that has none: <c>Track &lt;mod&gt;</c>, then one baseline commit
-    /// per plugin on <c>main</c>, which stays checked out. Answers each plugin whose commit
-    /// failed.</summary>
-    public static IReadOnlyList<(string Plugin, string Reason)> Track(
+    /// <summary>Answers each plugin whose commit failed.</summary>
+    internal static IReadOnlyList<(string Plugin, string Reason)> Track(
         string modFolder, SourcePreset preset,
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
     {
         GitCli.EnsureOnPath();
-        if (IsTracked(modFolder) || HoldsAnotherRepository(modFolder))
+        if (SourceRepositoryGit.IsTracked(modFolder) || SourceRepositoryGit.HoldsAnotherRepository(modFolder))
             throw new InvalidOperationException($"'{modFolder}' already holds a repository.");
 
-        var gitDir = Path.Combine(modFolder, ".git");
-        CreateRepository(gitDir, modFolder, preset);
-        var refused = CommitEachBaseline(gitDir, modFolder, baselines);
+        var git = new SourceRepositoryGit(modFolder);
+        CreateRepository(git, modFolder, preset);
+        var refused = CommitEachBaseline(git, modFolder, baselines);
         // The baselines were committed through a scratch index, so the real one catches up with main.
-        GitCli.Run(gitDir, modFolder, "reset", "-q");
+        git.Run("reset", "-q");
         return refused;
     }
 
     // No rollback beyond git's: the commits before a failed one stand, and git's own clean takes the
     // failed plugin's files back out of the work tree.
     private static List<(string Plugin, string Reason)> CommitEachBaseline(
-        string gitDir, string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
+        SourceRepositoryGit git, string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
     {
         var refused = new List<(string Plugin, string Reason)>();
         foreach (var (files, trailers) in baselines)
@@ -60,56 +45,50 @@ public sealed partial class SourceRepository
             try
             {
                 PristineFileWriter.WriteAll(files, workTree);
-                CommitBaselineToMain(gitDir, workTree, TrackSubject(trailers), trailers);
+                git.ParkBaseline(trailers.Plugin, CommitToMain(
+                    git, [SourceRepositoryGit.LiteralPathspec(SourceRepositoryLayout.RootFor(trailers.Plugin))],
+                    BaselineMessage(TrackSubject(trailers), trailers)));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
-                GitCli.Run(gitDir, workTree, "clean", "-fdq", "--", LiteralPathspec(RootFor(trailers.Plugin)));
+                git.Run("clean", "-fdq", "--", SourceRepositoryGit.LiteralPathspec(SourceRepositoryLayout.RootFor(trailers.Plugin)));
                 refused.Add((trailers.Plugin, ex.Message));
             }
         }
         return refused;
     }
 
-    private static void CreateRepository(string gitDir, string modFolder, SourcePreset preset)
+    private static void CreateRepository(SourceRepositoryGit git, string modFolder, SourcePreset preset)
     {
-        GitCli.Run(gitDir, modFolder, "init", "-q", "-b", "main");
-        GitCli.Run(gitDir, modFolder, "config", "core.autocrlf", "false");
-        GitCli.Run(gitDir, modFolder, "config", "commit.gpgsign", "false");
-        GitCli.Run(gitDir, modFolder, "config", "gc.autoDetach", "false");
+        git.Run("init", "-q", "-b", "main");
+        git.Run("config", "core.autocrlf", "false");
+        git.Run("config", "commit.gpgsign", "false");
+        git.Run("config", "gc.autoDetach", "false");
         // Plugin file names carry spaces, which git's default quotePath C-quotes in porcelain output,
         // and every porcelain reader here expects the raw path.
-        GitCli.Run(gitDir, modFolder, "config", "core.quotePath", "false");
-        EnsureCommitIdentity(gitDir, modFolder);
+        git.Run("config", "core.quotePath", "false");
+        EnsureCommitIdentity(git);
 
         File.WriteAllText(Path.Combine(modFolder, ".gitignore"), GitignoreContent(preset));
-        GitCli.Run(gitDir, modFolder, "add", "-A");
-        GitCli.Run(gitDir, modFolder, "commit", "-q", "-m", $"Track {ModNameIn(modFolder)}");
-    }
-
-    private static void CommitBaselineToMain(string gitDir, string workTree, string subject, BaselineTrailers trailers)
-    {
-        var commitSha = CommitToMain(
-            gitDir, workTree, [LiteralPathspec(RootFor(trailers.Plugin))], BaselineMessage(subject, trailers));
-        GitCli.Run(gitDir, workTree, "update-ref", LastCompileRef(trailers.Plugin), commitSha);
+        git.Run("add", "-A");
+        git.Run("commit", "-q", "-m", $"Track {SourceRepositoryLayout.ModNameIn(modFolder)}");
     }
 
     // main's own tree with just the pathspecs restaged from the work tree, through a scratch index:
     // another tool, such as VS Code's own git, may hold the real one's lock on the repository (ADR-0003).
-    private static string CommitToMain(
-        string gitDir, string workTree, string[] pathspecs, string message)
+    private static string CommitToMain(SourceRepositoryGit git, string[] pathspecs, string message)
     {
         var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-main-index-{Guid.NewGuid():N}");
         try
         {
-            var parentSha = GitCli.Run(gitDir, workTree, "rev-parse", "refs/heads/main").Trim();
-            GitCli.RunWithIndex(gitDir, workTree, scratchIndex, "read-tree", parentSha);
-            GitCli.RunWithIndex(gitDir, workTree, scratchIndex, ["add", "-A", "--", .. pathspecs]);
-            var treeSha = GitCli.RunWithIndex(gitDir, workTree, scratchIndex, "write-tree").Trim();
-            var commitSha = GitCli.Run(gitDir, workTree, "commit-tree", treeSha, "-p", parentSha, "-m", message).Trim();
+            var parentSha = git.Run("rev-parse", "refs/heads/main").Trim();
+            git.RunWithIndex(scratchIndex, "read-tree", parentSha);
+            git.RunWithIndex(scratchIndex, ["add", "-A", "--", .. pathspecs]);
+            var treeSha = git.RunWithIndex(scratchIndex, "write-tree").Trim();
+            var commitSha = git.Run("commit-tree", treeSha, "-p", parentSha, "-m", message).Trim();
             // The old value makes the move conditional, so a main another tool moved in between is not
             // overwritten (ADR-0003).
-            GitCli.Run(gitDir, workTree, "update-ref", "refs/heads/main", commitSha, parentSha);
+            git.Run("update-ref", "refs/heads/main", commitSha, parentSha);
             return commitSha;
         }
         finally
@@ -117,9 +96,6 @@ public sealed partial class SourceRepository
             if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
         }
     }
-
-    // Plugin and asset file names carry brackets and asterisks, which git otherwise reads as a glob.
-    private static string LiteralPathspec(string relativePath) => $":(literal){ToGitPath(relativePath)}";
 
     private static string TrackSubject(BaselineTrailers trailers) =>
         trailers.UpstreamVersion is { } version ? $"Track {trailers.Plugin} {version}" : $"Track {trailers.Plugin}";
@@ -134,21 +110,13 @@ public sealed partial class SourceRepository
         return string.Join('\n', lines) + "\n";
     }
 
-    private static IEnumerable<string> ReadTrailers(string body, string key)
-    {
-        var prefix = $"{key}: ";
-        return body.Split('\n')
-            .Where(line => line.StartsWith(prefix, StringComparison.Ordinal))
-            .Select(line => line[prefix.Length..].Trim());
-    }
-
     // Pins a repo-local identity only when the global one is unset; never overwrites a real identity.
-    private static void EnsureCommitIdentity(string gitDir, string workTree)
+    private static void EnsureCommitIdentity(SourceRepositoryGit git)
     {
-        if (!GitCli.TryRun(gitDir, workTree, out _, "config", "--get", "user.name"))
-            GitCli.Run(gitDir, workTree, "config", "user.name", "Modbench");
-        if (!GitCli.TryRun(gitDir, workTree, out _, "config", "--get", "user.email"))
-            GitCli.Run(gitDir, workTree, "config", "user.email", "modbench@localhost");
+        if (!git.TryRun(out _, "config", "--get", "user.name"))
+            git.Run("config", "user.name", "Modbench");
+        if (!git.TryRun(out _, "config", "--get", "user.email"))
+            git.Run("config", "user.email", "modbench@localhost");
     }
 
     private static string GitignoreContent(SourcePreset preset) => preset switch
@@ -158,8 +126,8 @@ public sealed partial class SourceRepository
         SourcePreset.Edits =>
             "# Generated by Track (Edits preset) — mEdit never rewrites this file after Track.\n" +
             "*\n" +
-            $"!/{RootFolderName}/\n" +
-            $"!/{RootFolderName}/**\n" +
+            $"!/{SourceRepositoryLayout.RootFolderName}/\n" +
+            $"!/{SourceRepositoryLayout.RootFolderName}/**\n" +
             "!.gitignore\n" +
             "meta.ini\n",
         // Root-anchored: plugin binaries only ever live at the mod folder root.
@@ -171,4 +139,19 @@ public sealed partial class SourceRepository
             "meta.ini\n",
         _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Unknown source preset."),
     };
+}
+
+/// <summary>The one way a list of <see cref="TreeFile"/>s becomes real files under a base
+/// directory, shared so the call sites cannot drift.</summary>
+internal static class PristineFileWriter
+{
+    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory)
+    {
+        foreach (var file in files)
+        {
+            var fullPath = Path.Combine(baseDirectory, file.RelativePath);
+            Directory.CreateDirectory(PathShape.DirectoryOf(fullPath));
+            File.WriteAllBytes(fullPath, file.Content);
+        }
+    }
 }

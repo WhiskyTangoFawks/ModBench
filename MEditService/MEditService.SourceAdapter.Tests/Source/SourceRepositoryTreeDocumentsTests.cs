@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-public sealed class SourceRepositoryReadAllTests : IDisposable
+public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
     private const string NpcFormKey = "000800:Fixture.esp";
@@ -22,7 +22,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    private readonly ScratchDirectory _modFolder = new("medit-readall-");
+    private readonly ScratchDirectory _modFolder = new("medit-tree-documents-");
 
     public void Dispose() => _modFolder.Dispose();
 
@@ -59,9 +59,9 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     }
 
     [Fact]
-    public void ReadAll_AtTheWorkingTree_HoldsThePluginHeaderUnderTheFormKeyPluginHeaderComputes()
+    public void TheTreesDocuments_HoldThePluginHeaderUnderTheFormKeyPluginHeaderComputes()
     {
-        var header = TrackedWithHeader().ReadAll(Plugin).SingleOrDefault(d => d.FormKey == HeaderFormKey);
+        var header = TreeDocuments.Of(TrackedWithHeader(), Plugin).SingleOrDefault(d => d.FormKey == HeaderFormKey);
 
         Assert.NotNull(header);
         Assert.Equal(PluginHeader.RecordType, header.RecordType);
@@ -69,7 +69,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     }
 
     [Fact]
-    public void ReadAll_AtTheWorkingTree_IsEveryDocumentPut()
+    public void TheTreesDocuments_AreEveryDocumentPut()
     {
         var repository = Tracked();
         var weapon = new SourceDocument("000900:Fixture.esp", "weap", "FixtureWeapon",
@@ -79,7 +79,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
         repository.Put(Plugin, weapon);
         repository.Put(Plugin, race);
 
-        var read = repository.ReadAll(Plugin);
+        var read = TreeDocuments.Of(repository, Plugin);
 
         Assert.Equal(
             [(NpcFormKey, "npc_", NpcEditorId, NpcBody), Tuple(weapon), Tuple(race)],
@@ -87,13 +87,13 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     }
 
     [Fact]
-    public void ReadAll_AtTheWorkingTree_DropsARecordRemoved()
+    public void TheTreesDocuments_DropARecordRemoved()
     {
         var repository = Tracked();
 
         repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId));
 
-        Assert.Empty(repository.ReadAll(Plugin));
+        Assert.Empty(TreeDocuments.Of(repository, Plugin));
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
         var repository = Tracked();
         repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId));
 
-        Assert.Empty(repository.ReadAll(Plugin));
+        Assert.Empty(TreeDocuments.Of(repository, Plugin));
         Assert.Contains(NpcFormKey, repository.FormKeysUsed(Plugin));
     }
 
@@ -124,13 +124,13 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     }
 
     [Fact]
-    public void ReadAll_AtTheWorkingTree_SkipsGroupMetadataAndAStrayFileDeclaringNoFormKey_ForADocumentIsWhatDeclaresAFormKeyNotWhereItSits()
+    public void FormKeysUsed_SkipsGroupMetadataAndAStrayFileDeclaringNoFormKey_ForADocumentIsWhatDeclaresAFormKeyNotWhereItSits()
     {
         var repository = Tracked();
-        var npcsFolder = Path.Combine(SourceRepository.RootIn(_modFolder, PluginName), "Npcs");
+        var npcsFolder = Path.Combine(PluginSourceRoot.In(_modFolder, PluginName), "Npcs");
         File.WriteAllText(Path.Combine(npcsFolder, "GroupRecordData.json"), "{\n  \"Type\": \"npc_\"\n}");
         File.WriteAllText(Path.Combine(npcsFolder, "notes.json"), "{\n  \"Note\": \"scratch\"\n}");
 
-        Assert.Equal([NpcFormKey], repository.ReadAll(Plugin).Select(d => d.FormKey).ToList());
+        Assert.Equal([NpcFormKey], repository.FormKeysUsed(Plugin).ToList());
     }
 }

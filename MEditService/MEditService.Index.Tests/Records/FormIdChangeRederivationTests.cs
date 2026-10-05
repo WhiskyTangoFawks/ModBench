@@ -95,7 +95,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
             (document, newKey) => RecordDocumentEdits.WithFormKey(codec, document.Body, GameRelease.Fallout4, document.RecordType, newKey),
             (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
                 codec, owner.Body, GameRelease.Fallout4, owner.RecordType, oldKey, newKey));
-        new SourceRepository.SourceTransaction().Rekey(
+        new SourceTransaction().Rekey(
             TrackedMods.RepositoryOf(fixture.Entry), fixture.Plugin,
             new RecordIdentity(fixture.Worldspace, current.RecordType, current.EditorId), newWorldspaceKey,
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), rekeying);

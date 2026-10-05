@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -215,7 +214,7 @@ public sealed class EditRecordTraceTests : HostedTests
 
     private static string[] DestinationDocumentsOnDiskCarrying(ScatteredFixtureData fx, string formKey) =>
         [.. Directory.EnumerateFiles(
-                SourceRepository.RootIn(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin), "*.json",
+                PluginSourceRoot.In(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin), "*.json",
                 SearchOption.AllDirectories)
             .Where(file => File.ReadAllText(file).Contains(formKey, StringComparison.Ordinal))];
 

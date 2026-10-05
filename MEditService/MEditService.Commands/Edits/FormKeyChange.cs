@@ -21,7 +21,7 @@ internal sealed class FormKeyChange(
         envelope is { Op: RecordEditEnvelope.Set, Path: [{ Kind: PathHop.MemberKind, Name: Member }] };
 
     /// <summary>A delete+create pair in source terms, written through a
-    /// <see cref="SourceRepository.SourceTransaction"/> that restores the tree on failure.</summary>
+    /// <see cref="SourceTransaction"/> that restores the tree on failure.</summary>
     internal RecordEditResult Change(
         PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, JsonElement? value)
@@ -58,7 +58,7 @@ internal sealed class FormKeyChange(
         if (targets.ResolveTargetFormKey(repository, plugin, requestedFormKey, out var targetFormKey)
             is { } refusedTarget) return refusedTarget with { Path = Member };
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         if (SourceCommit.Write(transaction, repository, logger, $"Changing the FormID of {formKey} to {targetFormKey} failed.", () =>
             {
                 transaction.Rekey(repository, plugin, identity, targetFormKey, schemas, new DocumentRekey(

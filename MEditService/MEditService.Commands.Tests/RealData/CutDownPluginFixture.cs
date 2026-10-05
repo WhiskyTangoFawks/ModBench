@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -36,7 +37,7 @@ public static class CutDownPluginFixture
         DocumentsOf(TrackedTree.Repository(modFolder));
 
     private static Dictionary<string, byte[]> DocumentsOf(SourceRepository repository) =>
-        repository.ReadAll(Plugin).ToDictionary(document => document.FormKey, document => Encoding.UTF8.GetBytes(document.Body));
+        TreeDocuments.Of(repository, Plugin).ToDictionary(document => document.FormKey, document => Encoding.UTF8.GetBytes(document.Body));
 
     // The library's whole-mod writer alone, not TrackService's own door: identical production code on
     // both sides would agree with itself about any file Track added.
@@ -50,7 +51,7 @@ public static class CutDownPluginFixture
         var scratch = Directory.CreateTempSubdirectory("medit-compile-derived-").FullName;
         try
         {
-            var root = Path.Combine(scratch, SourceRepository.RootFor(PluginFileName));
+            var root = Path.Combine(scratch, PluginSourceRoot.For(PluginFileName));
             Directory.CreateDirectory(root);
             RecordTextCodecGeneratorSeed
                 .SerializeWholeMod((IFallout4ModGetter)mod, root, InlineWorkDropoff.Instance, CancellationToken.None)

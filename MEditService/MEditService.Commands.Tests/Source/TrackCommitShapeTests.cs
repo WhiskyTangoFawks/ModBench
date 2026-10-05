@@ -130,7 +130,7 @@ public sealed class TrackCommitShapeTests : IDisposable
     {
         public override Task WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>
-            files.Any(file => file.RelativePath.StartsWith(SourceRepository.RootFor(plugin), StringComparison.Ordinal))
+            files.Any(file => file.RelativePath.StartsWith(PluginSourceRoot.For(plugin), StringComparison.Ordinal))
                 ? new ForgedTreeWriteAdapter(plugin, DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, cancel)
                 : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, cancel);
 
@@ -169,5 +169,5 @@ public sealed class TrackCommitShapeTests : IDisposable
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
     private IReadOnlyList<SourceDocument> HeldBy(string plugin) =>
-        SourceRepository.Over(_modFolder, GameRelease.Fallout4).ReadAll(Key(plugin));
+        TreeDocuments.Of(SourceRepository.Over(_modFolder, GameRelease.Fallout4), Key(plugin));
 }

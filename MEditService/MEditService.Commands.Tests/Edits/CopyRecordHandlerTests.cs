@@ -30,6 +30,24 @@ public sealed class CopyRecordHandlerTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void CopyingAsOverride_OfARecordTheDestinationsTreeUsesButNoRecordAnswersTo_RefusesIt_AndTheOthersLand(bool replace)
+    {
+        using var mod = CopyFixture.Create();
+        var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
+        var faction = new RecordAt(mod.SourcePlugin, mod.SelfLinkingFaction.ToString());
+        TreeTampering.NameInAnUnplaceableChild(mod.DestinationModFolder, mod.DestinationPlugin, mod.SourceNpc.ToString());
+
+        var result = mod.CopyHandler.Copy([npc, faction], CopyMode.Override, [mod.DestinationPlugin], replace);
+
+        Assert.Equal([new CopyItem(faction, mod.DestinationPlugin)], result.Applied.Select(landed => landed.Item));
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(new CopyItem(npc, mod.DestinationPlugin), refused.Item);
+        Assert.Equal(RecordEditRefusal.FormKeyCollision, refused.Refusal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void CopyingAsOverride_IntoTheRecordsOwnPlugin_WritesNothing_AndIsNoRefusal(bool replace)
     {
         using var mod = CopyFixture.Create(trackSource: true);

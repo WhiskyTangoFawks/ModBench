@@ -50,7 +50,7 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
     internal RecordEditResult Land(
         PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder, string written, CellCrossing crossing, string spelled)
     {
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         return SourceCommit.Write(
                 transaction, edit.Repository, logger, $"Moving {edit.Identity.FormKey} into another cell failed.",
                 () => Cross(transaction, plugin, edit, holder, written, crossing, spelled))
@@ -58,7 +58,7 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
     }
 
     private RecordEditResult? Cross(
-        SourceRepository.SourceTransaction transaction, PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder,
+        SourceTransaction transaction, PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder,
         string written, CellCrossing crossing, string spelled)
     {
         var (release, moved, repository) = edit;
@@ -83,7 +83,7 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         return landing.Finish(landed => Write(transaction, move, given, landed));
     }
 
-    private RecordEditResult? Write(SourceRepository.SourceTransaction transaction, Move move, SourceDocument given, Landed landed)
+    private RecordEditResult? Write(SourceTransaction transaction, Move move, SourceDocument given, Landed landed)
     {
         transaction.Put(move.Repository, move.Plugin, given);
         if (landed.NewInWorldspace is { } worldspace) transaction.PutInWorldspace(move.Repository, move.Plugin, landed.Cell, worldspace);

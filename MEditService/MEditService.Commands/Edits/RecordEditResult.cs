@@ -97,7 +97,7 @@ public enum RecordEditRefusal
     DestinationHoldsRecord,
 
     /// <summary>Deleting the header would remove the root <c>RecordData.json</c> the whole-mod door needs;
-    /// its FormKey is synthetic. Refused before <c>HoldingUnit.IsDirectoryPerRecord</c>, whose filename-only
+    /// its FormKey is synthetic. Refused before the adapter's container test, whose filename-only
     /// test would delete the whole source root.</summary>
     HeaderDeleteNotSupported,
 

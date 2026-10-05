@@ -1,6 +1,5 @@
 using MEditService.LoadOrder;
 using MEditService.Ports;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -56,7 +55,7 @@ internal sealed class ContainerMod : IDisposable
     /// embedded child.</summary>
     public string SourceFileContaining(string editorId) =>
         Directory.EnumerateFiles(
-                Path.Combine(Entry.ModFolderOf(), SourceRepository.RootFor(PluginName)), "*.json", SearchOption.AllDirectories)
+                Path.Combine(Entry.ModFolderOf(), PluginSourceRoot.For(PluginName)), "*.json", SearchOption.AllDirectories)
             .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
 
     public void Dispose() => _fixture.Dispose();
