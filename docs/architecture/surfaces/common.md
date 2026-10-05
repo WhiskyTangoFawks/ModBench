@@ -44,7 +44,7 @@ As a user, I want:
 
 By commands.md, A gesture ends when the read model shows it. As a user, I want:
 
-1. The view's progress bar from my click until the read that follows the gesture's write lands, and nothing in the view to change until then. Source: ADR-0015
+1. The view's progress bar from my click until the read that follows the gesture's write lands, and nothing in the view to change until then but what VS Code's own control changes as I click it, such as a check box. Source: ADR-0015; Mutagen's data, the reference's behaviour, VS Code's interaction
 2. Every value I see to be the read model's. A view shows what each read holds, whoever wrote it, and never a value it remembers from my gesture. Source: ADR-0003
 3. A gesture whose read fails to end with it: the rows I had stay and the message line says so (States, story 6). Source: ADR-0019
 

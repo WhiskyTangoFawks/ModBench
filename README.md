@@ -36,8 +36,8 @@ What's next is the [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBe
 ```
 modbench/          VS Code extension (TypeScript) + React webview for the compare grid, one
                    composite project per box of docs/architecture/
-  src/*.ts, src/medit/  the activation file and its wiring, Modbench's composition root:
-                        mEdit's status bar, log and filter code lens
+  src/*.ts           the activation file, its wiring, and the ports it implements over
+                     VS Code's window and workspace: Modbench's composition root
   src/toolbox/       Toolbox view — the instance's profile row, switch profile and refresh
   src/mods/          Mods view — the modlist tree and every mod gesture, never calling the
                      backend
