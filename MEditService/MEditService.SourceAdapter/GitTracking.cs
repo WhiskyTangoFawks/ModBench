@@ -13,7 +13,8 @@ public enum SourcePreset
 }
 
 /// <summary>Makes a mod's repository: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, which stays
-/// checked out. A track that lands no plugin leaves no repository.</summary>
+/// checked out. A track that lands no plugin leaves what it found: it takes back what it created, and
+/// a repository it did not create is never deleted (ADR-0003).</summary>
 internal static class GitTracking
 {
     /// <summary>Answers each plugin whose files could not be written.</summary>
@@ -25,41 +26,53 @@ internal static class GitTracking
         if (SourceRepositoryGit.IsTracked(modFolder) || SourceRepositoryGit.HoldsAnotherRepository(modFolder))
             throw new InvalidOperationException($"'{modFolder}' already holds a repository.");
 
-        var git = new SourceRepositoryGit(modFolder);
-        CreateRepository(git);
-        var (written, refused) = WriteEachPlugin(git, modFolder, baselines);
-        if (written.Count == 0 && refused.Count > 0)
-        {
-            git.Delete();
-            return refused;
-        }
+        List<string> created = [];
+        var (written, refused) = WriteEachPlugin(modFolder, baselines, created);
+        if (written.Count == 0) return refused;
 
-        File.WriteAllText(Path.Combine(modFolder, ".gitignore"), GitignoreContent(preset));
-        git.Run("add", "-A");
-        git.Run("commit", "-q", "-m", $"Track {SourceRepositoryLayout.ModNameIn(modFolder)}");
-        foreach (var plugin in written)
+        var git = new SourceRepositoryGit(modFolder);
+        var gitignorePath = Path.Combine(modFolder, ".gitignore");
+        var gitignoreBefore = File.Exists(gitignorePath) ? File.ReadAllBytes(gitignorePath) : null;
+        var repositoryExisted = git.Exists;
+        try
         {
-            if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Plugin, binarySha256);
+            CreateRepository(git);
+            File.WriteAllText(gitignorePath, GitignoreContent(preset));
+            git.Run("add", "-A");
+            git.Run("commit", "-q", "-m", $"Track {SourceRepositoryLayout.ModNameIn(modFolder)}");
+            foreach (var plugin in written)
+            {
+                if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Plugin, binarySha256);
+            }
+        }
+        catch
+        {
+            if (!repositoryExisted && git.Exists) git.Delete();
+            if (gitignoreBefore is null) File.Delete(gitignorePath);
+            else File.WriteAllBytes(gitignorePath, gitignoreBefore);
+            PristineFileWriter.Undo(created);
+            throw;
         }
         return refused;
     }
 
-    // Git's own clean takes a failed plugin's files back out of the work tree.
     private static (List<BaselineTrailers> Written, List<(string Plugin, string Reason)> Refused) WriteEachPlugin(
-        SourceRepositoryGit git, string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
+        string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines, List<string> created)
     {
         List<BaselineTrailers> written = [];
         List<(string Plugin, string Reason)> refused = [];
         foreach (var (files, trailers) in baselines)
         {
+            List<string> own = [];
             try
             {
-                PristineFileWriter.WriteAll(files, workTree);
+                PristineFileWriter.WriteAll(files, workTree, own);
                 written.Add(trailers);
+                created.AddRange(own);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
-                git.Run("clean", "-fdq", "--", SourceRepositoryGit.LiteralPathspec(SourceRepositoryLayout.RootFor(trailers.Plugin)));
+                PristineFileWriter.Undo(own);
                 refused.Add((trailers.Plugin, ex.Message));
             }
         }
@@ -113,13 +126,32 @@ internal static class GitTracking
 /// directory, shared so the call sites cannot drift.</summary>
 internal static class PristineFileWriter
 {
-    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory)
+    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory) => WriteAll(files, baseDirectory, []);
+
+    /// <summary>Every file and directory this call creates lands in <paramref name="created"/>, in the
+    /// order it was made, so <see cref="Undo"/> can take back exactly that.</summary>
+    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory, List<string> created)
     {
         foreach (var file in files)
         {
             var fullPath = Path.Combine(baseDirectory, file.RelativePath);
-            Directory.CreateDirectory(PathShape.DirectoryOf(fullPath));
+            var directory = PathShape.DirectoryOf(fullPath);
+            var missing = new Stack<string>();
+            for (var ancestor = directory; !Directory.Exists(ancestor); ancestor = PathShape.DirectoryOf(ancestor))
+                missing.Push(ancestor);
+            created.AddRange(missing);
+            Directory.CreateDirectory(directory);
+            if (!File.Exists(fullPath)) created.Add(fullPath);
             File.WriteAllBytes(fullPath, file.Content);
+        }
+    }
+
+    internal static void Undo(IEnumerable<string> created)
+    {
+        foreach (var path in created.Reverse())
+        {
+            if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+            else if (File.Exists(path)) File.Delete(path);
         }
     }
 }

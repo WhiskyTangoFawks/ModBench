@@ -1,7 +1,9 @@
 using System.Text;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -62,6 +64,21 @@ public sealed class SourceRepositoryTrackTests : IDisposable
         Assert.Equal(Encoding.UTF8.GetString(crlf), Git("show", "main:plugin-source/A.esp/npc_/A.esp/crlf.json"));
         Assert.Equal(Encoding.UTF8.GetString(lf), Git("show", "main:plugin-source/A.esp/npc_/A.esp/lf.json"));
         Assert.Equal(string.Empty, Git("status", "--porcelain"));
+    }
+
+    [Fact]
+    public void Track_ParksEachPluginsBinaryOnItsOwnRef()
+    {
+        SourceRepository.Track(
+            _modFolder, SourcePreset.Edits,
+            [
+                (SourceOf("First.esp"), new BaselineTrailers("First.esp", null, "AAAA")),
+                (SourceOf("Second.esp"), new BaselineTrailers("Second.esp", null, "BBBB")),
+            ]);
+
+        var repository = SourceRepository.Over(_modFolder, GameRelease.Fallout4);
+        Assert.Equal(["AAAA"], repository.LastWrittenBinarySha256s(new PluginAddress("First.esp", ModName)));
+        Assert.Equal(["BBBB"], repository.LastWrittenBinarySha256s(new PluginAddress("Second.esp", ModName)));
     }
 
     [Fact]

@@ -37,10 +37,44 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.False(SourceRepository.IsTracked(_modFolder));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
         Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
     }
 
     [Fact]
-    public void Track_AfterAFailedTrackOfTheModsOwnFiles_IsNotTracked_AndTrackingAgainCreatesTheRepository()
+    public void Track_WhenEveryPluginIsRefused_LeavesARepositoryItDidNotMakeAsItWas()
+    {
+        var theirs = Directory.CreateDirectory(Path.Combine(_modFolder, ".git")).FullName;
+        File.WriteAllText(Path.Combine(theirs, "config"), "[remote \"origin\"]\n");
+
+        SourceRepository.Track(
+            _modFolder, SourcePreset.Edits, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
+
+        Assert.Equal("[remote \"origin\"]\n", File.ReadAllText(Path.Combine(theirs, "config")));
+    }
+
+    [Fact]
+    public void Track_WhenTheCommitFails_LeavesARepositoryItDidNotMakeAsItWas()
+    {
+        var theirs = Directory.CreateDirectory(Path.Combine(_modFolder, ".git")).FullName;
+        File.WriteAllText(Path.Combine(theirs, "marker"), "theirs");
+        var asset = Path.Combine(_modFolder, "Locked.dds");
+        File.WriteAllText(asset, "pixels");
+        FileModes.Set(asset, "000");
+        try
+        {
+            Assert.ThrowsAny<InvalidOperationException>(
+                () => SourceRepository.Track(_modFolder, SourcePreset.Everything, [Baseline("A.esp")]));
+        }
+        finally
+        {
+            FileModes.Set(asset, "600");
+        }
+
+        Assert.Equal("theirs", File.ReadAllText(Path.Combine(theirs, "marker")));
+    }
+
+    [Fact]
+    public void Track_WhenTheCommitFails_TakesBackWhatItMade_AndTrackingAgainCreatesTheRepository()
     {
         var asset = Path.Combine(_modFolder, "Locked.dds");
         File.WriteAllText(asset, "pixels");
@@ -54,8 +88,9 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         {
             FileModes.Set(asset, "600");
         }
-        Assert.True(Directory.Exists(Path.Combine(_modFolder, ".git")));
-        Assert.False(SourceRepository.IsTracked(_modFolder));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
+        Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
 
         var refused = SourceRepository.Track(_modFolder, SourcePreset.Everything, [Baseline("A.esp")]);
 

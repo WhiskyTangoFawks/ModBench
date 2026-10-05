@@ -37,8 +37,7 @@ public sealed class SourceRepositoryLayoutTests
         string pluginFileName, string recordType, string formKeyString, string? editorId)
     {
         using var modFolder = new ScratchDirectory("medit-layout-roundtrip-");
-        PluginBaselines.Track(
-            modFolder, SourcePreset.Edits, []);
+        PluginBaselines.TrackWithNoRecords(modFolder);
         var repository = SourceRepository.Open(modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
         var plugin = new PluginAddress(pluginFileName, "LayoutMod");
