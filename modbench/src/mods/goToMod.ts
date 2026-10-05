@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import { goToModCandidates, originLabel, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import type { FileOrigin, Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
-import { registerModsGesture, singularArgument } from './gestureEntry';
+import { registerGesture, singularArgument } from '../drivingLib/gestureEntry';
 import type { ModlistNode, ModNode, OverwriteNode } from './ModListProvider';
 import { reportFailure } from '../drivingLib/reportFailure';
 
@@ -29,7 +29,7 @@ async function pickFrom(candidates: readonly FileOrigin[]): Promise<FileOrigin |
 export function registerGoToModCommand(
   instance: Pick<Instance, 'value'>, reporter: Reporter, view: GoToModView,
 ): vscode.Disposable {
-  return registerModsGesture('modbench.mod.goToMod', view.selection, async (entry, option) => {
+  return registerGesture('modbench.mod.goToMod', view.selection, async (entry, option) => {
     const row = singularArgument(entry, 'file');
     if (row === undefined) return;
     const candidates = goToModCandidates(instance.value.files.get(row.file.relativePath), row.origin);
