@@ -5,13 +5,10 @@ import { ExpandArrow } from './ExpandArrow';
 import { baseCell, labelCell, focusedRowStyle, mono, fg } from './gridStyles';
 import type { Column } from './recordUtils';
 import type { FocusedCell } from './DiffRow';
-import type { ColumnKey, PathHop } from './types';
+import type { ColumnKey } from './types';
 import { LABEL_COLUMN } from './columnKey';
+import { RECORD_HEADER_ROW, FORM_ID_ROW } from './recordRows';
 
-export const RECORD_HEADER_ROW = 'Record Header';
-export const FORM_ID_ROW = `${RECORD_HEADER_ROW}.FormID`;
-// The document member a record's FormID is (editor.md, The record header, story 2).
-export const FORM_ID_PATH: PathHop[] = [{ kind: 'member', name: 'FormKey' }];
 const INDENT = 24;
 
 interface FormIdCellProps {
