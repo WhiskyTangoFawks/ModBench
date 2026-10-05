@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceMasterPruningTests : IDisposable
+public sealed class CompilePluginMasterPruningTests : IDisposable
 {
     private const string FixtureFileName = "SpaDia_AMR.esp";
     private const string Origin = "SpaDiaAMRCompileMod";
@@ -20,7 +20,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginAddress _plugin = new(FixtureFileName, Origin);
 
-    public PluginCompileServiceMasterPruningTests()
+    public CompilePluginMasterPruningTests()
     {
         var fixturePath = Path.Combine(AppContext.BaseDirectory, "TestData", FixtureFileName);
         var pluginPath = Path.Combine(_modFolder, FixtureFileName);
@@ -54,7 +54,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     {
         var compileService = CompileServices.Over(_loadOrder);
 
-        var result = await compileService.CompileAsync(_plugin);
+        var result = await compileService.CompileOneAsync(_plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains("DiaQ_LLInjector_SpadeyAMR", result.RefusalReason);

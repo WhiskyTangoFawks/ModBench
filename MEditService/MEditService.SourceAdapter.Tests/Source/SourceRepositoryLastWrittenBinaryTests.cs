@@ -63,6 +63,45 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     }
 
     [Fact]
+    public void AGitFailureAfterTheWrite_ReportsTheRecordUnfinished_AndTheBinaryStaysWritten()
+    {
+        using var modFolder = new ScratchDirectory("medit-last-written-");
+        var repository = TrackedOver(modFolder);
+        repository.WriteBinary(Test, "FIRST", () => { });
+        var written = false;
+
+        var recorded = repository.WriteBinary(Test, "SECOND", () =>
+        {
+            written = true;
+            File.WriteAllText(RefLockOfTest(modFolder), "");
+        });
+
+        Assert.False(recorded);
+        Assert.True(written);
+        Assert.Equal(["SECOND", "FIRST"], repository.LastWrittenBinarySha256s(Test));
+    }
+
+    [Fact]
+    public void AGitFailureBeforeTheWrite_ThrowsAndNeverWrites()
+    {
+        using var modFolder = new ScratchDirectory("medit-last-written-");
+        var repository = TrackedOver(modFolder);
+        repository.WriteBinary(Test, "FIRST", () => { });
+        File.WriteAllText(RefLockOfTest(modFolder), "");
+        var written = false;
+
+        var failure = Assert.Throws<GitCommandFailedException>(
+            () => repository.WriteBinary(Test, "SECOND", () => written = true));
+
+        Assert.False(written);
+        Assert.DoesNotContain(modFolder, failure.Message, StringComparison.Ordinal);
+        Assert.Equal(["FIRST"], repository.LastWrittenBinarySha256s(Test));
+    }
+
+    private static string RefLockOfTest(string modFolder) =>
+        Path.Combine(modFolder, ".git", "refs", "medit", "last-compile", "Test.esp.lock");
+
+    [Fact]
     public void ThePluginsOfOneTrack_AnswerOnlyTheirOwnBinaries()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");

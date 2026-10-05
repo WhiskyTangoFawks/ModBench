@@ -4,7 +4,7 @@ using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceDiagnosisTests : IDisposable
+public sealed class CompilePluginDiagnosisTests : IDisposable
 {
     private readonly CompileFixture _mod = new();
 
@@ -16,7 +16,7 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
         Corrupt();
 
         var compileService = _mod.CompileService();
-        var result = await compileService.CompileAsync(_mod.Plugin);
+        var result = await compileService.CompileOneAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains("FixtureNpc", result.RefusalReason);
@@ -31,7 +31,7 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
         var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
         Corrupt();
 
-        var result = await _mod.CompileService().CompileAsync(_mod.Plugin);
+        var result = await _mod.CompileService().CompileOneAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, file), result.RefusalReason, StringComparison.Ordinal);

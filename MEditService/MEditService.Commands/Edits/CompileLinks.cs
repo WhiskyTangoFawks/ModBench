@@ -82,7 +82,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, SchemaReflector schem
 
     // A plugin-level problem is the header record's: it is the one source unit that stands for the
     // whole plugin, so the Problems entry lands on a file the author can open.
-    private static CompileDiagnostic PluginDiagnostic(PluginAddress plugin, SourceRepository repository, string message)
+    internal static CompileDiagnostic PluginDiagnostic(PluginAddress plugin, SourceRepository repository, string message)
     {
         var header = new RecordIdentity(
             PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), PluginHeader.RecordType, null);

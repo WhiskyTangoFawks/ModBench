@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceLinkTests : IDisposable
+public sealed class CompilePluginLinkTests : IDisposable
 {
     private const string HostName = "LinkHost.esp";
     private const string HostOrigin = "LinkHostMod";
@@ -33,7 +33,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     private readonly FormKey _npc;
     private readonly FormKey _targetKeyword;
 
-    public PluginCompileServiceLinkTests()
+    public CompilePluginLinkTests()
     {
         _targetFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", TargetOrigin)).FullName;
         _hostFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", HostOrigin)).FullName;
@@ -82,7 +82,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             npc => npc.Keywords = [new FormLink<IKeywordGetter>(keyword)]);
 
     private async Task<CompileResult> CompileHost() =>
-        await CompileServices.Over(_loadOrder).CompileAsync(_host);
+        await CompileServices.Over(_loadOrder).CompileOneAsync(_host);
 
     private IReadOnlyList<FormKey> KeywordsInTheBinary()
     {
@@ -151,7 +151,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     public async Task Compile_WhenTheLinkCheckItselfFails_StillSucceeds_AndSaysTheCheckDidNotRun()
     {
         var result = await CompileServices.Over(_loadOrder, new FaultyLinkAdapter())
-            .CompileAsync(_host);
+            .CompileOneAsync(_host);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = Assert.Single(result.Diagnostics);

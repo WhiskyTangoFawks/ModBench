@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -9,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceTests : IDisposable
+public sealed class CompilePluginTests : IDisposable
 {
     private const uint MovedNpcId = 0x000900;
     private const uint CreatedNpcId = 0x000910;
@@ -18,12 +17,12 @@ public sealed class PluginCompileServiceTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private PluginCompileService CompileService() =>
+    private CompilePluginHandler CompileService() =>
         _mod.CompileService();
 
     private async Task<(IFallout4ModGetter Mod, IDisposable Handle)> CompileAndReimport()
     {
-        var result = await CompileService().CompileAsync(_mod.Plugin);
+        var result = await CompileService().CompileOneAsync(_mod.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
@@ -37,7 +36,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     {
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
 
-        var result = await CompileService().CompileAsync(_mod.Plugin);
+        var result = await CompileService().CompileOneAsync(_mod.Plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -54,7 +53,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     public async Task Compile_LeavesUntouchedRecordsUnchanged()
     {
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        await CompileService().CompileAsync(_mod.Plugin);
+        await CompileService().CompileOneAsync(_mod.Plugin);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         using var overlayDisposable = ModFactory.ImportGetter(
@@ -69,7 +68,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     [Fact]
     public async Task Compile_WithASemanticallyBrokenRecord_SucceedsWithDiagnostics()
     {
-        var result = await CompileService().CompileAsync(_mod.Plugin);
+        var result = await CompileService().CompileOneAsync(_mod.Plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Contains(result.Diagnostics, d => d.FormKey == _mod.Race.ToString());
@@ -78,7 +77,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     [Fact]
     public async Task Compile_NamesADiagnosticsOwnDocument_RelativeToTheModFolder()
     {
-        var result = await CompileService().CompileAsync(_mod.Plugin);
+        var result = await CompileService().CompileOneAsync(_mod.Plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = result.Diagnostics.First(d => d.FormKey == _mod.Race.ToString());
@@ -146,7 +145,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     {
         var stray = TreeTampering.StrayGroupDocument(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
-        var result = await CompileService().CompileAsync(_mod.Plugin);
+        var result = await CompileService().CompileOneAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, stray), result.RefusalReason, StringComparison.Ordinal);

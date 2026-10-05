@@ -76,8 +76,6 @@ try
     // The handlers (ADR-0014) are registered where the module they share is visible,
     // and resolved by the route that names the gesture.
     builder.Services.AddCommandHandlers();
-    // The write path's other half — source text -> binary.
-    builder.Services.AddSingleton<PluginCompileService>();
 
     var app = builder.Build();
 

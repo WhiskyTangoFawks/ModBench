@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
@@ -12,7 +11,7 @@ using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceContainerTests : IDisposable
+public sealed class CompilePluginContainerTests : IDisposable
 {
     private const string PluginName = "ContainerCompile.esp";
     private const string Origin = "ContainerCompileMod";
@@ -41,7 +40,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     private readonly FormKey _questC;
     private readonly FormKey _topicC2;
 
-    public PluginCompileServiceContainerTests()
+    public CompilePluginContainerTests()
     {
         var pluginPath = Path.Combine(_modFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
@@ -125,11 +124,11 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         _gameDirectory.Dispose();
     }
 
-    private PluginCompileService CompileService() => CompileServices.Over(_loadOrder);
+    private CompilePluginHandler CompileService() => CompileServices.Over(_loadOrder);
 
     private async Task<(IFallout4ModGetter Mod, IDisposable Handle)> CompileAndReimport()
     {
-        var result = await CompileService().CompileAsync(_plugin);
+        var result = await CompileService().CompileOneAsync(_plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);
@@ -209,7 +208,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     [Fact]
     public async Task Compile_ForAnEmbeddedChildWithASemanticError_NamesTheContainersOwnDocument()
     {
-        var result = await CompileService().CompileAsync(_plugin);
+        var result = await CompileService().CompileOneAsync(_plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var diagnostic = Assert.Single(

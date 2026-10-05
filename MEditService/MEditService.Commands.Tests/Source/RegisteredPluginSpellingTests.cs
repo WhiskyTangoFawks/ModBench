@@ -39,7 +39,7 @@ public sealed class RegisteredPluginSpellingTests
         using var scratch = new ModFolderUnderAnInstanceRootScratch();
         scratch.TrackWithoutTheTrackDoor();
 
-        var result = await CompileServices.Over(scratch.LoadOrder).CompileAsync(scratch.Plugin);
+        var result = await CompileServices.Over(scratch.LoadOrder).CompileOneAsync(scratch.Plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
     }

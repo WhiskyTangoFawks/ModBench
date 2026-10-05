@@ -1,17 +1,16 @@
 using System.Security.Cryptography;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceParkedRefTests : IDisposable
+public sealed class CompilePluginParkedRefTests : IDisposable
 {
     private readonly CompileFixture _mod = new();
 
     public void Dispose() => _mod.Dispose();
 
-    private PluginCompileService CompileService() =>
+    private CompilePluginHandler CompileService() =>
         _mod.CompileService();
 
     private IReadOnlyList<string> Parked() => LastWriteRecord.Of(_mod.ModFolder, CompileFixture.PluginName);
@@ -24,7 +23,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         var baselineParked = Parked();
 
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        var result = await CompileService().CompileAsync(_mod.Plugin);
+        var result = await CompileService().CompileOneAsync(_mod.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
@@ -38,14 +37,29 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
         var baselineParked = Parked();
-        var result = await CompileService().CompileAsync(_mod.Plugin);
+        var result = await CompileService().CompileOneAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Equal(baselineParked, Parked());
     }
 
     [Fact]
-    public async Task Compile_ThatCannotParkItsRecord_LeavesTheOldBinary()
+    public async Task Compile_ThatCannotFinishItsRecord_Lands_AndSaysSo()
+    {
+        var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
+        var before = File.ReadAllBytes(pluginPath);
+        _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
+        LastWriteRecord.RefuseRefUpdatesAfterTheFirst(_mod.ModFolder);
+
+        var result = await CompileService().CompileOneAsync(_mod.Plugin);
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.NotEqual(before, File.ReadAllBytes(pluginPath));
+        Assert.Single(result.Diagnostics, d => d.Message.Contains("could not be finished", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Compile_ThatCannotParkItsRecord_IsRefusedAsAFailedWrite_AndLeavesTheOldBinary()
     {
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var before = File.ReadAllBytes(pluginPath);
@@ -54,7 +68,10 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         File.WriteAllText(refLock, "");
         try
         {
-            await Assert.ThrowsAnyAsync<InvalidOperationException>(() => CompileService().CompileAsync(_mod.Plugin));
+            var result = await CompileService().CompileOneAsync(_mod.Plugin);
+
+            Assert.Equal(CompileRefusal.WriteFailed, result.Refusal);
+            Assert.DoesNotContain(_mod.ModFolder, result.RefusalReason, StringComparison.Ordinal);
         }
         finally
         {

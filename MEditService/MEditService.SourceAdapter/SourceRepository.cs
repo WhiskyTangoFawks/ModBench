@@ -220,13 +220,13 @@ public sealed class SourceRepository
         Writes.ReplaceSourceFrom(plugin.Name, files, binarySha256);
     }
 
-    /// <summary>Runs <paramref name="write"/>, which puts the plugin's binary on disk, recording
-    /// <paramref name="binarySha256"/> as the one last written. An interrupted write leaves a record
-    /// naming the old and the new binary (ADR-0003).</summary>
-    public void WriteBinary(PluginAddress plugin, string binarySha256, Action write)
+    /// <summary>Runs <paramref name="write"/>, recording <paramref name="binarySha256"/> as the one last
+    /// written; an interrupted write leaves the old and new (ADR-0003). Git failing before the write
+    /// throws with nothing written; after it, false.</summary>
+    public bool WriteBinary(PluginAddress plugin, string binarySha256, Action write)
     {
         RefuseUnlessProvidedByThisMod(plugin);
-        _git.WriteBinary(plugin.Name, binarySha256, write);
+        return _git.WriteBinary(plugin.Name, binarySha256, write);
     }
 
     /// <summary>Every binary hash Modbench last wrote for the plugin: one, or several while a write

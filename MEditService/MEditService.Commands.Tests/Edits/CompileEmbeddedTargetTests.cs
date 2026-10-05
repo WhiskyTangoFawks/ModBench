@@ -94,7 +94,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     [Fact]
     public async Task Compile_ForALinkToARecordEmbeddedInAnotherTrackedPlugin_ReportsNothingAboutIt()
     {
-        var result = await CompileServices.Over(_loadOrder).CompileAsync(_referrer);
+        var result = await CompileServices.Over(_loadOrder).CompileOneAsync(_referrer);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.DoesNotContain(
@@ -107,7 +107,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         var notLoaded = SnapshotPlugins.Snapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4, [Target(enabled: false), Referrer]);
 
-        var result = await CompileServices.Over(notLoaded).CompileAsync(_referrer);
+        var result = await CompileServices.Over(notLoaded).CompileOneAsync(_referrer);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Contains(

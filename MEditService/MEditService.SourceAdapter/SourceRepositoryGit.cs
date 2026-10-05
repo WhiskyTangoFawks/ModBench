@@ -143,7 +143,7 @@ internal sealed class SourceRepositoryGit(string modFolder)
         return [.. ReadTrailers(body, BinaryTrailer), .. ReadTrailers(body, EarlierBinaryTrailer)];
     }
 
-    internal void WriteBinary(string pluginFileName, string binarySha256, Action write)
+    internal bool WriteBinary(string pluginFileName, string binarySha256, Action write)
     {
         var headSha = Run("rev-parse", "HEAD").Trim();
         var tree = WorkingTreeSnapshotTree();
@@ -153,10 +153,20 @@ internal sealed class SourceRepositoryGit(string modFolder)
 
         write();
 
-        var parked = LastCompileRef(pluginFileName);
-        var parkedTree = Run("rev-parse", $"{parked}^{{tree}}").Trim();
-        var parent = Run("rev-parse", $"{parked}^").Trim();
-        ParkSnapshot("Compile", pluginFileName, parkedTree, parent, [$"{BinaryTrailer}: {binarySha256}"]);
+        // The binary is on disk, so a git failure from here is a record left unfinished, never a
+        // write that did not happen. The ref keeps naming the old and the new binary (ADR-0003).
+        try
+        {
+            var parked = LastCompileRef(pluginFileName);
+            var parkedTree = Run("rev-parse", $"{parked}^{{tree}}").Trim();
+            var parent = Run("rev-parse", $"{parked}^").Trim();
+            ParkSnapshot("Compile", pluginFileName, parkedTree, parent, [$"{BinaryTrailer}: {binarySha256}"]);
+            return true;
+        }
+        catch (GitCommandFailedException)
+        {
+            return false;
+        }
     }
 
     /// <summary>What the working tree now holds was made from this binary, as a landed compile's is. The

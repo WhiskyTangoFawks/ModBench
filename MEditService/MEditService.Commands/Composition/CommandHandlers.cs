@@ -74,7 +74,12 @@ public static class CommandHandlers
             sp.GetRequiredService<ILogger<DecompilePluginHandler>>()));
 
         services.AddSingleton(sp => new CompilePluginHandler(
-            sp.GetRequiredService<PluginCompileService>(),
+            new PluginCompileService(
+                sp.GetRequiredService<LoadOrderHolder>(),
+                sp.GetRequiredService<SchemaReflector>(),
+                sp.GetRequiredService<RecordTextCodec>(),
+                sp.GetRequiredService<IPluginAdapter>(),
+                sp.GetRequiredService<ILogger<PluginCompileService>>()),
             sp.GetRequiredService<LoadOrderHolder>()));
 
         services.AddSingleton(sp => new CreatePluginHandler(

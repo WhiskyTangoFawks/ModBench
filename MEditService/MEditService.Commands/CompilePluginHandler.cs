@@ -1,10 +1,10 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
-/// <summary>The Compile gesture's handler (ADR-0014): it owns the selection, and every
-/// step of the compile itself stays on <see cref="PluginCompileService"/>.</summary>
+/// <summary>The Compile gesture's handler (ADR-0014), and Compile's only way in.</summary>
 public sealed class CompilePluginHandler
 {
     private readonly PluginCompileService _compileService;
@@ -25,7 +25,7 @@ public sealed class CompilePluginHandler
 
     private async Task<ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileOneAsync(PluginAddress plugin)
     {
-        // A write the file system refuses (ADR-0003) is this plugin's refusal alone.
+        // A write the file system or git refuses (ADR-0003) is this plugin's refusal alone.
         try
         {
             var result = await _compileService.CompileAsync(plugin);
@@ -36,7 +36,7 @@ public sealed class CompilePluginHandler
                     result.RefusalReason
                         ?? throw new InvalidOperationException("Expected a refused compile to carry the reason it was refused."));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or GitCommandFailedException)
         {
             return ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>.Refused(
                 CompileRefusal.WriteFailed,

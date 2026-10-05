@@ -29,7 +29,6 @@ internal static class TestEditService
             .AddSingleton<RecordTextCodec>()
             .AddSingleton(SharedSchemaReflector.Instance)
             .AddSingleton<TrackService>()
-            .AddSingleton<PluginCompileService>()
             .AddCommandHandlers()
             .BuildServiceProvider();
 
@@ -45,8 +44,8 @@ internal static class TestEditService
     internal static CopyRecordHandler CopyHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<CopyRecordHandler>();
 
-    internal static CompilePluginHandler CompileHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<CompilePluginHandler>();
+    internal static CompilePluginHandler CompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
+        Over(holder, adapter: adapter).GetRequiredService<CompilePluginHandler>();
 
     internal static TrackHandler TrackHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<TrackHandler>();

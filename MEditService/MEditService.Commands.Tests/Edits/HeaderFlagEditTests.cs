@@ -32,7 +32,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.Contains("Small", _fixture.Document(HeaderFormKey).Require().Body, StringComparison.Ordinal);
 
         var compile = await CompileServices.Over(_fixture.LoadOrder)
-            .CompileAsync(_fixture.Plugin);
+            .CompileOneAsync(_fixture.Plugin);
         Assert.True(compile.Succeeded, compile.RefusalReason);
 
         using var written = ModFactory.ImportGetter(
@@ -48,7 +48,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         TrackedTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
-        var compile = await CompileService().CompileAsync(_fixture.Plugin);
+        var compile = await CompileService().CompileOneAsync(_fixture.Plugin);
 
         Assert.False(compile.Succeeded);
         Assert.Contains("001000", compile.RefusalReason, StringComparison.Ordinal);
@@ -64,12 +64,12 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false)).Applied);
 
-        var compile = await CompileService().CompileAsync(_fixture.Plugin);
+        var compile = await CompileService().CompileOneAsync(_fixture.Plugin);
 
         Assert.True(compile.Succeeded, compile.RefusalReason);
     }
 
-    private PluginCompileService CompileService() =>
+    private CompilePluginHandler CompileService() =>
         CompileServices.Over(_fixture.LoadOrder);
 
     private RecordEditResult SetFlags(string names) =>
@@ -102,7 +102,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     {
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "Author", JsonDocument.Parse("\"Someone\"").RootElement).Applied);
 
-        var compile = await CompileService().CompileAsync(_fixture.Plugin);
+        var compile = await CompileService().CompileOneAsync(_fixture.Plugin);
         Assert.True(compile.Succeeded, compile.RefusalReason);
 
         using var written = ModFactory.ImportGetter(

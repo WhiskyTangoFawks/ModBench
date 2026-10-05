@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>ADR-0007's compile, for one plugin.</summary>
-public sealed class PluginCompileService(
+internal sealed class PluginCompileService(
     LoadOrderHolder loadOrderHolder,
     SchemaReflector schemaReflector,
     RecordTextCodec codec,
@@ -25,8 +25,6 @@ public sealed class PluginCompileService(
     public async Task<CompileResult> CompileAsync(PluginAddress plugin)
     {
         var loadOrder = loadOrderHolder.Current;
-        if (loadOrder.Plugins.Count == 0)
-            return CompileResult.Refused(CompileRefusal.PluginNotInLoadOrder, "No load order has been received.");
         if (loadOrder.Plugin(plugin) is not { } registered)
             return CompileResult.Refused(CompileRefusal.PluginNotInLoadOrder, $"{plugin.Name} is not in the load order.");
         if (SourceRepository.TrackedModOf(loadOrder, plugin) is not { } mod)
@@ -115,9 +113,10 @@ public sealed class PluginCompileService(
                 CompileRefusal.FormIdUnmappable,
                 $"{plugin.Name} could not be compiled: {PluginDiagnosis.FromWriteException(ex).Describe()}");
         }
+        bool recorded;
         using (save)
         {
-            repository.WriteBinary(plugin, save.BinarySha256(), save.Commit);
+            recorded = repository.WriteBinary(plugin, save.BinarySha256(), save.Commit);
         }
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -125,7 +124,15 @@ public sealed class PluginCompileService(
             logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
                 plugin.Name, plugin.Origin, tree.FormKeys.Count);
         }
-        return CompileResult.Success(_links.Report(new LinkCheckScope(plugin, registered, loadOrder, repository), content.Records, content.Links));
+        var diagnostics = _links.Report(new LinkCheckScope(plugin, registered, loadOrder, repository), content.Records, content.Links);
+        if (!recorded)
+        {
+            diagnostics.Add(CompileLinks.PluginDiagnostic(
+                plugin, repository,
+                $"{plugin.Name} compiled, but the record of the binary Modbench last wrote could not be finished. " +
+                "Compile it again to update the record."));
+        }
+        return CompileResult.Success(diagnostics);
     }
 
     private sealed record Content(IReadOnlyList<SourceRecord> Records, IReadOnlyCollection<string> Links);

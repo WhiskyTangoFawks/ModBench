@@ -1,4 +1,3 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -20,7 +19,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
     private CopyRecordHandler CopyHandler() => _fixture.CopyHandler;
 
-    private PluginCompileService CompileService() =>
+    private CompilePluginHandler CompileService() =>
         CompileServices.Over(_fixture.LoadOrder);
 
     [Fact]
@@ -30,7 +29,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
             _fixture.SourcePlugin, _fixture.ExteriorPersistentRef.ToString(), _fixture.DestinationPlugin);
         Assert.True(copyResult.Applied, copyResult.Message);
 
-        var compileResult = await CompileService().CompileAsync(_fixture.DestinationPlugin);
+        var compileResult = await CompileService().CompileOneAsync(_fixture.DestinationPlugin);
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
 
         var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
@@ -158,7 +157,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
     private async Task<IFallout4ModGetter> ImportCompiled()
     {
-        var compileResult = await CompileService().CompileAsync(_fixture.DestinationPlugin);
+        var compileResult = await CompileService().CompileOneAsync(_fixture.DestinationPlugin);
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
 
         var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
@@ -177,7 +176,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
             _fixture.SourcePlugin, _fixture.ExteriorTemporaryRef.ToString(), _fixture.DestinationPlugin);
         Assert.True(copyResult.Applied, copyResult.Message);
 
-        var compileResult = await CompileService().CompileAsync(_fixture.DestinationPlugin);
+        var compileResult = await CompileService().CompileOneAsync(_fixture.DestinationPlugin);
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
 
         var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
