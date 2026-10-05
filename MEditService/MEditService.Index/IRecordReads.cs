@@ -20,10 +20,8 @@ public interface IRecordReads
     /// that plugin never indexed this FormKey.</summary>
     RecordDocument? GetDocument(string formKey, PluginAddress plugin);
 
-    /// <summary>The copy <paramref name="plugin"/> would hold of <paramref name="formKey"/> were its
-    /// document <paramref name="text"/>, read as the Index reads a stored one: the plugin need not be
-    /// active, nor hold the record. Null if no active plugin indexes the FormKey, whose record type
-    /// the text does not state. A copy no plugin wins has no winner.</summary>
+    /// <summary>The copy <paramref name="plugin"/> would hold were its document <paramref name="text"/>,
+    /// active or not. Null if no active plugin indexes the FormKey, which gives the record type.</summary>
     RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text);
 
     /// <summary>Every document <paramref name="plugin"/> holds, in one bulk read, for consumers that

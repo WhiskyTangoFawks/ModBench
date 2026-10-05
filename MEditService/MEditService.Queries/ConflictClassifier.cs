@@ -138,8 +138,8 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
         foreach (var member in records.SelectMany(r => r.Fields).Select(f => f.Metadata).DistinctBy(m => m.Name))
         {
             // A Partial Form override's own fields are excluded as if null (ADR-0018), so they fall
-            // through to the previous non-partial override; copies compared with no conflict show them. Its record header and its EditorID,
-            // which it keeps, take part as xEdit's do.
+            // through to the previous non-partial override; its header and EditorID take part. Copies
+            // compared with no conflict show them all.
             var header = member.IsRecordHeaderMember;
             var ownField = !header && !member.IsEditorId;
             var values = records.ToDictionary(Column, r => ctx.Coloured && r.IsPartialForm && ownField ? null : MemberValue(r, member.Name));
