@@ -1,51 +1,56 @@
 using MEditService.Codec.Schema;
-using MEditService.Ports;
+using MEditService.LoadOrder;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>A <see cref="DuckDbRecordIndex"/> per game, opened over the calling instance's
-/// persistent file when it names one. A file another window holds answers an index whose
-/// HeldElsewhere says so (ADR-0010).</summary>
+/// <summary>A <see cref="DuckDbRecordIndex"/> per game, opened over the calling instance's persistent
+/// file when it names one. Another window holding the file answers a refusal and no index
+/// (ADR-0010).</summary>
 internal sealed class DuckDbRecordIndexFactory(
     SchemaReflector schemaReflector,
     TableDdlBuilder ddlBuilder,
-    INotificationPublisher? notifications = null,
     ILogger<DuckDbRecordIndexFactory>? logger = null,
     TimeProvider? timeProvider = null)
 {
-    private readonly SchemaReflector _schemaReflector = schemaReflector;
-    private readonly TableDdlBuilder _ddlBuilder = ddlBuilder;
-    private readonly INotificationPublisher? _notifications = notifications;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
-    private readonly TimeProvider? _timeProvider = timeProvider;
 
     /// <summary>A null <paramref name="instanceRoot"/> means an in-memory index that dies with this
-    /// object.</summary>
-    public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot)
-    {
-        var index = New(instanceRoot);
-        if (index.HeldElsewhere is null) index.Initialize(gameRelease);
-        return index;
-    }
+    /// object. <paramref name="openedPlugins"/> is what the index's reads answer
+    /// <see cref="IRecordReads.OpenedPlugins"/> with; null means none are open.</summary>
+    public DuckDbRecordIndex? Create(
+        GameRelease gameRelease, string? instanceRoot,
+        Func<IReadOnlyDictionary<PluginAddress, PluginContent>>? openedPlugins, out string? refusal) =>
+        Open(gameRelease, instanceRoot, openedPlugins, atLeastSequence: null, out refusal);
 
     /// <summary>The reopened sequence is floored at <paramref name="atLeastSequence"/>: this process
     /// may already have answered a caller with a higher value, and Sequence must never regress.</summary>
-    public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence)
-    {
-        var index = New(instanceRoot);
-        if (index.HeldElsewhere is null) index.RebuildEmpty(gameRelease, atLeastSequence);
-        return index;
-    }
+    public DuckDbRecordIndex? Rebuild(
+        GameRelease gameRelease, string instanceRoot, long atLeastSequence, out string? refusal) =>
+        Open(gameRelease, instanceRoot, openedPlugins: null, atLeastSequence, out refusal);
 
-    private DuckDbRecordIndex New(string? instanceRoot)
+    private DuckDbRecordIndex? Open(
+        GameRelease gameRelease, string? instanceRoot,
+        Func<IReadOnlyDictionary<PluginAddress, PluginContent>>? openedPlugins,
+        long? atLeastSequence, out string? refusal)
     {
-        var index = new DuckDbRecordIndex(
-            _schemaReflector, _ddlBuilder, _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot),
-            _notifications, _timeProvider);
-        index.Open();
-        return index;
+        var store = new Store(
+            _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), schemaReflector, ddlBuilder,
+            timeProvider, openedPlugins ?? (() => new Dictionary<PluginAddress, PluginContent>()));
+        refusal = store.Open();
+        if (refusal is not null)
+        {
+            store.Dispose();
+            return null;
+        }
+
+        // ADR-0010: a rebuild's whole job on an opened file, which the open already refused if
+        // another process held it.
+        if (atLeastSequence is not null) store.RebuildFile();
+        store.Initialize(gameRelease);
+        if (atLeastSequence is { } floor) store.SeedSequence(floor);
+        return new DuckDbRecordIndex(store, _logger);
     }
 }

@@ -29,8 +29,6 @@ internal sealed class Store : IDisposable
     private readonly PluginFileHashes _hashes;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
     private bool _recordTypeViewsCreated;
-    private Func<IReadOnlyDictionary<PluginAddress, PluginContent>> _openedPlugins =
-        () => new Dictionary<PluginAddress, PluginContent>();
 
     private DuckDBConnection? _connection;
 
@@ -47,16 +45,12 @@ internal sealed class Store : IDisposable
     public IReadOnlyDictionary<string, RecordTableSchema> Schemas =>
         _schemas ?? throw new InvalidOperationException("Call Initialize before using the repository.");
 
-    // Empty until the Indexer points it somewhere: a store opened by a test that never reconciles
-    // has no plugins open, which is what an empty set says.
-    public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins() => _openedPlugins();
-
-    public void ReadOpenedPluginsFrom(Func<IReadOnlyDictionary<PluginAddress, PluginContent>> opened) =>
-        _openedPlugins = opened;
-
+    /// <summary><paramref name="openedPlugins"/> answers <see cref="IRecordReads.OpenedPlugins"/>:
+    /// the store holds no header flag, master list or record count, so the reads take them from the
+    /// plugins the Indexer holds open.</summary>
     public Store(
         ILogger logger, string? databasePath, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder,
-        TimeProvider? timeProvider)
+        TimeProvider? timeProvider, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins)
     {
         _logger = logger;
         _databasePath = databasePath;
@@ -64,7 +58,7 @@ internal sealed class Store : IDisposable
         _ddlBuilder = ddlBuilder;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _hashes = new PluginFileHashes(_timeProvider);
-        Reads = new RelationReads(this);
+        Reads = new RelationReads(this, openedPlugins);
         Filter = new RecordFilter(this);
     }
 
@@ -346,7 +340,7 @@ internal sealed class Store : IDisposable
             $"UPDATE {PluginDerivationRelation} SET derived_from = $1 WHERE plugin = $2 AND origin = $3",
             derivedFrom.ToString(), key.Name, key.Origin);
 
-    /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
+    /// <summary>The hash of the file <paramref name="key"/>'s rows were built from, or null when none.</summary>
     public string? IndexedContentHash(PluginAddress key)
     {
         using var connection = OpenReadConnection();
