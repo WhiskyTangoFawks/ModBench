@@ -149,6 +149,18 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task CreatePlugin_WhenTheFileSystemRefusesTheWrite_RefusesWithItsWords()
+    {
+        var adapter = new RecordingAdapter { Failure = new IOException("disk full") };
+
+        var result = await HandlerIn(GameRelease.Fallout4, adapter).CreatePlugin(new PluginAddress("Full.esp", "FullMod"), ModFolder("FullMod"));
+
+        Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
+        Assert.Contains("Full.esp", result.Message, StringComparison.Ordinal);
+        Assert.Contains("disk full", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CreatePlugin_WhoseAdapterAnswersAnUnnamedOutcome_ThrowsRatherThanReportingApplied()
     {
         var adapter = new RecordingAdapter { Outcome = (EmptyPluginWrite)99 };
@@ -168,10 +180,12 @@ public sealed class CreatePluginHandlerTests : IDisposable
     {
         public List<(string Name, GameRelease Release)> Asked { get; } = [];
         public EmptyPluginWrite Outcome { get; init; } = EmptyPluginWrite.Written;
+        public Exception? Failure { get; init; }
 
         public override Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease)
         {
             Asked.Add((modKey.FileName.String, gameRelease));
+            if (Failure is not null) throw Failure;
             return Task.FromResult(Outcome);
         }
     }

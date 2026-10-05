@@ -188,10 +188,11 @@ public sealed class PersistentFlagEditTests : IDisposable
         TreeTampering.BlockWrite(_mod.ModFolder, _mod.Plugin, new RecordIdentity(_keys["World"].ToString(), "wrld", "World"));
         var before = TrackedTree.Records(_mod.ModFolder, _mod.Plugin);
 
-        var thrown = Assert.Throws<IOException>(() => SetFlags("OutsideTemp", Persistent));
+        var result = SetFlags("OutsideTemp", Persistent);
 
+        Assert.Equal(RecordEditRefusal.SourceWriteFailed, result.Refusal);
         Assert.Equal(before, TrackedTree.Records(_mod.ModFolder, _mod.Plugin));
-        Assert.Contains("back as it was — nothing to review or revert", thrown.Message, StringComparison.Ordinal);
+        Assert.Contains("back as it was — nothing to review or revert", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]

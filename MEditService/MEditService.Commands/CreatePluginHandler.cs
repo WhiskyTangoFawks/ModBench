@@ -29,7 +29,17 @@ public sealed class CreatePluginHandler
                 $"{release} has no light plugins, so {plugin.Name} cannot be created.");
         }
 
-        return await _adapter.CreateAndWriteAsync(modKey, folder, release) switch
+        EmptyPluginWrite written;
+        try
+        {
+            written = await _adapter.CreateAndWriteAsync(modKey, folder, release);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new PluginCreateResult(PluginCreateRefusal.WriteFailed, $"Could not write {plugin.Name} into {folder}: {ex.Message}");
+        }
+
+        return written switch
         {
             EmptyPluginWrite.Written => new PluginCreateResult(),
             EmptyPluginWrite.FolderGone => new PluginCreateResult(PluginCreateRefusal.FolderGone,

@@ -33,7 +33,12 @@ public sealed class CreateRecordHandler
     /// <summary>The FormKey is <paramref name="requestedFormKey"/> (xEdit's typed-FormID path) or the next
     /// free local ID, collision-checked at both refs so an uncompiled create or a working-tree-deleted
     /// record is never handed out twice.</summary>
-    public RecordEditResult CreateRecord(PluginAddress plugin, string recordType, string? editorId, string? requestedFormKey = null)
+    public RecordEditResult CreateRecord(PluginAddress plugin, string recordType, string? editorId, string? requestedFormKey = null) =>
+        ItemWrite.RefusingTheWriteFailure(
+            () => MintRecord(plugin, recordType, editorId, requestedFormKey),
+            $"Could not write the source file for the new {recordType}", _logger);
+
+    private RecordEditResult MintRecord(PluginAddress plugin, string recordType, string? editorId, string? requestedFormKey)
     {
         if (_targets.RefuseUnlessTrackedAndLoaded(plugin, out var openedRepository) is { } blocked) return blocked;
         var repository = openedRepository

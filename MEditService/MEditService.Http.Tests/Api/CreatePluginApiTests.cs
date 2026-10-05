@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
@@ -122,5 +123,41 @@ public sealed class CreatePluginApiTests : HostedTests
 
         Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
         Assert.False(File.Exists(Path.Combine(modFolder, "Bad|Name.esp")));
+    }
+
+    [Fact]
+    public async Task CreatingAPluginInAFolderTheFileSystemWillNotWrite_IsATypedRefusal_AndWritesNothing()
+    {
+        var fx = Owned(await Loaded());
+        var modFolder = NewModFolder(fx, "mod-locked");
+        OtherTool.SetsThePermissions(modFolder, "500");
+        try
+        {
+            var created = await Create("Locked.esp", modFolder, "LockedMod");
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, created.StatusCode);
+            var problem = await created.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("WriteFailed", problem.GetProperty("refusal").GetString());
+            Assert.Empty(Directory.EnumerateFileSystemEntries(modFolder));
+        }
+        finally
+        {
+            OtherTool.SetsThePermissions(modFolder, "700");
+        }
+    }
+
+    [Fact]
+    public async Task ARefusedCreate_IsLoggedOnce_NamingThePluginAndWhy()
+    {
+        var fx = Owned(await Loaded());
+        var modFolder = NewModFolder(fx, "mod-taken");
+        await Created("Taken.esp", modFolder, "TakenMod");
+
+        await Create("Taken.esp", modFolder, "TakenMod");
+
+        var logged = Assert.Single(Logged, entry => entry.Message.StartsWith("Refused Create plugin", StringComparison.Ordinal));
+        Assert.Equal(LogLevel.Warning, logged.Level);
+        Assert.Contains("Taken.esp", logged.Message, StringComparison.Ordinal);
+        Assert.Contains("FileExists", logged.Message, StringComparison.Ordinal);
     }
 }

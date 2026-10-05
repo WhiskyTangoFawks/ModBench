@@ -5,9 +5,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Endpoints;
 
-/// <summary>The write handlers' shared binding and error-mapping seam. Deliberately does not log:
-/// each call site keeps its own structured log line, which a shared mapper cannot generalize
-/// without losing the file, FormKey or plugin it names.</summary>
+/// <summary>The write handlers' shared binding and error-mapping seam, and the one place a refusal is
+/// logged.</summary>
 internal static class WriteEndpointMapping
 {
     /// <summary>For route-bound (URL-encoded) plugin names only. A body-sourced name must never pass
@@ -70,7 +69,7 @@ internal static class WriteEndpointMapping
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = refusal.Refusal.ToString() });
 
-    /// <summary>Create plugin's own refusal, each found before any write: the status says what kind
+    /// <summary>Create plugin's own refusal, each leaving the folder as it was: the status says what kind
     /// of problem, the refusal extension says exactly which (ADR-0019).</summary>
     internal static IResult Refusal(PluginCreateRefusal refusal, string? message) => Results.Problem(
         detail: message,
@@ -78,6 +77,7 @@ internal static class WriteEndpointMapping
         {
             PluginCreateRefusal.FolderGone => 404,
             PluginCreateRefusal.FileExists => 409,
+            // The request is sound; the file system refused the write.
             // Well-formed, and still not a plugin this game can load.
             _ => 422,
         },
@@ -93,6 +93,7 @@ internal static class WriteEndpointMapping
     /// <summary>A gesture over a selection answers 200 with what landed and what was refused, or the
     /// refusal of the whole selection (ADR-0019).</summary>
     internal static async Task<IResult> Answered<TItem, TRefusal, TOutcome, TLanded, TRefused>(
+        string gesture, ILogger logger,
         Task<SelectionResult<TItem, TRefusal, TOutcome>> answer,
         Func<SelectionRefusal<TRefusal>, IResult> refusal,
         Func<ItemLanded<TItem, TOutcome>, TLanded> landed,
@@ -100,9 +101,21 @@ internal static class WriteEndpointMapping
         Func<IReadOnlyList<TLanded>, IReadOnlyList<TRefused>, object> response)
     {
         var result = await answer;
-        return result.SelectionRefusal is { } selectionRefusal
-            ? refusal(selectionRefusal)
-            : Results.Ok(response([.. result.Landed.Select(landed)], [.. result.Refused.Select(refused)]));
+        if (result.SelectionRefusal is { } selectionRefusal)
+        {
+            LogRefusal(logger, gesture, selectionRefusal.Refusal, selectionRefusal.Message);
+            return refusal(selectionRefusal);
+        }
+
+        foreach (var item in result.Refused)
+            LogRefusal(logger, gesture, item.Refusal, item.Message, item.Item);
+        return Results.Ok(response([.. result.Landed.Select(landed)], [.. result.Refused.Select(refused)]));
+    }
+
+    internal static void LogRefusal(ILogger logger, string gesture, object? refusal, string? message, object? item = null)
+    {
+        if (item is null) logger.LogWarning("Refused {Gesture}: {Refusal} — {Message}", gesture, refusal, message);
+        else logger.LogWarning("Refused {Gesture} of {Item}: {Refusal} — {Message}", gesture, item, refusal, message);
     }
 
     private static IResult RecordEditProblem(RecordEditRefusal refusal, string message, string? path) => Results.Problem(
@@ -126,9 +139,7 @@ internal static class WriteEndpointMapping
             ["path"] = path,
         });
 
-    /// <summary>A write to a working tree Modbench does not own exclusively can fail; the caller
-    /// builds <paramref name="detail"/> because it is wire body that differs per site, so one shared
-    /// message would change what every client reads.</summary>
+    /// <summary>The load order's own failure, which no typed refusal names.</summary>
     internal static IResult WriteFailure(string detail) => Results.Problem(detail, statusCode: 500);
 
     /// <summary>The load order went away underneath the request — a "not right now", never a bad
@@ -147,11 +158,11 @@ internal static class WriteEndpointMapping
     /// <summary>No Index gate here (ADR-0015): the Index serializes its own projections
     /// afterwards, so a source write never queues behind one and never answers "busy".</summary>
     internal static IResult Execute(
+        string gesture, ILogger logger,
         Action? logReceived,
         Func<IResult?> validate,
         Func<RecordEditResult> execute,
         Func<RecordEditResult, IResult> onApplied,
-        Func<Exception, IResult> onWriteFailure,
         Func<ArgumentException, IResult>? onMalformedFormKey,
         Func<NoLoadOrderException, IResult> onNoLoadOrder)
     {
@@ -163,11 +174,10 @@ internal static class WriteEndpointMapping
         try
         {
             var result = execute();
-            return result.Applied ? onApplied(result) : Refusal(result);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return onWriteFailure(ex);
+            if (result.Applied) return onApplied(result);
+
+            LogRefusal(logger, gesture, result.Refusal, result.Message);
+            return Refusal(result);
         }
         catch (ArgumentException ex) when (onMalformedFormKey is not null)
         {

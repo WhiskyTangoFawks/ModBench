@@ -27,12 +27,12 @@ public sealed class FormIdEditRollbackTests
         var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
         var statusBefore = mod.ChangedFormKeys();
 
-        var thrown = Assert.Throws<IOException>(() =>
-            mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), NewNpcFormKey.ToString()));
+        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), NewNpcFormKey.ToString());
 
+        Assert.Equal(RecordEditRefusal.SourceWriteFailed, result.Refusal);
         Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
         Assert.Equal(statusBefore, mod.ChangedFormKeys());
-        Assert.Contains("back as it was — nothing to review or revert", thrown.Message, StringComparison.Ordinal);
+        Assert.Contains("back as it was — nothing to review or revert", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -94,10 +94,10 @@ public sealed class FormIdEditRollbackTests
         var before = TrackedTree.Records(fixture.ModFolder, fixture.Plugin);
         var statusBefore = fixture.ChangedFormKeys();
 
-        var thrown = Assert.Throws<IOException>(() =>
-            fixture.EditHandler.SetFormId(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
+        var result = fixture.EditHandler.SetFormId(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey);
 
-        Assert.Contains("nowhere to move to", thrown.Message, StringComparison.Ordinal);
+        Assert.Equal(RecordEditRefusal.SourceWriteFailed, result.Refusal);
+        Assert.Contains("nowhere to move to", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, TrackedTree.Records(fixture.ModFolder, fixture.Plugin));
         Assert.Equal(statusBefore, fixture.ChangedFormKeys());
     }

@@ -481,6 +481,21 @@ describe('HttpMEditClient — the not-OK response text', () => {
     });
   });
 
+  it('editRecord carries a refused disk write as the typed SourceWriteFailed, not Unknown', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {
+      refusal: 'SourceWriteFailed', detail: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.editRecord(
+      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA', { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
+    );
+
+    expect(outcome).toEqual({
+      applied: false, refusal: 'SourceWriteFailed', message: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
+    });
+  });
+
   it('editRecord leaves the load-order-absent 503 alone, its outcome carrying this side\'s own Unknown as there is no typed refusal in it', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
