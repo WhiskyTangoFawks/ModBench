@@ -31,6 +31,8 @@ const workspace = (name, fixture) => {
   return folder;
 };
 
+const logs = path.join(runDir, 'logs');
+
 // test-cli hands cachePath through to test-electron's download, so one install serves every
 // worktree.
 const shared = {
@@ -42,10 +44,10 @@ const shared = {
   skipExtensionDependencies: true,
   launchArgs: [
     '--user-data-dir', path.join(runDir, 'user-data'), '--extensions-dir', path.join(runDir, 'extensions'),
-    '--logsPath', path.join(runDir, 'logs'),
+    '--logsPath', logs,
   ],
   // Linux's OS trash lives under XDG_DATA_HOME, and every run trashes folders of the same names.
-  env: { MODBENCH_TEST_PORT: String(port), XDG_DATA_HOME: path.join(runDir, 'data'), MODBENCH_TEST_LOGS: path.join(runDir, 'logs') },
+  env: { MODBENCH_TEST_PORT: String(port), XDG_DATA_HOME: path.join(runDir, 'data'), MODBENCH_TEST_LOGS: logs },
   mocha: { timeout: 20000, ui: 'bdd' },
 };
 
