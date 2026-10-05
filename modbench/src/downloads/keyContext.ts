@@ -1,4 +1,7 @@
 import { DownloadNode, type DownloadsTreeNode } from './DownloadsProvider';
+import { gestureEntry, kindGuard, selectionArgument, singularArgument, type GestureEntry } from '../drivingLib/gestureEntry';
+
+const isDownloadsRow = kindGuard<DownloadsTreeNode>()(['download', 'error']);
 
 /** What the Downloads keys' and palette entries' `when` clauses read off the selection, since
  *  neither is handed a row. */
@@ -10,19 +13,10 @@ export interface DownloadsKeyContext {
   readonly holdsExcluded: boolean;
 }
 
-export function selectedFiles(selection: readonly DownloadsTreeNode[]): DownloadNode[] {
-  return selection.filter((row): row is DownloadNode => row.kind === 'download');
-}
-
-/** The one selected file, the Argument a singular gesture takes from the palette. */
-export function singleSelectedFile(selection: readonly DownloadsTreeNode[]): DownloadNode | undefined {
-  const [only, ...rest] = selection;
-  return only?.kind === 'download' && rest.length === 0 ? only : undefined;
-}
-
 export function downloadsKeyContext(selection: readonly DownloadsTreeNode[]): DownloadsKeyContext {
-  const files = selectedFiles(selection);
-  const single = singleSelectedFile(selection);
+  const entry = gestureEntry<DownloadsTreeNode>(undefined, undefined, () => selection);
+  const files = selectionArgument(entry, 'download');
+  const single = singularArgument(entry, 'download');
   return {
     singleFile: single !== undefined,
     singleFileWithMeta: single?.row.hasMeta === true,
@@ -41,10 +35,13 @@ export const DOWNLOADS_KEY_ARGS = { view: 'modbench.downloads' } as const;
 export function downloadsCopyValueText(
   viewSelection: () => readonly DownloadsTreeNode[],
 ): (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined {
-  const names = (rows: readonly unknown[]) => rows.filter((row) => row instanceof DownloadNode).map((row) => row.row.name).join('\n');
+  const names = (entry: GestureEntry<DownloadsTreeNode>) =>
+    selectionArgument(entry, 'download').map((row) => row.row.name).join('\n');
   return (clicked, allSelected) => {
-    if (typeof clicked === 'object' && clicked !== null && Reflect.get(clicked, 'view') === DOWNLOADS_KEY_ARGS.view) return names(viewSelection());
+    if (typeof clicked === 'object' && clicked !== null && Reflect.get(clicked, 'view') === DOWNLOADS_KEY_ARGS.view) {
+      return names({ selection: viewSelection() });
+    }
     if (!(clicked instanceof DownloadNode)) return undefined;
-    return names(allSelected?.length ? allSelected : [clicked]);
+    return names(gestureEntry(clicked, allSelected?.length ? allSelected.filter(isDownloadsRow) : undefined, viewSelection));
   };
 }
