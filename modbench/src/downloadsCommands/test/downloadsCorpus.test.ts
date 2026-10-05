@@ -170,7 +170,7 @@ describe('downloads commands over the committed corpus fixture, since these verb
       await rm(path);
     });
 
-    expect(outcome).toEqual({ landed: [{ name: NAME, metaLeftBehind: 'disk full' }], refused: [] });
+    expect(outcome).toEqual({ landed: [{ name: NAME, metadataLeftBehind: 'disk full' }], refused: [] });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([ARCHIVE]));
     expect(after.has(ARCHIVE)).toBe(false);

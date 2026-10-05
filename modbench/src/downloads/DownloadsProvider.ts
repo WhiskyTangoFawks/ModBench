@@ -48,7 +48,7 @@ function downloadTooltip(row: DownloadRow): vscode.MarkdownString {
 }
 
 /** `id` is pinned to the raw filename because TreeItem otherwise auto-derives it from the
- *  label, and a `.meta` name change would then silently drop the user's tree selection. */
+ *  label, and a metadata name change would then silently drop the user's tree selection. */
 export class DownloadNode extends vscode.TreeItem {
   readonly kind = 'download' as const;
   /** The Argument view on Nexus reads, which the Mods row supplies under the same name. */
@@ -69,7 +69,7 @@ export class DownloadNode extends vscode.TreeItem {
 export type DownloadsTreeNode = DownloadNode | ErrorNode;
 
 export interface DownloadsProviderOptions {
-  /** downloads/ rows, `.meta` sidecars folded in. */
+  /** downloads/ rows, metadata folded in. */
   instance: InstanceView;
 }
 
