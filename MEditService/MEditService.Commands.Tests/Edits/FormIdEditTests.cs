@@ -114,6 +114,30 @@ public sealed class FormIdEditTests
     }
 
     [Fact]
+    public void EditingTheFormId_AfterTheLightFlagIsSetInTheSession_RefusesAValueAboveTheLightRangeImmediately()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        var header = $"000000:{SourceEditFixture.PluginName}";
+        Assert.True(mod.EditHandler.Set(mod.Plugin, header, "IsSmallMaster", JsonDocument.Parse("true").RootElement).Applied);
+
+        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
+    }
+
+    [Fact]
+    public void EditingTheFormId_OnAnUnflaggedPlugin_Accepts_AValueAboveTheLightRange()
+    {
+        using var mod = SourceEditFixture.Tracked();
+
+        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal("001000:Fixture.esp", result.NewFormKey);
+    }
+
+    [Fact]
     public void EditingTheFormId_Refuses_WhenTheValueNamesADifferentPlugin()
     {
         using var mod = SourceEditFixture.Tracked();
