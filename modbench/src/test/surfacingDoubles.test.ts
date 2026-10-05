@@ -45,7 +45,7 @@ describe('the recording reporter', () => {
     await applyRecordEdit({ meditClient, refreshSourceControlFor: () => {}, reporter }, '000800', 'A.esp', 'ModA', EDIT);
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not edit this record.', detail: 'backend down' },
+      { severity: 'error', message: 'Could not edit EditorID.', detail: 'backend down' },
     ]);
     expect(reporter.landings).toEqual([]);
   });
@@ -58,7 +58,7 @@ describe('the recording reporter', () => {
     reporter.landed('Mods deployed.');
 
     expect(reporter.reports).toEqual([
-      { severity: 'warning', message: 'Record is read-only.', detail: undefined },
+      { severity: 'warning', message: 'EditorID: Record is read-only.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual(['Mods deployed.']);
   });
