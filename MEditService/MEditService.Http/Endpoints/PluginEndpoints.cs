@@ -61,7 +61,7 @@ public static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/record-types",(string plugin, string? origin, IRecordQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IRecordQueryService svc) =>
         {
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             return Results.Ok(svc.GetPluginRecordTypes(WriteEndpointMapping.PluginAddressOf(plugin, origin)));
