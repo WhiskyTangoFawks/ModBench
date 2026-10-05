@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { productionFiles, SRC } from '../../test/scanSource';
+import { productionFiles, SRC } from './scanSource';
 
 const VIEW_DIRS = ['downloads', 'drivingLib'];
 
