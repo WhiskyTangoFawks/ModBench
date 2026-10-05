@@ -154,10 +154,8 @@ internal sealed class DuckDbRecordIndex : IDisposable
         cmd.ExecuteNonQuery();
     }
 
-    /// <summary>Upserts the plugin's <c>registrations</c> row: its indexed facts answer with no
-    /// re-index (ADR-0012), its records too when it is active. Winners stay stale until the next
-    /// sweep. Neither this verb nor <see cref="Unregister"/> touches a data row: which rows answer
-    /// is <see cref="TableDdlBuilder.RegistrationsRelation"/>'s.</summary>
+    /// <summary>Upserts the plugin's <c>registrations</c> row: its indexed facts answer with no re-index
+    /// (ADR-0012). Winners stay stale until the next sweep.</summary>
     public void Register(PluginMetadata registered)
     {
         using var tx = Connection.BeginTransaction();
