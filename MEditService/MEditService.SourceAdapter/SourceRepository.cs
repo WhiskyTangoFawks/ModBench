@@ -230,6 +230,23 @@ public sealed class SourceRepository
         Writes.ReplaceSourceFrom(plugin.Name, files, binarySha256);
     }
 
+    /// <summary>The plugin's source and what Modbench last wrote move to <paramref name="newName"/>, and
+    /// every FormKey of the plugin follows. False, writing nothing, when a plugin source of the mod holds
+    /// that name, compared without case.</summary>
+    public bool RenameSource(PluginAddress plugin, string newName)
+    {
+        RefuseUnlessProvidedByThisMod(plugin);
+        var sources = Path.Combine(_modFolder, SourceRepositoryLayout.RootFolderName);
+        if (Directory.EnumerateFileSystemEntries(sources)
+            .Any(entry => string.Equals(Path.GetFileName(entry), newName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        Writes.RenameSource(plugin.Name, newName);
+        return true;
+    }
+
     /// <summary>Runs <paramref name="write"/>, recording <paramref name="binarySha256"/> as the one last
     /// written; an interrupted write leaves the old and new (ADR-0003). Git failing before the write
     /// throws with nothing written; after it, false.</summary>
