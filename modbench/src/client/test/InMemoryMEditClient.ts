@@ -7,7 +7,7 @@ import { NotificationListenerRegistry } from '../notificationStream';
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getLightPluginsSupported'
   | 'getRecords' | 'searchRecords'
-  | 'getRecordOwner' | 'getRecordHolders' | 'getComparison' | 'getRecordsComparison' | 'getReferences'
+  | 'getRecordOwner' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations' | 'getComparison' | 'getRecordsComparison' | 'getReferences'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
@@ -244,6 +244,16 @@ export class InMemoryMEditClient implements MEditClient {
   }
   getRecordHolders(...args: Parameters<MEditClient['getRecordHolders']>): ReturnType<MEditClient['getRecordHolders']> {
     return this.query('getRecordHolders', args);
+  }
+  getRecordsWithChildren(
+    ...args: Parameters<MEditClient['getRecordsWithChildren']>
+  ): ReturnType<MEditClient['getRecordsWithChildren']> {
+    return this.query('getRecordsWithChildren', args);
+  }
+  getChildrenInDestinations(
+    ...args: Parameters<MEditClient['getChildrenInDestinations']>
+  ): ReturnType<MEditClient['getChildrenInDestinations']> {
+    return this.query('getChildrenInDestinations', args);
   }
   getComparison(...args: Parameters<MEditClient['getComparison']>): ReturnType<MEditClient['getComparison']> {
     return this.query('getComparison', args);

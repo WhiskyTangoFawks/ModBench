@@ -342,6 +342,41 @@ describe('HttpMEditClient — copying records answers per record and destination
   });
 });
 
+describe('HttpMEditClient — child records', () => {
+  const quest = { formKey: '000801:Source.esp', plugin: 'Source.esp', origin: 'SourceMod' };
+  const patch = { name: 'Patch.esp', origin: 'PatchMod' };
+
+  it('asks which records have child records, sending each record as (formKey, plugin, origin)', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, [quest])));
+
+    expect(await makeClient(fetch).getRecordsWithChildren([quest])).toEqual([quest]);
+
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/records\/with-children$/);
+    expect(await request?.json()).toEqual({ records: [quest] });
+  });
+
+  it('asks which destinations hold a record\'s child records, and reads each record with its holders', async () => {
+    const holders = [{ record: quest, destinations: [patch] }];
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, holders)));
+
+    expect(await makeClient(fetch).getChildrenInDestinations([quest], [patch])).toEqual(holders);
+
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/records\/children-in-destinations$/);
+    expect(await request?.json()).toEqual({ records: [quest], destinations: [patch] });
+  });
+
+  it.each([
+    ['getRecordsWithChildren', (c: HttpMEditClient) => c.getRecordsWithChildren([quest])],
+    ['getChildrenInDestinations', (c: HttpMEditClient) => c.getChildrenInDestinations([quest], [patch])],
+  ])('fails %s when the service refuses, naming the call', async (name, call) => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'The index is not ready.' })));
+
+    await expect(call(makeClient(fetch))).rejects.toThrow(new RegExp(name));
+  });
+});
+
 describe('HttpMEditClient — getRecordOwner', () => {
   it('answers the plugin holding the record as a plugin address', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { plugin: 'Patch.esp', origin: 'PatchMod' })));
