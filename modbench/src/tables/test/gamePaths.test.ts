@@ -1,8 +1,7 @@
-import { present } from '../../ports/present';
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionRule,
+  creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionRule, type PluginCompanionRule,
 } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
@@ -125,7 +124,11 @@ describe('creationClubListFile', () => {
 });
 
 describe('pluginCompanionRule', () => {
-  const rule = (release: string) => present(pluginCompanionRule(release), 'the rule');
+  const rule = (release: string): PluginCompanionRule => {
+    const found = pluginCompanionRule(release);
+    if (found === undefined) throw new Error(`no rule for ${release}`);
+    return found;
+  };
 
   it('takes the archive of a plugin: its own name, or its name cut at the last " - ", with the release\'s extension', () => {
     expect(rule('Fallout4').inRoot('Foo.esp', 'Foo.ba2')).toBe(true);
