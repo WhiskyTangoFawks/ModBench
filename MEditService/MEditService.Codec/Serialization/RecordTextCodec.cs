@@ -43,12 +43,11 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     public string SerializeToText(IMajorRecordGetter record, GameRelease gameRelease) =>
         Encoding.UTF8.GetString(SerializeToBytes(record, gameRelease));
 
-    /// <summary>The same bytes <see cref="SerializeAsync"/> writes, without the filesystem
-    /// (ADR-0005): indexing produces millions, so a temp-file round trip is not an option.</summary>
+    /// <summary>The bytes of a source document, without the filesystem (ADR-0005): indexing
+    /// produces millions, so a temp-file round trip is not an option.</summary>
     public byte[] SerializeToBytes(IMajorRecordGetter record, GameRelease gameRelease, CancellationToken cancel = default)
     {
-        // No directory: nothing here writes a file, so there is nothing to resolve against.
-        var bytes = SerializeCore(record, gameRelease, directory: string.Empty, cancel);
+        var bytes = SerializeCore(record, gameRelease, cancel);
         if (logger.IsEnabled(LogLevel.Trace))
         {
             logger.LogTrace("Serialized record {FormKey} to {ByteCount} bytes", record.FormKey, bytes.Length);
@@ -56,42 +55,13 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         return bytes;
     }
 
-    public async Task SerializeAsync(IMajorRecordGetter record, string filePath, GameRelease gameRelease, CancellationToken cancel = default)
-    {
-        // No Directory.CreateDirectory here, deliberately: directory-creation policy is the caller's.
-        var directory = Path.GetDirectoryName(filePath);
-        var bytes = SerializeCore(record, gameRelease, directory ?? string.Empty, cancel);
-
-        // Write-then-rename: File.Create truncates before any new byte lands, so an interrupted
-        // direct write leaves a 0-byte or partial record that dirty detection reads as an edit.
-        // Same volume, so File.Move is an atomic rename.
-        var tempPath = filePath + ".tmp";
-        try
-        {
-            await using (var output = File.Create(tempPath))
-                await output.WriteAsync(bytes, cancel).ConfigureAwait(false);
-
-            File.Move(tempPath, filePath, overwrite: true);
-        }
-        catch
-        {
-            File.Delete(tempPath);
-            throw;
-        }
-
-        if (logger.IsEnabled(LogLevel.Trace))
-        {
-            logger.LogTrace("Serialized record {FormKey} to {FilePath}", record.FormKey, filePath);
-        }
-    }
-
     // Buffered rather than streamed: Newtonsoft's JsonTextWriter has no public NewLine to pin (it
     // reads its private inner TextWriter's), so newline normalization has to happen after the fact.
     private static byte[] SerializeCore(
-        object record, GameRelease gameRelease, string directory, CancellationToken cancel)
+        object record, GameRelease gameRelease, CancellationToken cancel)
     {
         using var buffer = new MemoryStream();
-        var streamPackage = new StreamPackage(buffer, directory);
+        var streamPackage = new StreamPackage(buffer, string.Empty);
         var writer = WriterKernel.GetNewObject(streamPackage);
         var metaData = new SerializationMetaData(
             gameRelease, null, NoRecordFolders.Instance, DiscardChildRecordStreams.Instance, cancel);
@@ -115,22 +85,6 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         return [.. buffer.ToArray().Where(b => b != (byte)'\r')];
     }
 
-    /// <summary><paramref name="recordType"/> is the index's own record_type; null means the
-    /// document names its own type, true only of the path-ambiguous types.</summary>
-    public IMajorRecord DeserializeFile(
-        string filePath, GameRelease gameRelease, string? recordType, CancellationToken cancel = default)
-    {
-        using var stream = File.OpenRead(filePath);
-        var record = DeserializeCore(
-            stream, Path.GetDirectoryName(filePath) ?? string.Empty, gameRelease, recordType, cancel);
-
-        if (logger.IsEnabled(LogLevel.Trace))
-        {
-            logger.LogTrace("Deserialized record {FormKey} from {FilePath}", record.FormKey, filePath);
-        }
-        return record;
-    }
-
     /// <summary>The index holds bytes, never a parsed graph. A document names its own type only when
     /// its path could not, so the caller states the record_type it knows (either spelling); null
     /// means self-describing.</summary>
@@ -138,7 +92,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         byte[] bytes, GameRelease gameRelease, string? recordType, CancellationToken cancel = default)
     {
         using var stream = new MemoryStream(bytes, writable: false);
-        var record = DeserializeCore(stream, string.Empty, gameRelease, recordType, cancel);
+        var record = DeserializeCore(stream, gameRelease, recordType, cancel);
 
         if (logger.IsEnabled(LogLevel.Trace))
         {
@@ -162,7 +116,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     public static string BlankDocument(Type loquiType, GameRelease gameRelease, JsonObject identity)
     {
         var instance = DeserializeText(loquiType, identity.ToJsonString(), gameRelease);
-        var bytes = SerializeCore(instance, gameRelease, directory: string.Empty, CancellationToken.None);
+        var bytes = SerializeCore(instance, gameRelease, CancellationToken.None);
         return Encoding.UTF8.GetString(bytes);
     }
 
@@ -171,18 +125,18 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     public static object DeserializeText(Type loquiType, string json, GameRelease gameRelease)
     {
         using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json), writable: false);
-        return DeserializeObject(stream, string.Empty, gameRelease,
+        return DeserializeObject(stream, gameRelease,
             readerType => ResolveConcreteDeserializeMethod(loquiType, readerType), CancellationToken.None);
     }
 
     private static IMajorRecord DeserializeCore(
-        Stream stream, string directory, GameRelease gameRelease, string? recordType, CancellationToken cancel)
+        Stream stream, GameRelease gameRelease, string? recordType, CancellationToken cancel)
     {
         // The reverse of SerializeCore's dispatch, driven by the same RecordTypeDispatch fact so
         // the two directions cannot disagree. An unknown recordType reads as ambiguous, so it takes
         // the self-describing path and fails loudly rather than constructing a guessed type.
         var dispatch = RecordTypeDispatch.For(gameRelease);
-        var record = DeserializeObject(stream, directory, gameRelease,
+        var record = DeserializeObject(stream, gameRelease,
             readerType => recordType is not null
                 && dispatch.ConcreteFor(recordType) is { } concrete
                 && !dispatch.IsPathAmbiguous(recordType)
@@ -193,9 +147,9 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     }
 
     private static object DeserializeObject(
-        Stream stream, string directory, GameRelease gameRelease, Func<Type, MethodInfo> resolve, CancellationToken cancel)
+        Stream stream, GameRelease gameRelease, Func<Type, MethodInfo> resolve, CancellationToken cancel)
     {
-        var streamPackage = new StreamPackage(stream, directory);
+        var streamPackage = new StreamPackage(stream, string.Empty);
         var reader = ReaderKernel.GetNewObject(streamPackage);
         var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
 
@@ -287,25 +241,6 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         internal static readonly DiscardChildRecordStreams Instance = new();
 
         public Stream GetStreamFor(IFileSystem fileSystem, FilePath path, bool write) => Stream.Null;
-    }
-
-    // Child folders are created directly through FileSystem.Directory.CreateDirectory, not the
-    // stream creator, so that alone does not stop them. Only CreateDirectory is neutralized; the
-    // codec's own temp+rename goes through File directly and never through this.
-    private sealed class NoRecordFolders : FileSystem
-    {
-        internal static readonly NoRecordFolders Instance = new();
-
-        private readonly Lazy<IDirectory> _directory;
-
-        private NoRecordFolders() => _directory = new Lazy<IDirectory>(() => new NonCreatingDirectory(this));
-
-        public override IDirectory Directory => _directory.Value;
-
-        private sealed class NonCreatingDirectory(IFileSystem fileSystem) : DirectoryWrapper(fileSystem)
-        {
-            public override IDirectoryInfo CreateDirectory(string path) => FileSystem.DirectoryInfo.New(path);
-        }
     }
 
     // An overlay reader's runtime type is "<ConcreteSetterName>BinaryOverlay"; stripping that one

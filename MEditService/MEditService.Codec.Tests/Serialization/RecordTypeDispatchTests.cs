@@ -1,6 +1,6 @@
+using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
-using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -32,16 +32,14 @@ public class RecordTypeDispatchTests
         };
 
     [Fact]
-    public async Task SerializeAsync_ThenDeserializeFile_DispatchesNpcByRuntimeType_OneOfTwoDifferentlyShapedGeneratedClassesSoResolvesForTheOneTypeTriedIsToldApartFromResolvesByAHoldingNamingConvention()
+    public void SerializeToBytes_ThenDeserializeFromBytes_DispatchesNpcByRuntimeType_OneOfTwoDifferentlyShapedGeneratedClassesSoResolvesForTheOneTypeTriedIsToldApartFromResolvesByAHoldingNamingConvention()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var original = MakeNpc();
-        using var dir = new ScratchDirectory("medit-dispatch-npc-");
-        var filePath = Path.Combine(dir.Path, "npc.json");
 
         IMajorRecordGetter callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne = original;
-        await codec.SerializeAsync(callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne, filePath, GameRelease.Fallout4);
-        var roundTripped = (Npc)codec.DeserializeFile(filePath, GameRelease.Fallout4, "npc_");
+        var bytes = codec.SerializeToBytes(callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne, GameRelease.Fallout4);
+        var roundTripped = (Npc)codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, "npc_");
 
         var mask = original.GetEqualsMask(roundTripped);
         var leaves = MaskInspector.CountLeaves(mask).ToList();
@@ -52,15 +50,13 @@ public class RecordTypeDispatchTests
     }
 
     [Fact]
-    public async Task SerializeAsync_ThenDeserializeFile_DispatchesCellByRuntimeType_AChildlessCellSoItAlreadyEmitsOneFileWithNoShallowCopyInterventionWhileContainerSingleFileTestsCoversTheLayoutOncePopulated()
+    public void SerializeToBytes_ThenDeserializeFromBytes_DispatchesCellByRuntimeType()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var original = MakeCell();
-        using var dir = new ScratchDirectory("medit-dispatch-cell-");
-        var filePath = Path.Combine(dir.Path, "cell.json");
 
-        await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
-        var roundTripped = (Cell)codec.DeserializeFile(filePath, GameRelease.Fallout4, "Cell");
+        var bytes = codec.SerializeToBytes(original, GameRelease.Fallout4);
+        var roundTripped = (Cell)codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, "Cell");
 
         var mask = original.GetEqualsMask(roundTripped);
         var leaves = MaskInspector.CountLeaves(mask).ToList();
@@ -68,25 +64,21 @@ public class RecordTypeDispatchTests
 
         Assert.NotEmpty(leaves);
         Assert.Empty(divergent);
-        Assert.Equal([filePath], Directory.GetFiles(dir.Path, "*", SearchOption.AllDirectories));
     }
 
     [Fact]
-    public async Task DeserializeFile_ForTextNamingAnUnknownType_ThrowsNamedException_NotABareNullReferenceExceptionBecauseARecordTypeTheSchemaDoesNotKnowMeansExpectTheDocumentToNameItself()
+    public void DeserializeFromBytes_ForTextNamingAnUnknownType_ThrowsNamedException_NotABareNullReferenceExceptionBecauseARecordTypeTheSchemaDoesNotKnowMeansExpectTheDocumentToNameItself()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        using var dir = new ScratchDirectory("medit-dispatch-unsupported-");
-        var filePath = Path.Combine(dir.Path, "unsupported.json");
         var globalFloatNotAnNpcBecauseOnlyPathAmbiguousTypesSelfDescribeSoAnNpcDocumentHasNoDiscriminatorToCorrupt = MakeGlobalFloat();
-        await codec.SerializeAsync(globalFloatNotAnNpcBecauseOnlyPathAmbiguousTypesSelfDescribeSoAnNpcDocumentHasNoDiscriminatorToCorrupt, filePath, GameRelease.Fallout4);
+        var text = Encoding.UTF8.GetString(codec.SerializeToBytes(globalFloatNotAnNpcBecauseOnlyPathAmbiguousTypesSelfDescribeSoAnNpcDocumentHasNoDiscriminatorToCorrupt, GameRelease.Fallout4));
 
-        var text = await File.ReadAllTextAsync(filePath);
         Assert.Contains("\"MutagenObjectType\": \"GlobalFloat\"", text, StringComparison.Ordinal);
-        await File.WriteAllTextAsync(filePath,
+        var corrupted = Encoding.UTF8.GetBytes(
             text.Replace("\"MutagenObjectType\": \"GlobalFloat\"", "\"MutagenObjectType\": \"NotARecordType\"", StringComparison.Ordinal));
 
         var ex = Assert.Throws<RecordTypeSerializationUnsupportedException>(
-            () => codec.DeserializeFile(filePath, GameRelease.Fallout4, "glob"));
+            () => codec.DeserializeFromBytes(corrupted, GameRelease.Fallout4, "glob"));
 
         const string TheMemberNameNotTheOffendingValueBecauseTheKernelDiscardsItOnThisRouteSoRequiringItWouldPinAnUpstreamDetail = "MutagenObjectType";
         Assert.Contains(TheMemberNameNotTheOffendingValueBecauseTheKernelDiscardsItOnThisRouteSoRequiringItWouldPinAnUpstreamDetail, ex.Message, StringComparison.Ordinal);

@@ -1,7 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -69,13 +68,14 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public async Task SerializeAsync_ForAPopulatedCell_WritesExactlyOneFile_TheCodecAdoptingSpriggitsEmbedCustomizationVerbatim()
+    public void SerializeToBytes_ForAPopulatedCell_CarriesItsChildrenInline_TheCodecAdoptingSpriggitsEmbedCustomizationVerbatim()
     {
-        using var dir = new ScratchDirectory("medit-embed-cell-");
-        var filePath = Path.Combine(dir.Path, "cell.json");
-        await Codec().SerializeAsync(MakePopulatedCell(), filePath, GameRelease.Fallout4);
+        using var doc = JsonDocument.Parse(Codec().SerializeToBytes(MakePopulatedCell(), GameRelease.Fallout4));
 
-        Assert.Equal([filePath], Directory.GetFiles(dir.Path, "*", SearchOption.AllDirectories));
+        Assert.Equal("PersistentRef", doc.RootElement.GetProperty("Persistent")[0].GetProperty("EditorID").GetString());
+        Assert.Equal("TemporaryRef", doc.RootElement.GetProperty("Temporary")[0].GetProperty("EditorID").GetString());
+        Assert.Equal("CellNavmesh", doc.RootElement.GetProperty("NavigationMeshes")[0].GetProperty("EditorID").GetString());
+        Assert.Equal("CellLandscape", doc.RootElement.GetProperty("Landscape").GetProperty("EditorID").GetString());
     }
 
     [Fact]
