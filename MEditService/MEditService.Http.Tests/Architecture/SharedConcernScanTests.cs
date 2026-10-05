@@ -15,7 +15,7 @@ public sealed class SharedConcernScanTests
     private static readonly string[] ScannedRoots =
         ["MEditService.Commands", "MEditService.Commands/Edits", "MEditService.Http"];
 
-        [Fact]
+    [Fact]
     public void TheWriteSide_CarriesNoCopyOfASharedConcernsMechanism()
     {
         var counts = Counts(ServiceProjects.SolutionDirectory(), ScannedRoots);
