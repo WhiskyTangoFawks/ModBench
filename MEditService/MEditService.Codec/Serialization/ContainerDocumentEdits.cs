@@ -55,7 +55,8 @@ public static class ContainerDocumentEdits
 
     /// <summary><paramref name="destinationText"/> with every child record of
     /// <paramref name="sourceText"/> added to its own slots, its own fields and the children it already
-    /// carries kept. A single-valued slot the destination already fills refuses.</summary>
+    /// carries kept. Throws <see cref="InvalidOperationException"/> when a single-valued slot is
+    /// already filled.</summary>
     public static string WithChildrenAdded(
         RecordTextCodec codec, string destinationText, string? destinationRecordType,
         string sourceText, string? sourceRecordType, GameRelease release)

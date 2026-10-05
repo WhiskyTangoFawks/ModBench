@@ -50,6 +50,16 @@ public sealed class ContainerCopyFixture : TestInstance, ITrackedPlugins
     public const string DialogBranchEditorId = "SourceBranch";
     public FormKey DialogBranch { get; }
 
+    public const string ChildlessQuestEditorId = "SourceChildlessQuest";
+    public FormKey ChildlessQuest { get; }
+
+    public const string BareQuestEditorId = "SourceBareQuest";
+    public FormKey BareQuest { get; }
+
+    public const string BareTopicEditorId = "SourceBareTopic";
+    public FormKey BareTopic { get; }
+
+    // Interior — the non-spatial case: a real block/sub-block pair.
     public const string InteriorCellEditorId = "SourceInteriorCell";
     public const float InteriorCellWaterHeight = 100f;
     public FormKey InteriorCell { get; }
@@ -135,6 +145,14 @@ public sealed class ContainerCopyFixture : TestInstance, ITrackedPlugins
         var dialogBranch = new DialogBranch(sourceMod) { EditorID = DialogBranchEditorId };
         quest.DialogBranches.Add(dialogBranch);
         sourceMod.Quests.Add(quest);
+
+        var childlessQuest = new Quest(sourceMod) { EditorID = ChildlessQuestEditorId };
+        sourceMod.Quests.Add(childlessQuest);
+        var bareQuest = new Quest(sourceMod) { EditorID = BareQuestEditorId };
+        var bareTopic = new DialogTopic(sourceMod) { EditorID = BareTopicEditorId };
+        bareQuest.DialogTopics.Add(bareTopic);
+        sourceMod.Quests.Add(bareQuest);
+        (ChildlessQuest, BareQuest, BareTopic) = (childlessQuest.FormKey, bareQuest.FormKey, bareTopic.FormKey);
 
         var interiorCell = new Cell(sourceMod) { EditorID = InteriorCellEditorId, WaterHeight = InteriorCellWaterHeight };
         var persistentRef = new PlacedObject(sourceMod)

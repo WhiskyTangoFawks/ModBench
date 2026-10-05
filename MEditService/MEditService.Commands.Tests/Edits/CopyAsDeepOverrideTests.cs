@@ -52,13 +52,22 @@ public sealed class CopyAsDeepOverrideTests
             record => Assert.NotNull(fixture.Document(fixture.DestinationPlugin, record)));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ADeepCopyOfAWorldspace_LandsItsPersistentCellAndEveryCellItHolds_EachWithItsReferences(bool trackedSource)
+    [Fact]
+    public void ADeepCopyOfAWorldspace_LandsItsPersistentCellAndEveryCellItHolds_EachWithItsReferences()
     {
-        using var fixture = trackedSource ? ContainerCopyFixture.CreateWithTrackedSource() : ContainerCopyFixture.Create();
+        using var fixture = ContainerCopyFixture.Create();
+        AssertAWorldspaceLandsWhole(fixture);
+    }
 
+    [Fact]
+    public void ADeepCopyOfAWorldspaceFromATrackedSource_LandsItsPersistentCellAndEveryCellItHolds_EachWithItsReferences()
+    {
+        using var fixture = ContainerCopyFixture.CreateWithTrackedSource();
+        AssertAWorldspaceLandsWhole(fixture);
+    }
+
+    private static void AssertAWorldspaceLandsWhole(ContainerCopyFixture fixture)
+    {
         var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -188,9 +197,10 @@ public sealed class CopyAsDeepOverrideTests
     [Fact]
     public void ADeepCopyOfAWorldspaceThatFailsPartWay_NamesTheCellsThatLandedAndTheCellThatFailed_AndTheOtherItemsStillLand()
     {
-        var blocked = RelativeDocumentPathOfACellWrittenByADeepCopy();
+        var inLandingOrder = NumberedCellsInLandingOrder(ContainerCopyFixture.Create());
+        var blocked = inLandingOrder[1];
         using var fixture = ContainerCopyFixture.Create();
-        Directory.CreateDirectory(Path.Combine(fixture.DestinationModFolder, blocked + ".tmp"));
+        Directory.CreateDirectory(Path.Combine(fixture.DestinationModFolder, RelativeDocumentPathOfACellWrittenByADeepCopy(blocked) + ".tmp"));
         var unrelated = new RecordAt(fixture.SourcePlugin, fixture.FlatNpc.ToString());
         var worldspace = new RecordAt(fixture.SourcePlugin, fixture.Worldspace.ToString());
 
@@ -199,20 +209,138 @@ public sealed class CopyAsDeepOverrideTests
         var refused = Assert.Single(result.Refused);
         Assert.Equal(worldspace, refused.Item.Record);
         Assert.Equal([unrelated], result.Landed.Select(landed => landed.Item.Record));
-        var cells = new[] { fixture.TopCell, fixture.ExteriorCell, fixture.SameBlockCell, fixture.SameSubBlockCell, fixture.OtherBlockCell };
-        var landedCells = cells.Where(cell => fixture.Document(fixture.DestinationPlugin, cell) is not null).ToList();
-        var failedCell = Assert.Single(cells.Except(landedCells));
-        Assert.Equal(fixture.OtherBlockCell, failedCell);
-        Assert.NotEmpty(landedCells);
-        Assert.Contains(failedCell.ToString(), refused.Message, StringComparison.Ordinal);
-        Assert.All(landedCells, cell => Assert.Contains(cell.ToString(), refused.Message, StringComparison.Ordinal));
+        var landedOnes = new[] { fixture.TopCell.ToString(), inLandingOrder[0] };
+        var neverReached = inLandingOrder[2..];
+        Assert.All(landedOnes, cell => Assert.NotNull(fixture.Document(fixture.DestinationPlugin, cell)));
+        Assert.All(landedOnes, cell => Assert.Contains(cell, refused.Message, StringComparison.Ordinal));
+        Assert.Contains(blocked, refused.Message, StringComparison.Ordinal);
+        Assert.All(neverReached, cell => Assert.Null(fixture.Document(fixture.DestinationPlugin, cell)));
+        Assert.All(neverReached, cell => Assert.DoesNotContain(cell, refused.Message, StringComparison.Ordinal));
     }
 
-    private static string RelativeDocumentPathOfACellWrittenByADeepCopy()
+    [Fact]
+    public void ADeepCopyOfAQuestWithNoTopics_IntoADestinationHoldingIt_AsksForReplaceLikeAnOverride()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.ChildlessQuest.ToString(), fixture.DestinationPlugin).Applied);
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.ChildlessQuest.ToString(), fixture.DestinationPlugin);
+
+        Assert.Equal(RecordEditRefusal.DestinationHoldsRecord, result.Refusal);
+    }
+
+    [Fact]
+    public void ADeepCopyOfAQuestWithNoTopics_IntoADestinationHoldingIt_ReplacesItsFieldsWhenToldTo()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.ChildlessQuest.ToString(), fixture.DestinationPlugin).Applied);
+        SourceEdits.Rewrite<Quest>(
+            TrackedTree.Repository(fixture.DestinationModFolder), fixture.DestinationPlugin,
+            new RecordIdentity(fixture.ChildlessQuest.ToString(), "qust", ContainerCopyFixture.ChildlessQuestEditorId),
+            GameRelease.Fallout4, quest => quest.EditorID = "Edited");
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.ChildlessQuest.ToString(), fixture.DestinationPlugin, replace: true);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(ContainerCopyFixture.ChildlessQuestEditorId, fixture.Document(fixture.DestinationPlugin, fixture.ChildlessQuest).Require().EditorId);
+    }
+
+    [Fact]
+    public void ADeepCopyOfATopicWithNoResponses_IntoADestinationHoldingIt_AsksForReplaceLikeAnOverride()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.BareTopic.ToString(), fixture.DestinationPlugin).Applied);
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.BareTopic.ToString(), fixture.DestinationPlugin);
+
+        Assert.Equal(RecordEditRefusal.DestinationHoldsRecord, result.Refusal);
+    }
+
+    [Fact]
+    public void ADeepCopyOfATopicWithNoResponses_IntoADestinationHoldingIt_ReplacesItsFieldsWhenToldTo()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.BareTopic.ToString(), fixture.DestinationPlugin).Applied);
+        SourceEdits.Rewrite<DialogTopic>(
+            TrackedTree.Repository(fixture.DestinationModFolder), fixture.DestinationPlugin,
+            new RecordIdentity(fixture.BareTopic.ToString(), "dial", ContainerCopyFixture.BareTopicEditorId),
+            GameRelease.Fallout4, topic => topic.EditorID = "Edited");
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.BareTopic.ToString(), fixture.DestinationPlugin, replace: true);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(ContainerCopyFixture.BareTopicEditorId, fixture.Document(fixture.DestinationPlugin, fixture.BareTopic).Require().EditorId);
+    }
+
+    [Fact]
+    public void ADeepCopyOfADialogTopicIntoADestinationHoldingItButNoneOfItsResponses_KeepsItsCopyAndAddsTheResponses()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.DialogTopic.ToString(), fixture.DestinationPlugin).Applied);
+        const string DestinationsOwnEditorId = "DestinationsOwnTopic";
+        SourceEdits.Rewrite<DialogTopic>(
+            TrackedTree.Repository(fixture.DestinationModFolder), fixture.DestinationPlugin,
+            new RecordIdentity(fixture.DialogTopic.ToString(), "dial", ContainerCopyFixture.DialogTopicEditorId),
+            GameRelease.Fallout4, topic => topic.EditorID = DestinationsOwnEditorId);
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.DialogTopic.ToString(), fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(DestinationsOwnEditorId, fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic).Require().EditorId);
+        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.Response1));
+        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.Response2));
+    }
+
+    [Fact]
+    public void ADeepCopyOfAWorldspaceIntoADestinationHoldingItButNoneOfItsCells_KeepsItsCopyAndAddsTheCells()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin).Applied);
+        const string DestinationsOwnEditorId = "DestinationsOwnWorld";
+        SourceEdits.Rewrite<Worldspace>(
+            TrackedTree.Repository(fixture.DestinationModFolder), fixture.DestinationPlugin,
+            new RecordIdentity(fixture.Worldspace.ToString(), "wrld", ContainerCopyFixture.WorldspaceEditorId),
+            GameRelease.Fallout4, worldspace => worldspace.EditorID = DestinationsOwnEditorId);
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(DestinationsOwnEditorId, fixture.Document(fixture.DestinationPlugin, fixture.Worldspace).Require().EditorId);
+        Assert.All(
+            new[] { fixture.TopCell, fixture.TopCellRef, fixture.ExteriorCell, fixture.OtherBlockCell, fixture.SameBlockCell, fixture.SameSubBlockCell },
+            record => Assert.NotNull(fixture.Document(fixture.DestinationPlugin, record)));
+    }
+
+    [Fact]
+    public void ADeepCopyIntoAPluginLoadingBeforeTheOriginOfAChildRecord_IsRefusedAsAnUnderrideAndWritesNothing()
+    {
+        using var fixture = new LateChildFixture();
+        var before = TreeSnapshot.Of(fixture.DestinationModFolder);
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin);
+
+        Assert.Equal(RecordEditRefusal.UnderrideDestination, result.Refusal);
+        Assert.Equal(before, TreeSnapshot.Of(fixture.DestinationModFolder));
+    }
+
+    private static string[] NumberedCellsInLandingOrder(ContainerCopyFixture fixture)
+    {
+        using (fixture)
+        {
+            return
+            [
+                .. new[] { fixture.ExteriorCell, fixture.SameBlockCell, fixture.SameSubBlockCell, fixture.OtherBlockCell }
+                    .Select(cell => cell.ToString())
+                    .Order(StringComparer.Ordinal),
+            ];
+        }
+    }
+
+    private static string RelativeDocumentPathOfACellWrittenByADeepCopy(string cell)
     {
         using var scratch = ContainerCopyFixture.Create();
         Assert.True(scratch.CopyHandler.CopyAsDeepOverride(scratch.SourcePlugin, scratch.Worldspace.ToString(), scratch.DestinationPlugin).Applied);
-        var cell = new RecordIdentity(scratch.OtherBlockCell.ToString(), "cell", ContainerCopyFixture.OtherBlockCellEditorId);
-        return TrackedTree.Repository(scratch.DestinationModFolder).RelativePathOf(scratch.DestinationPlugin, cell).Require();
+        var identity = scratch.Document(scratch.DestinationPlugin, cell).Require().Identity;
+        return TrackedTree.Repository(scratch.DestinationModFolder).RelativePathOf(scratch.DestinationPlugin, identity).Require();
     }
 }
