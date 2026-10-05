@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 
@@ -103,33 +102,85 @@ public sealed class CopyAsOverrideContainerTests
     }
 
     [Fact]
-    public void CopyRecordAsOverride_OnATopCellPlacedReference_Refuses_WhenDestinationHasNoCellOverride()
+    public void CopyRecordAsOverride_OnATopCellPlacedReference_CopiesTheWorldspaceAndItsPersistentCellIn_WhenDestinationHasNeither()
     {
         using var fixture = ContainerCopyFixture.Create();
 
         var result = fixture.CopyHandler.CopyAsOverride(
             fixture.SourcePlugin, fixture.TopCellRef.ToString(), fixture.DestinationPlugin);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ContainerParentMissingInDestination, result.Refusal);
-        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.TopCellRef.ToString()));
+        Assert.True(result.Applied, result.Message);
+        var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
+        Assert.False(worldspace.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
+
+        var topCell = JsonNode.Parse(worldspace.Body).Require()["TopCell"].Require();
+        Assert.Equal(fixture.TopCell.ToString(), topCell["FormKey"].Require().GetValue<string>());
+        Assert.Equal(ContainerCopyFixture.TopCellEditorId, topCell["EditorID"].Require().GetValue<string>());
+        Assert.False(topCell["MajorRecordFlagsRaw"]?.GetValue<int>() is { } flags && (flags & 0x4000) != 0);
+        var placed = Assert.Single(topCell["Temporary"].Require().AsArray());
+        Assert.Equal(fixture.TopCellRef.ToString(), placed.Require()["FormKey"].Require().GetValue<string>());
     }
 
     [Fact]
-    public void CopyRecordAsOverride_OnATopCellItself_Refuses()
+    public void CopyRecordAsOverride_OnATopCellItself_CopiesItIntoTheWorldspaceItMintsWithItsFields_WithoutItsRecords()
     {
         using var fixture = ContainerCopyFixture.Create();
 
         var result = fixture.CopyHandler.CopyAsOverride(
             fixture.SourcePlugin, fixture.TopCell.ToString(), fixture.DestinationPlugin);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ContainerParentMissingInDestination, result.Refusal);
-        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.TopCell.ToString()));
+        Assert.True(result.Applied, result.Message);
+        var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
+        Assert.False(worldspace.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
+
+        var topCell = JsonNode.Parse(worldspace.Body).Require()["TopCell"].Require().AsObject();
+        Assert.Equal(fixture.TopCell.ToString(), topCell["FormKey"].Require().GetValue<string>());
+        Assert.Equal(ContainerCopyFixture.TopCellEditorId, topCell["EditorID"].Require().GetValue<string>());
+        Assert.False(topCell.ContainsKey("Persistent"));
+        Assert.False(topCell.ContainsKey("Temporary"));
     }
 
     [Fact]
-    public void CopyRecordAsOverride_OnAGenuineExteriorPlacedReference_MintsPartialFormWrldAndCellOverrides_WhenDestinationHasNeither()
+    public void CopyRecordAsOverride_OnATopCellPlacedReferenceFromATrackedSource_CopiesTheWorldspaceAndItsPersistentCellIn()
+    {
+        using var fixture = ContainerCopyFixture.CreateWithTrackedSource();
+
+        var result = fixture.CopyHandler.CopyAsOverride(
+            fixture.SourcePlugin, fixture.TopCellRef.ToString(), fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
+        Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
+        var topCell = JsonNode.Parse(worldspace.Body).Require()["TopCell"].Require();
+        Assert.Equal(ContainerCopyFixture.TopCellEditorId, topCell["EditorID"].Require().GetValue<string>());
+        Assert.Equal(
+            fixture.TopCellRef.ToString(),
+            Assert.Single(topCell["Temporary"].Require().AsArray()).Require()["FormKey"].Require().GetValue<string>());
+    }
+
+    [Fact]
+    public void CopyRecordAsOverride_OnATopCell_WhenDestinationAlreadyOverridesTheWorldspace_LandsItInThatWorldspaceUntouchedOtherwise()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(
+            fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin).Applied);
+        var before = JsonNode.Parse(fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require().Body).Require().AsObject();
+
+        var result = fixture.CopyHandler.CopyAsOverride(
+            fixture.SourcePlugin, fixture.TopCell.ToString(), fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var after = JsonNode.Parse(fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require().Body).Require().AsObject();
+        Assert.Equal(
+            fixture.TopCell.ToString(), after["TopCell"].Require()["FormKey"].Require().GetValue<string>());
+        after.Remove("TopCell");
+        Assert.Equal(before.ToJsonString(), after.ToJsonString());
+    }
+
+    [Fact]
+    public void CopyRecordAsOverride_OnAGenuineExteriorPlacedReference_CopiesTheWorldspaceAndCellInWithTheirFields_WhenDestinationHasNeither()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -138,11 +189,14 @@ public sealed class CopyAsOverrideContainerTests
 
         Assert.True(result.Applied, result.Message);
 
-        Assert.True(fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require().IsPartialForm());
+        var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
+        Assert.False(worldspace.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
 
         var cell = fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString());
         Assert.NotNull(cell);
-        Assert.True(cell.IsPartialForm());
+        Assert.False(cell.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.ExteriorCellEditorId, cell.EditorId);
 
         var placed = fixture.Document(fixture.DestinationPlugin, fixture.ExteriorPersistentRef.ToString());
         Assert.NotNull(placed);
@@ -154,7 +208,7 @@ public sealed class CopyAsOverrideContainerTests
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorTemporaryRef.ToString()));
 
         fixture.AssertDestinationCellSitsAt(
-            fixture.ExteriorCell.ToString(), editorId: null,
+            fixture.ExteriorCell.ToString(), ContainerCopyFixture.ExteriorCellEditorId,
             ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY, ContainerCopyFixture.ExteriorSubX, ContainerCopyFixture.ExteriorSubY);
         Assert.Contains(
             $"\"{ContainerCopyFixture.ExteriorGridX}, {ContainerCopyFixture.ExteriorGridY}\"",
@@ -172,7 +226,7 @@ public sealed class CopyAsOverrideContainerTests
         Assert.True(result.Applied, result.Message);
 
         fixture.AssertDestinationCellSitsAt(
-            fixture.ExteriorCell.ToString(), editorId: null,
+            fixture.ExteriorCell.ToString(), ContainerCopyFixture.ExteriorCellEditorId,
             ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY, ContainerCopyFixture.ExteriorSubX, ContainerCopyFixture.ExteriorSubY);
         Assert.Contains(
             ContainerCopyFixture.ExteriorPersistentRefEditorId,
@@ -191,7 +245,7 @@ public sealed class CopyAsOverrideContainerTests
         Assert.True(result.Applied, result.Message);
         var cell = fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString());
         Assert.NotNull(cell);
-        Assert.True(cell.IsPartialForm());
+        Assert.False(cell.IsPartialForm());
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorTemporaryRef.ToString()));
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorPersistentRef.ToString()));
 
@@ -203,7 +257,7 @@ public sealed class CopyAsOverrideContainerTests
     }
 
     [Fact]
-    public void CopyRecordAsOverride_OnAGenuineExteriorCellItself_MintsPartialFormWrldOverride_CellLandsOwnFieldsOnlyAndNotPartialForm()
+    public void CopyRecordAsOverride_OnAGenuineExteriorCellItself_CopiesTheWorldspaceInWithItsFields_CellLandsOwnFieldsOnly()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -212,7 +266,9 @@ public sealed class CopyAsOverrideContainerTests
 
         Assert.True(result.Applied, result.Message);
 
-        Assert.True(fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require().IsPartialForm());
+        var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
+        Assert.False(worldspace.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
 
         var cell = fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString());
         Assert.NotNull(cell);
@@ -228,7 +284,7 @@ public sealed class CopyAsOverrideContainerTests
     }
 
     [Fact]
-    public void CopyRecordAsOverride_OnAnInteriorPlacedReference_AutoCreatesTheCellAsPartialForm_WhenMissing()
+    public void CopyRecordAsOverride_OnAnInteriorPlacedReference_CopiesTheCellInWithItsFields_WhenMissing()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -239,12 +295,14 @@ public sealed class CopyAsOverrideContainerTests
 
         var mintedCell = fixture.Document(fixture.DestinationPlugin, fixture.InteriorCell.ToString());
         Assert.NotNull(mintedCell);
-        Assert.True(mintedCell.IsPartialForm());
+        Assert.False(mintedCell.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.InteriorCellEditorId, mintedCell.EditorId);
 
         var cellText = fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.PersistentRefEditorId).Body;
-        Assert.DoesNotContain(
+        Assert.Contains(
             $"\"WaterHeight\": {ContainerCopyFixture.InteriorCellWaterHeight:0.0}", cellText, StringComparison.Ordinal);
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, cellText, StringComparison.Ordinal);
+        Assert.DoesNotContain(ContainerCopyFixture.TemporaryRefEditorId, cellText, StringComparison.Ordinal);
 
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.PersistentRef.ToString()));
     }

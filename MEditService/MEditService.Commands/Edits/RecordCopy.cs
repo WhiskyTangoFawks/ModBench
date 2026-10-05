@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>The container half of both copy modes: a child lands inside its container's document,
-/// minted bare and Partial Form when the destination lacks it. Shares the write side's schema and
+/// copied in as an override with its own fields when the destination lacks it. Shares the write side's schema and
 /// codec: one write path (ADR-0007).</summary>
 internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger, RecordTextCodec codec)
 {
@@ -17,9 +17,8 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
     /// write here is a put, and the repository decides where a document goes.</summary>
     internal readonly record struct Destination(SourceRepository Repository, PluginAddress Plugin);
 
-    /// <summary>Bare fields are xEdit parity; Partial Form is a deliberate mEdit divergence, so conflict
-    /// detection ignores the ancestor's stub fields. Own fields only, like every plain Copy as Override:
-    /// a copied topic lands with no responses.</summary>
+    /// <summary>Own fields only, like every plain Copy as Override: a copied topic lands with no
+    /// responses.</summary>
     internal RecordEditResult CopyEmbeddedChildAsOverride(
         CopySource source, SourceDocument child, DocumentContainment container,
         Destination destination, GameRelease release, bool replace)
@@ -50,8 +49,8 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
     }
 
     /// <summary>The container rule: the child lands at the end of its slot in the destination's copy
-    /// of the container's document, minted bare and Partial Form when absent, transitively; the index
-    /// derives its rows from that document.</summary>
+    /// of the container's document, the container copied in with its own fields when absent,
+    /// transitively; the index derives its rows from that document.</summary>
     internal RecordEditResult AppendEmbeddedChild(
         CopySource source, DocumentContainment container, SourceDocument child,
         Destination destination, GameRelease release)
@@ -75,33 +74,33 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         return RecordEditResult.Success();
     }
 
-    // A container the destination lacks is minted bare and Partial Form around the child: itself a
-    // child lands in its own container's slot by the same rule, a top-level one at a placement.
+    // A container the destination lacks is copied in around the child: itself a child lands in its
+    // own container's slot by the same rule, a top-level one at a placement.
     private RecordEditResult MintContainerAround(
         CopySource source, DocumentContainment container, SourceDocument child,
         Destination destination, GameRelease release)
     {
         var containerFormKey = container.ParentFormKey;
-        var bare = BarePartialFormAncestor(containerFormKey, container.ParentRecordType, release);
-        var bareWithChild = bare with
+        var sourceContainer = HeldBy(source, containerFormKey);
+        var ownFields = OwnFieldsOf(source, sourceContainer, release);
+        var withChild = ownFields with
         {
             Body = ContainerDocumentEdits.WithChildAppended(
-                       codec, bare.Body, release, bare.RecordType, containerFormKey, container.SlotName,
+                       codec, ownFields.Body, release, ownFields.RecordType, containerFormKey, container.SlotName,
                        child.Body, child.RecordType)
                    ?? throw new InvalidOperationException(
-                       $"The bare {container.ParentRecordType} minted for {containerFormKey} does not carry its own FormKey."),
+                       $"The copy of {containerFormKey} does not carry its own FormKey."),
         };
 
-        var sourceContainer = source.Identity(containerFormKey);
-        var minted = sourceContainer is { } held && source.ContainerOf(held) is { } ownParent
-            ? AppendEmbeddedChild(source, ownParent, bareWithChild, destination, release)
-            : PlaceMintedContainer(source, bareWithChild, destination, release);
+        var minted = source.ContainerOf(sourceContainer) is { } ownParent
+            ? AppendEmbeddedChild(source, ownParent, withChild, destination, release)
+            : PlaceMintedContainer(source, withChild, destination, release);
 
         if (minted.Applied && logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
-                "Landed {FormKey} in {DestinationPlugin} ({DestinationOrigin}) — minted its container {ContainerFormKey} " +
-                "as a Partial Form ancestor around it",
+                "Landed {FormKey} in {DestinationPlugin} ({DestinationOrigin}) — copied in its container {ContainerFormKey} " +
+                "as an override around it",
                 child.FormKey, destination.Plugin.Name, destination.Plugin.Origin, containerFormKey);
         }
         return minted;
@@ -143,16 +142,6 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         var sourceCell = RecordTypeDispatch.For(release).IsCell(container.RecordType) ? source.Identity(formKey) : null;
         if (sourceCell is { } cell && source.WorldspaceOf(cell) is { } worldspace)
         {
-            // Only a numbered cell has a grid to mint at; a worldspace's own persistent cell carries
-            // none.
-            if (!source.SitsAtAGrid(cell))
-            {
-                return RecordEditResult.Refused(
-                    RecordEditRefusal.ContainerParentMissingInDestination,
-                    $"{destination.Plugin.Name} has no override of {formKey}, the container the copied record belongs to. " +
-                    $"{formKey} is an exterior cell with no worldspace grid position of its own — a worldspace's " +
-                    "persistent cell, not one of its numbered blocks — so mEdit cannot auto-create an override of it here.");
-            }
             return MintExteriorCell(source, worldspace, container, destination, release);
         }
 
@@ -161,16 +150,16 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
-                "Auto-created {FormKey} as a Partial Form override in {DestinationPlugin} ({DestinationOrigin}) " +
+                "Copied in {FormKey} as an override in {DestinationPlugin} ({DestinationOrigin}) " +
                 "— container for a copied child",
                 formKey, destination.Plugin.Name, destination.Plugin.Origin);
         }
         return RecordEditResult.Success();
     }
 
-    /// <summary>Lands an exterior CELL in <paramref name="worldspaceFormKey"/>, minting a bare Partial
-    /// Form WRLD first when the destination has none: the put of a cell whose worldspace is absent
-    /// refuses.</summary>
+    /// <summary>Lands an exterior CELL in <paramref name="worldspaceFormKey"/>, copying the WRLD in with
+    /// its own fields first when the destination has none: the put of a cell whose worldspace is
+    /// absent refuses.</summary>
     internal RecordEditResult MintExteriorCell(
         CopySource source, string worldspaceFormKey, SourceDocument cell, Destination destination, GameRelease release)
     {
@@ -180,12 +169,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
 
         if (Identity(destination, worldspaceFormKey, release) is null)
         {
-            var sourceWorldspace = source.Identity(worldspaceFormKey)
-                ?? throw new InvalidOperationException(
-                    $"{source.Plugin.Name} does not hold {worldspaceFormKey} — the cell it carries names it as its worldspace.");
-            destination.Repository.Put(
-                destination.Plugin,
-                BarePartialFormAncestor(worldspaceFormKey, sourceWorldspace.RecordType, release));
+            destination.Repository.Put(destination.Plugin, OwnFieldsOf(source, HeldBy(source, worldspaceFormKey), release));
         }
 
         var sourceCell = source.Identity(cellFormKey)
@@ -248,10 +232,14 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
     internal static InvalidOperationException NoDocumentCarries(PluginAddress plugin, string formKey) =>
         new($"{plugin.Name} holds {formKey}, but no document in its source tree carries it.");
 
-    // Bare fields, no EditorID is xEdit parity (AddIfMissingInternal's Assign() runs only under
-    // `if aDeepCopy`, hardcoded False for ancestors).
-    private SourceDocument BarePartialFormAncestor(string formKey, string recordType, GameRelease release) =>
-        new(formKey, recordType, null,
-            RecordMint.BareDocument(
-                codec, schemaReflector.GetSchemas(release)[recordType], release, formKey, editorId: null, partialForm: true));
+    private static RecordIdentity HeldBy(CopySource source, string containerFormKey) =>
+        source.Identity(containerFormKey)
+        ?? throw new InvalidOperationException(
+            $"{source.Plugin.Name} does not hold {containerFormKey}, which a copied record names as its container.");
+
+    private SourceDocument OwnFieldsOf(CopySource source, RecordIdentity container, GameRelease release)
+    {
+        var document = source.Document(container);
+        return document with { Body = ContainerDocumentEdits.WithoutChildren(codec, document.Body, release, document.RecordType) };
+    }
 }

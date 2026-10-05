@@ -37,9 +37,7 @@ public sealed class ContainerCopyFixture : TestInstance, ITrackedPlugins
     public const string DialogTopicEditorId = "SourceTopic";
     public FormKey DialogTopic { get; }
 
-    // Two responses under the topic — "DIAL with INFOs": each copied child draws a fresh
-    // FormKey, and Response2's sibling link at Response1 stays pointed at the *original* (never
-    // remapped onto the copies — xEdit doesn't either).
+    // Two responses under the topic: DIAL with INFOs.
     public const string Response1EditorId = "SourceResponse1";
     public FormKey Response1 { get; }
 
@@ -71,9 +69,7 @@ public sealed class ContainerCopyFixture : TestInstance, ITrackedPlugins
     public const string LandscapeEditorId = "SourceLandscape";
     public FormKey Landscape { get; }
 
-    // TopCell is the simplest real exterior shape: PlacementWalker.WalkWorldspace emits it with no
-    // block/sub/grid at all, so it proves the "exterior, ancestor missing" refusal without a genuine
-    // SubCells grid position.
+    // TopCell is a worldspace's persistent cell: embedded in the worldspace's document, with no grid.
     public const string WorldspaceEditorId = "SourceWorld";
     public FormKey Worldspace { get; }
 
@@ -132,7 +128,7 @@ public sealed class ContainerCopyFixture : TestInstance, ITrackedPlugins
         var dialogTopic = new DialogTopic(sourceMod) { EditorID = DialogTopicEditorId };
         var response1 = new DialogResponses(sourceMod) { EditorID = Response1EditorId };
         var response2 = new DialogResponses(sourceMod) { EditorID = Response2EditorId };
-        response2.PreviousDialog.SetTo(response1);
+        response2.PreviousDialog.SetTo(response2);
         dialogTopic.Responses.Add(response1);
         dialogTopic.Responses.Add(response2);
         quest.DialogTopics.Add(dialogTopic);

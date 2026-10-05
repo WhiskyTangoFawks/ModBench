@@ -53,10 +53,9 @@ internal sealed class OverrideCopy
         if (RefuseIfUnderride(formKey, destinationPlugin) is { } underrideRefusal) return underrideRefusal;
 
         // A record a container's document carries lands inside the destination's copy of that
-        // document (the container rule); the refusal below is for a record with no group of its own
-        // that no container document carries.
-        if (RecordTypeDispatch.For(release).GroupFolderNameFor(identity.RecordType) is null
-            && source.ContainerOf(identity) is { } container)
+        // document (the container rule), a worldspace's persistent cell among them; the refusal below
+        // is for a record with no group of its own that no container document carries.
+        if (source.ContainerOf(identity) is { } container)
         {
             return _recordCopy.CopyEmbeddedChildAsOverride(
                 source, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body),
@@ -77,11 +76,8 @@ internal sealed class OverrideCopy
             return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
         }
 
-        // A worldspace has both its numbered cells and its TopCell. Only a numbered cell has a grid
-        // to mint at; a TopCell falls through to the refusal.
         var isCell = RecordTypeDispatch.For(release).IsCell(identity.RecordType);
-        var worldspace = isCell ? source.WorldspaceOf(identity) : null;
-        if (worldspace != null && source.SitsAtAGrid(identity))
+        if (isCell && source.WorldspaceOf(identity) is { } worldspace)
         {
             var mintResult = _recordCopy.MintExteriorCell(
                 source, worldspace,
@@ -93,18 +89,10 @@ internal sealed class OverrideCopy
             {
                 _logger.LogInformation(
                     "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into " +
-                    "{DestinationPlugin} ({DestinationOrigin}) — minted its worldspace as a Partial Form ancestor",
+                    "{DestinationPlugin} ({DestinationOrigin}) — copied in its worldspace as an override",
                     formKey, source.Plugin.Name, source.Plugin.Origin, destinationPlugin.Name, destinationPlugin.Origin);
             }
             return mintResult;
-        }
-        if (worldspace != null)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ContainerParentMissingInDestination,
-                $"{formKey} is an exterior cell with no worldspace grid position of its own — a worldspace's " +
-                $"persistent cell, not one of its numbered blocks — so Copy as Override cannot create it in " +
-                $"{destinationPlugin.Name}.");
         }
 
         // A plain Copy as Override is own-fields-only, so a container's inline children are stripped.

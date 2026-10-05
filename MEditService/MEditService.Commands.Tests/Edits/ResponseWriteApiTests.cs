@@ -110,7 +110,7 @@ public sealed class ResponseWriteApiTests : IDisposable
     }
 
     [Fact]
-    public async Task CopyingAResponseAsOverride_IntoAPluginLackingItsTopic_MintsABarePartialFormTopicWithTheResponseInline()
+    public async Task CopyingAResponseAsOverride_IntoAPluginLackingItsTopic_CopiesTheTopicInWithItsFieldsAndTheResponseInline()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -118,10 +118,10 @@ public sealed class ResponseWriteApiTests : IDisposable
             fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.True(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require().IsPartialForm());
+        Assert.False(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require().IsPartialForm());
         var mintedTopic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
         Assert.NotNull(mintedTopic);
-        Assert.True(mintedTopic.IsPartialForm());
+        Assert.False(mintedTopic.IsPartialForm());
         Assert.Equal(
             fixture.Response1.ToString(),
             Assert.Single(JsonDocument.Parse(mintedTopic.Body).RootElement.GetProperty("Responses").EnumerateArray())

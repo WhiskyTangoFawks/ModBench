@@ -107,17 +107,17 @@ public static class ContainerChildFields
         }
     }
 
-    /// <summary>Only ever a list slot (Persistent/Temporary): a single-value slot has no "append" to
-    /// make sense of.</summary>
+    /// <summary>A list slot takes the child at its end; a single-value slot (a worldspace's persistent
+    /// cell) takes it as its value.</summary>
     internal static void AddChildToSlot(IMajorRecordGetter parent, string slotName, IMajorRecord child)
     {
         var property = parent.GetType().GetProperty(slotName)
             ?? throw new InvalidOperationException(
                 $"{parent.GetType().Name} has no property '{slotName}' to add a child to — its child members are the assembly's own.");
 
-        var value = property.GetValue(parent)
-            ?? throw new InvalidOperationException($"Expected {parent.GetType().Name}.{slotName} to hold a collection to add a child to.");
-        ((dynamic)value).Add((dynamic)child);
+        var value = property.GetValue(parent);
+        if (value is System.Collections.IEnumerable and not string) ((dynamic)value).Add((dynamic)child);
+        else property.SetValue(parent, child);
     }
 
     /// <summary>The own-fields-replace half: the replacing record arrives child-stripped, and

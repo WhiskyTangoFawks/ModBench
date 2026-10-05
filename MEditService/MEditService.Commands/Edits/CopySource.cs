@@ -66,23 +66,15 @@ internal sealed class CopySource(
     internal string Diagnose(Exception ex) =>
         _tree != null ? ex.Message : PluginDiagnosis.FromParseException(ex).Describe();
 
-    /// <summary>The container carrying this record, or null when it has a document of its own. A cell
-    /// always answers null: its place is <see cref="WorldspaceOf"/>'s, never a slot's.</summary>
-    internal DocumentContainment? ContainerOf(RecordIdentity identity)
-    {
-        if (RecordTypeDispatch.For(_release).IsCell(identity.RecordType)) return null;
-        return _tree != null ? _tree.ContainerOf(plugin, identity, _schemas) : Loaded()?.ContainmentOf(identity.FormKey);
-    }
+    /// <summary>The container carrying this record, or null when it has a document of its own. A
+    /// worldspace's persistent cell answers its worldspace; a numbered cell has a document of its own.</summary>
+    internal DocumentContainment? ContainerOf(RecordIdentity identity) =>
+        _tree != null ? _tree.ContainerOf(plugin, identity, _schemas) : Loaded()?.ContainmentOf(identity.FormKey);
 
     /// <summary>The worldspace the cell <paramref name="identity"/> names sits in, or null for an interior
     /// cell or a cell this plugin does not hold.</summary>
     internal string? WorldspaceOf(RecordIdentity identity) =>
         _tree != null ? _tree.WorldspaceOf(plugin, identity) : Loaded()?.CellStructureOf(identity.FormKey)?.ParentWorldspace;
-
-    /// <summary>Whether the cell's own document says which grid it sits at: a numbered exterior cell does,
-    /// and a worldspace's own persistent cell does not.</summary>
-    internal bool SitsAtAGrid(RecordIdentity identity) =>
-        JsonNode.Parse(Body(identity)) is JsonObject cell && PlacedCell.Grid(cell) != null;
 
     /// <summary>The exterior cell this plugin holds at grid (<paramref name="x"/>, <paramref name="y"/>)
     /// of <paramref name="worldspace"/>, or null when it holds none there.</summary>

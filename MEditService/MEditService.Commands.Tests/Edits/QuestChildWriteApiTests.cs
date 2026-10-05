@@ -208,7 +208,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     }
 
     [Fact]
-    public async Task CopyingASceneAsOverride_IntoAPluginLackingItsQuest_MintsABarePartialFormQuestWithTheSceneInline()
+    public async Task CopyingASceneAsOverride_IntoAPluginLackingItsQuest_CopiesTheQuestInWithItsFieldsAndTheSceneInline()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -218,7 +218,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
         Assert.NotNull(quest);
-        Assert.True(quest.Require().IsPartialForm());
+        Assert.False(quest.Require().IsPartialForm());
         Assert.Equal(
             fixture.Scene.ToString(),
             Assert.Single(JsonDocument.Parse(quest.Body).RootElement.GetProperty("Scenes").EnumerateArray())
@@ -232,7 +232,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     }
 
     [Fact]
-    public async Task CopyingATopicAsOverride_IntoAPluginLackingItsQuest_MintsTheQuest_AndLandsTheTopicWithEmptyResponses()
+    public async Task CopyingATopicAsOverride_IntoAPluginLackingItsQuest_CopiesTheQuestIn_AndLandsTheTopicWithEmptyResponses()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -240,7 +240,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
             fixture.SourcePlugin, fixture.DialogTopic.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.True(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require().IsPartialForm());
+        Assert.False(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require().IsPartialForm());
         var topic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
         Assert.NotNull(topic);
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, topic.Require().EditorId);
@@ -253,7 +253,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     }
 
     [Fact]
-    public async Task CopyingAResponseAsOverride_IntoAPluginLackingItsTopicAndQuest_MintsBoth_InOneQuestDocument()
+    public async Task CopyingAResponseAsOverride_IntoAPluginLackingItsTopicAndQuest_CopiesBothIn_InOneQuestDocument()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -263,10 +263,10 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
         Assert.NotNull(quest);
-        Assert.True(quest.Require().IsPartialForm());
+        Assert.False(quest.Require().IsPartialForm());
         var topic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
         Assert.NotNull(topic);
-        Assert.True(topic.Require().IsPartialForm());
+        Assert.False(topic.Require().IsPartialForm());
         Assert.Equal(
             fixture.DialogTopic.ToString(),
             Assert.Single(JsonDocument.Parse(quest.Body).RootElement.GetProperty("DialogTopics").EnumerateArray())
