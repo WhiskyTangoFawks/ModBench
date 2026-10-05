@@ -1457,3 +1457,46 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
     expect(progressSteps).toEqual(endsOnTheRead);
   });
 });
+
+describe('rename mod refuses in its prompt', () => {
+  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
+
+  const MOD_CLASH = 'A mod with this name already exists';
+  const instance = {
+    ...instanceThatReads,
+    value: instanceValueFixture({
+      activeProfile: 'Default', profiles: ['Default'],
+      mods: [{ kind: 'mod', name: 'Mod A', enabled: true }, { kind: 'mod', name: 'Mod B', enabled: true }],
+    }),
+  };
+  const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
+
+  async function validatorOver(root: string): Promise<(value: string) => unknown> {
+    showInputBox.mockResolvedValueOnce(undefined);
+    registerModContextCommands({
+      access: accessTo(root), instance, viewSelection: () => [], reporter: recordingReporter(),
+      ask: scriptedDialog(), trash: vi.fn(), log: vi.fn(),
+    });
+    await invoke('modbench.mod.rename', modB);
+    return present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
+  }
+
+  it('a name another mod has, in any case, listed or in a folder, and a path separator, and takes its own name in another case', async () => {
+    const root = await instanceWithFoldersLeftByAnotherToolAndModOrderListing(['Mod A', 'Mod B', 'Folder Only'], [
+      { kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }, { kind: 'mod', name: 'Listed Only' },
+    ]);
+    try {
+      const validate = await validatorOver(root);
+      expect(await validate('mod a')).toBe(MOD_CLASH);
+      expect(await validate('FOLDER ONLY')).toBe(MOD_CLASH);
+      expect(await validate('listed only')).toBe(MOD_CLASH);
+      expect(await validate('a/b')).toBe('A mod name cannot contain / or \\');
+      expect(await validate('a\\b')).toBe('A mod name cannot contain / or \\');
+      expect(await validate('mod b')).toBeUndefined();
+      expect(await validate('Fresh')).toBeUndefined();
+      expect(await validate('')).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
