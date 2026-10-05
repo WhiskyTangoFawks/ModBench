@@ -7,7 +7,8 @@ import type {
 } from '../client';
 import { parseRecordResourceUri, recordResourceUri } from './recordResourceUri';
 import { failurePrefixIcon } from './failurePrefixIcon';
-import { pluginAddressKey } from './trackedRepositories';
+import { pluginAddressKey } from './pluginAddress';
+import type { PluginConditions } from './pluginFacts';
 import { errorMessage } from '../ports/errorMessage';
 import { UNLIMITED_RECORDS } from '../client';
 
@@ -46,11 +47,7 @@ function collapsibleWhen(hasChildren: boolean): vscode.TreeItemCollapsibleState 
 // PluginsTreeProvider's. Do not reintroduce one: reconciling a "pluginImmutable" contextValue
 // with the row's own read-only-ness story is an open question.
 
-/** What a row beneath a plugin states about that plugin, which the menus' conditions read. */
-export interface PluginConditions {
-  readonly tracked: boolean;
-  readonly editable: boolean;
-}
+export type { PluginConditions };
 
 // A row whose plugin no caller has described offers no record edit.
 const NOT_EDITABLE: PluginConditions = { tracked: false, editable: false };

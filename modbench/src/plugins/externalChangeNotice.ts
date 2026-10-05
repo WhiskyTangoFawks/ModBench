@@ -1,6 +1,6 @@
 import type { MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
-import { pluginAddressKey } from './trackedRepositories';
+import { pluginAddressKey } from './pluginAddress';
 
 /** package.json's title for the gesture that decompiles an untracked plugin of a tracked mod. */
 export const DECOMPILE_PLUGIN_TITLE = 'Decompile Plugin';

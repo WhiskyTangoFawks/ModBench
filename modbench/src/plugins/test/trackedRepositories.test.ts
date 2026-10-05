@@ -12,10 +12,11 @@ vi.mock('vscode', () => ({
 
 import * as path from 'node:path';
 import {
-  trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, trackedRepositoriesOver,
+  trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, trackedRepositoriesOver,
 } from '../trackedRepositories';
 import { InMemoryMEditClient, type PluginMetadata } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
+import { pluginAddressKey } from '../pluginAddress';
 
 const modDirsOf = (byOrigin: Record<string, string>): ReadonlyMap<string, string> => new Map(Object.entries(byOrigin));
 

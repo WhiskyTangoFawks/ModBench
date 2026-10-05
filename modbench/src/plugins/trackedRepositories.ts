@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
+import { pluginAddressKey } from './pluginAddress';
 
 /** Each plugin's tracked folder, by `pluginAddressKey`; a plugin whose origin is not a tracked mod
  *  has no entry. A lookup over the Instance value's own two facts, never a fresh disk check. */
@@ -32,11 +33,6 @@ export async function registerTrackedRepositories<T>(
     if (repository != null) repositories.set(folder, repository);
   }
   return repositories;
-}
-
-/** ADR-0012. */
-export function pluginAddressKey(name: string, origin: string): string {
-  return `${origin.toLowerCase()}|${name.toLowerCase()}`;
 }
 
 /** Reindexed by plugin because a field edit knows the plugin it edited, never the folder. */
