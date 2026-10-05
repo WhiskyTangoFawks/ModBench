@@ -85,7 +85,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     // one is hierarchical — plugin → record type → record.
     showCollapseAll: true,
   });
-  const selected = survivingSelection(view);
+  const selected = survivingSelection(view, (row) => tree.shownRow(row));
   const showKeyContext = () => {
     for (const [name, value] of Object.entries(pluginsKeyContext(selected.rows(), (row) => tree.isEnabled(row)))) {
       void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);

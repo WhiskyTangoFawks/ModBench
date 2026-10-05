@@ -64,9 +64,8 @@ describe('a rename while a recompute is reading', () => {
     await filesReadBeforeRename;
     const client = new InMemoryMEditClient();
     client.setCommandResult('renameSource', { renamed: true });
-    client.setQueryAnswer('getPluginDependants', { dependants: [], unreadable: [] });
     await instance.quiet(async () => {
-      await renamePlugin({ adapter: writer, client, ask: () => Promise.resolve(undefined) }, PLUGIN, RENAMED, 'Fallout4');
+      await renamePlugin({ adapter: writer, client }, PLUGIN, RENAMED, 'Fallout4');
       release();
     });
     await overlapping;

@@ -929,6 +929,12 @@ describe('HttpMEditClient — the plugins that list a plugin as a master', () =>
     await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).resolves.toEqual(answer);
   });
 
+  it('rejects a response with no body, so a rename never goes ahead unasked on no answer', async () => {
+    const client = makeClient(vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 200 }))));
+
+    await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).rejects.toThrow(/no answer/);
+  });
+
   it('rejects, naming the reason, while mEdit has not finished indexing', async () => {
     const client = makeClient(vi.fn((_req: Request) =>
       Promise.resolve(jsonResponse(503, { detail: 'mEdit has not finished indexing the plugins.' }))));

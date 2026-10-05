@@ -511,6 +511,36 @@ describe('PluginsTreeProvider — name filter', () => {
     expect(rows.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp', 'AlphaExtra.esp']);
   });
 
+  it('finds the row it shows under the id of a row VS Code holds from before a rebuild', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]));
+    const { tree } = makeTree([], { instance });
+    const [held] = expectInstancesOf(await tree.getChildren(), PluginNode);
+    tree.invalidate();
+
+    const shown = tree.shownRow(expectInstanceOf(held, PluginNode));
+
+    expect(shown?.id).toBe(held?.id);
+    expect(shown).not.toBe(held);
+  });
+
+  it('finds no row for a plugin the instance no longer holds', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]));
+    const { tree } = makeTree([], { instance });
+    const [alpha] = expectInstancesOf(await tree.getChildren(), PluginNode);
+    instance.value = valueOf([plugin({ name: 'Beta.esp', slot: 0 })]);
+    tree.invalidate();
+
+    expect(tree.shownRow(expectInstanceOf(alpha, PluginNode))).toBeUndefined();
+  });
+
+  it('finds no row for a plugin the name filter hides', async () => {
+    const { tree } = makeTree([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]);
+    const [alpha] = expectInstancesOf(await tree.getChildren(), PluginNode);
+    tree.setFilter('beta');
+
+    expect(tree.shownRow(expectInstanceOf(alpha, PluginNode))).toBeUndefined();
+  });
+
   it('restores the full list when the filter is cleared', async () => {
     const { tree } = makeTree([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]);
     tree.setFilter('alpha');

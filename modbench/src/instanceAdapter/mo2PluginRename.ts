@@ -2,6 +2,7 @@
 // plugin order's lock, and put back if a write fails.
 
 import { parse } from 'node:path';
+import { refuse } from '../ports/refuse';
 import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCodec/pluginsText';
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
 import { get, listDir, rename, undoAll, type Undo, withLock, write } from './files';
@@ -109,7 +110,12 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
 
   return {
     async checkPluginRename(origin, from, to, gameRelease) {
-      await plan(await orderFiles(), origin, from, to, gameRelease);
+      try {
+        await plan(await orderFiles(), origin, from, to, gameRelease);
+        return { applied: true };
+      } catch (err) {
+        return refuse(err);
+      }
     },
     async renamePlugin(origin, from, to, gameRelease) {
       const orders = await orderFiles();

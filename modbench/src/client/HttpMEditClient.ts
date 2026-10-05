@@ -460,7 +460,8 @@ export class HttpMEditClient implements MEditClient {
         signal,
       });
       this.ensureOk(`getPluginDependants(${plugin})`, response, error);
-      return data ?? { dependants: [], unreadable: [] };
+      if (data === undefined) throw new Error(`mEdit gave no answer for getPluginDependants(${plugin})`);
+      return data;
     });
   }
 

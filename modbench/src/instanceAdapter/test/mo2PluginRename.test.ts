@@ -202,13 +202,13 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
   });
 
   describe('checking a rename before it is made', () => {
-    const check = (to = 'Renamed Patch.esp', from = 'Tracked Patch Mod.esp'): Promise<void> =>
+    const check = (to = 'Renamed Patch.esp', from = 'Tracked Patch Mod.esp') =>
       adapter.checkPluginRename(ORIGIN, from, to, 'Fallout4');
 
     it('passes a rename that would be made, and changes nothing', async () => {
       const before = await snapshotTree(root);
 
-      await expect(check()).resolves.toBeUndefined();
+      expect(await check()).toEqual({ applied: true });
 
       assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
@@ -219,17 +219,19 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       ['a release the tables hold no row for', () => adapter.checkPluginRename(ORIGIN, 'Tracked Patch Mod.esp', 'Renamed Patch.esp', undefined), /release/i],
       ['a name a file of the origin already has', async () => {
         await put(`${MOD}/RENAMED PATCH.esp`);
-        await check();
+        return check();
       }, /RENAMED PATCH\.esp/],
       ['a name a profile already lists for another plugin', async () => {
         await put(SECONDARY_PLUGINS, 'Tracked Patch Mod.esp\r\n*renamed patch.ESP\r\n');
-        await check();
+        return check();
       }, /renamed patch\.ESP/],
     ])('refuses %s, as the rename would, and changes nothing', async (_name, attempt, reason) => {
       const before = await snapshotTree(root);
 
-      await expect(attempt()).rejects.toThrow(reason);
+      const result = await attempt();
 
+      expect(result).toMatchObject({ applied: false });
+      expect('refusal' in result && result.refusal).toMatch(reason);
       assertOnlyChanged(before, await snapshotTree(root), new Set([`${MOD}/RENAMED PATCH.esp`, SECONDARY_PLUGINS]));
     });
   });

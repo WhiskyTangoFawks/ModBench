@@ -29,10 +29,10 @@ import { progressSteps } from '../../test/recordedProgress';
 import { registerRenamePluginCommand } from '../pluginRenameCommand';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import type { AskQuestion } from '../../ports/dialog';
+import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
-import type { AskQuestion } from '../../ports/dialog';
 import { present } from '../../ports/present';
 import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -41,14 +41,17 @@ const held = (name: string, origin: string): LoadOrderPlugin =>
 
 const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
 
-function setup(selection: readonly PluginsTreeNode[] = []) {
+function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string | undefined)[]) {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getLightPluginsSupported', true);
   client.setCommandResult('renameSource', { renamed: true });
   client.setQueryAnswer('getPluginDependants', { dependants: [], unreadable: [] });
-  const ask = vi.fn<AskQuestion>().mockResolvedValue('Rename');
+  const dialog = scriptedDialog(...answers);
+  const stepsWhenAsked: string[][] = [];
+  const ask = Object.assign<AskQuestion, { asked: typeof dialog.asked }>(
+    (...args) => { stepsWhenAsked.push([...progressSteps]); return dialog(...args); }, { asked: dialog.asked });
   const renameFiles = vi.fn().mockResolvedValue(undefined);
-  const access = { ...accessTo('/instance'), adapter: { ...accessTo('/instance').adapter, renamePlugin: renameFiles, checkPluginRename: vi.fn().mockResolvedValue(undefined) } };
+  const access = { ...accessTo('/instance'), adapter: { ...accessTo('/instance').adapter, renamePlugin: renameFiles, checkPluginRename: vi.fn().mockResolvedValue({ applied: true }) } };
   const instance = {
     value: instanceValueFixture({
       gameRelease: 'Fallout4',
@@ -74,7 +77,7 @@ function setup(selection: readonly PluginsTreeNode[] = []) {
     await run(new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin));
     return validated;
   };
-  return { client, ask, renameFiles, reporter, run, validate };
+  return { client, ask, stepsWhenAsked, renameFiles, reporter, run, validate };
 }
 
 const row = () => new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin);
@@ -110,16 +113,27 @@ describe('modbench.plugin.rename', () => {
 
   it('renames nothing when the confirmation of its dependants is declined, and says nothing', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, ask, renameFiles, reporter, run } = setup();
+    const { client, ask, renameFiles, reporter, run } = setup([], undefined);
     client.setQueryAnswer('getPluginDependants', { dependants: [{ name: 'Child.esp', origin: 'ModB' }], unreadable: [] });
-    ask.mockResolvedValue(undefined);
 
     await run(row());
 
-    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask.asked).toHaveLength(1);
     expect(client.calls.filter((c) => c.method === 'renameSource')).toEqual([]);
     expect(renameFiles).not.toHaveBeenCalled();
     expect(reporter.reports).toEqual([]);
+    expect(progressSteps).toEqual([]);
+  });
+
+  it('asks before the Plugins bar opens, so the question does not hold the bar or the reads', async () => {
+    showInputBox.mockResolvedValueOnce('Renamed.esp');
+    const { client, stepsWhenAsked, run } = setup([], 'Rename');
+    client.setQueryAnswer('getPluginDependants', { dependants: [{ name: 'Child.esp', origin: 'ModB' }], unreadable: [] });
+
+    await run(row());
+
+    expect(stepsWhenAsked).toEqual([[]]);
+    expect(progressSteps[0]).toBe('progress opens on modbench.pluginListTree');
   });
 
   it('tells a refusal that came before any write, such as an index still reading', async () => {

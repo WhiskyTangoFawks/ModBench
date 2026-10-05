@@ -15,11 +15,10 @@ public sealed class PluginDependantsQueryService(IQueryIndex index, LoadOrderHol
     /// <summary>Null until the index is ready: a plugin it has not opened would read as no dependant.</summary>
     public PluginDependants? GetDependants(PluginAddress plugin)
     {
-        var reads = index.RequireReads();
         var held = loadOrder.Require();
         if (index.Status.State != LoadOrderState.Ready) return null;
 
-        var opened = reads.OpenedPlugins;
+        var opened = index.RequireReads().OpenedPlugins;
         var others = held.Plugins.Where(other => !PluginAddress.Comparer.Equals(other.Key, plugin)).ToList();
         return new PluginDependants(
             [.. others.Where(other => opened.TryGetValue(other.Key, out var content)
