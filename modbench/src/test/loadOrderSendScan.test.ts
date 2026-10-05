@@ -7,7 +7,7 @@ import { productionFiles, SRC } from './scanSource';
 
 const SENDS = join('instanceCommands', 'loadOrder.ts');
 const PUTS = join('client', 'loadOrderSender.ts');
-const PORT = ['MEditClient.ts', 'HttpMEditClient.ts', 'InMemoryMEditClient.ts']
+const PORT = ['MEditClient.ts', 'HttpMEditClient.ts']
   .map((name) => join('client', name));
 
 type CallCheck = (text: string, path: string, root: string) => boolean;

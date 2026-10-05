@@ -22,7 +22,7 @@ const openExtendedFieldEditor =
 
 import { commitField, registerRecordPanelContextCommands, type RecordPanelContextCommandDeps } from '../recordPanelContextCommands';
 import type { ArrayElementContext, ArrayParentContext, StringValueContext } from '../../wire/messages';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { present } from '../../ports/present';
 
 beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); showInputBox.mockReset(); executeCommand.mockReset(); });

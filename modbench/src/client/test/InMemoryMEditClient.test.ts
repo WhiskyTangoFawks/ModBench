@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { InMemoryMEditClient } from '../InMemoryMEditClient';
+import { InMemoryMEditClient } from './InMemoryMEditClient';
 import { pluginMetadataFixture, notificationEventFixture } from './fixtures';
 
 describe('InMemoryMEditClient — recorded calls', () => {

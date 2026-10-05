@@ -19,7 +19,7 @@ import {
 } from '../recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import type { CompareResult } from '../../client';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); });

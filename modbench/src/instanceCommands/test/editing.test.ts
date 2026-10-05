@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  createLoadOrderSender, InMemoryMEditClient, type LoadOrderOutcome, type LoadOrderPluginInput, type LoadOrderProgress,
+  createLoadOrderSender, type LoadOrderOutcome, type LoadOrderProgress,
 } from '../../client';
+import type { LoadOrderPluginInput } from '../../client/MEditClient';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { editingFlow, type Told } from '../editing';
 import type { LoadOrderSource } from '../loadOrder';
 

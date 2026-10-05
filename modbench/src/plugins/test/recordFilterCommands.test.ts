@@ -26,7 +26,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { makeShowRecordFilter, registerFilterCommands, type FilterCommandDeps } from '../recordFilterCommands';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 

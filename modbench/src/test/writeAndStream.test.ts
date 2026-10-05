@@ -11,7 +11,8 @@ import { PluginTreeProvider, RecordNode, RecordTypeNode } from '../plugins/Plugi
 import { subscribeRecordPanelsToNotifications } from '../editor/notificationWiring';
 import { EditsInFlight } from '../editor/followRecord';
 import { subscribeTreeToNotifications } from '../plugins/treeNotifications';
-import { InMemoryMEditClient, type RecordSummary } from '../client';
+import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
+import { type RecordSummary } from '../client';
 import { recordingReporter } from './surfacingDoubles';
 import { recordTypeCountFixture } from '../client/test/fixtures';
 import { expectInstanceOf } from './expectInstanceOf';

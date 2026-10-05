@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn() }));
 vi.mock('vscode', () => ({ commands: { executeCommand } }));
 
-import { InMemoryMEditClient, UNLIMITED_RECORDS, type MEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { UNLIMITED_RECORDS, type MEditClient } from '../../client';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { createdRecordSelection } from '../createdRecordSelection';

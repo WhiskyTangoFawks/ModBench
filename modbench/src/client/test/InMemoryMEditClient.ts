@@ -1,6 +1,6 @@
-import type { MEditClient, NotificationKind, NotificationPayloads, BackendStatus } from './MEditClient';
-import type { NotificationEvent } from './apiClient';
-import { NotificationListenerRegistry } from './notificationStream';
+import type { MEditClient, NotificationKind, NotificationPayloads, BackendStatus } from '../MEditClient';
+import type { NotificationEvent } from '../apiClient';
+import { NotificationListenerRegistry } from '../notificationStream';
 
 // Every query and command a test can script; `putLoadOrder` counts as a command here — the
 // distinction is architectural, not behavioural.
