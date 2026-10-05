@@ -77,6 +77,7 @@ internal static class GitTracking
     private static void CreateRepository(SourceRepositoryGit git)
     {
         git.Run("init", "-q", "-b", "main");
+        git.Run("config", $"{SourceRepositoryGit.TrackMarkSection}.{SourceRepositoryGit.TrackMarkKey}", "true");
         git.Run("config", "core.autocrlf", "false");
         git.Run("config", "commit.gpgsign", "false");
         git.Run("config", "gc.autoDetach", "false");
