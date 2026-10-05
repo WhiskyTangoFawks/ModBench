@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
-using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -13,31 +12,18 @@ namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>A real tracked plugin with no records of its own: a case seeds the document it needs,
 /// then edits it through the real <see cref="EditRecordHandler"/>.</summary>
-internal sealed class DocumentEditFixture : IDisposable
+internal sealed class DocumentEditFixture : TestInstance
 {
     private const string PluginName = "DocEdit.esp";
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
-    private readonly ScratchDirectory _modFolder = new("medit-docedit-");
-    private readonly ScratchDirectory _gameDirectory = new("medit-docedit-game-");
-    private readonly SourceRepository _repository;
+    private SourceRepository Repository => RepositoryOf(Plugin)
+        ?? throw new InvalidOperationException($"Expected '{Plugin}' to already be tracked.");
 
-    internal PluginAddress Plugin { get; } = new(PluginName, "DocEditMod");
-    internal EditRecordHandler EditHandler { get; }
+    internal PluginAddress Plugin { get; }
 
-    internal DocumentEditFixture()
-    {
-        TrackedTemplates.WriteTracked(_modFolder, new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4));
-        _repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
-
-        var pluginPath = Path.Combine(_modFolder, PluginName);
-        var entries = new[] { new LoadOrderEntry(PluginName, pluginPath, Plugin.Origin, Slot: 0, Enabled: true, Winning: true) };
-        var loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, _modFolder, GameRelease.Fallout4, entries);
-        var holder = new LoadOrderHolder();
-        holder.Apply(loadOrder);
-        EditHandler = TestEditService.EditHandler(holder);
-    }
+    internal DocumentEditFixture() =>
+        Plugin = Add(new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4), "DocEditMod");
 
     /// <summary>Seeds the working tree with a real record's own codec-serialized document; returns
     /// its FormKey.</summary>
@@ -60,10 +46,10 @@ internal sealed class DocumentEditFixture : IDisposable
     /// <summary>Seeds an exact document body, for a case whose input is a shape the codec itself
     /// would not produce.</summary>
     internal void SeedRaw(string formKey, string recordType, string? editorId, string body) =>
-        _repository.Put(Plugin, new SourceDocument(formKey, recordType, editorId, body));
+        Repository.Put(Plugin, new SourceDocument(formKey, recordType, editorId, body));
 
     internal string Document(string formKey) =>
-        TrackedTree.Document(_modFolder, Plugin, formKey)?.Body
+        TrackedTree.Document(ModFolderOf(Plugin), Plugin, formKey)?.Body
             ?? throw new InvalidOperationException($"Expected a document for '{formKey}'.");
 
     /// <summary>Applies <paramref name="envelope"/> through the real handler; on success returns the
@@ -72,11 +58,5 @@ internal sealed class DocumentEditFixture : IDisposable
     {
         var result = EditHandler.Edit(Plugin, formKey, envelope);
         return (result, result.Applied ? Document(formKey) : null);
-    }
-
-    public void Dispose()
-    {
-        _modFolder.Dispose();
-        _gameDirectory.Dispose();
     }
 }

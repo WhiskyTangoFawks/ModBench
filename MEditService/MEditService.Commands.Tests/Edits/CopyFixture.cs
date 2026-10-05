@@ -1,6 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -10,26 +9,17 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>Two mod folders and one load order, since a copy across plugins is unaskable of one.
 /// <see cref="SourcePlugin"/> defaults untracked: a Data-directory master's own file is its only
 /// representation. No index anywhere in it.</summary>
-public sealed class CopyFixture : IDisposable, ITrackedPlugins
+public sealed class CopyFixture : TestInstance, ITrackedPlugins
 {
     public const string SourcePluginName = "Source.esm";
     public const string SourceOrigin = "SourceMod";
     public const string DestinationPluginName = "Destination.esp";
     public const string DestinationOrigin = "DestinationMod";
 
-    public ScratchDirectory SourceModFolder { get; } = new("medit-copy-source-");
-    public ScratchDirectory DestinationModFolder { get; } = new("medit-copy-dest-");
-    public ScratchDirectory GameDirectory { get; } = new("medit-copy-game-");
-    /// <summary>The same snapshot as a list, for a test that reconciles an index over these trees.</summary>
-    public IReadOnlyList<LoadOrderEntry> Entries { get; }
-
-    public LoadOrderSnapshot LoadOrder { get; }
-    public EditRecordHandler EditHandler { get; }
-    public DeleteRecordHandler DeleteHandler { get; }
-    public CreateRecordHandler CreateHandler { get; }
-    public CopyRecordHandler CopyHandler { get; }
-    public PluginAddress SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
-    public PluginAddress DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
+    public string SourceModFolder => FolderOf(SourceOrigin);
+    public string DestinationModFolder => FolderOf(DestinationOrigin);
+    public PluginAddress SourcePlugin { get; }
+    public PluginAddress DestinationPlugin { get; }
 
     public const string SourceNpcEditorId = "SourceNpc";
     public FormKey SourceNpc { get; }
@@ -48,9 +38,6 @@ public sealed class CopyFixture : IDisposable, ITrackedPlugins
 
     private CopyFixture(bool trackSource)
     {
-        var holder = new LoadOrderHolder();
-
-        var sourcePath = Path.Combine(SourceModFolder, SourcePluginName);
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
         var npc = sourceMod.Npcs.AddNew(SourceNpcEditorId);
         var namelessNpc = sourceMod.Npcs.AddNew((string?)null);
@@ -58,29 +45,14 @@ public sealed class CopyFixture : IDisposable, ITrackedPlugins
         var relation = new Relation();
         relation.Target.SetTo(faction);
         faction.Relations.Add(relation);
-        if (trackSource) TrackedTemplates.WriteTracked(SourceModFolder, sourceMod);
-        else sourceMod.WriteToBinary(sourcePath);
+        SourcePlugin = Add(sourceMod, SourceOrigin, trackSource);
         (SourceNpc, SelfLinkingFaction) = (npc.FormKey, faction.FormKey);
         SourceNpcWithNoEditorId = namelessNpc.FormKey;
 
-        var destinationPath = Path.Combine(DestinationModFolder, DestinationPluginName);
         var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
         var destinationNpc = destinationMod.Npcs.AddNew(DestinationNpcEditorId);
-        TrackedTemplates.WriteTracked(DestinationModFolder, destinationMod);
+        DestinationPlugin = Add(destinationMod, DestinationOrigin);
         DestinationNpc = destinationNpc.FormKey;
-
-        Entries =
-        [
-            new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: 0, Enabled: true, Winning: true),
-            new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 1, Enabled: true, Winning: true),
-        ];
-        LoadOrder = SnapshotPlugins.Snapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, Entries);
-
-        holder.Apply(LoadOrder);
-        EditHandler = TestEditService.EditHandler(holder);
-        DeleteHandler = TestEditService.DeleteHandler(holder);
-        CreateHandler = TestEditService.CreateHandler(holder);
-        CopyHandler = TestEditService.CopyHandler(holder);
     }
 
     /// <summary>Commits the destination's working tree, so what it holds now is what HEAD holds —
@@ -94,15 +66,5 @@ public sealed class CopyFixture : IDisposable, ITrackedPlugins
     /// an untracked source is read from.</summary>
     public byte[] SourcePluginBytes() => File.ReadAllBytes(Path.Combine(SourceModFolder, SourcePluginName));
 
-    public string ModFolderOf(PluginAddress plugin) =>
-        plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder;
-
     public static CopyFixture Create(bool trackSource = false) => new(trackSource);
-
-    public void Dispose()
-    {
-        SourceModFolder.Dispose();
-        DestinationModFolder.Dispose();
-        GameDirectory.Dispose();
-    }
 }

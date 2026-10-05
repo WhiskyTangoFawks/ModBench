@@ -1,7 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -10,18 +9,13 @@ namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>One mod tracked once, holding one record of every owning type: the expensive part is the <see
 /// cref="TrackService"/> setup, not the records.</summary>
-public sealed class AbstractUnionCompileFixture : IDisposable
+public sealed class AbstractUnionCompileFixture : TestInstance
 {
     public const string PluginName = "AbstractUnion611.esp";
     private const string Origin = "AbstractUnion611Mod";
 
-    private readonly ScratchDirectory _modFolder = new("medit-611-mod-");
-    private readonly ScratchDirectory _gameDirectory = new("medit-611-game-");
-
-    public string ModFolder => _modFolder;
-    public PluginAddress Plugin { get; } = new(PluginName, Origin);
-    public LoadOrderSnapshot LoadOrder { get; }
-    public EditRecordHandler EditHandler { get; }
+    public string ModFolder => FolderOf(Origin);
+    public PluginAddress Plugin { get; }
 
     // ── Supporting cast — FormLink targets only, never edited directly ─────────
     public FormKey Keyword { get; }
@@ -47,8 +41,6 @@ public sealed class AbstractUnionCompileFixture : IDisposable
 
     public AbstractUnionCompileFixture()
     {
-        var holder = new LoadOrderHolder();
-        var pluginPath = Path.Combine(_modFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
         var keyword = mod.Keywords.AddNew("Keyword611");
@@ -130,19 +122,6 @@ public sealed class AbstractUnionCompileFixture : IDisposable
         stat.NavmeshGeometry = new NavmeshGeometry { Parent = new WorldspaceNavmeshParent() };
         Static = stat.FormKey;
 
-        TrackedTemplates.WriteTracked(_modFolder, mod);
-
-        LoadOrder = SnapshotPlugins.Snapshot(
-            _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-
-        holder.Apply(LoadOrder);
-        EditHandler = TestEditService.EditHandler(holder);
-    }
-
-    public void Dispose()
-    {
-        _modFolder.Dispose();
-        _gameDirectory.Dispose();
+        Plugin = Add(mod, Origin);
     }
 }

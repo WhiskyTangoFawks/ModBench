@@ -1,7 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -12,24 +11,17 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>Two mod folders, because one cannot ask whether a copy crosses plugins. The source
 /// defaults untracked, so its records come through the Plugin adapter; no index anywhere in
 /// it.</summary>
-public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
+public sealed class ContainerCopyFixture : TestInstance, ITrackedPlugins
 {
     public const string SourcePluginName = "ContainerSource.esm";
     public const string SourceOrigin = "ContainerSourceMod";
     public const string DestinationPluginName = "ContainerDestination.esp";
     public const string DestinationOrigin = "ContainerDestinationMod";
 
-    public ScratchDirectory SourceModFolder { get; } = new("medit-container-copy-source-");
-    public ScratchDirectory DestinationModFolder { get; } = new("medit-container-copy-dest-");
-    public ScratchDirectory GameDirectory { get; } = new("medit-container-copy-game-");
-    /// <summary>The same snapshot as a list, for a test that reconciles an index over these trees.</summary>
-    public IReadOnlyList<LoadOrderEntry> Entries { get; }
-
-    public LoadOrderSnapshot LoadOrder { get; }
-    public EditRecordHandler EditHandler { get; }
-    public CopyRecordHandler CopyHandler { get; }
-    public PluginAddress SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
-    public PluginAddress DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
+    public string SourceModFolder => FolderOf(SourceOrigin);
+    public string DestinationModFolder => FolderOf(DestinationOrigin);
+    public PluginAddress SourcePlugin { get; }
+    public PluginAddress DestinationPlugin { get; }
 
     public const string DestinationNpcEditorId = "DestinationNpc";
     public FormKey DestinationNpc { get; }
@@ -132,9 +124,6 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
 
     private ContainerCopyFixture(bool destinationLoadsFirst, bool trackSource)
     {
-        var holder = new LoadOrderHolder();
-
-        var sourcePath = Path.Combine(SourceModFolder, SourcePluginName);
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
 
         var flatNpc = sourceMod.Npcs.AddNew(FlatNpcEditorId);
@@ -239,8 +228,6 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
 
         sourceMod.Worldspaces.Add(worldspace);
 
-        if (trackSource) TrackedTemplates.WriteTracked(SourceModFolder, sourceMod);
-        else sourceMod.WriteToBinary(sourcePath);
         (Quest, DialogTopic) = (quest.FormKey, dialogTopic.FormKey);
         (Response1, Response2) = (response1.FormKey, response2.FormKey);
         (Scene, DialogBranch) = (scene.FormKey, dialogBranch.FormKey);
@@ -254,22 +241,20 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
         (OtherBlockCell, SameBlockCell, SameSubBlockCell) =
             (otherBlockCell.FormKey, sameBlockCell.FormKey, sameSubBlockCell.FormKey);
 
-        var destinationPath = Path.Combine(DestinationModFolder, DestinationPluginName);
         var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
         var destinationNpc = destinationMod.Npcs.AddNew(DestinationNpcEditorId);
-        TrackedTemplates.WriteTracked(DestinationModFolder, destinationMod);
         DestinationNpc = destinationNpc.FormKey;
 
-        Entries =
-        [
-            new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: destinationLoadsFirst ? 1 : 0, Enabled: true, Winning: true),
-            new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: destinationLoadsFirst ? 0 : 1, Enabled: true, Winning: true),
-        ];
-        LoadOrder = SnapshotPlugins.Snapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, Entries);
-
-        holder.Apply(LoadOrder);
-        EditHandler = TestEditService.EditHandler(holder);
-        CopyHandler = TestEditService.CopyHandler(holder);
+        if (destinationLoadsFirst)
+        {
+            DestinationPlugin = Add(destinationMod, DestinationOrigin);
+            SourcePlugin = Add(sourceMod, SourceOrigin, trackSource);
+        }
+        else
+        {
+            SourcePlugin = Add(sourceMod, SourceOrigin, trackSource);
+            DestinationPlugin = Add(destinationMod, DestinationOrigin);
+        }
     }
 
     public static ContainerCopyFixture Create() => new(destinationLoadsFirst: false, trackSource: false);
@@ -278,8 +263,6 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
 
     public static ContainerCopyFixture CreateWithDestinationLoadingFirst() =>
         new(destinationLoadsFirst: true, trackSource: false);
-
-    public string ModFolderOf(PluginAddress plugin) => plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder;
 
     internal void AssertDestinationCellSitsAt(
         string cellFormKey, string? editorId, int blockX, int blockY, int subX, int subY)
@@ -298,12 +281,5 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
         var block = new CellBlock { BlockNumber = blockNumber, GroupType = GroupTypeEnum.InteriorCellBlock };
         block.SubBlocks.Add(subBlock);
         mod.Cells.Records.Add(block);
-    }
-
-    public void Dispose()
-    {
-        SourceModFolder.Dispose();
-        DestinationModFolder.Dispose();
-        GameDirectory.Dispose();
     }
 }

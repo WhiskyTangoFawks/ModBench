@@ -14,7 +14,7 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>A real tracked mod folder and the load order value over it, and nothing else: compile
 /// reads only those (ADR-0015). A change to the tree here goes through the repository,
 /// never the edit service.</summary>
-public sealed class CompileFixture : IDisposable, ITrackedPlugin
+public sealed class CompileFixture : TestInstance, ITrackedPlugin
 {
     public const string Origin = "CompileMod";
     public const string PluginName = "Compile.esp";
@@ -24,12 +24,8 @@ public sealed class CompileFixture : IDisposable, ITrackedPlugin
 
     private const GameRelease Release = GameRelease.Fallout4;
 
-    public string ModFolder { get; }
+    public string ModFolder => FolderOf(Origin);
     public PluginAddress Plugin { get; }
-
-    private readonly ScratchDirectory _instanceRoot = new("medit-compile-instance-");
-    private readonly ScratchDirectory _gameDirectory = new("medit-compile-game-");
-    private readonly LoadOrderSnapshot _loadOrder;
 
     // Keyword is a valid target for the NPC's keywords field and Race a resolvable target of the
     // wrong type, so both FormLink error axes are reachable without inventing data mid-test.
@@ -40,28 +36,21 @@ public sealed class CompileFixture : IDisposable, ITrackedPlugin
 
     public CompileFixture()
     {
-        ModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
-        Plugin = new PluginAddress(PluginName, Origin);
-
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         var race = mod.Races.AddNew("FixtureRace");
         var keyword = mod.Keywords.AddNew("FixtureKeyword");
         var npc = mod.Npcs.AddNew(NpcEditorId);
         npc.Race.SetTo(race);
         var otherNpc = mod.Npcs.AddNew(OtherNpcEditorId);
-        TrackedTemplates.WriteTracked(ModFolder, mod);
+        Plugin = Add(mod, Origin);
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
-
-        _loadOrder = SnapshotPlugins.Snapshot(
-            _gameDirectory, _instanceRoot, Release,
-            [new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
     }
 
     private string PluginPath => Path.Combine(ModFolder, PluginName);
 
-    private SourceRepository Repository => SourceRepository.Open(ModFolder, Release).Require();
+    private SourceRepository Repository => RepositoryOf(Plugin).Require();
 
-    public PluginCompileService CompileService() => CompileServices.Over(_loadOrder);
+    public PluginCompileService CompileService() => CompileServices.Over(LoadOrder);
 
     public IFallout4ModGetter Reimport(out IDisposable handle)
     {
@@ -101,10 +90,4 @@ public sealed class CompileFixture : IDisposable, ITrackedPlugin
         Repository.Remove(Plugin, new RecordIdentity(formKey.ToString(), recordType, editorId));
 
     public RecordIdentity NpcIdentity => new(Npc.ToString(), NpcRecordType, NpcEditorId);
-
-    public void Dispose()
-    {
-        _instanceRoot.Dispose();
-        _gameDirectory.Dispose();
-    }
 }

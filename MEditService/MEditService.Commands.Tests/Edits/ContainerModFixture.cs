@@ -10,25 +10,13 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>The container counterpart to SourceEditFixture, which holds only flat records. No
 /// index anywhere in it (ADR-0015); the handlers below still need Commands, unlike
 /// the shared container shape.</summary>
-public sealed class ContainerModFixture : IDisposable, ITrackedPlugin
+public sealed class ContainerModFixture : TestInstance, ITrackedPlugin
 {
     public const string ModFolderOrigin = "ContainerFixtureMod";
     public const string PluginName = "ContainerFixture.esp";
 
-    public string ModFolder { get; }
-    public string GameDirectory { get; }
-    public LoadOrderSnapshot LoadOrder { get; }
-
-    /// <summary>The kernel's holder with <see cref="LoadOrder"/> applied, for a handler built over
-    /// this fixture.</summary>
-    public LoadOrderHolder Holder { get; }
-    public EditRecordHandler EditHandler { get; }
-    public DeleteRecordHandler DeleteHandler { get; }
-    public CreateRecordHandler CreateHandler { get; }
-
-    /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
-    public IReadOnlyList<LoadOrderEntry> Entries { get; }
-    public PluginAddress Plugin { get; } = new(PluginName, ModFolderOrigin);
+    public string ModFolder => FolderOf(ModFolderOrigin);
+    public PluginAddress Plugin { get; }
 
     public const string NpcEditorId = "FixtureNpc";
     public FormKey Npc { get; }
@@ -86,11 +74,6 @@ public sealed class ContainerModFixture : IDisposable, ITrackedPlugin
 
     public ContainerModFixture()
     {
-        var holder = new LoadOrderHolder();
-        ModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", ModFolderOrigin)).FullName;
-        GameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
-
-        var pluginPath = Path.Combine(ModFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
         var npc = mod.Npcs.AddNew(NpcEditorId);
@@ -114,7 +97,7 @@ public sealed class ContainerModFixture : IDisposable, ITrackedPlugin
         quest.Scenes.Add(scene);
         mod.Quests.Add(quest);
 
-        TrackedTemplates.WriteTracked(ModFolder, mod);
+        Plugin = Add(mod, ModFolderOrigin);
 
         Npc = npc.FormKey;
         Cell = containerKeys.Cell;
@@ -125,18 +108,5 @@ public sealed class ContainerModFixture : IDisposable, ITrackedPlugin
         (Response, Response2) = (response.FormKey, response2.FormKey);
         (DialogTopic2, DialogTopic3) = (dialogTopic2.FormKey, dialogTopic3.FormKey);
         (DialogBranch, Scene) = (dialogBranch.FormKey, scene.FormKey);
-
-        Entries = [new LoadOrderEntry(PluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)];
-        LoadOrder = SnapshotPlugins.Snapshot(GameDirectory, _instanceRoot, GameRelease.Fallout4, Entries);
-
-        holder.Apply(LoadOrder);
-        Holder = holder;
-        EditHandler = TestEditService.EditHandler(holder);
-        DeleteHandler = TestEditService.DeleteHandler(holder);
-        CreateHandler = TestEditService.CreateHandler(holder);
     }
-
-    private readonly ScratchDirectory _instanceRoot = new("medit-container-mod-");
-
-    public void Dispose() => _instanceRoot.Dispose();
 }
