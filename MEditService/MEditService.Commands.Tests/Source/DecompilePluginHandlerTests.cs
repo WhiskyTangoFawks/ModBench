@@ -37,7 +37,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var tracked = TestEditService.TrackHandler(_holder)
             .TrackAsync([TrackedModName])
             .GetAwaiter().GetResult();
-        Assert.Equal([Tracked("First.esp")], tracked.Landed);
+        Assert.Equal([Tracked("First.esp")], Assert.Single(tracked.Landed).Outcome.Tracked);
         WritePlugin(_trackedMod, "Second.esp", "SecondNpc");
         _holder.Apply(SnapshotPlugins.Snapshot(game, _root, GameRelease.Fallout4,
         [

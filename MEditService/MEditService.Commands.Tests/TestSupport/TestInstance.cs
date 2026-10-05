@@ -1,9 +1,7 @@
-using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
@@ -107,10 +105,9 @@ public abstract class TestInstance : IDisposable
 
     private void Track(string origin)
     {
-        var result = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(Snapshot(), origin).GetAwaiter().GetResult();
-        if (result.Refused.Count > 0)
-            throw new InvalidOperationException($"Expected '{origin}' to track: {string.Join("; ", result.Refused.Select(r => r.Message))}");
+        var result = TrackEveryPluginOf.ModAsync(Snapshot(), origin).GetAwaiter().GetResult();
+        if (result.RefusalMessages() is { Count: > 0 } messages)
+            throw new InvalidOperationException($"Expected '{origin}' to track: {string.Join("; ", messages)}");
     }
 
     private LoadOrderSnapshot Snapshot() => SnapshotPlugins.Snapshot(GameDirectory, _root, GameRelease.Fallout4, _entries);

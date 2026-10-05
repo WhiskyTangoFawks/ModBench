@@ -39,7 +39,7 @@ public static class CutDownPluginFixture
     private static Dictionary<string, byte[]> DocumentsOf(SourceRepository repository) =>
         TreeDocuments.Of(repository, Plugin).ToDictionary(document => document.FormKey, document => Encoding.UTF8.GetBytes(document.Body));
 
-    // The library's whole-mod writer alone, not TrackService's own door: identical production code on
+    // The library's whole-mod writer alone, not Track's own door: identical production code on
     // both sides would agree with itself about any file Track added.
     public static Dictionary<string, byte[]> DeriveSourceTreeFromBinary(string pluginPath)
     {

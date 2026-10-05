@@ -98,7 +98,7 @@ public class RecordTextCodecGeneratorSeedTests
     public void DoorFiles_NeverNameTheParallelWorkDropoffThatRacesInMajorRecordListParallelHelper()
     {
         const string parallelDropoffName = "ParallelWorkDropoff";
-        var doorFiles = new[] { "TrackService.cs", PluginBinaryAndTreeDoor, HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter };
+        var doorFiles = new[] { "TrackHandler.cs", PluginBinaryAndTreeDoor, HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter };
 
         var sourceFiles = ProductionSources()
             .Where(f => doorFiles.Contains(Path.GetFileName(f)))

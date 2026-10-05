@@ -34,9 +34,9 @@ internal static class WriteEndpointMapping
 
     /// <summary>Track's own refusal-to-status map, the same posture the record edits' has: the status
     /// says what kind of problem, the refusal extension says exactly which (ADR-0019).</summary>
-    internal static IResult Refusal(TrackResult result) => Results.Problem(
-        detail: result.Message,
-        statusCode: result.Refusal switch
+    internal static IResult Refusal(SelectionRefusal<TrackRefusal> refusal) => Results.Problem(
+        detail: refusal.Message,
+        statusCode: refusal.Refusal switch
         {
             TrackRefusal.AlreadyTracked => 409,
             // The request is sound; the machine lacks git, or git or the disk refused the write.
@@ -44,7 +44,7 @@ internal static class WriteEndpointMapping
             // A data problem in the plugin itself, the status the record edits' own refusals use.
             _ => 422,
         },
-        extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
+        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.Refusal.ToString() });
 
     /// <summary>Decompile's refusal of a whole selection: the refusal extension says which cause no
     /// plugin escaped (ADR-0019).</summary>

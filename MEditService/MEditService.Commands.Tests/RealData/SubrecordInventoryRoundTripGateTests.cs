@@ -1,9 +1,7 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Commands.Tests.RealData;
 
@@ -49,9 +47,8 @@ public sealed class SubrecordInventoryRoundTripGateTests
             _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, "TrueStormsMod", _gameDirectory);
         }
 
-        public async Task<TrackResult> TrackAsync() =>
-            (await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(_loadOrder, "TrueStormsMod")).Only();
+        public async Task<PluginTrack> TrackAsync() =>
+            (await TrackEveryPluginOf.ModAsync(_loadOrder, "TrueStormsMod")).Only();
 
         public void Dispose()
         {

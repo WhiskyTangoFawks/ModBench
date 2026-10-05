@@ -6,7 +6,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -59,10 +58,8 @@ public sealed class CompilePluginLinkTests : IDisposable
                 new LoadOrderEntry(TargetName, targetPath, TargetOrigin, Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(HostName, hostPath, HostOrigin, Slot: 1, Enabled: true, Winning: true),
             ]);
-
-        var trackService = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        trackService.TrackModAsync(_loadOrder, TargetOrigin).GetAwaiter().GetResult();
-        trackService.TrackModAsync(_loadOrder, HostOrigin).GetAwaiter().GetResult();
+        TrackEveryPluginOf.ModAsync(_loadOrder, TargetOrigin).GetAwaiter().GetResult();
+        TrackEveryPluginOf.ModAsync(_loadOrder, HostOrigin).GetAwaiter().GetResult();
     }
 
     public void Dispose()

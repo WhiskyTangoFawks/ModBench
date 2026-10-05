@@ -30,7 +30,6 @@ public sealed class DeleteRecordHandlerTests
         Assert.Equal(header, refused.Item);
         Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
         Assert.False(string.IsNullOrWhiteSpace(refused.Message));
-        Assert.False(result.AllApplied);
         Assert.Null(mod.Document(mod.Npc.ToString()));
         Assert.Null(mod.Document(mod.OtherNpc.ToString()));
         Assert.NotNull(mod.Document(header.FormKey));
@@ -216,7 +215,8 @@ public sealed class DeleteRecordHandlerTests
 
         var result = handler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
-        Assert.True(result.AllApplied);
+        Assert.Empty(result.Refused);
+        Assert.Null(result.SelectionRefusal);
         Assert.Empty(notifications.Notifications);
     }
 

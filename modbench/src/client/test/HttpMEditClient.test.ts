@@ -342,24 +342,25 @@ describe('HttpMEditClient — getComparison', () => {
   });
 });
 
-describe('HttpMEditClient — tracking mods answers per plugin and per mod', () => {
+describe('HttpMEditClient — tracking mods answers per mod, naming the plugins of it that did not track', () => {
   const first = { name: 'First.esp', origin: 'ModA' };
   const second = { name: 'Second.esp', origin: 'ModA' };
 
-  it('sends the mods as one call and reads what was applied as landed, each refused plugin and refused mod with its message', async () => {
+  it('sends the mods as one call and reads each applied mod with the plugins that tracked and those that did not, and each refused mod, with its message', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      applied: [first],
-      refused: [{ plugin: second, refusal: 'RoundTripFailed', message: 'Second.esp does not round-trip.' }],
-      refusedMods: [{ mod: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }],
+      applied: [{
+        mod: 'ModA', tracked: [first],
+        refused: [{ item: second, refusal: 'RoundTripFailed', message: 'Second.esp does not round-trip.' }],
+      }],
+      refused: [{ item: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }],
     })));
     const client = makeClient(fetch);
 
     const outcome = await client.track(['ModA', 'ModC']);
 
     expect(outcome).toEqual({
-      landed: [first],
-      refused: [{ item: second, reason: 'Second.esp does not round-trip.' }],
-      refusedMods: [{ item: 'ModC', reason: 'ModC provides no plugin.' }],
+      landed: [{ mod: 'ModA', tracked: [first], refused: [{ item: second, reason: 'Second.esp does not round-trip.' }] }],
+      refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }],
     });
     const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/track$/.test(req.url));
     expect(await request?.json()).toEqual({ mods: ['ModA', 'ModC'] });
