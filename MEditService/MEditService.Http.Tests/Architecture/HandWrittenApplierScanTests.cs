@@ -29,7 +29,7 @@ public sealed class HandWrittenApplierScanTests
         Assert.Contains("TranslatedString", MutagenTypeNames);
         Assert.Contains("FormLink", MutagenTypeNames);
 
-        var sites = Sites(ArchitectureTests.SolutionDirectory(), ScannedRoots);
+        var sites = Sites(ServiceProjects.SolutionDirectory(), ScannedRoots);
 
         Assert.True(
             sites.Count == 0,
@@ -64,7 +64,7 @@ public sealed class HandWrittenApplierScanTests
         }
     }
 
-    private static List<string> Sites(string root, string[] scannedRoots) =>
+    private static List<string> Sites(string root, IReadOnlyList<string> scannedRoots) =>
         [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)).Order(StringComparer.Ordinal))
             .SelectMany(file => File.ReadLines(file)

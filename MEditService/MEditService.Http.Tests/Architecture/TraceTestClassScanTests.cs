@@ -10,7 +10,7 @@ public sealed class TraceTestClassScanTests
     [Fact]
     public void EveryTraceThatDrawsAnMEditActor_HasATestClassNamedForIt()
     {
-        var solution = ArchitectureTests.SolutionDirectory();
+        var solution = ServiceProjects.SolutionDirectory();
         var traces = TracesWithAnMEditActor(solution);
         var classes = DeclaredClasses(solution);
         var missing = traces
@@ -35,7 +35,7 @@ public sealed class TraceTestClassScanTests
     [Fact]
     public void EveryTraceSuffixedClass_NamesATraceFile()
     {
-        var solution = ArchitectureTests.SolutionDirectory();
+        var solution = ServiceProjects.SolutionDirectory();
         var traceStems = TraceFileStems(solution);
         var orphans = TraceSuffixedClasses(solution)
             .Where(name => !traceStems.Contains(TraceStemFor(name)))

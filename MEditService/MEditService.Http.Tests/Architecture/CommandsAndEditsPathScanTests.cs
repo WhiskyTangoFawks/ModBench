@@ -15,7 +15,7 @@ public sealed class CommandsAndEditsPathScanTests
     [Fact]
     public void CommandsAndEdits_NameNoPathFileOrDirectoryOperation()
     {
-        var counts = Counts(ArchitectureTests.SolutionDirectory(), ScannedRoots);
+        var counts = Counts(ServiceProjects.SolutionDirectory(), ScannedRoots);
 
         Assert.True(
             counts.Count == 0,
@@ -27,7 +27,7 @@ public sealed class CommandsAndEditsPathScanTests
     [Fact]
     public void TheScan_WalksMoreThanTwentyFiles()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var walked = ScannedRoots.SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r))).Count();
 
@@ -76,7 +76,7 @@ public sealed class CommandsAndEditsPathScanTests
         }
     }
 
-    private static List<string> Counts(string root, string[] scannedRoots) =>
+    private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots) =>
         [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)))
             .SelectMany(file => Occurrences(File.ReadAllText(file))
