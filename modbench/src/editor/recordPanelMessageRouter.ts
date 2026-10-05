@@ -15,9 +15,7 @@ export interface RouteRecordPanelMessageDeps {
   // The FormKey picker's search and the panel's own read — one client serves both, and the
   // per-panel picker bundle below reuses it.
   meditClient: Pick<MEditClient, 'searchRecords' | 'getComparison' | 'getPlugins'>;
-  // The leveled 'Modbench' channel the webview has no direct route to — the webview composes the
-  // message text, this is a pure level→method forward.
-  channel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
+  channel: Pick<vscode.LogOutputChannel, 'warn'>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
   // reconstructed per message at the call site rather than shared like `channel`.

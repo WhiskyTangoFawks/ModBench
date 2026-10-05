@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
@@ -8,7 +8,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW } from '../../src/wire/messages';
-import { compareOverride, compareResultFixture, diffNode, fieldMeta, panelClient, required } from './test/fixtures';
+import { compareOverride, compareResultFixture, diffNode, fieldMeta, panelClient, required, tellPanel } from './test/fixtures';
 import type { CompareResult } from './types';
 
 const FORM_KEY = '000001:Fallout4.esm';
@@ -36,8 +36,6 @@ const plugins = [
 
 let disk = recordNamed('Before');
 
-const send = (data: unknown) => { act(() => { window.dispatchEvent(new MessageEvent('message', { data })); }); };
-
 const nameCell = () => {
   const row = required(screen.getByText('Name').closest('tr'), 'the Name row');
   return required(row.querySelectorAll('td')[2], "MyMod.esp's Name cell");
@@ -63,7 +61,7 @@ describe('a record panel cell after an edit (common.md, A gesture that writes, s
     expect(nameCell()).not.toHaveTextContent('After');
 
     disk = recordNamed('After');
-    send({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
+    tellPanel({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
     await waitFor(() => expect(nameCell()).toHaveTextContent('After'));
   });
 });

@@ -3,7 +3,7 @@ import { DiskCell } from './DiskCell';
 import { formKeyLabel } from './FormKeyLink';
 import { ExpandArrow } from './ExpandArrow';
 import { baseCell, labelCell, focusedRowStyle, mono, fg } from './gridStyles';
-import { toStr, type Column } from './recordUtils';
+import type { Column } from './recordUtils';
 import type { FocusedCell } from './DiffRow';
 import type { ColumnKey, PathHop } from './types';
 import { LABEL_COLUMN } from './columnKey';
@@ -145,7 +145,7 @@ export function FormIdRow({
             copyText={formKeyLabel(override.formKey, override)}
           >
             <FormIdCell
-              formKey={toStr(override.formKey)}
+              formKey={override.formKey}
               label={formKeyLabel(override.formKey, override)}
               editable={editableColumns.has(key) && readOnlyReason == null}
               onCommit={formKey => onCommitFormId(key, formKey)}
