@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { handlers, registerCommand, executeCommand, showQuickPick } = vi.hoisted(() => {
+const { handlers, registerCommand, executeCommand, createQuickPick } = vi.hoisted(() => {
   const handlers = new Map<string, () => Promise<void> | void>();
   return {
     handlers,
@@ -9,7 +9,7 @@ const { handlers, registerCommand, executeCommand, showQuickPick } = vi.hoisted(
       return { dispose: vi.fn() };
     }),
     executeCommand: vi.fn(),
-    showQuickPick: vi.fn(),
+    createQuickPick: vi.fn(),
   };
 });
 
@@ -17,7 +17,7 @@ vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
   return {
     commands: { registerCommand, executeCommand },
-    window: { showQuickPick, withProgress: recordedWithProgress },
+    window: { createQuickPick, withProgress: recordedWithProgress },
   };
 });
 
@@ -31,6 +31,7 @@ import { registerRefreshCommand, registerToolboxCommands, type ToolboxCommandDep
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
+import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
 import { accessTo } from '../../test/mo2/adapterOver';
 import type { RefreshResult } from '../../instanceCommands/loadOrder';
 
@@ -78,49 +79,51 @@ describe('Open settings', () => {
   });
 });
 
+interface ProfileItem { label: string; description?: string }
+
+async function switchProfileChoosing(choice: string, over: Partial<ToolboxCommandDeps> = {}) {
+  const { qp, accept, escape } = fakeQuickPick<ProfileItem>();
+  createQuickPick.mockReturnValue(qp);
+  const registered = register(over);
+  const done = registered.run('modbench.profile.switch');
+  await vi.waitFor(() => expect(qp.show).toHaveBeenCalled());
+  if (choice === 'Esc') escape();
+  else accept(present(qp.items.find((i) => i.label === choice), `the item "${choice}"`));
+  await done;
+  return { ...registered, qp };
+}
+
 describe('Switch profile', () => {
   it('picks among the instance\'s profiles, the active one marked', async () => {
-    showQuickPick.mockResolvedValueOnce(undefined);
+    const { qp } = await switchProfileChoosing('Esc');
 
-    const { run } = register();
-    await run('modbench.profile.switch');
-
-    expect(showQuickPick).toHaveBeenCalledWith(
-      [
-        { label: 'Default', description: 'current' },
-        { label: 'Modding', description: undefined },
-        { label: 'Survival', description: undefined },
-      ],
-      expect.anything(),
-    );
+    expect(qp.items).toEqual([
+      { label: 'Default', description: 'current' },
+      { label: 'Modding', description: undefined },
+      { label: 'Survival', description: undefined },
+    ]);
+    expect(qp.activeItems).toEqual([{ label: 'Default', description: 'current' }]);
   });
 
   it('switches nothing and says nothing on Esc', async () => {
-    showQuickPick.mockResolvedValueOnce(undefined);
-
-    const { reporter, run } = register();
-    await run('modbench.profile.switch');
+    const { reporter } = await switchProfileChoosing('Esc');
 
     expect(switchProfile).not.toHaveBeenCalled();
     expect(reporter.reports).toEqual([]);
   });
 
   it('switches to the picked profile', async () => {
-    showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
     switchProfile.mockResolvedValueOnce({ applied: true });
 
-    const { run } = register();
-    await run('modbench.profile.switch');
+    await switchProfileChoosing('Modding');
 
     expect(switchProfile).toHaveBeenCalledWith(access, 'Modding', ['Default', 'Modding', 'Survival']);
   });
 
   it('writes the switch under the Toolbox\'s progress, which closes once the Instance loader has read again', async () => {
     switchProfile.mockImplementationOnce(() => { progressSteps.push('write'); return Promise.resolve({ applied: true }); });
-    showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
 
-    const { reporter, run } = register();
-    await run('modbench.profile.switch');
+    const { reporter } = await switchProfileChoosing('Modding');
 
     expect(progressSteps).toEqual([
       'progress opens on modbench.toolbox', 'write', 'Instance loader: read every file again', 'progress closes',
@@ -131,11 +134,9 @@ describe('Switch profile', () => {
   });
 
   it('reads again after a refused switch, since the disk is what the view shows', async () => {
-    showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
     switchProfile.mockResolvedValueOnce({ applied: false, refusal: 'read-only' });
 
-    const { run } = register();
-    await run('modbench.profile.switch');
+    await switchProfileChoosing('Modding');
 
     expect(progressSteps).toEqual([
       'progress opens on modbench.toolbox', 'Instance loader: read every file again', 'progress closes',
@@ -143,21 +144,16 @@ describe('Switch profile', () => {
   });
 
   it('opens no progress on Esc, or when the pick is the active profile', async () => {
-    showQuickPick.mockResolvedValueOnce(undefined).mockResolvedValueOnce({ label: 'Default' });
-
-    const { run } = register();
-    await run('modbench.profile.switch');
-    await run('modbench.profile.switch');
+    await switchProfileChoosing('Esc');
+    await switchProfileChoosing('Default');
 
     expect(progressSteps).toEqual([]);
   });
 
   it('reports a refused switch at error', async () => {
-    showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
     switchProfile.mockResolvedValueOnce({ applied: false, refusal: 'ModOrganizer.ini is read-only' });
 
-    const { reporter, run } = register();
-    await run('modbench.profile.switch');
+    const { reporter } = await switchProfileChoosing('Modding');
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to switch profile.', detail: 'ModOrganizer.ini is read-only' },
@@ -165,10 +161,7 @@ describe('Switch profile', () => {
   });
 
   it('switches nothing when the picked profile is the active one', async () => {
-    showQuickPick.mockResolvedValueOnce({ label: 'Default' });
-
-    const { run } = register();
-    await run('modbench.profile.switch');
+    await switchProfileChoosing('Default');
 
     expect(switchProfile).not.toHaveBeenCalled();
   });

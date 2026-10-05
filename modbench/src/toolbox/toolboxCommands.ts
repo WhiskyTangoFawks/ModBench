@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import { switchProfile, type ProfileAccess } from '../instanceCommands/profile';
 import type { RefreshResult } from '../instanceCommands/loadOrder';
+import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 
@@ -24,10 +25,8 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
   return [
     vscode.commands.registerCommand('modbench.profile.switch', async () => {
       const { activeProfile: active, profiles } = instance.value;
-      const picked = await vscode.window.showQuickPick(
-        profiles.map((p) => ({ label: p, description: p === active ? 'current' : undefined })),
-        { placeHolder: 'Switch profile' },
-      );
+      const items = profiles.map((p) => ({ label: p, description: p === active ? 'current' : undefined }));
+      const picked = await pickWithMarked(items, items.find((i) => i.label === active), 'Switch profile');
       if (!picked || picked.label === active) return;
       await runWritingGesture(TOOLBOX_VIEW, instance, async () => {
         const outcome = await switchProfile(access, picked.label, profiles);
