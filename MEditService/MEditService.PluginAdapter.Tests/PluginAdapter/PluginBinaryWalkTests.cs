@@ -1,9 +1,8 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
-using MEditService.Codec.Serialization;
 
-namespace MEditService.Codec.Tests.Serialization;
+namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
 public sealed class PluginBinaryWalkTests
 {
