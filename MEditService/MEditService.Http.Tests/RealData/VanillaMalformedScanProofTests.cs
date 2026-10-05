@@ -1,4 +1,4 @@
-using MEditService.Codec.Serialization;
+using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
