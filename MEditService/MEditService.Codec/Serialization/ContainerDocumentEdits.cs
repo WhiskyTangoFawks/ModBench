@@ -53,10 +53,9 @@ public static class ContainerDocumentEdits
         RecordTextCodec codec, string text, GameRelease release, string? recordType) =>
         [.. DescendantsOf(codec.Deserialize(text, release, recordType)).Select(child => child.FormKey.ToString())];
 
-    /// <summary><paramref name="destinationText"/> with every child record of
-    /// <paramref name="sourceText"/> added to its own slots, its own fields and the children it already
-    /// carries kept. Throws <see cref="InvalidOperationException"/> when a single-valued slot is
-    /// already filled.</summary>
+    /// <summary><paramref name="destinationText"/> with <paramref name="sourceText"/>'s child records
+    /// added, its own fields and children kept. Throws <see cref="InvalidOperationException"/> when a
+    /// single-valued slot is filled.</summary>
     public static string WithChildrenAdded(
         RecordTextCodec codec, string destinationText, string? destinationRecordType,
         string sourceText, string? sourceRecordType, GameRelease release)
