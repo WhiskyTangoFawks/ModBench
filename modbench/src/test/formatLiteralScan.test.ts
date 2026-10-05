@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename, sep } from 'node:path';
 import ts from 'typescript';
-import { MO2_NAMES, pathSegments, productionFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from '../../test/scanSource';
-import { tsFiles } from '../../test/tsFiles';
+import { MO2_NAMES, pathSegments, productionFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
+import { tsFiles } from './tsFiles';
 
 interface Codec {
   file: string;

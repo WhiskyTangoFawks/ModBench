@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
-import { importSpecifiers, productionFiles, SRC } from '../../test/scanSource';
+import { importSpecifiers, productionFiles, SRC } from './scanSource';
 
 const BOX = join('instanceAdapter') + sep;
 const ADAPTER_PATH = join(SRC, 'instanceAdapter', 'files.ts');

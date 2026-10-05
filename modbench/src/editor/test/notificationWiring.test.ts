@@ -11,7 +11,7 @@ vi.mock('vscode', () => ({
 
 import { subscribeRecordPanelsToNotifications } from '../notificationWiring';
 import { EditsInFlight } from '../followRecord';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 function rowsChanged(keys: string[], overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return { kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys, sequence: 1, ...overrides };

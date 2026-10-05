@@ -28,7 +28,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { createReferencedByView, referencedByTitle, type ReferencedByFilter, type ReferencedByFilterDeps } from '../referencedByView';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ReferenceResult } from '../../client';
 
 const reference = (formKey: string): ReferenceResult => ({

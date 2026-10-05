@@ -14,7 +14,8 @@ import * as path from 'node:path';
 import {
   trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, trackedRepositoriesOver,
 } from '../trackedRepositories';
-import { InMemoryMEditClient, type PluginMetadata } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { type PluginMetadata } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { pluginAddressKey } from '../../wire/pluginAddress';
 

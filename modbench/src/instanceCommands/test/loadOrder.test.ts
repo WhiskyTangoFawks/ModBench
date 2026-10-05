@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-  createLoadOrderSender, InMemoryMEditClient, type LoadOrderOutcome, type LoadOrderProgress,
+  createLoadOrderSender, type LoadOrderOutcome, type LoadOrderProgress,
 } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { putLoadOrder, refresh, type LoadOrderSource } from '../loadOrder';
 
 const READY_STATUS: LoadOrderProgress = {

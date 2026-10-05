@@ -1,7 +1,7 @@
 import type { NotificationEvent } from '../../client/apiClient';
 import { describe, it, expect, vi } from 'vitest';
 import { subscribeTreeToNotifications } from '../treeNotifications';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 function rowsChanged(keys: string[]): NotificationEvent {
   return { kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys, sequence: 1 };

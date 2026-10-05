@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EditsInFlight } from '../followRecord';
 import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from '../notificationWiring';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 function fakePanel(title: string) {
   return { title, webview: { postMessage: vi.fn(() => Promise.resolve(true)) } };

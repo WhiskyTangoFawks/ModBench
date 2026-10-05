@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  InMemoryMEditClient, type RecordSummary, type ContainerChildSummary, type RecordPage, type CellSummary, type InteriorCellBlock,
+  type RecordSummary, type ContainerChildSummary, type RecordPage, type CellSummary, type InteriorCellBlock,
 } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom, fakeUri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
