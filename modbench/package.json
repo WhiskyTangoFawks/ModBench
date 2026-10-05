@@ -1589,15 +1589,14 @@
   "scripts": {
     "vscode:prepublish": "npm run build && npm run build:backend",
     "build": "tsc -b && node esbuild.mjs && npm run build:webview",
-    "build:webview": "VITE_CJS_IGNORE_WARNING=1 vite build --config webview/vite.config.ts",
-    "build:backend": "dotnet publish ../MEditService/MEditService.Http/MEditService.Http.csproj -c Release --self-contained -r linux-x64 -o backend",
+    "build:webview": "node buildWebview.mjs",
+    "build:backend": "dotnet publish ../MEditService/MEditService.Http/MEditService.Http.csproj -c Release --self-contained --use-current-runtime -o backend",
     "watch": "node esbuild.mjs --watch",
     "generate-api": "openapi-typescript http://localhost:5172/swagger/v1/swagger.json -o src/wire/generated/api.ts",
     "test:unit": "vitest run",
     "test:integration": "tsc -p tsconfig.integration.json && env -u WAYLAND_DISPLAY -u XDG_SESSION_TYPE xvfb-run -a vscode-test",
     "lint": "eslint src webview/src eslint-rules eslint.config.mjs",
-    "prepackage": "cp ../LICENSE ./LICENSE",
-    "package": "vsce package --no-dependencies"
+    "package": "node package.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
