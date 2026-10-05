@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { compareOverride, compareResultFixture, diffNode, fieldMeta } from './test/fixtures';
 import { buildColumns } from './recordUtils';
 import { columnKey } from './columnKey';
-import { navRows, recordRows, visibleRows, RECORD_HEADER_ROW, type FieldRow } from './recordRows';
-import type { CompareResult, FieldMetadata } from './types';
+import { navRows, recordRows, visibleRows, RECORD_HEADER_ROW, type FieldRow, type RecordRow } from './recordRows';
+import type { ColumnKey, CompareResult, FieldMetadata } from './types';
 
 const MASTER = columnKey('Fallout4.esm', null);
 const MOD = columnKey('MyMod.esp', null);
@@ -30,12 +30,14 @@ function answer(metas: FieldMetadata[], diffs: CompareResult['diffs'], partialMo
   });
 }
 
-function rowsFor(result: CompareResult, editable = [MASTER, MOD], partial: string[] = []) {
+function rowsFor(result: CompareResult, editable = [MASTER, MOD], partial: ColumnKey[] = []) {
   return recordRows({
     result, columns: buildColumns(result.overrides),
     editableColumns: new Set(editable), partialFormColumns: new Set(partial),
   });
 }
+
+const fieldRowsOf = (rows: RecordRow[]): FieldRow[] => rows.filter(r => r.kind === 'field');
 
 const boundsDiff = diffNode({
   fieldName: 'Bounds', values: { [MASTER]: { X: 1, Y: 2 }, [MOD]: { X: 3, Y: 2 } },
@@ -79,7 +81,7 @@ describe('recordRows', () => {
     const first = diffNode({ fieldName: 'Keyword', values: { [MASTER]: 1, [MOD]: 1 }, indexes: { [MASTER]: 0, [MOD]: 0 } });
     const second = diffNode({ fieldName: 'Keyword', values: { [MOD]: 2 }, indexes: { [MOD]: 1 } });
     const rows = rowsFor(answer([keywords], [diffNode({ fieldName: 'Keywords', values: {}, children: [first, second] })]));
-    const [, one, two] = rows as FieldRow[];
+    const [, one, two] = fieldRowsOf(rows);
 
     expect([MASTER, MOD].map(c => two?.present(c))).toEqual([false, true]);
     expect([MASTER, MOD].map(c => one?.present(c))).toEqual([true, true]);
@@ -110,10 +112,10 @@ describe('recordRows', () => {
   });
 
   it('a Partial Form column can write the EditorID and no other field of its own', () => {
-    const rows = rowsFor(
+    const rows = fieldRowsOf(rowsFor(
       answer([editorId, bounds], [diffNode({ fieldName: 'EditorID', values: {} }), diffNode({ fieldName: 'Bounds', values: {} })]),
       [MASTER, MOD], [MOD],
-    ) as FieldRow[];
+    ));
     const [id, struct] = rows;
 
     expect([...(id?.editable ?? [])]).toEqual([MASTER, MOD]);
@@ -144,5 +146,17 @@ describe('what the rows show of what is collapsed', () => {
   it('a collapsed Record Header hides its members', () => {
     expect(navRows(rows, new Set([RECORD_HEADER_ROW])).map(r => r.key))
       .toEqual([RECORD_HEADER_ROW, 'Bounds', 'Bounds.X', 'Bounds.Y', 'EditorID']);
+  });
+
+  it('a collapsed row hides its grandchildren too', () => {
+    const header = fieldMeta({ ...bounds, name: 'Hdr', isRecordHeaderMember: true });
+    const nested = recordRows({
+      result: answer([header], [diffNode({
+        fieldName: 'Hdr', values: {}, children: [diffNode({ fieldName: 'X', values: {} })],
+      })]),
+      columns: [], editableColumns: new Set(), partialFormColumns: new Set(),
+    });
+
+    expect(navRows(nested, new Set([RECORD_HEADER_ROW])).map(r => r.key)).toEqual([RECORD_HEADER_ROW]);
   });
 });

@@ -148,7 +148,7 @@ interface DiffRowProps {
   onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
   // The columns whose cells can be written — mutable plugin, in the load order, tracked. Computed
   // once for the whole grid so one definition of "writable" reaches every row.
-  editableColumns: Set<ColumnKey>;
+  editableColumns: ReadonlySet<ColumnKey>;
   // Takes the leaf value alone — the row builder owns the path the envelope carries.
   onEditCell?: (plugin: ColumnKey, value: unknown) => void;
   onAddElement?: (context: ArrayParentContext, value: unknown) => void;

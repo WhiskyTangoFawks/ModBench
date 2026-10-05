@@ -120,9 +120,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // editor.md, A column's header: a Partial Form column is dimmed, header and cells alike. One
   // definition of a column's look, so the header and the cells cannot disagree.
   const partialFormColumns = useMemo(() => columnKeysWhere(result?.overrides, o => o.isPartialForm), [result]);
-  // editor-fields.md, Partial Form: a Partial Form copy's own fields are read-only.
-  const ownFieldEditableColumns = useMemo(
-    () => new Set([...editableColumns].filter(key => !partialFormColumns.has(key))), [editableColumns, partialFormColumns]);
   const columnStyle = useCallback((key: ColumnKey | typeof LABEL_COLUMN): React.CSSProperties => ({
     ...(key !== LABEL_COLUMN && partialFormColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
     ...columnWidthStyle(key !== LABEL_COLUMN && collapsedColumns.has(key) ? COLLAPSED_COLUMN_WIDTH : columnWidths.get(key)),
