@@ -28,10 +28,12 @@ internal static class TreeDocuments
             // A plugin whose tree holds no root document holds no header.
         }
 
+        var embedded = new HashSet<string>(StringComparer.Ordinal);
         foreach (var document in documents.Records)
         {
-            if (roots.Count > 0 && IsEmbeddedIn(roots[^1], document)) continue;
+            if (roots.Count > 0 && embedded.Contains(document.FormKey) && document.FormKey != roots[^1].FormKey) continue;
             roots.Add(document);
+            embedded = FormKeysBelowTheRoot(document.Text);
         }
 
         return
@@ -43,31 +45,28 @@ internal static class TreeDocuments
 
     // An embedded child follows the document that carries it, and that document holds an object of the
     // child's own FormKey below its root.
-    private static bool IsEmbeddedIn(PluginDocument owner, PluginDocument child)
+    private static HashSet<string> FormKeysBelowTheRoot(string text)
     {
-        using var json = JsonDocument.Parse(owner.Text);
-        return child.FormKey != owner.FormKey && HoldsBelowTheRoot(json.RootElement, child.FormKey, atRoot: true);
+        using var json = JsonDocument.Parse(text);
+        var found = new HashSet<string>(StringComparer.Ordinal);
+        Collect(json.RootElement, found, atRoot: true);
+        return found;
     }
 
-    private static bool HoldsBelowTheRoot(JsonElement element, string formKey, bool atRoot)
+    private static void Collect(JsonElement element, HashSet<string> found, bool atRoot)
     {
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
                 foreach (var member in element.EnumerateObject())
                 {
-                    if (!atRoot && member.Name == "FormKey" && member.Value.ValueKind == JsonValueKind.String
-                        && member.Value.GetString() == formKey)
-                    {
-                        return true;
-                    }
-                    if (HoldsBelowTheRoot(member.Value, formKey, atRoot: false)) return true;
+                    if (!atRoot && member.Name == "FormKey" && member.Value.ValueKind == JsonValueKind.String) found.Add(member.Value.GetString() ?? string.Empty);
+                    Collect(member.Value, found, atRoot: false);
                 }
-                return false;
+                break;
             case JsonValueKind.Array:
-                return element.EnumerateArray().Any(item => HoldsBelowTheRoot(item, formKey, atRoot: false));
-            default:
-                return false;
+                foreach (var item in element.EnumerateArray()) Collect(item, found, atRoot: false);
+                break;
         }
     }
 
