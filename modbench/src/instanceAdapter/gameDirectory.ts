@@ -102,10 +102,10 @@ const NOT_SET = 'not set';
 type Looked = { found: string } | { look: GameFolderLook; fallThrough: boolean };
 
 const noDataFolder = (place: string, root: string): Looked =>
-  ({ look: { place, answer: `${root} has no Data folder` }, fallThrough: true });
+  ({ look: { place, answer: `${root} has no Data folder` }, fallThrough: false });
 
-// A translation failure refuses to fall through to Steam: resolving a different game folder
-// entirely would hide the real problem.
+// A configured folder that cannot be used refuses to fall through to Steam: resolving a different
+// game folder entirely would hide the real problem. Only an ini naming no folder falls through.
 async function iniGamePath(iniText: string, detectors: GameDetectors): Promise<Looked> {
   let raw: string;
   try {
@@ -122,8 +122,8 @@ async function iniGamePath(iniText: string, detectors: GameDetectors): Promise<L
   return (await hasDataFolder(root)) ? { found: root } : noDataFolder(GAME_PATH_PLACE, root);
 }
 
-/** The setting, then MO2's `gamePath`, then autodetect. A set setting with no Data folder refuses
- *  to fall through, because it names the folder the user chose. */
+/** The setting, then MO2's `gamePath`, then autodetect. A folder either names with no Data folder
+ *  refuses to fall through, because it names the folder the user chose. */
 export function gameDirectoryResolver(
   overridesOf: () => GameDirectoryOverrides, detectors: GameDetectors = STEAM,
 ): GameDirectoryResolver {

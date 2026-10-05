@@ -110,6 +110,17 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
     ]);
   });
 
+  it('an overwrite/ plugin the mod manager keeps from the game provides nothing, whatever its name carries', () => {
+    const excludedFile = { ...runtimeOutput('Foo.esp'), excluded: true };
+    const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
+
+    const listed = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [excludedFile], GAME_FOLDER);
+    const unlisted = buildLoadOrderRows(lines([]), index({}), [excludedFile], GAME_FOLDER);
+
+    expect(listed).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true }]);
+    expect(unlisted).toEqual([]);
+  });
+
   it('an unlisted plugin sitting in overwrite/ is sent with no slot, winning-most', () => {
     const result = buildLoadOrderRows(lines([]), index({}), [runtimeOutput('New.esp'), runtimeOutput('notes.txt')], GAME_FOLDER);
 
