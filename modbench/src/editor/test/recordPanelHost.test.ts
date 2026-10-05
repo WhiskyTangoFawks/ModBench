@@ -61,7 +61,6 @@ function register(
     activeRecordTracker: tracker,
     editsInFlight: new EditsInFlight(tracker),
     focusedCells: override.focusedCells ?? new FocusedCells(() => undefined, () => undefined),
-    recordBadgeSource: { workingTreeStateOf: () => undefined, onDidReadRecords: () => ({ dispose: () => undefined }) },
     meditClient,
     focusedViewSelection,
     viewSelections: new Map(),

@@ -413,7 +413,7 @@ export function activate(context: vscode.ExtensionContext) {
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
-      context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, recordBadgeSource: treeProvider, meditClient, outputChannel,
+      context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, meditClient, outputChannel,
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       focusedViewSelection: selectionInFocusedView(
