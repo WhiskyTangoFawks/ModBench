@@ -15,7 +15,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     [Fact]
     public async Task PostFilter_ValidSql_Returns200WithSql()
     {
-        var resp = await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" });
+        var resp = await _client.SetFilter();
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("SELECT form_key FROM \"NPC_\"", body.GetProperty("sql").GetString());
@@ -41,8 +41,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     [Fact]
     public async Task GetFilter_AfterPostFilter_ReturnsTheSqlAndItsSource()
     {
-        await _client.PostAsJsonAsync("/load-order/filter",
-            new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" });
+        await _client.SetFilter();
 
         var resp = await _client.GetAsync("/load-order/filter");
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>();

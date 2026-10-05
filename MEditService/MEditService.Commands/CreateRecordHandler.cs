@@ -37,6 +37,7 @@ public sealed class CreateRecordHandler
 
     private RecordEditResult MintRecord(PluginAddress plugin, string recordType)
     {
+        if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
         if (_targets.RefuseUnlessTrackedAndLoaded(plugin, out var openedRepository) is { } blocked) return blocked;
         var repository = openedRepository
             ?? throw new InvalidOperationException("Expected RefuseUnlessTrackedAndLoaded to open a repository when it does not refuse.");

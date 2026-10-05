@@ -3,6 +3,7 @@ using MEditService.TestSupport;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Core;
@@ -12,13 +13,17 @@ namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>The whole service, hosted in process, logging only to <see cref="Logged"/>. The service's
 /// own logger freezes the process's one Serilog bootstrap logger, so a second host fails.</summary>
-public sealed class MEditHost : WebApplicationFactory<Program>
+public sealed class MEditHost(Action<IServiceCollection>? replacing = null) : WebApplicationFactory<Program>
 {
     public List<LogEntry> Logged { get; } = [];
 
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
-        builder.ConfigureTestServices(services => services.AddSerilog(
-            new LoggerConfiguration().WriteTo.Sink(new CollectingSink(Logged)).CreateLogger(), dispose: true));
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddSerilog(
+                new LoggerConfiguration().WriteTo.Sink(new CollectingSink(Logged)).CreateLogger(), dispose: true);
+            replacing?.Invoke(services);
+        });
 
     private sealed class CollectingSink(List<LogEntry> entries) : ILogEventSink
     {

@@ -185,6 +185,14 @@ public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> l
     }
 
     [Fact]
+    public async Task AComparisonOfARecordNoPluginHolds_IsAnsweredWithNothingFound()
+    {
+        var response = await Client.GetAsync(new Uri("/records/000FFF:Nowhere.esp/compare", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task APluginsInteriorCells_AnswerAsTheBlocksAndSubBlocksTheFileHoldsThemIn()
     {
         var blocks = await InteriorBlocks();

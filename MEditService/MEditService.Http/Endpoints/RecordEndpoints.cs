@@ -73,6 +73,7 @@ public static class RecordEndpoints
         .WithName("GetReferences")
         .WithTags("Records")
         .Produces<IReadOnlyList<ReferenceResult>>()
+        .ProducesProblem(503)
         .ProducesProblem(500);
 
         // The single write path's one door (ADR-0007). Scripts and agents reach the same
@@ -87,10 +88,7 @@ public static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        // The source file is not ours exclusively — an I/O failure mid-edit is a real answer this
-        // route can give, so it is declared like every other (endpoint invariant).
-        .ProducesProblem(500)
-        .ProducesProblem(503);
+        .ProducesProblem(500);
 
         app.MapPost("/records/delete", (RecordDeleteRequest request, DeleteRecordHandler edits) =>
             DeleteRecord(request, edits, logger))
@@ -195,14 +193,7 @@ public static class RecordEndpoints
             execute: () => edits.Edit(
                 new PluginAddress(request.Plugin, request.Origin), decoded,
                 new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value)),
-            onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled, result.NewFormKey)),
-            onNoLoadOrder: ex =>
-            {
-                // 503, matching every sibling's own mapping for it: the load order went away
-                // underneath the request, which is a "not right now", never a bad request.
-                logger.LogError(ex, "No usable loadOrder while editing {FormKey} at {Path}", decoded, spelled);
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            });
+            onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled, result.NewFormKey)));
     }
 
     internal static Task<IResult> DeleteRecord(RecordDeleteRequest request, DeleteRecordHandler edits, ILogger logger)
@@ -294,6 +285,11 @@ public static class RecordEndpoints
         {
             var results = svc.GetReferences(decoded);
             return Results.Ok(results);
+        }
+        catch (NoLoadOrderException ex)
+        {
+            logger.LogError(ex, "No load order for GetReferences of {FormKey}", decoded);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
