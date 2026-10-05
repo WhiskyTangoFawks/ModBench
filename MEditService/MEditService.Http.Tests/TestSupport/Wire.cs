@@ -42,6 +42,21 @@ internal static class Wire
             ? fx.Plugins
             : fx.Plugins.Where(p => p.LoadedWithNoLine || origins.Contains(p.Origin, StringComparer.Ordinal));
 
+    internal static Task<HttpResponseMessage> SetFilter(this HttpClient client) =>
+        client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" });
+
+    internal static Task<HttpResponseMessage> RebuildIndex(this HttpClient client, string instanceRoot) =>
+        client.PostAsJsonAsync("/index/rebuild", new { instanceRoot, gameRelease = "Fallout4" });
+
+    internal static async Task<JsonElement> AssertIsProblem(this HttpResponseMessage response, System.Net.HttpStatusCode status)
+    {
+        Assert.Equal(status, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var problem = await response.Body();
+        Assert.Equal((int)status, problem.GetProperty("status").GetInt32());
+        return problem;
+    }
+
     internal static Task<HttpResponseMessage> Track(this HttpClient client, string mod) =>
         client.Track([mod]);
 

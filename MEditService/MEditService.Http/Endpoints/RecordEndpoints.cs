@@ -73,6 +73,7 @@ public static class RecordEndpoints
         .WithName("GetReferences")
         .WithTags("Records")
         .Produces<IReadOnlyList<ReferenceResult>>()
+        .ProducesProblem(503)
         .ProducesProblem(500);
 
         // The single write path's one door (ADR-0007). Scripts and agents reach the same
@@ -87,8 +88,6 @@ public static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        // The source file is not ours exclusively — an I/O failure mid-edit is a real answer this
-        // route can give, so it is declared like every other (endpoint invariant).
         .ProducesProblem(500);
 
         app.MapPost("/records/delete", (RecordDeleteRequest request, DeleteRecordHandler edits) =>
@@ -286,6 +285,11 @@ public static class RecordEndpoints
         {
             var results = svc.GetReferences(decoded);
             return Results.Ok(results);
+        }
+        catch (NoLoadOrderException ex)
+        {
+            logger.LogError(ex, "No load order for GetReferences of {FormKey}", decoded);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

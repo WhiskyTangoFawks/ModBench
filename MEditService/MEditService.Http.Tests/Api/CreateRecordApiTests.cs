@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -31,12 +32,18 @@ public sealed class CreateRecordApiTests : HostedTests
     [Fact]
     public async Task CreatingARecord_InATrackedPlugin_AnswersTheNewFormKey()
     {
-        await Loaded(tracked: true);
+        var fx = await Loaded(tracked: true);
 
         var response = await Create(Origin, "npc_");
 
         response.EnsureSuccessStatusCode();
-        Assert.StartsWith("0", (await response.Body()).GetProperty("formKey").GetString(), StringComparison.Ordinal);
+        var formKey = (await response.Body()).GetProperty("formKey").GetString().Require();
+        Assert.EndsWith(":" + Plugin, formKey, StringComparison.Ordinal);
+        await Client.NextSnapshot(fx);
+        await Wire.Eventually(
+            async () => (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
+                .GetProperty("items").EnumerateArray().Any(r => r.GetProperty("formKey").GetString() == formKey),
+            "the created record to be read");
     }
 
     [Fact]

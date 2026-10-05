@@ -5,9 +5,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.TestSupport;
 
-/// <summary>An Index that fails every question, or refuses a rebuild as another window's hold does,
+/// <summary>An Index that fails every question, except that given a refusal it answers a rebuild with it as another window's hold does,
 /// so a test sees what the wire answers for a failure the real Index only has by accident.</summary>
-internal sealed class UnreachableIndex(string? rebuildRefusal = null) : IQueryIndex
+internal sealed class FailingIndex(string? rebuildRefusal = null) : IQueryIndex
 {
     public LoadOrderStatus Status => throw Failed();
 
@@ -27,7 +27,7 @@ internal sealed class UnreachableIndex(string? rebuildRefusal = null) : IQueryIn
         rebuildRefusal is null ? throw Failed() : new StoreRebuild(Task.CompletedTask, rebuildRefusal);
 
     internal static void Replace(IServiceCollection services, string? rebuildRefusal = null) =>
-        services.AddSingleton<IQueryIndex>(new UnreachableIndex(rebuildRefusal));
+        services.AddSingleton<IQueryIndex>(new FailingIndex(rebuildRefusal));
 
     private static InvalidOperationException Failed() => new("The index failed.");
 }

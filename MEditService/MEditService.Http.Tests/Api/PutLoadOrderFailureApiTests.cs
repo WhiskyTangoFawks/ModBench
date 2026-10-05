@@ -13,14 +13,13 @@ public sealed class PutLoadOrderFailureApiTests : HostedTests
     [Fact]
     public async Task PutLoadOrder_WhenApplyingTheSnapshotFails_Is500()
     {
-        using var fx = new PluginFixtureBuilder("api-put-load-order-failure")
+        var fx = Owned(new PluginFixtureBuilder("api-put-load-order-failure")
             .WithPlugin("Held.esp", mod => mod.Npcs.AddNew("HeldNpc"), origin: "HeldMod")
-            .BuildScattered();
+            .BuildScattered());
         Services.GetRequiredService<LoadOrderHolder>().Arrived += (_, _) => throw new InvalidOperationException("A subscriber failed.");
 
         var response = await Client.PutAsJsonAsync("/load-order", SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, fx.Plugins));
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        await response.AssertIsProblem(HttpStatusCode.InternalServerError);
     }
 }

@@ -99,6 +99,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [InlineData("track", 503)]
     [InlineData("deleteRecord", 503)]
     [InlineData("setFilter", 503)]
+    [InlineData("getReferences", 503)]
     [InlineData("getPluginDiagnoses", 503)]
     [InlineData("decompilePlugin", 503)]
     [InlineData("copyRecord", 503)]
@@ -114,7 +115,8 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "createPlugin" => await client.PostAsJsonAsync(
                 "/plugins/create", new { origin = "NoLoadOrderMod", name = "New.esp", folder = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod") }),
             "getFilter" => await client.GetAsync("/load-order/filter"),
-            "setFilter" => await client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" }),
+            "setFilter" => await client.SetFilter(),
+            "getReferences" => await client.GetAsync("/records/000800%3ANew.esp/references"),
             "getPluginDiagnoses" => await client.GetAsync("/plugins/diagnoses"),
             "decompilePlugin" => await client.Decompile([("New.esp", "NoLoadOrderMod")]),
             "copyRecord" => await client.Copy("000800:New.esp", ("New.esp", "NoLoadOrderMod"), "Override", ("Dest.esp", "DestMod")),

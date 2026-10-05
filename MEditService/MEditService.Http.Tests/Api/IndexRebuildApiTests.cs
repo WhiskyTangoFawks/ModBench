@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 
@@ -12,8 +11,7 @@ public sealed class IndexRebuildApiTests : HostedTests
     {
         using var instance = new ScratchDirectory("medit-rebuild-");
 
-        var response = await Client.PostAsJsonAsync(
-            "/index/rebuild", new { instanceRoot = instance.ToString(), gameRelease = "Fallout4" });
+        var response = await Client.RebuildIndex(instance.ToString());
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }

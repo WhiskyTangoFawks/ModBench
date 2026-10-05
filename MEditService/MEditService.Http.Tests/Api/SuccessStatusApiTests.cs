@@ -13,10 +13,7 @@ public sealed class SuccessStatusApiTests(LoadedApiFixture<TestPluginFixture> lo
     [Fact]
     public async Task Health_Is200Ok()
     {
-        await using var app = new MEditHost();
-        using var client = app.CreateClient();
-
-        var response = await client.GetAsync(new Uri("/health", UriKind.Relative));
+        var response = await Client.GetAsync(new Uri("/health", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("ok", (await response.Body()).GetProperty("status").GetString());

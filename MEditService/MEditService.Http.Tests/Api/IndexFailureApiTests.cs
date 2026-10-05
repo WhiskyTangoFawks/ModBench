@@ -12,14 +12,10 @@ public sealed class IndexFailureApiTests : HostedTests
     private const string Origin = "HeldMod";
     private const string EscapedFormKey = "000800%3AHeld.esp";
 
-    protected override MEditHost CreateHost() => new(services => UnreachableIndex.Replace(services));
+    protected override MEditHost CreateHost() => new(services => FailingIndex.Replace(services));
 
-    private static async Task AssertIsProblem500(HttpResponseMessage response)
-    {
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        Assert.Equal(500, (await response.Body()).GetProperty("status").GetInt32());
-    }
+    private static async Task AssertIsProblem500(HttpResponseMessage response) =>
+        await response.AssertIsProblem(HttpStatusCode.InternalServerError);
 
     private async Task LoadOrderHeld()
     {
@@ -32,8 +28,7 @@ public sealed class IndexFailureApiTests : HostedTests
 
     [Fact]
     public async Task SetFilter_WhenTheIndexFails_Is500() =>
-        await AssertIsProblem500(await Client.PostAsJsonAsync(
-            "/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" }));
+        await AssertIsProblem500(await Client.SetFilter());
 
     [Fact]
     public async Task ClearFilter_WhenTheIndexFails_Is500() =>
@@ -44,8 +39,7 @@ public sealed class IndexFailureApiTests : HostedTests
     {
         using var instance = new ScratchDirectory("medit-rebuild-");
 
-        await AssertIsProblem500(await Client.PostAsJsonAsync(
-            "/index/rebuild", new { instanceRoot = instance.ToString(), gameRelease = "Fallout4" }));
+        await AssertIsProblem500(await Client.RebuildIndex(instance.ToString()));
     }
 
     [Fact]
