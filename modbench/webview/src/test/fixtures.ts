@@ -3,7 +3,7 @@ import { act } from '@testing-library/react';
 import { WEBVIEW_TO_EXTENSION, hasSection, type ExtensionToWebview, type WebviewToExtension } from '../../../src/wire/messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
 import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
-import { columnKey } from '../columnKey';
+import { columnKey } from '../../../src/wire/columnKey';
 
 // Nothing here imports a component: `vscode.ts` calls acquireVsCodeApi() at module load, so a
 // module that reached it would throw in every test file that does not mock it.
@@ -63,7 +63,7 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
   const plugins = opts.plugins ?? [];
   // ADR-0012: compound keying, so a fake keyed by bare filename cannot pass a same-filename case.
   const columnsWhere = (p: (plugin: FixturePlugin) => boolean) =>
-    new Set(plugins.filter(p).map(x => columnKey(x.name, x.origin ?? null)));
+    new Set(plugins.filter(p).map(x => columnKey({ name: x.name, origin: x.origin ?? 'Data' })));
   return {
     load: opts.load ?? vi.fn().mockImplementation(() => Promise.resolve({
       ok: true,

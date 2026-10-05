@@ -9,7 +9,7 @@ import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW } from '../../src/wire/messages';
 import { compareOverride, compareResultFixture, diffNode, fieldMeta, panelClient, required, tellPanel } from './test/fixtures';
-import { columnKey } from './columnKey';
+import { columnKey } from '../../src/wire/columnKey';
 import { WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 import type { CompareResult } from './types';
 
@@ -86,8 +86,8 @@ describe('a record panel cell after a refused edit (editor.md, Reporting, story 
 describe('a record panel reading the FormKey its record moved to (editor.md, States, story 5)', () => {
   const MOVED = '000002:Fallout4.esm';
   const answered = (result: CompareResult) => ({
-    ok: true as const, result, immutableSet: new Set([columnKey('Fallout4.esm', null)]),
-    trackedSet: new Set([columnKey('MyMod.esp', 'ModA')]), conflictsComputed: true, loadFailures: [],
+    ok: true as const, result, immutableSet: new Set([columnKey({ name: 'Fallout4.esm', origin: 'Data' })]),
+    trackedSet: new Set([columnKey({ name: 'MyMod.esp', origin: 'ModA' })]), conflictsComputed: true, loadFailures: [],
   });
   const editedFormKeys = () => vi.mocked(vscode.postMessage).mock.calls
     .map(([m]) => m)

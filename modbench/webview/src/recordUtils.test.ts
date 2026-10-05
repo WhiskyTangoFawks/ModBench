@@ -17,7 +17,7 @@ import {
 } from './recordUtils';
 import type { CompareOverride } from './types';
 import { fieldMeta } from './test/fixtures';
-import { columnKey } from './columnKey';
+import { columnKey } from '../../src/wire/columnKey';
 
 function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): CompareOverride {
   return {
@@ -238,23 +238,23 @@ describe('wirePath', () => {
       { kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 },
       { kind: 'member', name: 'Properties' }, { kind: 'index', index: 2 },
     ];
-    expect(wirePath('VirtualMachineAdapter', path, columnKey('A.esp', 'Data'))).toEqual([
+    expect(wirePath('VirtualMachineAdapter', path, columnKey({ name: 'A.esp', origin: 'Data' }))).toEqual([
       { kind: 'member', name: 'VirtualMachineAdapter' }, ...path,
     ]);
   });
 
   it('is the one member hop for a top-level row', () => {
-    expect(wirePath('Level', [], columnKey('A.esp', 'Data'))).toEqual([{ kind: 'member', name: 'Level' }]);
+    expect(wirePath('Level', [], columnKey({ name: 'A.esp', origin: 'Data' }))).toEqual([{ kind: 'member', name: 'Level' }]);
   });
 
   it('turns an element into its position in the given column', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Packages' }, { kind: 'element', indexes: { 'A.esp': 0, 'B.esp': 2 }, keyed: false }];
-    expect(wirePath('Data', path, columnKey('B.esp', 'Data')))
+    expect(wirePath('Data', path, columnKey({ name: 'B.esp', origin: 'Data' })))
       .toEqual([{ kind: 'member', name: 'Data' }, { kind: 'member', name: 'Packages' }, { kind: 'index', index: 2 }]);
   });
 
   it('is no path for a column that does not hold the element', () => {
-    expect(wirePath('Packages', [{ kind: 'element', indexes: { 'A.esp': 0 }, keyed: false }], columnKey('B.esp', 'Data'))).toBeUndefined();
+    expect(wirePath('Packages', [{ kind: 'element', indexes: { 'A.esp': 0 }, keyed: false }], columnKey({ name: 'B.esp', origin: 'Data' }))).toBeUndefined();
   });
 });
 

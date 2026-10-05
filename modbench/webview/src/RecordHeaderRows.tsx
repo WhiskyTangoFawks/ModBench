@@ -7,7 +7,7 @@ import { baseCell, labelCell, focusedRowStyle, mono, fg } from './gridStyles';
 import type { Column } from './recordUtils';
 import type { FocusedCell } from './gridNavigation';
 import type { ColumnKey } from './types';
-import { LABEL_COLUMN } from './columnKey';
+import { LABEL_COLUMN } from './labelColumn';
 import { RECORD_HEADER_ROW, FORM_ID_ROW, type RecordRow } from './recordRows';
 
 const INDENT = 24;

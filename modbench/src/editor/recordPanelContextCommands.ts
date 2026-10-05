@@ -48,7 +48,11 @@ function isStringValueContext(value: unknown): value is StringValueContext {
   return hasWebviewSection(value, 'stringValue');
 }
 
-function editCommand<Ctx extends { formKey: string; plugin: string; origin: string }>(
+interface PluginCopyAddress { formKey: string; plugin: string; origin: string }
+
+const editAddressOf = (copy: PluginCopyAddress): EditAddress => ({ formKey: copy.formKey, plugin: pluginAddressOf(copy) });
+
+function editCommand<Ctx extends PluginCopyAddress>(
   command: string,
   isCtx: (value: unknown) => value is Ctx,
   envelopeOf: (ctx: Ctx, option: unknown) => RecordEditEnvelope | undefined,
@@ -59,12 +63,10 @@ function editCommand<Ctx extends { formKey: string; plugin: string; origin: stri
       if (!isCtx(raw)) return;
       const envelope = envelopeOf(raw, option);
       if (!envelope) return;
-      await deps.editGateOf(raw)(raw, formKey => applyRecordEdit(deps, formKey, pluginAddressOf(raw), envelope));
+      await writeGated(deps, editAddressOf(raw), envelope);
     },
   };
 }
-
-interface PluginCopyAddress { formKey: string; plugin: string; origin: string }
 
 function isPluginCopyAddress(value: unknown): value is PluginCopyAddress {
   if (typeof value !== 'object' || value === null) return false;
@@ -77,7 +79,7 @@ async function editField(deps: RecordPanelContextCommandDeps, address: unknown, 
   if (!isPluginCopyAddress(address)) return;
   const envelope = isRecordEditEnvelope(option) ? option : await promptedSet(address);
   if (!envelope) return;
-  await deps.editGateOf(address)(address, formKey => applyRecordEdit(deps, formKey, pluginAddressOf(address), envelope));
+  await writeGated(deps, editAddressOf(address), envelope);
 }
 
 async function promptedSet(address: object): Promise<RecordEditEnvelope | undefined> {
@@ -89,8 +91,11 @@ async function promptedSet(address: object): Promise<RecordEditEnvelope | undefi
 // The tab's save posts the `set` an inline edit does, at the row's own path, once per save
 // (editor.md, Menus and keys, story 2).
 export function commitField(deps: FieldCommitDeps, field: FieldAddress, value: string): Promise<void> {
-  return deps.editGateOf(field)(field, formKey =>
-    applyRecordEdit(deps, formKey, pluginAddressOf(field), { op: 'set', path: field.path, value }));
+  return writeGated(deps, field, { op: 'set', path: field.path, value });
+}
+
+function writeGated(deps: FieldCommitDeps, address: EditAddress, envelope: RecordEditEnvelope): Promise<void> {
+  return deps.editGateOf(address)(address, formKey => applyRecordEdit(deps, formKey, address.plugin, envelope));
 }
 
 const CONTEXT_COMMANDS: ContextCommand[] = [

@@ -14,7 +14,7 @@ import { defaultOf, type Column } from './recordUtils';
 import type { ColumnKey, ConflictThis, FieldMetadata, FormKeyResolution, PathHop } from './types';
 import type { FieldRow } from './recordRows';
 import type { FocusedCell } from './gridNavigation';
-import { LABEL_COLUMN } from './columnKey';
+import { LABEL_COLUMN } from './labelColumn';
 import type { ArrayParentContext } from '../../src/wire/messages';
 import type { CellDrag } from './cellDrag';
 

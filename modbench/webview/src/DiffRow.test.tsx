@@ -12,7 +12,8 @@ import { DiffRow } from './DiffRow';
 import type { Column, PathSegment } from './recordUtils';
 import type { ColumnKey, CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 import { fieldRow } from './recordRows';
-import { columnKey } from './columnKey';
+import { columnKey } from '../../src/wire/columnKey';
+import { pluginAddressOf } from '../../src/wire/pluginAddress';
 import { DIMMED_OPACITY } from './gridStyles';
 import { diffNode, fieldMeta, parseJsonRecord, required } from './test/fixtures';
 
@@ -31,7 +32,7 @@ function override(plugin: string, partial: Partial<CompareOverride> = {}): Compa
 }
 
 function diskColumn(o: CompareOverride): Column {
-  return { key: columnKey(o.plugin, o.origin), override: o };
+  return { key: columnKey(pluginAddressOf(o)), override: o };
 }
 function diff(partial: Partial<FieldDiff> = {}): FieldDiff {
   return diffNode({
@@ -144,7 +145,7 @@ describe('DiffRow — top-level scalar row', () => {
 
 describe('DiffRow — dimmed columns, the panel deciding each column\'s look and the row applying it to every cell of that column and asking nothing else', () => {
   it('dims a cell whose column the panel named dimmed', () => {
-    const dimmed = columnKey('MyMod.esp', null);
+    const dimmed = columnKey({ name: 'MyMod.esp', origin: 'Data' });
     renderRow({ columnStyle: column => (column === dimmed ? { opacity: DIMMED_OPACITY } : {}) });
     const cell = required(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1").closest('td'), "its td ancestor");
     expect(cell).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
@@ -174,20 +175,20 @@ describe('DiffRow — cell focus, whose identity lives above DiffRow: it reports
   });
 
   it('a disk cell matching focusedCell is tabbable and carries real DOM focus', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey({ name: 'MyMod.esp', origin: 'Data' }) } });
     const cell = required(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1").closest('td'), "its td ancestor");
     expect(cell).toHaveAttribute('tabindex', '0');
     expect(cell).toHaveFocus();
   });
 
   it('a cell not matching focusedCell does not carry DOM focus', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey({ name: 'MyMod.esp', origin: 'Data' }) } });
     const cell = required(required(screen.getAllByText('disk-value')[0], "the 'disk-value' match at index 0").closest('td'), "its td ancestor");
     expect(cell).not.toHaveFocus();
   });
 
   it('the row containing the focused cell is highlighted', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey({ name: 'MyMod.esp', origin: 'Data' }) } });
     const row = required(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1").closest('tr'), "its tr ancestor");
     expect(row.style.boxShadow).toContain('var(--vscode-focusBorder');
   });
@@ -199,7 +200,7 @@ describe('DiffRow — cell focus, whose identity lives above DiffRow: it reports
   });
 
   it('the focused cell itself is visibly distinguished from the rest of its row', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey({ name: 'MyMod.esp', origin: 'Data' }) } });
     const focusedTd = required(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1").closest('td'), "its td ancestor");
     const otherTd = required(required(screen.getAllByText('disk-value')[0], "the 'disk-value' match at index 0").closest('td'), "its td ancestor");
     expect(focusedTd.style.boxShadow).toContain('var(--vscode-focusBorder');
@@ -218,8 +219,8 @@ describe('DiffRow — cell focus, whose identity lives above DiffRow: it reports
     const colB = override('Shared.esp', { origin: 'ModB' });
     renderRow({
       columns: [diskColumn(colA), diskColumn(colB)],
-      diff: diff({ values: { [columnKey('Shared.esp', 'ModA')]: 'disk-value', [columnKey('Shared.esp', 'ModB')]: 'disk-value' } }),
-      focusedCell: { rowKey: 'Name', plugin: columnKey('Shared.esp', 'ModA') },
+      diff: diff({ values: { [columnKey({ name: 'Shared.esp', origin: 'ModA' })]: 'disk-value', [columnKey({ name: 'Shared.esp', origin: 'ModB' })]: 'disk-value' } }),
+      focusedCell: { rowKey: 'Name', plugin: columnKey({ name: 'Shared.esp', origin: 'ModA' }) },
     });
     const cells = screen.getAllByText('disk-value');
     const cellA = required(required(cells[0], "the first 'disk-value' match").closest('td'), "its td ancestor");
@@ -380,7 +381,7 @@ describe('DiffRow — flags cell wiring', () => {
 
   it('a click on a flag in a non-editable column writes nothing', () => {
     const onEdit = vi.fn();
-    flagsRow({ isExpanded: true, editableColumns: new Set([columnKey('MyMod.esp', null)]), onEdit });
+    flagsRow({ isExpanded: true, editableColumns: new Set([columnKey({ name: 'MyMod.esp', origin: 'Data' })]), onEdit });
     fireEvent.click(required(screen.getAllByRole('checkbox')[1], "the second checkbox (Fallout4.esm's B)"));
     expect(onEdit).not.toHaveBeenCalled();
   });
@@ -399,11 +400,11 @@ describe('DiffRow — flags cell wiring', () => {
     const onEdit = vi.fn();
     flagsRow({
       isExpanded: true,
-      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      editableColumns: new Set([columnKey({ name: 'MyMod.esp', origin: 'Data' })]),
       onEdit,
     });
     fireEvent.click(required(screen.getAllByRole('checkbox')[3], "the fourth checkbox (MyMod.esp's B)"));
-    expect(onEdit).toHaveBeenCalledWith(columnKey('MyMod.esp', null), [{ kind: 'member', name: 'Name' }], ['A', 'B']);
+    expect(onEdit).toHaveBeenCalledWith(columnKey({ name: 'MyMod.esp', origin: 'Data' }), [{ kind: 'member', name: 'Name' }], ['A', 'B']);
   });
 });
 
@@ -421,15 +422,15 @@ describe('DiffRow — formKey cell wiring', () => {
   afterEach(() => { pickFormKeyBehindAcquireVsCodeApi.mockClear(); });
 
   it('a formKey cell in a non-editable column does not open the picker when clicked', () => {
-    fkRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
+    fkRow({ focusedCell: { rowKey: 'Name', plugin: columnKey({ name: 'MyMod.esp', origin: 'Data' }) } });
     fireEvent.click(required(screen.getAllByText('000019:Fallout4.esm')[1], "the '000019:Fallout4.esm' match at index 1"));
     expect(pickFormKeyBehindAcquireVsCodeApi).not.toHaveBeenCalled();
   });
 
   it('a formKey cell in an editable, focused column opens the picker with the field’s valid types', () => {
     fkRow({
-      editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
+      editableColumns: new Set([columnKey({ name: 'MyMod.esp', origin: 'Data' })]),
+      focusedCell: { rowKey: 'Name', plugin: columnKey({ name: 'MyMod.esp', origin: 'Data' }) },
     });
     fireEvent.click(required(screen.getAllByText('000019:Fallout4.esm')[1], "the '000019:Fallout4.esm' match at index 1"));
     expect(pickFormKeyBehindAcquireVsCodeApi).toHaveBeenCalledWith('000019:Fallout4.esm', ['race']);
@@ -439,13 +440,13 @@ describe('DiffRow — formKey cell wiring', () => {
     const onEdit = vi.fn();
     pickFormKeyBehindAcquireVsCodeApi.mockResolvedValueOnce('00001A:Fallout4.esm');
     fkRow({
-      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      editableColumns: new Set([columnKey({ name: 'MyMod.esp', origin: 'Data' })]),
       onEdit,
-      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
+      focusedCell: { rowKey: 'Name', plugin: columnKey({ name: 'MyMod.esp', origin: 'Data' }) },
     });
     fireEvent.click(required(screen.getAllByText('000019:Fallout4.esm')[1], "the '000019:Fallout4.esm' match at index 1"));
     await vi.waitFor(() => expect(onEdit)
-      .toHaveBeenCalledWith(columnKey('MyMod.esp', null), [{ kind: 'member', name: 'Name' }], '00001A:Fallout4.esm'));
+      .toHaveBeenCalledWith(columnKey({ name: 'MyMod.esp', origin: 'Data' }), [{ kind: 'member', name: 'Name' }], '00001A:Fallout4.esm'));
   });
 });
 
@@ -460,7 +461,7 @@ describe('DiffRow — string cell right-click menu, the extended editor\'s only 
 
   it('a mutable string cell carries a stringValue context with readOnly: false, its current value, and for a top-level row a wire path of the record\'s own member alone', () => {
     renderRow({
-      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      editableColumns: new Set([columnKey({ name: 'MyMod.esp', origin: 'Data' })]),
     });
     expect(stringContext('disk-value', 1)).toEqual({
       webviewSection: 'cell editableCell stringValue',
@@ -488,7 +489,7 @@ describe('DiffRow — string cell right-click menu, the extended editor\'s only 
   it('a nested string cell carries its whole wire path, so its save does not land on the root, and is titled by its own label', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Sub' }];
     renderRow({
-      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      editableColumns: new Set([columnKey({ name: 'MyMod.esp', origin: 'Data' })]),
       context: { path, rootField: 'Struct', depth: path.length },
     });
     const ctx = stringContext('disk-value', 1);
@@ -497,7 +498,7 @@ describe('DiffRow — string cell right-click menu, the extended editor\'s only 
   });
 
   it('double click opens the inline editor in place, never a tab, calling no callback', () => {
-    renderRow({ editableColumns: new Set([columnKey('MyMod.esp', null)]) });
+    renderRow({ editableColumns: new Set([columnKey({ name: 'MyMod.esp', origin: 'Data' })]) });
     fireEvent.doubleClick(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1"));
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
   });
@@ -532,7 +533,7 @@ describe('DiffRow — array parent/element right-click context, a nested array\'
     renderRow({
       diff: arrayDiff(),
       meta: intArrayMeta,
-      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      editableColumns: new Set([columnKey({ name: 'MyMod.esp', origin: 'Data' })]),
       context: { path: [], rootField: 'Items', depth: 0 },
       isExpanded: false,
     });
@@ -548,7 +549,7 @@ describe('DiffRow — array parent/element right-click context, a nested array\'
     renderRow({
       diff: arrayDiff(),
       meta: intArrayMeta,
-      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      editableColumns: new Set([columnKey({ name: 'MyMod.esp', origin: 'Data' })]),
       context: { path, rootField: 'Container', depth: path.length },
       isExpanded: false,
     });
@@ -561,7 +562,7 @@ describe('DiffRow — array parent/element right-click context, a nested array\'
     renderRow({
       diff: diff({ fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': 2 } }),
       meta: intMetaLeaf,
-      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      editableColumns: new Set([columnKey({ name: 'MyMod.esp', origin: 'Data' })]),
       context: { path, rootField: 'Items', depth: path.length },
     });
     const ctx = vscodeContextFor('2', 1);
@@ -575,7 +576,7 @@ describe('DiffRow — array parent/element right-click context, a nested array\'
     renderRow({
       diff: diff({ fieldName: '[0]', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }),
       meta: intMetaLeaf,
-      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      editableColumns: new Set([columnKey({ name: 'MyMod.esp', origin: 'Data' })]),
       context: { path, rootField: 'Container', depth: path.length },
     });
     const ctx = vscodeContextFor('5', 1);
@@ -663,7 +664,7 @@ describe('DiffRow — a collapsed container row, per column: `{…}`/`[n]` state
       meta: arrayMeta,
       context: { path: [{ kind: 'member', name: 'Items' }], rootField: 'Owner', depth: 1 },
       isExpanded: false,
-      ownerPresent: column => column === columnKey('Fallout4.esm', null),
+      ownerPresent: column => column === columnKey({ name: 'Fallout4.esm', origin: 'Data' }),
     });
     const itemsRow = required(screen.getByText('Items').closest('tr'), "the 'Items' cell's tr ancestor");
     const cells = itemsRow.querySelectorAll('td');

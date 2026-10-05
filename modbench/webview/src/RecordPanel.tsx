@@ -7,7 +7,9 @@ import { mono, fg, headerCell, headerBackground, DIMMED_OPACITY, COLLAPSED_COLUM
 import type {
   ColumnKey, CompareOverride, CompareResult, PathHop, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
-import { columnKey, LABEL_COLUMN } from './columnKey';
+import { LABEL_COLUMN } from './labelColumn';
+import { columnKey } from '../../src/wire/columnKey';
+import { pluginAddressOf } from '../../src/wire/pluginAddress';
 import { addElement, editField, focusCell } from './nativeBridge';
 import { openEditor } from './DiskCell';
 import { EditorMounted } from './cellEditor';
@@ -31,7 +33,7 @@ function columnKeysWhere(
 ): Set<ColumnKey> {
   const keys = new Set<ColumnKey>();
   for (const o of overrides ?? []) {
-    const key = columnKey(o.plugin, o.origin);
+    const key = columnKey(pluginAddressOf(o));
     if (holds(o, key)) keys.add(key);
   }
   return keys;
@@ -97,7 +99,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // The column key alone is a rendering key; the override carries the compound identity (ADR-0012)
   // the write path needs and the values a wire path resolves against.
   const overrideFor = useCallback(
-    (plugin: ColumnKey) => (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin),
+    (plugin: ColumnKey) => (result?.overrides ?? []).find(o => columnKey(pluginAddressOf(o)) === plugin),
     [result]);
 
   const post = useCallback((plugin: ColumnKey, envelope: RecordEditEnvelope) => {
