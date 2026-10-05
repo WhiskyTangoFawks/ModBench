@@ -119,7 +119,7 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
     panel.webview.onDidReceiveMessage((msg: unknown) => {
       // A reply and a follow reach the one panel that asked, never a broadcast; `routerDeps` is
       // shared across panels, so the per-panel fields are rebuilt with the panel this closure holds.
-      void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells));
+      void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight));
     });
 
     showWebviewPage(panel.webview, context.extensionUri, {

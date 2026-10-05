@@ -17,9 +17,9 @@ export type EditGate = (address: EditAddress, write: (formKey: string) => Promis
 
 interface InFlight { writes: number; reported: Set<string>; refreshed: boolean }
 
-// One plugin's record moved by an edit of its FormID. `readAt` is when the tab read `to`: an
-// address taken after it names what it means.
-interface Move { plugin: string; origin: string; from: string; to: string; readAt: number | undefined }
+// One plugin's record moved by an edit of its FormID. `asked` is whether the tab was told to read
+// `to`. `readAt` is when that read was answered: an address taken after it names what it means.
+interface Move { plugin: string; origin: string; from: string; to: string; asked: boolean; readAt: number | undefined }
 
 /** The one place a record tab reads again. With an edit in flight, it reads once after the
  *  answer, under the FormKey it then shows, and only on mEdit's report, which may land first
@@ -67,7 +67,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     }
     const shown = this.tracker.formKeyOf(panel);
     if (!shown || !keys.includes(shown)) return;
-    this.markRead(panel, shown);
+    for (const move of this.moves.get(panel) ?? []) if (move.to === shown) move.asked = true;
     this.read(panel, shown);
   }
 
@@ -80,17 +80,31 @@ export class EditsInFlight<Panel extends FollowedPanel> {
       return;
     }
     const shown = this.tracker.formKeyOf(panel);
-    if (shown && !this.awaitsRead(panel)) this.read(panel, shown);
+    if (shown && !this.awaitsReport(panel)) this.read(panel, shown);
   }
 
   /** The FormKey a panel waits on a report for, when no edit of it is in flight. */
   waitingFor(panel: Panel): string | undefined {
-    return this.inFlight.has(panel) || !this.awaitsRead(panel) ? undefined : this.tracker.formKeyOf(panel);
+    return this.inFlight.has(panel) || !this.awaitsReport(panel) ? undefined : this.tracker.formKeyOf(panel);
   }
 
   /** mEdit holds `formKey`: the panel reads it if it still waits on it. */
   release(panel: Panel, formKey: string): void {
     if (this.waitingFor(panel) === formKey) this.reported(panel, [formKey]);
+  }
+
+  /** The tab's read of `formKey` is answered: it shows that record from now on. Reading a chain's
+   *  last key ends every move in it, back to the key the tab last read. */
+  answered(panel: Panel, formKey: string): void {
+    const moves = this.moves.get(panel) ?? [];
+    const readAt = ++this.clock;
+    let ended = moves.filter(move => move.readAt === undefined && move.to === formKey);
+    while (ended.length > 0) {
+      for (const move of ended) move.readAt = readAt;
+      const reached = ended;
+      ended = moves.filter(move => move.readAt === undefined && reached.some(later =>
+        later.from === move.to && later.plugin === move.plugin && later.origin === move.origin));
+    }
   }
 
   /** A closed panel: nothing of it is held any longer. */
@@ -121,7 +135,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   // The record header, story 2).
   private follow(panel: Panel, target: EditAddress, newFormKey: string): void {
     const moves = this.moves.get(panel) ?? [];
-    moves.push({ plugin: target.plugin, origin: target.origin, from: target.formKey, to: newFormKey, readAt: undefined });
+    moves.push({ plugin: target.plugin, origin: target.origin, from: target.formKey, to: newFormKey, asked: false, readAt: undefined });
     this.moves.set(panel, moves);
     if (this.tracker.formKeyOf(panel) !== target.formKey) return;
     this.tracker.setFormKey(panel, newFormKey);
@@ -135,22 +149,9 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     else if (entry.refreshed) this.refresh(panel);
   }
 
-  private awaitsRead(panel: Panel): boolean {
+  private awaitsReport(panel: Panel): boolean {
     const shown = this.tracker.formKeyOf(panel);
-    return (this.moves.get(panel) ?? []).some(move => move.to === shown && move.readAt === undefined);
-  }
-
-  // Reading a chain's last key ends every move in it, back to the key the tab last read.
-  private markRead(panel: Panel, formKey: string): void {
-    const moves = this.moves.get(panel) ?? [];
-    const readAt = ++this.clock;
-    let ended = moves.filter(move => move.readAt === undefined && move.to === formKey);
-    while (ended.length > 0) {
-      for (const move of ended) move.readAt = readAt;
-      const reached = ended;
-      ended = moves.filter(move => move.readAt === undefined && reached.some(later =>
-        later.from === move.to && later.plugin === move.plugin && later.origin === move.origin));
-    }
+    return (this.moves.get(panel) ?? []).some(move => move.to === shown && !move.asked);
   }
 
   // The same plugin's record, addressed before the tab read where it moved to, is where it

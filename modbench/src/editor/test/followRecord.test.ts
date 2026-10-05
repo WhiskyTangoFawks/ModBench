@@ -211,6 +211,7 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
       const openedBefore = edits.gate(panel);
       await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
       client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+      edits.answered(panel, '000900:Mod.esp');
 
       expect(await sentTo(edits, panel, EDITED_MOD_ESP_FROM_MODA, openedBefore)).toEqual(['000900:Mod.esp']);
       expect(await sentTo(edits, panel, EDITED_MOD_ESP_FROM_MODA)).toEqual(['000800:Mod.esp']);
@@ -280,6 +281,7 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
     await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
     await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000A00:Mod.esp'));
     client.emit(rowsChanged(['000900:Mod.esp', '000A00:Mod.esp']));
+    edits.answered(panel, '000A00:Mod.esp');
 
     const targets: string[] = [];
     await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, formKey => { targets.push(formKey); return Promise.resolve(undefined); });

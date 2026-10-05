@@ -6,7 +6,7 @@ import {
 import type { MEditClient, PluginLoadFailure } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { pickRecord, type RecordPickerDeps } from './recordPicker';
-import type { FollowedPanel } from './followRecord';
+import type { EditsInFlight, FollowedPanel } from './followRecord';
 import type { FocusedCellContext, FocusedCells } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
 import { recordTitle } from './recordTitle';
@@ -27,19 +27,22 @@ export interface RouteRecordPanelMessageDeps {
   reply: (msg: ExtensionToWebview) => void;
   // Titles the panel from the record its read answered (editor.md, Opening, story 5).
   setTitle: (title: string) => void;
+  // The panel's read of `formKey` is answered, and the webview shows that record from then on.
+  readAnswered: (formKey: string) => void;
   // The latest load-order status, read rather than fetched.
   conflictsComputed: () => boolean;
   loadFailures: () => readonly PluginLoadFailure[];
 }
 
 /** What every panel's messages share: the rest is the panel's own. */
-export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | 'setTitle'>;
+export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | 'setTitle' | 'readAnswered'>;
 
 /** The router's bundle for one panel's messages: the picker and the record load both reply to it. */
 export function routerDepsForPanel<Panel extends FollowedPanel>(
   shared: SharedRecordPanelDeps,
   panel: Panel,
   focusedCells: FocusedCells<Panel>,
+  editsInFlight: Pick<EditsInFlight<Panel>, 'answered'>,
 ): RouteRecordPanelMessageDeps {
   return {
     ...shared,
@@ -47,6 +50,7 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
     focusCell: (context, userFocus) => { focusedCells.setCell(panel, context, userFocus); },
     reply: (m) => { void panel.webview.postMessage(m); },
     setTitle: (title) => { panel.title = title; },
+    readAnswered: (formKey) => { editsInFlight.answered(panel, formKey); },
   };
 }
 
@@ -141,6 +145,7 @@ async function answerRecordLoad(
     return;
   }
   deps.setTitle(recordTitle(m.formKey, compare.value?.overrides));
+  deps.readAnswered(m.formKey);
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     compare: compare.value, plugins: plugins.status === 'fulfilled' ? plugins.value : null,
