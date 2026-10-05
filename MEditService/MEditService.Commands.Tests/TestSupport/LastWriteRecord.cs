@@ -24,6 +24,19 @@ internal static class LastWriteRecord
     internal static void Delete(string modFolder) =>
         GitProbe.Run(GitDir(modFolder), modFolder, "update-ref", "-d", RefOfTheOnlyPlugin(modFolder));
 
+    /// <summary>Lets the next ref update through and refuses every one after it. A compile moves the ref
+    /// before it writes the binary and again after, so this fails only the second.</summary>
+    internal static void RefuseRefUpdatesAfterTheFirst(string modFolder)
+    {
+        var marker = Path.Combine(modFolder, "first-ref-update");
+        var hooks = Path.Combine(GitDir(modFolder), "hooks");
+        var hook = Path.Combine(hooks, "reference-transaction");
+        Directory.CreateDirectory(hooks);
+        File.WriteAllText(hook, $"#!/bin/sh\n[ \"$1\" = prepared ] || exit 0\n[ -e '{marker}' ] && exit 1\n: > '{marker}'\n");
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(hook, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
     internal static string LockFileOfTheOnlyPlugin(string modFolder) =>
         Path.Combine(GitDir(modFolder), RefOfTheOnlyPlugin(modFolder) + ".lock");
 

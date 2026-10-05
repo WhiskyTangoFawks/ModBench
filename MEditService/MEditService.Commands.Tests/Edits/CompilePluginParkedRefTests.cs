@@ -44,6 +44,21 @@ public sealed class CompilePluginParkedRefTests : IDisposable
     }
 
     [Fact]
+    public async Task Compile_ThatCannotFinishItsRecord_Lands_AndSaysSo()
+    {
+        var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
+        var before = File.ReadAllBytes(pluginPath);
+        _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
+        LastWriteRecord.RefuseRefUpdatesAfterTheFirst(_mod.ModFolder);
+
+        var result = await CompileService().CompileOneAsync(_mod.Plugin);
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.NotEqual(before, File.ReadAllBytes(pluginPath));
+        Assert.Single(result.Diagnostics, d => d.Message.Contains("could not be finished", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Compile_ThatCannotParkItsRecord_IsRefusedAsAFailedWrite_AndLeavesTheOldBinary()
     {
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
