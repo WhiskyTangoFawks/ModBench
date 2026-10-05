@@ -2,20 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
-import { present } from '../ports/present';
+import { importSpecifiers, isTestSupport, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
-const SRC = join(__dirname, '..');
 const CLIENT_DIR = 'client';
 const GENERATED_DIR = 'generated';
 
-function importsOf(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => present(m[1], "the import/export statement's module specifier"));
-}
-
-function isTestSupport(relativePath: string): boolean {
-  return relativePath.split(sep).some((seg) => seg === 'test' || seg === 'integration') || relativePath.includes('.test.');
-}
+const importsOf = (source: string): string[] => importSpecifiers(source, 'source.ts');
 
 function isClientFolder(relativePath: string): boolean {
   return relativePath.split(sep)[0] === CLIENT_DIR;

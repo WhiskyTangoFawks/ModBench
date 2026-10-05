@@ -1,69 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import ts from 'typescript';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import { type Box, boxesIn } from './boxes';
+import { importSpecifiers, isTestSupport, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
-
-const SRC = join(__dirname, '..');
 
 const SHARED_TEST_SUPPORT = 'test';
 
 const ROOT_BOX = '(composition root)';
-
-const VI_MODULE_CALLS = new Set(['mock', 'doMock', 'unmock', 'doUnmock', 'importActual', 'importMock']);
-
-interface Box {
-  name: string;
-  references: Set<string>;
-}
-
-function boxesIn(src: string): Box[] {
-  return readdirSync(src, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && existsSync(join(src, entry.name, 'tsconfig.json')))
-    .map((entry) => {
-      const path = join(src, entry.name, 'tsconfig.json');
-      const read: { config?: unknown; error?: ts.Diagnostic } = ts.readConfigFile(path, (p) => readFileSync(p, 'utf8'));
-      if (read.error) throw new Error(`${path}: ${ts.flattenDiagnosticMessageText(read.error.messageText, '\n')}`);
-      return { name: entry.name, references: new Set(referencePaths(read.config).map((r) => basename(r))) };
-    });
-}
-
-function referencePaths(config: unknown): string[] {
-  if (typeof config !== 'object' || config === null || !('references' in config)) return [];
-  const { references } = config;
-  if (!Array.isArray(references)) return [];
-  return references.flatMap((reference: unknown) =>
-    (typeof reference === 'object' && reference !== null && 'path' in reference && typeof reference.path === 'string'
-      ? [reference.path] : []));
-}
-
-function moduleSpecifiers(sourceText: string, fileName: string): string[] {
-  const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
-  const found: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
-      && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-      found.push(node.moduleSpecifier.text);
-    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)
-      && ts.isStringLiteral(node.argument.literal)) {
-      found.push(node.argument.literal.text);
-    } else if (ts.isCallExpression(node) && isModuleCall(node)) {
-      const [first] = node.arguments;
-      if (first && ts.isStringLiteralLike(first)) found.push(first.text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return found;
-}
-
-function isModuleCall(call: ts.CallExpression): boolean {
-  if (call.expression.kind === ts.SyntaxKind.ImportKeyword) return true;
-  const callee = call.expression;
-  return ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)
-    && callee.expression.text === 'vi' && VI_MODULE_CALLS.has(callee.name.text);
-}
 
 function ownerOf(src: string, path: string, boxes: readonly Box[]): string | undefined {
   const rel = relative(src, path);
@@ -73,12 +18,9 @@ function ownerOf(src: string, path: string, boxes: readonly Box[]): string | und
   return boxes.some((box) => box.name === top) ? top : ROOT_BOX;
 }
 
-const isTestFile = (src: string, path: string): boolean =>
-  path.endsWith('.test.ts') || relative(src, path).split(sep).includes('test');
-
 function boxTests(src: string, boxes: readonly Box[]): { file: string; box: Box }[] {
   const testedBoxes: Box[] = [...boxes, { name: ROOT_BOX, references: new Set(boxes.map((box) => box.name)) }];
-  return tsFiles(src).filter((file) => isTestFile(src, file)).flatMap((file) => {
+  return tsFiles(src).filter((file) => isTestSupport(relative(src, file))).flatMap((file) => {
     const box = testedBoxes.find((b) => b.name === ownerOf(src, file, boxes));
     return box ? [{ file, box }] : [];
   });
@@ -89,7 +31,7 @@ function unreferencedImports(src: string): string[] {
   const offenders: string[] = [];
   for (const { file, box } of boxTests(src, boxes)) {
     const own = box.name;
-    for (const specifier of moduleSpecifiers(readFileSync(file, 'utf8'), file)) {
+    for (const specifier of importSpecifiers(readFileSync(file, 'utf8'), file)) {
       if (!specifier.startsWith('.')) continue;
       const target = ownerOf(src, resolve(dirname(file), specifier), boxes) ?? 'outside src/';
       if (target === own || target === SHARED_TEST_SUPPORT || box.references.has(target)) continue;

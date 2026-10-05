@@ -1,36 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
-import { extname, join } from 'node:path';
-import { present } from '../ports/present';
-
-const COMMAND_BOXES = ['modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install'];
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { CORE_BOXES } from './boxes';
+import { importSpecifiers, productionFiles, SRC } from './scanSource';
 
 const READ_MODEL_MODULE = join('instanceLoader', 'instance');
 const READ_MODEL_NAMES = ['InstanceValue', 'InstanceView'];
 
 const readModelIn = (source: string): string[] => [
-  ...importsOf(source).filter((spec) => spec.endsWith(READ_MODEL_MODULE)),
+  ...importSpecifiers(source, 'command.ts').filter((spec) => spec.endsWith(READ_MODEL_MODULE)),
   ...READ_MODEL_NAMES.filter((name) => new RegExp(`\\b${name}\\b`).test(source)),
 ];
 
-function importsOf(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) =>
-    present(m[1], 'the matched import-source capture group'),
-  );
-}
-
-const commandModules = (): string[] =>
-  COMMAND_BOXES.flatMap((box) => {
-    const dir = join(__dirname, '..', box);
-    return readdirSync(dir)
-      .filter((name) => extname(name) === '.ts' && !name.endsWith('.test.ts'))
-      .map((name) => join(dir, name));
-  });
+const commandModules = (): string[] => CORE_BOXES.flatMap((box) => productionFiles(join(SRC, box)));
 
 describe('commands never read the Instance', () => {
   it('covers every command box the core band draws and the code builds', () => {
-    expect(COMMAND_BOXES).toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install']);
-    expect(commandModules().length).toBeGreaterThan(COMMAND_BOXES.length);
+    expect(CORE_BOXES).toEqual(expect.arrayContaining(['modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install']));
+    expect(commandModules().length).toBeGreaterThan(CORE_BOXES.length);
   });
 
   it('no command module imports the read model, directly or by name', () => {

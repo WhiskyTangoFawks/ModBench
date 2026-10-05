@@ -1,25 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import ts from 'typescript';
 import { ESLint, Linter } from 'eslint';
+import { rootFiles, SRC } from './scanSource';
 import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../eslint-rules/activationDecides.mjs';
 
-const SRC = join(__dirname, '..');
 
 const ACTIVATION = 'extension.ts';
 const WIRING = ['syncWiring.ts'];
 const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'reporter.ts', 'trash.ts', 'workspaceConfig.ts'];
 const ACTIVATION_EXPORTS = ['ActivateExports', 'activate', 'deactivate'];
 
-const rootFiles = (): string[] =>
-  readdirSync(SRC, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
-    .map((entry) => entry.name)
-    .sort();
-
 const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =>
   ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
+
+function restrictedSyntaxApplied(config: unknown, message: string): string[] {
+  if (typeof config !== 'object' || config === null || !('rules' in config)) return [];
+  const { rules } = config;
+  if (typeof rules !== 'object' || rules === null || !('no-restricted-syntax' in rules)) return [];
+  const options: unknown = rules['no-restricted-syntax'];
+  if (!Array.isArray(options)) return [];
+  return options.flatMap((option: unknown) =>
+    (typeof option === 'object' && option !== null && 'message' in option && option.message === message
+      && 'selector' in option && typeof option.selector === 'string' ? [option.selector] : []));
+}
 
 function exportedNames(source: ts.SourceFile): string[] {
   return source.statements.flatMap((statement) => {
@@ -35,14 +40,13 @@ function exportedNames(source: ts.SourceFile): string[] {
 
 describe('the composition root builds each box, registers it with VS Code and decides nothing', () => {
   it('holds the activation file, its wiring and the ports it implements, and no other file', () => {
-    expect(rootFiles()).toEqual([ACTIVATION, ...WIRING, ...PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API].sort());
+    expect(rootFiles().map((path) => basename(path)).sort()).toEqual([ACTIVATION, ...WIRING, ...PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API].sort());
   });
 
-  it.each([ACTIVATION, ...WIRING])('lint holds %s to deciding nothing', async (file) => {
-    const [result] = await new ESLint({ cwd: join(SRC, '..') }).lintText('export const planted = (a: number) => (a ? 1 : 2);\n', { filePath: join(SRC, file) });
-    expect(result?.messages.filter((message) => message.ruleId === 'no-restricted-syntax').map((message) => message.message))
-      .toEqual([ACTIVATION_DECIDES_MESSAGE]);
-  }, 60_000);
+  it.each([ACTIVATION, ...WIRING])('the lint config applies the deciding selectors to %s', async (file) => {
+    const config: unknown = await new ESLint({ cwd: join(SRC, '..') }).calculateConfigForFile(join(SRC, file));
+    expect(restrictedSyntaxApplied(config, ACTIVATION_DECIDES_MESSAGE)).toEqual(ACTIVATION_DECIDES_SELECTORS);
+  });
 
   it('exports nothing from the activation file but what VS Code and the integration tests take', () => {
     expect(exportedNames(parse(join(SRC, ACTIVATION)))).toEqual(ACTIVATION_EXPORTS);

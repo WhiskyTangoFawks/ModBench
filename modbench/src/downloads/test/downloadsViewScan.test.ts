@@ -1,25 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { present } from '../../ports/present';
-
-const SRC = join(__dirname, '..', '..');
+import { readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { importSpecifiers, productionFiles, SRC } from '../../test/scanSource';
 
 const VIEW_DIRS = ['downloads', 'drivingLib'];
 
 const VIEW_FILES_WALKED_NOT_LISTED = VIEW_DIRS
-  .flatMap((dir) => readdirSync(join(SRC, dir)).map((name) => join(dir, name)))
-  .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
+  .flatMap((dir) => productionFiles(join(SRC, dir)).map((path) => relative(SRC, path)))
   .sort();
 
 const FS_MODULES = ['fs', 'fs/promises', 'node:fs', 'node:fs/promises'];
 
 const FS_CALLS_NAMED_BECAUSE_AN_ALIAS_EVADES_THE_IMPORT_CHECK = ['readFile', 'writeFile', 'readdir', 'mkdir', 'rm', 'access', 'stat', 'cp', 'rename'];
 
-function importsOf(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)]
-    .map((m) => present(m[1], 'the module-path capture group the pattern always matches'));
-}
+const importsOf = (source: string): string[] => importSpecifiers(source, 'view.ts');
 
 function codeWithoutCommentLines(source: string): string {
   return source.split('\n').filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).join('\n');
