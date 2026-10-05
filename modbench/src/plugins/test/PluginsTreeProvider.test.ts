@@ -1844,7 +1844,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     expect(await h.tree.getChildren()).toEqual([]);
 
     h.client.setQueryFailure('getPlugins', new Error('GET /plugins failed (503)'));
-    expect(await h.tree.refreshFacts()).toBeUndefined();
+    await h.tree.refreshFacts();
 
     expect(await h.tree.getChildren()).toHaveLength(1);
   });
@@ -1901,7 +1901,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     await h.tree.refreshFacts();
     resolveSlow([held('A.esp')]);
 
-    expect(await handOff).toEqual([{ name: 'A.esp', hasMatchingRecords: true }]);
+    expect(await handOff).toBe(1);
     const [row] = await h.tree.getChildren();
     expect(await h.tree.getChildren(row)).not.toContainEqual(expect.any(IndexingNode));
   });

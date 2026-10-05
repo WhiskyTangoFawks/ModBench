@@ -146,7 +146,7 @@ function buildBareSide(own: Own): InstanceSide {
     facts: { trackedMods: () => new Set(), modDirs: () => new Map(), refresh: () => Promise.resolve() },
     plugins: {
       selection: () => [], progress: { while: (work) => work(), say: () => undefined },
-      recordRow: () => Promise.resolve(undefined), reveal: () => Promise.resolve(), refreshFacts: () => Promise.resolve(undefined),
+      recordRow: () => Promise.resolve(undefined), reveal: () => Promise.resolve(), refreshFacts: () => Promise.resolve(),
       showRecordFilter: () => undefined,
     },
     latestSent: () => Promise.resolve(undefined),
