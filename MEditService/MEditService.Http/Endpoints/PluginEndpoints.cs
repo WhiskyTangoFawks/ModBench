@@ -159,18 +159,12 @@ public static class PluginEndpoints
                 return WriteEndpointMapping.Refusal(refusal, result.Message);
             }
 
-            return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin, Path.Combine(req.Folder, plugin.Name)));
+            return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin));
         }
         catch (NoLoadOrderException ex)
         {
             logger.LogError(ex, "No loadOrder when creating plugin {Name}", req.Name);
             return WriteEndpointMapping.NoLoadOrder(ex);
-        }
-        catch (ArgumentException ex)
-        {
-            // Mutagen refuses the filename the request passed the extension check with.
-            logger.LogError(ex, "Invalid argument creating plugin {Name}", req.Name);
-            return WriteEndpointMapping.InvalidArgument(ex);
         }
     }
 
@@ -180,16 +174,9 @@ public static class PluginEndpoints
     {
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.Problem("Plugin name is required.", statusCode: 400);
-        if (string.IsNullOrWhiteSpace(req.Folder) || string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("The folder and the origin are required.", statusCode: 400);
-
-        var extension = Path.GetExtension(req.Name);
-        return extension.Equals(".esp", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".esm", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".esl", StringComparison.OrdinalIgnoreCase)
-            ? null
-            : Results.Problem(
-                $"Invalid plugin extension '{extension}'. Must be .esp, .esm, or .esl.", statusCode: 400);
+        return string.IsNullOrWhiteSpace(req.Folder) || string.IsNullOrWhiteSpace(req.Origin)
+            ? Results.Problem("The folder and the origin are required.", statusCode: 400)
+            : null;
     }
 
     // Track (ADR-0007) over a selection of mods (commands.md, A selection is one gesture); the
@@ -313,9 +300,9 @@ public static class PluginEndpoints
 /// the instance holds that origin's files.</summary>
 public record CreatePluginRequest(string Origin, string Name, string Folder);
 
-/// <summary>The plugin the create gesture wrote and where. Not a plugin row: the Index has not seen
+/// <summary>The plugin the create gesture wrote. Not a plugin row: the Index has not seen
 /// it, and nothing registers it.</summary>
-public record PluginCreatedResponse(string Name, string Origin, string Path);
+public record PluginCreatedResponse(string Name, string Origin);
 
 /// <summary>The mods by name; the load order says each one's plugins and folder.</summary>
 public record TrackRequest(IReadOnlyList<string> Mods);

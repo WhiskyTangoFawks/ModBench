@@ -137,6 +137,21 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     [Theory]
+    [InlineData("Mod.txt")]
+    [InlineData("Mod")]
+    [InlineData("Mod.esp.bak")]
+    public async Task CreatePlugin_ANameThatIsNotAPluginFile_IsRefusedNamingIt_BeforeAnyWrite(string name)
+    {
+        var adapter = new RecordingAdapter();
+
+        var result = await HandlerIn(GameRelease.Fallout4, adapter).CreatePlugin(new PluginAddress(name, "BadMod"), ModFolder("BadMod"));
+
+        Assert.Equal(PluginCreateRefusal.NotAPluginFile, result.Refusal);
+        Assert.Contains(name, result.Message, StringComparison.Ordinal);
+        Assert.Empty(adapter.Asked);
+    }
+
+    [Theory]
     [InlineData("Plain.esp")]
     [InlineData("Master.esm")]
     public async Task CreatePlugin_AFullPluginInAReleaseWithoutLightPlugins_IsWritten(string name)
