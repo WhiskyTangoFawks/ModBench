@@ -47,7 +47,6 @@ import {
   conflictsComputedOver, registerTrackCommand, registerCompileCommand, registerDecompileCommand, CompileProblems,
 } from '../pluginRowCommands';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
-import type { InstanceValue } from '../../instanceLoader/instance';
 import { InMemoryMEditClient } from '../../client';
 import { PluginNode } from '../PluginsTreeProvider';
 import { assertAskedOnce, recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
