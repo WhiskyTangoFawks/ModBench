@@ -242,39 +242,30 @@ public static class PluginEndpoints
     internal static Task<IResult> Decompile(
         DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory)
     {
-        return OverPlugins(req.Plugins, "decompiling", loggerFactory, async plugins =>
-        {
-            var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-            var result = await decompileHandler.DecompileAsync(plugins);
-            if (result.SelectionRefusal is { } selectionRefusal)
-            {
-                logger.LogWarning("Refused to decompile {Count} plugin(s): {Refusal} — {Message}",
-                    plugins.Count, selectionRefusal.Refusal, selectionRefusal.Message);
-                return WriteEndpointMapping.Refusal(selectionRefusal);
-            }
-            return Results.Ok(new DecompileResponse(
-                [.. result.Landed.Select(landed => landed.Item)],
-                [.. result.Refused.Select(r => new PluginDecompileRefusal(r.Item, r.Refusal, r.Message))]));
-        });
+        return OverPlugins(req.Plugins, "decompiling", loggerFactory, plugins => WriteEndpointMapping.Answered(
+            decompileHandler.DecompileAsync(plugins),
+            WriteEndpointMapping.Refusal,
+            landed => landed.Item,
+            refused => new PluginDecompileRefusal(refused.Item, refused.Refusal, refused.Message),
+            (applied, refused) => new DecompileResponse(applied, refused)));
     }
 
     // compile-plugin: the selection (commands.md, A selection is one gesture).
     internal static Task<IResult> Compile(
         CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
     {
-        return OverPlugins(req.Plugins, "compiling", loggerFactory, async plugins =>
-        {
-            var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-            var result = await compileHandler.CompileAsync(plugins);
-            foreach (var refused in result.Refused)
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        return OverPlugins(req.Plugins, "compiling", loggerFactory, plugins => WriteEndpointMapping.Answered(
+            compileHandler.CompileAsync(plugins),
+            WriteEndpointMapping.Refusal,
+            landed => new CompiledPlugin(landed.Item.Name, landed.Item.Origin, landed.Outcome),
+            refused =>
             {
                 logger.LogWarning("Refused to compile {Plugin} ({Origin}): {Refusal} — {Message}",
                     refused.Item.Name, refused.Item.Origin, refused.Refusal, refused.Message);
-            }
-            return Results.Ok(new CompileResponse(
-                [.. result.Landed.Select(landed => new CompiledPlugin(landed.Item, landed.Outcome))],
-                [.. result.Refused.Select(r => new PluginCompileRefusal(r.Item, r.Refusal, r.Message))]));
-        });
+                return new PluginCompileRefusal(refused.Item, refused.Refusal, refused.Message);
+            },
+            (applied, refused) => new CompileResponse(applied, refused)));
     }
 
     // The routes over a selection of plugins share their request's shape and one answer that is no
@@ -375,7 +366,7 @@ public record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 public record CompileResponse(IReadOnlyList<CompiledPlugin> Applied, IReadOnlyList<PluginCompileRefusal> Refused);
 
 /// <summary>A plugin of the selection whose binary was written, with its diagnostics (ADR-0007).</summary>
-public record CompiledPlugin(PluginAddress Plugin, IReadOnlyList<CompileDiagnostic> Diagnostics);
+public record CompiledPlugin(string Name, string Origin, IReadOnlyList<CompileDiagnostic> Diagnostics);
 
 /// <summary>A plugin of the selection that wrote nothing, with the typed refusal and the message naming
 /// the way out.</summary>

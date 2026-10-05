@@ -258,7 +258,7 @@ async function compilePlugins(deps: CompileDeps, plugins: readonly PluginAddress
 }
 
 function publishLanded(deps: CompileDeps, outcome: CompileOutcome): void {
-  for (const { plugin, diagnostics } of outcome.landed) deps.problems.publish(plugin, deps.originFiles(plugin.origin), diagnostics);
+  for (const compiled of outcome.landed) deps.problems.publish(compiled, deps.originFiles(compiled.origin), compiled.diagnostics);
 }
 
 function diagnosticsWords(count: number): string {
@@ -275,12 +275,12 @@ function reportCompiled(reporter: Reporter, outcome: CompileOutcome, total: numb
     const what = total === 1 ? `"${refused.item.name}"` : `${outcome.refused.length} of ${total} plugins`;
     reporter.selectionOutcome(
       `Could not compile ${what}.${rest}`,
-      { landed: outcome.landed.map((compiled) => compiled.plugin), refused: outcome.refused }, rowName);
+      { landed: outcome.landed, refused: outcome.refused }, rowName);
     return;
   }
   const [only, ...more] = outcome.landed;
   if (only === undefined) return;
-  const what = more.length === 0 ? `"${only.plugin.name}"` : `${outcome.landed.length} plugins`;
+  const what = more.length === 0 ? `"${only.name}"` : `${outcome.landed.length} plugins`;
   reporter.landed(diagnostics > 0 ? `Compiled ${what} with ${diagnosticsWords(diagnostics)}` : `Compiled ${what}.`);
 }
 

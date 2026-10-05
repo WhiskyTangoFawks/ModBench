@@ -1,4 +1,4 @@
-import type { CompiledPlugin, NotificationEvent, PluginMetadata, PluginRecordTypeCount, RecordSummary } from '../index';
+import type { CompiledPlugin, NotificationEvent, PluginAddress, PluginMetadata, PluginRecordTypeCount, RecordSummary } from '../index';
 import type { InMemoryMEditClient } from '../InMemoryMEditClient';
 
 /** A `PluginMetadata` with every required wire member at its neutral value — a test naming only
@@ -62,10 +62,11 @@ export function listsForThePluginAsked(client: InMemoryMEditClient): InMemoryMEd
   return client;
 }
 
-/** A `CompiledPlugin` with every required wire member at its neutral no-diagnostic
- *  value. */
-export function compiledPluginFixture(overrides: Partial<CompiledPlugin> & Pick<CompiledPlugin, 'plugin'>): CompiledPlugin {
-  return { diagnostics: [], ...overrides };
+/** A `CompiledPlugin` of `plugin` with no diagnostics unless given. */
+export function compiledPluginFixture(
+  { plugin, diagnostics = [] }: { plugin: PluginAddress; diagnostics?: CompiledPlugin['diagnostics'] },
+): CompiledPlugin {
+  return { ...plugin, diagnostics };
 }
 
 /** A `NotificationEvent` with every required wire member at its neutral value. */

@@ -38,7 +38,7 @@ public sealed class AnExternalChangeRefusesNothingTests : IDisposable
         _mod.ChangeOutsideModbench();
         var npc = new RecordAt(_mod.Plugin, _mod.Npc.ToString());
 
-        var result = _mod.DeleteHandler.DeleteRecords([npc]);
+        var result = _mod.DeleteHandler.DeleteRecordsSync([npc]);
 
         Assert.Empty(result.Refused);
         Assert.Equal([npc], result.Landed.Select(landed => landed.Item));

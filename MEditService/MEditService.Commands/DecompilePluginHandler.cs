@@ -20,43 +20,26 @@ public sealed class DecompilePluginHandler
     /// <summary>Throws <see cref="NoLoadOrderException"/> with nothing written when none is held; git
     /// missing refuses the whole selection once, before any write (commands.md, A selection is one
     /// gesture).</summary>
-    public async Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> DecompileAsync(
+    public Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> DecompileAsync(
         IReadOnlyList<PluginAddress> plugins, CancellationToken cancel = default)
     {
         var loadOrder = _loadOrder.Require();
-        try
-        {
-            SourceRepository.EnsureTrackable();
-        }
-        catch (GitUnavailableException ex)
-        {
-            return SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>.WholeSelectionRefused(
-                DecompileRefusal.GitUnavailable, ex.Message);
-        }
-
-        var landed = new List<ItemLanded<PluginAddress, NoOutcome>>();
-        var refused = new List<ItemRefused<PluginAddress, DecompileRefusal>>();
-        foreach (var plugin in plugins.Distinct(PluginAddress.Comparer))
+        return ItemWrite.OverAsync(plugins, PluginAddress.Comparer, DecompileRefusal.GitUnavailable, plugin =>
         {
             cancel.ThrowIfCancellationRequested();
-            if (await DecompileOneAsync(loadOrder, plugin, cancel) is { } refusal)
-            {
-                _logger.LogWarning("Refused to decompile {Plugin} ({Origin}): {Refusal} — {Message}",
-                    plugin.Name, plugin.Origin, refusal.Refusal, refusal.Message);
-                refused.Add(refusal);
-            }
-            else
-            {
-                landed.Add(new(plugin, default));
-            }
-        }
-        return SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>.PerItem(landed, refused);
+            return DecompileOneAsync(loadOrder, plugin, cancel);
+        });
     }
 
-    private async Task<ItemRefused<PluginAddress, DecompileRefusal>?> DecompileOneAsync(
+    private async Task<ItemAnswer<DecompileRefusal, NoOutcome>> DecompileOneAsync(
         LoadOrderSnapshot loadOrder, PluginAddress key, CancellationToken cancel)
     {
-        ItemRefused<PluginAddress, DecompileRefusal> Refuse(DecompileRefusal refusal, string message) => new(key, refusal, message);
+        ItemAnswer<DecompileRefusal, NoOutcome> Refuse(DecompileRefusal refusal, string message)
+        {
+            _logger.LogWarning("Refused to decompile {Plugin} ({Origin}): {Refusal} — {Message}",
+                key.Name, key.Origin, refusal, message);
+            return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(refusal, message);
+        }
 
         if (loadOrder.Plugin(key) is not { } plugin)
         {
@@ -77,7 +60,7 @@ public sealed class DecompilePluginHandler
         try
         {
             repository.ReplaceSourceFrom(key, files, PluginBinaryHash.TrailerFormOfFile(plugin.Path));
-            return null;
+            return ItemAnswer<DecompileRefusal, NoOutcome>.Landed(default);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {

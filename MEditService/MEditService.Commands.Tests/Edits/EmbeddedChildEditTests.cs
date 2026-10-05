@@ -192,7 +192,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
                    + $",\n  \"NotAChild\": {{ \"FormKey\": \"{_fixture.TemporaryRef}\" }}\n}}",
         });
 
-        var result = _fixture.DeleteHandler.DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.TemporaryRef.ToString())]);
+        var result = _fixture.DeleteHandler.DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.TemporaryRef.ToString())]);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(RecordEditRefusal.RecordNotFound, refused.Refusal);

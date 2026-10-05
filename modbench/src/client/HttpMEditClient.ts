@@ -19,7 +19,7 @@ import {
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
-import type { SelectionOutcome } from '../ports/selectionOutcome';
+import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 // 30s is an ordinary HTTP-client default. A slow call and a hung one look the same to the tree,
 // so nothing tries to tell them apart.
@@ -38,7 +38,9 @@ export interface HttpMEditClientDeps {
   reconnectDelayMs?: number;
 }
 
-function selectionOutcome<L, R>(answer: { applied: L[]; refused: { item: R; message: string }[] }): SelectionOutcome<L | R> {
+function selectionOutcome<L, R>(
+  answer: { applied: L[]; refused: { item: R; message: string }[] },
+): { landed: readonly L[]; refused: readonly ItemRefusal<R>[] } {
   return { landed: answer.applied, refused: answer.refused.map((r) => ({ item: r.item, reason: r.message })) };
 }
 
@@ -380,11 +382,7 @@ export class HttpMEditClient implements MEditClient {
         body: { plugins: [...plugins] },
       }),
     });
-    if (isRefused(answer)) return answer;
-    return {
-      landed: answer.applied,
-      refused: answer.refused.map((r) => ({ item: r.item, reason: r.message })),
-    };
+    return isRefused(answer) ? answer : selectionOutcome(answer);
   }
 
   /** A refusal (untracked plugin, a link that would dangle) comes back typed (ADR-0014);

@@ -59,6 +59,17 @@ internal static class WriteEndpointMapping
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = refusal.Refusal.ToString() });
 
+    /// <summary>Compile's refusal of a whole selection, mapped as Decompile's is (ADR-0019).</summary>
+    internal static IResult Refusal(SelectionRefusal<CompileRefusal> refusal) => Results.Problem(
+        detail: refusal.Message,
+        statusCode: refusal.Refusal switch
+        {
+            // The request is sound; the machine lacks git.
+            CompileRefusal.GitUnavailable => 500,
+            _ => 422,
+        },
+        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.Refusal.ToString() });
+
     /// <summary>Create plugin's own refusal, each found before any write: the status says what kind
     /// of problem, the refusal extension says exactly which (ADR-0019).</summary>
     internal static IResult Refusal(PluginCreateRefusal refusal, string? message) => Results.Problem(
@@ -78,6 +89,21 @@ internal static class WriteEndpointMapping
         detail: result.Message,
         statusCode: 400,
         extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
+
+    /// <summary>A gesture over a selection answers 200 with what landed and what was refused, or the
+    /// refusal of the whole selection (ADR-0019).</summary>
+    internal static async Task<IResult> Answered<TItem, TRefusal, TOutcome, TLanded, TRefused>(
+        Task<SelectionResult<TItem, TRefusal, TOutcome>> answer,
+        Func<SelectionRefusal<TRefusal>, IResult> refusal,
+        Func<ItemLanded<TItem, TOutcome>, TLanded> landed,
+        Func<ItemRefused<TItem, TRefusal>, TRefused> refused,
+        Func<IReadOnlyList<TLanded>, IReadOnlyList<TRefused>, object> response)
+    {
+        var result = await answer;
+        return result.SelectionRefusal is { } selectionRefusal
+            ? refusal(selectionRefusal)
+            : Results.Ok(response([.. result.Landed.Select(landed)], [.. result.Refused.Select(refused)]));
+    }
 
     private static IResult RecordEditProblem(RecordEditRefusal refusal, string message, string? path) => Results.Problem(
         detail: message,

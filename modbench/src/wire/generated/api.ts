@@ -559,7 +559,7 @@ export interface components {
             message: string;
         };
         /** @enum {string} */
-        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "NoSource" | "SourceUnreadable" | "SourceDoesNotParse" | "SourceDoesNotRoundTrip" | "FormKeyCollision" | "LightFormIdOutOfRange" | "FormIdUnmappable" | "WriteFailed";
+        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "NoSource" | "SourceUnreadable" | "SourceDoesNotParse" | "SourceDoesNotRoundTrip" | "FormKeyCollision" | "LightFormIdOutOfRange" | "FormIdUnmappable" | "WriteFailed" | "GitUnavailable";
         CompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
         };
@@ -568,7 +568,8 @@ export interface components {
             refused: components["schemas"]["PluginCompileRefusal"][];
         };
         CompiledPlugin: {
-            plugin: components["schemas"]["PluginAddress"];
+            name: string;
+            origin: string;
             diagnostics: components["schemas"]["CompileDiagnostic"][];
         };
         /** @enum {string} */

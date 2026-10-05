@@ -81,7 +81,7 @@ public sealed class CreateRecordHandlerTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var deleted = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
+        var deleted = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
         Assert.Empty(deleted.Refused);
 
         var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AfterTheGap");
@@ -116,7 +116,7 @@ public sealed class CreateRecordHandlerTests
         Assert.NotNull(headOnly.NewFormKey);
         var headOnlyFormKey = headOnly.NewFormKey;
         Commit(mod);
-        Assert.Empty(mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, headOnlyFormKey)]).Refused);
+        Assert.Empty(mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, headOnlyFormKey)]).Refused);
         Assert.Null(mod.Document(headOnlyFormKey));
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AllocatedAfter");

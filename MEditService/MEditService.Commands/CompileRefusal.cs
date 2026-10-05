@@ -40,4 +40,7 @@ public enum CompileRefusal
     /// <summary>The file system refused the write (ADR-0003); the source is untouched, so compiling again
     /// rebuilds it.</summary>
     WriteFailed,
+
+    /// <summary>git is not on PATH (ADR-0007), a cause no plugin of a selection escapes.</summary>
+    GitUnavailable,
 }

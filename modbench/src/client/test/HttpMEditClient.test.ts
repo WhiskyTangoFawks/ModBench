@@ -382,7 +382,7 @@ describe('HttpMEditClient — compiling plugins answers per plugin', () => {
 
   it('sends the whole selection as one call, and reads each compiled plugin and each refusal with its message', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      applied: [{ plugin: first, diagnostics: [diagnostic] }],
+      applied: [{ ...first, diagnostics: [diagnostic] }],
       refused: [{ item: second, refusal: 'PluginNotTracked', message: 'Second.esp is not tracked, so there is no source to compile.' }],
     })));
     const client = makeClient(fetch);
@@ -390,7 +390,7 @@ describe('HttpMEditClient — compiling plugins answers per plugin', () => {
     const outcome = await client.compile([first, second]);
 
     expect(outcome).toEqual({
-      landed: [{ plugin: first, diagnostics: [diagnostic] }],
+      landed: [{ ...first, diagnostics: [diagnostic] }],
       refused: [{ item: second, reason: 'Second.esp is not tracked, so there is no source to compile.' }],
     });
     const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/compile$/.test(req.url));

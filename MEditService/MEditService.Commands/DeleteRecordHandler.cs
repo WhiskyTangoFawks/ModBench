@@ -21,7 +21,7 @@ public sealed class DeleteRecordHandler
     /// <summary>A record named twice is deleted once: its second delete would find nothing and be
     /// refused, for a record that is gone. Throws <see cref="NoLoadOrderException"/> when no load order
     /// is held (ADR-0013).</summary>
-    public SelectionResult<RecordAt, RecordEditRefusal, string?> DeleteRecords(IReadOnlyList<RecordAt> records)
+    public Task<SelectionResult<RecordAt, RecordEditRefusal, string?>> DeleteRecords(IReadOnlyList<RecordAt> records)
     {
         _loadOrder.Require();
         return ItemWrite.Over(

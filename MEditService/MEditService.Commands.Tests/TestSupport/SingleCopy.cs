@@ -9,11 +9,11 @@ internal static class SingleCopy
     internal static RecordEditResult CopyAsOverride(
         this CopyRecordHandler handler, PluginAddress source, string formKey, PluginAddress destination,
         bool replace = false) =>
-        OnlyItem(handler.Copy([new RecordAt(source, formKey)], CopyMode.Override, [destination], replace));
+        OnlyItem(handler.CopySync([new RecordAt(source, formKey)], CopyMode.Override, [destination], replace));
 
     internal static RecordEditResult CopyAsNew(
         this CopyRecordHandler handler, PluginAddress source, string formKey, PluginAddress destination) =>
-        OnlyItem(handler.Copy([new RecordAt(source, formKey)], CopyMode.New, [destination], replace: false));
+        OnlyItem(handler.CopySync([new RecordAt(source, formKey)], CopyMode.New, [destination], replace: false));
 
     private static RecordEditResult OnlyItem(SelectionResult<CopyItem, RecordEditRefusal, string?> result)
     {

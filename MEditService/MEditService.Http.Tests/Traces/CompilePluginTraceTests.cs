@@ -47,7 +47,7 @@ public sealed class CompilePluginTraceTests : HostedTests
         var answer = await Answer(await Client.Compile([(Plugin, Origin)]));
 
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
-        var applied = Assert.Single(answer.GetProperty("applied").EnumerateArray()).GetProperty("plugin");
+        var applied = Assert.Single(answer.GetProperty("applied").EnumerateArray());
         Assert.Equal((Plugin, Origin), (applied.GetProperty("name").GetString(), applied.GetProperty("origin").GetString()));
         Assert.Equal(0.75, await HeightMaxOfTheWrittenBytes(fx, Plugin, Origin, formKey), 3);
     }
@@ -66,7 +66,7 @@ public sealed class CompilePluginTraceTests : HostedTests
 
         Assert.Equal(
             [(Plugin, Origin), (OtherPlugin, OtherOrigin)],
-            answer.GetProperty("applied").EnumerateArray().Select(a => a.GetProperty("plugin"))
+            answer.GetProperty("applied").EnumerateArray()
                 .Select(p => (p.GetProperty("name").GetString(), p.GetProperty("origin").GetString())));
         var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
         Assert.Equal(
@@ -173,7 +173,7 @@ public sealed class CompilePluginTraceTests : HostedTests
 
             Assert.Equal(
                 [OtherPlugin],
-                answer.GetProperty("applied").EnumerateArray().Select(a => a.GetProperty("plugin").GetProperty("name").GetString()));
+                answer.GetProperty("applied").EnumerateArray().Select(a => a.GetProperty("name").GetString()));
             var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
             Assert.Equal(Plugin, refused.GetProperty("item").GetProperty("name").GetString());
             Assert.Equal("WriteFailed", refused.GetProperty("refusal").GetString());
