@@ -7,7 +7,7 @@ import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { modOfRow } from '../drivingLib/modRow';
 import { modOfOrigin } from './modOfOrigin';
-import { pluginAddressKey } from './trackedRepositories';
+import { pluginAddressKey } from './pluginAddress';
 import { trackProgressMessage } from './trackProgress';
 import { PluginNode, type PluginsTreeNode } from './PluginsTreeProvider';
 import {

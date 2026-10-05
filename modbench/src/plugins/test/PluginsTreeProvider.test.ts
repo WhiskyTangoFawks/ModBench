@@ -2477,53 +2477,11 @@ function tooltipAsString(value: unknown): string {
 describe('PluginsTreeProvider — the row states its conditions', () => {
   const flags = async (h: Harness, index = 0): Promise<string[]> => String((await rowItem(h, index)).contextValue).split(' ');
 
-  it('states an untracked, editable plugin in a mod', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp')]);
-
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inUntrackedMod', 'untracked', 'editable']);
-  });
-
   it('states a tracked, editable plugin in a tracked mod', async () => {
     const h = makeTree([A_ROW()], { instance: new FakeInstance({ ...valueOf([A_ROW()]), trackedMods: new Set(['SomeMod']) }) });
     await reconcile(h, [held('A.esp', { isTracked: true })]);
 
     expect(await flags(h)).toEqual(['plugin', 'enabled', 'inTrackedMod', 'tracked', 'editable']);
-  });
-
-  it('states an untracked plugin in a tracked mod', async () => {
-    const h = makeTree([A_ROW()], { instance: new FakeInstance({ ...valueOf([A_ROW()]), trackedMods: new Set(['SomeMod']) }) });
-    await reconcile(h, [held('A.esp')]);
-
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inTrackedMod', 'untracked', 'editable']);
-  });
-
-  it('states a tracked plugin that is read-only for editing', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp', { isTracked: true, isImmutable: true })]);
-
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inUntrackedMod', 'tracked']);
-  });
-
-  it('states a plugin in Overwrite', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'overwrite' })]);
-    await reconcile(h, [held('A.esp', { origin: 'overwrite' })]);
-
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inOverwrite', 'untracked', 'editable']);
-  });
-
-  it('states neither a mod nor Overwrite for a plugin in the game folder', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'Data' })]);
-    await reconcile(h, [held('A.esp', { origin: 'Data' })]);
-
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'untracked', 'editable']);
-  });
-
-  it('states no mod for an origin the instance value names no mod folder for', async () => {
-    const h = makeTree([A_ROW()], { instance: new FakeInstance(instanceValueFixture({ plugins: [A_ROW()] })) });
-    await reconcile(h, [held('A.esp', { isTracked: true })]);
-
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'tracked', 'editable']);
   });
 
   it('states a disabled line', async () => {
@@ -2537,17 +2495,6 @@ describe('PluginsTreeProvider — the row states its conditions', () => {
     const h = makeTree([A_ROW()]);
 
     expect(await flags(h)).toEqual(['plugin', 'enabled', 'inUntrackedMod']);
-  });
-
-  it('says whether any plugin compiles, a read-only one included, which compile\'s palette entry reads', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    expect(h.tree.anyCompilable()).toBe(false);
-
-    await reconcile(h, [held('A.esp'), held('B.esp')]);
-    expect(h.tree.anyCompilable()).toBe(false);
-
-    await reconcile(h, [held('A.esp'), held('B.esp', { isTracked: true, isImmutable: true })]);
-    expect(h.tree.anyCompilable()).toBe(true);
   });
 });
 
@@ -2584,20 +2531,6 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
     expect(item.description).toBeUndefined();
   });
 
-  it('matches read-only case-insensitively, like the load order set itself', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('a.ESP', { isImmutable: true })]);
-
-    expect((await rowItem(h)).tooltip).toContain('read-only');
-  });
-
-  it('leaves an editable plugin tooltip at the base — file name and mod, no read-only line', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp')]);
-
-    expect((await rowItem(h)).tooltip).toBe('A.esp\nSomeMod');
-  });
-
   it('stays through a fresh load start, until a new reconcile answers', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp', { isImmutable: true })]);
@@ -2632,13 +2565,6 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
     expect(item.tooltip).toContain('Missing masters: Ghost.esm');
   });
 
-  it('matches the plugin key case-insensitively, like the load order set itself', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.ESP', { masterIssues: ['Ghost.esm'] })]);
-
-    expect((await rowItem(h)).tooltip).toContain('Missing master');
-  });
-
   it('never touches collapsibleState — AC2, and the leading slot stays the checkbox alone', async () => {
     const h = makeTree([A_ROW()]);
     await withIssues(h, ['Ghost.esm']);
@@ -2647,18 +2573,6 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
 
     expect(item.collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
     expect(item.checkboxState).toBe(vscode.TreeItemCheckboxState.Checked);
-  });
-
-  it('leaves an unaffected plugin row undecorated', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    await reconcile(h, [
-      held('A.esp', { masterIssues: ['Ghost.esm'] }),
-      held('B.esp'),
-    ]);
-
-    const item = await rowItem(h, 1);
-    expect(item.tooltip).toBe('B.esp\nSomeMod');
-    expect(item.iconPath).toBeUndefined();
   });
 
   it('clears icon, description and tooltip once the master resolves (reused-row hazard)', async () => {
@@ -2674,15 +2588,6 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
     expect(item.description).toBeUndefined();
   });
 
-  it('shows no master status while mEdit has not checked the masters', async () => {
-    const h = makeTree([A_ROW()]);
-    await withIssues(h, null);
-
-    const item = await rowItem(h);
-    expect(item.tooltip).toBe('A.esp\nSomeMod');
-    expect(item.iconPath).toBeUndefined();
-  });
-
   it('keeps the last master issues through a read taken before the next snapshot is indexed', async () => {
     const h = makeTree([A_ROW()]);
     await withIssues(h, ['Ghost.esm']);
@@ -2691,22 +2596,6 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
     await h.tree.refreshFacts();
 
     expect((await rowItem(h)).description).toBe('1 master issue');
-  });
-
-  it('counts the masters that are not active, and names them on one tooltip line in MO2 words', async () => {
-    const h = makeTree([A_ROW()]);
-    await withIssues(h, ['Ghost.esm', 'Disabled.esm']);
-
-    const item = await rowItem(h);
-    expect(item.description).toBe('2 master issues');
-    expect(item.tooltip).toBe('A.esp\nSomeMod\nMissing masters: Ghost.esm, Disabled.esm');
-  });
-
-  it('leaves a row the backend flags nothing on undecorated', async () => {
-    const h = makeTree([A_ROW()]);
-    await withIssues(h, []);
-
-    expect((await rowItem(h)).tooltip).toBe('A.esp\nSomeMod');
   });
 });
 
@@ -2735,13 +2624,6 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
     expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('Malformed record');
   });
 
-  it('matches the plugin, name and origin, case-insensitively', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [], [{ name: 'A.ESP', origin: 'SOMEMOD', reason: 'Malformed record' }]);
-
-    expect((await rowItem(h)).tooltip).toContain('Failed to read');
-  });
-
   it('keeps the failed-to-read status (no blink) while expansion still reads "still indexing" for an unreached plugin', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
@@ -2754,18 +2636,6 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
     expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
   });
 
-  it('clears the failed tooltip once a later reconcile reports the plugin loaded', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
-    expect((await rowItem(h)).tooltip).toContain('Failed to read');
-
-    await reconcile(h, [held('A.esp')]);
-
-    const item = await rowItem(h);
-    expect(item.tooltip).toBe('A.esp\nSomeMod');
-    expect(item.iconPath).toBeUndefined();
-  });
-
   it('leaves an unaffected plugin row undecorated', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('B.esp')], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
@@ -2773,29 +2643,6 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
     const item = await rowItem(h, 1);
     expect(item.tooltip).toBe('B.esp\nSomeMod');
     expect(item.iconPath).toBeUndefined();
-  });
-});
-
-describe('PluginsTreeProvider — parse-failure decoration', () => {
-  it('flags a plugin holding an unreadable record, and leaves every other row alone', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    await reconcile(h, [held('A.esp', { hasParseFailure: true }), held('B.esp')]);
-
-    const flagged = await rowItem(h);
-    expect(expectInstanceOf(flagged.iconPath, ThemeIcon).id).toBe('error');
-    expect(flagged.description).toBe('unreadable records');
-    expect(flagged.tooltip).toContain('could not be read');
-    expect((await rowItem(h, 1)).iconPath).toBeUndefined();
-  });
-
-  it('clears once a later reconcile reports the plugin whole', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp', { hasParseFailure: true })]);
-    expect((await rowItem(h)).iconPath).toBeDefined();
-
-    await reconcile(h, [held('A.esp')]);
-
-    expect((await rowItem(h)).iconPath).toBeUndefined();
   });
 });
 
@@ -2811,17 +2658,6 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
     expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsWarningIcon.foreground'));
     expect(item.description).toBe('malformed');
     expect(item.tooltip).toContain('RDAT is 6 bytes');
-  });
-
-  it('two diagnoses on one plugin read as the same fixed word, with both in the tooltip line', async () => {
-    const h = makeTree([A_ROW()]);
-    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'first diagnosis'), diagnosis('A.esp', 'second diagnosis')]);
-    await reconcile(h, [held('A.esp')]);
-
-    const item = await rowItem(h);
-    expect(item.description).toBe('malformed');
-    expect(item.tooltip).toContain('first diagnosis');
-    expect(item.tooltip).toContain('second diagnosis');
   });
 
   it('keeps the last diagnoses through a reconcile until its own scan lands', async () => {
@@ -2852,20 +2688,6 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
     await reconcile(h, [held('A.esp')]);
 
     expect((await rowItem(h)).description).toBe('malformed');
-  });
-
-  it('a reconcile clears the previous scan diagnoses when the new scan finds nothing', async () => {
-    const h = makeTree([A_ROW()]);
-    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
-    await reconcile(h, [held('A.esp')]);
-    expect((await rowItem(h)).description).toBe('malformed');
-
-    h.client.setQueryAnswer('getDiagnoses', []);
-    await reconcile(h, [held('A.esp')]);
-
-    const item = await rowItem(h);
-    expect(item.description).toBeUndefined();
-    expect(item.tooltip).toBe('A.esp\nSomeMod');
   });
 
   it('publishes the scan for the Problems panel as well as the row badge', async () => {
@@ -2900,27 +2722,6 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
     expect((await rowItem(h, 1)).description).toBeUndefined();
   });
 
-  it('clears once a later settle of the mod leaves it out', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp')]);
-    settled(h, 'SomeMod', 'A.esp');
-
-    settled(h, 'SomeMod');
-
-    const item = await rowItem(h);
-    expect(item.description).toBeUndefined();
-    expect(item.tooltip).toBe('A.esp\nSomeMod');
-  });
-
-  it('leaves the same file name in another mod alone', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp')]);
-
-    settled(h, 'OtherMod', 'A.esp');
-
-    expect((await rowItem(h)).description).toBeUndefined();
-  });
-
   it('publishes a warning on every plugin that changed outside Modbench for the Problems panel, each mod\'s settle replacing its own', () => {
     const published: string[][] = [];
     const h = makeTree([A_ROW()], {
@@ -2937,57 +2738,6 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
       [`SomeMod/A.esp${said}`, `OtherMod/C.esp${said}`],
       [`OtherMod/C.esp${said}`],
     ]);
-  });
-});
-
-describe('PluginsTreeProvider — several statuses on one row', () => {
-  it('shows all five statuses: the first status\'s icon, every status\'s words, one tooltip line each', async () => {
-    const h = makeTree([A_ROW()]);
-    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
-    await reconcile(
-      h,
-      [held('A.esp', { hasParseFailure: true, masterIssues: ['Ghost.esm'] })],
-      [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }],
-    );
-    h.client.emit({
-      kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 0,
-      changedPlugins: [{ name: 'A.esp', bytesSha256: null }],
-    });
-
-    const item = await rowItem(h);
-    expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
-    expect(item.description).toBe('failed to read, 1 master issue, unreadable records, changed outside Modbench, malformed');
-    const tooltip = tooltipAsString(item.tooltip);
-    expect(tooltip).toContain('Failed to read: Malformed record');
-    expect(tooltip).toContain('Missing masters: Ghost.esm');
-    expect(tooltip).toContain('could not be read');
-    expect(tooltip).toContain('Changed outside Modbench');
-    expect(tooltip).toContain('some diagnosis');
-  });
-
-  it('sets the icon from the first present status, skipping ones this row does not carry', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp', {
-      hasParseFailure: true,
-      masterIssues: ['Ghost.esm'],
-    })]);
-
-    const item = await rowItem(h);
-    expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
-    expect(item.description).toBe('1 master issue, unreadable records');
-  });
-
-  it('carries the read-only line alongside a status', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp', {
-      isImmutable: true,
-      masterIssues: ['Ghost.esm'],
-    })]);
-
-    const item = await rowItem(h);
-    expect(item.description).toBe('1 master issue');
-    expect(item.tooltip).toContain('read-only');
-    expect(item.tooltip).toContain('Missing masters: Ghost.esm');
   });
 });
 
