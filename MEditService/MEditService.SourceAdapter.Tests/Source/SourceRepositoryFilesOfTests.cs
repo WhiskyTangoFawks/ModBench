@@ -39,7 +39,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
     private SourceRepository Repository =>
-        SourceRepository.Open(_modFolder, GameRelease.Fallout4)
+        SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private string NpcRelativePath =>

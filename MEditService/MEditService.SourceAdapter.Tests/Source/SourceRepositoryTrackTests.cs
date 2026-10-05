@@ -64,7 +64,7 @@ public sealed class SourceRepositoryTrackTests : IDisposable
                 (SourceOf("Second.esp"), new DecompiledPlugin("Second.esp", "BBBB")),
             ]);
 
-        var repository = SourceRepository.Over(_modFolder, GameRelease.Fallout4);
+        var repository = SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4);
         Assert.Equal(["AAAA"], repository.LastWrittenBinarySha256s(new PluginAddress("First.esp", ModName)));
         Assert.Equal(["BBBB"], repository.LastWrittenBinarySha256s(new PluginAddress("Second.esp", ModName)));
     }

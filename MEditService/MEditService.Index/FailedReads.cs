@@ -55,10 +55,10 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
     private FailedRead? ReadStateOf(RegisteredPlugin plugin)
     {
         var binary = index.FileContentHash(plugin.Path);
-        if (Projector.TreeFolderOf(plugin.Key, plugin.Provider) is not { } modFolder)
+        if (Projector.TreeModOf(plugin.Key, plugin.Provider) is not { } mod)
             return binary is null ? null : new FailedRead(binary, null);
 
-        if (!Projector.TryTreeStamps(modFolder, index.Release, plugin.Key, out var stamps, out var ambiguity))
+        if (!Projector.TryTreeStamps(mod, index.Release, plugin.Key, out var stamps, out var ambiguity))
             return new FailedRead(binary, null, ambiguity);
         return stamps.Unreadable.Count == 0 ? new FailedRead(binary, stamps) : null;
     }

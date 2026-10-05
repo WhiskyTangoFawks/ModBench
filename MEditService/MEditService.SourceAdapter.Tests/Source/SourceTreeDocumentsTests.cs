@@ -79,7 +79,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
         _codec.SerializeToBytes(record, Release);
 
     private SourceRepository Repository =>
-        SourceRepository.Open(_modFolder, Release)
+        SourceRepository.Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private Dictionary<string, PluginDocument> Documents()

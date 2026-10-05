@@ -74,7 +74,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
         _codec.SerializeToBytes(record, Release);
 
     private SourceRepository Repository =>
-        SourceRepository.Open(_modFolder, Release) ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+        SourceRepository.Open(TestMod.In(_modFolder), Release) ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private static RecordIdentity Identity(IMajorRecordGetter record, string recordType) =>
         new(record.FormKey.ToString(), recordType, record.EditorID);

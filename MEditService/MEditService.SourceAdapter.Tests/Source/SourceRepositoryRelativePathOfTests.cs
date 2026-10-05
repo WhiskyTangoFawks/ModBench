@@ -23,7 +23,7 @@ public sealed class SourceRepositoryRelativePathOfTests : IDisposable
         var header = new TreeFile(HeaderPath, "{\"MasterReferences\": []}"u8.ToArray());
         PluginBaselines.Track(
             _modFolder, [header]);
-        return SourceRepository.Open(_modFolder, GameRelease.Fallout4)
+        return SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
 
