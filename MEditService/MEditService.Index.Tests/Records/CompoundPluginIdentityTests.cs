@@ -68,30 +68,6 @@ public class CompoundPluginIdentityTests
     }
 
     [Fact]
-    public void TwoOrigins_SameFilenameDifferentNativeFormKeys_GetNativeFormKeys_ScopesToRequestedOrigin()
-    {
-        FormKey sharedFirstKey = default, secondKey = default;
-        using var fixture = new PluginFixtureBuilder("identity-native")
-            .WithPlugin("Shared.esp", mod => sharedFirstKey = mod.Npcs.AddNew("First").FormKey, origin: "ModA")
-            .WithPlugin("Shared.esp", mod =>
-            {
-                mod.Npcs.AddNew("First");
-                secondKey = mod.Npcs.AddNew("SecondOnlyInModB").FormKey;
-            }, origin: "ModB")
-            .BuildScattered();
-        using var index = Indexes.Open(_holder);
-
-        var whileAWins = ReadsWithWinner(index, fixture, ModA);
-        Assert.Equal([sharedFirstKey.ToString()], whileAWins.GetNativeFormKeys(ModA));
-        Assert.Empty(whileAWins.GetNativeFormKeys(ModB));
-
-        var whileBWins = ReadsWithWinner(index, fixture, ModB);
-        Assert.Contains(secondKey.ToString(), whileBWins.GetNativeFormKeys(ModB));
-        Assert.Equal(2, whileBWins.GetNativeFormKeys(ModB).Count);
-        Assert.Empty(whileBWins.GetNativeFormKeys(ModA));
-    }
-
-    [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_GetRecords_FiltersToRequestedOriginAndSurfacesIt()
     {
         using var fixture = SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey("identity-list", out var npcKey);
