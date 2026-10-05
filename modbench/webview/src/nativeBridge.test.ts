@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { vscode } from './vscode';
-import { focusedCellContext, pickFormKey, requestRecordLoad } from './nativeBridge';
+import { pickFormKey, requestRecordLoad } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 
 function postedRequestId(): string {
@@ -113,31 +113,5 @@ describe('requestRecordLoad, whose request shape and reply unwrapping are its ow
     }));
 
     expect(await resultPromise).toEqual({ ok: false, error: 'HTTP 404' });
-  });
-});
-
-describe('focusedCellContext', () => {
-  function gridWith(cell: string): HTMLElement {
-    const root = document.createElement('div');
-    root.innerHTML = `<table><tbody><tr><td data-vscode-context='{"webviewSection":"stringValue"}'>x</td>${cell}</tr></tbody></table>`;
-    return root;
-  }
-
-  it('carries the text the focused cell copies, so the palette can copy it without the webview', () => {
-    const root = gridWith('<td data-focused-cell data-copy-text="Reference">Reference</td>');
-
-    expect(focusedCellContext(root)).toEqual({ copyText: 'Reference' });
-  });
-
-  it('carries the empty text of a focused cell that reads empty', () => {
-    const root = gridWith('<td data-focused-cell data-copy-text="">&nbsp;</td>');
-
-    expect(focusedCellContext(root)).toEqual({ copyText: '' });
-  });
-
-  it('carries no copy text for a focused cell that copies nothing', () => {
-    const root = gridWith('<td data-focused-cell>{…}</td>');
-
-    expect(focusedCellContext(root)).toEqual({});
   });
 });

@@ -7,10 +7,9 @@ export interface GridKeyCommandDeps {
   tellFocusedPanel: (message: ExtensionToWebview) => void;
 }
 
+// The panel builds a cell's sections and their members together, so a section names its shape.
 function isEditableCell(cell: FocusedCellContext | undefined): cell is EditableCellContext {
-  return cell !== undefined && hasSection(cell, 'editableCell')
-    && ['formKey', 'plugin', 'origin'].every(name => typeof Reflect.get(cell, name) === 'string')
-    && Array.isArray(Reflect.get(cell, 'path')) && typeof Reflect.get(cell, 'holdsValue') === 'boolean';
+  return hasSection(cell, 'editableCell');
 }
 
 type Firing = [command: string, ...args: unknown[]];

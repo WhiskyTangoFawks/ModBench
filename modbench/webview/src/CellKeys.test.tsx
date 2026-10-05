@@ -152,6 +152,17 @@ describe('RecordPanel — the keys\' commands reaching the focused cell', () => 
     expect(screen.getByRole('spinbutton')).toHaveValue(7);
   });
 
+  it('F2\'s in an open editor keeps the text typed there', async () => {
+    await focusCell('Level', 2);
+    tellPanel({ type: EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR });
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '12' } });
+
+    tellPanel({ type: EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR });
+
+    expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
+    expect(screen.getByRole('spinbutton')).toHaveValue(12);
+  });
+
   it('F2\'s opens nothing in a column that cannot be edited', async () => {
     await focusCell('Level', 1);
     tellPanel({ type: EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR });

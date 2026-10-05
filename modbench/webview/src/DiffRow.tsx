@@ -4,18 +4,16 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
-import { copiedText, modelValue, pastedValue, readsAsFlags } from './modelValue';
+import { readsAsFlags } from './modelValue';
 import { ExpandArrow } from './ExpandArrow';
 import { collapsedReading, versionControlInfo1 } from './presentation';
 import {
   baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
 } from './gridStyles';
-import {
-  arrayElementContext, arrayParentContext, editableCellContext, referenceContext, defaultOf, getAtPath, isArrayElementHop,
-  columnHasNode, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
-  type Column, type PathSegment,
-} from './recordUtils';
-import type { ColumnKey, ConflictThis, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
+import { defaultOf, type Column } from './recordUtils';
+import type { ColumnKey, ConflictThis, FieldMetadata, FormKeyResolution, PathHop } from './types';
+import type { FieldRow } from './recordRows';
+import type { FocusedCell } from './gridNavigation';
 import { LABEL_COLUMN } from './columnKey';
 import type { ArrayParentContext } from '../../src/wire/messages';
 import type { CellDrag } from './cellDrag';
@@ -88,25 +86,6 @@ function renderCell(
   );
 }
 
-// A row's coordinates at arbitrary nesting depth — a script property's own struct data needs more
-// than any fixed set of levels. `rootField` is the record's own member; `path` the row's hops
-// below it.
-export interface RowContext {
-  path: PathSegment[];
-  rootField: string;
-  // True ancestor-hop count, tracked independently of `path` so indentation stays a property of
-  // where a row sits in the tree rather than of how far into a value it addresses.
-  depth: number;
-}
-
-// The one focused cell panel-wide (editor.md, The focused cell). `plugin` is the column's compound
-// identity (ADR-0012), so two columns sharing a filename never both read as focused. `null` is the
-// label column.
-export interface FocusedCell {
-  rowKey: string;
-  plugin: ColumnKey | null;
-}
-
 function masterOrOnlyOne(
   value: unknown, key: ColumnKey, columns: readonly Column[],
 ): ConflictThis | undefined {
@@ -121,73 +100,28 @@ function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: 
 // One step of label indentation per ancestor hop, so a row's indent reads as its real depth.
 const INDENT_PER_LEVEL = 24;
 
-const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
-
 interface DiffRowProps {
-  diff: FieldDiff;
-  // This row's own schema leaf. The panel resolves it at every depth, so the row never looks one
-  // up and can never render against a shape the panel did not choose.
-  meta: FieldMetadata;
+  row: FieldRow;
   columns: Column[];
   // Each column's look, as the panel gives its header too, so the header and every cell under it
   // can never disagree.
   columnStyle: (column: ColumnKey | typeof LABEL_COLUMN) => React.CSSProperties;
   collapsedColumns: Set<ColumnKey>;
-  // "EditorID [FormKey]", the composite the panel's own title uses — the extended editor's temp
-  // file is filed under it, and only the panel knows it.
-  recordLabel: string;
-  context: RowContext;
   isExpanded?: boolean;
   onToggle?: () => void;
-  // onFocusCell takes rowKey explicitly rather than closing over it here, so RecordPanel stays
-  // the one place that knows how a click turns into a FocusedCell.
-  rowKey: string;
-  // The row of the array this row is an element of, which an element dragged from here is added to.
-  parentRowKey: string | null;
   focusedCell: FocusedCell | null;
   onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
-  // The columns whose cells can be written — mutable plugin, in the load order, tracked. Computed
-  // once for the whole grid so one definition of "writable" reaches every row.
-  editableColumns: ReadonlySet<ColumnKey>;
-  // Takes the leaf value alone — the row builder owns the path the envelope carries.
-  onEditCell?: (plugin: ColumnKey, value: unknown) => void;
-  onAddElement?: (context: ArrayParentContext, value: unknown) => void;
-  // Per column, whether this row is the last element its array holds there. Absent for a row that
-  // is no array's element.
-  isLastElement?: (column: ColumnKey) => boolean;
-  keyMembers?: readonly string[] | null;
-  // Whether this column holds the object this row is a member of. A member of nothing reads as
-  // nothing; a member its owner omits reads as its default (ADR-0005). Absent means every owner is
-  // present.
-  ownerPresent?: (column: ColumnKey) => boolean;
-  // Per column, the shape of a member whose type varies by the owner's leaf: the variant that
-  // column's own leaf names. Absent where the member has one shape.
-  cellMetas?: Partial<Record<string, FieldMetadata>>;
+  onEdit: (plugin: ColumnKey, path: PathHop[], value: unknown) => void;
+  onAddElement: (context: ArrayParentContext, value: unknown) => void;
 }
 
 export function DiffRow({
-  diff, meta, columns, columnStyle,
-  collapsedColumns,
-  recordLabel, context, isExpanded, onToggle,
-  rowKey, parentRowKey, focusedCell, onFocusCell, editableColumns, onEditCell,
-  onAddElement, isLastElement, keyMembers, ownerPresent, cellMetas,
+  row, columns, columnStyle, collapsedColumns, isExpanded, onToggle, focusedCell, onFocusCell, onEdit, onAddElement,
 }: Readonly<DiffRowProps>) {
+  const { diff, meta, key: rowKey, isLastElement, keyMembers } = row;
   // The children the diff node itself carries — the row and the panel can never disagree about
   // whether this node has any.
   const hasChildren = (diff.children?.length ?? 0) > 0;
-
-  // Every row in
-  // one subtree (root, struct-child, array-element, and any deeper hop) shares the
-  // same wire path/overlay-fields key, so RecordPanel hands it down unchanged at every depth rather
-  // than DiffRow re-deriving "top-level or not."
-  const rootField = context.rootField;
-  // What the label column shows for this row, reused as the extended-editor tab's own title.
-  const label = meta.displayLabel ?? diff.fieldName;
-  // Which array gestures this row offers — its own array's row (Add) or one of its element rows
-  // (Remove and Move).
-  const isArrayParentRow = offersArrayAdd(meta);
-  const lastPathSegment = context.path[context.path.length - 1];
-  const isArrayElementRow = isArrayElementHop(lastPathSegment);
   const isRowFocused = focusedCell?.rowKey === rowKey;
   // This row paints its own node's conflict state, not a record-wide value. An expanded row with
   // children defers to its children's tints — painting both would duplicate the signal — and
@@ -195,116 +129,62 @@ export function DiffRow({
   const rowBg = hasChildren && isExpanded ? undefined : rowBackground(diff.conflictAll);
 
   // A flags row is collapsible like a struct row, though its "children" are the checkbox lines
-  // inside the cell, not sub-rows. It starts collapsed, sharing struct rows' default exactly.
+  // inside the cell, not sub-rows.
   const isFlagsRow = readsAsFlags(meta);
   const rowExpanded = !!isExpanded;
-  // A row no column carries a value for holds nothing but its children, so it is present in every
-  // column — nothing there is absent relative to anything, and `hasElement` below stays true
-  // throughout.
-  const rowIsStructural = Object.values(diff.values).every(v => v == null);
 
   return (
     <tr style={{ backgroundColor: rowBg, ...(isRowFocused ? focusedRowStyle : undefined) }}>
-      {/* editor.md, Rows, story 4. For a row with no children the flip lands in expandedStructs,
-          an entry nothing reads. */}
+      {/* editor.md, Rows, story 4. */}
       <DiskCell
-        style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
+        style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: row.depth * INDENT_PER_LEVEL || undefined }}
         isFocused={isCellFocused(focusedCell, rowKey, null)}
         onFocusCell={() => onFocusCell(rowKey, null)}
         onDoubleClick={onToggle}
-        copyText={label}
+        context={row.label.context}
       >
         {(hasChildren || isFlagsRow) && (
           <ExpandArrow expanded={rowExpanded} onToggle={onToggle} />
         )}
         {/* The schema's own label when the field's name is a wire name rather than a readable
             one (a union's MutagenObjectType is "Kind"). */}
-        {label}
+        {row.name}
       </DiskCell>
       {columns.map(col => {
         const { key, override } = col;
         // No `userSelect: 'text'` (editor.md, The focused cell): the cell is `draggable` at rest,
         // and `draggable` consumes the mousedown that would start a selection.
 
-        // Every per-column lookup below is keyed by `key`, this column's ColumnKey (ADR-0012), as
-        // the backend keys its own dictionaries.
-
         // mEdit sends no state for the master's own cell, nor for any cell of a lone copy.
         const cellState = diff.cellStates[key] ?? masterOrOnlyOne(diff.values[key], key, columns);
         const cellStyle = {
           ...baseCell, ...getCellStyle(cellState), ...columnStyle(key),
         };
-        if (collapsedColumns.has(key)) {
+        const cell = row.cells.get(key);
+        if (collapsedColumns.has(key) || !cell) {
           return <td key={key} style={cellStyle} />;
         }
-        const rootValue = rootFieldOf(override, rootField);
+        const { meta: cellMeta, holds, shown, editPath, dropAddsTo } = cell;
         // The wire carries one per column at every depth, so this row's error is its own node's.
         const checkError = diff.checkErrors?.[key];
         const isFocused = isCellFocused(focusedCell, rowKey, key);
-        const cellMeta = cellMetas?.[key] ?? meta;
-        // Whether this column has something on this row: this row's own node, and the object it
-        // is a member of. A leaf its owner omits is the default, so it is there.
-        const hasElement = rowIsStructural
-          || ((ownerPresent?.(key) ?? true) && columnHasNode(cellMeta, diff.values[key]));
-        const shown = hasElement ? diff.values[key] ?? defaultOf(cellMeta) : undefined;
-        // The string Ctrl+C copies for this cell (editor-fields.md, By type), computed once so the
-        // struct/array-summary branch and the leaf branch below hand DiskCell the same value.
-        const copyText = copiedText(shown, cellMeta, diff.resolutions?.[key]);
         const cellTitle = [cellState && conflictStateName(cellState), cellMeta.readOnlyReason]
           .filter(Boolean).join('\n') || undefined;
-        // The host that invokes these commands holds no document, so it is handed the envelope's
-        // own path, as this column addresses it.
-        const hops = wirePath(rootField, context.path, key);
-        // Under an element this column does not hold, there is nothing to write to.
-        const writable = editableColumns.has(key) && cellMeta.readOnlyReason == null && hops !== undefined;
-        // Array ops are offered only on a writable cell.
-        const arrayEditable = !!onAddElement && writable && (isArrayParentRow || isArrayElementRow);
-        // A string cell's right-click `readOnly` is this boolean negated, so the menu and the
-        // inline-editor gate can never disagree.
-        const cellEditable = !!onEditCell && writable;
-        // `hops` ends in the element's own `index` hop, and carries every hop above it rather than
-        // just that one.
-        const elementContext = hops && arrayEditable && isArrayElementRow
-          ? arrayElementContext(
-              col.override.formKey, col.override.plugin, col.override.origin, hops,
-              arrayLength(getAtPath(rootValue?.value, hops.slice(1, -1))),
-              lastPathSegment?.kind === 'element' && lastPathSegment.keyed)
-          : undefined;
-        const paste = cellEditable ? (text: string) => onEditCell(key, pastedValue(text, cellMeta, shown)) : undefined;
-        // `hops` addresses the array itself here — this row *is* the array.
-        const parentContext = hops && arrayEditable && isArrayParentRow
-          ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
-          : undefined;
+        const edit = editPath && ((value: unknown) => onEdit(key, editPath, value));
         const drag: CellDrag | undefined = diff.values[key] != null
-          ? { row: rowKey, arrayRow: isArrayElementRow ? parentRowKey : null, value: diff.values[key] }
+          ? { row: rowKey, arrayRow: row.elementOf, value: diff.values[key] }
           : undefined;
         const landing = (dragged: CellDrag): (() => void) | undefined => {
           if (dragged.row === rowKey) {
-            return cellEditable && JSON.stringify(dragged.value) !== JSON.stringify(shown)
-              ? () => onEditCell(key, dragged.value)
+            return edit && JSON.stringify(dragged.value) !== JSON.stringify(shown)
+              ? () => edit(dragged.value)
               : undefined;
           }
-          return parentContext && dragged.arrayRow === rowKey
-            ? () => onAddElement?.(parentContext, dragged.value)
+          return dropAddsTo && dragged.arrayRow === rowKey
+            ? () => onAddElement(dropAddsTo, dragged.value)
             : undefined;
         };
         const resolution = diff.resolutions?.[key];
-        const contexts = [
-          parentContext,
-          elementContext,
-          hops && cellEditable
-            ? editableCellContext(col.override.formKey, col.override.plugin, col.override.origin, hops, diff.values[key] != null)
-            : undefined,
-          hops && meta.type === 'string'
-            ? stringValueContext(
-                col.override.formKey, col.override.plugin, col.override.origin, recordLabel, label,
-                modelValue(diff.values[key], meta), !cellEditable, hops,
-              )
-            : undefined,
-          typeof shown === 'string' && cellMeta.type === 'formKey' && resolution && resolution.state !== 'Unresolved'
-            ? referenceContext(shown)
-            : undefined,
-        ];
         if (hasChildren) {
           const reading = isExpanded ? undefined : collapsedReading(diff, cellMeta, key, isLastElement?.(key), keyMembers);
           return (
@@ -314,13 +194,11 @@ export function DiffRow({
               title={cellTitle}
               isFocused={isFocused}
               onFocusCell={() => onFocusCell(rowKey, key)}
-              copyText={copyText}
-              paste={paste}
+              context={cell.context}
               drag={drag}
               landing={landing}
-              contexts={contexts}
             >
-              {reading && hasElement && (
+              {reading && holds && (
                 <span style={{ opacity: reading.isPlaceholder ? 0.5 : undefined, display: 'inline-flex', alignItems: 'center' }}>
                   {reading.text}<CheckErrorIcon checkError={checkError} />
                 </span>
@@ -330,23 +208,21 @@ export function DiffRow({
         }
         return (
           <DiskCell
-            paste={paste}
             drag={drag}
             landing={landing}
-            contexts={contexts}
+            context={cell.context}
             key={key}
             style={cellStyle}
             title={cellTitle}
             isFocused={isFocused}
             onFocusCell={() => onFocusCell(rowKey, key)}
-            copyText={copyText}
           >
             {/* "[3]"/"{…}" say a container is present and merely unexpanded, and a leaf reads its
                 default, so nothing at all stands in for a column that has no such thing. */}
-            {hasElement && (
+            {holds && (
               renderCell(shown ?? defaultOf(cellMeta), cellMeta, {
                 checkError, resolution,
-                onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
+                onCommit: edit,
                 rowCollapsed: isFlagsRow && !rowExpanded,
                 reading: cellMeta.isVersionControlInfo1 ? versionControlInfo1(shown, override) : undefined,
               })

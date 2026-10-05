@@ -2175,7 +2175,7 @@ describe('RecordPanel — the Record Header', () => {
     await waitFor(() => screen.getAllByText('A Name'));
     const cell = required(stampCells(container)[0], 'the Version Control Info 1 cell');
 
-    expect(cell).toHaveAttribute('data-copy-text', '33890154');
+    expect(parseJsonRecord(required(cell.getAttribute('data-vscode-context'), 'its context')).copyText).toBe('33890154');
     fireEvent.doubleClick(within(cell).getByText('2015-11-10 User: 5 Index: 2'));
     expect(required(cell.querySelector('input'), 'the cell\'s input')).toHaveValue(33890154);
   });

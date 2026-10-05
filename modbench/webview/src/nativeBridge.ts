@@ -86,23 +86,3 @@ export function addElement(context: ArrayParentContext, value: unknown): void {
 export function focusCell(context: Record<string, unknown> | null, entered: boolean): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context, entered });
 }
-
-/** The focused cell's `data-vscode-context`, merged over its ancestors' as VS Code merges them for
- *  a right-click, the nearest winning, and the text its Ctrl+C copies. `null` while no cell is
- *  focused. */
-export function focusedCellContext(root: ParentNode): Record<string, unknown> | null {
-  const cell = root.querySelector('[data-focused-cell]');
-  if (!cell) return null;
-  const chain: Element[] = [];
-  for (let e: Element | null = cell; e; e = e.parentElement) chain.unshift(e);
-  const merged: Record<string, unknown> = {};
-  for (const e of chain) {
-    const raw = e.getAttribute('data-vscode-context');
-    if (!raw) continue;
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed === 'object' && parsed !== null) Object.assign(merged, parsed);
-  }
-  const copyText = cell.getAttribute('data-copy-text');
-  if (copyText !== null) merged.copyText = copyText;
-  return merged;
-}

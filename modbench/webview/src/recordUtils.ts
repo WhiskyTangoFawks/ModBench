@@ -73,10 +73,23 @@ export function headerCellContext(
   return { webviewSection: 'recordHeader', formKey, plugin, origin, editable, preventDefaultContextMenuItems: true };
 }
 
+/** A cell's `data-vscode-context`: what its right-click hands a command, and what the host's keys
+ *  read while it is focused. */
+export type CellContext = { webviewSection: string; copyText?: string } & Record<string, unknown>;
+
 // Every cell suppresses VS Code's own Cut, Copy and Paste, which act on the text on the screen, and
-// offers copy value the text editor-fields.md says it copies.
-export function cellContext(copyText: string | undefined): { webviewSection: 'cell'; copyText?: string; preventDefaultContextMenuItems: true } {
-  return { webviewSection: 'cell', ...(copyText === undefined ? {} : { copyText }), preventDefaultContextMenuItems: true };
+// offers copy value the text editor-fields.md says it copies. A menu's `=~` reads its sections.
+export function cellContext(copyText: string | undefined, ...more: (object | undefined)[]): CellContext {
+  const sections = ['cell'];
+  const merged: Record<string, unknown> = {};
+  for (const [name, value] of more.flatMap(context => (context === undefined ? [] : Object.entries(context)))) {
+    if (name !== 'webviewSection') merged[name] = value;
+    else if (typeof value === 'string') sections.push(value);
+  }
+  return {
+    ...merged, ...(copyText === undefined ? {} : { copyText }), preventDefaultContextMenuItems: true,
+    webviewSection: sections.join(' '),
+  };
 }
 
 export function editableCellContext(
@@ -100,22 +113,6 @@ export function stringValueContext(
     webviewSection: 'stringValue', formKey, plugin, origin, recordLabel, fieldName, value, readOnly, path,
     preventDefaultContextMenuItems: true,
   };
-}
-
-// `webviewSection` supports a space-separated value via VS Code's `=~` regex `when`-clause
-// operator, so this is the union of every context's token. Other keys are equal across contexts
-// sharing one row, so last-write-wins is harmless.
-export function combineVscodeContexts(...contexts: (object | undefined)[]): string | undefined {
-  const present = contexts.filter((c): c is Record<string, unknown> => c != null);
-  if (present.length === 0) return undefined;
-  const merged: Record<string, unknown> = {};
-  const sections: string[] = [];
-  for (const c of present) {
-    const { webviewSection, ...rest } = c;
-    if (typeof webviewSection === 'string') sections.push(webviewSection);
-    Object.assign(merged, rest);
-  }
-  return JSON.stringify({ ...merged, webviewSection: sections.join(' ') });
 }
 
 // ── Reading the document along a row's path ──────────────────────────────────
