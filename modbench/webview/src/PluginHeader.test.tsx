@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { PluginHeader } from './PluginHeader';
@@ -76,24 +76,38 @@ describe('PluginHeader', () => {
     expect(header).not.toHaveTextContent(displaced);
   });
 
-  it('holds no control, so nothing writes the Partial Form flag from here, even on a Partial Form column', () => {
+  it('holds no control but the collapse button, so nothing writes the Partial Form flag from here, even on a Partial Form column', () => {
     const { header } = renderHeader({ override: { isPartialForm: true } });
-    expect(header.querySelector('input, button, select')).toBeNull();
+    expect(header.querySelectorAll('input, select')).toHaveLength(0);
+    expect(header.querySelectorAll('button')).toHaveLength(1);
   });
 
-  it('toggles its column’s collapse on a click anywhere on it', () => {
+  it('toggles its column’s collapse from its button', () => {
+    const { header, onToggleCollapse } = renderHeader();
+    fireEvent.click(within(header).getByRole('button'));
+    expect(onToggleCollapse).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggles nothing on a click elsewhere on it', () => {
     const { header, onToggleCollapse } = renderHeader();
     fireEvent.click(header);
+    fireEvent.click(screen.getByText('MyMod.esp'));
     fireEvent.click(screen.getByText('(tracked)'));
-    expect(onToggleCollapse).toHaveBeenCalledTimes(2);
+    expect(onToggleCollapse).not.toHaveBeenCalled();
+  });
+
+  it('shows its button as a restore control while collapsed', () => {
+    const { header } = renderHeader({}, { collapsed: true });
+    expect(within(header).getByRole('button')).toHaveTextContent('▶');
   });
 
   it('shows only its label while collapsed', () => {
-    const { header } = renderHeader({}, { collapsed: true });
-    expect(header).toHaveTextContent(/^\[01\] MyMod\.esp$/);
+    renderHeader({}, { collapsed: true });
+    expect(screen.queryByText('(tracked)')).not.toBeInTheDocument();
+    expect(screen.getByText('MyMod.esp').parentElement).toHaveTextContent(/^\[01\] MyMod\.esp$/);
   });
 
-  it('resizes its column by the drag of its edge, and does not collapse it', async () => {
+  it('resizes its column by the drag of its edge, and does not collapse it', () => {
     const { header, onToggleCollapse, onResize } = renderHeader();
     vi.spyOn(header, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 20));
     const edge = required(header.querySelector('[data-column-edge]'), 'the header’s edge');
@@ -106,10 +120,6 @@ describe('PluginHeader', () => {
 
     expect(onResize.mock.calls).toEqual([[260]]);
     expect(onToggleCollapse).not.toHaveBeenCalled();
-
-    await new Promise(resolve => setTimeout(resolve, 0));
-    fireEvent.click(header);
-    expect(onToggleCollapse).toHaveBeenCalledTimes(1);
   });
 
   it('takes no drag from a button but the left one', () => {
