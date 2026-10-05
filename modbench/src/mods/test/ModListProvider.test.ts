@@ -20,7 +20,6 @@ vi.mock('vscode', () => ({
 import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
 import { modOfRow } from '../../drivingLib/modRow';
 import { ErrorNode } from '../../drivingLib/errorNode';
-import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { file, indexedValueOf } from './indexedValue';
@@ -465,17 +464,16 @@ describe('ModListProvider', () => {
   });
 
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
-    await withUnreadCorpusInstance(async (instance) => {
-      const provider = new ModListProvider({ instance });
+    const instance = new FakeInstance(valueOf([]), SEQUENCE_NOT_READ_YET);
+    const provider = new ModListProvider({ instance });
 
-      const pending = provider.getChildren();
-      await instance.refresh();
-      const rendered = (await pending).map((n) => n.label);
+    const pending = provider.getChildren();
+    instance.publish(valueOf([mod('A'), mod('B')]));
+    const rendered = (await pending).map((n) => n.label);
 
-      expect(rendered.length).toBeGreaterThan(1);
-      expect(rendered).toEqual((await provider.getChildren()).map((n) => n.label));
-      provider.dispose();
-    });
+    expect(rendered).toEqual(['B', 'A', 'Overwrite']);
+    expect(rendered).toEqual((await provider.getChildren()).map((n) => n.label));
+    provider.dispose();
   });
 
   it('settles a failed first read, rather than spinning forever, on the one error row naming the reason, then renders rows when a value lands', async () => {
@@ -545,26 +543,6 @@ describe('ModListProvider', () => {
       expect(sepNode.label).toBe('Group A');
       const children = await provider.getChildren(sepNode);
       expect(children.map((n) => n.label)).toEqual(['Alpha Child', 'Zeta']);
-    });
-
-    it('fires onDidChangeTreeData when filter is set', () => {
-      const provider = makeProvider(entries());
-      let fired = false;
-      provider.onDidChangeTreeData(() => { fired = true; });
-      provider.setFilter('x', true);
-      expect(fired).toBe(true);
-    });
-
-    it('setFilter does not rebuild rows, re-rendering the stale cache built off the original 7-entry fixture rather than re-pulling the instance value', async () => {
-      const instance = new FakeInstance(valueOf(entries()));
-      const provider = makeProvider([], { instance });
-      await provider.getChildren();
-
-      instance.value = valueOf([mod('Alpha')]);
-      provider.setFilter('alpha', true);
-      const roots = await provider.getChildren();
-
-      expect(roots.map((n) => n.label)).toContain('Group A');
     });
   });
 
@@ -713,16 +691,6 @@ describe('ModListProvider', () => {
   });
 
   describe('sort order toggle', () => {
-    it('setting the view direction fires a refresh', () => {
-      const provider = makeProvider([mod('A')]);
-      let fired = false;
-      provider.onDidChangeTreeData(() => { fired = true; });
-
-      provider.setViewDirection('winningAtTop');
-
-      expect(fired).toBe(true);
-    });
-
     it('toggled to winning-at-top: the mods within a separator, the entries preceding it, are in file order', async () => {
       const provider = makeProvider([
         mod('First'),

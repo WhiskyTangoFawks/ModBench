@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
-import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
-import { cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
   uriFile, uriFrom, DataTransferItem, DataTransfer,
@@ -70,13 +67,10 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { Instance } from '../../instanceLoader/instance';
+import type { ModlistEntry } from '../../instanceLoader/instance';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
-import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
-import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { present } from '../../ports/present';
-import { adapterOver, STEADY_WINDOW } from '../../test/mo2/adapterOver';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
@@ -87,17 +81,19 @@ const NO_SYNC = {
   channel: { error: () => undefined, info: () => undefined },
 };
 
-async function makeSettledInstance(root: string): Promise<Instance> {
-  const instance = new Instance({
-    window: STEADY_WINDOW,
-    adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
-    log: () => undefined,
-    logReadFailure: () => undefined,
-  });
-  await instance.refresh();
-  await instance.refresh();
-  return instance;
-}
+const mod = (name: string, enabled = true): ModlistEntry => ({ kind: 'mod', name, enabled });
+const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });
+
+const LISTED_MODS: ModlistEntry[] = [
+  mod('Ñoño\'s Retexture'), mod('Tracked Patch Mod'), mod('SKK Fast Start new game (Fallout 4)'),
+  separator('Unassigned (Modlist Development)'),
+  mod('[NODELETE] Radfall'), mod('Unofficial Fallout 4 Patch'),
+  separator('Radfall - All-In-One Survival Overhaul'),
+  mod('ENBoost - 12k'), mod('Harder VATS', false), mod('Cracked and Smudged Pip-Boy Screen'),
+];
+
+const instanceListing = (mods: ModlistEntry[]) => new FakeInstance(instanceValueFixture({ mods }));
+const listing = (mods: ModlistEntry[]) => instanceValueFixture({ mods });
 
 beforeEach(() => {
   h.state.boxes.length = 0;
@@ -113,8 +109,7 @@ beforeEach(() => {
 
 describe('the Mods filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
-    const root = cloneCorpusFixture();
-    const instance = await makeSettledInstance(root);
+    const instance = instanceListing(LISTED_MODS);
     const { provider, view: modListView, nameFilter: modListFilter } =
       createModsView({ instance, log: () => undefined, ...NO_SYNC });
     await provider.getChildren();
@@ -124,24 +119,19 @@ describe('the Mods filter follows a row change with no keystroke', () => {
     await waitForMessage(modListView, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
     expect(modListView.message).toBe('No matches for "zzznomatch".');
 
-    const modlistPath = join(root, DEFAULT_MODLIST);
-    const original = await readFile(modlistPath, 'utf8');
-    await writeFile(modlistPath, `${original}+zzznomatchMod\r\n`);
-    await instance.refresh();
+    instance.publish(listing([...LISTED_MODS, mod('zzznomatchMod')]));
     await waitForMessage(modListView, (m) => m === undefined, 'the message clearing once a matching mod lands');
     expect(modListView.message).toBeUndefined();
 
-    await writeFile(modlistPath, original);
-    await instance.refresh();
+    instance.publish(listing(LISTED_MODS));
     await waitForMessage(modListView, (m) => m === 'No matches for "zzznomatch".', 'the message returning once the mod is gone');
     expect(modListView.message).toBe('No matches for "zzznomatch".');
   });
 });
 
 describe('the Mods view\'s description counts the mods', () => {
-  it('reads the enabled mods over the listed mods, then the term, counting the whole list', async () => {
-    const root = cloneCorpusFixture();
-    const instance = await makeSettledInstance(root);
+  it('reads the enabled mods over the listed mods, then the term, counting the whole list', () => {
+    const instance = instanceListing(LISTED_MODS);
     const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
     expect(modListView.description).toBe('7 / 8');
 
@@ -150,14 +140,11 @@ describe('the Mods view\'s description counts the mods', () => {
     expect(modListView.description).toBe('7 / 8 · "radfall"');
   });
 
-  it('follows a new instance value, with nothing pushed', async () => {
-    const root = cloneCorpusFixture();
-    const instance = await makeSettledInstance(root);
+  it('follows a new instance value, with nothing pushed', () => {
+    const instance = instanceListing(LISTED_MODS);
     const { view: modListView } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
 
-    const modlistPath = join(root, DEFAULT_MODLIST);
-    await writeFile(modlistPath, `${await readFile(modlistPath, 'utf8')}-Parked Mod\r\n`);
-    await instance.refresh();
+    instance.publish(listing([...LISTED_MODS, mod('Parked Mod', false)]));
 
     expect(modListView.description).toBe('7 / 9');
   });
@@ -165,7 +152,7 @@ describe('the Mods view\'s description counts the mods', () => {
 
 describe('the Mods title-bar sort icons', () => {
   it('set the tree\'s own direction, and the key the icon reads', async () => {
-    const instance = await makeSettledInstance(cloneCorpusFixture());
+    const instance = instanceListing(LISTED_MODS);
     const { provider } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
 
     expect(h.state.contextKeys.get('modbench.mod.winningAtTop')).toBe(false);
@@ -182,16 +169,15 @@ describe('the Mods view tells its keys, which are handed no row, what the select
     for (const listener of h.selectionListeners) listener({ selection: rows });
   };
 
-  it('sets the Space direction and the Delete and F2 kind off the selection', async () => {
-    const root = cloneCorpusFixture();
-    const instance = await makeSettledInstance(root);
+  it('sets the Space direction and the Delete and F2 kind off the selection', () => {
+    const instance = instanceListing(LISTED_MODS);
     const { view: modListView } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
 
     const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod']
       .map((name) => `modbench.mod.${name}`);
     const keys = () => Object.fromEntries(SELECTION_KEYS.map((key) => [key, h.state.contextKeys.get(key)]));
     const harderVats = new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false });
-    const separator = (name: string) => new SeparatorNode({ kind: 'separator', name, enabled: true }, []);
+    const separatorRow = (name: string) => new SeparatorNode({ kind: 'separator', name, enabled: true }, []);
 
     select(modListView, [harderVats]);
     expect(keys()).toEqual({
@@ -199,22 +185,19 @@ describe('the Mods view tells its keys, which are handed no row, what the select
       'modbench.mod.holdsEnabledMod': false, 'modbench.mod.holdsDisabledMod': true,
     });
 
-    select(modListView, [separator('Radfall - All-In-One Survival Overhaul'), separator('Unassigned (Modlist Development)')]);
+    select(modListView, [separatorRow('Radfall - All-In-One Survival Overhaul'), separatorRow('Unassigned (Modlist Development)')]);
     expect(keys()).toEqual({
       'modbench.mod.selectionToggle': undefined, 'modbench.mod.selectionKind': 'separator', 'modbench.mod.singleRow': false,
       'modbench.mod.holdsEnabledMod': false, 'modbench.mod.holdsDisabledMod': false,
     });
   });
 
-  it('follows a mod enabled on disk while the selection still holds the row built before', async () => {
-    const root = cloneCorpusFixture();
-    const instance = await makeSettledInstance(root);
+  it('follows a mod enabled on disk while the selection still holds the row built before', () => {
+    const instance = instanceListing(LISTED_MODS);
     const { view: modListView } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
     select(modListView, [new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
 
-    const modlistPath = join(root, DEFAULT_MODLIST);
-    await writeFile(modlistPath, (await readFile(modlistPath, 'utf8')).replace('-Harder VATS', '+Harder VATS'));
-    await instance.refresh();
+    instance.publish(listing(LISTED_MODS.map((m) => (m.name === 'Harder VATS' ? mod('Harder VATS') : m))));
 
     expect(h.state.contextKeys.get('modbench.mod.selectionToggle')).toBe('disable');
   });
@@ -222,9 +205,7 @@ describe('the Mods view tells its keys, which are handed no row, what the select
 
 describe('the Mods view expands by reveal a separator a filter shows for its matching mods', () => {
   const mountFiltered = async (term: string, log: (line: string) => void = () => undefined) => {
-    const root = cloneCorpusFixture();
-    const instance = await makeSettledInstance(root);
-    createModsView({ instance, log, ...NO_SYNC }).nameFilter.open();
+    createModsView({ instance: instanceListing(LISTED_MODS), log, ...NO_SYNC }).nameFilter.open();
     currentBox().type(term);
     await new Promise((resolve) => setTimeout(resolve, 20));
   };
@@ -269,45 +250,40 @@ describe('the Mods view says when the list is empty', () => {
   const NO_MODS = 'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
 
   it('says nothing before the first read, says so once an empty list lands, and gives way to the no-match message', async () => {
-    await withUnreadCorpusInstance(async (instance, root) => {
-      await writeFile(join(root, DEFAULT_MODLIST), '# This file was automatically generated by Mod Organizer.\r\n');
-      const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
-      expect(modListView.message).toBeUndefined();
-      expect(modListView.description).toBeUndefined();
+    const instance = new FakeInstance(listing([]), 0);
+    const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
+    expect(modListView.message).toBeUndefined();
+    expect(modListView.description).toBeUndefined();
 
-      await instance.refresh();
-      await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
+    instance.publish(listing([]));
+    await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
 
-      modListFilter.open();
-      currentBox().type('zzz');
-      await waitForMessage(modListView, (m) => m === 'No matches for "zzz".', 'the no-match message');
+    modListFilter.open();
+    currentBox().type('zzz');
+    await waitForMessage(modListView, (m) => m === 'No matches for "zzz".', 'the no-match message');
 
-      currentBox().type('');
-      await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message back');
-    });
+    currentBox().type('');
+    await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message back');
   });
 
   it('says mod sync\'s refusal beside it, and drops only that once the sync lands', async () => {
-    await withUnreadCorpusInstance(async (instance, root) => {
-      await writeFile(join(root, DEFAULT_MODLIST), '# This file was automatically generated by Mod Organizer.\r\n');
-      const outcomes = [
-        { applied: false as const, refusal: '/instance/mods does not exist' },
-        { applied: true as const, added: [], dropped: [] },
-      ];
-      let run = 0;
-      const { view: modListView, modSync } = createModsView({
-        instance, log: () => undefined, channel: NO_SYNC.channel, syncMods: () => Promise.resolve(present(outcomes[run++], 'an outcome for this run')),
-      });
-      await instance.refresh();
-      await instance.refresh();
-      await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
-
-      await modSync.run(instance.value.modSyncArguments);
-      await waitForMessage(modListView, (m) => m === `${NO_MODS} modlist.txt is not synced: /instance/mods does not exist.`, 'both messages');
-
-      await modSync.run(instance.value.modSyncArguments);
-      await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message alone');
+    const instance = new FakeInstance(listing([]), 0);
+    const outcomes = [
+      { applied: false as const, refusal: '/instance/mods does not exist' },
+      { applied: true as const, added: [], dropped: [] },
+    ];
+    let run = 0;
+    const { view: modListView, modSync } = createModsView({
+      instance, log: () => undefined, channel: NO_SYNC.channel, syncMods: () => Promise.resolve(present(outcomes[run++], 'an outcome for this run')),
     });
+    instance.publish(listing([]));
+    await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
+
+    await modSync.run(instance.value.modSyncArguments);
+    await waitForMessage(modListView, (m) => m === `${NO_MODS} modlist.txt is not synced: /instance/mods does not exist.`, 'both messages');
+
+    await modSync.run(instance.value.modSyncArguments);
+    await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message alone');
   });
 });
 
