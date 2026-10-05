@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Globalization;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using Microsoft.Extensions.Logging;
@@ -358,7 +357,7 @@ internal sealed class Store : IDisposable
         DuckDbSql.ExecuteFor(Connection, $"""
             INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from) VALUES ($1, $2, $3)
             """, plugin, origin, derivedFrom.ToString());
-        if (filePath == null || PluginBinaryHash.BytesOfFile(filePath) is not { } bytes)
+        if (filePath == null || PluginBinaryHash.ClaimOfFile(filePath) is not { } claim)
         {
             if (filePath != null) LogUnreadable(filePath);
             return;
@@ -367,22 +366,16 @@ internal sealed class Store : IDisposable
         DuckDbSql.ExecuteFor(Connection, $"""
             INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash)
             VALUES ($1, $2, $3, $4)
-            """, plugin, origin, Path.GetFullPath(filePath), PluginBinaryHash.OfBytes(bytes));
-        StampDiagnoses(plugin, origin, bytes);
+            """, plugin, origin, Path.GetFullPath(filePath), claim.Hash);
+        StampDiagnoses(plugin, origin, claim);
     }
 
-    // The bytes are in hand for the hash, so the Kind B scan reads them here rather than the file
-    // again. A scan that throws is logged and leaves no rows, never a refused ingest.
-    private void StampDiagnoses(string plugin, string origin, byte[] bytes)
+    // A scan that threw is logged and leaves no rows, never a refused ingest.
+    private void StampDiagnoses(string plugin, string origin, FileClaim claim)
     {
-        List<PluginDiagnosis> diagnoses;
-        try
+        if (claim.Diagnoses is not { } diagnoses)
         {
-            diagnoses = MalformedPluginScan.Scan(bytes);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            _logger.LogWarning(ex, "Could not scan {Plugin} ({Origin}) for malformed records", plugin, origin);
+            _logger.LogWarning(claim.ScanError, "Could not scan {Plugin} ({Origin}) for malformed records", plugin, origin);
             return;
         }
 
