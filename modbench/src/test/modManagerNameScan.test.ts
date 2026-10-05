@@ -45,10 +45,13 @@ function withoutConstruction(sourceText: string, fileName: string): string {
   );
 }
 
+const namesFile = (literal: string, name: string): boolean =>
+  literal.split(name).slice(1).some((after) => !/^\w/.test(after));
+
 function managerMentions(sourceText: string, fileName: string): string[] {
   const names = MO2_NAMES.anywhere.filter((name) => name.test(sourceText)).map((name) => name.source);
   const literals = stringLiterals(sourceText, fileName);
-  const fileNames = MO2_NAMES.files.filter((name) => literals.some((literal) => literal.includes(name)));
+  const fileNames = MO2_NAMES.files.filter((name) => literals.some((literal) => namesFile(literal, name)));
   const segments = pathSegments(sourceText, fileName);
   const directoryNames = MO2_NAMES.directories.filter((name) => segments.has(name));
   return [...names, ...fileNames, ...directoryNames];
@@ -131,6 +134,7 @@ describe('no extension file names MO2 outside its implementation of the Instance
       [join('mods', 'identifier.ts')]: 'export const modorganizerRoot = 1;\n',
       [join('mods', 'layout.ts')]: "export const root = (base: string) => join(base, 'profiles', 'overwrite');\n",
       [join('mods', 'prose.ts')]: "export const say = 'the mods and profiles are fine';\nimport x from '../mods/y';\n",
+      [join('mods', 'sidecar.ts')]: 'export const say = (name: string) => `${name}.meta was left behind.`;\n',
       [join('mods', 'clean.ts')]: 'export const say = (file: string) => `its ${file} line could not be written.`;\n',
       [join('mods', 'test', 'fixture.ts')]: "export const ini = 'ModOrganizer.ini';\n",
       [join(ADAPTER, 'mo2Instance.ts')]: "export const manager = 'MO2';\n",
@@ -143,6 +147,7 @@ describe('no extension file names MO2 outside its implementation of the Instance
         [join('mods', 'layout.ts')]: ['profiles', 'overwrite'],
         [join('mods', 'tooltip.ts')]: ['\\bMod Organizer\\b'],
         [join('mods', 'message.ts')]: ['modlist.txt'],
+        [join('mods', 'sidecar.ts')]: ['.meta'],
         [join('plugins', 'command.ts')]: ['mo2'],
         [join('views', 'mo2Trees.ts')]: ['file name'],
         [ADAPTER_INTERFACE]: ['mo2'],
@@ -154,5 +159,9 @@ describe('no extension file names MO2 outside its implementation of the Instance
 
   it('does not flag a file of the manager\'s named in a comment', () => {
     expect(managerMentions('// reads modlist.txt\n', 'x.ts')).toEqual([]);
+  });
+
+  it('does not flag a longer name a file of the manager\'s begins', () => {
+    expect(managerMentions("export const say = 'its .metadata';\n", 'x.ts')).toEqual([]);
   });
 });
