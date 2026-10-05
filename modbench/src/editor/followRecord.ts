@@ -57,7 +57,8 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   }
 
   /** mEdit reported `keys` changed: the panel reads again when it shows one of them, unless an edit
-   *  of it is in flight, which keeps the keys for its answer. */
+   *  of it is in flight, which keeps the keys for its answer. A FormKey spans its override chain, so
+   *  matching it is enough. */
   reported(panel: Panel, keys: readonly string[]): void {
     const entry = this.inFlight.get(panel);
     if (entry) {

@@ -144,6 +144,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       const loaded = await client.load(fk);
       if (read !== latestRead.current) return;
       if (!loaded.ok) throw new Error(loaded.error);
+      setFormKey(fk);
       setError(null);
       setResult(loaded.result);
       setGone(loaded.result === null);
@@ -184,9 +185,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       } catch {
         return; // Not one of ours, or a stale/mismatched build.
       }
-      if (msg.type !== EXTENSION_TO_WEBVIEW.LOAD_RECORD) return;
-      setFormKey(msg.formKey);
-      void refresh(msg.formKey);
+      if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) void refresh(msg.formKey);
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);

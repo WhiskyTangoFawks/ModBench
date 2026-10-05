@@ -1,7 +1,6 @@
 import type { MEditClient } from '../client';
 
-// A FormKey spans its override chain, so matching it is enough. On reconnect, a panel waiting on a
-// missed report reads once mEdit holds it.
+// On reconnect, a panel waiting on a missed report reads once mEdit holds it.
 export function subscribeRecordPanelsToNotifications<Panel>(
   client: Pick<MEditClient, 'onNotification' | 'onReconnected' | 'getRecordOwner'>,
   recordPanels: Set<Panel>,
