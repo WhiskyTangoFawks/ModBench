@@ -1,6 +1,4 @@
 using MEditService.RepositoriesLib;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.PluginAdapter;
@@ -9,20 +7,6 @@ namespace MEditService.PluginAdapter;
 /// binary it replaces, since git keeps every state of the source (compile-plugin). Mechanism only.</summary>
 public static class PluginWriter
 {
-    // loadOrder orders the written master list explicitly, so the file matches what xEdit shows,
-    // rather than leaving the order to Mutagen's undefined default.
-    private static Task<PreparedPluginSave> PrepareAsync(
-        string pluginPath,
-        GameRelease gameRelease,
-        IReadOnlyList<string>? loadOrder = null)
-    {
-        // No load order concept here, so no origin to distinguish a mod folder from the game Data folder:
-        // the single-argument ForRead overload applies. The path names its own ModKey.
-        var mod = MutagenPluginAdapter.OpenForWrite(
-            new ModPath(pluginPath), gameRelease, PluginStrings.In(PathShape.DirectoryOf(pluginPath)));
-        return PrepareFromModAsync(mod, pluginPath, loadOrder);
-    }
-
     /// <summary>Writes an already-assembled mod: compile's mod comes from the source tree, never off
     /// the binary it replaces. <paramref name="pluginPath"/> still supplies the destination.</summary>
     public static async Task<PreparedPluginSave> PrepareFromModAsync(
@@ -64,15 +48,5 @@ public static class PluginWriter
             catch (UnauthorizedAccessException) { /* Windows file lock (AV/game); tmpDir will remain */ }
             throw;
         }
-    }
-
-    /// <summary>Prepare, then commit.</summary>
-    public static async Task SaveAsync(
-        string pluginPath,
-        GameRelease gameRelease,
-        IReadOnlyList<string>? loadOrder = null)
-    {
-        using var prep = await PrepareAsync(pluginPath, gameRelease, loadOrder);
-        prep.Commit();
     }
 }
