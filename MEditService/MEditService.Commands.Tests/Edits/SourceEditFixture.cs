@@ -29,6 +29,9 @@ public sealed class SourceEditFixture : TestInstance, ITrackedPlugin
     public FormKey Race { get; }
     public FormKey Keyword { get; }
     public FormKey OtherNpc { get; }
+    public FormKey Worldspace { get; }
+    public FormKey Cell { get; }
+    public FormKey Quest { get; }
 
     private SourceEditFixture(bool track, string pluginName, bool isLight)
     {
@@ -43,6 +46,18 @@ public sealed class SourceEditFixture : TestInstance, ITrackedPlugin
         npc.Race.SetTo(race);
         var otherNpc = mod.Npcs.AddNew(OtherNpcEditorId);
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
+
+        var worldspace = new Worldspace(mod) { EditorID = "FixtureWorld" };
+        mod.Worldspaces.Add(worldspace);
+        var cell = new Cell(mod) { EditorID = "FixtureCell" };
+        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+        subBlock.Cells.Add(cell);
+        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+        block.SubBlocks.Add(subBlock);
+        mod.Cells.Records.Add(block);
+        var quest = new Quest(mod) { EditorID = "FixtureQuest" };
+        mod.Quests.Add(quest);
+        (Worldspace, Cell, Quest) = (worldspace.FormKey, cell.FormKey, quest.FormKey);
 
         // Tracked through the real service: what an edit does to a git working tree is the thing
         // under test, and no mock can answer that.
