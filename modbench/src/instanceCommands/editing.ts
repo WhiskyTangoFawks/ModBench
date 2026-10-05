@@ -55,13 +55,8 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
       return tell({ kind: 'backendFailed' });
     }
     const value = await source;
-    if (!value?.loadOrderSnapshot) return exitEditing();
-    if ('refusal' in value.loadOrderSnapshot) {
-      await put(value);
-      return exitEditing();
-    }
     startPutRan = true;
-    await put(value);
+    if (value) await put(value);
   };
 
   const statusSubscription = client.onStatusChanged((status) => {
