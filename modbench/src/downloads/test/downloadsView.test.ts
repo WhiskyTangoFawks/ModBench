@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
-import { writeFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
-import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import {
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom,
 } from '../../test/vscodeMock';
@@ -55,7 +52,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { Instance, type InstanceView } from '../../instanceLoader/instance';
+import type { Instance, InstanceView } from '../../instanceLoader/instance';
 import { createDownloadsView, type DownloadsViewDeps } from '../downloadsView';
 import { DownloadNode } from '../DownloadsProvider';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
@@ -63,8 +60,7 @@ import { present } from '../../ports/present';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { accessTo, adapterOver, STEADY_WINDOW } from '../../test/mo2/adapterOver';
+import { accessTo } from '../../test/mo2/adapterOver';
 
 const downloadsViewDeps = (instanceRoot: string, instance: InstanceView & Pick<Instance, 'refresh'>): DownloadsViewDeps => ({
   access: accessTo(instanceRoot), instance, reporter: recordingReporter(),
@@ -75,17 +71,11 @@ const downloadsViewDeps = (instanceRoot: string, instance: InstanceView & Pick<I
 const command = commandInvoker(h.state);
 const currentBox = currentBoxOf(h.state);
 
-async function makeSettledInstance(root: string): Promise<Instance> {
-  const instance = new Instance({
-    window: STEADY_WINDOW,
-    adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
-    log: () => undefined,
-    logReadFailure: () => undefined,
-  });
-  await instance.refresh();
-  await instance.refresh();
-  return instance;
-}
+const INSTANCE_ROOT = '/instance';
+const instanceOver = (...rows: ReturnType<typeof downloadRowFixture>[]) =>
+  new FakeInstance(instanceValueFixture({ downloads: { kind: 'listed', rows } }));
+const viewOver = (instance: FakeInstance) => createDownloadsView(downloadsViewDeps(INSTANCE_ROOT, instance));
+const downloadsTree = () => present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
 
 beforeEach(() => {
   h.state.boxes.length = 0;
@@ -97,25 +87,20 @@ beforeEach(() => {
 
 describe('the Downloads filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
-    const root = cloneCorpusFixture();
-    const instance = await makeSettledInstance(root);
-
-    const { nameFilter: downloadsFilter } = createDownloadsView(downloadsViewDeps(root, instance));
-    const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
+    const instance = instanceOver(downloadRowFixture('other.7z'));
+    const { nameFilter: downloadsFilter } = viewOver(instance);
+    const downloadsView = downloadsTree();
 
     downloadsFilter.open();
     currentBox().type('zzznomatch');
     await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
     expect(downloadsView.message).toBe('No matches for "zzznomatch".');
 
-    const archivePath = join(root, 'downloads', 'zzznomatch.7z');
-    await writeFile(archivePath, '');
-    await instance.refresh();
+    instance.publish(instanceValueFixture({ downloads: { kind: 'listed', rows: [downloadRowFixture('zzznomatch.7z')] } }));
     await waitForMessage(downloadsView, (m) => m === undefined, 'the message clearing once a matching download lands');
     expect(downloadsView.message).toBeUndefined();
 
-    await rm(archivePath);
-    await instance.refresh();
+    instance.publish(instanceValueFixture());
     await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message returning once the download is gone');
     expect(downloadsView.message).toBe('No matches for "zzznomatch".');
   });
@@ -123,14 +108,8 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
 
 describe('the Downloads filter follows a toggle with no new instance value', () => {
   it('recomputes the no-match message off Show excluded, in both directions', async () => {
-    const root = cloneCorpusFixture();
-    const archivePath = join(root, 'downloads', 'zzznomatch.7z');
-    await writeFile(archivePath, '');
-    await writeFile(`${archivePath}.meta`, '[General]\r\nremoved=true\r\n');
-    const instance = await makeSettledInstance(root);
-
-    const { nameFilter: downloadsFilter } = createDownloadsView(downloadsViewDeps(root, instance));
-    const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
+    const { nameFilter: downloadsFilter } = viewOver(instanceOver(downloadRowFixture('zzznomatch.7z', { excluded: true })));
+    const downloadsView = downloadsTree();
 
     downloadsFilter.open();
     currentBox().type('zzznomatch');
@@ -151,13 +130,8 @@ describe('the Downloads view sets the all-excluded context key', () => {
   const KEY = 'modbench.downloadedFile.allExcluded';
   const contextValue = () => h.state.contextKeys.get(KEY);
 
-  it('is true once the corpus\'s one download is excluded, and follows Show excluded both ways', async () => {
-    const root = cloneCorpusFixture();
-    const metaPath = join(root, 'downloads', 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z.meta');
-    await writeFile(metaPath, '[General]\r\ngameName=Fallout4\r\nmodID=4598\r\ninstalled=true\r\nremoved=true\r\n');
-    const instance = await makeSettledInstance(root);
-
-    createDownloadsView(downloadsViewDeps(root, instance));
+  it('is true once the one download is excluded, and follows Show excluded both ways', async () => {
+    viewOver(instanceOver(downloadRowFixture('a.7z', { excluded: true })));
 
     await vi.waitFor(() => expect(contextValue()).toBe(true));
 
@@ -169,28 +143,21 @@ describe('the Downloads view sets the all-excluded context key', () => {
   });
 
   it('stays false while at least one download is not excluded', async () => {
-    const root = cloneCorpusFixture();
-    const instance = await makeSettledInstance(root);
+    viewOver(instanceOver(downloadRowFixture('a.7z'), downloadRowFixture('b.7z', { excluded: true })));
 
-    createDownloadsView(downloadsViewDeps(root, instance));
-
-    await vi.waitFor(() => expect(h.trees.get('modbench.downloads')).toBeDefined());
-    expect(contextValue()).not.toBe(true);
+    await vi.waitFor(() => expect(contextValue()).toBe(false));
   });
 });
 
 describe('the Downloads decoration provider follows a rows change', () => {
   it('fires onDidChangeFileDecorations once the Instance value carries a new download', async () => {
-    const root = cloneCorpusFixture();
-    const instance = await makeSettledInstance(root);
-
-    createDownloadsView(downloadsViewDeps(root, instance));
+    const instance = instanceOver();
+    viewOver(instance);
     const [provider] = h.decorationProviders;
     const fired = vi.fn();
     present(provider, 'the registered decoration provider').onDidChangeFileDecorations?.(fired);
 
-    await writeFile(join(root, 'downloads', 'zzznew.7z'), '');
-    await instance.refresh();
+    instance.publish(instanceValueFixture({ downloads: { kind: 'listed', rows: [downloadRowFixture('zzznew.7z')] } }));
 
     await vi.waitFor(() => expect(fired).toHaveBeenCalled());
   });
@@ -205,10 +172,8 @@ describe('the Downloads view tells its palette entries, which are handed no row,
     for (const listener of h.selectionListeners) listener({ selection: rows });
   };
 
-  it('sets each key off the selection as it changes', async () => {
-    const root = cloneCorpusFixture();
-    const instance = await makeSettledInstance(root);
-    const { view: downloadsView } = createDownloadsView(downloadsViewDeps(root, instance));
+  it('sets each key off the selection as it changes', () => {
+    const { view: downloadsView } = viewOver(instanceOver());
 
     select(downloadsView, [new DownloadNode(downloadRowFixture('a.7z', { hasMeta: true }))]);
     expect(keys()).toEqual({
@@ -233,7 +198,7 @@ describe('the Downloads view writes the unresolved folder to the Output', () => 
   it('hands the reason to its log once the Instance value carries it', () => {
     const instance = new FakeInstance(instanceValueFixture());
     const lines: string[] = [];
-    createDownloadsView({ ...downloadsViewDeps('/instance', instance), logUnresolved: (line) => lines.push(line) });
+    createDownloadsView({ ...downloadsViewDeps(INSTANCE_ROOT, instance), logUnresolved: (line) => lines.push(line) });
 
     instance.publish(instanceValueFixture({ downloads: { kind: 'unresolved', reason: 'no folder' } }));
 
