@@ -110,7 +110,6 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
 
         Assert.NotNull(binary.Body);
         Assert.Contains("\"ModHeader\"", binary.Body, StringComparison.Ordinal);
-        Assert.Contains("\"MasterReferences\"", binary.Body, StringComparison.Ordinal);
 
         Assert.Equal(binary.Body, source.Body);
 

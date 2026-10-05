@@ -84,7 +84,7 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void GetDocument_Header_MastersField_ListsPluginFilenamesInOrder()
+    public void GetDocument_Header_MastersField_HoldsNothing_BecauseTheHeaderDocumentLeavesTheDerivedMastersOut()
     {
         using var fixture = OnePlugin("header-masters", "MastersTest.esp", mod =>
         {
@@ -93,11 +93,7 @@ public class HeaderIndexingTests
         });
         using var index = Indexes.Reconciled(fixture);
 
-        var doc = Header(index, "MastersTest.esp");
-        var masters = Assert.IsType<JsonElement>(FieldValueOf(doc, "MasterReferences"));
-        Assert.Equal(
-            ["Fallout4.esm", "DLCRobot.esm"],
-            masters.EnumerateArray().Select(e => e.GetProperty("Master").GetString() ?? "").ToList());
+        Assert.Null(FieldValueOf(Header(index, "MastersTest.esp"), "MasterReferences"));
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -19,6 +20,7 @@ public sealed class HeaderDocumentTests
         mod.ModHeader.Description = NonAsciiBecauseTheByteComparisonsAreTheOnlyPlaceAnEncodingDifferenceBetweenTheTwoProducersCouldShow;
         mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Master | Fallout4ModHeader.HeaderFlag.Localized;
         mod.ModHeader.Stats.NextFormID = 0x900;
+        mod.ModHeader.Stats.NumRecords = 5;
         mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Fallout4.esm") });
         mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Other.esm") });
         mod.ModHeader.SetOverriddenForms([new FormKey(ModKey.FromFileName("Fallout4.esm"), 0x123)]);
@@ -64,7 +66,20 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public void Read_RoundTripsEveryHeaderField_AndReSerializesToTheSameBytes()
+    public void Write_HoldsNoMastersNextFormIdOrRecordCount_BecauseEveryWriteDerivesThemFromContent()
+    {
+        var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
+
+        using var document = JsonDocument.Parse(body);
+        var header = document.RootElement.GetProperty("ModHeader");
+        Assert.False(header.TryGetProperty("MasterReferences", out _));
+        var stats = header.GetProperty("Stats");
+        Assert.False(stats.TryGetProperty("NextFormID", out _));
+        Assert.False(stats.TryGetProperty("NumRecords", out _));
+    }
+
+    [Fact]
+    public void Read_RoundTripsEveryHeaderFieldTheDocumentHolds_AndReSerializesToTheSameBytes()
     {
         var mod = PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords();
         var body = HeaderDocument.Write(mod);
@@ -76,10 +91,7 @@ public sealed class HeaderDocumentTests
         Assert.Equal(mod.ModHeader.Author, readBack.ModHeader.Author);
         Assert.Equal(mod.ModHeader.Description, readBack.ModHeader.Description);
         Assert.Equal(mod.ModHeader.Flags, readBack.ModHeader.Flags);
-        Assert.Equal(mod.ModHeader.Stats.NextFormID, readBack.ModHeader.Stats.NextFormID);
-        Assert.Equal(
-            mod.ModHeader.MasterReferences.Select(m => m.Master.FileName.ToString()),
-            readBack.ModHeader.MasterReferences.Select(m => m.Master.FileName.ToString()));
+        Assert.Equal(mod.ModHeader.Stats.Version, readBack.ModHeader.Stats.Version);
 
         Assert.Equal(body, HeaderDocument.Write(readBack));
     }

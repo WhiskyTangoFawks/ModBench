@@ -3,7 +3,10 @@ using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
+using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Exceptions;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
@@ -91,5 +94,31 @@ public sealed class PluginTreeReadTests
         var written = Adapter.ReadContent(
             new ModPath(ModKey.FromFileName("Patch.esp"), recompiledPath), GameRelease.Fallout4);
         Assert.Equal(reversed, written.Content.Masters);
+    }
+
+    [Fact]
+    public async Task WriteFromTree_OfANativeFormIdBelowTheHighRange_WithNoMasterItsContentNeeds_KeepsTheFirstOfTheMasterOrderAsItsMaster()
+    {
+        using var data = new PluginFixtureBuilder("writetree-lower-range")
+            .WithPlugin("AlphaBase.esm", mod => mod.Npcs.AddNew("AlphaNpc"))
+            .WithPlugin(
+                "Lower.esp",
+                mod =>
+                {
+                    mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("AlphaBase.esm") });
+                    mod.Npcs.Add(new Npc(new FormKey(mod.ModKey, 0x700), Fallout4Release.Fallout4) { EditorID = "LowerNpc" });
+                },
+                writeParams: new BinaryWriteParameters { MastersListContent = MastersListContentOption.NoCheck })
+            .Build();
+        var lowerPath = Path.Combine(data.DataFolder, "Lower.esp");
+        var files = await Adapter.ReadPristineFilesAsync(
+            new ModPath(lowerPath), GameRelease.Fallout4, PluginStrings.In(data.DataFolder));
+        var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Lower.esp");
+
+        await Adapter.WriteFromTreeAsync(files, recompiledPath, ["AlphaBase.esm"]);
+
+        var written = Adapter.ReadContent(
+            new ModPath(ModKey.FromFileName("Lower.esp"), recompiledPath), GameRelease.Fallout4);
+        Assert.Equal(["AlphaBase.esm"], written.Content.Masters);
     }
 }

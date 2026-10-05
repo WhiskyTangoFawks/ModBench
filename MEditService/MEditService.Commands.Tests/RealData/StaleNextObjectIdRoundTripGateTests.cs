@@ -14,11 +14,11 @@ namespace MEditService.Commands.Tests.RealData;
 
 public sealed class StaleNextObjectIdRoundTripGateTests
 {
-    public static TheoryData<string, uint, uint> RealFixturesBecauseMutagenWritesAFreshHeaderByDefault => new()
+    public static TheoryData<string, uint, uint, uint> RealFixturesWithAStaleHeader => new()
     {
-        { "LitR - Settings Holotapes Sorting.esp", 2, 16 },
-        { "RecruitSierra.esl", 17098, 148 },
-        { "Hitech Trashcans to BOS.esp", 43, 150 },
+        { "LitR - Settings Holotapes Sorting.esp", 2, 16, 18 },
+        { "RecruitSierra.esl", 17098, 148, 145 },
+        { "Hitech Trashcans to BOS.esp", 43, 150, 149 },
     };
 
     public static TheoryData<string> TrackAndCompileRealFixtures => new()
@@ -31,16 +31,17 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     private static string FixturePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
 
     [Theory]
-    [MemberData(nameof(RealFixturesBecauseMutagenWritesAFreshHeaderByDefault))]
-    public async Task Save_OfARealPluginWithAStaleHeader_PreservesNextObjectIdAndNumRecordsVerbatim_SinceNothingInGameReadsThemAndAuthoringToolsLeaveThemStale(
-        string fileName, uint storedNextObjectId, uint storedNumRecords)
+    [MemberData(nameof(RealFixturesWithAStaleHeader))]
+    public async Task Save_OfARealPluginWithAStaleHeader_DerivesNextObjectIdAndNumRecordsFromContent(
+        string fileName, uint storedNextObjectId, uint storedNumRecords, uint derivedNumRecords)
     {
         using var scratch = new TrackedScratch(fileName);
         Assert.Equal((storedNextObjectId, storedNumRecords), ReadHeaderStats(scratch.PluginPath));
+        var oneAboveTheHighestNativeId = HighestNativeId(scratch.PluginPath) + 1;
 
         await PluginWriter.SaveAsync(scratch.PluginPath, GameRelease.Fallout4);
 
-        Assert.Equal((storedNextObjectId, storedNumRecords), ReadHeaderStats(scratch.PluginPath));
+        Assert.Equal((oneAboveTheHighestNativeId, derivedNumRecords), ReadHeaderStats(scratch.PluginPath));
     }
 
     [Theory]
@@ -102,6 +103,13 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         using var overlay = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(Path.GetFileName(pluginPath)), pluginPath), Fallout4Release.Fallout4);
         return (overlay.ModHeader.Stats.NextFormID, overlay.ModHeader.Stats.NumRecords);
+    }
+
+    private static uint HighestNativeId(string pluginPath)
+    {
+        var modKey = ModKey.FromFileName(Path.GetFileName(pluginPath));
+        using var overlay = Fallout4Mod.CreateFromBinaryOverlay(new ModPath(modKey, pluginPath), Fallout4Release.Fallout4);
+        return overlay.EnumerateMajorRecords().Where(r => r.FormKey.ModKey == modKey).Max(r => r.FormKey.ID);
     }
 
     private sealed class TrackedScratch : IDisposable

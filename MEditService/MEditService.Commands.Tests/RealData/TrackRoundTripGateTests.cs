@@ -81,15 +81,19 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
     }
 
     [Fact]
-    public void Track_OfTheRealFixture_WritesTheNonDefaultConditionUnknown1PadOfAFallout4EsmResponseAndHeaderStats()
+    public void Track_OfTheRealFixture_WritesTheNonDefaultConditionUnknown1PadOfAFallout4EsmResponse()
     {
         var topicDocumentText = fixture.Documents()
             .Single(document => document.Body.Contains("\"FormKey\": \"01AACD:Fallout4.esm\"", StringComparison.Ordinal)).Body;
         Assert.Contains("\"Unknown1\": \"0x1D9D68\"", topicDocumentText, StringComparison.Ordinal);
+    }
 
-        var rootText = fixture.Documents()
-            .Single(document => document.Body.Contains("\"NumRecords\"", StringComparison.Ordinal)).Body;
-        Assert.Contains("\"NumRecords\": 4743", rootText, StringComparison.Ordinal);
-        Assert.Contains("\"NextFormID\": 2049", rootText, StringComparison.Ordinal);
+    [Theory]
+    [InlineData("\"MasterReferences\"")]
+    [InlineData("\"NextFormID\"")]
+    [InlineData("\"NumRecords\"")]
+    public void Track_OfTheRealFixture_WritesNoValueThePluginDerives(string member)
+    {
+        Assert.DoesNotContain(fixture.Documents(), document => document.Body.Contains(member, StringComparison.Ordinal));
     }
 }
