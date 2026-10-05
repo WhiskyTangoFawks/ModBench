@@ -14,16 +14,17 @@ public sealed class EditRecordHandler
     // (MEditService.Commands.Composition) rather than the host naming a type it cannot see.
     internal EditRecordHandler(RecordEdit edit, ILogger<EditRecordHandler> logger) => (_edit, _logger) = (edit, logger);
 
-    public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
-        _edit.Run(plugin, formKey, envelope, given: null, (transaction, repository, changes) =>
+    public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
+    {
+        var plan = _edit.Plan(plugin, formKey, envelope, given: null);
+        var written = SourceCommit.Apply(plan, _logger);
+        if (written.Applied && plan.Repository is not null && _logger.IsEnabled(LogLevel.Information))
         {
-            transaction.Apply(repository, changes);
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation(
-                    "Edited {Op} {Path} on {FormKey} in {Plugin} ({Origin}): moved {Moves}, wrote {Documents}",
-                    envelope.Op, RecordEditEnvelope.Spell(envelope.Path), formKey, plugin.Name, plugin.Origin,
-                    changes.Moves.Select(move => $"{move.From} to {move.To}"), changes.Documents.Select(document => document.Path));
-            }
-        });
+            _logger.LogInformation(
+                "Edited {Op} {Path} on {FormKey} in {Plugin} ({Origin}): moved {Moves}, wrote {Documents}",
+                envelope.Op, RecordEditEnvelope.Spell(envelope.Path), formKey, plugin.Name, plugin.Origin,
+                plan.Changes.Moves.Select(move => $"{move.From} to {move.To}"), plan.Changes.Documents.Select(document => document.Path));
+        }
+        return written;
+    }
 }

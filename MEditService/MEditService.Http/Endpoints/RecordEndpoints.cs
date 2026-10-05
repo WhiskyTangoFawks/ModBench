@@ -3,7 +3,6 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.Queries;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -216,7 +215,7 @@ public static class RecordEndpoints
                         request.Op, spelled, decoded, request.Plugin, request.Origin);
                 }
             },
-            validate: () => EditRequestProblem(request.Plugin, request.Origin, request.Op, request.Path),
+            validate: () => EditRequestProblem(request),
             execute: () => edits.Edit(
                 new PluginAddress(request.Plugin, request.Origin), decoded,
                 new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value)),
@@ -227,8 +226,9 @@ public static class RecordEndpoints
         string formKey, RecordEditChangesRequest request, EditRecordChangesHandler edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
-        var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
-        var changes = SourceChanges.None;
+        // A body missing its edit binds it as null, whatever the type says; validation answers that.
+        RecordEditRequest? edit = request.Edit;
+        var spelled = RecordEditEnvelope.Spell(edit?.Path ?? []);
         return WriteEndpointMapping.Execute(
             "EditChanges", logger,
             logReceived: () =>
@@ -237,32 +237,29 @@ public static class RecordEndpoints
                 {
                     logger.LogInformation(
                         "Received EditRecordChanges {Op} {Path} for {FormKey} in {Plugin} ({Origin})",
-                        request.Op, spelled, decoded, request.Plugin, request.Origin);
+                        edit?.Op, spelled, decoded, edit?.Plugin, edit?.Origin);
                 }
             },
             validate: () => request.Text is null
                 ? Results.Problem("The text of the document carrying the record is required.", statusCode: 400)
-                : EditRequestProblem(request.Plugin, request.Origin, request.Op, request.Path),
-            execute: () =>
-            {
-                var answer = edits.Changes(
-                    new PluginAddress(request.Plugin, request.Origin), decoded,
-                    new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value), request.Text);
-                changes = answer.Changes;
-                return answer.Outcome;
-            },
-            onApplied: result => Results.Ok(
-                new RecordEditChangesResponse(decoded, spelled, changes.Moves, changes.Documents, result.NewFormKey)));
+                : EditRequestProblem(edit),
+            execute: () => edits.Changes(
+                new PluginAddress(request.Edit.Plugin, request.Edit.Origin), decoded,
+                new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.Value), request.Text),
+            outcome: answer => answer.Outcome,
+            onApplied: answer => Results.Ok(new RecordEditChangesResponse(
+                decoded, spelled, answer.Changes.Moves, answer.Changes.Documents, answer.Outcome.NewFormKey)));
     }
 
-    private static IResult? EditRequestProblem(string? plugin, string? origin, string? op, IReadOnlyList<PathHop>? path)
+    private static IResult? EditRequestProblem(RecordEditRequest? request)
     {
-        if (string.IsNullOrWhiteSpace(plugin) || string.IsNullOrWhiteSpace(origin))
+        if (string.IsNullOrWhiteSpace(request?.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
             return Results.Problem("Plugin name and origin are required.", statusCode: 400);
-        if (string.IsNullOrWhiteSpace(op) || path is not { Count: > 0 })
+        if (string.IsNullOrWhiteSpace(request.Op) || request.Path is not { Count: > 0 })
             return Results.Problem("An operation and a path are required.", statusCode: 400);
         return null;
     }
+
 
     internal static Task<IResult> DeleteRecord(RecordDeleteRequest request, DeleteRecordHandler edits, ILogger logger)
     {

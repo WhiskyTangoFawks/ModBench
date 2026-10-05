@@ -117,6 +117,13 @@ public sealed class SourceRepository
         PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         Locator.ContainerDocument(plugin, identity, schemas);
 
+    /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>:
+    /// the tree only says which document that is. Null when nothing holds it; text naming no record throws
+    /// <see cref="UnreadableSourceDocumentException"/>.</summary>
+    public (RecordIdentity Record, SourceDocument Carrying)? CarryingFromText(
+        PluginAddress plugin, string formKey, string text, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        Locator.CarryingFromText(plugin, formKey, text, schemas);
+
     /// <summary>The record that carries <paramref name="identity"/> inline, and the slot it sits in; null
     /// for a record with a document of its own.</summary>
     public DocumentContainment? ContainerOf(

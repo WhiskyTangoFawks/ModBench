@@ -58,13 +58,7 @@ public record RecordEditResponse(bool Applied, string FormKey, string Path, stri
 
 /// <summary>An edit asked for the changes it makes, given <see cref="Text"/>, the current text of the
 /// document carrying the record.</summary>
-public record RecordEditChangesRequest(
-    string Plugin,
-    string Origin,
-    string Op,
-    IReadOnlyList<PathHop> Path,
-    string Text,
-    [property: JsonConverter(typeof(KeepsJsonNullConverter))] JsonElement? Value = null);
+public record RecordEditChangesRequest(RecordEditRequest Edit, string Text);
 
 /// <summary>The changes an edit makes to plugin source, written nowhere: each move, then each document's
 /// new text at its path once moved, relative to the mod folder. A refusal is ProblemDetails, as the edit's is.</summary>

@@ -1,6 +1,5 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
@@ -15,8 +14,7 @@ public sealed class EditRecordChangesHandler
     /// <summary><paramref name="text"/> is the current text of the document that carries the record.</summary>
     public RecordEditChanges Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string text)
     {
-        var answer = SourceChanges.None;
-        var outcome = _edit.Run(plugin, formKey, envelope, text, (_, _, changes) => answer = changes);
-        return new RecordEditChanges(outcome, outcome.Applied ? answer : SourceChanges.None);
+        var plan = _edit.Plan(plugin, formKey, envelope, text);
+        return new RecordEditChanges(plan.Outcome, plan.Changes);
     }
 }

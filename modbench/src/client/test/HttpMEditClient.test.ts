@@ -551,7 +551,7 @@ describe('HttpMEditClient — an edit answered as its source changes', () => {
 
     expect(outcome).toEqual({ applied: true, moves, documents });
     expect(new URL(seen?.url ?? '').pathname).toBe('/records/000800%3AMyPatch.esp/edit-changes');
-    expect(await seen?.json()).toEqual({ plugin: 'MyPatch.esp', origin: 'ModA', ...renamed, text: '{"EditorID": "Old"}' });
+    expect(await seen?.json()).toEqual({ edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed }, text: '{"EditorID": "Old"}' });
   });
 
   it('getEditChanges carries the new FormKey an edit of the FormID answers with', async () => {

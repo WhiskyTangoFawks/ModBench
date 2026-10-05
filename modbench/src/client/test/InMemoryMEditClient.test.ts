@@ -10,20 +10,6 @@ describe('InMemoryMEditClient — recorded calls', () => {
     expect(client.calls).toContainEqual({ method: 'getReferences', args: ['000001:Fallout4.esm'] });
   });
 
-  it('answers an edit\'s scripted source changes, recording the document text it was given', async () => {
-    const client = new InMemoryMEditClient();
-    const changes = { applied: true as const, moves: [], documents: [{ path: 'plugin-source/A.esp/Npcs/N.json', text: '{}' }] };
-    client.setQueryAnswer('getEditChanges', changes);
-    const envelope = { op: 'set' as const, path: [{ kind: 'member' as const, name: 'EditorID' }], value: 'N' };
-
-    const answer = await client.getEditChanges('000800:A.esp', { name: 'A.esp', origin: 'ModA' }, envelope, '{"EditorID": "M"}');
-
-    expect(answer).toEqual(changes);
-    expect(client.calls).toContainEqual({
-      method: 'getEditChanges', args: ['000800:A.esp', { name: 'A.esp', origin: 'ModA' }, envelope, '{"EditorID": "M"}'],
-    });
-  });
-
   it('records a command call with its arguments', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('compile', { landed: [], refused: [] });

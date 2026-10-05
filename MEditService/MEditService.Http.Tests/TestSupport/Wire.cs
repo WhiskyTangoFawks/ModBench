@@ -81,7 +81,7 @@ internal static class Wire
         this HttpClient client, string formKey, string plugin, string origin, string member, object value, string? text) =>
         client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/edit-changes",
-            new { plugin, origin, op = "set", path = new[] { new { kind = "member", name = member } }, value, text });
+            new { edit = new { plugin, origin, op = "set", path = new[] { new { kind = "member", name = member } }, value }, text });
 
     internal static Task<HttpResponseMessage> Copy(
         this HttpClient client, IEnumerable<(string FormKey, string Plugin, string Origin)> records, string mode,

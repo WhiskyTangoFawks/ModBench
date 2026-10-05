@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
@@ -9,53 +10,35 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>What an edit does with the changes it makes to plugin source: write them, or keep them as
-/// the answer.</summary>
-internal delegate void SourceWrite(SourceTransaction transaction, SourceRepository repository, SourceChanges changes);
+/// <summary>An edit's outcome and, when it applies, the changes it makes to plugin source. A failed write of
+/// them refuses with <see cref="Failed"/>, the tree put back.</summary>
+internal sealed record EditPlan(RecordEditResult Outcome, SourceChanges Changes, SourceRepository? Repository, string Failed)
+{
+    public static implicit operator EditPlan(RecordEditResult outcome) => new(outcome, SourceChanges.None, null, "");
+}
 
-/// <summary>A record edit as the changes it makes to plugin source (ADR-0007). The target and the
-/// pre-write gate are <see cref="WriteTargets"/>'s, so nothing here re-derives one.</summary>
+/// <summary>A record edit as the changes it makes to plugin source, written nowhere (ADR-0007). The target
+/// and the pre-write gate are <see cref="WriteTargets"/>'s, so nothing here re-derives one.</summary>
 internal sealed class RecordEdit(WriteTargets targets, RecordTextCodec codec, SchemaReflector schemaReflector, ILogger logger)
 {
     private readonly FormKeyChange _formKeyChange = new(codec, logger);
     private readonly CellLanding _cellLanding = new(targets, codec, schemaReflector, logger);
 
-    /// <summary>The edit's refusal, or its changes handed to <paramref name="write"/>. <paramref name="given"/>
-    /// stands in for the file of the document carrying the record, which is read when it is null.</summary>
-    internal RecordEditResult Run(
-        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string? given, SourceWrite write) =>
-        WriteFailure.Refused(
-            () => EditSource(plugin, formKey, envelope, given, write), $"Could not write the source file for {formKey}", logger);
+    /// <summary><paramref name="given"/> stands in for the file of the document carrying the record, which is
+    /// read when it is null.</summary>
+    internal EditPlan Plan(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string? given) =>
+        WriteFailure.Refused<EditPlan>(
+            () => EditSource(plugin, formKey, envelope, given), refused => refused, $"Could not write the source file for {formKey}", logger);
 
-    private RecordEditResult EditSource(
-        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string? given, SourceWrite write)
+    private EditPlan EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string? given)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
-        if (targets.ResolveEditTarget(plugin, formKey, out var editTarget) is { } blocked) return blocked;
+        if (!TryCarrying(plugin, formKey, given, out var editTarget, out var document, out var blocked)) return blocked;
         var (release, identity, repository) = editTarget;
         var schemas = schemaReflector.GetSchemas(release);
-
-        // An embedded child is patched inside the document that carries it, so the identity written
-        // back is that document's — its own for every other shape, the header included.
         var relativePath = repository.RelativePathOf(plugin, identity);
-        SourceDocument? carrying;
-        try
-        {
-            carrying = repository.ContainerDocument(plugin, identity, schemas);
-        }
-        catch (UnreadableSourceDocumentException ex)
-        {
-            return WriteTargets.RefuseUnreadable(formKey, ex.Message);
-        }
-        if (carrying is not { } held)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.SourceUnitNotFound,
-                $"{relativePath ?? $"{plugin.Name}'s source tree"} does not hold {formKey} — it was moved or removed outside " +
-                "Modbench. Check the Source Control panel.");
-        }
-        var document = given is null ? held : held with { Body = given };
-        if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, document, envelope.Value, write);
+
+        if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, document, envelope.Value);
         var isEmbedded = !document.FormKey.Equals(identity.FormKey, StringComparison.Ordinal);
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
 
@@ -139,16 +122,47 @@ internal sealed class RecordEdit(WriteTargets targets, RecordTextCodec codec, Sc
         if (refused is { Refusal: RecordEditRefusal.CodecRejected } && Unreadable(roundTrip, text) is { } why)
             return WriteTargets.RefuseUnreadable(formKey, why, spelled);
         if (refused is { } rejected) return rejected;
-        if (crossing is { } leaving) return _cellLanding.Land(plugin, editTarget, target, newText, leaving, spelled, write);
+        if (crossing is { } leaving) return _cellLanding.Land(plugin, editTarget, target, newText, leaving, spelled);
 
         // The document already said this (a value set to itself): nothing to commit, so no dirty file
         // or history entry.
         if (string.Equals(newText, text, StringComparison.Ordinal)) return RecordEditResult.Success();
 
-        write(
-            new SourceTransaction(), repository,
-            repository.ChangesToPut(plugin, new SourceDocument(target.FormKey, target.RecordType, WriteTargets.EditorIdOf(newText), newText)));
-        return RecordEditResult.Success();
+        return new EditPlan(
+            RecordEditResult.Success(),
+            repository.ChangesToPut(plugin, new SourceDocument(target.FormKey, target.RecordType, WriteTargets.EditorIdOf(newText), newText)),
+            repository, $"Could not write the source file for {formKey}.");
+    }
+
+    // An embedded child is patched inside the document that carries it, so the identity written back is
+    // that document's: its own for every other shape, the header included.
+    private bool TryCarrying(
+        PluginAddress plugin, string formKey, string? given, out WriteTargets.EditTarget target,
+        [NotNullWhen(true)] out SourceDocument? document, [NotNullWhen(false)] out RecordEditResult? refused)
+    {
+        if (given is not null) return targets.TryResolveEditTarget(plugin, formKey, given, out target, out document, out refused);
+
+        document = null;
+        refused = targets.ResolveEditTarget(plugin, formKey, out target);
+        if (refused is not null) return false;
+
+        var (release, identity, repository) = target;
+        try
+        {
+            document = repository.ContainerDocument(plugin, identity, schemaReflector.GetSchemas(release));
+        }
+        catch (UnreadableSourceDocumentException ex)
+        {
+            refused = WriteTargets.RefuseUnreadable(formKey, ex.Message);
+            return false;
+        }
+        if (document is not null) return true;
+
+        refused = RecordEditResult.Refused(
+            RecordEditRefusal.SourceUnitNotFound,
+            $"{repository.RelativePathOf(plugin, identity) ?? $"{plugin.Name}'s source tree"} does not hold {formKey} — it was moved or removed outside " +
+            "Modbench. Check the Source Control panel.");
+        return false;
     }
 
     private static string? Unreadable(Func<string, string> roundTrip, string text)

@@ -251,6 +251,26 @@ public sealed class SourceTransactionTests : IDisposable
     }
 
     [Fact]
+    public void Rollback_ReportsAMoveTheFileSystemRefusedToPutBack_WithItsWords()
+    {
+        Seed(Fk("000800"), "npc_", "Moved");
+        var from = Path.GetRelativePath(_root, FlatFile(Fk("000800"), "npc_", "Moved"));
+        var to = Path.Combine("Elsewhere", Path.GetFileName(from));
+        Directory.CreateDirectory(Path.Combine(_root, "Elsewhere"));
+
+        var transaction = new SourceTransaction();
+        transaction.Apply(Repo, new SourceChanges([new SourceMove(from, to)], []));
+        var folderItLeft = Path.GetDirectoryName(Path.Combine(_root, from)).Require();
+        Directory.Delete(folderItLeft);
+
+        var only = Assert.Single(transaction.Undo(Repo));
+        Assert.Equal(UnrestoredReason.RestoreFailed, only.Reason);
+        Assert.Equal(from, only.RelativePath);
+        Assert.NotNull(only.Error);
+        Assert.True(File.Exists(Path.Combine(_root, to)));
+    }
+
+    [Fact]
     public void Rollback_PutsBackAContainerWhoseRekeyFailedAfterItsMove()
     {
         Seed(Fk("000900"), "wrld", "Home");

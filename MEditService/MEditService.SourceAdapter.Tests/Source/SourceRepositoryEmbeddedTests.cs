@@ -358,7 +358,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void ChangesToRekey_OfARecordNoDocumentCarries_Refuses()
+    public void ChangingTheFormKeyOfARecordNoDocumentCarries_IsRefusedNamingIt()
     {
         var absent = new SourceDocument("00FFFF:Embedded.esp", "refr", "Absent", "{}");
 

@@ -51,6 +51,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var written = instance.EditHandler.Edit(plugin, formKey, envelope);
 
         Assert.True(written.Applied, written.Message);
+        Assert.NotEqual(before, TreeSnapshot.Of(modFolder));
         Assert.Equal(written.NewFormKey, answer.Outcome.NewFormKey);
         Assert.Equal(TreeSnapshot.Of(byHand), TreeSnapshot.Of(modFolder));
     }
@@ -106,6 +107,53 @@ public sealed class EditRecordChangesTests : IDisposable
         var document = Assert.Single(answer.Changes.Documents);
         Assert.Contains("TypedButUnsaved", document.Text, StringComparison.Ordinal);
         Assert.Contains("0.75", document.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFieldEdit_OfARecordWhoseFileIsNoDocument_BuildsOnTheTextItIsGiven()
+    {
+        var given = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString());
+        var file = Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require());
+        File.WriteAllText(file, "not a document");
+
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"), given);
+
+        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
+        var document = Assert.Single(answer.Changes.Documents);
+        Assert.Equal(Path.GetRelativePath(_mod.ModFolder, file), document.Path);
+        Assert.Contains("0.75", document.Text, StringComparison.Ordinal);
+        Assert.Equal("not a document", File.ReadAllText(file));
+    }
+
+    [Fact]
+    public void AFormIdEdit_BuildsOnTheTextItIsGiven_NotOnTheFile()
+    {
+        var unsaved = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString())
+            .Replace($"\"{SourceEditFixture.NpcEditorId}\"", "\"TypedButUnsaved\"", StringComparison.Ordinal);
+
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("FormKey", "\"000F00:Fixture.esp\""), unsaved);
+
+        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
+        var document = Assert.Single(answer.Changes.Documents);
+        Assert.Contains("TypedButUnsaved", document.Text, StringComparison.Ordinal);
+        Assert.Contains("000F00:Fixture.esp", document.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APlacedRecordCrossingIntoAnotherCell_BuildsOnTheTextItIsGivenForTheCellItLeaves()
+    {
+        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
+        var leaving = TrackedTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require();
+        var unsaved = TextOf(world, world.Plugin, keys["Mover"].ToString())
+            .Replace("\"Wanderer\"", "\"TypedButUnsaved\"", StringComparison.Ordinal);
+        Assert.Contains("TypedButUnsaved", unsaved, StringComparison.Ordinal);
+
+        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Flags(Persistent), unsaved);
+
+        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
+        var left = Assert.Single(answer.Changes.Documents, document => document.Path == leaving);
+        Assert.Contains("TypedButUnsaved", left.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Mover", left.Text, StringComparison.Ordinal);
     }
 
     [Fact]

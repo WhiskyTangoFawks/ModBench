@@ -298,35 +298,25 @@ internal sealed class SourceRepositoryWrites(
     {
         if (LeafMove(unit, document) is not var (from, to)) return;
 
+        // A file whose text is not a document is something else's, and moving it over drops what it wrote.
+        if (SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
+            throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
+
         SourceRepositoryLayout.MoveEntry(from, to);
         locator.Forget();
     }
 
-    // The file or folder that holds the document, and where its layout leaf name puts it.
+    // The file or folder that holds the document, and where its layout leaf name puts it; null when it
+    // is already there.
     private static (string From, string To)? LeafMove(SourceUnit unit, SourceDocument document)
     {
-        if (!MovesToAnotherLeafName(unit, document)) return null;
+        if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !File.Exists(unit.FullPath)) return null;
 
         var from = unit.IsDirectoryPerRecord ? PathShape.DirectoryOf(unit.FullPath) : unit.FullPath;
-        return (from, Path.Combine(PathShape.DirectoryOf(from), LayoutLeafName(unit, document)));
-    }
-
-    private static string LayoutLeafName(SourceUnit unit, SourceDocument document) =>
-        SourceRepositoryLayout.LeafNameFor(FormKey.Factory(document.FormKey), document.EditorId, unit.IsDirectoryPerRecord);
-
-    /// <summary>Whether putting <paramref name="document"/> would move the file it replaces to the leaf
-    /// name the layout gives it. Refuses a file whose text is not a document: overwriting it would drop
-    /// what something else wrote.</summary>
-    internal static bool MovesToAnotherLeafName(SourceUnit unit, SourceDocument document)
-    {
-        if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !File.Exists(unit.FullPath))
-            return false;
-
-        if (SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
-            throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
-
-        var held = Path.GetFileName(unit.IsDirectoryPerRecord ? PathShape.DirectoryOf(unit.FullPath) : unit.FullPath);
-        return !string.Equals(held, LayoutLeafName(unit, document), StringComparison.Ordinal);
+        var to = Path.Combine(
+            PathShape.DirectoryOf(from),
+            SourceRepositoryLayout.LeafNameFor(FormKey.Factory(document.FormKey), document.EditorId, unit.IsDirectoryPerRecord));
+        return string.Equals(from, to, StringComparison.Ordinal) ? null : (from, to);
     }
 
     private static byte[] OwnerBytes(SourceUnit unit) => DocumentText.StripUtf8Bom(File.ReadAllBytes(unit.FullPath));

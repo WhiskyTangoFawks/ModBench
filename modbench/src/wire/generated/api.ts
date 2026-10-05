@@ -1020,12 +1020,8 @@ export interface components {
             parseDiagnosis?: string | null;
         };
         RecordEditChangesRequest: {
-            plugin: string;
-            origin: string;
-            op: string;
-            path: components["schemas"]["PathHop"][];
+            edit: components["schemas"]["RecordEditRequest"];
             text: string;
-            value?: unknown;
         };
         RecordEditChangesResponse: {
             formKey: string;

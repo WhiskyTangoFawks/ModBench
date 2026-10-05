@@ -118,6 +118,54 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         return new RecordIdentity(spelled, child.RecordType, child.EditorId);
     }
 
+    /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>
+    /// rather than that document's file, which is only found. Null when nothing in the tree holds it.</summary>
+    internal (RecordIdentity Record, SourceDocument Carrying)? CarryingFromText(
+        PluginAddress plugin, string formKey, string text, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (!FormKey.TryFactory(formKey, out var parsed)) return null;
+        var spelled = parsed.ToString();
+        var sourceRoot = Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name));
+        if (!Directory.Exists(sourceRoot)) return null;
+
+        if (spelled.Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), StringComparison.OrdinalIgnoreCase))
+        {
+            if (!File.Exists(SourceRepositoryLayout.HeaderDocumentIn(_modFolder, plugin.Name))) return null;
+            var header = new SourceDocument(spelled, PluginHeader.RecordType, null, text);
+            return (header.Identity, header);
+        }
+
+        var named = DocumentsNaming(sourceRoot, spelled).Where(File.Exists).ToList();
+        if (OneDocumentPerFormKey.TheOne(named.Count > 0 ? named : DocumentsDeclaring(sourceRoot, spelled), spelled, _modFolder) is { } own)
+        {
+            var document = DeclaredIn(own, text, plugin.Name, schemas);
+            if (!FormKey.TryFactory(document.FormKey, out var declared) || declared != parsed)
+                throw new UnreadableSourceDocumentException($"The text given for {Path.GetRelativePath(_modFolder, own)} declares {document.FormKey}, not {spelled}.");
+            return (document.Identity with { FormKey = spelled }, document);
+        }
+
+        if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
+        var carrying = DeclaredIn(owner.FullPath, text, plugin.Name, schemas);
+        var child = new ContainerDocuments(_release, schemas).EmbeddedIdentity(owner.RecordType, Encoding.UTF8.GetBytes(text), spelled)
+            ?? throw new UnreadableSourceDocumentException(
+                $"The text given for {Path.GetRelativePath(_modFolder, owner.FullPath)} does not carry {spelled}.");
+        return (new RecordIdentity(spelled, child.RecordType, child.EditorId), carrying);
+    }
+
+    private SourceDocument DeclaredIn(
+        string documentPath, string text, string pluginFileName, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        var relativePath = Path.GetRelativePath(_modFolder, documentPath);
+        if (NotADocument(text) is { } why)
+            throw new UnreadableSourceDocumentException($"The text given for {relativePath} is not a readable document: {why}");
+        var document = DocumentAt(relativePath, text, pluginFileName)
+            ?? throw new UnreadableSourceDocumentException($"The text given for {relativePath} names no record.");
+        var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
+            ?? new ContainerDocuments(_release, schemas).RecordTypeNamed(document.RecordType)
+            ?? throw new UnreadableSourceDocumentException($"The text given for {relativePath} names no record type.");
+        return document with { RecordType = recordType };
+    }
+
     /// <summary>The reader's own words for a document whose name carries <paramref name="formKey"/>
     /// and whose text is not one; null when the tree names no such document.</summary>
     internal string? UnreadableDocumentFor(PluginAddress plugin, string formKey)
