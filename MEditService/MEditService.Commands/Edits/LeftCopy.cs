@@ -1,3 +1,5 @@
+using MEditService.LoadOrder;
+
 namespace MEditService.Commands.Edits;
 
 /// <summary>What the walk to the left found: a copy, none, or a nearest copy it cannot read.</summary>
@@ -7,7 +9,7 @@ internal abstract record LeftCopy
     {
     }
 
-    internal sealed record Found(string Text) : LeftCopy;
+    internal sealed record Found(string Text, PluginAddress Plugin) : LeftCopy;
 
     internal sealed record None : LeftCopy;
 

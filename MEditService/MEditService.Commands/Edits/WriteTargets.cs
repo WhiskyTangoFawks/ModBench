@@ -212,6 +212,35 @@ internal sealed class WriteTargets(
         new(false, RecordEditRefusal.RecordParseFailed,
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);
 
+    /// <summary>xEdit's HighestOverrideVisibleForFile: the source's copy stands unless it is Partial Form
+    /// or a master of the destination loads after it. <paramref name="text"/> is that master's copy,
+    /// null when the source's stands.</summary>
+    internal RecordEditResult? HighestOverrideVisibleToTheDestination(
+        CopySource source, RecordIdentity identity, RecordCopy.Destination destination, out string? text)
+    {
+        text = null;
+        var current = loadOrder.Current;
+        int IndexOf(PluginAddress plugin) => current.LoadOrderIndex(plugin) ?? current.Active.Count;
+        var sourcePartial = source.IsPartialForm(identity);
+        if (!sourcePartial && IndexOf(destination.Plugin) <= IndexOf(source.Plugin)) return null;
+
+        var spelled = identity.FormKey;
+        if (MastersOf(
+                destination.Repository, destination.Plugin, schemaReflector.GetSchemas(current.GameRelease), spelled,
+                "the copy of a container the destination can see", out var masters) is { } refused) return refused;
+
+        switch (NearestCopyToTheLeft(destination.Plugin, identity.FormKey, _ => true, PartialFormFlag.Bit, masters))
+        {
+            case LeftCopy.Unreadable unreadable:
+                return unreadable.Refusal(spelled, "the copy of a container the destination can see is carried in");
+            case LeftCopy.Found found when sourcePartial || IndexOf(found.Plugin) > IndexOf(source.Plugin):
+                text = found.Text;
+                return null;
+            default:
+                return null;
+        }
+    }
+
     /// <summary>The nearest copy left of <paramref name="plugin"/>, among <paramref name="among"/> if given,
     /// that <paramref name="says"/> accepts, passing over one whose header holds a flag of
     /// <paramref name="passOver"/>. An unreadable copy ends the walk.</summary>
@@ -245,7 +274,7 @@ internal sealed class WriteTargets(
             using var source = new CopySource(left, current, adapter, codec, schemaReflector);
             try
             {
-                if (answer(source) is { } text) return new LeftCopy.Found(text);
+                if (answer(source) is { } text) return new LeftCopy.Found(text, left);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {

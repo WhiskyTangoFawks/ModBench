@@ -92,7 +92,7 @@ internal static class TrackedTree
         var body = RecordMint.BareDocument(
             new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["npc_"],
-            GameRelease.Fallout4, formKey, editorId: null, partialForm: false);
+            GameRelease.Fallout4, formKey, editorId: null);
         Repository(modFolder).Put(plugin, new SourceDocument(formKey, "npc_", null, body));
     }
 
