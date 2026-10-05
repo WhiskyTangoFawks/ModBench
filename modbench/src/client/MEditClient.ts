@@ -41,10 +41,6 @@ export function isRefused(result: unknown): result is WriteRefused {
   return typeof result === 'object' && result !== null && (result as { refused?: unknown }).refused === true;
 }
 
-export function isUnanswered(result: unknown): result is WriteRefused & { unanswered: true } {
-  return isRefused(result) && result.unanswered === true;
-}
-
 const NOTIFICATION_KINDS = [
   'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'external-change',
   'untracked-plugins',

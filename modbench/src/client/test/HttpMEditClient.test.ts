@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { HttpMEditClient, type HttpMEditClientDeps } from '../HttpMEditClient';
 import { Readable } from 'node:stream';
-import { isUnanswered } from '../MEditClient';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -212,7 +211,6 @@ describe('HttpMEditClient — deleting records answers per record', () => {
     const result = await client.deleteRecords([kept]);
 
     expect(result).toEqual({ refused: true, unanswered: true, message: 'Could not delete 1 record — socket hang up' });
-    expect(isUnanswered(result)).toBe(true);
   });
 
   it('tells a success with no body apart as unanswered, for create and copy too', async () => {
@@ -225,14 +223,14 @@ describe('HttpMEditClient — deleting records answers per record', () => {
       await thrown.copyRecords([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false),
     ];
 
-    expect(answers.map(isUnanswered)).toEqual([true, true, true]);
+    expect(answers.map((a) => (a as { unanswered?: boolean }).unanswered)).toEqual([true, true, true]);
     expect(answers[0]).toEqual({ refused: true, unanswered: true, message: 'Could not delete 1 record — no answer' });
   });
 
   it('never tells a refusal mEdit answered apart as unanswered', async () => {
     const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(400, 'Bad Request'))));
 
-    expect(isUnanswered(await client.deleteRecords([kept]))).toBe(false);
+    expect(await client.deleteRecords([kept])).not.toHaveProperty('unanswered');
   });
 });
 
@@ -888,5 +886,38 @@ describe('HttpMEditClient — onNotification', () => {
 
     await vi.waitFor(() => expect(heard).toEqual([{ plugin: { name: 'A.esp', origin: 'ModA' } }]));
     await client.stop();
+  });
+});
+
+describe('HttpMEditClient — a plugin address on the wire', () => {
+  const plugin = { name: 'Shared.esp', origin: 'ModA' };
+
+  async function requestOf(call: (client: HttpMEditClient) => Promise<unknown>, answer: unknown = []): Promise<Request> {
+    let seen: Request | undefined;
+    const fetch = vi.fn((req: Request) => { seen = req; return Promise.resolve(jsonResponse(200, answer)); });
+    await call(makeClient(fetch));
+    if (!seen) throw new Error('no request sent');
+    return seen;
+  }
+
+  it.each([
+    ['getRecordTypes', (c: HttpMEditClient) => c.getRecordTypes(plugin), []],
+    ['getWorldspaces', (c: HttpMEditClient) => c.getWorldspaces(plugin), []],
+    ['getWorldspaceBlocks', (c: HttpMEditClient) => c.getWorldspaceBlocks(plugin, '000800:Shared.esp'), { topCells: [], blocks: [] }],
+    ['getCellChildRecords', (c: HttpMEditClient) => c.getCellChildRecords(plugin, '000800:Shared.esp'), { persistent: [], temporary: [] }],
+    ['getInteriorCells', (c: HttpMEditClient) => c.getInteriorCells(plugin), []],
+    ['getContainerChildren', (c: HttpMEditClient) => c.getContainerChildren(plugin, '000800:Shared.esp'), []],
+  ])('%s asks for the plugin by filename in the path and by origin in the query', async (_name, call, answer) => {
+    const request = await requestOf(call, answer);
+
+    expect(new URL(request.url).pathname).toContain('/plugins/Shared.esp/');
+    expect(new URL(request.url).searchParams.get('origin')).toBe('ModA');
+  });
+
+  it('editRecord posts the plugin and its origin in the body beside the envelope', async () => {
+    const request = await requestOf(
+      (c) => c.editRecord('000800:Shared.esp', plugin, { op: 'set', path: [], value: 1 }), { applied: true });
+
+    expect(await request.json()).toEqual({ plugin: 'Shared.esp', origin: 'ModA', op: 'set', path: [], value: 1 });
   });
 });

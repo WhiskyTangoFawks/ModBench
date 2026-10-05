@@ -610,3 +610,7 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 }
+
+export function createMEditClient(deps: HttpMEditClientDeps): MEditClient {
+  return new HttpMEditClient(deps);
+}

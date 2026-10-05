@@ -20,7 +20,6 @@ export type CompareResult = Schemas['CompareResult'];
 
 /** The `track-progress` notification's payload, subscribed alongside the in-flight
  *  `POST /plugins/track`. Counts are of *plugins*, not records. */
-export type TrackPhase = Schemas['TrackPhase'];
 export type TrackStatus = Schemas['TrackProgress'];
 export type ChangedPlugin = Schemas['ChangedPlugin'];
 
