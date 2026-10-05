@@ -27,10 +27,9 @@ internal sealed class OverrideCopy
         (_targets, _recordCopy, _loadOrder, _codec, _logger) = (targets, recordCopy, loadOrder, codec, logger);
     }
 
-    /// <summary>The source's text is read before anything is written, so an unreadable record
-    /// refuses rather than landing as a stub. <paramref name="replace"/> lets it take a held record's
-    /// place; <paramref name="deep"/> brings the child records, and a record with none is a plain
-    /// override.</summary>
+    /// <summary>An unreadable source record refuses rather than landing as a stub.
+    /// <paramref name="replace"/> lets it take a held record's place; <paramref name="deep"/> brings
+    /// the child records, and a record with none is a plain override.</summary>
     internal RecordEditResult Copy(
         PluginAddress sourcePlugin, string formKey, PluginAddress destinationPlugin, bool replace, bool deep = false)
     {
@@ -118,9 +117,8 @@ internal sealed class OverrideCopy
         return new WorldspaceCells([.. cells[true]], [.. cells[false].Order(StringComparer.Ordinal)]);
     }
 
-    // One document at a time, as the tree takes them, so a failure leaves the cells before it in the
-    // working tree and the answer names them. Only a fault of the tree or the file system is that
-    // answer; anything else is a bug.
+    // A failure leaves the cells before it in the working tree, and the answer names them. Only a
+    // fault of the tree or the file system is that answer; anything else is a bug.
     private RecordEditResult LandCells(WriteTargets.CopyTarget copy, WorldspaceCells cells)
     {
         var (source, identity, destination, release, _) = copy;
