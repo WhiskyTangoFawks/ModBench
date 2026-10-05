@@ -127,7 +127,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
     {
         var cell = InTheTree(InteriorCell, "cell");
         var cells = Path.Combine(_modFolder, "plugin-source", PluginName, "Cells");
-        Directory.Move(Path.Combine(cells, "0", "0", "000802_Vendor.esp"), Path.Combine(cells, "000802_Vendor.esp"));
+        Directory.Move(Path.Combine(cells, "0", "5", "000802_Vendor.esp"), Path.Combine(cells, "000802_Vendor.esp"));
 
         var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.WorldspaceOf(Plugin, cell.Identity));
 
