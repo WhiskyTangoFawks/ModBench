@@ -7,7 +7,7 @@ import type {
 } from '../client';
 import { parseRecordResourceUri, recordResourceUri } from './recordResourceUri';
 import { failurePrefixIcon } from './failurePrefixIcon';
-import { pluginAddressKey, pluginAddressOf } from '../wire/pluginAddress';
+import { pluginAddressKey, pluginAddressOf, type PluginAddress } from '../wire/pluginAddress';
 import type { PluginConditions } from './pluginFacts';
 import { errorMessage } from '../ports/errorMessage';
 import { UNLIMITED_RECORDS } from '../client';
@@ -104,7 +104,7 @@ export class RecordNode extends vscode.TreeItem {
     };
     // RecordDecorationProvider's keying identity — record.plugin (this row's own copy's owning
     // plugin, which an override stack row can differ from the RecordTypeNode's) paired with origin.
-    this.resourceUri = recordResourceUri(record.plugin, origin, record.formKey);
+    this.resourceUri = recordResourceUri({ name: record.plugin, origin }, record.formKey);
     describeRecordRow(this, record);
   }
 }
@@ -337,8 +337,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  private cachedRecord(plugin: string, origin: string, formKey: string): RecordSummary | undefined {
-    const prefix = `${pluginAddressKey({ name: plugin, origin })}::`;
+  private cachedRecord(plugin: PluginAddress, formKey: string): RecordSummary | undefined {
+    const prefix = `${pluginAddressKey(plugin)}::`;
     for (const [key, page] of this.pageCache) {
       if (!key.startsWith(prefix)) continue;
       const item = page.items.find(r => r.formKey === formKey);
@@ -351,7 +351,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
    *  the decoration provider reads the same as 'None': nothing to badge. */
   workingTreeStateOf(uri: vscode.Uri): RecordSummary['workingTreeState'] | undefined {
     const identity = parseRecordResourceUri(uri);
-    return identity && this.cachedRecord(identity.plugin, identity.origin, identity.formKey)?.workingTreeState;
+    return identity && this.cachedRecord(identity.plugin, identity.formKey)?.workingTreeState;
   }
 
   getTreeItem(element: PluginTreeNode): vscode.TreeItem {
@@ -431,9 +431,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   /** Keyed by the plugin rather than by a node this provider built: `PluginsTreeProvider` expands
    *  its own rows, whose whole knowledge of this side is the plugin and the
    *  conditions that row states. */
-  async getPluginChildren(pluginName: string, origin: string, conditions: PluginConditions = NOT_EDITABLE): Promise<PluginTreeNode[]> {
+  async getPluginChildren(plugin: PluginAddress, conditions: PluginConditions = NOT_EDITABLE): Promise<PluginTreeNode[]> {
+    const { name: pluginName, origin } = plugin;
     return this.orErrorNode(`getPluginChildren(${pluginName})`, async () => {
-      const types = await this.repository.getRecordTypes({ name: pluginName, origin });
+      const types = await this.repository.getRecordTypes(plugin);
       return types
         .map(t => SPATIAL_GROUP_FACTORIES[t.type]?.(pluginName, t, origin, conditions)
           ?? new RecordTypeNode(pluginName, t, origin, conditions));
@@ -503,7 +504,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       // fetchContainerChildren uses.
       const rows = cached.items.map(r => new RecordNode(
         r, node.origin, node.conditions, containerChildTypeOf(node.recordType), r.hasContainerChildren));
-      if (read) this._onDidReadRecords.fire(rows.map((row) => recordResourceUri(row.record.plugin, node.origin, row.record.formKey)));
+      if (read) this._onDidReadRecords.fire(rows.map((row) => recordResourceUri({ name: row.record.plugin, origin: node.origin }, row.record.formKey)));
       return rows;
     });
   }

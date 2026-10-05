@@ -228,14 +228,14 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header'
   it('PluginNode opens the header at the plugin and origin its row stands for', () => {
     const node = new PluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod');
     expect(node.command).toEqual({
-      command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: '000000:TestMod.esp', origin: 'SomeMod' }],
+      command: 'modbench.record.open', title: 'Open Record', arguments: [{ header: { name: 'TestMod.esp', origin: 'SomeMod' } }],
     });
   });
 
   it('ImplicitMasterNode opens the header at the plugin and origin its row stands for', () => {
     const node = new ImplicitMasterNode('Fallout4.esm', 'Data');
     expect(node.command).toEqual({
-      command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: '000000:Fallout4.esm', origin: 'Data' }],
+      command: 'modbench.record.open', title: 'Open Record', arguments: [{ header: { name: 'Fallout4.esm', origin: 'Data' } }],
     });
   });
 
