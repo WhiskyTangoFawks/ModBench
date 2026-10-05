@@ -1,16 +1,17 @@
 using System.Diagnostics;
 using System.Globalization;
 using DuckDB.NET.Data;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>The connection/DDL/validate/rebuild collaborator of <see cref="DuckDbRecordIndex"/>.
-/// Validate is a pure question: this class returns the stale set and never removes rows itself,
-/// since <c>Unindex</c> is the caller's orchestrating verb.</summary>
+/// <summary>The connection, DDL, validate and rebuild of the index file, and every read over it.
+/// Validate returns the stale set and never removes rows: <c>Unindex</c> is the caller's verb.</summary>
 internal sealed class Store : IDisposable
 {
     internal const string FilesRelation = "mirror.files";
@@ -22,39 +23,74 @@ internal sealed class Store : IDisposable
     private readonly ILogger _logger;
     private readonly string? _databasePath;
     private readonly TimeProvider _timeProvider;
+    private readonly SchemaReflector _schemaReflector;
+    private readonly TableDdlBuilder _ddlBuilder;
     // One per Store.
     private readonly PluginFileHashes _hashes;
+    private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
+    private bool _recordTypeViewsCreated;
+    private Func<IReadOnlyDictionary<PluginAddress, PluginContent>> _openedPlugins =
+        () => new Dictionary<PluginAddress, PluginContent>();
 
-    public DuckDBConnection Connection { get; private set; }
+    private DuckDBConnection? _connection;
 
-    public Store(ILogger logger, string? databasePath, TimeProvider? timeProvider = null)
+    public DuckDBConnection Connection =>
+        _connection ?? throw new InvalidOperationException("The store is not open.");
+
+    /// <summary>Every read the index answers.</summary>
+    public IRecordReads Reads { get; }
+
+    public RecordFilter Filter { get; }
+
+    public GameRelease Release { get; private set; }
+
+    public IReadOnlyDictionary<string, RecordTableSchema> Schemas =>
+        _schemas ?? throw new InvalidOperationException("Call Initialize before using the repository.");
+
+    // Empty until the Indexer points it somewhere: a store opened by a test that never reconciles
+    // has no plugins open, which is what an empty set says.
+    public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins() => _openedPlugins();
+
+    public void ReadOpenedPluginsFrom(Func<IReadOnlyDictionary<PluginAddress, PluginContent>> opened) =>
+        _openedPlugins = opened;
+
+    public Store(
+        ILogger logger, string? databasePath, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder,
+        TimeProvider? timeProvider)
     {
         _logger = logger;
         _databasePath = databasePath;
+        _schemaReflector = schemaReflector;
+        _ddlBuilder = ddlBuilder;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _hashes = new PluginFileHashes(_timeProvider);
-        Connection = Open();
+        Reads = new RelationReads(this);
+        Filter = new RecordFilter(this);
     }
 
-    // ADR-0010.
-    private DuckDBConnection Open()
+    /// <summary>Opens the file, or the in-memory database when no path was given. Another window
+    /// holding the file answers its refusal, leaving the store unopened (ADR-0010).</summary>
+    public string? Open()
     {
         if (_databasePath == null)
         {
             var memory = new DuckDBConnection("DataSource=:memory:");
             memory.Open();
-            return memory;
+            _connection = memory;
+            return null;
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(_databasePath)
             ?? throw new InvalidOperationException($"Expected '{_databasePath}' to name a file in a folder."));
         try
         {
-            return OpenFile();
+            _connection = OpenFile(_databasePath);
+            return null;
         }
         catch (Exception ex) when (IsAnotherWriter(ex))
         {
-            throw IndexHeldElsewhereException.For(_databasePath, ex);
+            _logger.LogWarning(ex, "The index at {Path} is held by another window", _databasePath);
+            return $"This instance's index is open in another Modbench window ({_databasePath}). Close mEdit there first, or open a different instance here.";
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -62,7 +98,8 @@ internal sealed class Store : IDisposable
             // changed between DuckDB versions, and the answer is the same for all of them.
             _logger.LogWarning(ex, "Could not open the index at {Path}; rebuilding it from scratch", _databasePath);
             File.Delete(_databasePath);
-            return OpenFile();
+            _connection = OpenFile(_databasePath);
+            return null;
         }
     }
 
@@ -113,24 +150,34 @@ internal sealed class Store : IDisposable
     public void Dispose()
     {
         lock (_rebuildGate) _disposed = true;
-        Connection.Dispose();
+        _connection?.Dispose();
     }
 
-    private DuckDBConnection OpenFile()
+    private static DuckDBConnection OpenFile(string databasePath)
     {
-        var connection = new DuckDBConnection($"DataSource={_databasePath}");
+        var connection = new DuckDBConnection($"DataSource={databasePath}");
         connection.Open();
         return connection;
     }
 
     /// <summary>Discards a file written under another <see cref="IndexVersion"/> (whole-file rebuild,
     /// never partial), then creates the fixed tables and stamps the version they were built under.</summary>
-    public void Initialize(string indexVersion)
+    public void Initialize(GameRelease release)
     {
+        var indexVersion = IndexVersion.For(_schemaReflector, release);
         DiscardFileWrittenUnderAnotherVersion(indexVersion);
+        _schemas = _schemaReflector.GetSchemas(release);
+        Release = release;
         TableDdlBuilder.CreateTables(Connection);
         DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {IndexVersionRelation}");
         DuckDbSql.ExecuteFor(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
+    }
+
+    public void CreateRecordTypeViews()
+    {
+        if (_recordTypeViewsCreated) return;
+        _ddlBuilder.CreateRecordTypeViews(Connection, Release);
+        _recordTypeViewsCreated = true;
     }
 
     // ADR-0010, with no in-place migration.
@@ -188,7 +235,7 @@ internal sealed class Store : IDisposable
                 Connection.Dispose();
                 File.Delete(_databasePath
                     ?? throw new InvalidOperationException("An in-memory index has no file to rebuild."));
-                Connection = OpenFile();
+                _connection = OpenFile(_databasePath);
             }
             finally
             {

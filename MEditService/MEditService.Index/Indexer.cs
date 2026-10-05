@@ -130,8 +130,8 @@ internal sealed class Indexer : IQueryIndex, IDisposable
         {
             lock (_lock)
             {
-                // Whatever this attempt still holds — usually nothing, since the two known
-                // refusals throw before EnsureScope holds anything new — with State/Message
+                // Whatever this attempt still holds — usually nothing, since a refused
+                // open leaves EnsureScope holding nothing new — with State/Message
                 // overlaid rather than discarded, so a mid-reconcile unknown failure keeps
                 // reporting what had already landed.
                 LoadOrderStatus held;
@@ -197,7 +197,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
         string? failure = null;
         try
         {
-            if (ReconcileOrRefuse(arrival, ref version, ref failure) is not { } reconciled) return;
+            if (ReconcileOrRefuse(arrival, ref version, ref heldElsewhere, ref failure) is not { } reconciled) return;
             changed = reconciled;
         }
         catch (OperationCanceledException)
@@ -205,11 +205,6 @@ internal sealed class Indexer : IQueryIndex, IDisposable
             // Superseded: the reconcile that cancelled this one answers for this version or
             // higher, so nothing here is ever the last word for it.
             return;
-        }
-        catch (IndexHeldElsewhereException ex)
-        {
-            heldElsewhere = ex.Message;
-            changed = true;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -232,10 +227,11 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     }
 
     // A superseded reconcile throws OperationCanceledException, leaving its work for its
-    // successor; a second window's hold throws IndexHeldElsewhereException. Null when the arrival
+    // successor; a second window's hold is answered in heldElsewhere. Null when the arrival
     // resolved to none, and false when the reconcile changed nothing Status reports.
     private bool? ReconcileOrRefuse(
-        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version, ref string? failure)
+        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version,
+        ref string? heldElsewhere, ref string? failure)
     {
         EnterExclusive();
         try
@@ -259,7 +255,13 @@ internal sealed class Indexer : IQueryIndex, IDisposable
                 _failureMessage = null;
             }
             var token = BeginReconcile();
-            var (held, index) = EnsureScope(snapshot);
+            if (EnsureScope(snapshot, out heldElsewhere) is not { } scope)
+            {
+                // Refused, not failed — the user has two windows on one instance, and nothing is
+                // held here (EnsureScope tore the previous scope down before the open that refused).
+                return true;
+            }
+            var (held, index) = (scope.Held, scope.Index);
             var reconciled = ReconcileProgressively(held, index, snapshot, token) || refusalCleared;
             failure = ValidateHeld(token);
             return failure is not null || reconciled;
@@ -269,13 +271,6 @@ internal sealed class Indexer : IQueryIndex, IDisposable
             // Superseded: whatever landed stays held and registered, and the reconcile that
             // cancelled this one owns the rest. Normal, not a failure — Information, not Warning.
             _logger.LogInformation(ex, "Load order reconcile was superseded before it completed");
-            throw;
-        }
-        catch (IndexHeldElsewhereException ex)
-        {
-            // Refused, not failed — the user has two windows on one instance, and nothing is
-            // held here (EnsureScope tore the previous scope down before the open that refused).
-            _logger.LogWarning(ex, "Load order refused: the index at {Path} is held by another window", ex.IndexPath);
             throw;
         }
         catch (Exception ex)
@@ -310,12 +305,13 @@ internal sealed class Indexer : IQueryIndex, IDisposable
 
     // ADR-0010.
     // Published before any plugin is opened, which is what makes the reconcile progressive.
-    private (HeldPlugins Held, IRecordIndex Index) EnsureScope(LoadOrderSnapshot snapshot)
+    private OpenScope? EnsureScope(LoadOrderSnapshot snapshot, out string? heldElsewhere)
     {
+        heldElsewhere = null;
         lock (_lock)
         {
             if (_heldPlugins is { } current && _index is { } index && SameScope(ScopeOf(current), snapshot))
-                return (current, index);
+                return new OpenScope(current, index);
             DisposeCurrent();
             if (_filter is { } filter && !SameScope(filter.Scope, snapshot)) _filter = null;
         }
@@ -323,6 +319,12 @@ internal sealed class Indexer : IQueryIndex, IDisposable
         _logger.LogDebug("Initializing DuckDB record index");
         var createTimer = Stopwatch.StartNew();
         var fresh = _indexFactory.Create(snapshot.GameRelease, snapshot.InstanceRoot);
+        if (fresh.HeldElsewhere is { } refusal)
+        {
+            fresh.Dispose();
+            heldElsewhere = refusal;
+            return null;
+        }
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("DuckDB record index initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
@@ -344,8 +346,10 @@ internal sealed class Indexer : IQueryIndex, IDisposable
             ReapplyFilter();
         }
         PublishStatus();
-        return (held, fresh);
+        return new OpenScope(held, fresh);
     }
+
+    private sealed record OpenScope(HeldPlugins Held, IRecordIndex Index);
 
     private readonly record struct IndexScope(GameRelease GameRelease, string DataFolderPath, string? InstanceRoot);
 
@@ -1072,16 +1076,11 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     {
         var previousSequence = Sequence;
         Close();
-        try
-        {
-            // Released before the reconcile below opens the same file for its own scope.
-            _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence).Dispose();
-        }
-        catch (IndexHeldElsewhereException ex)
-        {
-            _logger.LogWarning(ex, "Refused to rebuild: the index at {Path} is held by another window", ex.IndexPath);
-            return new StoreRebuild(Task.CompletedTask, ex.Message);
-        }
+        string? refusal;
+        // Released before the reconcile below opens the same file for its own scope.
+        using (var rebuilt = _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence))
+            refusal = rebuilt.HeldElsewhere;
+        if (refusal is not null) return new StoreRebuild(Task.CompletedTask, refusal);
 
         return new StoreRebuild(Task.Factory.StartNew(
             ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default));

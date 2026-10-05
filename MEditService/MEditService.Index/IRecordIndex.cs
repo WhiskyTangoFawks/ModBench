@@ -16,6 +16,10 @@ internal interface IRecordIndex : IDisposable
     /// open.</summary>
     void ReadOpenedPluginsFrom(Func<IReadOnlyDictionary<PluginAddress, PluginContent>> opened);
 
+    /// <summary>The refusal when another window holds the instance's index file, which leaves the
+    /// index unusable (ADR-0010). Null otherwise.</summary>
+    string? HeldElsewhere { get; }
+
     void Initialize(GameRelease release);
 
     /// <summary>ADR-0015: one monotonic counter, advanced in the same transaction as
