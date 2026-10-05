@@ -31,9 +31,10 @@ import {
   type OriginFileMark,
 } from '../modlist/modlist';
 import { FILE_MARKS, fileLabel } from './modFiles';
-import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
+import { endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
 import { installNameRefusal } from '../install/install';
 import { errorMessage } from '../ports/errorMessage';
+import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { applyOrThrow } from '../ports/applyOrThrow';
 
@@ -114,8 +115,8 @@ export function registerModMoveCommand(
     const { mods: entries, activeProfile } = instance.value;
     const direction = view.direction();
     const given = moveTargetOf(option);
-    const pick = async <T extends MovePlace>(items: MovePickItem<T>[], placeHolder: string) => {
-      const picked = await vscode.window.showQuickPick(items, { placeHolder });
+    const pick = async <T extends MovePlace>(items: MovePickItem<T>[], placeholder: string) => {
+      const picked = await pickWithMarked(items, onlyCurrent(items), placeholder);
       return picked && { place: picked.target, end: endAtTop(direction) };
     };
     if (modNames.length > 0 && separatorNames.length === 0) {
