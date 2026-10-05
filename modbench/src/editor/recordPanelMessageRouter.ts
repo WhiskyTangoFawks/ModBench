@@ -64,7 +64,6 @@ const HANDLERS: {
     deps: RouteRecordPanelMessageDeps, m: Extract<WebviewToExtension, { type: T }>,
   ) => Promise<void> | void;
 } = {
-  [WEBVIEW_TO_EXTENSION.LOG]: (deps, m) => { deps.channel[m.level](m.message); },
   [WEBVIEW_TO_EXTENSION.EDIT_FIELD]: editField,
   [WEBVIEW_TO_EXTENSION.ADD_ELEMENT]: async (_deps, m) => {
     await vscode.commands.executeCommand('modbench.record.addElement', m.context, m.value);
@@ -78,7 +77,6 @@ const HANDLERS: {
 // cast — the narrowing is exactly the correlation `HANDLERS[m.type]` cannot prove on its own.
 function dispatch(deps: RouteRecordPanelMessageDeps, m: WebviewToExtension): Promise<void> | void {
   switch (m.type) {
-    case WEBVIEW_TO_EXTENSION.LOG: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.ADD_ELEMENT: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return HANDLERS[m.type](deps, m);

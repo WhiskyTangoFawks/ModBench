@@ -187,11 +187,4 @@ describe('RecordPanel — the keys\' commands reaching the focused cell', () => 
     pasteIntoCell('12');
     expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();
   });
-
-  it('a pasted cell reads as the pasted value while the write waits for the disk', async () => {
-    await focusCell('Level', 2);
-    pasteIntoCell('12');
-    const cell = required(screen.getByText('Level').closest('tr'), 'the Level row').querySelectorAll('td')[2];
-    await waitFor(() => expect(cell).toHaveTextContent('12'));
-  });
 });

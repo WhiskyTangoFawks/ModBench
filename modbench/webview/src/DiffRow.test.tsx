@@ -58,7 +58,6 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     parentRowKey: null,
     focusedCell: null,
     onFocusCell: vi.fn(),
-    writeAt: () => undefined,
     ...overrides,
   };
 }

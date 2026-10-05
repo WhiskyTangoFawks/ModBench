@@ -42,7 +42,7 @@ describe('the recording reporter', () => {
     const reporter = recordingReporter();
     const meditClient = { editRecord: () => Promise.reject(new Error('backend down')) };
 
-    await applyRecordEdit({ meditClient, refreshSourceControlFor: () => {}, reporter, tellPanels: () => {} }, '000800', 'A.esp', 'ModA', EDIT);
+    await applyRecordEdit({ meditClient, refreshSourceControlFor: () => {}, reporter }, '000800', 'A.esp', 'ModA', EDIT);
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not edit this record.', detail: 'backend down' },
@@ -54,7 +54,7 @@ describe('the recording reporter', () => {
     const reporter = recordingReporter();
     const meditClient = { editRecord: () => Promise.resolve({ applied: false as const, refusal: 'ReadOnly', message: 'Record is read-only.' }) };
 
-    await applyRecordEdit({ meditClient, refreshSourceControlFor: () => {}, reporter, tellPanels: () => {} }, '000800', 'A.esp', 'ModA', EDIT);
+    await applyRecordEdit({ meditClient, refreshSourceControlFor: () => {}, reporter }, '000800', 'A.esp', 'ModA', EDIT);
     reporter.landed('Mods deployed.');
 
     expect(reporter.reports).toEqual([
