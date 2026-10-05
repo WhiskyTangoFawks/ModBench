@@ -409,9 +409,43 @@ export interface paths {
         put?: never;
         /**
          * Copy records into destination plugins, each record into each destination on its own.
-         * @description Override: the source record's own text lands verbatim in the destination under the same FormKey; the master dependency is derived at compile (ADR-0008). A destination that already holds the record is refused unless replace is given, and a replacement changes its own fields only, keeping the children the destination's copy carries. New: a duplicate under the destination's next free FormID, with an EditorID derived from the source's; a container's embedded children copy under fresh FormKeys, and a self-reference follows the copy. Each record and destination is applied or refused on its own, and the answer names both.
+         * @description Override: the source record's own text lands verbatim in the destination under the same FormKey, without its child records; the master dependency is derived at compile (ADR-0008). DeepOverride: the same for a record with child records, and every child record at any depth lands with it; a record with none copies as Override. New: a duplicate without its child records under the destination's next free FormID, with an EditorID derived from the source's, and a self-reference follows the copy. A cell or a worldspace is refused as New. In every mode, a container the destination lacks is copied in as an override. Replace applies to Override and DeepOverride only. Under Override, a destination that already holds the record is refused unless replace is given, and a replacement changes the record's own fields only, keeping the children the destination's copy carries. Under DeepOverride, replace overwrites each child record the destination holds and keeps its copy of the record itself; a child record the destination holds and the source lacks stays. Each record and destination is applied or refused on its own, and the answer names both.
          */
         post: operations["CopyRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/records/with-children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Which of the records have child records in their own plugin. */
+        post: operations["GetRecordsWithChildren"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/records/children-in-destinations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** For each record, the destination plugins that hold any of its child records, at any depth. */
+        post: operations["GetChildrenInDestinations"];
         delete?: never;
         options?: never;
         head?: never;
@@ -533,6 +567,10 @@ export interface components {
             baseEditorId?: string | null;
             parseDiagnosis?: string | null;
         };
+        ChildrenInDestinationsRequest: {
+            records: components["schemas"]["RecordAddress"][];
+            destinations: components["schemas"]["PluginAddress"][];
+        };
         CompareOverride: {
             formKey: string;
             plugin: string;
@@ -592,7 +630,7 @@ export interface components {
             fullName?: string | null;
         };
         /** @enum {string} */
-        CopyMode: "New" | "Override";
+        CopyMode: "New" | "Override" | "DeepOverride";
         CreatableRecordType: {
             type: string;
             displayName: string;
@@ -848,6 +886,10 @@ export interface components {
             refusal: components["schemas"]["RecordEditRefusal"];
             message: string;
         };
+        RecordChildHolders: {
+            record: components["schemas"]["RecordAddress"];
+            destinations: components["schemas"]["PluginAddress"][];
+        };
         RecordCopyItem: {
             record: components["schemas"]["RecordAddress"];
             destination: components["schemas"]["PluginAddress"];
@@ -932,6 +974,9 @@ export interface components {
             items: components["schemas"]["RecordSummary"][];
             /** Format: int32 */
             total: number;
+        };
+        RecordsWithChildrenRequest: {
+            records: components["schemas"]["RecordAddress"][];
         };
         ReferenceResult: {
             formKey: string;
@@ -2054,6 +2099,90 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetRecordsWithChildren: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordsWithChildrenRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordAddress"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetChildrenInDestinations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChildrenInDestinationsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordChildHolders"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
