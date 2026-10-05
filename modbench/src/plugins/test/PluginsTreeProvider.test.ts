@@ -1697,29 +1697,6 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     expect(children).toEqual([expect.any(ErrorNode)]);
   });
 
-  it("a failed refusal leaves an already-held plugin's records alone", async () => {
-    const client = makeClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
-    const h = makeTree([A_ROW()], { client });
-    await reconcile(h, [held('A.esp')]);
-    const [row] = await h.tree.getChildren();
-
-    h.tree.applyRefused(failed);
-    const children = await h.tree.getChildren(row);
-
-    expect(children[0]).toBeInstanceOf(RecordTypeNode);
-  });
-
-  it('a failed refusal names the reason on a row this reload never reached', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    await reconcile(h, [held('A.esp')]);
-    const rows = await h.tree.getChildren();
-
-    h.tree.applyRefused(failed);
-    const children = await h.tree.getChildren(rows[1]);
-
-    expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe(failed.message);
-  });
-
   it("a failed refusal names the failure on the view's message line until the next reconcile ticks", async () => {
     const h = makeTree([A_ROW()]);
     await h.tree.getChildren();
@@ -1728,26 +1705,6 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     expect(h.tree.viewMessage()).toBe(`Indexing failed: ${failed.message}`);
 
     h.tree.applyIndexed([], []);
-    expect(h.tree.viewMessage()).toBeUndefined();
-  });
-
-  it('a reconcile that lands with no tick of its own clears a failed refusal from the message line', async () => {
-    const h = makeTree([A_ROW()]);
-    await h.tree.getChildren();
-    h.tree.applyRefused(failed);
-
-    await reconcile(h, [held('A.esp')]);
-
-    expect(h.tree.viewMessage()).toBeUndefined();
-  });
-
-  it('a heldElsewhere refusal clears an earlier failed refusal from the message line', async () => {
-    const h = makeTree([A_ROW()]);
-    await h.tree.getChildren();
-    h.tree.applyRefused(failed);
-
-    h.tree.applyRefused(heldElsewhere);
-
     expect(h.tree.viewMessage()).toBeUndefined();
   });
 
@@ -1764,17 +1721,6 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     expect(h.tree.getTreeItem(present(after[1], "B.esp's row")).description).toBe(statusBefore);
   });
 
-  it('clears once a later tick lands, resuming normal expansion into records', async () => {
-    const client = makeClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
-    const h = makeTree([A_ROW()], { client });
-    h.tree.applyRefused(heldElsewhere);
-
-    h.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
-    const [row] = await h.tree.getChildren();
-    const children = await h.tree.getChildren(row);
-
-    expect(children[0]).toBeInstanceOf(RecordTypeNode);
-  });
 });
 
 describe('PluginsTreeProvider — applyBackendUnreachable', () => {
@@ -1788,50 +1734,6 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
     expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('mEdit is disconnected.');
   });
 
-  it('names the reason on a row this reload has not reached yet, mid-reconcile', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    h.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
-    const rows = await h.tree.getChildren();
-
-    h.tree.applyBackendUnreachable('mEdit is disconnected.');
-    const children = await h.tree.getChildren(rows[1]);
-
-    expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('mEdit is disconnected.');
-  });
-
-  it('leaves an already-held row browsable — the disconnect is not this row\'s to report', async () => {
-    const client = makeClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
-    const h = makeTree([A_ROW()], { client });
-    h.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
-    const [row] = await h.tree.getChildren();
-
-    h.tree.applyBackendUnreachable('mEdit is disconnected.');
-    const children = await h.tree.getChildren(row);
-
-    expect(children[0]).toBeInstanceOf(RecordTypeNode);
-  });
-
-  it('clears once a later tick lands, resuming "Still indexing…"', async () => {
-    const h = makeTree([A_ROW()]);
-    h.tree.applyBackendUnreachable('mEdit is disconnected.');
-
-    h.tree.applyIndexed([], []);
-    const [row] = await h.tree.getChildren();
-    const children = await h.tree.getChildren(row);
-
-    expect(children[0]).toBeInstanceOf(IndexingNode);
-  });
-
-  it('never downgrades an everyRow refusal already in force', async () => {
-    const h = makeTree([A_ROW()]);
-    const [row] = await h.tree.getChildren();
-    h.tree.applyRefused({ kind: 'heldElsewhere', message: 'another Modbench window holds this instance' });
-
-    h.tree.applyBackendUnreachable('mEdit is disconnected.');
-    const children = await h.tree.getChildren(row);
-
-    expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('another Modbench window holds this instance');
-  });
 });
 
 describe('PluginsTreeProvider — a record filter hides a plugin with no matches', () => {

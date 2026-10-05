@@ -1,4 +1,4 @@
-import type { NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
+import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import type { PluginOrderFacts } from '../pluginsCommands/pluginOrder';
 import { modOfOrigin } from './modOfOrigin';
@@ -29,6 +29,20 @@ export interface PlaceFacts {
   readonly modDirs: ReadonlyMap<string, string>;
   readonly trackedMods: ReadonlySet<string>;
 }
+
+/** What a plugin row expands into: its records, the error row naming why not, or the still-indexing row. */
+export type Expansion = { kind: 'records' } | { kind: 'error'; message: string } | { kind: 'indexing' };
+
+/** What the view's message line reads besides the index: the first of these that holds wins. */
+export interface HeldMessageInputs {
+  readonly gameFolderMessage: string | undefined;
+  readonly noRowsMessage: string | undefined;
+  readonly recordFilterSource: string | undefined;
+}
+
+// `everyRow`: another window holds the instance (ADR-0010). `unheldRow`: mEdit unreachable, or the
+// snapshot's index failed.
+type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
 const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
 
@@ -89,6 +103,8 @@ export class PluginFacts {
   // Children expansion only: this reload's own ticks, replaced wholesale each time, so a plugin
   // not yet reached reads as still indexing, never a stale failure from before the reload began.
   private reachableFailures = new ByPluginAddress<string>();
+  private expansionOverride?: ExpansionOverride;
+  private indexFailure?: string;
   private compilable = false;
   private noMatchAnywhere = false;
 
@@ -96,7 +112,24 @@ export class PluginFacts {
   indexed(plugins: readonly PluginAddress[], failures: readonly PluginLoadFailure[]): void {
     this.held = heldSet(plugins);
     this.reachableFailures = indexLoadFailures(failures);
-    for (const f of failures) this.loadFailures.set(f.name, f.origin, f.reason);
+    indexLoadFailures(failures, this.loadFailures);
+    this.clearOverride();
+  }
+
+  /** The load order's own refusal (ADR-0010). */
+  refused(refusal: LoadOrderRefusal): void {
+    this.indexFailure = refusal.kind === 'failed' ? refusal.message : undefined;
+    this.expansionOverride = { scope: refusal.kind === 'heldElsewhere' ? 'everyRow' : 'unheldRow', message: refusal.message };
+  }
+
+  /** mEdit could not be reached or read. Never downgrades a second window's refusal. */
+  unreachable(reason: string): void {
+    if (this.expansionOverride?.scope !== 'everyRow') this.expansionOverride = { scope: 'unheldRow', message: reason };
+  }
+
+  private clearOverride(): void {
+    this.expansionOverride = undefined;
+    this.indexFailure = undefined;
   }
 
   /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, and each
@@ -105,6 +138,7 @@ export class PluginFacts {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
+    this.clearOverride();
     this.refreshed(plugins);
   }
 
@@ -152,9 +186,26 @@ export class PluginFacts {
     return this.held.has(name, origin);
   }
 
-  /** Why expanding the plugin will never index it, from this reload's own ticks. */
-  reachableFailure({ name, origin }: PluginAddress): string | undefined {
-    return this.reachableFailures.get(name, origin);
+  /** What expanding the plugin's row shows, in precedence order (plugins.md, States, stories 2-4
+   *  and 6). */
+  expansion(address: PluginAddress): Expansion {
+    const { name, origin } = address;
+    if (this.expansionOverride?.scope === 'everyRow') return { kind: 'error', message: this.expansionOverride.message };
+    if (this.isHeld(address)) return { kind: 'records' };
+    const failure = this.reachableFailures.get(name, origin);
+    if (failure !== undefined) return { kind: 'error', message: failure };
+    if (this.expansionOverride !== undefined) return { kind: 'error', message: this.expansionOverride.message };
+    return { kind: 'indexing' };
+  }
+
+  /** The first message that holds: the game folder not found (common.md, States 5), a failed index
+   *  (plugins.md, States 6), no rows (States 1), a record filter matching nothing (States 5). */
+  heldMessage({ gameFolderMessage, noRowsMessage, recordFilterSource }: HeldMessageInputs): string | undefined {
+    if (gameFolderMessage !== undefined) return gameFolderMessage;
+    if (this.indexFailure !== undefined) return `Indexing failed: ${this.indexFailure}`;
+    if (noRowsMessage !== undefined) return noRowsMessage;
+    if (recordFilterSource !== undefined && this.recordFilterMatchesNothing()) return `No records match ${recordFilterSource}.`;
+    return undefined;
   }
 
   /** Whether a record filter in force leaves the plugin with nothing; false while mEdit has not
@@ -240,8 +291,7 @@ function heldSet(plugins: readonly PluginAddress[]): ByPluginAddress<true> {
   return held;
 }
 
-function indexLoadFailures(failures: readonly PluginLoadFailure[]): ByPluginAddress<string> {
-  const byAddress = new ByPluginAddress<string>();
+function indexLoadFailures(failures: readonly PluginLoadFailure[], byAddress = new ByPluginAddress<string>()): ByPluginAddress<string> {
   for (const f of failures) byAddress.set(f.name, f.origin, f.reason);
   return byAddress;
 }

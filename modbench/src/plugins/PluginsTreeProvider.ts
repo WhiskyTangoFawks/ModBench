@@ -184,10 +184,6 @@ type RowDecoration = {
   iconPath: vscode.TreeItem['iconPath'];
 };
 
-// What a row not resolved by the load order shows (plugins.md, States, stories 3, 4 and 6).
-// `everyRow`: a second window (ADR-0010). `unheldRow`: mEdit unreachable, or a `Failed` reconcile.
-type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
-
 // The yellow status icon (plugins.md, A row).
 function warningIcon(): vscode.ThemeIcon {
   return new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
@@ -288,19 +284,15 @@ export class PluginsTreeProvider
     return lastGoodReadMessage(this.instance);
   }
 
-  // The first that holds: the game folder not found (common.md, States 5), a failed index
-  // (plugins.md, States 6), no rows (States 1), a record filter matching nothing (States 5).
   private firstHeldMessage(): string | undefined {
     const { gameFolder } = this.instanceValue;
-    if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
-      return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
-    }
-    if (this.indexFailure !== undefined) return `Indexing failed: ${this.indexFailure}`;
-    if (this.lastBuildHadNoRows) return NO_PLUGINS_MESSAGE;
-    if (this.recordFilterSource !== undefined && this.facts.recordFilterMatchesNothing()) {
-      return `No records match ${this.recordFilterSource}.`;
-    }
-    return undefined;
+    return this.facts.heldMessage({
+      gameFolderMessage: this.instance.sequence !== 0 && gameFolder.kind !== 'found'
+        ? `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`
+        : undefined,
+      noRowsMessage: this.lastBuildHadNoRows ? NO_PLUGINS_MESSAGE : undefined,
+      recordFilterSource: this.recordFilterSource,
+    });
   }
 
   /** The source of the record filter in force, which the no-match message names; undefined while
@@ -385,18 +377,12 @@ export class PluginsTreeProvider
     return (await this.getChildren(group)).find((row) => row.kind === 'record' && row.record.formKey === formKey);
   }
 
-  // plugins.md, States 2-4: what a plugin row expands into, in precedence order.
   private async expandPluginRow(element: PluginListNode, file: string): Promise<PluginsTreeNode[]> {
     const address = { name: file, origin: element.origin };
-    if (this.expansionOverride?.scope === 'everyRow') return [new ErrorNode(this.expansionOverride.message)];
-    if (this.facts.isHeld(address)) {
-      return this.records?.getPluginChildren(file, element.origin, this.facts.conditions(address)) ?? noRecordBrowser();
-    }
-    // plugins.md, States, stories 2, 3 and 6.
-    const failure = this.facts.reachableFailure(address);
-    if (failure !== undefined) return [new ErrorNode(failure)];
-    if (this.expansionOverride?.scope === 'unheldRow') return [new ErrorNode(this.expansionOverride.message)];
-    return [new IndexingNode()];
+    const expansion = this.facts.expansion(address);
+    if (expansion.kind === 'error') return [new ErrorNode(expansion.message)];
+    if (expansion.kind === 'indexing') return [new IndexingNode()];
+    return this.records?.getPluginChildren(file, element.origin, this.facts.conditions(address)) ?? noRecordBrowser();
   }
 
   private async rows(): Promise<(PluginListNode | ErrorNode)[]> {
@@ -515,11 +501,6 @@ export class PluginsTreeProvider
   // ── the load order and its facts ──────────────────────────────────────────
 
   private readonly facts = new PluginFacts();
-  // plugins.md, States 3-4: what an unheld row shows in place of "Still indexing…", and whether
-  // that reaches even an already-held row. One field, so the two never disagree on precedence.
-  private expansionOverride?: ExpansionOverride;
-  // plugins.md, States 6: why the snapshot's index failed, until the next reconcile ticks.
-  private indexFailure?: string;
   // Bumped by each reconcile step (a tick, a refusal, unreachable, the hand-off), so a slow read
   // answering after a newer step cannot resurrect a stale answer.
   private generation = 0;
@@ -531,8 +512,6 @@ export class PluginsTreeProvider
    *  this reload's own ticks. */
   applyIndexed(indexedPlugins: PluginAddress[], failures: PluginLoadFailure[]): void {
     this.generation++;
-    this.expansionOverride = undefined;
-    this.indexFailure = undefined;
     this.facts.indexed(indexedPlugins, failures);
     this._onDidChangeTreeData.fire(undefined);
   }
@@ -540,8 +519,7 @@ export class PluginsTreeProvider
   /** The load order's own refusal (ADR-0010; plugins.md, States, stories 4 and 6). */
   applyRefused(refusal: LoadOrderRefusal): void {
     this.generation++;
-    this.indexFailure = refusal.kind === 'failed' ? refusal.message : undefined;
-    this.expansionOverride = { scope: refusal.kind === 'heldElsewhere' ? 'everyRow' : 'unheldRow', message: refusal.message };
+    this.facts.refused(refusal);
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -550,7 +528,7 @@ export class PluginsTreeProvider
    *  `everyRow` refusal already in force. */
   applyBackendUnreachable(reason: string): void {
     this.generation++;
-    if (this.expansionOverride?.scope !== 'everyRow') this.expansionOverride = { scope: 'unheldRow', message: reason };
+    this.facts.unreachable(reason);
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -561,8 +539,6 @@ export class PluginsTreeProvider
     const generation = ++this.generation;
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation) return undefined;
-    this.expansionOverride = undefined;
-    this.indexFailure = undefined;
     this.facts.reconciled(plugins, failures);
     // Diagnoses stay as the last scan left them (no blink) until `scanDiagnoses` below lands a
     // fresh answer; a failed scan leaves them alone too.
@@ -596,8 +572,7 @@ export class PluginsTreeProvider
     } catch (err) {
       const message = errorMessage(err);
       this.log('error', `[PluginsTreeProvider] reading the backend's plugin list failed: ${message}`);
-      // A second window's refusal is not this read's to downgrade.
-      if (this.expansionOverride?.scope !== 'everyRow') this.expansionOverride = { scope: 'unheldRow', message };
+      this.facts.unreachable(message);
       // Briefly over-showing rows beats freezing every one behind a stale filter answer.
       this.facts.matchesUnknown();
       this._onDidChangeTreeData.fire(undefined);

@@ -147,25 +147,24 @@ describe('PluginFacts — which statuses stay and which land (plugins.md, A row,
 
   it('adds each tick\'s failures to the last, for the row, and replaces them for the expansion', () => {
     const facts = new PluginFacts();
-    const B = { name: 'B.esp', origin: 'SomeMod' };
     facts.indexed([], [failure('first')]);
     facts.indexed([], [failure('second', B)]);
 
     expect(facts.statuses(A).map((s) => s.words)).toEqual(['failed to read']);
     expect(facts.statuses(B).map((s) => s.words)).toEqual(['failed to read']);
-    expect(facts.reachableFailure(A)).toBeUndefined();
-    expect(facts.reachableFailure(B)).toBe('second');
+    expect(facts.expansion(A)).toEqual({ kind: 'indexing' });
+    expect(facts.expansion(B)).toEqual({ kind: 'error', message: 'second' });
   });
 
   it('expands a plugin failed in the last reconcile to its reason, and one that failed only before it to nothing', () => {
     const facts = new PluginFacts();
     facts.indexed([], [failure('first')]);
-    facts.reconciled([held()], []);
+    facts.reconciled([], []);
 
-    expect(facts.reachableFailure(A)).toBeUndefined();
+    expect(facts.expansion(A)).toEqual({ kind: 'indexing' });
 
     facts.reconciled([], [failure('second')]);
-    expect(facts.reachableFailure(A)).toBe('second');
+    expect(facts.expansion(A)).toEqual({ kind: 'error', message: 'second' });
   });
 
   it('keeps the last diagnoses until the next scan lands, and a scan that finds nothing clears them', () => {
@@ -290,6 +289,86 @@ describe('PluginFacts — which plugins mEdit holds and the record filter', () =
 
     expect(facts.hiddenByRecordFilter(A)).toBe(false);
     expect(facts.recordFilterMatchesNothing()).toBe(false);
+  });
+});
+
+const heldElsewhere = { kind: 'heldElsewhere', message: 'another window holds this instance' } as const;
+const failedIndex = { kind: 'failed', message: 'the index threw' } as const;
+const B = { name: 'B.esp', origin: 'SomeMod' };
+const RECORDS = { kind: 'records' } as const;
+const INDEXING = { kind: 'indexing' } as const;
+const errorOf = (message: string) => ({ kind: 'error', message }) as const;
+
+// A is held; B has not been reached.
+const midReload: Scene = (facts) => facts.indexed([A], []);
+
+describe('PluginFacts — what a row expands into (plugins.md, States, stories 2-4 and 6)', () => {
+  it.each([
+    ['before any tick', scenes(), INDEXING, INDEXING],
+    ['a tick holding A', midReload, RECORDS, INDEXING],
+    ['a tick holding nothing', (facts: PluginFacts) => facts.indexed([], []), INDEXING, INDEXING],
+    ['a tick that failed B', (facts: PluginFacts) => facts.indexed([A], [failure('Malformed record', B)]),
+      RECORDS, errorOf('Malformed record')],
+    ['mEdit unreachable', scenes(midReload, (facts) => facts.unreachable('mEdit is down')), RECORDS, errorOf('mEdit is down')],
+    ['another window holds the index', scenes(midReload, (facts) => facts.refused(heldElsewhere)),
+      errorOf(heldElsewhere.message), errorOf(heldElsewhere.message)],
+    ['the snapshot failed', scenes(midReload, (facts) => facts.refused(failedIndex)), RECORDS, errorOf(failedIndex.message)],
+    ['a failure of B over mEdit unreachable',
+      scenes((facts) => facts.indexed([A], [failure('Malformed record', B)]), (facts) => facts.unreachable('mEdit is down')),
+      RECORDS, errorOf('Malformed record')],
+    ['the other window over mEdit unreachable',
+      scenes((facts) => facts.refused(heldElsewhere), (facts) => facts.unreachable('mEdit is down')),
+      errorOf(heldElsewhere.message), errorOf(heldElsewhere.message)],
+    ['mEdit unreachable, then another window', scenes((facts) => facts.unreachable('mEdit is down'), (facts) => facts.refused(heldElsewhere)),
+      errorOf(heldElsewhere.message), errorOf(heldElsewhere.message)],
+    ['a tick after a refusal', scenes((facts) => facts.refused(heldElsewhere), midReload), RECORDS, INDEXING],
+    ['a tick after mEdit was unreachable', scenes((facts) => facts.unreachable('mEdit is down'), midReload), RECORDS, INDEXING],
+    ['the hand-off after a refusal', scenes((facts) => facts.refused(failedIndex), (facts) => facts.reconciled([held()], [])),
+      RECORDS, INDEXING],
+  ] as const)('%s', (_label, scene, forA, forB) => {
+    const facts = new PluginFacts();
+    scene(facts);
+
+    expect(facts.expansion(A)).toEqual(forA);
+    expect(facts.expansion(B)).toEqual(forB);
+  });
+
+  it('a failure the last reload named is forgotten once a tick no longer names it', () => {
+    const facts = new PluginFacts();
+    facts.indexed([], [failure('Malformed record', B)]);
+    facts.indexed([], []);
+
+    expect(facts.expansion(B)).toEqual(INDEXING);
+  });
+});
+
+describe('PluginFacts — the view message line (plugins.md, States, stories 1, 5 and 6)', () => {
+  const none = { gameFolderMessage: undefined, noRowsMessage: undefined, recordFilterSource: undefined };
+
+  it.each([
+    ['nothing holds', scenes(), none, undefined],
+    ['the game folder is missing', scenes(), { ...none, gameFolderMessage: 'no game folder' }, 'no game folder'],
+    ['no rows', scenes(), { ...none, noRowsMessage: 'no plugins' }, 'no plugins'],
+    ['the snapshot failed', (facts: PluginFacts) => facts.refused(failedIndex), none, 'Indexing failed: the index threw'],
+    ['another window holds the index', (facts: PluginFacts) => facts.refused(heldElsewhere), none, undefined],
+    ['a tick after the failure', scenes((facts) => facts.refused(failedIndex), midReload), none, undefined],
+    ['the hand-off after the failure', scenes((facts) => facts.refused(failedIndex), (facts) => facts.reconciled([held()], [])),
+      none, undefined],
+    ['the game folder over the failure', (facts: PluginFacts) => facts.refused(failedIndex),
+      { ...none, gameFolderMessage: 'no game folder' }, 'no game folder'],
+    ['the failure over no rows', (facts: PluginFacts) => facts.refused(failedIndex),
+      { ...none, noRowsMessage: 'no plugins' }, 'Indexing failed: the index threw'],
+    ['a filter matching nothing', (facts: PluginFacts) => facts.reconciled([held({ hasMatchingRecords: false })], []),
+      { ...none, recordFilterSource: 'weapon' }, 'No records match weapon.'],
+    ['a filter matching something', (facts: PluginFacts) => facts.reconciled([held()], []),
+      { ...none, recordFilterSource: 'weapon' }, undefined],
+    ['no rows over a filter matching nothing', (facts: PluginFacts) => facts.reconciled([held({ hasMatchingRecords: false })], []),
+      { ...none, noRowsMessage: 'no plugins', recordFilterSource: 'weapon' }, 'no plugins'],
+  ] as const)('%s', (_label, scene, inputs, message) => {
+    const facts = new PluginFacts();
+    scene(facts);
+
+    expect(facts.heldMessage(inputs)).toBe(message);
   });
 });
 
