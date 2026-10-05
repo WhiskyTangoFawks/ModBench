@@ -1,23 +1,16 @@
 export type {
-  MEditClient, WriteRefused, RebuildIndexOutcome, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput, LoadOrderProgress,
-  NotificationKind, NotificationPayloads, BackendStatus, RecordEditOutcome, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
-  PluginRecordTypeCount, CreatableRecordType, PluginCreatedResponse, PluginAddress, RecordCreateResponse, RecordAddress,
+  MEditClient, LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress,
+  NotificationPayloads, BackendStatus, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
+  PluginRecordTypeCount, PluginAddress, RecordAddress,
   CopyMode, CopyItem, ReferenceResult, RecordFilter,
   TrackStatus, TrackOutcome, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, RecordSummary,
   WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords, CellSummary,
-  ChildRecordSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic, CompileOutcome,
-  LoadOrderStatus,
+  ChildRecordSummary, ContainerChildSummary, CompileDiagnostic, CompileOutcome,
   LoadOrderRefusal, PluginLoadFailure, CompareResult,
 } from './MEditClient';
 export type { RecordEditEnvelope } from './MEditClient';
-export { isMEditGone, isRefused, isUnanswered, UNLIMITED_RECORDS } from './MEditClient';
-export { toLoadOrderStatus } from './apiClient';
-export { HttpMEditClient, type HttpMEditClientDeps } from './HttpMEditClient';
-export type { BackendLogChannel } from './backendLog';
-export type { BackendLifecycleOptions, BackendStream } from './backendLifecycle';
+export { isMEditGone, isRefused, UNLIMITED_RECORDS } from './MEditClient';
+export { createMEditClient } from './HttpMEditClient';
 export { InMemoryMEditClient, type RecordedCall } from './InMemoryMEditClient';
-export {
-  createLoadOrderSender,
-  type LoadOrderSender, type LoadOrderSnapshot, type LoadOrderSendClient,
-} from './loadOrderSender';
+export { createLoadOrderSender, type LoadOrderSender, type LoadOrderSnapshot } from './loadOrderSender';
 export { enterEditingAcrossRestarts } from './crashReentry';

@@ -2,7 +2,7 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { HttpMEditClient, createLoadOrderSender, type LoadOrderSender, type MEditClient } from './client';
+import { createMEditClient, createLoadOrderSender, type LoadOrderSender, type MEditClient } from './client';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
@@ -331,7 +331,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(compileDiagnostics);
 
   // ADR-0002.
-  const meditClient = new HttpMEditClient({ backend: { attachPort }, backendLog: outputChannel, log });
+  const meditClient = createMEditClient({ backend: { attachPort }, backendLog: outputChannel, log });
   activeClient = meditClient; // deactivate()'s only way to reach it
   const statusBar = createStatusBar(meditClient);
   context.subscriptions.push(statusBar);
@@ -412,7 +412,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 interface PluginRowCommandDeps {
   plugins: PluginsHandle;
-  client: HttpMEditClient;
+  client: MEditClient;
   outputChannel: vscode.LogOutputChannel;
   compileProblems: CompileProblems;
   conflictsComputed: () => Promise<void>;
@@ -464,7 +464,7 @@ function compileDeps(deps: PluginRowCommandDeps): CompileDeps {
 
 // VS Code's own `deactivate()` takes no arguments, so it has no way to receive what `activate()`
 // built — this module-level reference exists solely to bridge that gap.
-let activeClient: HttpMEditClient | undefined;
+let activeClient: MEditClient | undefined;
 
 // Async so VS Code awaits confirmed-dead-child teardown before the extension host finishes
 // tearing down — otherwise a reload's replacement client is structurally unable to ever clean up

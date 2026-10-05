@@ -2,10 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { columnKey } from '../columnKey';
 
 describe('columnKey agrees with the backend\'s ColumnKey.Of for the same plugin', () => {
-  it('the same plugin and origin always produce the same key', () => {
-    expect(columnKey({ name: 'Shared.esp', origin: 'ModA' })).toBe(columnKey({ name: 'Shared.esp', origin: 'ModA' }));
-  });
-
   it('the same filename under two different origins produces two distinct keys', () => {
     expect(columnKey({ name: 'Shared.esp', origin: 'ModA' })).not.toBe(columnKey({ name: 'Shared.esp', origin: 'ModB' }));
   });

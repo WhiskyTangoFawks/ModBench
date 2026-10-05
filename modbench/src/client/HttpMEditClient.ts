@@ -129,11 +129,11 @@ export class HttpMEditClient implements MEditClient {
         this.log(`[HttpMEditClient] ${spec.op} failed (${response.status}): ${text}`);
         return { refused: true, message: `${spec.failMsg} — ${text}` };
       }
-      return data ?? { refused: true, unanswered: true, message: `${spec.failMsg} — no answer` };
+      return data ?? { refused: true, message: `${spec.failMsg} — no answer` };
     } catch (e) {
       const message = errorMessage(e);
       this.log(`[HttpMEditClient] ${spec.op} threw: ${message}`);
-      return { refused: true, unanswered: true, message: `${spec.failMsg} — ${message}` };
+      return { refused: true, message: `${spec.failMsg} — ${message}` };
     }
   }
 
@@ -609,4 +609,8 @@ export class HttpMEditClient implements MEditClient {
       return data ?? [];
     });
   }
+}
+
+export function createMEditClient(deps: HttpMEditClientDeps): MEditClient {
+  return new HttpMEditClient(deps);
 }
