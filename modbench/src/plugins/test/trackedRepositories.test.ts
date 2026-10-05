@@ -16,7 +16,7 @@ import {
 } from '../trackedRepositories';
 import { InMemoryMEditClient, type PluginMetadata } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
-import { pluginAddressKey } from '../pluginAddress';
+import { pluginAddressKey } from '../../wire/pluginAddress';
 
 const modDirsOf = (byOrigin: Record<string, string>): ReadonlyMap<string, string> => new Map(Object.entries(byOrigin));
 
@@ -48,7 +48,7 @@ describe('trackedFoldersOf', () => {
 
     const folders = trackedFoldersOf(plugins, new Set(['TrackedMod']), modDirsOf({ TrackedMod: '/mods/TrackedMod' }));
 
-    expect(folders).toEqual(new Map([[pluginAddressKey('Tracked.esp', 'TrackedMod'), '/mods/TrackedMod']]));
+    expect(folders).toEqual(new Map([[pluginAddressKey({ name: 'Tracked.esp', origin: 'TrackedMod' }), '/mods/TrackedMod']]));
   });
 
   it('keeps two same-name plugins from different mods apart', () => {
@@ -61,8 +61,8 @@ describe('trackedFoldersOf', () => {
       plugins, new Set(['ModA', 'ModB']), modDirsOf({ ModA: '/mods/ModA', ModB: '/mods/ModB' }),
     );
 
-    expect(folders.get(pluginAddressKey('Shared.esp', 'ModA'))).toBe('/mods/ModA');
-    expect(folders.get(pluginAddressKey('Shared.esp', 'ModB'))).toBe('/mods/ModB');
+    expect(folders.get(pluginAddressKey({ name: 'Shared.esp', origin: 'ModA' }))).toBe('/mods/ModA');
+    expect(folders.get(pluginAddressKey({ name: 'Shared.esp', origin: 'ModB' }))).toBe('/mods/ModB');
   });
 });
 
@@ -108,25 +108,25 @@ describe('pluginRepositoriesOf', () => {
   it('maps each plugin to the repository resolved for its tracked folder', () => {
     const repoA = { name: 'repoA' };
     const repoB = { name: 'repoB' };
-    const folders = new Map([[pluginAddressKey('A.esp', 'ModA'), '/mods/ModA'], [pluginAddressKey('B.esp', 'ModB'), '/mods/ModB']]);
+    const folders = new Map([[pluginAddressKey({ name: 'A.esp', origin: 'ModA' }), '/mods/ModA'], [pluginAddressKey({ name: 'B.esp', origin: 'ModB' }), '/mods/ModB']]);
     const folderRepositories = new Map([['/mods/ModA', repoA], ['/mods/ModB', repoB]]);
 
     const byPlugin = pluginRepositoriesOf(folders, folderRepositories);
 
-    expect(byPlugin).toEqual(new Map([[pluginAddressKey('A.esp', 'ModA'), repoA], [pluginAddressKey('B.esp', 'ModB'), repoB]]));
+    expect(byPlugin).toEqual(new Map([[pluginAddressKey({ name: 'A.esp', origin: 'ModA' }), repoA], [pluginAddressKey({ name: 'B.esp', origin: 'ModB' }), repoB]]));
   });
 
   it('gives two plugins sharing one folder the same repository', () => {
     const repo = { name: 'repo' };
-    const folders = new Map([[pluginAddressKey('A.esp', 'SharedMod'), '/mods/SharedMod'], [pluginAddressKey('B.esp', 'SharedMod'), '/mods/SharedMod']]);
+    const folders = new Map([[pluginAddressKey({ name: 'A.esp', origin: 'SharedMod' }), '/mods/SharedMod'], [pluginAddressKey({ name: 'B.esp', origin: 'SharedMod' }), '/mods/SharedMod']]);
 
     const byPlugin = pluginRepositoriesOf(folders, new Map([['/mods/SharedMod', repo]]));
 
-    expect(byPlugin).toEqual(new Map([[pluginAddressKey('A.esp', 'SharedMod'), repo], [pluginAddressKey('B.esp', 'SharedMod'), repo]]));
+    expect(byPlugin).toEqual(new Map([[pluginAddressKey({ name: 'A.esp', origin: 'SharedMod' }), repo], [pluginAddressKey({ name: 'B.esp', origin: 'SharedMod' }), repo]]));
   });
 
   it('omits a plugin whose folder has no entry in folderRepositories', () => {
-    const folders = new Map([[pluginAddressKey('U.esp', 'Declined'), '/mods/Declined']]);
+    const folders = new Map([[pluginAddressKey({ name: 'U.esp', origin: 'Declined' }), '/mods/Declined']]);
 
     expect(pluginRepositoriesOf(folders, new Map()).size).toBe(0);
   });
@@ -162,8 +162,8 @@ describe('trackedRepositoriesOver', () => {
     const { tracked } = setup(status);
     await tracked.conflictsComputedOver(() => {})();
 
-    tracked.refreshSourceControlFor('Other.esp', 'ModB');
-    tracked.refreshSourceControlFor('Other.esp', 'ModC');
+    tracked.refreshSourceControlFor({ name: 'Other.esp', origin: 'ModB' });
+    tracked.refreshSourceControlFor({ name: 'Other.esp', origin: 'ModC' });
 
     expect(status).toHaveBeenCalledOnce();
   });
@@ -172,7 +172,7 @@ describe('trackedRepositoriesOver', () => {
     const status = vi.fn(() => Promise.resolve());
     const { tracked } = setup(status);
 
-    tracked.refreshSourceControlFor('Other.esp', 'ModB');
+    tracked.refreshSourceControlFor({ name: 'Other.esp', origin: 'ModB' });
 
     expect(status).not.toHaveBeenCalled();
   });
@@ -181,7 +181,7 @@ describe('trackedRepositoriesOver', () => {
     const { tracked, outputChannel } = setup(() => Promise.reject(new Error('boom')));
     await tracked.conflictsComputedOver(() => {})();
 
-    tracked.refreshSourceControlFor('Other.esp', 'ModB');
+    tracked.refreshSourceControlFor({ name: 'Other.esp', origin: 'ModB' });
     await vi.waitFor(() => { expect(outputChannel.error).toHaveBeenCalledOnce(); });
   });
 

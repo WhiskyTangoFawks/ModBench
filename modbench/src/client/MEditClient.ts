@@ -9,6 +9,7 @@ import {
   type PluginLoadFailure, type CompareResult,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
+import type { PluginAddress } from '../wire/pluginAddress';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 /** What `editRecord` is handed, re-exported because its caller reaches the backend only through
@@ -59,7 +60,7 @@ export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
   'track-progress': TrackStatus;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
-  'untracked-plugins': { origin: string; plugins: string[] };
+  'untracked-plugins': { plugins: PluginAddress[] };
   'rows-changed': { plugin: PluginAddress; keys: string[] };
   'plugin-changed': { plugin: PluginAddress };
 }
@@ -124,8 +125,7 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 // apiClient.ts aliases the wire shapes its own module needs; these are the port's own, named
 // here for the same reason (modbench/CLAUDE.md: the generated schema is the frontend type).
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
-/** ADR-0012. */
-export type PluginAddress = components['schemas']['PluginAddress'];
+export type { PluginAddress };
 
 /** A mod of Track's selection that tracked: the plugins whose source landed in its commit, and those
  *  of it that did not, each with its reason. */

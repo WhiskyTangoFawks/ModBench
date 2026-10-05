@@ -7,7 +7,7 @@ import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { modOfRow } from '../drivingLib/modRow';
 import { modOfOrigin } from './modOfOrigin';
-import { pluginAddressKey } from './pluginAddress';
+import { pluginAddressKey } from '../wire/pluginAddress';
 import { trackProgressMessage } from './trackProgress';
 import { PluginNode, type PluginsTreeNode } from './PluginsTreeProvider';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
@@ -237,8 +237,8 @@ async function argumentOf(
 // compilable plugin first and marked.
 async function pickCompilable(deps: CompileDeps, entry: GestureEntry<PluginsTreeNode>): Promise<PluginAddress[] | undefined> {
   const selected = compilableSelected(entry.selection);
-  const selectedKey = selected && pluginAddressKey(selected.plugin.name, selected.origin);
-  const isSelected = (item: { label: string; description: string }) => pluginAddressKey(item.label, item.description) === selectedKey;
+  const selectedKey = selected && pluginAddressKey({ name: selected.plugin.name, origin: selected.origin });
+  const isSelected = (item: { label: string; description: string }) => pluginAddressKey({ name: item.label, origin: item.description }) === selectedKey;
   const plugins = await deps.client.getPlugins().catch((err: unknown) => {
     deps.reporter.report('error', 'Could not list the plugins to compile.', errorMessage(err));
     return undefined;
@@ -299,7 +299,7 @@ export class CompileProblems {
   constructor(private readonly collection: vscode.DiagnosticCollection) {}
 
   publish(plugin: PluginAddress, files: OriginFiles | undefined, diagnostics: readonly CompileDiagnostic[]): void {
-    const key = pluginAddressKey(plugin.name, plugin.origin);
+    const key = pluginAddressKey(plugin);
     for (const uri of this.published.get(key) ?? []) this.collection.delete(uri);
     if (files === undefined) {
       this.published.delete(key);

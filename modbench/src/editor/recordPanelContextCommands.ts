@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { hasSection, isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type ArrayParentContext, type ReferenceContext, type StringValueContext } from '../wire/messages';
 import type { RecordEditEnvelope } from '../client';
+import { pluginAddressOf } from '../wire/pluginAddress';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 import type { ExtendedFieldDocuments, FieldAddress } from './extendedFieldEditor';
 import type { EditAddress, EditGate } from './followRecord';
@@ -58,7 +59,7 @@ function editCommand<Ctx extends { formKey: string; plugin: string; origin: stri
       if (!isCtx(raw)) return;
       const envelope = envelopeOf(raw, option);
       if (!envelope) return;
-      await deps.editGateOf(raw)(raw, formKey => applyRecordEdit(deps, formKey, raw.plugin, raw.origin, envelope));
+      await deps.editGateOf(raw)(raw, formKey => applyRecordEdit(deps, formKey, pluginAddressOf(raw), envelope));
     },
   };
 }
@@ -76,7 +77,7 @@ async function editField(deps: RecordPanelContextCommandDeps, address: unknown, 
   if (!isPluginCopyAddress(address)) return;
   const envelope = isRecordEditEnvelope(option) ? option : await promptedSet(address);
   if (!envelope) return;
-  await deps.editGateOf(address)(address, formKey => applyRecordEdit(deps, formKey, address.plugin, address.origin, envelope));
+  await deps.editGateOf(address)(address, formKey => applyRecordEdit(deps, formKey, pluginAddressOf(address), envelope));
 }
 
 async function promptedSet(address: object): Promise<RecordEditEnvelope | undefined> {
@@ -89,7 +90,7 @@ async function promptedSet(address: object): Promise<RecordEditEnvelope | undefi
 // (editor.md, Menus and keys, story 2).
 export function commitField(deps: FieldCommitDeps, field: FieldAddress, value: string): Promise<void> {
   return deps.editGateOf(field)(field, formKey =>
-    applyRecordEdit(deps, formKey, field.plugin, field.origin, { op: 'set', path: field.path, value }));
+    applyRecordEdit(deps, formKey, pluginAddressOf(field), { op: 'set', path: field.path, value }));
 }
 
 const CONTEXT_COMMANDS: ContextCommand[] = [

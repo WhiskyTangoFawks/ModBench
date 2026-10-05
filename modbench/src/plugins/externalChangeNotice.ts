@@ -1,6 +1,6 @@
 import type { MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
-import { pluginAddressKey } from './pluginAddress';
+import { pluginAddressKey } from '../wire/pluginAddress';
 
 /** package.json's title for the gesture that decompiles an untracked plugin of a tracked mod. */
 export const DECOMPILE_PLUGIN_TITLE = 'Decompile Plugin';
@@ -23,12 +23,12 @@ export function noticeExternalChanges(
     if (fresh.length > 0) reporter.report('warning', `${fresh.join(', ')} in ${origin} changed outside Modbench`);
   });
 
-  const offUntracked = notifications.onNotification('untracked-plugins', ({ origin, plugins }) => {
+  const offUntracked = notifications.onNotification('untracked-plugins', ({ plugins }) => {
     for (const plugin of plugins) {
-      const key = pluginAddressKey(plugin, origin);
+      const key = pluginAddressKey(plugin);
       if (toldUntracked.has(key)) continue;
       toldUntracked.add(key);
-      reporter.report('warning', `${plugin} in ${origin} has no plugin source`, `run "${DECOMPILE_PLUGIN_TITLE}" on it`);
+      reporter.report('warning', `${plugin.name} in ${plugin.origin} has no plugin source`, `run "${DECOMPILE_PLUGIN_TITLE}" on it`);
     }
   });
 

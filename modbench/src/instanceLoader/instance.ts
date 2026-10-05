@@ -3,8 +3,9 @@
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
   buildLoadOrderRows, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin,
-  type LoadOrderPluginLine, type LoadOrderSnapshotRefusal, type LoadOrderSnapshotValue, type PluginAddress,
+  type LoadOrderPluginLine, type LoadOrderSnapshotRefusal, type LoadOrderSnapshotValue,
 } from './loadOrderSnapshot';
+import type { PluginAddress } from '../wire/pluginAddress';
 import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
 import {

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
-import { pluginAddressKey } from './pluginAddress';
+import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
 /** Each plugin's tracked folder, by `pluginAddressKey`; a plugin whose origin is not a tracked mod
  *  has no entry. A lookup over the Instance value's own two facts, never a fresh disk check. */
@@ -14,7 +14,7 @@ export function trackedFoldersOf(
   for (const plugin of plugins) {
     if (!trackedMods.has(plugin.origin)) continue;
     const folder = modDirs.get(plugin.origin);
-    if (folder !== undefined) folders.set(pluginAddressKey(plugin.name, plugin.origin), folder);
+    if (folder !== undefined) folders.set(pluginAddressKey(plugin), folder);
   }
   return folders;
 }
@@ -77,7 +77,7 @@ export interface TrackedRepositories {
   /** `Repository.status()`, the same effect the SCM panel's Refresh button has, fired from the
    *  edit rather than waiting on the native watcher. A plugin with no handle is a silent no-op; a
    *  rejected `status()` is logged, never surfaced. */
-  refreshSourceControlFor: (plugin: string, origin: string) => void;
+  refreshSourceControlFor: (plugin: PluginAddress) => void;
 }
 
 /** The session's tracked repositories by plugin, held here and refilled by each registration. */
@@ -112,11 +112,11 @@ export function trackedRepositoriesOver(deps: TrackedRepositoriesDeps): TrackedR
       announce();
       await registerHeld();
     },
-    refreshSourceControlFor: (plugin, origin) => {
-      const repo = byPlugin.get(pluginAddressKey(plugin, origin));
+    refreshSourceControlFor: (plugin) => {
+      const repo = byPlugin.get(pluginAddressKey(plugin));
       if (!repo) return;
       void repo.status().then(undefined, (err: unknown) => {
-        deps.outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${errorMessage(err)}`);
+        deps.outputChannel.error(`[extension] refreshing Source Control status for ${plugin.name} failed: ${errorMessage(err)}`);
       });
     },
   };
