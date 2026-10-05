@@ -378,6 +378,37 @@ describe('HttpMEditClient — getComparison', () => {
   });
 });
 
+describe('HttpMEditClient — getRecordsComparison', () => {
+  const copies = [
+    { formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'AMod' }, documentText: '{}' },
+    { formKey: '000802:B.esp', plugin: { name: 'B.esp', origin: 'BMod' } },
+  ];
+
+  it('posts the copies in order and returns the comparison untransformed', async () => {
+    const comparison = { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Weapon' };
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, comparison)));
+    const client = makeClient(fetch);
+
+    expect(await client.getRecordsComparison(copies)).toEqual(comparison);
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.method).toBe('POST');
+    expect(request?.url).toMatch(/\/records\/compare$/);
+    expect(await request?.json()).toEqual({ copies });
+  });
+
+  it('answers null on a 404, a copy no plugin holds', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(404, { detail: 'No such copy.' })));
+
+    expect(await makeClient(fetch).getRecordsComparison(copies)).toBeNull();
+  });
+
+  it('rejects on any other non-OK answer', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(400, { detail: 'No records.' })));
+
+    await expect(makeClient(fetch).getRecordsComparison([])).rejects.toThrow(/getRecordsComparison.*failed \(400\)/);
+  });
+});
+
 describe('HttpMEditClient — tracking mods answers per mod, naming the plugins of it that did not track', () => {
   const first = { name: 'First.esp', origin: 'ModA' };
   const second = { name: 'Second.esp', origin: 'ModA' };

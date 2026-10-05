@@ -55,4 +55,19 @@ internal static class RealDocuments
             record.FormKey.ToString(), plugin, loadOrderIndex, isWinner, record.EditorID, recordType, body, fields,
             IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(root, record.GetType()));
     }
+
+    internal static RecordDocument FromText(
+        string body, string formKey, PluginAddress plugin, int loadOrderIndex, string recordType, IReadOnlyList<string> fieldNames)
+    {
+        var release = GameRelease.Fallout4;
+        var schema = SharedSchemaReflector.Instance.GetSchemas(release)[recordType];
+        using var parsed = JsonDocument.Parse(body);
+        var fields = fieldNames
+            .Where(n => schema.RecordColumns.Any(c => c.Name == n))
+            .Select(n => FieldOf(schema, parsed.RootElement, n, release))
+            .ToList();
+        return new RecordDocument(
+            formKey, plugin, loadOrderIndex, false, DocumentNodes.At(parsed.RootElement, "EditorID")?.GetString(), recordType, body, fields,
+            IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(parsed.RootElement, schema.RecordType));
+    }
 }

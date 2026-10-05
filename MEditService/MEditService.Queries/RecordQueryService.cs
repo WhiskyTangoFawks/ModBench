@@ -16,6 +16,8 @@ public sealed class RecordQueryService(
     private readonly IQueryIndex _index = index;
     private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
+    private const int NotInLoadOrder = int.MaxValue;
+
     private readonly ConflictClassifier _conflictClassifier = new ConflictClassifier(logger);
 
     public IReadOnlyList<PluginRow> GetPlugins()
@@ -96,17 +98,47 @@ public sealed class RecordQueryService(
         // PluginStates is keyed by ColumnKey.Of (ADR-0012), so a bare-plugin lookup
         // would miss for any non-Data-origin column and silently drop its ConflictThis.
         var annotated = committedOverrides
-            .ConvertAll(o => new CompareOverride(
-                o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields,
-                classification.PluginStates.TryGetValue(ColumnKey.Of(o.Plugin, o.Origin), out var state) ? state : null,
-                Origin: o.Origin,
-                LoadIndex: LoadIndex.Of(new PluginAddress(o.Plugin, o.Origin), o.LoadOrderIndex, snapshot, reads.OpenedPlugins),
-                RecordType: o.RecordType, IsPartialForm: o.IsPartialForm, ParseDiagnosis: o.ParseDiagnosis,
-                IsInOverwrite: snapshot.ProviderOf(new PluginAddress(o.Plugin, o.Origin)) == PluginProvider.NoMod));
+            .ConvertAll(o => ToCompareOverride(
+                o, classification.PluginStates.TryGetValue(ColumnKey.Of(o.Plugin, o.Origin), out var state) ? state : null,
+                column: null, snapshot, reads));
 
         return new CompareResult(
             annotated, classification.Diffs, conflictAll, RequireSchemas().DisplayNameFor(stack.RecordType));
     }
+
+    public CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies)
+    {
+        var reads = RequireReads();
+        var snapshot = _loadOrder.Require();
+
+        var documents = new List<RecordDocument>(copies.Count);
+        foreach (var copy in copies)
+        {
+            var document = copy.DocumentText is { } text
+                ? reads.DocumentFromText(copy.FormKey, copy.Plugin, snapshot.LoadOrderIndex(copy.Plugin) ?? NotInLoadOrder, text)
+                : reads.GetDocument(copy.FormKey, copy.Plugin);
+            if (document == null) return null;
+            documents.Add(document);
+        }
+
+        var records = documents.ConvertAll(ToRecordDetail);
+        // Two copies may come from one plugin, so a column is named by its place as well.
+        var columns = records.Select((r, i) => $"{i}#{ColumnKey.Of(r.Plugin, r.Origin)}").ToList();
+        var diffs = _conflictClassifier.Align(
+            records, columns, snapshot.GameRelease, reads.LinkResolver(copies[0].FormKey), LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins));
+        var overrides = records.Select((r, i) => ToCompareOverride(r, state: null, columns[i], snapshot, reads)).ToList();
+
+        return new CompareResult(overrides, diffs, ConflictAll.NoConflict, RequireSchemas().DisplayNameFor(documents[0].RecordType));
+    }
+
+    private static CompareOverride ToCompareOverride(
+        RecordDetail o, ConflictThis? state, string? column, LoadOrderSnapshot snapshot, IRecordReads reads) =>
+        new(o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields, state,
+            Origin: o.Origin,
+            LoadIndex: LoadIndex.Of(new PluginAddress(o.Plugin, o.Origin), o.LoadOrderIndex, snapshot, reads.OpenedPlugins),
+            RecordType: o.RecordType, IsPartialForm: o.IsPartialForm, ParseDiagnosis: o.ParseDiagnosis,
+            IsInOverwrite: snapshot.ProviderOf(new PluginAddress(o.Plugin, o.Origin)) == PluginProvider.NoMod,
+            Column: column);
 
     private (ClassifyResult Classification, ConflictAll ConflictAll) ClassifyStack(
         IReadOnlyList<RecordDetail> committedOverrides,

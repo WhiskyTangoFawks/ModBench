@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.Queries;
 
 namespace MEditService.Http;
 
@@ -70,6 +71,8 @@ public record RecordAddress(string FormKey, string Plugin, string Origin);
 /// <summary>A record of the selection that wrote nothing: the typed refusal, and the message naming
 /// the way out.</summary>
 public record RecordAddressRefusal(RecordAddress Item, RecordEditRefusal Refusal, string Message);
+
+public record CompareRecordsRequest(IReadOnlyList<RecordCopy> Copies);
 
 public record RecordDeleteRequest(IReadOnlyList<RecordAddress> Records);
 

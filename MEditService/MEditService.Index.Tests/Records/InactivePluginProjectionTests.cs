@@ -69,6 +69,16 @@ public sealed class InactivePluginProjectionTests : IDisposable
     }
 
     [Fact]
+    public void ACopyGivenAsText_ReadsWhenOnlyAPluginThatIsNotActiveHoldsItsRecord()
+    {
+        var text = Reads.DocumentOf(_npc, _mod.KeyOf()).Body ?? throw new InvalidOperationException("Expected a body.");
+        Reconcile(active: false);
+
+        Assert.Null(Reads.GetDocument(_npc, _mod.KeyOf()));
+        Assert.NotNull(Reads.DocumentFromText(_npc, _mod.KeyOf(), 3, text));
+    }
+
+    [Fact]
     public void ATrackedPluginThatIsNotActive_IsStillReadAsTracked()
     {
         Reconcile(active: false);
