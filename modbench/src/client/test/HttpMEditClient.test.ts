@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { HttpMEditClient, type HttpMEditClientDeps } from '../HttpMEditClient';
+import type { RecordEditEnvelope } from '../MEditClient';
 import { Readable } from 'node:stream';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -503,11 +504,12 @@ describe('HttpMEditClient — an applied edit', () => {
 
 describe('HttpMEditClient — an edit answered as its source changes', () => {
   const plugin = { name: 'MyPatch.esp', origin: 'ModA' };
-  const renamed = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' } as const;
+  const renamed: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' };
 
   it('getEditChanges posts the envelope and the document\'s text, and reads each move and document', async () => {
-    const moves = [{ from: 'plugin-source/MyPatch.esp/Npcs/Old - 000800_MyPatch.esp.json', to: 'plugin-source/MyPatch.esp/Npcs/Renamed - 000800_MyPatch.esp.json' }];
-    const documents = [{ path: moves[0].to, text: '{"EditorID": "Renamed"}' }];
+    const to = 'plugin-source/MyPatch.esp/Npcs/Renamed - 000800_MyPatch.esp.json';
+    const moves = [{ from: 'plugin-source/MyPatch.esp/Npcs/Old - 000800_MyPatch.esp.json', to }];
+    const documents = [{ path: to, text: '{"EditorID": "Renamed"}' }];
     let seen: Request | undefined;
     const fetch = vi.fn((req: Request) => {
       seen = req;
