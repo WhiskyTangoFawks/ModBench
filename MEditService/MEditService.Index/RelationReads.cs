@@ -69,7 +69,7 @@ internal sealed class RelationReads(
             // has no reconstitution path.
             if (!schemas.TryGetValue(row.RecordType, out var schema)) continue;
             documents.Add(DocumentFromBody(
-                row.FormKey, row.Plugin, row.Origin, row.LoadOrderIndex, row.IsWinner,
+                connection, row.FormKey, row.Plugin, row.Origin, row.LoadOrderIndex, row.IsWinner,
                 row.EditorId, row.Body, schema, resolve, row.ParseDiagnosis));
         }
         return documents;
@@ -96,7 +96,7 @@ internal sealed class RelationReads(
         var entries = new List<OverrideStackEntry>();
         while (reader.Read())
         {
-            var doc = ReadDocumentFromBody(reader, schema, resolve);
+            var doc = ReadDocumentFromBody(connection, reader, schema, resolve);
             var isDirty = WorkingTreeStates.FromStored(reader.GetString(8)) != WorkingTreeState.None;
             entries.Add(new OverrideStackEntry(doc.Plugin, doc.LoadOrderIndex, doc.IsWinner, doc, isDirty));
         }
@@ -732,30 +732,33 @@ internal sealed class RelationReads(
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
 
-        return ReadDocumentFromBody(reader, schema, resolve);
+        return ReadDocumentFromBody(connection, reader, schema, resolve);
     }
 
     private RecordDocument ReadDocumentFromBody(
-        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey) =>
+        DuckDBConnection connection, DuckDBDataReader reader, RecordTableSchema schema,
+        Func<string, RecordLookupEntry?> resolveFormKey) =>
         DocumentFromBody(
-            reader.GetString(0), reader.GetString(1), reader.GetString(2), LoadOrderSortKey(reader, 3),
+            connection, reader.GetString(0), reader.GetString(1), reader.GetString(2), LoadOrderSortKey(reader, 3),
             reader.GetBoolean(4), reader.IsDBNull(5) ? null : reader.GetString(5),
             reader.GetString(6), schema, resolveFormKey, reader.IsDBNull(7) ? null : reader.GetString(7));
 
     // The construction half of ReadDocumentFromBody, split out so the bulk read can build documents
-    // from rows materialized before reading any. The fields are the document's own nodes at each
-    // column's path (ADR-0005): nothing is reconstituted.
+    // from rows materialized first. The fields are the document's own nodes (ADR-0005), except a
+    // header's masters, which no document holds (ADR-0008).
     private RecordDocument DocumentFromBody(
-        string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
+        DuckDBConnection connection, string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
         string? editorId, string body, RecordTableSchema schema,
         Func<string, RecordLookupEntry?> resolveFormKey, string? parseDiagnosis)
     {
         using var parsed = JsonDocument.Parse(body);
         var root = parsed.RootElement;
+        var address = new PluginAddress(plugin, origin);
+        var fields = BuildFields(schema, root, resolveFormKey, store.Release);
 
         return new RecordDocument(
-            formKey, new PluginAddress(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName,
-            body, BuildFields(schema, root, resolveFormKey, store.Release),
+            formKey, address, loadOrderIndex, isWinner, editorId, schema.TableName,
+            body, schema.IsHeader ? RequiredMasters.InHeader(fields, connection, address) : fields,
             // A ModHeader cannot carry the Partial Form flag.
             IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(root, schema.RecordType),
             ParseDiagnosis: parseDiagnosis);
