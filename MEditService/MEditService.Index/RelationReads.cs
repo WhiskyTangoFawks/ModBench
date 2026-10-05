@@ -502,6 +502,40 @@ internal sealed class RelationReads(
             connection, plugin.Name, plugin.Origin, parentFormKey, store.Filter.AlsoKeeps("cc", "child_form_key"), NavigatorSql.FormIdOrder("cc.child_form_key"));
     }
 
+    public bool HasChildRecords(PluginAddress plugin, string formKey)
+    {
+        using var connection = store.OpenReadConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT EXISTS (
+                SELECT 1 FROM ({NavigatorSql.Held}) h WHERE h.parent = $1 AND h.plugin = $2 AND h.origin = $3)
+            """;
+        DuckDbSql.AddParams(cmd, [formKey, plugin.Name, plugin.Origin]);
+        using var reader = cmd.ExecuteReader();
+        return reader.Read() && reader.GetBoolean(0);
+    }
+
+    public IReadOnlySet<PluginAddress> PluginsHoldingChildRecords(PluginAddress plugin, string formKey)
+    {
+        using var connection = store.OpenReadConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"""
+            WITH RECURSIVE below(form_key) AS (
+                SELECT h.child FROM ({NavigatorSql.Held}) h WHERE h.parent = $1 AND h.plugin = $2 AND h.origin = $3
+                UNION
+                SELECT h.child FROM ({NavigatorSql.Held}) h
+                JOIN below b ON h.parent = b.form_key WHERE h.plugin = $2 AND h.origin = $3
+            )
+            SELECT DISTINCT r.plugin, r.origin FROM records r JOIN below b ON r.form_key = b.form_key
+            """;
+        DuckDbSql.AddParams(cmd, [formKey, plugin.Name, plugin.Origin]);
+        using var reader = cmd.ExecuteReader();
+
+        var holders = new HashSet<PluginAddress>(PluginAddress.Comparer);
+        while (reader.Read()) holders.Add(new PluginAddress(reader.GetString(0), reader.GetString(1)));
+        return holders;
+    }
+
     public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey)
     {
         using var connection = store.OpenReadConnection();

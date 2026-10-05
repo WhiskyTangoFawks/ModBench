@@ -178,7 +178,7 @@ describe('modbench.record.create ends when the write does', () => {
 
   it('ends the write after a create mEdit never answered', async () => {
     const { client, writing, create } = harness();
-    client.setCommandHandler('createRecord', () => Promise.resolve({ refused: true, unanswered: true, message: 'no answer' }));
+    client.setCommandHandler('createRecord', () => Promise.resolve({ refused: true, message: 'no answer' }));
 
     await create(NPC_GROUP);
 

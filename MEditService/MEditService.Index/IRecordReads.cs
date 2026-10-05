@@ -86,6 +86,15 @@ public interface IRecordReads
     /// none. Ref-invariant by construction.</summary>
     IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey);
 
+    /// <summary>Whether <paramref name="plugin"/> holds a record below <paramref name="formKey"/>: a
+    /// topic in its quest, a cell in its worldspace, a placed reference in its cell. Unfiltered: a
+    /// copy takes every child record, whatever the listing shows.</summary>
+    bool HasChildRecords(PluginAddress plugin, string formKey);
+
+    /// <summary>Every plugin holding at least one record below <paramref name="formKey"/> as
+    /// <paramref name="plugin"/> holds it, at any depth, whether or not it holds the record itself.</summary>
+    IReadOnlySet<PluginAddress> PluginsHoldingChildRecords(PluginAddress plugin, string formKey);
+
     /// <summary>The one parent slot <paramref name="childFormKey"/> sits in, or null. Needed because
     /// an embedded child has no file of its own; a placed reference answers null here and through
     /// <see cref="GetPlacement"/> instead.</summary>

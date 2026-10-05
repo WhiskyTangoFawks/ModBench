@@ -57,6 +57,8 @@ public class WorldspaceQueryServiceTests
         public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
         public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey) => [];
         public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
+        public bool HasChildRecords(PluginAddress plugin, string formKey) => false;
+        public IReadOnlySet<PluginAddress> PluginsHoldingChildRecords(PluginAddress plugin, string formKey) => new HashSet<PluginAddress>();
     }
 
     private static WorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>

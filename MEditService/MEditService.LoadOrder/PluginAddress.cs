@@ -18,3 +18,6 @@ public readonly record struct PluginAddress(string Name, string Origin)
             StringComparer.OrdinalIgnoreCase.GetHashCode(key.Origin));
     }
 }
+
+/// <summary>A record and the plugin holding it (ADR-0012).</summary>
+public readonly record struct RecordAt(PluginAddress Plugin, string FormKey);

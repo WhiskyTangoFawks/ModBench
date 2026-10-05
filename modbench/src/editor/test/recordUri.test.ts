@@ -36,7 +36,7 @@ describe('a record tab\'s address', () => {
       .not.toEqual(recordUri({ header: { name: 'MyPatch.esp', origin: 'ModB' } }));
   });
 
-  it('asks mEdit for a header at the FormKey mEdit indexes it at', () => {
+  it('asks mEdit for a header at the FormKey mEdit indexes it at, and for a record at its own FormKey', () => {
     expect(formKeyOf({ header: { name: 'MyPatch.esp', origin: 'ModA' } })).toBe('000000:MyPatch.esp');
     expect(formKeyOf({ formKey: '000800:MyPatch.esp' })).toBe('000800:MyPatch.esp');
   });
