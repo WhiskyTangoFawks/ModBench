@@ -1,12 +1,11 @@
 // MO2's changes to mod order: the file spliced through its codec under its lock and written
 // whole; a separator's folder moves with its line, under the same lock.
 
-import { errorMessage } from '../ports/errorMessage';
 import {
   deleteSeparatorInText, insertModAtWinningEnd, insertSeparatorAtIndexInText, moveModsInText, moveSeparatorsInText,
   parseModlist, removeModFromText, renameModLineInText, renameSeparatorInText, separatorModName, setEnabledInText,
 } from './codecs/modlistText';
-import { ensureDir, get, remove, rename, withLock, write } from './files';
+import { ensureDir, get, remove, rename, undoAll, type Undo, withLock, write } from './files';
 import {
   entryNotFound, type EntryRef, type InstanceAdapter, type ModlistEntry, type ModOrderChange, type MovePlace,
   type SeparatorsPlace,
@@ -17,8 +16,6 @@ import {
 } from './mo2Context';
 
 export type Mo2ModOrder = Pick<InstanceAdapter, 'changeModOrder'>;
-
-type Undo = () => Promise<void>;
 
 function listedName(order: readonly ModlistEntry[], entry: EntryRef): string {
   const listed = listedAs(order, entry);
@@ -112,21 +109,6 @@ function spliceModOrderChange(text: string, change: ModOrderChange): string {
     case 'dropMod': return removeModFromText(text, change.mod);
     case 'dropSeparator': return deleteSeparatorInText(text, change.separator);
   }
-}
-
-// Every undo is tried, newest first, and each one that fails is named beside the failure it
-// followed.
-async function undoAll(undos: readonly Undo[], err: unknown): Promise<unknown> {
-  const failures: string[] = [];
-  for (const undo of undos) {
-    try {
-      await undo();
-    } catch (undoErr) {
-      failures.push(errorMessage(undoErr));
-    }
-  }
-  if (failures.length === 0) return err;
-  return new Error(`${errorMessage(err)}; not put back: ${failures.join('; ')}`);
 }
 
 export function mo2ModOrder(context: Mo2Context): Mo2ModOrder {

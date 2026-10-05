@@ -24,7 +24,7 @@ import { isPluginFile } from './pluginFile';
 
 export type Mo2Reads = Omit<InstanceAdapter,
   | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
-  | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'extractedEntries'
+  | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'renamePlugin' | 'extractedEntries'
   | 'extractNewMod' | 'extractUpgrade' | 'subscribe' | 'names'>;
 
 async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
