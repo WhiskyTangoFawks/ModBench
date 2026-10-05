@@ -212,10 +212,9 @@ internal sealed class WriteTargets(
         new(false, RecordEditRefusal.RecordParseFailed,
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);
 
-    /// <summary>The container copy the destination can see, as xEdit's HighestOverrideVisibleForFile
-    /// answers it: the source's own, unless a master of the destination loads after it, or the source's
-    /// is Partial Form. <paramref name="text"/> is the master's copy that wins, null when the source's
-    /// does.</summary>
+    /// <summary>xEdit's HighestOverrideVisibleForFile: the source's copy stands unless it is Partial Form
+    /// or a master of the destination loads after it. <paramref name="text"/> is that master's copy,
+    /// null when the source's stands.</summary>
     internal RecordEditResult? HighestOverrideVisibleToTheDestination(
         CopySource source, RecordIdentity identity, RecordCopy.Destination destination, out string? text)
     {
