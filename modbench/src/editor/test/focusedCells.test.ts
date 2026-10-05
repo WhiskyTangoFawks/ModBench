@@ -4,12 +4,21 @@ import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText, publishFoc
 const element = { webviewSection: 'arrayElement', canMoveUp: false, canMoveDown: true };
 const text = { webviewSection: 'stringValue' };
 
+function focusing() {
+  let active: string | undefined;
+  return {
+    activePanel: () => active,
+    focus: (panel: string | undefined) => { active = panel; },
+  };
+}
+
 describe('the focused cell of the record tab in focus, which the palette\'s field gestures act on', () => {
   function tracked() {
     const shown: (object | undefined)[] = [];
     const entries: string[] = [];
-    const cells = new FocusedCells<string>((cell) => shown.push(cell), () => entries.push('entered'));
-    return { cells, shown, entries };
+    const tab = focusing();
+    const cells = new FocusedCells<string>(tab.activePanel, (cell) => shown.push(cell), () => entries.push('entered'));
+    return { cells: Object.assign(cells, { setActivePanel: (panel: string) => { tab.focus(panel); cells.panelFocused(); }, closeActive: (panel: string) => { cells.removePanel(panel); tab.focus(undefined); } }), shown, entries };
   }
 
   it('is the active panel\'s own focused cell, and follows the active panel', () => {
@@ -47,7 +56,7 @@ describe('the focused cell of the record tab in focus, which the palette\'s fiel
     const { cells, shown } = tracked();
     cells.setActivePanel('A');
     cells.setCell('A', element);
-    cells.removePanel('A');
+    cells.closeActive('A');
     expect(cells.current()).toBeUndefined();
     expect(shown.at(-1)).toBeUndefined();
   });
@@ -86,8 +95,9 @@ describe('publishing the focused cell as context keys', () => {
 describe('the record grid entering the focused view, which copy value and the name filter act on', () => {
   function tracked() {
     const entries: string[] = [];
-    const cells = new FocusedCells<string>(() => undefined, () => entries.push('entered'));
-    return { cells, entries };
+    const tab = focusing();
+    const cells = new FocusedCells<string>(tab.activePanel, () => undefined, () => entries.push('entered'));
+    return { cells: Object.assign(cells, { setActivePanel: (panel: string) => { tab.focus(panel); cells.panelFocused(); } }), entries };
   }
 
   it('enters when a cell reports a user\'s focus', () => {
