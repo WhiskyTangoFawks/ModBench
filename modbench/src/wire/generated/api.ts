@@ -685,10 +685,6 @@ export interface components {
         };
         /** @enum {string} */
         FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
-        IndexedPlugin: {
-            name: string;
-            origin: string;
-        };
         InteriorCellBlock: {
             /** Format: int32 */
             number: number;
@@ -728,7 +724,7 @@ export interface components {
             totalPlugins: number;
             /** Format: int32 */
             activePlugins: number;
-            indexedPlugins: components["schemas"]["IndexedPlugin"][];
+            indexedPlugins: components["schemas"]["PluginAddress"][];
             conflictsComputed: boolean;
             failures: components["schemas"]["PluginLoadFailure"][];
             message?: string | null;

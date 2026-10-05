@@ -29,7 +29,7 @@ internal sealed class Reconciler(
 
     // The reconcile's own progress. Guarded by _lock like _scope: written by the reconciling thread
     // as each plugin lands, read by whoever asks for Status meanwhile.
-    private readonly List<IndexedPlugin> _indexed = [];
+    private readonly List<PluginAddress> _indexed = [];
     private bool _conflictsComputed;
     private bool _validating;
     private int _plannedCount;
@@ -548,7 +548,7 @@ internal sealed class Reconciler(
             }
             // Counted exactly as an indexed plugin is: Status promises a plugin listed here is
             // wholly queryable, and a registered one is.
-            lock (_lock) _indexed.Add(new IndexedPlugin(plugin.Name, plugin.Origin));
+            lock (_lock) _indexed.Add(new PluginAddress(plugin.Name, plugin.Origin));
             PublishStatus();
             return;
         }
@@ -582,7 +582,7 @@ internal sealed class Reconciler(
         // Recorded only once Index() has returned: Status promises a plugin here is wholly
         // queryable, so listing it any earlier would be the partial-visibility lie in a
         // different form.
-        lock (_lock) _indexed.Add(new IndexedPlugin(plugin.Name, plugin.Origin));
+        lock (_lock) _indexed.Add(new PluginAddress(plugin.Name, plugin.Origin));
         PublishStatus();
     }
 

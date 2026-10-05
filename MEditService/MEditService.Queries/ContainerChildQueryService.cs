@@ -27,14 +27,11 @@ public sealed class ContainerChildQueryService(
         ["Responses"] = "info",
     };
 
-    // The caller that names `plugin` (a tree row) always knows which origin it means
-    // (ADR-0012).
-    public IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string origin)
+    public IReadOnlyList<ContainerChildSummary> GetChildren(PluginAddress plugin, string parentFormKey)
     {
         var repo = _index.RequireReads();
-        var pluginKey = new PluginAddress(plugin, origin);
 
-        var rows = repo.GetContainerChildren(pluginKey, parentFormKey)
+        var rows = repo.GetContainerChildren(plugin, parentFormKey)
             .Where(r => SlotRecordTypes.ContainsKey(r.SlotName))
             .ToList();
         if (rows.Count == 0) return [];
@@ -44,7 +41,7 @@ public sealed class ContainerChildQueryService(
         foreach (var recordType in rows.Select(r => SlotRecordTypes[r.SlotName]).Distinct(StringComparer.Ordinal))
         {
             var page = repo.Search(new RecordQuery(
-                RecordTypes: [recordType], Plugin: pluginKey.Name, Origin: pluginKey.Origin, Limit: UnlimitedRecords, Offset: 0));
+                RecordTypes: [recordType], Plugin: plugin.Name, Origin: plugin.Origin, Limit: UnlimitedRecords, Offset: 0));
             foreach (var record in page.Items) byFormKey[record.FormKey] = record.ToQuery();
         }
 
@@ -59,7 +56,7 @@ public sealed class ContainerChildQueryService(
                 _logger.LogWarning(
                     "Container child {ChildFormKey} of {ParentFormKey} in {Plugin} ({Origin}) is indexed in " +
                     "container_child but Search({RecordType}) did not return it; omitting.",
-                    row.ChildFormKey, parentFormKey, plugin, origin, SlotRecordTypes[row.SlotName]);
+                    row.ChildFormKey, parentFormKey, plugin.Name, plugin.Origin, SlotRecordTypes[row.SlotName]);
                 continue;
             }
             result.Add(new ContainerChildSummary(

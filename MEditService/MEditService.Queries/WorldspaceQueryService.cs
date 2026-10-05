@@ -7,12 +7,10 @@ namespace MEditService.Queries;
 
 public interface IWorldspaceQueryService
 {
-    // The caller that names `plugin` (a tree row) always knows which origin it means
-    // (ADR-0012).
-    IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string origin);
-    WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string origin);
-    CellChildRecords GetCellChildRecords(string plugin, string cellFormKey, string origin);
-    IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string origin);
+    IReadOnlyList<WorldspaceSummary> GetWorldspaces(PluginAddress plugin);
+    WorldspaceBlocks GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey);
+    CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey);
+    IReadOnlyList<InteriorCellBlock> GetInteriorCells(PluginAddress plugin);
 }
 
 /// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin
@@ -25,22 +23,22 @@ public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<Worldspace
     private readonly IQueryIndex _index = index;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
-    public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string origin)
+    public IReadOnlyList<WorldspaceSummary> GetWorldspaces(PluginAddress plugin)
     {
         var repo = _index.RequireReads();
         // Without an origin filter, two same-filename plugins' worldspace lists silently merge
         // into one under this plugin name.
-        var query = new RecordQuery(RecordTypes: ["wrld"], Plugin: plugin, Origin: origin, Limit: WorldspaceListLimit, Offset: 0, GroupOnly: true);
-        var holdingCells = repo.GetWorldspacesHoldingCells(new PluginAddress(plugin, origin));
+        var query = new RecordQuery(RecordTypes: ["wrld"], Plugin: plugin.Name, Origin: plugin.Origin, Limit: WorldspaceListLimit, Offset: 0, GroupOnly: true);
+        var holdingCells = repo.GetWorldspacesHoldingCells(plugin);
         return [.. repo.Search(query)
             .Items.Select(r => new WorldspaceSummary(
                 r.FormKey, r.EditorId, r.HasParseFailure, r.FullName, r.ParseDiagnosis,
                 holdingCells.Contains(r.FormKey)))];
     }
 
-    public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string origin)
+    public WorldspaceBlocks GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey)
     {
-        var cells = _index.RequireReads().GetWorldspaceCells(new PluginAddress(plugin, origin), worldspaceFormKey);
+        var cells = _index.RequireReads().GetWorldspaceCells(plugin, worldspaceFormKey);
 
         // A TopCell has no block coordinates. Every block-less row is surfaced, but the data can't
         // say which of several is the real TopCell, so the first (deterministic order) is treated
@@ -51,7 +49,7 @@ public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<Worldspace
             _logger.LogWarning(
                 "Worldspace {WorldspaceFormKey} in {Plugin} ({Origin}) has {Count} block-less cell rows; " +
                 "expected at most one TopCell. Surfacing all, but only the first is treated as the persistent cell.",
-                worldspaceFormKey, plugin, origin, topCellRows.Count);
+                worldspaceFormKey, plugin.Name, plugin.Origin, topCellRows.Count);
         }
         var topCells = topCellRows
             .Select((c, i) => CellOf(c) with { IsPersistentWorldspaceCell = i == 0 })
@@ -83,13 +81,12 @@ public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<Worldspace
         return new WorldspaceBlocks(blocks, topCells);
     }
 
-    public CellChildRecords GetCellChildRecords(string plugin, string cellFormKey, string origin) =>
-        _index.RequireReads().GetCellChildRecords(new PluginAddress(plugin, origin), cellFormKey).ToQuery();
+    public CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey) =>
+        _index.RequireReads().GetCellChildRecords(plugin, cellFormKey).ToQuery();
 
-    public IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string origin)
+    public IReadOnlyList<InteriorCellBlock> GetInteriorCells(PluginAddress plugin)
     {
-        var pluginKey = new PluginAddress(plugin, origin);
-        return [.. _index.RequireReads().GetInteriorCells(pluginKey)
+        return [.. _index.RequireReads().GetInteriorCells(plugin)
             .GroupBy(c => c.BlockX ?? 0)
             .Select(block =>
             {

@@ -73,7 +73,7 @@ public class WorldspaceQueryServiceTests
             FullName: "TemporaryFull", BaseEditorId: "TemporaryBase", ParseDiagnosis: "temporary diagnosis");
         var svc = new WorldspaceQueryService(new StubIndex(new StubReader([], cellRefs: new Index.CellChildRecords([persistent], [temporary]))));
 
-        var result = svc.GetCellChildRecords("M.esp", "cell:M.esp", "Data");
+        var result = svc.GetCellChildRecords(new PluginAddress("M.esp", "Data"), "cell:M.esp");
 
         Assert.Equal(
             new ChildRecordSummary("p1:M.esp", "PersistentEditor", "base1:M.esp", "REFR", true, "PersistentFull", "PersistentBase", "persistent diagnosis"),
@@ -92,7 +92,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("ccc:M.esp", "CellC", 1, 0, 0, 0, 40, 2),
         ]);
 
-        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
+        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "Data"), "wrld:M.esp");
 
         Assert.Empty(result.TopCells);
         Assert.Equal(2, result.Blocks.Count);
@@ -114,7 +114,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("a2:M.esp", "CellA2", 0, 0, 0, 0, 4, 4),
         ]);
 
-        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
+        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "Data"), "wrld:M.esp");
 
         Assert.Equal(
             [(0, 0), (0, 1), (1, 0)],
@@ -130,7 +130,7 @@ public class WorldspaceQueryServiceTests
     public void GetInteriorCells_NoReads_ThrowsNoLoadOrderException_ForOriginTravelsInFromTheCallerSoTheReadsAreTheOneGuard()
     {
         var svc = new WorldspaceQueryService(new StubIndex(reads: null));
-        Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells("M.esp", "Data"));
+        Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells(new PluginAddress("M.esp", "Data")));
     }
 
     [Fact]
@@ -142,7 +142,7 @@ public class WorldspaceQueryServiceTests
         ]);
         var svc = new WorldspaceQueryService(new StubIndex(reader));
 
-        var result = svc.GetWorldspaces("M.esp", "Data");
+        var result = svc.GetWorldspaces(new PluginAddress("M.esp", "Data"));
 
         Assert.Equal(2, result.Count);
         Assert.Equal("0001:M.esp", result[0].FormKey);
@@ -156,7 +156,7 @@ public class WorldspaceQueryServiceTests
         var reader = new StubReader([]);
         var svc = new WorldspaceQueryService(new StubIndex(reader));
 
-        svc.GetWorldspaces("M.esp", origin: "ModB");
+        svc.GetWorldspaces(new PluginAddress("M.esp", "ModB"));
 
         Assert.Equal("ModB", reader.LastSearchOrigin);
     }
@@ -167,7 +167,7 @@ public class WorldspaceQueryServiceTests
         var reader = new StubReader([]);
         var svc = new WorldspaceQueryService(new StubIndex(reader));
 
-        svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", origin: "ModB");
+        svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "ModB"), "wrld:M.esp");
 
         Assert.Equal("ModB", reader.LastGetWorldspaceCellsOrigin);
     }
@@ -178,7 +178,7 @@ public class WorldspaceQueryServiceTests
         var reader = new StubReader([]);
         var svc = new WorldspaceQueryService(new StubIndex(reader));
 
-        svc.GetInteriorCells("M.esp", origin: "ModB");
+        svc.GetInteriorCells(new PluginAddress("M.esp", "ModB"));
 
         Assert.Equal("ModB", reader.LastGetInteriorCellsOrigin);
     }
@@ -190,7 +190,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("int:M.esp", "IntCell", null, null, null, null, 0, 0),
         ]);
 
-        var result = svc.GetInteriorCells("M.esp", "Data");
+        var result = svc.GetInteriorCells(new PluginAddress("M.esp", "Data"));
 
         Assert.Equal("IntCell", Assert.Single(Assert.Single(Assert.Single(result).SubBlocks).Cells).EditorId);
     }
@@ -203,7 +203,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 1, 1),
         ]);
 
-        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
+        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "Data"), "wrld:M.esp");
 
         Assert.Single(result.TopCells);
         Assert.Equal("TopCell", result.TopCells[0].EditorId);
@@ -219,7 +219,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("second:M.esp", "SecondBlockless", null, null, null, null, 0, 0),
         ]);
 
-        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
+        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "Data"), "wrld:M.esp");
 
         Assert.Equal(2, result.TopCells.Count);
         Assert.Equal(new string?[] { "FirstBlockless", "SecondBlockless" }, result.TopCells.Select(c => c.EditorId).ToArray());
@@ -235,7 +235,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 1, 1, "Concord"),
         ]);
 
-        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
+        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "Data"), "wrld:M.esp");
 
         Assert.Equal("Sanctuary Hills", result.TopCells[0].FullName);
         Assert.Equal("Concord", result.Blocks[0].SubBlocks[0].Cells[0].FullName);
@@ -249,7 +249,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("bbb:M.esp", "CellB", 1, 0, 0, 0, 2, 2),
         ]);
 
-        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
+        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "Data"), "wrld:M.esp");
 
         var failing = result.Blocks.Single(b => b is { X: 0, Y: 0 });
         Assert.True(failing.HasParseFailure);
@@ -270,7 +270,7 @@ public class WorldspaceQueryServiceTests
         ]);
         var svc = new WorldspaceQueryService(new StubIndex(reader));
 
-        var result = svc.GetWorldspaces("M.esp", "Data");
+        var result = svc.GetWorldspaces(new PluginAddress("M.esp", "Data"));
 
         Assert.True(result.Single(w => w.FormKey == "0001:M.esp").HasParseFailure);
         Assert.False(result.Single(w => w.FormKey == "0002:M.esp").HasParseFailure);

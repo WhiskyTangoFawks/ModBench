@@ -23,6 +23,16 @@ public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> l
         return blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells");
     }
 
+    [Theory]
+    [InlineData("plugin=Any.esp")]
+    [InlineData("origin=AnyMod")]
+    public async Task ARecordListNamingOnlyHalfAPluginsAddress_IsRefused(string half)
+    {
+        var response = await Client.GetAsync($"/records?{half}&type=npc_");
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Fact]
     public async Task AQuestionAboutAPluginsRecords_IsAnsweredWithTheRowsAndThenTheRecord()
     {

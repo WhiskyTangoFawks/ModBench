@@ -1,28 +1,20 @@
+using MEditService.LoadOrder;
 using MEditService.Ports;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
 
-/// <summary>ADR-0012's guard, shared so no caller's own copy of this check can drift
-/// from another's.</summary>
-public static class RecordFilterGuard
-{
-    public static bool NamesOnlyPluginOrOnlyOrigin(string? plugin, string? origin) =>
-        string.IsNullOrWhiteSpace(plugin) != string.IsNullOrWhiteSpace(origin);
-}
-
 public interface IRecordQueryService
 {
     IReadOnlyList<PluginRow> GetPlugins();
-    // plugin/origin (ADR-0012): both null browses every plugin; naming one names the
-    // other too.
+    // A null plugin browses every plugin.
     PagedResult<RecordSummary> GetRecords(
-        IReadOnlyList<string>? types, string? plugin, string? search, int limit, int offset, string? origin = null, bool unfiltered = false);
+        IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset, bool unfiltered = false);
     RecordDetail? GetRecord(string formKey);
 
     CompareResult? GetCompare(string formKey);
 
-    IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string origin);
+    IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(PluginAddress plugin);
     IReadOnlyList<CreatableRecordType> GetCreatableRecordTypes();
     bool GetLightPluginsSupported();
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);

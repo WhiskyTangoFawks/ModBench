@@ -41,8 +41,7 @@ public static class PluginEndpoints
         app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IRecordQueryService svc) =>
         {
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            var decoded = Uri.UnescapeDataString(plugin);
-            return Results.Ok(svc.GetPluginRecordTypes(decoded, origin));
+            return Results.Ok(svc.GetPluginRecordTypes(WriteEndpointMapping.PluginAddressOf(plugin, origin)));
         })
             .WithName("GetPluginRecordTypes")
             .WithTags(Tag)

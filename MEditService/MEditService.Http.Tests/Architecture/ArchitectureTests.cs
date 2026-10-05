@@ -34,17 +34,17 @@ public sealed class ArchitectureTests
     ];
 
     [Fact]
-    public void PluginIdentity_TravelsAsNameAndOriginTogether_OnEverySeamMemberAndDto()
+    public void PluginIdentity_TravelsAsAPluginAddressOnEveryInterface_AndAsNameAndOriginTogetherOnEveryDto()
     {
         var offenders = new List<string>();
         foreach (var type in EveryBoxAssembly.SelectMany(box => box.GetExportedTypes()).Where(t => t.IsInterface))
         {
             foreach (var method in type.GetMethods())
             {
-                offenders.AddRange(PluginStringsWithoutOrigin(method.GetParameters())
+                offenders.AddRange(StringPlugins(method.GetParameters())
                     .Select(p => $"{type.Name}.{method.Name}({p})"));
             }
-            offenders.AddRange(PluginStringsWithoutOrigin(type.GetProperties().Select(p => (p.Name, p.PropertyType)).ToArray())
+            offenders.AddRange(StringPlugins(type.GetProperties().Select(p => (p.Name, p.PropertyType)).ToArray())
                 .Select(p => $"{type.Name}.{p}"));
         }
         foreach (var record in ReadModelAndWireRecordNamespaces.SelectMany(box => box.Assembly.GetExportedTypes()
@@ -55,8 +55,18 @@ public sealed class ArchitectureTests
             offenders.AddRange(PluginStringsWithoutOrigin(primary.GetParameters())
                 .Select(p => $"{record.Name}({p})"));
         }
-        Assert.True(offenders.Count == 0, "A plugin name travels without its origin:\n" + string.Join("\n", offenders));
+        Assert.True(offenders.Count == 0, "A plugin travels as a string where its address or its origin belongs:\n" + string.Join("\n", offenders));
     }
+
+    private static readonly Regex PluginNamed = new("(plugin|pluginName)$", RegexOptions.IgnoreCase);
+
+    private static IEnumerable<string> StringPlugins(ParameterInfo[] parameters) =>
+        StringPlugins(parameters
+            .Select(p => (p.Name ?? throw new InvalidOperationException("Expected a parameter to have a name."), p.ParameterType))
+            .ToArray());
+
+    private static IEnumerable<string> StringPlugins((string Name, Type Type)[] members) =>
+        members.Where(m => m.Type == typeof(string) && PluginNamed.IsMatch(m.Name)).Select(m => m.Name);
 
     internal static IEnumerable<string> PluginStringsWithoutOrigin(ParameterInfo[] parameters) =>
         PluginStringsWithoutOrigin(parameters
@@ -424,6 +434,16 @@ public sealed class ArchitectureTests
         Assert.Equal(["destinationPlugin"], PluginStringsWithoutOrigin(ParametersOf(Paired)));
         Assert.Empty(PluginStringsWithoutOrigin(ParametersOf(Typed)));
         Assert.Equal(["Plugin"], PluginStringsWithoutOrigin([("Plugin", typeof(string)), ("Path", typeof(string))]));
+    }
+
+    [Fact]
+    public void StringPlugins_FlagsAPluginStringEvenBesideItsOrigin_AndAcceptsATypedKey()
+    {
+        static void Paired(string plugin, string origin) { }
+        static void Typed(PluginAddress plugin, string formKey) { }
+
+        Assert.Equal(["plugin"], StringPlugins(ParametersOf(Paired)));
+        Assert.Empty(StringPlugins(ParametersOf(Typed)));
     }
 
     private static ParameterInfo[] ParametersOf(Delegate method) => method.Method.GetParameters();

@@ -23,15 +23,15 @@ public static class WorldspaceEndpoints
                 logger.LogInformation("Received GetWorldspaceBlocks for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            var decodedPlugin = Uri.UnescapeDataString(plugin);
+            var address = WriteEndpointMapping.PluginAddressOf(plugin, origin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
             {
-                return Results.Ok(svc.GetWorldspaceBlocks(decodedPlugin, decodedFk, origin));
+                return Results.Ok(svc.GetWorldspaceBlocks(address, decodedFk));
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                logger.LogError(ex, "Failed to get worldspace blocks for {Plugin} {FormKey}", decodedPlugin, decodedFk);
+                logger.LogError(ex, "Failed to get worldspace blocks for {Plugin} {FormKey}", address.Name, decodedFk);
                 return Results.Problem(ex.Message);
             }
         })
@@ -48,15 +48,15 @@ public static class WorldspaceEndpoints
                 logger.LogInformation("Received GetCellChildRecords for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            var decodedPlugin = Uri.UnescapeDataString(plugin);
+            var address = WriteEndpointMapping.PluginAddressOf(plugin, origin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
             {
-                return Results.Ok(svc.GetCellChildRecords(decodedPlugin, decodedFk, origin));
+                return Results.Ok(svc.GetCellChildRecords(address, decodedFk));
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                logger.LogError(ex, "Failed to get cell references for {Plugin} {FormKey}", decodedPlugin, decodedFk);
+                logger.LogError(ex, "Failed to get cell references for {Plugin} {FormKey}", address.Name, decodedFk);
                 return Results.Problem(ex.Message);
             }
         })
@@ -73,14 +73,14 @@ public static class WorldspaceEndpoints
                 logger.LogInformation("Received GetInteriorCells for {Plugin} ({Origin})", plugin, origin);
             }
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            var decoded = Uri.UnescapeDataString(plugin);
+            var address = WriteEndpointMapping.PluginAddressOf(plugin, origin);
             try
             {
-                return Results.Ok(svc.GetInteriorCells(decoded, origin));
+                return Results.Ok(svc.GetInteriorCells(address));
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                logger.LogError(ex, "Failed to get interior cells for {Plugin}", decoded);
+                logger.LogError(ex, "Failed to get interior cells for {Plugin}", address.Name);
                 return Results.Problem(ex.Message);
             }
         })
@@ -100,14 +100,14 @@ public static class WorldspaceEndpoints
             logger.LogInformation("Received GetWorldspaces for {Plugin} ({Origin})", plugin, origin);
         }
         if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-        var decoded = Uri.UnescapeDataString(plugin);
+        var address = WriteEndpointMapping.PluginAddressOf(plugin, origin);
         try
         {
-            return Results.Ok(svc.GetWorldspaces(decoded, origin));
+            return Results.Ok(svc.GetWorldspaces(address));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            logger.LogError(ex, "Failed to get worldspaces for {Plugin}", decoded);
+            logger.LogError(ex, "Failed to get worldspaces for {Plugin}", address.Name);
             return Results.Problem(ex.Message);
         }
     }
