@@ -4,14 +4,14 @@ import type { FileOrigin, Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { copyOfConflictCell } from '../wire/conflictTable';
-import { modsGestureEntry, singularArgument } from './gestureEntry';
+import { gestureEntry, singularArgument } from '../drivingLib/gestureEntry';
 import type { ModlistNode } from './ModListProvider';
 
 function copyOf(
   clicked: unknown, selected: readonly ModlistNode[] | undefined, viewSelection: () => readonly ModlistNode[],
 ): { origin: Extract<FileOrigin, { kind: 'mod' }>; path: string } | undefined {
   const cell = copyOfConflictCell(clicked);
-  const row = singularArgument(modsGestureEntry(clicked, selected, viewSelection), 'file');
+  const row = singularArgument(gestureEntry(clicked, selected, viewSelection), 'file');
   const taken = cell ?? (row === undefined ? undefined : { origin: row.origin, path: row.file.relativePath });
   return taken?.origin.kind === 'mod' ? { origin: taken.origin, path: taken.path } : undefined;
 }

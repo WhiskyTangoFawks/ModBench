@@ -1,6 +1,6 @@
 // mods.md, Drag and drop: a drop is `move`, and it lands where the view shows it.
 
-import { pluralArgument } from './gestureEntry';
+import { pluralArgument } from '../drivingLib/gestureEntry';
 import { endAtTop, type MoveTarget } from './movePick';
 import type { ModlistNode, ModNode, SeparatorNode } from './ModListProvider';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';

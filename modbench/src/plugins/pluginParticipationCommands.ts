@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import type { PluginNode, PluginsTreeNode } from './PluginsTreeProvider';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import { PLUGINS_KEY_ARGS, pluralArgument, registerPluginsGesture, type GestureEntry } from './gestureEntry';
+import { PLUGINS_KEY_ARGS } from './gestureEntry';
+import { pluralArgument, registerGesture, type GestureEntry } from '../drivingLib/gestureEntry';
 import {
   setPluginsEnabled, type PluginParticipation, type PluginsAccess, type PluginsSelectionResult,
 } from '../pluginsCommands/plugins';
@@ -14,7 +15,7 @@ export function registerPluginEnableCommands(
   access: PluginsAccess, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly PluginsTreeNode[], reporter: Reporter,
 ): vscode.Disposable[] {
-  const run = (enabled: boolean) => async (entry: GestureEntry) => {
+  const run = (enabled: boolean) => async (entry: GestureEntry<PluginsTreeNode>) => {
     const rows = pluralArgument(entry, 'plugin');
     if (rows.length === 0) return;
     const names = rows.map((n: PluginNode) => n.plugin.name);
@@ -24,8 +25,8 @@ export function registerPluginEnableCommands(
     });
   };
   return [
-    registerPluginsGesture('modbench.plugin.enable', viewSelection, run(true)),
-    registerPluginsGesture('modbench.plugin.disable', viewSelection, run(false)),
+    registerGesture('modbench.plugin.enable', viewSelection, run(true)),
+    registerGesture('modbench.plugin.disable', viewSelection, run(false)),
   ];
 }
 

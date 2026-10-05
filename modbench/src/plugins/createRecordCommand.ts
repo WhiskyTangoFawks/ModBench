@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { isRefused, type MEditClient, type PluginAddress } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
-import { registerPluginsGesture, singularArgument } from './gestureEntry';
+import { registerGesture, singularArgument } from '../drivingLib/gestureEntry';
 import type { PluginsTreeNode } from './PluginsTreeProvider';
 import type { RecordGroup } from './createdRecordSelection';
 import type { RecordWrite } from '../drivingLib/writingGesture';
@@ -29,7 +29,7 @@ async function pickRecordType(deps: RecordCreateDeps): Promise<string | undefine
 export function registerRecordCreateCommand(
   deps: RecordCreateDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  return registerPluginsGesture('modbench.record.create', viewSelection, async (entry) => {
+  return registerGesture('modbench.record.create', viewSelection, async (entry) => {
     const row = singularArgument(entry, 'plugin', 'recordType');
     if (row === undefined) return;
     const plugin: PluginAddress = { name: row.kind === 'plugin' ? row.plugin.name : row.plugin, origin: row.origin };

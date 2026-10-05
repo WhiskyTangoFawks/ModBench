@@ -5,8 +5,9 @@ import {
   ImplicitMasterNode, PluginNode, PluginsTreeProvider, type PluginListNode, type PluginsTreeNode,
 } from './PluginsTreeProvider';
 import {
-  PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, isPluginsKeyArgs, onlySelected, pluginsGestureEntry, selectionArgument, type GestureEntry,
+  PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, isPluginsKeyArgs, onlySelected,
 } from './gestureEntry';
+import { gestureEntry, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import { CellNode, ChildRecordNode, RecordNode, WorldspaceNode } from './PluginTreeProvider';
 import { placeFolder, pluginPlaces } from './pluginPlaces';
 import type { Reporter } from '../ports/reporter';
@@ -65,13 +66,13 @@ function copyValueLine(row: CopiedRow): string {
 export function pluginsCopyValueText(
   viewSelection: () => readonly PluginsTreeNode[],
 ): (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined {
-  const lines = (entry: GestureEntry) =>
+  const lines = (entry: GestureEntry<PluginsTreeNode>) =>
     selectionArgument(entry, ...PLUGIN_ROW_KINDS, ...RECORD_ROW_KINDS).map(copyValueLine).join('\n');
   return (clicked, allSelected) => {
     if (isPluginsKeyArgs(clicked)) return lines({ selection: viewSelection() });
     if (!isCopiedRow(clicked)) return undefined;
     const selected = allSelected?.length ? allSelected.filter(isCopiedRow) : undefined;
-    return lines(pluginsGestureEntry(clicked, selected, viewSelection));
+    return lines(gestureEntry(clicked, selected, viewSelection));
   };
 }
 
