@@ -59,6 +59,10 @@ public interface IPluginRecordLookup : IDisposable
     /// <summary>The FormKey of the exterior cell the plugin holds at grid (<paramref name="x"/>,
     /// <paramref name="y"/>) of <paramref name="worldspace"/>, or null when it holds none there.</summary>
     string? CellAt(string worldspace, int x, int y);
+
+    /// <summary>The FormKey of every cell <paramref name="worldspace"/> holds, its persistent cell
+    /// and each numbered cell; empty when the plugin holds no such worldspace.</summary>
+    IReadOnlyList<string> CellsIn(string worldspace);
 }
 
 /// <summary>A plugin's documents, whichever door they came through: the binary through the Plugin

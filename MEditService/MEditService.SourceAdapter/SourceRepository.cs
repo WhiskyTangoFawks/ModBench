@@ -145,6 +145,17 @@ public sealed class SourceRepository
         PluginAddress plugin, string worldspace, int x, int y, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         Locator.CellFormKeyAt(plugin, worldspace, x, y) is { } formKey ? Get(plugin, formKey, schemas) : null;
 
+    /// <summary>The FormKey of every cell <paramref name="worldspace"/> holds in this plugin's tree, its
+    /// persistent cell and each numbered cell.</summary>
+    public IReadOnlyList<string> CellsIn(
+        PluginAddress plugin, string worldspace, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        using var documents = OpenDocuments(plugin, schemas);
+        return [.. documents.Records
+            .Where(document => document.Cell is { IsInterior: false } cell && cell.ParentWorldspace == worldspace)
+            .Select(document => document.FormKey)];
+    }
+
     /// <summary>Every EditorID the plugin's tree holds now, a record with a document of its own and
     /// an embedded child alike — what a derived EditorID is checked against to stay unique in the
     /// destination.</summary>
