@@ -45,6 +45,7 @@ public sealed class EditRecordHandler
 
     private RecordEditResult EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
+        if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
         if (_targets.ResolveEditTarget(plugin, formKey, out var editTarget) is { } blocked) return blocked;
         var (release, identity, repository) = editTarget;
         var schemas = _schemaReflector.GetSchemas(release);

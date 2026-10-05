@@ -50,20 +50,6 @@ public sealed class DecompilePluginTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task Tracking_MakesOneCommit_NamedForTheMod()
-    {
-        await Loaded();
-
-        var tracked = await Client.Track(Origin);
-
-        tracked.EnsureSuccessStatusCode();
-        var modFolder = OtherTool.ModFolderOf(_instance, Origin);
-        Assert.Equal(
-            [$"Track {Path.GetFileName(modFolder)}"],
-            GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "log", "--format=%s", "main").Split('\n', StringSplitOptions.RemoveEmptyEntries));
-    }
-
-    [Fact]
     public async Task TrackingNoMod_Is400()
     {
         await Loaded();

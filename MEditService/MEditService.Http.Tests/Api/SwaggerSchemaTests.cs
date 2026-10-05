@@ -41,7 +41,7 @@ public sealed class SwaggerSchemaTests
         var responses = root.GetProperty("paths").GetProperty("/plugins/create").GetProperty("post").GetProperty("responses");
 
         var declared = responses.EnumerateObject().Select(p => p.Name).ToHashSet();
-        Assert.Equal(new HashSet<string> { "200", "400", "404", "409", "422", "500", "503" }, declared);
+        Assert.Equal(new HashSet<string> { "200", "400", "404", "409", "422", "503" }, declared);
     }
 
     [Fact]

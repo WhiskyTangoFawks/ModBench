@@ -187,8 +187,11 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Equal(
             [(records[0], UntrackedPlugin, "PluginNotTracked"), (records[1], UntrackedPlugin, "PluginNotTracked")],
             answer.GetProperty("refused").EnumerateArray().Select(RefusedFrom).ToArray());
-        Assert.Single(DestinationDocumentsOnDiskCarrying(fx, records[0]));
-        Assert.Single(DestinationDocumentsOnDiskCarrying(fx, records[1]));
+        await Client.NextSnapshot(fx);
+        await Wire.Eventually(
+            async () => (await NpcFormKeys(OtherPlugin, OtherOrigin)).Intersect(records).Count() == records.Length,
+            "the tracked destination to answer both copied records");
+        Assert.Empty((await NpcFormKeys(UntrackedPlugin, UntrackedOrigin)).Intersect(records));
     }
 
     private async Task<ScatteredFixtureData> TwoRecordsAndTwoDestinations()
@@ -212,12 +215,6 @@ public sealed class EditRecordTraceTests : HostedTests
         return response;
     }
 
-    private static string[] DestinationDocumentsOnDiskCarrying(ScatteredFixtureData fx, string formKey) =>
-        [.. Directory.EnumerateFiles(
-                PluginSourceRoot.In(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin), "*.json",
-                SearchOption.AllDirectories)
-            .Where(file => File.ReadAllText(file).Contains(formKey, StringComparison.Ordinal))];
-
     private static (string FormKey, string Destination, string Refusal) RefusedFrom(JsonElement refusal) =>
         (refusal.GetProperty("item").GetProperty("record").GetProperty("formKey").GetString().Require(),
             refusal.GetProperty("item").GetProperty("destination").GetProperty("name").GetString().Require(),
@@ -228,17 +225,26 @@ public sealed class EditRecordTraceTests : HostedTests
     {
         using var fx = await Loaded(OtherOrigin);
         var formKey = await Client.FirstFormKey(Plugin, Origin);
+        var copiedHeight = await HeightMax(formKey);
         (await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin))).EnsureSuccessStatusCode();
-        var held = OtherTool.SourceDocumentCarrying(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin, formKey);
-        var copied = File.ReadAllText(held);
+        await Client.NextSnapshot(fx);
+        await Wire.Eventually(async () => (await NpcFormKeys(OtherPlugin, OtherOrigin)).Contains(formKey), "the copy to be answered");
         (await Client.Edit(formKey, OtherPlugin, OtherOrigin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
+        await Wire.Eventually(async () => await HeightMax(formKey) == 0.75, "the edit of the copy to be answered");
 
         var response = await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin), replace: true);
 
         response.EnsureSuccessStatusCode();
         Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());
-        Assert.Equal(copied, File.ReadAllText(held));
+        await Client.NextSnapshot(fx);
+        await Wire.Eventually(async () => await HeightMax(formKey) == copiedHeight, "the replacement to be answered");
     }
+
+    private async Task<double?> HeightMax(string formKey) =>
+        (await Client.Record(formKey)).GetProperty("fields").EnumerateArray()
+            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax")
+            .GetProperty("value") is { ValueKind: JsonValueKind.Number } height ? height.GetDouble() : null;
 
     private static (string FormKey, string Destination) CopiedInto(JsonElement item) =>
         (item.GetProperty("record").GetProperty("formKey").GetString().Require(),

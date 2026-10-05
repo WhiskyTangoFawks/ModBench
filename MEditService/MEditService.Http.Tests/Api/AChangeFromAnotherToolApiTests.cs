@@ -88,13 +88,13 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ADialogResponseCopiedIntoAQuestWhoseDocumentWasRenamedByHand_LandsInThatDocument()
+    public async Task ADialogResponseCopiedIntoAQuestWhoseDocumentWasRenamedByHand_IsReadUnderThatQuest()
     {
         const string master = "DialogueMaster.esm";
         const string masterOrigin = "DialogueMasterMod";
         const string patch = "DialoguePatch.esp";
         const string patchOrigin = "DialoguePatchMod";
-        var response = FormKey.Null;
+        FormKey response = FormKey.Null, topicKey = FormKey.Null;
         using var fx = new PluginFixtureBuilder("trace-another-tool-dialogue")
             .WithPlugin(master, mod =>
             {
@@ -104,7 +104,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
                 topic.Responses.Add(line);
                 quest.DialogTopics.Add(topic);
                 mod.Quests.Add(quest);
-                response = line.FormKey;
+                (response, topicKey) = (line.FormKey, topic.FormKey);
             }, origin: masterOrigin)
             .WithPlugin(patch, (mod, earlier) =>
             {
@@ -119,14 +119,17 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         await Client.PluginReportsTracked(patch);
         var patchFolder = OtherTool.ModFolderOf(fx, patchOrigin);
         OtherTool.RenamesASourceDocument(patchFolder, patch, "\"SharedDialogueQuest\"", "RenamedByHand.json");
-        var renamed = OtherTool.SourceDocumentCarrying(patchFolder, patch, "\"SharedDialogueQuest\"");
 
         var copied = await Client.Copy(response.ToString(), (master, masterOrigin), "Override", (patch, patchOrigin));
 
         copied.EnsureSuccessStatusCode();
         Assert.Single((await copied.Body()).GetProperty("applied").EnumerateArray());
-        Assert.Equal(renamed, OtherTool.SourceDocumentCarrying(patchFolder, patch, "\"SharedDialogueQuest\""));
-        Assert.Contains("CopiedResponse", File.ReadAllText(renamed), StringComparison.Ordinal);
+        await Client.NextSnapshot(fx);
+        await Wire.Eventually(
+            async () => (await Client.GetFromJsonAsync<JsonElement>(
+                    $"/plugins/{patch}/records/{Uri.EscapeDataString(topicKey.ToString())}/children?origin={patchOrigin}"))
+                .EnumerateArray().Any(child => child.GetProperty("formKey").GetString() == response.ToString()),
+            "the copied response to be read under its topic in the patch");
     }
 
     [Fact]

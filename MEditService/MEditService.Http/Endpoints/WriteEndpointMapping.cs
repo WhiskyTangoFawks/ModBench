@@ -155,25 +155,17 @@ internal static class WriteEndpointMapping
         Action? logReceived,
         Func<IResult?> validate,
         Func<RecordEditResult> execute,
-        Func<RecordEditResult, IResult> onApplied,
-        Func<NoLoadOrderException, IResult> onNoLoadOrder)
+        Func<RecordEditResult, IResult> onApplied)
     {
         logReceived?.Invoke();
 
         if (validate() is { } validationFailure)
             return validationFailure;
 
-        try
-        {
-            var result = execute();
-            if (result.Applied) return onApplied(result);
+        var result = execute();
+        if (result.Applied) return onApplied(result);
 
-            LogRefusal(logger, gesture, result.Refusal, result.Message);
-            return Refusal(result);
-        }
-        catch (NoLoadOrderException ex)
-        {
-            return onNoLoadOrder(ex);
-        }
+        LogRefusal(logger, gesture, result.Refusal, result.Message);
+        return Refusal(result);
     }
 }

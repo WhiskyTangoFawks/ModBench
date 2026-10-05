@@ -1,8 +1,8 @@
-using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
-namespace MEditService.Http.Tests.RealData;
+
+namespace MEditService.PluginAdapter.Tests.RealData;
 
 public sealed class VanillaMalformedScanProofTests
 {
