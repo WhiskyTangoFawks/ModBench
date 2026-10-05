@@ -43,10 +43,10 @@ export class NotificationListenerRegistry {
         this.deliver('untracked-plugins', { origin, plugins: keys });
         break;
       case 'rows-changed':
-        this.deliver('rows-changed', { plugin, origin, keys });
+        this.deliver('rows-changed', { plugin: { name: plugin, origin }, keys });
         break;
       case 'plugin-changed':
-        this.deliver('plugin-changed', { plugin, origin });
+        this.deliver('plugin-changed', { plugin: { name: plugin, origin } });
         break;
     }
   }

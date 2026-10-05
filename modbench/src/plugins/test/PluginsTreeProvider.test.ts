@@ -1424,7 +1424,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
 
     const children = await h.tree.getChildren(row);
 
-    expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: ['A.esp', 'SomeMod'] });
+    expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: [{ name: 'A.esp', origin: 'SomeMod' }] });
     expect(children[0]).toBeInstanceOf(RecordTypeNode);
   });
 
@@ -1912,7 +1912,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
 
     const children = await h.tree.getChildren(row);
 
-    expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: ['A.esp', 'SomeMod'] });
+    expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: [{ name: 'A.esp', origin: 'SomeMod' }] });
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(RecordTypeNode);
     expect(expectInstanceOf(children[0], RecordTypeNode).label).toBe('Weapon');
@@ -1935,7 +1935,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const record = expectInstanceOf((await h.tree.getChildren(group))[0], RecordNode);
 
     expect(client.calls.filter((c) => c.method === 'getRecordTypes' || c.method === 'getRecords').map((c) => c.args))
-      .toEqual([['Shared.esp', 'ModB'], ['Shared.esp', 'weap', 0, expect.any(Number), 'ModB']]);
+      .toEqual([[{ name: 'Shared.esp', origin: 'ModB' }], [{ name: 'Shared.esp', origin: 'ModB' }, 'weap', 0, expect.any(Number)]]);
     expect([group.plugin, group.origin, record.record.plugin, record.origin]).toEqual(['Shared.esp', 'ModB', 'Shared.esp', 'ModB']);
   });
 

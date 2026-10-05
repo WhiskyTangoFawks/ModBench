@@ -311,7 +311,7 @@ export class HttpMEditClient implements MEditClient {
     }
   }
 
-  async createRecord(plugin: string, origin: string, recordType: string): Promise<RecordCreateResponse | WriteRefused> {
+  async createRecord({ name: plugin, origin }: PluginAddress, recordType: string): Promise<RecordCreateResponse | WriteRefused> {
     const failMsg = `Could not create a new ${recordType} record in "${plugin}"`;
     const answer = await this.mutate<RecordCreateResponse>({
       op: `createRecord(${plugin}, ${recordType})`,
@@ -375,7 +375,7 @@ export class HttpMEditClient implements MEditClient {
 
   /** A refusal (untracked plugin, a link that would dangle) comes back typed (ADR-0014);
    *  only a transport failure rejects. */
-  async editRecord(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): Promise<RecordEditOutcome> {
+  async editRecord(formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope): Promise<RecordEditOutcome> {
     const spelled = JSON.stringify(envelope.path);
     const { data, error, response } = await this.apiClient.POST('/records/{formKey}/edit', {
       params: { path: { formKey } },
@@ -440,7 +440,7 @@ export class HttpMEditClient implements MEditClient {
     return data ?? [];
   }
 
-  async getRecordTypes(plugin: string, origin: string): Promise<PluginRecordTypeCount[]> {
+  async getRecordTypes({ name: plugin, origin }: PluginAddress): Promise<PluginRecordTypeCount[]> {
     return this.withTimeout(`getRecordTypes(${plugin})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/record-types', {
         params: { path: { plugin }, query: { origin } },
@@ -468,7 +468,7 @@ export class HttpMEditClient implements MEditClient {
   }
 
   async getRecords(
-    plugin: string, type: string, offset: number, limit: number, origin: string, options?: { unfiltered: boolean },
+    { name: plugin, origin }: PluginAddress, type: string, offset: number, limit: number, options?: { unfiltered: boolean },
   ): Promise<RecordPage> {
     return this.withTimeout(`getRecords(${plugin}, ${type})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/records', {
@@ -488,11 +488,11 @@ export class HttpMEditClient implements MEditClient {
     return data ?? { items: [], total: 0 };
   }
 
-  async getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined> {
+  async getRecordOwner(formKey: string): Promise<PluginAddress | undefined> {
     const { data, error, response } = await this.apiClient.GET('/records/{formKey}', { params: { path: { formKey } } });
     if (response.status === 404) return undefined;
     this.ensureOk(`getRecordOwner(${formKey})`, response, error);
-    return data ? { plugin: data.plugin, origin: data.origin } : undefined;
+    return data ? { name: data.plugin, origin: data.origin } : undefined;
   }
 
   // A 404 (unknown FormKey) is "nothing holds it yet", not a fault, as getRecordOwner's own 404 is.
@@ -555,7 +555,7 @@ export class HttpMEditClient implements MEditClient {
     return { sql: data.sql, source: data.source };
   }
 
-  async getWorldspaces(plugin: string, origin: string): Promise<WorldspaceSummary[]> {
+  async getWorldspaces({ name: plugin, origin }: PluginAddress): Promise<WorldspaceSummary[]> {
     return this.withTimeout(`getWorldspaces(${plugin})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/worldspaces', {
         params: { path: { plugin }, query: { origin } },
@@ -566,7 +566,7 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin: string): Promise<WorldspaceBlocks> {
+  async getWorldspaceBlocks({ name: plugin, origin }: PluginAddress, worldspaceFormKey: string): Promise<WorldspaceBlocks> {
     return this.withTimeout(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
         params: { path: { plugin, formKey: worldspaceFormKey }, query: { origin } },
@@ -577,7 +577,7 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getCellChildRecords(plugin: string, cellFormKey: string, origin: string): Promise<CellChildRecords> {
+  async getCellChildRecords({ name: plugin, origin }: PluginAddress, cellFormKey: string): Promise<CellChildRecords> {
     return this.withTimeout(`getCellChildRecords(${plugin}, ${cellFormKey})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/cells/{formKey}/children', {
         params: { path: { plugin, formKey: cellFormKey }, query: { origin } },
@@ -588,7 +588,7 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getInteriorCells(plugin: string, origin: string): Promise<InteriorCellBlock[]> {
+  async getInteriorCells({ name: plugin, origin }: PluginAddress): Promise<InteriorCellBlock[]> {
     return this.withTimeout(`getInteriorCells(${plugin})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/interior-cells', {
         params: { path: { plugin }, query: { origin } },
@@ -599,7 +599,7 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getContainerChildren(plugin: string, parentFormKey: string, origin: string): Promise<ContainerChildSummary[]> {
+  async getContainerChildren({ name: plugin, origin }: PluginAddress, parentFormKey: string): Promise<ContainerChildSummary[]> {
     return this.withTimeout(`getContainerChildren(${plugin}, ${parentFormKey})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/children', {
         params: { path: { plugin, formKey: parentFormKey }, query: { origin } },

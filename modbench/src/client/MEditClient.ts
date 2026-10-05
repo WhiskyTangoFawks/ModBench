@@ -28,7 +28,7 @@ export function isMEditGone(status: BackendStatus): status is 'disconnected' | '
  *  success arm. */
 export interface WriteRefused {
   readonly refused: true;
-  /** mEdit never answered, so the write may have landed (common.md, Unconfirmed writes, story 6). */
+  /** mEdit never answered, so the write may have landed. */
   readonly unanswered?: true;
   readonly message: string;
 }
@@ -60,8 +60,8 @@ export interface NotificationPayloads {
   'track-progress': TrackStatus;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'untracked-plugins': { origin: string; plugins: string[] };
-  'rows-changed': { plugin: string; origin: string; keys: string[] };
-  'plugin-changed': { plugin: string; origin: string };
+  'rows-changed': { plugin: PluginAddress; keys: string[] };
+  'plugin-changed': { plugin: PluginAddress };
 }
 
 /** Whether the wire defines `kind` — the one place `NotificationEvent.kind` (the schema's honest
@@ -167,7 +167,7 @@ export interface MEditClient {
   createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(mods: readonly string[], options?: { onProgress?: (status: TrackStatus) => void }): Promise<TrackOutcome | WriteRefused>;
-  createRecord(plugin: string, origin: string, recordType: string): Promise<RecordCreateResponse | WriteRefused>;
+  createRecord(plugin: PluginAddress, recordType: string): Promise<RecordCreateResponse | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself failing, with nothing deleted.
   deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused>;
@@ -183,22 +183,22 @@ export interface MEditClient {
   // call itself refused, with nothing written.
   compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused>;
   // Today's field-edit write, grouped here per the ruling: "edit (today the repository's)".
-  editRecord(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): Promise<RecordEditOutcome>;
+  editRecord(formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope): Promise<RecordEditOutcome>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter).
   getPlugins(): Promise<PluginMetadata[]>;
   getDiagnoses(): Promise<PluginDiagnosisReport[]>;
-  getRecordTypes(plugin: string, origin: string): Promise<PluginRecordTypeCount[]>;
+  getRecordTypes(plugin: PluginAddress): Promise<PluginRecordTypeCount[]>;
   // The game's, not a plugin's: every plugin of the load order shares it.
   getCreatableRecordTypes(): Promise<CreatableRecordType[]>;
   getLightPluginsSupported(): Promise<boolean>;
   // `unfiltered` lists what the record filter hides too.
   getRecords(
-    plugin: string, type: string, offset: number, limit: number, origin: string, options?: { unfiltered: boolean },
+    plugin: PluginAddress, type: string, offset: number, limit: number, options?: { unfiltered: boolean },
   ): Promise<RecordPage>;
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
-  getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
+  getRecordOwner(formKey: string): Promise<PluginAddress | undefined>;
   /** Every plugin that holds a copy of the record, its own included. */
   getRecordHolders(formKey: string): Promise<PluginAddress[]>;
   /** One record as every active plugin has it: the record panel's host asks for this and posts it
@@ -206,11 +206,11 @@ export interface MEditClient {
    *  record held by no active plugin. */
   getComparison(formKey: string): Promise<CompareResult | null>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
-  getWorldspaces(plugin: string, origin: string): Promise<WorldspaceSummary[]>;
-  getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin: string): Promise<WorldspaceBlocks>;
-  getCellChildRecords(plugin: string, cellFormKey: string, origin: string): Promise<CellChildRecords>;
-  getInteriorCells(plugin: string, origin: string): Promise<InteriorCellBlock[]>;
-  getContainerChildren(plugin: string, parentFormKey: string, origin: string): Promise<ContainerChildSummary[]>;
+  getWorldspaces(plugin: PluginAddress): Promise<WorldspaceSummary[]>;
+  getWorldspaceBlocks(plugin: PluginAddress, worldspaceFormKey: string): Promise<WorldspaceBlocks>;
+  getCellChildRecords(plugin: PluginAddress, cellFormKey: string): Promise<CellChildRecords>;
+  getInteriorCells(plugin: PluginAddress): Promise<InteriorCellBlock[]>;
+  getContainerChildren(plugin: PluginAddress, parentFormKey: string): Promise<ContainerChildSummary[]>;
   /** Null when mEdit took the filter, or the reason it did not. */
   setFilter(filter: RecordFilter): Promise<string | null>;
   /** Null when mEdit dropped the filter, or the reason it did not. */

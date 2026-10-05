@@ -142,7 +142,7 @@ describe('InMemoryMEditClient — emit', () => {
     client.onNotification('rows-changed', rowsListener);
     client.onNotification('plugin-changed', pluginListener);
     client.emit(notificationEventFixture({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: ['k'] }));
-    expect(rowsListener).toHaveBeenCalledWith({ plugin: 'A.esp', origin: 'ModA', keys: ['k'] });
+    expect(rowsListener).toHaveBeenCalledWith({ plugin: { name: 'A.esp', origin: 'ModA' }, keys: ['k'] });
     expect(pluginListener).not.toHaveBeenCalled();
   });
 

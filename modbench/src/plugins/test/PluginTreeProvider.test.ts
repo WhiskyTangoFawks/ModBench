@@ -155,7 +155,7 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     expect(children).toHaveLength(FALLOUT4_ESM_INFO_COUNT);
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
-    expect(repo.calls).toContainEqual({ method: 'getRecords', args: ['Plugin0.esp', 'WEAP', 0, expect.any(Number), 'Data'] });
+    expect(repo.calls).toContainEqual({ method: 'getRecords', args: [{ name: 'Plugin0.esp', origin: 'Data' }, 'WEAP', 0, expect.any(Number)] });
     const limitArg = present(repo.calls.find(c => c.method === 'getRecords'), 'the getRecords call').args[3];
     if (typeof limitArg !== 'number') throw new Error(`Expected a number, got ${String(limitArg)}`);
     expect(limitArg).toBeGreaterThan(FALLOUT4_ESM_INFO_COUNT);
@@ -609,7 +609,7 @@ describe('PluginTreeProvider fetch failures', () => {
 
     const children = await provider.getPluginChildren('Plugin0.esp', 'Data');
 
-    expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: ['Plugin0.esp', 'Data'] });
+    expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: [{ name: 'Plugin0.esp', origin: 'Data' }] });
     expect(children.map(c => c.label)).toEqual(['Cell', 'Weapon', 'Worldspace']);
   });
 
@@ -714,7 +714,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
 
     const wsNode = present(expectInstancesOf(await provider.getChildren(node), WorldspaceNode)[0], 'the sole WorldspaceNode');
 
-    expect(repo.calls).toContainEqual({ method: 'getWorldspaces', args: ['Shared.esp', 'ModB'] });
+    expect(repo.calls).toContainEqual({ method: 'getWorldspaces', args: [{ name: 'Shared.esp', origin: 'ModB' }] });
     expect(wsNode.origin).toBe('ModB');
   });
 
@@ -731,7 +731,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const topCellNode = expectInstanceOf(worldspaceChildren[0], CellNode);
     const blockNode = worldspaceChildren[1];
 
-    expect(repo.calls).toContainEqual({ method: 'getWorldspaceBlocks', args: ['Shared.esp', 'wrld:M.esp', 'ModB'] });
+    expect(repo.calls).toContainEqual({ method: 'getWorldspaceBlocks', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'wrld:M.esp'] });
     expect(topCellNode.origin).toBe('ModB');
 
     const [subBlockNode] = await provider.getChildren(blockNode);
@@ -750,7 +750,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const node = new CellNode('Shared.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false }, 'ModB');
 
     const groupNode = present(expectInstancesOf(await provider.getChildren(node), ChildRecordGroupNode)[0], 'the sole ChildRecordGroupNode');
-    expect(repo.calls).toContainEqual({ method: 'getCellChildRecords', args: ['Shared.esp', 'c:M.esp', 'ModB'] });
+    expect(repo.calls).toContainEqual({ method: 'getCellChildRecords', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'c:M.esp'] });
     expect(groupNode.origin).toBe('ModB');
 
     const placedNode = present(expectInstancesOf(await provider.getChildren(groupNode), ChildRecordNode)[0], 'the sole ChildRecordNode');
@@ -767,7 +767,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const [subBlock] = expectInstancesOf(await provider.getChildren(present(block, 'the sole block')), InteriorSubBlockNode);
     const [cellNode] = expectInstancesOf(await provider.getChildren(present(subBlock, 'the sole sub-block')), CellNode);
 
-    expect(repo.calls).toContainEqual({ method: 'getInteriorCells', args: ['Shared.esp', 'ModB'] });
+    expect(repo.calls).toContainEqual({ method: 'getInteriorCells', args: [{ name: 'Shared.esp', origin: 'ModB' }] });
     expect(present(block, 'the sole block').origin).toBe('ModB');
     expect(present(subBlock, 'the sole sub-block').origin).toBe('ModB');
     expect(present(cellNode, 'the sole cell').origin).toBe('ModB');
@@ -847,7 +847,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
 
     await provider.getPluginChildren('Shared.esp', 'ModB');
 
-    expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: ['Shared.esp', 'ModB'] });
+    expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: [{ name: 'Shared.esp', origin: 'ModB' }] });
   });
 
   it('carries that plugin through to its record pages', async () => {
@@ -857,7 +857,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Shared.esp', 'ModB'), RecordTypeNode)[0], 'the sole RecordTypeNode');
     await provider.getChildren(typeNode);
 
-    expect(repo.calls).toContainEqual({ method: 'getRecords', args: ['Shared.esp', 'WEAP', 0, expect.any(Number), 'ModB'] });
+    expect(repo.calls).toContainEqual({ method: 'getRecords', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'WEAP', 0, expect.any(Number)] });
   });
 
   it('caches each plugin separately, so one plugin\'s page is never served for the other', async () => {
@@ -949,7 +949,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
 
     const children = await provider.getChildren(questNode);
 
-    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: ['Plugin0.esp', 'qust1:Fallout4.esm', 'Data'] });
+    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: [{ name: 'Plugin0.esp', origin: 'Data' }, 'qust1:Fallout4.esm'] });
     expect(children).toHaveLength(2);
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
     expect(expectInstanceOf(children[0], RecordNode).record.editorId).toBe('TopicA');
@@ -988,7 +988,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
 
     const children = await provider.getChildren(topicNode);
 
-    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: ['Plugin0.esp', 'dial1:Fallout4.esm', 'Data'] });
+    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: [{ name: 'Plugin0.esp', origin: 'Data' }, 'dial1:Fallout4.esm'] });
     expect(children).toHaveLength(1);
   });
 
@@ -1020,8 +1020,8 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
 
     const containerCalls = repo.calls.filter(c => c.method === 'getContainerChildren');
     expect(containerCalls).toHaveLength(2);
-    expect(present(containerCalls[0], 'the first getContainerChildren call').args).toEqual(['Shared.esp', 'qust1:Shared.esp', 'ModA']);
-    expect(present(containerCalls[1], 'the second getContainerChildren call').args).toEqual(['Shared.esp', 'qust1:Shared.esp', 'ModB']);
+    expect(present(containerCalls[0], 'the first getContainerChildren call').args).toEqual([{ name: 'Shared.esp', origin: 'ModA' }, 'qust1:Shared.esp']);
+    expect(present(containerCalls[1], 'the second getContainerChildren call').args).toEqual([{ name: 'Shared.esp', origin: 'ModB' }, 'qust1:Shared.esp']);
     expect(present(childrenA[0], "ModA's sole child").record.editorId).toBe('TopicModA');
     expect(present(childrenB[0], "ModB's sole child").record.editorId).toBe('TopicModB');
   });

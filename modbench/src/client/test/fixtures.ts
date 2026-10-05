@@ -56,7 +56,7 @@ export function recordTypeCountFixture(overrides: Partial<PluginRecordTypeCount>
 export function listsForThePluginAsked(client: InMemoryMEditClient): InMemoryMEditClient {
   const scripted = client.getRecords.bind(client);
   client.getRecords = async (...asked) => {
-    const [plugin, , , , origin] = asked;
+    const [{ name: plugin, origin }] = asked;
     const page = await scripted(...asked);
     return { ...page, items: page.items.map((record) => ({ ...record, plugin, origin })) };
   };

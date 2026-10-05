@@ -234,7 +234,7 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
   describe('on the stream\'s reconnect, a tab waiting for its new FormKey, since a report missed while the stream was down would leave it waiting for ever', () => {
     it('reads it once the Index holds it, and refreshes as usual afterwards', async () => {
       const { client, panel, edits } = openOn('000800:Mod.esp');
-      client.setQueryAnswer('getRecordOwner', { plugin: 'Mod.esp', origin: 'ModA' });
+      client.setQueryAnswer('getRecordOwner', { name: 'Mod.esp', origin: 'ModA' });
       await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
       client.reconnected();

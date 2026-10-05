@@ -153,7 +153,7 @@ export class ExtendedFieldDocuments implements vscode.Disposable {
         for (const files of both) files.changedWhere(field => event.keys.includes(field.formKey));
       }),
       deps.client.onNotification('plugin-changed', event => {
-        for (const files of both) files.changedWhere(field => field.plugin === event.plugin && field.origin === event.origin);
+        for (const files of both) files.changedWhere(field => field.plugin === event.plugin.name && field.origin === event.plugin.origin);
       }),
     ];
     this.registrations = [
