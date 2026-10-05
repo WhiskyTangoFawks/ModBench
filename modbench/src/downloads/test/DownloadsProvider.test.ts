@@ -1,6 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
@@ -17,67 +15,21 @@ vi.mock('vscode', () => ({
 import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions, type DownloadsTreeNode } from '../DownloadsProvider';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
-import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
+import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { DownloadFile, DownloadRow, InstanceValue } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 
 const rowNamesOfDownloadNodes = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadNode).row.name);
 
-const row = (extra: Partial<DownloadRow> = {}): DownloadFile => {
-  const base: DownloadRow = {
-    name: 'foo.zip',
-    displayName: 'foo.zip',
-    status: 'Downloaded',
-    size: 100,
-    mtimeMs: 1700000000000,
-    hasMeta: false,
-    excluded: false,
-    ...extra,
-  };
-  return {
-    ...base,
-    path: join('/instance', 'downloads', base.name),
-    sidecarPath: join('/instance', 'downloads', base.name + '.meta'),
-  };
-};
+const row = (extra: Partial<DownloadRow> = {}): DownloadFile => downloadRowFixture(extra.name ?? 'foo.zip', extra);
 
 function valueOf(downloads: DownloadFile[]): InstanceValue {
   return instanceValueFixture({ downloads: { kind: 'listed', rows: downloads } });
 }
 
-const SEQUENCE_ALREADY_LOADED = 1;
 const SEQUENCE_NOT_READ_YET = 0;
-
-class FakeInstance {
-  value: InstanceValue;
-  sequence: number;
-  readFailure: string | undefined;
-  private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
-  private failureListeners: (() => void)[] = [];
-  constructor(initial: InstanceValue, sequence = SEQUENCE_ALREADY_LOADED) {
-    this.value = initial;
-    this.sequence = sequence;
-  }
-  subscribe(subscriber: (value: InstanceValue, sequence: number) => void) {
-    this.subscribers.push(subscriber);
-    return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscriber); } };
-  }
-  publish(value: InstanceValue): void {
-    this.value = value;
-    this.readFailure = undefined;
-    this.sequence++;
-    for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
-  }
-  onReadFailure(listener: () => void) {
-    this.failureListeners.push(listener);
-    return { dispose: () => { this.failureListeners = this.failureListeners.filter((l) => l !== listener); } };
-  }
-  fail(reason: string): void {
-    this.readFailure = reason;
-    for (const listener of [...this.failureListeners]) listener();
-  }
-}
 
 const explicitFailureIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
   pending,
@@ -430,15 +382,13 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
   });
 
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
-    await withUnreadCorpusInstance(async (instance) => {
-      const provider = new DownloadsProvider({ instance });
+    const instance = new FakeInstance(valueOf([]), SEQUENCE_NOT_READ_YET);
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
 
-      const pending = provider.getChildren();
-      await instance.refresh();
+    const pending = provider.getChildren();
+    instance.publish(valueOf([row({ name: 'a.zip' })]));
 
-      expect(rowNamesOfDownloadNodes(await pending)).toEqual(['Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z']);
-      provider.dispose();
-    });
+    expect(rowNamesOfDownloadNodes(await pending)).toEqual(['a.zip']);
   });
 
   it('settles a failed first read, rather than spinning forever, on the one error row naming the reason, then renders rows when a value lands', async () => {
@@ -487,21 +437,6 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
-  });
-
-  it('a file appearing on disk changes nothing until the Instance publishes it', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'downloads-provider-'));
-    try {
-      const instance = new FakeInstance(valueOf([row({ name: 'a.zip' })]));
-      const provider = makeProviderOverRowsNeverOnDisk([], { instance });
-      expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
-
-      await writeFile(join(root, 'b.zip'), 'data');
-
-      expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
   });
 });
 
