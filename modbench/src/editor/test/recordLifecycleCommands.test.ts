@@ -321,7 +321,7 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('ends the write after a call mEdit never answered, and reports it', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { refused: true, unanswered: true, message: 'Could not delete 1 record — socket hang up' });
+      client.setCommandResult('deleteRecords', { refused: true, message: 'Could not delete 1 record — socket hang up' });
       const { writing, reporter } = invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE);
@@ -672,7 +672,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   it('ends the write after a call mEdit never answered, and reports it', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
-    client.setCommandResult('copyRecords', { refused: true, unanswered: true, message: 'Could not copy 1 record — socket hang up' });
+    client.setCommandResult('copyRecords', { refused: true, message: 'Could not copy 1 record — socket hang up' });
     pick('New', [PATCH]);
     const { writing, reporter } = invoke(client);
 

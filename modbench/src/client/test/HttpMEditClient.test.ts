@@ -204,16 +204,16 @@ describe('HttpMEditClient — deleting records answers per record', () => {
     expect(result).toEqual({ refused: true, message: 'Could not delete 2 records — Bad Request' });
   });
 
-  it('resolves a thrown request the same way, told apart as unanswered, as a request with no answer may have written', async () => {
+  it('resolves a thrown request the same way', async () => {
     const fetch = vi.fn(() => Promise.reject(new Error('socket hang up')));
     const client = makeClient(fetch);
 
     const result = await client.deleteRecords([kept]);
 
-    expect(result).toEqual({ refused: true, unanswered: true, message: 'Could not delete 1 record — socket hang up' });
+    expect(result).toEqual({ refused: true, message: 'Could not delete 1 record — socket hang up' });
   });
 
-  it('tells a success with no body apart as unanswered, for create and copy too', async () => {
+  it('refuses a success with no body, and a thrown create or copy', async () => {
     const client = makeClient(vi.fn(() => Promise.resolve(new Response(null, { status: 200 }))));
     const thrown = makeClient(vi.fn(() => Promise.reject(new Error('socket hang up'))));
 
@@ -223,14 +223,8 @@ describe('HttpMEditClient — deleting records answers per record', () => {
       await thrown.copyRecords([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false),
     ];
 
-    for (const answer of answers) expect(answer).toMatchObject({ refused: true, unanswered: true });
-    expect(answers[0]).toEqual({ refused: true, unanswered: true, message: 'Could not delete 1 record — no answer' });
-  });
-
-  it('never tells a refusal mEdit answered apart as unanswered', async () => {
-    const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(400, 'Bad Request'))));
-
-    expect(await client.deleteRecords([kept])).not.toHaveProperty('unanswered');
+    for (const answer of answers) expect(answer).toMatchObject({ refused: true });
+    expect(answers[0]).toEqual({ refused: true, message: 'Could not delete 1 record — no answer' });
   });
 });
 

@@ -29,8 +29,6 @@ export function isMEditGone(status: BackendStatus): status is 'disconnected' | '
  *  success arm. */
 export interface WriteRefused {
   readonly refused: true;
-  /** mEdit never answered, so the write may have landed. */
-  readonly unanswered?: true;
   readonly message: string;
 }
 
