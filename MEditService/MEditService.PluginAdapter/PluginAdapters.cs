@@ -53,6 +53,14 @@ public static class PluginAdapters
             new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, gameRelease,
             strings);
 
+    /// <summary>The master file names in the header of the plugin whose file name and path are named
+    /// here, in header order.</summary>
+    public static IReadOnlyList<string> MastersOf(
+        this IPluginAdapter adapter, string pluginFileName, string pluginFilePath, GameRelease gameRelease,
+        PluginStrings strings) =>
+        adapter.ReadContent(new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), gameRelease, strings)
+            .Content.Masters;
+
     private static bool SameFile(RegisteredPlugin plugin, RegisteredPlugin other) =>
         plugin.Name.Equals(other.Name, StringComparison.OrdinalIgnoreCase);
 }
