@@ -1,26 +1,40 @@
 using System.Text.Json;
-using MEditService.Commands.Tests.RealData;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Source;
 
 public sealed class DecompileChurnTests : IDisposable
 {
-    private static readonly PluginAddress Plugin = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
+    private const string PluginName = "ChurnFixture.esp";
+    private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
     private readonly ScratchDirectory _gameDirectory = new("medit-churn-game-");
     private readonly ScratchDirectory _modFolder = new("medit-churn-");
     private readonly LoadOrderHolder _holder = new();
 
     public DecompileChurnTests()
     {
-        CutDownPluginFixture.TrackedInto(_modFolder);
+        TrackedTemplates.WriteTracked(_modFolder, SmallMod());
         _holder.Apply(SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
+    }
+
+    private static Fallout4Mod SmallMod()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
+        var first = mod.Keywords.AddNew("ChurnKeywordA");
+        var second = mod.Keywords.AddNew("ChurnKeywordB");
+        var third = mod.Keywords.AddNew("ChurnKeywordC");
+        mod.Npcs.AddNew("ChurnNpcPlain");
+        var tagged = mod.Npcs.AddNew("ChurnNpcTagged");
+        tagged.Keywords = [first.ToLink(), second.ToLink(), third.ToLink()];
+        return mod;
     }
 
     public void Dispose()

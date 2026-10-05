@@ -341,30 +341,6 @@ internal sealed class RelationReads(
         return result;
     }
 
-    public IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin)
-    {
-        using var connection = store.OpenReadConnection();
-        // The header is excluded explicitly: its synthetic 000000:<plugin> FormKey names no record,
-        // and the caller that computes the next free local FormID would be handed a FormKey no
-        // record occupies.
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText =
-            $"SELECT DISTINCT form_key FROM records WHERE plugin = $1 AND origin = $2 AND record_type <> '{PluginHeader.RecordType}'";
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
-        using var reader = cmd.ExecuteReader();
-
-        var result = new List<string>();
-        while (reader.Read())
-        {
-            var fk = reader.GetString(0);
-            var colon = fk.IndexOf(':');
-            if (colon > 0 && fk.AsSpan(colon + 1).Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
-                result.Add(fk);
-        }
-        return result;
-    }
-
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) =>
         CellLocations(plugin, "cl.parent_worldspace = $3", "cl.block_x, cl.block_y, cl.sub_x, cl.sub_y", [worldspaceFormKey]);
 

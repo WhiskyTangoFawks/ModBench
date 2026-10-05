@@ -62,10 +62,6 @@ public interface IRecordReads
     /// row, answered from the page it already has.</summary>
     IReadOnlySet<string> GetPluginsWithParseFailures();
 
-    /// <summary>FormKeys native to <paramref name="plugin"/> (the FormKey's own ModKey is this
-    /// plugin) — ESL-eligibility validation.</summary>
-    IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin);
-
     // Worldspace tree reads (plugins.md, The tree, story 6) from the placement / cell_location side
     // tables, in the order xEdit's navigator lists them.
     IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey);
