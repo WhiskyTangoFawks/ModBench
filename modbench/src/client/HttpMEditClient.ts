@@ -12,8 +12,13 @@ import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
+<<<<<<< HEAD
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type CreatableRecordType,
   type RebuildIndexOutcome, type CopyItem, type CopyMode,
+=======
+  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type CreatableRecordType,
+  type RebuildIndexOutcome, type CopyItem, type CopyMode, type RecordChildHolders,
+>>>>>>> main
   type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
@@ -525,6 +530,22 @@ export class HttpMEditClient implements MEditClient {
     if (response.status === 404) return [];
     this.ensureOk(`getRecordHolders(${formKey})`, response, error);
     return (data?.overrides ?? []).map((o) => ({ name: o.plugin, origin: o.origin }));
+  }
+
+  async getRecordsWithChildren(records: readonly RecordAddress[]): Promise<RecordAddress[]> {
+    const { data, error, response } = await this.apiClient.POST('/records/with-children', { body: { records: [...records] } });
+    this.ensureOk('getRecordsWithChildren', response, error);
+    return data ?? [];
+  }
+
+  async getChildrenInDestinations(
+    records: readonly RecordAddress[], destinations: readonly PluginAddress[],
+  ): Promise<RecordChildHolders[]> {
+    const { data, error, response } = await this.apiClient.POST('/records/children-in-destinations', {
+      body: { records: [...records], destinations: [...destinations] },
+    });
+    this.ensureOk('getChildrenInDestinations', response, error);
+    return data ?? [];
   }
 
   async getComparison(formKey: string): Promise<CompareResult | null> {

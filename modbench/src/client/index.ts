@@ -1,8 +1,13 @@
 export type {
   MEditClient, LoadOrderOutcome, LoadOrderProgress,
   NotificationPayloads, BackendStatus, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
+<<<<<<< HEAD
   PluginRecordTypeCount, PluginDependants, PluginAddress, RecordAddress,
   CopyMode, CopyItem, ReferenceResult, RecordFilter,
+=======
+  PluginRecordTypeCount, PluginAddress, RecordAddress,
+  CopyMode, CopyItem, RecordChildHolders, ReferenceResult, RecordFilter,
+>>>>>>> main
   TrackStatus, TrackOutcome, PluginMetadata, PluginDiagnosisReport, RecordSummary,
   WorldspaceSummary, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords, CellSummary,
   ChildRecordSummary, ContainerChildSummary, CompileDiagnostic, CompileOutcome,
