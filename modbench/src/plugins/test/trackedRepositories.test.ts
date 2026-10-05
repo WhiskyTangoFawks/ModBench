@@ -1,9 +1,21 @@
 import { describe, it, expect, vi } from 'vitest';
+
+const { getExtension, openRepository } = vi.hoisted(() => ({
+  getExtension: vi.fn(),
+  openRepository: vi.fn(),
+}));
+
+vi.mock('vscode', () => ({
+  extensions: { getExtension },
+  Uri: { file: (fsPath: string) => ({ fsPath }) },
+}));
+
 import * as path from 'node:path';
 import {
-  trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey,
+  trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, trackedRepositoriesOver,
 } from '../trackedRepositories';
-import type { PluginMetadata } from '../../client';
+import { InMemoryMEditClient, type PluginMetadata } from '../../client';
+import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 const modDirsOf = (byOrigin: Record<string, string>): ReadonlyMap<string, string> => new Map(Object.entries(byOrigin));
 
@@ -116,5 +128,69 @@ describe('pluginRepositoriesOf', () => {
     const folders = new Map([[pluginAddressKey('U.esp', 'Declined'), '/mods/Declined']]);
 
     expect(pluginRepositoriesOf(folders, new Map()).size).toBe(0);
+  });
+});
+
+describe('trackedRepositoriesOver', () => {
+  function setup(status: () => Promise<unknown> = () => Promise.resolve()) {
+    openRepository.mockReset().mockResolvedValue({ status });
+    getExtension.mockReset().mockReturnValue({ isActive: true, exports: { getAPI: () => ({ openRepository }) } });
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'Other.esp', origin: 'ModB' })]);
+    const outputChannel = { warn: vi.fn(), error: vi.fn() };
+    const tracked = trackedRepositoriesOver({
+      client, outputChannel,
+      trackedMods: () => new Set(['ModB']), modDirs: () => new Map([['ModB', '/mods/ModB']]),
+    });
+    return { tracked, outputChannel };
+  }
+
+  it('tells the panels, then registers the tracked repository once per notice', async () => {
+    const { tracked, outputChannel } = setup();
+    const announce = vi.fn();
+
+    await tracked.conflictsComputedOver(announce)();
+
+    expect(announce).toHaveBeenCalledOnce();
+    expect(openRepository).toHaveBeenCalledOnce();
+    expect(outputChannel.error).not.toHaveBeenCalled();
+  });
+
+  it('refreshes the repository a registration held for the plugin, and no other', async () => {
+    const status = vi.fn(() => Promise.resolve());
+    const { tracked } = setup(status);
+    await tracked.conflictsComputedOver(() => {})();
+
+    tracked.refreshSourceControlFor('Other.esp', 'ModB');
+    tracked.refreshSourceControlFor('Other.esp', 'ModC');
+
+    expect(status).toHaveBeenCalledOnce();
+  });
+
+  it('refreshes nothing before any registration', () => {
+    const status = vi.fn(() => Promise.resolve());
+    const { tracked } = setup(status);
+
+    tracked.refreshSourceControlFor('Other.esp', 'ModB');
+
+    expect(status).not.toHaveBeenCalled();
+  });
+
+  it('logs a rejected status and does not surface it', async () => {
+    const { tracked, outputChannel } = setup(() => Promise.reject(new Error('boom')));
+    await tracked.conflictsComputedOver(() => {})();
+
+    tracked.refreshSourceControlFor('Other.esp', 'ModB');
+    await vi.waitFor(() => { expect(outputChannel.error).toHaveBeenCalledOnce(); });
+  });
+
+  it('warns and registers nothing when vscode.git is absent', async () => {
+    const { tracked, outputChannel } = setup();
+    getExtension.mockReturnValue(undefined);
+
+    await tracked.conflictsComputedOver(() => {})();
+
+    expect(outputChannel.warn).toHaveBeenCalledOnce();
+    expect(openRepository).not.toHaveBeenCalled();
   });
 });
