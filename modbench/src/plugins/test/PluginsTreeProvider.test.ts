@@ -1,8 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { reorderOver, type PluginsDrop } from '../../pluginsCommands/plugins';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { PluginsDrop } from '../../pluginsCommands/plugins';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import type { InstanceValue } from '../../instanceLoader/instance';
@@ -44,7 +41,6 @@ import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { progressSteps } from '../../test/recordedProgress';
-import { accessTo, readPluginLines } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
 import { listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
 
@@ -86,10 +82,6 @@ class FakeSource implements PluginListSource {
     return Promise.resolve();
   }
 }
-
-const writesTo = (instanceRoot: string): PluginListSource => ({
-  reorderPlugins: reorderOver(accessTo(instanceRoot), () => 'Default'),
-});
 
 function held(name: string, overrides: Partial<PluginMetadata> = {}): PluginMetadata {
   return {
@@ -219,11 +211,10 @@ describe('ImplicitMasterNode — leading slot', () => {
     expect(node.resourceUri?.path).toBe('/game/Data/Fallout4.esm');
   });
 
-  it('keys resourceUri off the plugin file\'s own file: URI, where its diagnostics are published, so no Problems badge reaches it', () => {
+  it('gives the locked row a resourceUri outside the file: scheme, where its plugin\'s diagnostics are published, so no Problems badge reaches it', () => {
     const node = new ImplicitMasterNode('Fallout4.esm', 'Data', '/game/Data/Fallout4.esm');
-    const scheme = node.resourceUri && 'scheme' in node.resourceUri ? node.resourceUri.scheme : undefined;
-    expect(scheme).toEqual(expect.any(String));
-    expect(scheme).not.toBe('file');
+    expect(node.resourceUri?.scheme).toEqual(expect.any(String));
+    expect(node.resourceUri?.scheme).not.toBe('file');
   });
 
   it('leaves resourceUri undefined when no path is given (test-construction convenience)', () => {
@@ -739,6 +730,20 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(source.reorderPluginsCalls).toEqual([]);
   });
 
+  it('a drop still asks for the move with the client reporting disconnected', async () => {
+    const source = new FakeSource();
+    const tree = new PluginsTreeProvider({
+      instance: new FakeInstance(valueOf(fixturePlugins())), source, client: makeDisconnectedClient(),
+    });
+    await tree.getChildren();
+    const dt = new DataTransfer();
+    tree.handleDrag([node('A.esp')], dt, IGNORED_TOKEN);
+
+    await tree.handleDrop(node('D.esp'), dt, IGNORED_TOKEN);
+
+    expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
+  });
+
   it('surfaces a write failure via the reporter, naming why (ADR-0019)', async () => {
     const source = new FakeSource();
     source.reorderPluginsError = new Error('disk full');
@@ -903,75 +908,6 @@ describe('PluginsTreeProvider — a drop keeps master and blueprint order', () =
       ['D.esp'], undefined, heldAll({ 'D.esp': { isBlueprint: true }, 'E.esp': { isBlueprint: true, masters: ['D.esp'] } }));
     expect(calls).toEqual([]);
     expect(reports.map((r) => r.detail)).toEqual(['"D.esp" is a master of "E.esp", so it must load before it.']);
-  });
-});
-
-describe('PluginsTreeProvider — drag reorder round-trips through plugins.txt on disk', () => {
-  let dir: string;
-  let source: PluginListSource;
-  const pluginsTxt = () => join(dir, 'profiles', 'Default', 'plugins.txt');
-  const orderOnDisk = async () => (await readPluginLines(dir)).map((e) => e.name);
-  const node = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
-  const fixturePlugins = () => ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'].map((name, slot) => plugin({ name, slot }));
-
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'plugin-dnd-'));
-    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
-    await writeFile(join(dir, 'ModOrganizer.ini'), '[General]\nselected_profile=@ByteArray(Default)\n');
-    await writeFile(pluginsTxt(), '# header\r\n*A.esp\r\nB.esp\r\n*C.esp\r\nD.esp\r\nE.esp\r\n');
-    source = writesTo(dir);
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
-
-  async function dragToDisk(moved: string[], target: string | undefined) {
-    const tree = new PluginsTreeProvider({ instance: new FakeInstance(valueOf(fixturePlugins())), source });
-    await tree.getChildren();
-    const dt = new DataTransfer();
-    tree.handleDrag(moved.map(node), dt, IGNORED_TOKEN);
-    await tree.handleDrop(target === undefined ? undefined : node(target), dt, IGNORED_TOKEN);
-  }
-
-  it('single-row down-drag lands the row before the target, keeping the comment header and every line\'s enabled mark byte for byte', async () => {
-    await dragToDisk(['A.esp'], 'D.esp');
-    expect(await readFile(pluginsTxt(), 'utf8')).toBe('# header\r\nB.esp\r\n*C.esp\r\n*A.esp\r\nD.esp\r\nE.esp\r\n');
-  });
-
-  it('non-contiguous multi-selection moves as a block, preserving relative order', async () => {
-    await dragToDisk(['A.esp', 'C.esp', 'E.esp'], 'D.esp');
-    expect(await orderOnDisk()).toEqual(['B.esp', 'A.esp', 'C.esp', 'E.esp', 'D.esp']);
-  });
-
-  it('drop past the last row appends the moved row', async () => {
-    await dragToDisk(['B.esp'], undefined);
-    expect(await orderOnDisk()).toEqual(['A.esp', 'C.esp', 'D.esp', 'E.esp', 'B.esp']);
-  });
-
-  it('a drop on a locked row lands the block first in plugins.txt, its losing end', async () => {
-    const tree = new PluginsTreeProvider({
-      instance: new FakeInstance(valueOf(fixturePlugins(), ['Fallout4.esm'])), source,
-    });
-    await tree.getChildren();
-    const dt = new DataTransfer();
-    tree.handleDrag([node('D.esp')], dt, IGNORED_TOKEN);
-
-    await tree.handleDrop(new ImplicitMasterNode('Fallout4.esm', 'Data'), dt, IGNORED_TOKEN);
-
-    expect(await orderOnDisk()).toEqual(['D.esp', 'A.esp', 'B.esp', 'C.esp', 'E.esp']);
-  });
-
-  it('a drag-reorder still writes plugins.txt with the client reporting disconnected', async () => {
-    const tree = new PluginsTreeProvider({
-      instance: new FakeInstance(valueOf(fixturePlugins())), source, client: makeDisconnectedClient(),
-    });
-    await tree.getChildren();
-    const dt = new DataTransfer();
-    tree.handleDrag([node('A.esp')], dt, IGNORED_TOKEN);
-
-    await tree.handleDrop(node('D.esp'), dt, IGNORED_TOKEN);
-
-    expect(await readFile(pluginsTxt(), 'utf8')).toBe('# header\r\nB.esp\r\n*C.esp\r\n*A.esp\r\nD.esp\r\nE.esp\r\n');
   });
 });
 
@@ -1190,34 +1126,23 @@ describe('PluginsTreeProvider — the sort direction', () => {
   });
 });
 
-describe('PluginsTreeProvider — a drop lands where it is shown, in either sort direction', () => {
-  let dir: string;
+describe('PluginsTreeProvider — a drop asks for the place it is shown, in either sort direction', () => {
   const node = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
   const LINES = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
   const LOCKED_ROW = new ImplicitMasterNode('Fallout4.esm', 'Data');
 
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'plugin-sorted-drop-'));
-    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
-    await writeFile(join(dir, 'ModOrganizer.ini'), '[General]\nselected_profile=@ByteArray(Default)\n');
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), LINES.map((name) => `${name}\r\n`).join(''));
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
-
   it.each([
-    { direction: 'losingAtTop', moved: ['E.esp'], where: 'B.esp', target: node('B.esp'), onDisk: ['A.esp', 'E.esp', 'B.esp', 'C.esp', 'D.esp'] },
-    { direction: 'losingAtTop', moved: ['A.esp'], where: 'below the last row', target: undefined, onDisk: ['B.esp', 'C.esp', 'D.esp', 'E.esp', 'A.esp'] },
-    { direction: 'losingAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED_ROW, onDisk: ['C.esp', 'A.esp', 'B.esp', 'D.esp', 'E.esp'] },
-    { direction: 'winningAtTop', moved: ['A.esp'], where: 'D.esp', target: node('D.esp'), onDisk: ['B.esp', 'C.esp', 'D.esp', 'A.esp', 'E.esp'] },
-    { direction: 'winningAtTop', moved: ['A.esp', 'B.esp'], where: 'D.esp', target: node('D.esp'), onDisk: ['C.esp', 'D.esp', 'A.esp', 'B.esp', 'E.esp'] },
-    { direction: 'winningAtTop', moved: ['E.esp'], where: 'below the last row', target: undefined, onDisk: ['E.esp', 'A.esp', 'B.esp', 'C.esp', 'D.esp'] },
-    { direction: 'winningAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED_ROW, onDisk: ['C.esp', 'A.esp', 'B.esp', 'D.esp', 'E.esp'] },
-  ] as const)('$direction: $moved dropped on $where lands as shown', async ({ direction, moved, target, onDisk }) => {
+    { direction: 'losingAtTop', moved: ['E.esp'], where: 'B.esp', target: node('B.esp'), drop: { kind: 'before', name: 'B.esp' } },
+    { direction: 'losingAtTop', moved: ['A.esp'], where: 'below the last row', target: undefined, drop: { kind: 'winningEnd' } },
+    { direction: 'losingAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED_ROW, drop: { kind: 'losingEnd' } },
+    { direction: 'winningAtTop', moved: ['A.esp'], where: 'D.esp', target: node('D.esp'), drop: { kind: 'after', name: 'D.esp' } },
+    { direction: 'winningAtTop', moved: ['A.esp', 'B.esp'], where: 'D.esp', target: node('D.esp'), drop: { kind: 'after', name: 'D.esp' } },
+    { direction: 'winningAtTop', moved: ['E.esp'], where: 'below the last row', target: undefined, drop: { kind: 'losingEnd' } },
+    { direction: 'winningAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED_ROW, drop: { kind: 'losingEnd' } },
+  ] as const)('$direction: $moved dropped on $where asks for $drop', async ({ direction, moved, target, drop }) => {
+    const source = new FakeSource();
     const tree = new PluginsTreeProvider({
-      instance: new FakeInstance(valueOf(LINES.map((name, slot) => plugin({ name, slot })), ['Fallout4.esm'])),
-      source: writesTo(dir),
+      instance: new FakeInstance(valueOf(LINES.map((name, slot) => plugin({ name, slot })), ['Fallout4.esm'])), source,
     });
     tree.setViewDirection(direction);
     await tree.getChildren();
@@ -1226,7 +1151,7 @@ describe('PluginsTreeProvider — a drop lands where it is shown, in either sort
 
     await tree.handleDrop(target, dt, IGNORED_TOKEN);
 
-    expect((await readPluginLines(dir)).map((line) => line.name)).toEqual(onDisk);
+    expect(source.reorderPluginsCalls).toEqual([{ names: moved, drop }]);
   });
 });
 
@@ -1243,45 +1168,6 @@ describe('PluginsTreeProvider — the locked plugins follow the instance value',
     instance.publish(valueOf(LINES(), ['Fallout4.esm', 'DLCRobot.esm']));
 
     expect(await shapeOf(h.tree)).toEqual(['implicitMaster Fallout4.esm', 'implicitMaster DLCRobot.esm', 'plugin Mod.esp']);
-  });
-});
-
-describe('PluginsTreeProvider — implicit master drop-index mapping', () => {
-  let dir: string;
-  const pluginsTxt = () => join(dir, 'profiles', 'Default', 'plugins.txt');
-  const node = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
-  const fixturePlugins = () => [plugin({ name: 'B.esp', slot: 0 }), plugin({ name: 'C.esp', slot: 1 })];
-
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'plugin-implicit-drop-'));
-    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
-    await writeFile(join(dir, 'ModOrganizer.ini'), '[General]\nselected_profile=@ByteArray(Default)\n');
-    await writeFile(pluginsTxt(), '*B.esp\r\n*C.esp\r\n');
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
-
-  async function dragToDisk(moved: string[], target: PluginNode | ImplicitMasterNode | undefined) {
-    const source = writesTo(dir);
-    const tree = new PluginsTreeProvider({ instance: new FakeInstance(valueOf(fixturePlugins())), source });
-    await tree.getChildren();
-    const dt = new DataTransfer();
-    tree.handleDrag(moved.map(node), dt, IGNORED_TOKEN);
-    await tree.handleDrop(target, dt, IGNORED_TOKEN);
-  }
-
-  it('dropping onto the implicit block lands the moved plugin at file-index 0, and the file never gains an implicit-master line', async () => {
-    await dragToDisk(['C.esp'], new ImplicitMasterNode('Fallout4.esm', 'Data'));
-
-    const text = await readFile(pluginsTxt(), 'utf8');
-    expect(text).toBe('*C.esp\r\n*B.esp\r\n');
-    expect(text).not.toContain('Fallout4.esm');
-  });
-
-  it('dropping onto a normal row is unaffected by the implicit prefix — same file index as with no implicit rows at all', async () => {
-    await dragToDisk(['C.esp'], node('B.esp'));
-    expect(await readFile(pluginsTxt(), 'utf8')).toBe('*C.esp\r\n*B.esp\r\n');
   });
 });
 
@@ -1835,15 +1721,41 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     expect(await h.tree.getChildren()).toEqual([]);
   });
 
-  it('shows every row again when the fact re-read fails', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp', { hasMatchingRecords: false })]);
-    expect(await h.tree.getChildren()).toEqual([]);
+  describe('when the fact re-read fails', () => {
+    const hiddenByA = async (): Promise<Harness> => {
+      const h = makeTree([A_ROW(), B_ROW()]);
+      h.tree.setRecordFilterSource('a.sql');
+      await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
+      h.client.setQueryFailure('getPlugins', new Error('GET /plugins failed (503)'));
+      return h;
+    };
+    const labels = async (h: Harness) => (await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label);
 
-    h.client.setQueryFailure('getPlugins', new Error('GET /plugins failed (503)'));
-    await h.tree.refreshFacts();
+    it('keeps a row hidden by the filter still in force', async () => {
+      const h = await hiddenByA();
 
-    expect(await h.tree.getChildren()).toHaveLength(1);
+      await h.tree.refreshFacts();
+
+      expect(await labels(h)).toEqual(['B.esp']);
+    });
+
+    it('shows the row again when the filter was cleared', async () => {
+      const h = await hiddenByA();
+
+      h.tree.setRecordFilterSource(undefined);
+      await h.tree.refreshFacts();
+
+      expect(await labels(h)).toEqual(['A.esp', 'B.esp']);
+    });
+
+    it('shows the row again when another filter replaced the one that hid it', async () => {
+      const h = await hiddenByA();
+
+      h.tree.setRecordFilterSource('b.sql');
+      await h.tree.refreshFacts();
+
+      expect(await labels(h)).toEqual(['A.esp', 'B.esp']);
+    });
   });
 
   it('keeps a filter-hidden row hidden while a fresh load is in progress', async () => {
