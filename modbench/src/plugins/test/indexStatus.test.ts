@@ -184,9 +184,8 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
     await flushed();
 
     expect(deps.log).toHaveBeenCalledWith('error', expect.stringContaining('did not reach the tree'));
-    expect(deps.reporter.reports).toEqual([
-      expect.objectContaining({ severity: 'warning', message: expect.stringContaining('plugin list could not be read') }),
-    ]);
+    expect(deps.reporter.reports.map((report) => report.severity)).toEqual(['warning']);
+    expect(deps.reporter.reports[0]?.message).toContain('plugin list could not be read');
     expect(deps.log).not.toHaveBeenCalledWith('info', expect.stringContaining('in the load order'));
   });
 
