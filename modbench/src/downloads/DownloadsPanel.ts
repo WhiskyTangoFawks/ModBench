@@ -6,8 +6,9 @@ import {
 import {
   defaultModName, installFromArchive, type InstallAccess, type InstallChoice, type InstallTarget,
 } from '../install/install';
-import type { DownloadNode, DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
-import { DOWNLOADS_KEY_ARGS, selectedFiles, singleSelectedFile } from './keyContext';
+import type { DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
+import { DOWNLOADS_KEY_ARGS } from './keyContext';
+import { pluralArgument, registerGesture, singularArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 
@@ -179,30 +180,22 @@ async function changeExcluded(
 export function registerDownloadsSingleRowCommands(
   reporter: Reporter, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
-  const rowOf = (node?: DownloadNode) => (node ?? singleSelectedFile(viewSelection()))?.row;
   return [
-    vscode.commands.registerCommand('modbench.downloadedFile.open', async (node?: DownloadNode) => {
-      const row = rowOf(node);
+    registerGesture('modbench.downloadedFile.open', viewSelection, async (entry) => {
+      const row = singularArgument(entry, 'download')?.row;
       if (!row) return;
       await runRowAction('Open File', row.name, reporter, async () => {
         await vscode.env.openExternal(vscode.Uri.file(row.path));
       });
     }),
-    vscode.commands.registerCommand('modbench.downloadedFile.openMeta', async (node?: DownloadNode) => {
-      const row = rowOf(node);
+    registerGesture('modbench.downloadedFile.openMeta', viewSelection, async (entry) => {
+      const row = singularArgument(entry, 'download')?.row;
       if (!row) return;
       await runRowAction('Open Meta File', row.name, reporter, async () => {
         await vscode.window.showTextDocument(vscode.Uri.file(row.sidecarPath));
       });
     }),
   ];
-}
-
-// A host that supplies no selection array, and a single-row click, both fall back to the
-// clicked row alone.
-function selectionRows(clicked: DownloadNode | undefined, selected: DownloadNode[] | undefined): DownloadFile[] {
-  if (selected && selected.length > 0) return selected.map((n) => n.row);
-  return clicked ? [clicked.row] : [];
 }
 
 /** Acts on the whole selection, applying the clicked row's action to a mixed one (the reference
@@ -212,17 +205,14 @@ export function registerDownloadsMultiRowCommands(
   access: DownloadsAccess, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
-  const rows = (clicked?: DownloadNode, selected?: DownloadNode[]) => {
-    const explicit = selectionRows(clicked, selected);
-    return explicit.length > 0 ? explicit : selectedFiles(viewSelection()).map((n) => n.row);
-  };
+  const rows = (entry: GestureEntry<DownloadsTreeNode>) => pluralArgument(entry, 'download').map((node) => node.row);
   return [
-    vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      deleteSelection(access, instance, rows(clicked, selected), reporter, ask, trash, log)),
-    vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      changeExcluded(access, instance, rows(clicked, selected), true, reporter)),
-    vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      changeExcluded(access, instance, rows(clicked, selected), false, reporter)),
+    registerGesture('modbench.downloadedFile.delete', viewSelection, (entry) =>
+      deleteSelection(access, instance, rows(entry), reporter, ask, trash, log)),
+    registerGesture('modbench.downloadedFile.exclude', viewSelection, (entry) =>
+      changeExcluded(access, instance, rows(entry), true, reporter)),
+    registerGesture('modbench.downloadedFile.include', viewSelection, (entry) =>
+      changeExcluded(access, instance, rows(entry), false, reporter)),
   ];
 }
 
