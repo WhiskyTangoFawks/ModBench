@@ -4,18 +4,13 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
-import { importSpecifiers } from '../../test/scanSource';
-import { tsFiles } from '../../test/tsFiles';
+import { importSpecifiers, productionFiles, SRC } from '../../test/scanSource';
 
-const SRC = join(__dirname, '..', '..');
 const BOX = join('instanceAdapter') + sep;
 const ADAPTER_PATH = join(SRC, 'instanceAdapter', 'files.ts');
 
 const FS_SPECIFIERS = new Set(['node:fs', 'node:fs/promises', 'fs', 'fs/promises']);
 const QUEUE_NAMES = new Set(['createWriteQueue', 'WriteQueue']);
-
-const productionFiles = (dir: string): string[] =>
-  tsFiles(dir, { exclude: ['generated', 'test'], tsx: false, includeTests: false });
 
 function fsImportsIn(path: string): string[] {
   return importSpecifiers(readFileSync(path, 'utf8'), path).filter((spec) => FS_SPECIFIERS.has(spec));
