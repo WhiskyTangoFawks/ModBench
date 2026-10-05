@@ -196,7 +196,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   };
   // commands.md, System commands, `modbench.instance.putLoadOrder`.
   const view = editingView({
-    narrator: plugins.narrator, progress: plugins.progress, log: outputChannel, revealLog: () => outputChannel.show(true),
+    narrator: plugins.narrator, progress: plugins.progress, log: outputChannel, revealLog: () => outputChannel.show(true), loadOrderPut: plugins.loadOrderPut,
     reportPut: (message) => reporterFor('loadOrder').report('error', message),
     reportEntry: (message) => reporterFor('enterEditing').report('error', message),
   });

@@ -15,12 +15,16 @@ export interface InstanceGame {
 
 /** The slice of the instance value put load order sends. */
 export interface LoadOrderSource extends InstanceGame {
-  readonly loadOrderSnapshot: (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine'> & { readonly dataFolder: string }) | undefined;
+  readonly loadOrderSnapshot:
+    | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine'> & { readonly dataFolder: string })
+    | { readonly refusal: string }
+    | undefined;
 }
 
-/** Nothing is sent without a game folder found: there is no Data folder to key the load order on. */
+/** Nothing is sent without a game folder found: there is no Data folder to key the load order on.
+ *  A refusal is the loader's, to tell once: a partial snapshot would unregister what it left out. */
 export type PutLoadOrderResult =
-  | { sent: false }
+  | { sent: false; refusal?: string }
   | { sent: true; snapshot: LoadOrderSnapshot; outcome: LoadOrderOutcome };
 
 // A game with no release is sent as the mod manager names it rather than a guess: the backend then
@@ -31,6 +35,7 @@ export async function putLoadOrder(
   sender: Pick<LoadOrderSender, 'send'>, instanceRoot: string, value: LoadOrderSource,
 ): Promise<PutLoadOrderResult> {
   if (!value.loadOrderSnapshot) return { sent: false };
+  if ('refusal' in value.loadOrderSnapshot) return { sent: false, refusal: value.loadOrderSnapshot.refusal };
   const { plugins, active, loadedWithNoLine, dataFolder } = value.loadOrderSnapshot;
   const snapshot: LoadOrderSnapshot = {
     plugins, active, loadedWithNoLine, gameDirectory: dataFolder, instanceRoot, gameRelease: releaseOf(value),

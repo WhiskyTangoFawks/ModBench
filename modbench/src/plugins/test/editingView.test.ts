@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { PutLoadOrderResult } from '../../instanceCommands/loadOrder';
+import { reportSyncFailures } from '../../drivingLib/syncFailureReport';
 import { editingView } from '../editingView';
 
 type Sent = Extract<PutLoadOrderResult, { sent: true }>;
@@ -14,6 +15,8 @@ const SNAPSHOT: Sent['snapshot'] = {
 
 const sent = (outcome: Outcome): PutLoadOrderResult => ({ sent: true, snapshot: SNAPSHOT, outcome });
 
+const refused = (refusal: string): PutLoadOrderResult => ({ sent: false, refusal });
+
 function wired() {
   const narrator = { hear: vi.fn(), settled: vi.fn(() => Promise.resolve()) };
   const progress = { while: vi.fn((work: () => Promise<void>) => work()), say: vi.fn() };
@@ -21,8 +24,10 @@ function wired() {
   const reportEntry = vi.fn();
   const log = { info: vi.fn(), error: vi.fn() };
   const revealLog = vi.fn();
-  const view = editingView({ narrator, progress, reportPut, reportEntry, log, revealLog });
-  return { view, narrator, progress, reportPut, reportEntry, log, revealLog };
+  const lines: string[] = [];
+  const loadOrderPut = reportSyncFailures('put load order', 'The load order is not sent', (line) => lines.push(line));
+  const view = editingView({ narrator, progress, reportPut, reportEntry, log, revealLog, loadOrderPut });
+  return { view, narrator, progress, reportPut, reportEntry, log, revealLog, loadOrderPut, lines };
 }
 
 describe('the entry shown', () => {
@@ -53,6 +58,36 @@ describe('the entry shown', () => {
 
     expect(log.info).toHaveBeenCalledWith(expect.stringContaining('abandoned'));
     expect([reportEntry, reportPut].flatMap((f) => f.mock.calls)).toEqual([]);
+  });
+});
+
+describe('a load order the loader refused, shown', () => {
+  it("says the refusal in the Plugins view's message line and once in the Output, however many values repeat it", async () => {
+    const { view, loadOrderPut, lines } = wired();
+
+    await view.tell({ kind: 'put', put: refused('a.esp is provided by the mod ModA, which has no mod folder') });
+    await view.tell({ kind: 'put', put: refused('a.esp is provided by the mod ModA, which has no mod folder') });
+
+    expect(loadOrderPut.message()).toBe('The load order is not sent: a.esp is provided by the mod ModA, which has no mod folder.');
+    expect(lines).toEqual(['put load order failed: a.esp is provided by the mod ModA, which has no mod folder']);
+  });
+
+  it('clears the message line once a snapshot is sent', async () => {
+    const { view, loadOrderPut } = wired();
+    await view.tell({ kind: 'put', put: refused('a.esp has no mod folder') });
+
+    await view.tell({ kind: 'put', put: sent({ outcome: 'abandoned' }) });
+
+    expect(loadOrderPut.message()).toBeUndefined();
+  });
+
+  it('leaves the line alone for a game folder not found, which the views already tell', async () => {
+    const { view, loadOrderPut } = wired();
+    await view.tell({ kind: 'put', put: refused('a.esp has no mod folder') });
+
+    await view.tell({ kind: 'put', put: { sent: false } });
+
+    expect(loadOrderPut.message()).toBeDefined();
   });
 });
 

@@ -26,7 +26,6 @@ internal sealed class SourceModFixture : IDisposable
         Plugin = new PluginAddress(pluginName, origin);
         _instanceRoot = Directory.CreateTempSubdirectory("medit-source-mod-").FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
-        var tracked = origin is not (PluginOrigin.DataDirectory or PluginOrigin.Overwrite);
 
         // The game's own Data folder and Overwrite are never mod folders, and never a repository
         // either (ADR-0012).
@@ -38,14 +37,15 @@ internal sealed class SourceModFixture : IDisposable
         };
 
         var pluginPath = Path.Combine(ModFolder, pluginName);
+        var entry = new LoadOrderEntry(pluginName, pluginPath, origin, Slot: 0, Enabled: true, Winning: true);
         var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4);
         build(mod);
-        if (tracked) TrackedTemplates.WriteTracked(ModFolder, mod);
+        if (entry.Provider is PluginProvider.FromMod) TrackedTemplates.WriteTracked(ModFolder, mod);
         else mod.WriteToBinary(pluginPath);
 
         LoadOrder = SnapshotPlugins.Snapshot(
             GameDirectory, _instanceRoot, GameRelease.Fallout4,
-            [new LoadOrderEntry(pluginName, pluginPath, origin, Slot: 0, Enabled: true, Winning: true)]);
+            [entry]);
 
         holder.Apply(LoadOrder);
         EditHandler = TestEditService.EditHandler(holder);

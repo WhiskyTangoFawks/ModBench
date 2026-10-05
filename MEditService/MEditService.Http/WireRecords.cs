@@ -21,13 +21,13 @@ public record LoadOrderPlugin(string Name, string Path, string Origin, PluginPro
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PluginProviderKind { Mod, Game, None }
 
-// What provides a plugin file (ADR-0012). Mod and Folder name the mod and its folder, and only Kind Mod has them.
+// Only Kind Mod has a Mod and a Folder.
 public record PluginProviderRequest(PluginProviderKind Kind, string? Mod = null, string? Folder = null)
 {
     internal PluginProvider? ToProvider() => Kind switch
     {
-        PluginProviderKind.Game => PluginProvider.Game,
-        PluginProviderKind.None => PluginProvider.NoMod,
+        PluginProviderKind.Game when Mod is null && Folder is null => PluginProvider.Game,
+        PluginProviderKind.None when Mod is null && Folder is null => PluginProvider.NoMod,
         PluginProviderKind.Mod when !string.IsNullOrEmpty(Mod) && !string.IsNullOrEmpty(Folder) =>
             new PluginProvider.FromMod(Mod, Folder),
         _ => null,

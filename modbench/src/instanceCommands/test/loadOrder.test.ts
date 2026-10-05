@@ -75,6 +75,18 @@ describe('put load order', () => {
   });
 });
 
+describe('put load order, refused by the loader', () => {
+  it('sends nothing and carries the refusal for the caller to tell', async () => {
+    const client = attachedClient();
+
+    const result = await putLoadOrder(
+      createLoadOrderSender(client), '/instance', { ...VALUE, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } });
+
+    expect(client.calls).toEqual([]);
+    expect(result).toEqual({ sent: false, refusal: 'a.esp has no mod folder' });
+  });
+});
+
 describe('refresh', () => {
   it('rebuilds the index for the instance, so mEdit reads every plugin again against the load order it holds, and sends nothing', async () => {
     const client = attachedClient();

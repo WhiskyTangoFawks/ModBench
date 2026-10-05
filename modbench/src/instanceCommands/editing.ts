@@ -56,6 +56,10 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     }
     const value = await source;
     if (!value?.loadOrderSnapshot) return exitEditing();
+    if ('refusal' in value.loadOrderSnapshot) {
+      await put(value);
+      return exitEditing();
+    }
     startPutRan = true;
     await put(value);
   };

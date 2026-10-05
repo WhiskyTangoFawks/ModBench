@@ -3,7 +3,7 @@
 import { basename, dirname, join, sep } from 'node:path';
 import { foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 import {
-  isPluginFile, OVERWRITE_ORIGIN, type DataFolderPlugins, type GameFolder, type ModFolder, type OriginFile, type PluginEntry,
+  isPluginFile, OVERWRITE_ORIGIN, type DataFolderPlugins, type GameFolder, type ModFolders, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile } from '../tables/gamePaths';
@@ -37,6 +37,11 @@ export type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string } | { 
 
 /** ADR-0013. */
 export type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'> & { provider: SnapshotProvider };
+
+/** The snapshot was not built, and why: the user is told once (common.md, Reporting). */
+export interface LoadOrderSnapshotRefusal {
+  readonly refusal: string;
+}
 
 /** ADR-0013's snapshot. */
 export interface LoadOrderSnapshotValue {
@@ -201,14 +206,15 @@ export function buildLoadOrderRows(
   return [...listed, ...outside, ...strays];
 }
 
-/** ADR-0013's snapshot, none without a listable game folder or while a mod's plugin has no mod folder.
- *  Active: the plugins the game loads with no line, then each enabled line's winner. */
+/** ADR-0013's snapshot, none without a listable game folder, and a refusal while a mod's plugin has
+ *  no mod folder: a snapshot without it would unregister the plugin. Active: the plugins the game
+ *  loads with no line, then each enabled line's winner. */
 export function loadOrderSnapshotOf(value: {
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   readonly gameFolder: GameFolder;
   readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
-  readonly modFolders: readonly ModFolder[] | undefined;
-}): LoadOrderSnapshotValue | undefined {
+  readonly modFolders: ModFolders | undefined;
+}): LoadOrderSnapshotValue | LoadOrderSnapshotRefusal | undefined {
   // Without the game's masters the snapshot would be silently wrong (principles.md), so the index
   // keeps what it holds until the folder can be read (common.md, States, story 5).
   if (value.gameFolder.kind !== 'found' || value.pluginsLoadedWithNoLine === undefined) return undefined;
@@ -217,12 +223,11 @@ export function loadOrderSnapshotOf(value: {
   const rows = value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined);
   const addressOf = (p: PluginAddress) => `${foldPath(p.origin)}\u0000${foldPath(p.name)}`;
   const rowAt = new Map(rows.map((p) => [addressOf(p), p] as const));
-  const modFolderOf = new Map((value.modFolders ?? []).filter((f) => f.kind === 'mod').map((f) => [foldPath(f.name), f.path] as const));
-  const providerOf = (origin: string): SnapshotProvider | undefined => {
+  const whatProvides = (origin: string): SnapshotProvider | undefined => {
     if (origin === OVERWRITE_ORIGIN) return { kind: 'None' };
     if (origin === DATA_DIRECTORY_ORIGIN) return { kind: 'Game' };
-    const folder = modFolderOf.get(foldPath(origin));
-    return folder === undefined ? undefined : { kind: 'Mod', mod: origin, folder };
+    const folder = value.modFolders?.holding({ kind: 'mod', name: origin });
+    return folder === undefined ? undefined : { kind: 'Mod', mod: origin, folder: folder.path };
   };
   const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) =>
     rowAt.get(addressOf(p)) ?? { ...p, path: join(dataFolder, p.name) });
@@ -237,12 +242,17 @@ export function loadOrderSnapshotOf(value: {
       return true;
     });
   const sent = new Map<string, SnapshotPlugin>();
+  const unprovided = new Map<string, string[]>();
   for (const { name, path, origin } of [...loadedWithNoLine, ...rows]) {
-    const provider = providerOf(origin);
-    if (provider === undefined) return undefined;
+    const provider = whatProvides(origin);
+    if (provider === undefined) {
+      unprovided.set(origin, [...unprovided.get(origin) ?? [], name]);
+      continue;
+    }
     const key = addressOf({ name, origin });
     if (!sent.has(key)) sent.set(key, { name, path, origin, provider });
   }
+  if (unprovided.size > 0) return { refusal: refusalOf(unprovided) };
   return {
     dataFolder,
     plugins: [...sent.values()],
@@ -250,3 +260,9 @@ export function loadOrderSnapshotOf(value: {
     loadedWithNoLine: loadedWithNoLine.map(({ name, origin }) => ({ name, origin })),
   };
 }
+
+const listed = (names: readonly string[]): string =>
+  names.length < 3 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+const refusalOf = (unprovided: ReadonlyMap<string, readonly string[]>): string =>
+  [...unprovided].map(([mod, names]) => `${listed(names)} ${names.length === 1 ? 'is' : 'are'} provided by the mod ${mod}, which has no mod folder`).join('; ');

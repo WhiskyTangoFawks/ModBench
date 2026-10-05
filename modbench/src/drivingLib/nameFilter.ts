@@ -44,6 +44,17 @@ export interface SyncMessage {
   onMessageChanged(listener: () => void): { dispose(): void };
 }
 
+/** Several system commands' parts of one view's message line, as one. */
+export function joinSyncMessages(...parts: SyncMessage[]): SyncMessage {
+  return {
+    message: () => messageLine(...parts.map((part) => part.message())),
+    onMessageChanged: (listener) => {
+      const subscriptions = parts.map((part) => part.onMessageChanged(listener));
+      return { dispose: () => subscriptions.forEach((subscription) => subscription.dispose()) };
+    },
+  };
+}
+
 export interface NameFilter extends vscode.Disposable {
   /** Whatever else this view says about itself. The filter owns `view.description` outright —
    *  two writers would race — and the term appears beside the base rather than replacing it. */

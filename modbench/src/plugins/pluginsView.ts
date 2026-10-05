@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import type { MEditClient, RecordFilter } from '../client';
 import { originFiles } from '../instanceLoader/loadOrderSnapshot';
-import { messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
+import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
 import { reorderOver, type PluginSyncRun, type PluginsAccess } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
-import type { SyncChannel } from '../drivingLib/syncFailureReport';
+import { reportSyncFailures, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
 import { createPluginSync, type PluginSync } from './pluginSync';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginsInstance, type PluginsTreeNode } from './PluginsTreeProvider';
 import type { PluginTreeProvider } from './PluginTreeProvider';
@@ -50,6 +50,8 @@ export interface PluginsView extends vscode.Disposable {
   view: vscode.TreeView<PluginsTreeNode>;
   nameFilter: NameFilter;
   pluginSync: PluginSync;
+  /** The load order Editing could not put: its refusal is this view's message line too. */
+  loadOrderPut: SyncFailureReport;
   showRecordFilter: (filter: RecordFilter | null) => void;
   progress: PluginsViewProgress;
   narrator: ReconcileNarrator;
@@ -59,6 +61,7 @@ export interface PluginsView extends vscode.Disposable {
 export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const { instance, access, recordBrowser, client, syncPlugins, channel, statusBar, notifyConflictsComputed, log, reporterFor } = deps;
   const pluginSync = createPluginSync(syncPlugins, channel);
+  const loadOrderPut = reportSyncFailures('put load order', 'The load order is not sent', (line) => channel.error(`[loadOrder] ${line}`));
   const filesOf = (origin: string) => originFiles(instance.value.plugins, origin);
   const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
   const changedOutsideDiagnostics = vscode.languages.createDiagnosticCollection('modbench-changed-outside');
@@ -88,7 +91,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   };
   showKeyContext();
   const keyContextSubscriptions = [view.onDidChangeSelection(showKeyContext), tree.onDidChangeTreeData(showKeyContext)];
-  const nameFilter = registerPluginsNameFilter(view, tree, pluginSync);
+  const nameFilter = registerPluginsNameFilter(view, tree, joinSyncMessages(pluginSync, loadOrderPut));
   const lens = new FilterCodeLensProvider();
   const showRecordFilter = makeShowRecordFilter(lens, { pluginsNameFilter: nameFilter, pluginsTree: tree });
   const progress = pluginsViewProgress(view, nameFilter);
@@ -116,7 +119,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     view, tree, changedOutsideDiagnostics, loadDiagnostics,
   );
   return {
-    tree, view, nameFilter, pluginSync, showRecordFilter, progress, narrator: indexStatus.narrator,
+    tree, view, nameFilter, pluginSync, loadOrderPut, showRecordFilter, progress, narrator: indexStatus.narrator,
     dispose: () => { disposable.dispose(); },
   };
 }
