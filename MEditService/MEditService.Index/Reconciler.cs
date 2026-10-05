@@ -22,10 +22,10 @@ internal sealed class Reconciler(
     TimeProvider timeProvider) : IDisposable
 {
     // Lock order: _lock, then the Store's projection lock, which a projection's announcements run
-    // under. An announcement may read Sequence, which takes only the latter, and never Status or
+    // under. An announcement reads the index's own Sequence, never this class's Sequence, Status or
     // RequireReads, which take _lock.
     private readonly Lock _lock = new();
-    private volatile OpenScope? _scope;
+    private OpenScope? _scope;
 
     // The reconcile's own progress. Guarded by _lock like _scope: written by the reconciling thread
     // as each plugin lands, read by whoever asks for Status meanwhile.
@@ -129,7 +129,7 @@ internal sealed class Reconciler(
     // so this is safe to call from inside a lock a caller already holds.
     private void PublishStatus() => notifications?.Publish(new LoadOrderStatusNotification(Status));
 
-    public long Sequence => _scope?.Index.Sequence ?? 0;
+    public long Sequence { get { lock (_lock) return _scope?.Index.Sequence ?? 0; } }
 
     // ADR-0015: a whole plugin re-derived or removed has too many rows to name, so the
     // announcement names the plugin and the sequence the store reached once the projection landed.
