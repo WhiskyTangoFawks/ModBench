@@ -221,6 +221,26 @@ public sealed class CompilePluginContainerTests : IDisposable
     }
 
     [Fact]
+    public async Task Compile_WithACellDirectoryRenamedByHand_Succeeds_WithADiagnosticOnItsDocumentNamingWhereItBelongs()
+    {
+        var cell = TrackedTree.DocumentCarrying(_modFolder, _plugin, "CellA");
+        var identity = new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId);
+        var directory = TreeTampering.DirectoryOf(_modFolder, _plugin, identity);
+        var belongsAt = Path.GetRelativePath(_modFolder, directory);
+        var renamed = Path.Combine(Path.GetDirectoryName(directory) ?? string.Empty, "ByHand");
+        Directory.Move(directory, renamed);
+
+        var result = await CompileService().CompileOneAsync(_plugin);
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        var diagnostic = Assert.Single(result.Diagnostics, d => d.Message.Contains("belongs at", StringComparison.Ordinal));
+        Assert.Equal(cell.FormKey, diagnostic.FormKey);
+        Assert.Equal(
+            Path.Combine(Path.GetRelativePath(_modFolder, renamed), "RecordData.json"), diagnostic.SourceRelativePath);
+        Assert.Contains(belongsAt, diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Compile_AfterDeletingTheMiddleOfThreeDialogTopics_Succeeds_KeepingSurvivorsInOrder()
     {
         SourceEdits.Rewrite<Quest>(
