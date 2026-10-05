@@ -113,14 +113,14 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     }
 
     [Fact]
-    public void ABatchAskedToPutAContainerTheTreeDoesNotHold_RefusesBeforeTouchingTheTree_ForMintingItsDirectoriesIsMoreThanTheOneDocumentsBytesABatchEntryHolds()
+    public void ABatchAskedToPutAContainerTheTreeDoesNotHold_RefusesBeforeTouchingTheTree_ForItsIdentityAloneNamesNoPlace()
     {
         var repository = Track(_firstFolder, "First.esp");
         var plugin = new PluginAddress("First.esp", "FirstMod");
         var before = TreeSnapshot.Of(_firstFolder);
 
         var transaction = new SourceTransaction();
-        var refusal = Assert.Throws<NotSupportedException>(() => transaction.Put(
+        var refusal = Assert.Throws<InvalidOperationException>(() => transaction.Put(
             repository, plugin,
             new SourceDocument("000900:First.esp", "cell", "FreshCell", "{\n  \"FormKey\": \"000900:First.esp\"\n}")));
 

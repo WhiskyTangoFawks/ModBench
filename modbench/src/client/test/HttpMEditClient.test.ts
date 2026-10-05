@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { HttpMEditClient, type HttpMEditClientDeps } from '../HttpMEditClient';
+import type { RecordEditEnvelope } from '../MEditClient';
 import { Readable } from 'node:stream';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -564,6 +565,49 @@ describe('HttpMEditClient — an applied edit', () => {
     );
 
     expect(outcome).toEqual({ applied: true });
+  });
+});
+
+describe('HttpMEditClient — an edit answered as its source changes', () => {
+  const plugin = { name: 'MyPatch.esp', origin: 'ModA' };
+  const renamed: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' };
+
+  it('getEditChanges posts the envelope and the document\'s text, and reads each move and document', async () => {
+    const to = 'plugin-source/MyPatch.esp/Npcs/Renamed - 000800_MyPatch.esp.json';
+    const moves = [{ from: 'plugin-source/MyPatch.esp/Npcs/Old - 000800_MyPatch.esp.json', to }];
+    const documents = [{ path: to, text: '{"EditorID": "Renamed"}' }];
+    let seen: Request | undefined;
+    const fetch = vi.fn((req: Request) => {
+      seen = req;
+      return Promise.resolve(jsonResponse(200, { formKey: '000800:MyPatch.esp', path: 'EditorID', moves, documents, newFormKey: null }));
+    });
+
+    const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed, '{"EditorID": "Old"}');
+
+    expect(outcome).toEqual({ applied: true, moves, documents });
+    expect(new URL(seen?.url ?? '').pathname).toBe('/records/000800%3AMyPatch.esp/edit-changes');
+    expect(await seen?.json()).toEqual({ edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed }, text: '{"EditorID": "Old"}' });
+  });
+
+  it('getEditChanges carries the new FormKey an edit of the FormID answers with', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
+      formKey: '000800:MyPatch.esp', path: 'FormKey', moves: [], documents: [], newFormKey: '000900:MyPatch.esp',
+    })));
+
+    const outcome = await makeClient(fetch).getEditChanges(
+      '000800:MyPatch.esp', plugin, { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' }, '{}');
+
+    expect(outcome).toEqual({ applied: true, moves: [], documents: [], newFormKey: '000900:MyPatch.esp' });
+  });
+
+  it('getEditChanges answers the edit\'s typed refusal as the backend worded it', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(409, {
+      refusal: 'PluginNotTracked', detail: 'MyPatch.esp is not tracked, so it is read-only.',
+    })));
+
+    const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed, '{}');
+
+    expect(outcome).toEqual({ applied: false, refusal: 'PluginNotTracked', message: 'MyPatch.esp is not tracked, so it is read-only.' });
   });
 });
 

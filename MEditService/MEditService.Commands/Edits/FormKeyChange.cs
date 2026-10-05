@@ -19,11 +19,10 @@ internal sealed class FormKeyChange(RecordTextCodec codec, ILogger logger)
     internal static bool IsFormIdEdit(RecordEditEnvelope envelope) =>
         envelope is { Op: RecordEditEnvelope.Set, Path: [{ Kind: PathHop.MemberKind, Name: Member }] };
 
-    /// <summary>A delete+create pair in source terms, written through a
-    /// <see cref="SourceTransaction"/> that restores the tree on failure.</summary>
-    internal RecordEditResult Change(
-        PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, JsonElement? value)
+    /// <summary>The record's file or folder moved to its new key, or its owner's text, read from
+    /// <paramref name="carrying"/>.</summary>
+    internal EditPlan Change(
+        PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, SourceDocument carrying, JsonElement? value)
     {
         var (release, identity, repository) = editTarget;
         if (identity.RecordType == PluginHeader.RecordType)
@@ -57,22 +56,13 @@ internal sealed class FormKeyChange(RecordTextCodec codec, ILogger logger)
         if (FormKeyAllocator.Over(repository, plugin, release).Claim(requestedFormKey, out var targetFormKey)
             is { } refusedTarget) return refusedTarget with { Path = Member };
 
-        var transaction = new SourceTransaction();
-        if (SourceCommit.Write(transaction, repository, logger, $"Changing the FormID of {formKey} to {targetFormKey} failed.", () =>
-            {
-                transaction.Rekey(repository, plugin, identity, targetFormKey, schemas, new DocumentRekey(
-                    (document, newKey) => RecordDocumentEdits.WithFormKey(codec, document.Body, release, document.RecordType, newKey),
-                    (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
-                        codec, owner.Body, release, owner.RecordType, oldKey, newKey)));
-                return null;
-            }) is { } refused) return refused;
-
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Changed the FormID of {OldFormKey} to {NewFormKey} in {Plugin} ({Origin})",
-                formKey, targetFormKey, plugin.Name, plugin.Origin);
-        }
-        return RecordEditResult.Success(targetFormKey);
+        var failed = $"Changing the FormID of {formKey} to {targetFormKey} failed.";
+        return SourceCommit.Plan(repository, logger, failed, () => new EditPlan(
+            RecordEditResult.Success(targetFormKey),
+            repository.ChangesToRekey(plugin, carrying, identity, targetFormKey, new DocumentRekey(
+                (document, newKey) => RecordDocumentEdits.WithFormKey(codec, document.Body, release, document.RecordType, newKey),
+                (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
+                    codec, owner.Body, release, owner.RecordType, oldKey, newKey))),
+            repository, failed));
     }
 }

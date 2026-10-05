@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
@@ -44,6 +45,45 @@ internal sealed class WriteTargets(
         }
     }
 
+    /// <summary>The edit target with <paramref name="text"/> standing in for the file of the document carrying
+    /// the record: the tree only says which document that is.</summary>
+    internal bool TryResolveEditTarget(
+        PluginAddress plugin, string formKey, string text, out EditTarget target,
+        [NotNullWhen(true)] out SourceDocument? carrying, [NotNullWhen(false)] out RecordEditResult? refused)
+    {
+        (target, carrying) = (default, null);
+        refused = RefuseUnlessTrackedAndLoaded(plugin, out var openedRepository);
+        if (refused is not null) return false;
+        var repository = openedRepository
+            ?? throw new InvalidOperationException("Expected RefuseUnlessTrackedAndLoaded to open a repository when it does not refuse.");
+
+        var release = loadOrder.Current.GameRelease;
+        try
+        {
+            if (repository.CarryingFromText(plugin, formKey, text, schemaReflector.GetSchemas(release)) is not var (record, document))
+            {
+                refused = RecordNotFound(plugin, formKey);
+                return false;
+            }
+            (target, carrying) = (new EditTarget(release, record, repository), document);
+            return true;
+        }
+        catch (AmbiguousSourceUnitException ex)
+        {
+            refused = RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, ex.Message);
+        }
+        catch (UnreadableSourceDocumentException ex)
+        {
+            refused = RefuseUnreadable(formKey, ex.Message);
+        }
+        return false;
+    }
+
+    private static RecordEditResult RecordNotFound(PluginAddress plugin, string formKey) =>
+        RecordEditResult.Refused(
+            RecordEditRefusal.RecordNotFound,
+            $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document carries it.");
+
     private RecordEditResult? ResolveInTheTree(
         PluginAddress plugin, string formKey, SourceRepository repository, GameRelease release, out EditTarget target)
     {
@@ -60,13 +100,7 @@ internal sealed class WriteTargets(
             return RefuseUnreadable(formKey, ex.Message);
         }
 
-        if (found is not { } document)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.RecordNotFound,
-                $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document " +
-                "carries it.");
-        }
+        if (found is not { } document) return RecordNotFound(plugin, formKey);
 
         target = new EditTarget(release, document.Identity, repository);
         return null;
