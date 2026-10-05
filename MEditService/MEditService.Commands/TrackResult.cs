@@ -10,18 +10,11 @@ public enum TrackRefusal
 {
     None,
 
-    /// <summary>No loaded plugin is the file name and origin the gesture named.</summary>
-    PluginNotLoaded,
+    /// <summary>The load order holds no plugin the mod provides.</summary>
+    ModProvidesNoPlugin,
 
     /// <summary>The mod's repository already holds the plugin's source.</summary>
     AlreadyTracked,
-
-    /// <summary>The origin is the game's own Data directory; the way out is a patch plugin (ADR-0007).</summary>
-    DataDirectoryOrigin,
-
-    /// <summary>The origin is Overwrite (ADR-0012); the way out is moving the plugin into
-    /// a mod.</summary>
-    OverwriteOrigin,
 
     /// <summary>ADR-0006's gate refused it, or the plugin cannot be read or deep-parsed
     /// at all. A data problem in the plugin, not a state conflict.</summary>

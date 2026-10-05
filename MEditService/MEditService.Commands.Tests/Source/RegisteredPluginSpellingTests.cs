@@ -24,7 +24,7 @@ public sealed class RegisteredPluginSpellingTests
         using var scratch = new ModFolderUnderAnInstanceRootScratch();
 
         var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(scratch.LoadOrder, Origin, SourcePreset.Edits);
+            .TrackModAsync(scratch.LoadOrder, Origin);
 
         Assert.Empty(result.Refused);
         var repository = SourceRepository.Open(scratch.ModFolder, Release).Require();
@@ -75,7 +75,7 @@ public sealed class RegisteredPluginSpellingTests
             var pristineFiles = SourceRepository.PristineFilesOf(PluginName, treeFiles);
 
             SourceRepository.Track(
-                ModFolder, SourcePreset.Edits, [(pristineFiles, new BaselineTrailers(PluginName, null, null))]);
+                ModFolder, [(pristineFiles, new DecompiledPlugin(PluginName, null))]);
         }
 
         public void Dispose()

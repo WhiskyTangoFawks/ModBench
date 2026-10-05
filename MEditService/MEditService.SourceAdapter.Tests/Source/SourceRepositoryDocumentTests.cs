@@ -26,7 +26,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
     private void Track(params TreeFile[] files) =>
         PluginBaselines.Track(
-            _modFolder, SourcePreset.Edits, files);
+            _modFolder, files);
 
     private string NpcGroupFolder
     {

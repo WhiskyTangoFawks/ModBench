@@ -63,7 +63,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         _quest.DialogTopics.Add(_topic);
 
         PluginBaselines.Track(
-            _modFolder, SourcePreset.Edits, TheFourDocumentsTheWholeModDoorWritesForThisGraph());
+            _modFolder, TheFourDocumentsTheWholeModDoorWritesForThisGraph());
     }
 
     public void Dispose() => _modFolder.Dispose();

@@ -4,7 +4,6 @@ using System.Text.Json.Nodes;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -56,7 +55,7 @@ public sealed class PersistentFlagPartialFormCellTests : IDisposable
                 new LoadOrderEntry(_override.Name, overridePath, OverrideOrigin, Slot: 1, Enabled: true, Winning: true),
             ]);
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(loadOrder, OverrideOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+            .TrackModAsync(loadOrder, OverrideOrigin).GetAwaiter().GetResult();
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
         _handler = TestEditService.EditHandler(holder);

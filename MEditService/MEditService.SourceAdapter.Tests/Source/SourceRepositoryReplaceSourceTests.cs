@@ -14,7 +14,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     private readonly ScratchDirectory _modFolder = new("medit-replace-source-");
 
     public SourceRepositoryReplaceSourceTests() =>
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits, [File("npc_/A.esp/000001.json", "{\"was\":1}")]);
+        PluginBaselines.Track(_modFolder, [File("npc_/A.esp/000001.json", "{\"was\":1}")]);
 
     public void Dispose() => _modFolder.Dispose();
 
@@ -117,7 +117,7 @@ public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
     private readonly ScratchDirectory _modFolder = new("medit-replace-source-nogit-");
 
     public SourceRepositoryReplaceSourceWithoutGitTests() =>
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits,
+        PluginBaselines.Track(_modFolder,
             [new TreeFile("plugin-source/A.esp/npc_/A.esp/000001.json", "{\"was\":1}"u8.ToArray())]);
 
     public void Dispose() => _modFolder.Dispose();

@@ -18,16 +18,14 @@ public sealed class SourceRepositoryTrackGitignoreTests
     private static string CommittedPaths(string modFolder) =>
         GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "ls-tree", "-r", "--name-only", "main");
 
-    [Theory]
-    [InlineData(SourcePreset.Edits)]
-    [InlineData(SourcePreset.Everything)]
-    public void Track_ExcludesMetaIniAndTheCompiledPluginBinaryFromTheCommit_RegardlessOfPreset(SourcePreset preset)
+    [Fact]
+    public void Track_ExcludesMetaIniAndTheCompiledPluginBinaryFromTheCommit()
     {
         using var modFolder = new ScratchDirectory("medit-track-gitignore-");
         WriteMetaIniWhichChangesForNonContentReasonsBesideTheSource(modFolder);
         WritePluginBinaryBesideTheSource(modFolder);
 
-        PluginBaselines.Track(modFolder, preset, [SourceFile()]);
+        PluginBaselines.Track(modFolder, [SourceFile()]);
 
         var gitDir = Path.Combine(modFolder, ".git");
         var committedPaths = CommittedPaths(modFolder);
@@ -39,12 +37,12 @@ public sealed class SourceRepositoryTrackGitignoreTests
     }
 
     [Fact]
-    public void Track_EditsPreset_IgnoresEverythingExceptTheSource()
+    public void Track_IgnoresEverythingExceptTheSource()
     {
         using var modFolder = new ScratchDirectory("medit-track-gitignore-");
         File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
 
-        PluginBaselines.Track(modFolder, SourcePreset.Edits, [SourceFile()]);
+        PluginBaselines.Track(modFolder, [SourceFile()]);
 
         var committedPaths = CommittedPaths(modFolder);
         Assert.Contains("plugin-source/Test.esp/npc_/Test.esp/000001.json", committedPaths);
@@ -52,19 +50,19 @@ public sealed class SourceRepositoryTrackGitignoreTests
     }
 
     [Fact]
-    public void Track_EditsPreset_DoesNotUnignoreATopLevelFolderThatMerelyEndsWithPluginSource_ForThePatternIsNotASuffixMatch()
+    public void Track_DoesNotUnignoreATopLevelFolderThatMerelyEndsWithPluginSource_ForThePatternIsNotASuffixMatch()
     {
         using var modFolder = new ScratchDirectory("medit-track-gitignore-");
         Directory.CreateDirectory(Path.Combine(modFolder, "My-plugin-source"));
         File.WriteAllText(Path.Combine(modFolder, "My-plugin-source", "notes.txt"), "Notes");
 
-        PluginBaselines.Track(modFolder, SourcePreset.Edits, [SourceFile()]);
+        PluginBaselines.Track(modFolder, [SourceFile()]);
 
         Assert.DoesNotContain("My-plugin-source", CommittedPaths(modFolder));
     }
 
     [Fact]
-    public void Track_EditsPreset_TracksExactlyGitignorePlusTheWholeSourceTree_NothingElse()
+    public void Track_TracksExactlyGitignorePlusTheWholeSourceTree_NothingElse()
     {
         using var modFolder = new ScratchDirectory("medit-track-gitignore-");
         WriteMetaIniWhichChangesForNonContentReasonsBesideTheSource(modFolder);
@@ -76,8 +74,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
         var otherPluginFile = new TreeFile(
             Path.Combine("plugin-source", "Other.esp", "npc_", "Other.esp", "000002.json"), "{}"u8.ToArray());
 
-        PluginBaselines.Track(
-            modFolder, SourcePreset.Edits, [SourceFile(), otherPluginFile]);
+        PluginBaselines.Track(modFolder, [SourceFile(), otherPluginFile]);
 
         var committedPaths = CommittedPaths(modFolder)
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
@@ -92,19 +89,5 @@ public sealed class SourceRepositoryTrackGitignoreTests
                 "plugin-source/Test.esp/npc_/Test.esp/000001.json",
             }.OrderBy(p => p, StringComparer.Ordinal),
             committedPaths);
-    }
-
-    [Fact]
-    public void Track_EverythingPreset_TracksAssetsButStillIgnoresThePluginBinary()
-    {
-        using var modFolder = new ScratchDirectory("medit-track-gitignore-");
-        File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
-        WritePluginBinaryBesideTheSource(modFolder);
-
-        PluginBaselines.Track(modFolder, SourcePreset.Everything, [SourceFile()]);
-
-        var committedPaths = CommittedPaths(modFolder);
-        Assert.Contains("texture.dds", committedPaths);
-        Assert.DoesNotContain("Test.esp\n", committedPaths + "\n");
     }
 }

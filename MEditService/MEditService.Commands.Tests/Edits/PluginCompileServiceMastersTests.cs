@@ -70,7 +70,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
             ]);
 
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(_loadOrder, _plugin.Origin, SourcePreset.Edits)
+            .TrackModAsync(_loadOrder, _plugin.Origin)
             .GetAwaiter().GetResult();
     }
 

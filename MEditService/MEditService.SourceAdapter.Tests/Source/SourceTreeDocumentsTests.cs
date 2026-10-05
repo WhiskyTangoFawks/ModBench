@@ -61,7 +61,6 @@ public sealed class SourceTreeDocumentsTests : IDisposable
 
         PluginBaselines.Track(
             _modFolder,
-            SourcePreset.Edits,
             [
                 new TreeFile(_interiorCellPath, Serialize(_interiorCell)),
                 new TreeFile(_worldspacePath, Serialize(_worldspace)),

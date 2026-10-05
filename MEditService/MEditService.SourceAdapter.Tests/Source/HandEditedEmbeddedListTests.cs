@@ -46,7 +46,6 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
 
         PluginBaselines.Track(
             _modFolder,
-            SourcePreset.Edits,
             [
                 new TreeFile(Path.Combine(PluginSourceRoot.For(PluginName), "RecordData.json"), HeaderDocument.Write(_mod)),
                 new TreeFile(_questPath, _codec.SerializeToBytes(_quest, Release)),

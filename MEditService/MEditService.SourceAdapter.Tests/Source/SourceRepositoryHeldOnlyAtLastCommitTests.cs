@@ -21,7 +21,7 @@ public sealed class SourceRepositoryHeldOnlyAtLastCommitTests : IDisposable
 
     private SourceRepository TrackedWithTheRecordCommitted()
     {
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits, [new TreeFile($"plugin-source/{PluginName}/Npcs/HeldNpc - 000800_Held.esp.json", System.Text.Encoding.UTF8.GetBytes(NpcDocument.Body))]);
+        PluginBaselines.Track(_modFolder, [new TreeFile($"plugin-source/{PluginName}/Npcs/HeldNpc - 000800_Held.esp.json", System.Text.Encoding.UTF8.GetBytes(NpcDocument.Body))]);
         return SourceRepository.Open(_modFolder, GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be tracked.");
     }
@@ -68,7 +68,7 @@ public sealed class SourceRepositoryHeldOnlyAtLastCommitTests : IDisposable
         var relativePath = Path.Combine(PluginSourceRoot.For(PluginName), folder, "Carrier - 00A000_Held.esp.json");
         const string withTheChild =
             "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Held.esp\",\n  \"Temporary\": [ { \"FormKey\": \"00A001:Held.esp\" } ]\n}";
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits, [new TreeFile(relativePath, System.Text.Encoding.UTF8.GetBytes(withTheChild))]);
+        PluginBaselines.Track(_modFolder, [new TreeFile(relativePath, System.Text.Encoding.UTF8.GetBytes(withTheChild))]);
         var repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be tracked.");
         File.WriteAllText(

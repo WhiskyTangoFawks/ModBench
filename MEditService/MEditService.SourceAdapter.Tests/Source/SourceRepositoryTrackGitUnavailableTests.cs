@@ -18,7 +18,7 @@ public sealed class SourceRepositoryTrackGitUnavailableTests
 
             var files = new[] { new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             var ex = Assert.Throws<GitUnavailableException>(() =>
-                PluginBaselines.Track(modFolder, SourcePreset.Edits, files));
+                PluginBaselines.Track(modFolder, files));
 
             Assert.Contains("git", ex.Message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("PATH", ex.Message, StringComparison.Ordinal);

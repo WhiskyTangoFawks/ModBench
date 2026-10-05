@@ -40,7 +40,7 @@ internal sealed class LoadOrderOfPlugins : IDisposable
         foreach (var (mod, _) in plugins.Where(p => p.Tracked))
         {
             new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(loadOrder, Origin(mod), SourcePreset.Edits).GetAwaiter().GetResult();
+                .TrackModAsync(loadOrder, Origin(mod)).GetAwaiter().GetResult();
         }
         _holder = new LoadOrderHolder();
         _holder.Apply(loadOrder);

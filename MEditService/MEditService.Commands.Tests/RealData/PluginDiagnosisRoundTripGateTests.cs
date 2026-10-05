@@ -75,7 +75,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
         public async Task<TrackResult> TrackAsync() =>
             (await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(_loadOrder, Origin, SourcePreset.Edits)).Only();
+                .TrackModAsync(_loadOrder, Origin)).Only();
 
         public void Dispose()
         {

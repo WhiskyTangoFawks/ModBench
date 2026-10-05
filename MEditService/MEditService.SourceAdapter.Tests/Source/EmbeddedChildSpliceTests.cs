@@ -50,7 +50,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
         _quest.DialogTopics.Add(_topic);
 
         PluginBaselines.Track(
-            _modFolder, SourcePreset.Edits, PristineFiles());
+            _modFolder, PristineFiles());
     }
 
     public void Dispose() => _modFolder.Dispose();

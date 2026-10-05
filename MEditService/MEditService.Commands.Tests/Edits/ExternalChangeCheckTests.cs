@@ -44,9 +44,9 @@ public sealed class ExternalChangeCheckTests : IDisposable
     private static string TrailerHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 
     private void Track(params (string Plugin, byte[] Bytes)[] plugins) =>
-        SourceRepository.Track(ModFolder, SourcePreset.Edits, [.. plugins.Select(p => (
+        SourceRepository.Track(ModFolder, [.. plugins.Select(p => (
             (IReadOnlyList<TreeFile>)[new TreeFile(TreeTampering.HeaderDocumentOf(p.Plugin), "{}"u8.ToArray())],
-            new BaselineTrailers(p.Plugin, null, TrailerHash(p.Bytes))))]);
+            new DecompiledPlugin(p.Plugin, TrailerHash(p.Bytes))))]);
 
     private ExternalChangeNotification TheExternalChange() =>
         Assert.Single(_notifications.Notifications.OfType<ExternalChangeNotification>());

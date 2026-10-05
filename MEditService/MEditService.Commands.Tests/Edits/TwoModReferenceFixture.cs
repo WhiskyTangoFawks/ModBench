@@ -1,7 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -83,7 +82,7 @@ public sealed class TwoModReferenceFixture : IDisposable, ITrackedPlugins
 
     private void Track(string origin) =>
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
+            .TrackModAsync(LoadOrder, origin).GetAwaiter().GetResult();
 
     public string ModFolderOf(PluginAddress plugin) =>
         plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder;

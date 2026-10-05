@@ -51,7 +51,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
 
         public async Task<TrackResult> TrackAsync() =>
             (await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(_loadOrder, "TrueStormsMod", SourcePreset.Edits)).Only();
+                .TrackModAsync(_loadOrder, "TrueStormsMod")).Only();
 
         public void Dispose()
         {

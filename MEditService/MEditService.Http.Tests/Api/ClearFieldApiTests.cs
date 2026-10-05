@@ -31,7 +31,7 @@ public sealed class ClearFieldApiTests(LoadedApiFixture<TestPluginFixture> loade
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(plugins),
             gameRelease = "Fallout4",
         })).EnsureSuccessStatusCode();
-        (await _client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        (await _client.Track(Origin)).EnsureSuccessStatusCode();
         await _client.NextSnapshot(fx, Origin);
         await _client.PluginReportsTracked(Plugin);
         var created = await _client.PostAsJsonAsync($"/plugins/{Plugin}/records", new

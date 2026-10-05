@@ -31,7 +31,7 @@ public sealed class UnlistedPluginEditRefusalApiTests : HostedTests
             _ => p,
         }).ToList();
         (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
-        var track = await Client.Track([(UnlistedPlugin, UnlistedOrigin), (DisabledPlugin, DisabledOrigin)]);
+        var track = await Client.Track([UnlistedOrigin, DisabledOrigin]);
         track.EnsureSuccessStatusCode();
         Assert.Empty((await track.Body()).GetProperty("refused").EnumerateArray());
         return fx;

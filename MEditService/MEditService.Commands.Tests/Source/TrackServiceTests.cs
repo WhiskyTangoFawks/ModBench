@@ -18,17 +18,17 @@ namespace MEditService.Commands.Tests.Source;
 public sealed class TrackServiceTests
 {
     [Fact]
-    public async Task TrackAsync_OfAPluginTheLoadOrderDoesNotHold_RefusesItWithoutThrowing()
+    public async Task TrackAsync_OfAModThatProvidesNoPlugin_RefusesTheSelectionWithoutThrowing()
     {
         using var gameDir = new ScratchDirectory("medit-track-noorigin-game-");
         var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], []);
 
         var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackAsync(loadOrder, [new PluginAddress("NoSuch.esp", "NoSuchMod")], SourcePreset.Edits, new Dictionary<string, string>());
+            .TrackAsync(loadOrder, ["NoSuchMod"]);
 
-        var refused = Assert.Single(result.Refused);
-        Assert.Equal(TrackRefusal.PluginNotLoaded, refused.Refusal);
-        Assert.Contains("NoSuchMod", refused.Message, StringComparison.Ordinal);
+        var refusal = Assert.IsType<TrackResult>(result.SelectionRefusal);
+        Assert.Equal(TrackRefusal.ModProvidesNoPlugin, refusal.Refusal);
+        Assert.Contains("NoSuchMod", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public sealed class TrackServiceTests
         ]);
 
         var result = await new TrackService(NullLogger<TrackService>.Instance, new LockedPluginAdapter("Locked.esp"))
-            .TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            .TrackModAsync(loadOrder, "FixtureMod");
 
         Assert.Equal([new PluginAddress("Fixture.esp", "FixtureMod")], result.Landed);
         var refused = Assert.Single(result.Refused);
@@ -87,7 +87,7 @@ public sealed class TrackServiceTests
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
         var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+        await service.TrackModAsync(loadOrder, "FixtureMod");
 
         Assert.True(SourceRepository.IsTracked(modFolder));
 
@@ -124,96 +124,39 @@ public sealed class TrackServiceTests
         File.WriteAllBytes(pluginPath, notAPluginSoAnyDeepParseFails);
 
         var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
+        var result = (await service.TrackModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.AlreadyTracked, result.Refusal);
     }
 
     [Fact]
-    public async Task TrackAsync_WithOnlyADataOriginPlugin_RefusesWithoutInitializingARepository()
+    public async Task TrackAsync_OfAMod_TracksOnlyThePluginsItProvides_NotAnotherModsPluginOfTheSameFileName()
     {
-        using var gameDir = new ScratchDirectory("medit-trackservice-dataorigin-");
-        var pluginPath = Path.Combine(gameDir, "Fixture.esp");
-        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        mod.Npcs.AddNew("SomeNpc");
-        mod.WriteToBinary(pluginPath);
+        using var modA = new ScratchDirectory("medit-trackservice-twomods-a-");
+        using var modB = new ScratchDirectory("medit-trackservice-twomods-b-");
+        using var gameDir = new ScratchDirectory("medit-trackservice-twomods-game-");
+        var pathA = Path.Combine(modA, "Same.esp");
+        var pathB = Path.Combine(modB, "Same.esp");
+        foreach (var path in new[] { pathA, pathB })
+        {
+            var mod = new Fallout4Mod(ModKey.FromFileName("Same.esp"), Fallout4Release.Fallout4);
+            mod.Npcs.AddNew("SomeNpc");
+            mod.WriteToBinary(path);
+        }
 
         var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
         [
-            new LoadOrderEntry("Fixture.esp", pluginPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry("Same.esp", pathA, "ModA", Slot: 0, Enabled: true, Winning: false),
+            new LoadOrderEntry("Same.esp", pathB, "ModB", Slot: 1, Enabled: true, Winning: true),
         ]);
 
-        var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        var result = (await service.TrackModAsync(
-            loadOrder, PluginOrigin.DataDirectory, SourcePreset.Edits)).Only();
+        var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
+            .TrackAsync(loadOrder, ["ModA"]);
 
-        Assert.False(result.Applied);
-        Assert.Equal(TrackRefusal.DataDirectoryOrigin, result.Refusal);
-        Assert.False(SourceRepository.IsTracked(gameDir));
-        Assert.False(SourceRepository.HoldsAnotherRepository(gameDir));
-    }
-
-    [Fact]
-    public async Task TrackAsync_WithOnlyAnOverwriteOriginPlugin_RefusesWithoutInitializingARepository()
-    {
-        using var overwriteDir = new ScratchDirectory("medit-trackservice-overwrite-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-overwrite-game-");
-        var pluginPath = Path.Combine(overwriteDir, "Stray.esp");
-        var mod = new Fallout4Mod(ModKey.FromFileName("Stray.esp"), Fallout4Release.Fallout4);
-        mod.Npcs.AddNew("SomeNpc");
-        mod.WriteToBinary(pluginPath);
-
-        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
-        [
-            new LoadOrderEntry("Stray.esp", pluginPath, PluginOrigin.Overwrite, 0, Enabled: true, Winning: true),
-        ]);
-
-        var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        var result = (await service.TrackModAsync(
-            loadOrder, PluginOrigin.Overwrite, SourcePreset.Edits)).Only();
-
-        Assert.False(result.Applied);
-        Assert.Equal(TrackRefusal.OverwriteOrigin, result.Refusal);
-        Assert.Contains("Stray.esp", result.Message, StringComparison.Ordinal);
-        Assert.Contains("Overwrite", result.Message, StringComparison.Ordinal);
-        Assert.False(SourceRepository.IsTracked(overwriteDir));
-        Assert.False(SourceRepository.HoldsAnotherRepository(overwriteDir));
-    }
-
-    [Fact]
-    public async Task TrackAsync_OverASelectionMixingOverwriteAndAMod_RefusesOnlyTheOverwritePlugin_AndTracksTheMod()
-    {
-        using var overwriteDir = new ScratchDirectory("medit-trackservice-mixed-overwrite-");
-        using var modFolder = new ScratchDirectory("medit-trackservice-mixed-mod-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-mixed-game-");
-        var strayPath = Path.Combine(overwriteDir, "Stray.esp");
-        new Fallout4Mod(ModKey.FromFileName("Stray.esp"), Fallout4Release.Fallout4).WriteToBinary(strayPath);
-
-        var trackablePath = Path.Combine(modFolder, "Fixture.esp");
-        var trackableMod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        trackableMod.Npcs.AddNew("OnlyNpc");
-        trackableMod.WriteToBinary(trackablePath);
-
-        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
-        [
-            new LoadOrderEntry("Stray.esp", strayPath, PluginOrigin.Overwrite, 0, Enabled: true, Winning: true),
-            new LoadOrderEntry("Fixture.esp", trackablePath, "FixtureMod", 1, Enabled: true, Winning: true),
-        ]);
-
-        var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        var result = await service.TrackAsync(
-            loadOrder,
-            [new PluginAddress("Stray.esp", PluginOrigin.Overwrite), new PluginAddress("Fixture.esp", "FixtureMod")],
-            SourcePreset.Edits,
-            new Dictionary<string, string>());
-
-        Assert.Equal([new PluginAddress("Fixture.esp", "FixtureMod")], result.Landed);
-        var refused = Assert.Single(result.Refused);
-        Assert.Equal((new PluginAddress("Stray.esp", PluginOrigin.Overwrite), TrackRefusal.OverwriteOrigin), (refused.Plugin, refused.Refusal));
-        Assert.True(SourceRepository.IsTracked(modFolder));
-        Assert.False(SourceRepository.IsTracked(overwriteDir));
-        Assert.False(SourceRepository.HoldsAnotherRepository(overwriteDir));
+        Assert.Equal([new PluginAddress("Same.esp", "ModA")], result.Landed);
+        Assert.True(SourceRepository.IsTracked(modA));
+        Assert.False(SourceRepository.IsTracked(modB));
     }
 
     [Fact]
@@ -242,12 +185,13 @@ public sealed class TrackServiceTests
         Assert.Equal(TrackPhase.Idle, service.Progress.Phase);
 
         var observed = new List<TrackProgress>();
-        var trackTask = service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+        var trackTask = service.TrackModAsync(loadOrder, "FixtureMod");
         while (!trackTask.IsCompleted)
             observed.Add(service.Progress);
         await trackTask;
 
         Assert.Contains(observed, p => p.Phase == TrackPhase.Serializing && p.PluginsDone > 0 && p.PluginsDone < p.PluginsTotal);
+        Assert.All(observed.Where(p => p.Phase != TrackPhase.Idle), p => Assert.Equal("FixtureMod", p.Origin));
         Assert.Equal(TrackPhase.Idle, service.Progress.Phase);
     }
 
@@ -274,7 +218,7 @@ public sealed class TrackServiceTests
 
         var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", CountingDeserialize));
 
-        await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+        await service.TrackModAsync(loadOrder, "FixtureMod");
 
         Assert.Equal(1, deserializeCalls);
         Assert.True(SourceRepository.IsTracked(modFolder));
@@ -303,7 +247,7 @@ public sealed class TrackServiceTests
 
         var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenCorruptTheNpc));
 
-        var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
+        var result = (await service.TrackModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -338,7 +282,7 @@ public sealed class TrackServiceTests
 
         var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenMutateTheFloat));
 
-        var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
+        var result = (await service.TrackModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -373,7 +317,7 @@ public sealed class TrackServiceTests
 
         var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
 
-        await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+        await service.TrackModAsync(loadOrder, "FixtureMod");
 
         Assert.True(SourceRepository.IsTracked(modFolder));
     }
@@ -417,7 +361,7 @@ public sealed class TrackServiceTests
 
         var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenCorrupt));
 
-        var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
+        var result = (await service.TrackModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -442,7 +386,7 @@ public sealed class TrackServiceTests
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
         var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
+        var result = (await service.TrackModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -508,7 +452,7 @@ public sealed class TrackServiceTests
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
         var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+        await service.TrackModAsync(loadOrder, "FixtureMod");
 
         Assert.True(SourceRepository.IsTracked(modFolder));
 
@@ -531,7 +475,7 @@ public sealed class TrackServiceTests
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
         var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
+        var result = (await service.TrackModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.MissingLocalizationStrings, result.Refusal);

@@ -29,7 +29,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
         await Loaded();
         using var stream = await Client.NotificationStream();
 
-        var tracked = await Client.Track(Plugin, Origin);
+        var tracked = await Client.Track(Origin);
 
         tracked.EnsureSuccessStatusCode();
         var body = await tracked.Content.ReadFromJsonAsync<JsonElement>();
@@ -51,7 +51,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
     {
         await Loaded();
 
-        var tracked = await Client.Track(Plugin, Origin);
+        var tracked = await Client.Track(Origin);
 
         tracked.EnsureSuccessStatusCode();
         var modFolder = OtherTool.ModFolderOf(_instance, Origin);
@@ -61,7 +61,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task TrackingNoPlugin_Is400()
+    public async Task TrackingNoMod_Is400()
     {
         await Loaded();
 
@@ -71,37 +71,33 @@ public sealed class DecompilePluginTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task TrackingAPluginWithoutAnOrigin_Is400()
+    public async Task TrackingAModWithoutAName_Is400()
     {
         await Loaded();
 
-        var response = await Client.Track(Plugin, string.Empty);
+        var response = await Client.Track(string.Empty);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task TrackingASelection_AnswersEachPluginOnItsOwn_ANotLoadedOneRefusedByName()
+    public async Task TrackingAModThatProvidesNoPlugin_RefusesTheSelection_Is404()
     {
         await Loaded();
 
-        var response = await Client.Track([(Plugin, Origin), ("NoSuch.esp", "NoSuchMod")]);
+        var response = await Client.Track([Origin, "NoSuchMod"]);
 
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal([Plugin], body.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
-        var refused = Assert.Single(body.GetProperty("refused").EnumerateArray());
-        Assert.Equal("NoSuch.esp", refused.GetProperty("plugin").GetProperty("name").GetString());
-        Assert.Equal("NoSuchMod", refused.GetProperty("plugin").GetProperty("origin").GetString());
-        Assert.Equal("PluginNotLoaded", refused.GetProperty("refusal").GetString());
-        Assert.Contains("NoSuch.esp", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ModProvidesNoPlugin", problem.GetProperty("refusal").GetString());
+        Assert.Contains("NoSuchMod", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task DecompilingATrackedPluginWhoseBytesChanged_AnswersItApplied_AndItsNewSourceReachesTheAnswers()
     {
         await Loaded();
-        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         OtherTool.WritesThePlugin(Path.Combine(OtherTool.ModFolderOf(_instance, Origin), Plugin), mod => mod.Npcs.AddNew("UpgradedNpc"));
 
@@ -149,7 +145,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
         await Loaded();
         Assert.False((await Client.Plugin(Plugin)).GetProperty("isTracked").GetBoolean());
 
-        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(_instance);
 
         await Client.PluginReportsTracked(Plugin);

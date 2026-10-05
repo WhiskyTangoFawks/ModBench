@@ -34,7 +34,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     {
         var files = new[] { new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody)) }.Concat(extraFiles).ToArray();
         PluginBaselines.Track(
-            _modFolder, SourcePreset.Edits, files);
+            _modFolder, files);
         return SourceRepository.Open(_modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
@@ -62,10 +62,13 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         var lookalikeFolderName = new string('x', widthOfThePorcelainStatusCodeAnEntryParseDrops) + rootSegment;
         var oldFolder = Directory.CreateDirectory(Path.Combine(_modFolder, lookalikeFolderName, PluginName)).FullName;
         File.WriteAllText(Path.Combine(oldFolder, "notes.txt"), "notes");
-        PluginBaselines.Track(_modFolder, SourcePreset.Everything, [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
+        PluginBaselines.Track(_modFolder, [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
         var repository = SourceRepository.Open(_modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
-        GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, "mv", $"{lookalikeFolderName}/{PluginName}/notes.txt", "notes.txt");
+        var gitDir = Path.Combine(_modFolder, ".git");
+        GitProbe.Run(gitDir, _modFolder, "add", "-f", $"{lookalikeFolderName}/{PluginName}/notes.txt");
+        GitProbe.Run(gitDir, _modFolder, "commit", "-q", "-m", "Their own file");
+        GitProbe.Run(gitDir, _modFolder, "mv", $"{lookalikeFolderName}/{PluginName}/notes.txt", "notes.txt");
 
         Assert.Empty(ChangesIn(repository));
     }

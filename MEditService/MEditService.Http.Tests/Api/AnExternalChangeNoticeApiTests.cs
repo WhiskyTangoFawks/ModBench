@@ -23,7 +23,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
     {
         var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(Plugin);
         return fx;
@@ -91,7 +91,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
         LoadOrderEntry[] plugins =
             [.. fx.Plugins, new LoadOrderEntry(SecondPlugin, second, Origin, fx.Plugins.Count, Enabled: true, Winning: true)];
         (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
-        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
         (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
         await Client.PluginReportsTracked(Plugin);
         Restart();

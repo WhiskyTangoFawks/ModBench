@@ -1,7 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -87,7 +86,7 @@ public sealed class InjectedChildTests : IDisposable
 
         var track = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
         foreach (var origin in new[] { BaseOrigin, InjectorOrigin })
-            track.TrackModAsync(_loadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
+            track.TrackModAsync(_loadOrder, origin).GetAwaiter().GetResult();
     }
 
     private (FormKey Container, FormKey Child) Case(string injection) => injection switch
