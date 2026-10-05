@@ -1,6 +1,6 @@
 export type {
   MEditClient, WriteRefused, RebuildIndexOutcome, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput, LoadOrderProgress,
-  NotificationKind, NotificationEvent, BackendStatus, RecordEditOutcome, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
+  NotificationKind, NotificationPayloads, NotificationEvent, BackendStatus, RecordEditOutcome, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
   PluginRecordTypeCount, CreatableRecordType, PluginCreatedResponse, PluginAddress, RecordCreateResponse, RecordAddress,
   CopyMode, CopyItem, ReferenceResult, RecordFilter,
   TrackStatus, TrackOutcome, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, RecordSummary,

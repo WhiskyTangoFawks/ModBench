@@ -5,7 +5,7 @@ import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages'
 // A FormKey spans its override chain, so matching it is enough. `heldReads` holds a panel's reads
 // until its edit is answered; on reconnect, one waiting on a missed report reads once mEdit holds it.
 export function subscribeRecordPanelsToNotifications<Panel extends { webview: Pick<vscode.Webview, 'postMessage'> }>(
-  client: Pick<MEditClient, 'subscribe' | 'onReconnected' | 'getRecordOwner'>,
+  client: Pick<MEditClient, 'onNotification' | 'onReconnected' | 'getRecordOwner'>,
   recordPanels: Set<Panel>,
   activeRecordTracker: { formKeyOf(panel: Panel): string | undefined },
   heldReads: {
@@ -17,7 +17,7 @@ export function subscribeRecordPanelsToNotifications<Panel extends { webview: Pi
   const read = (panel: Panel, formKey: string) => {
     void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey } satisfies ExtensionToWebview);
   };
-  const unsubscribeRows = client.subscribe('rows-changed', (event) => {
+  const unsubscribeRows = client.onNotification('rows-changed', (event) => {
     for (const panel of recordPanels) {
       if (heldReads.holds(panel, event.keys)) continue;
       const formKey = activeRecordTracker.formKeyOf(panel);

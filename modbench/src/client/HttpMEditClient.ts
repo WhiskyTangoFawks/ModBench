@@ -116,19 +116,6 @@ export class HttpMEditClient implements MEditClient {
     return this.notifications.onNotification(kind, listener);
   }
 
-  // `extract` picks a kind's payload out of the flat wire envelope; undefined skips the event.
-  private subscribeStatus<T>(
-    kind: NotificationKind,
-    extract: (event: NotificationEvent) => T | undefined,
-    onProgress: ((status: T) => void) | undefined,
-  ): () => void {
-    if (!onProgress) return () => {};
-    return this.notifications.subscribe(kind, (event) => {
-      const status = extract(event);
-      if (status !== undefined) onProgress(status);
-    });
-  }
-
   // ── writes ───────────────────────────────────────────────────────────────
 
   // Every write verb below shares this shape: POST, map a non-ok response or a thrown request
@@ -202,9 +189,7 @@ export class HttpMEditClient implements MEditClient {
     // A box, not a `let`: the subscriber below closes over it before this call's own PUT answers
     // with the version it holds.
     const applying: { version?: number; latest?: LoadOrderStatus } = {};
-    const unsubscribe = this.notifications.subscribe('load-order-status', (event) => {
-      if (!event.loadOrderStatus) return;
-      const status = toLoadOrderStatus(event.loadOrderStatus);
+    const unsubscribe = this.notifications.onNotification('load-order-status', (status) => {
       applying.latest = status;
       if (applying.version !== undefined && isTerminalLoadOrderStatusFor(status, applying.version)) resolveTerminal(status);
     });
@@ -313,7 +298,7 @@ export class HttpMEditClient implements MEditClient {
   ): Promise<TrackOutcome | WriteRefused> {
     const counted = mods.length === 1 ? '1 mod' : `${mods.length} mods`;
     // The POST stays blocking, so progress rides the track-progress notification alongside it.
-    const unsubscribe = this.subscribeStatus('track-progress', (event) => event.trackProgress ?? undefined, options.onProgress);
+    const unsubscribe = options.onProgress ? this.notifications.onNotification('track-progress', options.onProgress) : () => {};
     try {
       const answer = await this.mutate({
         op: `track(${counted})`,

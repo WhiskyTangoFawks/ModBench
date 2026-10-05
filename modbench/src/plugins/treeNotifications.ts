@@ -4,10 +4,10 @@ import type { MEditClient } from '../client';
 // identity to check it against. The plugin facts too, as a changed record can start or stop
 // matching the record filter.
 export function subscribeTreeToNotifications(
-  client: Pick<MEditClient, 'subscribe'>, tree: { refresh(): void }, refreshPluginFacts: () => void,
+  client: Pick<MEditClient, 'onNotification'>, tree: { refresh(): void }, refreshPluginFacts: () => void,
 ): () => void {
   const reread = () => { tree.refresh(); refreshPluginFacts(); };
-  const unsubscribeRows = client.subscribe('rows-changed', reread);
-  const unsubscribePlugin = client.subscribe('plugin-changed', reread);
+  const unsubscribeRows = client.onNotification('rows-changed', reread);
+  const unsubscribePlugin = client.onNotification('plugin-changed', reread);
   return () => { unsubscribeRows(); unsubscribePlugin(); };
 }

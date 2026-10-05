@@ -56,7 +56,7 @@ describe('ReferencedByTreeProvider — no active record', () => {
     expect(await provider.getChildren()).toEqual([]);
     expect(provider.viewMessage()).toBe('Open a record to see what references it.');
     expect(provider.count()).toBeUndefined();
-    expect(client.calls.filter((c) => c.method !== 'subscribe')).toEqual([]);
+    expect(client.calls.filter((c) => c.method !== 'onNotification')).toEqual([]);
   });
 
   it('empties when retargeted to undefined (the last record tab closed), and says to open a record', async () => {
