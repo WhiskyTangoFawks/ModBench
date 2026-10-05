@@ -62,7 +62,7 @@ public sealed class ValidationFaultTests : IDisposable
     {
         public const string Reason = "the stream could not take the push";
 
-        public void Publish(Notification notification)
+        public void Publish(INotification notification)
         {
             if (notification is PluginChangedNotification) throw new InvalidOperationException(Reason);
         }

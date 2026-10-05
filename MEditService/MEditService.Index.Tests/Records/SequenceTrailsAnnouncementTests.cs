@@ -68,7 +68,7 @@ public sealed class SequenceTrailsAnnouncementTests : IDisposable
 
         internal void Release() => _released.TrySetResult();
 
-        public void Publish(Notification notification)
+        public void Publish(INotification notification)
         {
             if (notification is PluginChangedNotification)
             {

@@ -158,7 +158,7 @@ public sealed class StoreRebuildTests : IDisposable
 
         public bool Armed { get; set; }
 
-        public void Publish(Notification notification)
+        public void Publish(INotification notification)
         {
             if (Armed && _holder is null && notification is LoadOrderStatusNotification)
                 _holder = ForeignIndexHolder.Hold(indexPath());

@@ -46,7 +46,7 @@ public sealed class IndexAnnouncementTests : IDisposable
 
     private int _publishedByReconcile;
 
-    private IEnumerable<Notification> SinceReconcile => _notifications.Notifications.Skip(_publishedByReconcile);
+    private IEnumerable<INotification> SinceReconcile => _notifications.Notifications.Skip(_publishedByReconcile);
 
     private void ReconcileHeld()
     {
