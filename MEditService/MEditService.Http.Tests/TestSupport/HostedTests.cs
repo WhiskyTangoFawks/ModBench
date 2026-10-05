@@ -1,3 +1,5 @@
+using MEditService.TestSupport;
+
 namespace MEditService.Http.Tests.TestSupport;
 
 public abstract class HostedTests : IDisposable
@@ -13,6 +15,14 @@ public abstract class HostedTests : IDisposable
     protected HttpClient Client { get; private set; }
 
     protected IServiceProvider Services => _app.Services;
+
+    protected IReadOnlyList<LogEntry> Logged
+    {
+        get
+        {
+            lock (_app.Logged) return [.. _app.Logged];
+        }
+    }
 
     private readonly List<IDisposable> _fixturesDisposedAfterTheHostStops = [];
 

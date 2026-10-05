@@ -39,7 +39,11 @@ public sealed class EditRecordHandler
 
     /// <summary>The single write path (ADR-0007): <see cref="DocumentEdit"/> patches the
     /// document, and this method owns only the IO around it.</summary>
-    public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
+    public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
+        ItemWrite.RefusingTheWriteFailure(
+            () => EditSource(plugin, formKey, envelope), $"Could not write the source file for {formKey}", _logger);
+
+    private RecordEditResult EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var editTarget) is { } blocked) return blocked;
         var (release, identity, repository) = editTarget;

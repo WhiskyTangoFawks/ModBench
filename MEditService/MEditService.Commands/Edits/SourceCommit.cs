@@ -8,8 +8,8 @@ namespace MEditService.Commands.Edits;
 internal static class SourceCommit
 {
     /// <summary>Runs <paramref name="write"/> and answers its refusal, or null once it lands. A tree not as
-    /// the gesture needs it is a refusal (ADR-0014), a filesystem fault a write failure, anything
-    /// else a bug.</summary>
+    /// the gesture needs it is a refusal (ADR-0014), and so is a filesystem fault; anything else is a
+    /// bug.</summary>
     internal static RecordEditResult? Write(
         SourceTransaction transaction, SourceRepository repository, ILogger logger, string failed,
         Func<RecordEditResult?> write)
@@ -26,7 +26,8 @@ internal static class SourceCommit
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            throw new IOException(RollBack(transaction, repository, logger, failed, ex), ex);
+            logger.LogError(ex, "{Failed}", failed);
+            return RecordEditResult.Refused(RecordEditRefusal.SourceWriteFailed, RollBack(transaction, repository, logger, failed, ex));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

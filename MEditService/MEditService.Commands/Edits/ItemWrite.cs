@@ -67,7 +67,9 @@ internal static class ItemWrite
                     : ItemAnswer<RecordEditRefusal, string?>.Refused(result.Refusal, result.Message));
             });
 
-    private static RecordEditResult RefusingTheWriteFailure(Func<RecordEditResult> write, string failure, ILogger logger)
+    /// <summary>A write a single-item gesture makes: the same two refusals <see cref="Over"/> gives an
+    /// item.</summary>
+    internal static RecordEditResult RefusingTheWriteFailure(Func<RecordEditResult> write, string failure, ILogger logger)
     {
         try
         {

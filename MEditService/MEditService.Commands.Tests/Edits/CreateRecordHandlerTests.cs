@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using System.Globalization;
 using System.Text.Json;
 using MEditService.Codec.Schema;
@@ -29,6 +30,20 @@ public sealed class CreateRecordHandlerTests
         Assert.NotNull(document);
         Assert.Equal("RenamedNpc", document.EditorId);
         Assert.Contains("RenamedNpc", document.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CreateRecord_WhenTheFileSystemRefusesTheWrite_RefusesWithItsWords_AndLeavesTheTreeAsItWas()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        const string newFormKey = "000F00:Fixture.esp";
+        TreeTampering.BlockWrite(mod.ModFolder, mod.Plugin, new RecordIdentity(newFormKey, "npc_", SourceEditFixture.NpcEditorId));
+        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", SourceEditFixture.NpcEditorId, newFormKey);
+
+        Assert.Equal(RecordEditRefusal.SourceWriteFailed, result.Refusal);
+        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]

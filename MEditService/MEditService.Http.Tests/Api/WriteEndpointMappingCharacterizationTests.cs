@@ -82,7 +82,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     }
 
     [Fact]
-    public async Task EditingTheFormId_WhenTheSourceCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
+    public async Task EditingTheFormId_WhenTheSourceCannotBeWritten_IsATypedRefusal_NotAnUnhandled500()
     {
         using var fx = BuildOneModOnePlugin();
         await Load(fx);
@@ -95,8 +95,9 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         {
             var response = await _client.Edit(formKey, Plugin, Origin, "FormKey", $"000F00:{Plugin}");
 
-            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
             var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("SourceWriteFailed", problem.GetProperty("refusal").GetString());
             Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("detail").GetString()));
         }
         finally

@@ -155,7 +155,7 @@ public static class PluginEndpoints
             var result = await create.CreatePlugin(plugin, req.Folder);
             if (result.Refusal is { } refusal)
             {
-                logger.LogWarning("Refused to create {Name} in {Origin}: {Refusal}", req.Name, req.Origin, refusal);
+                WriteEndpointMapping.LogRefusal(logger, "Create plugin", refusal, result.Message, plugin);
                 return WriteEndpointMapping.Refusal(refusal, result.Message);
             }
 
@@ -171,11 +171,6 @@ public static class PluginEndpoints
             // Mutagen refuses the filename the request passed the extension check with.
             logger.LogError(ex, "Invalid argument creating plugin {Name}", req.Name);
             return WriteEndpointMapping.InvalidArgument(ex);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogError(ex, "Could not write plugin {Name} into {Folder}", req.Name, req.Folder);
-            return WriteEndpointMapping.WriteFailure($"Could not write {req.Name} into {req.Folder}: {ex.Message}");
         }
     }
 
@@ -242,7 +237,9 @@ public static class PluginEndpoints
     internal static Task<IResult> Decompile(
         DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         return OverPlugins(req.Plugins, "decompiling", loggerFactory, plugins => WriteEndpointMapping.Answered(
+            "Decompile", logger,
             decompileHandler.DecompileAsync(plugins),
             WriteEndpointMapping.Refusal,
             landed => landed.Item,
@@ -256,15 +253,11 @@ public static class PluginEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         return OverPlugins(req.Plugins, "compiling", loggerFactory, plugins => WriteEndpointMapping.Answered(
+            "Compile", logger,
             compileHandler.CompileAsync(plugins),
             WriteEndpointMapping.Refusal,
             landed => new CompiledPlugin(landed.Item.Name, landed.Item.Origin, landed.Outcome),
-            refused =>
-            {
-                logger.LogWarning("Refused to compile {Plugin} ({Origin}): {Refusal} — {Message}",
-                    refused.Item.Name, refused.Item.Origin, refused.Refusal, refused.Message);
-                return new PluginCompileRefusal(refused.Item, refused.Refusal, refused.Message);
-            },
+            refused => new PluginCompileRefusal(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new CompileResponse(applied, refused)));
     }
 
@@ -301,6 +294,7 @@ public static class PluginEndpoints
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
         return WriteEndpointMapping.Execute(
+            "Create record", logger,
             logReceived: null,
             validate: () =>
             {
@@ -312,11 +306,6 @@ public static class PluginEndpoints
             },
             execute: () => edits.CreateRecord(WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType, req.EditorId, req.FormKey),
             onApplied: result => Results.Ok(new RecordCreateResponse(true, WriteEndpointMapping.RequireNewFormKey(result), req.RecordType)),
-            onWriteFailure: ex =>
-            {
-                logger.LogError(ex, "Could not write the source file while creating a {RecordType} in {Plugin}", req.RecordType, decoded);
-                return WriteEndpointMapping.WriteFailure($"Could not write the source file for the new record: {ex.Message}");
-            },
             // req.FormKey reaches Mutagen's FormKey.Factory with no TryFactory guard, so a malformed
             // value throws ArgumentException: malformed syntax is a 400, never Refusal's 422.
             onMalformedFormKey: ex =>

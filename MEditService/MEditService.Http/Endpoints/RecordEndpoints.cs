@@ -136,6 +136,7 @@ public static class RecordEndpoints
         var decoded = Uri.UnescapeDataString(formKey);
         var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
         return WriteEndpointMapping.Execute(
+            "Edit", logger,
             logReceived: () =>
             {
                 if (logger.IsEnabled(LogLevel.Information))
@@ -157,11 +158,6 @@ public static class RecordEndpoints
                 new PluginAddress(request.Plugin, request.Origin), decoded,
                 new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value)),
             onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled, result.NewFormKey)),
-            onWriteFailure: ex =>
-            {
-                logger.LogError(ex, "Could not write the source file while editing {FormKey} at {Path}", decoded, spelled);
-                return WriteEndpointMapping.WriteFailure($"Could not write the source file for {decoded}: {ex.Message}");
-            },
             onMalformedFormKey: null,
             onNoLoadOrder: ex =>
             {
@@ -182,6 +178,7 @@ public static class RecordEndpoints
         return OverRecords(records, "deleting", logger, validateOptions: () => null, answer: addressed =>
         {
             return WriteEndpointMapping.Answered(
+                "Delete", logger,
                 edits.DeleteRecords(addressed),
                 WriteEndpointMapping.Refusal,
                 landed => Addressed(landed.Item),
@@ -212,6 +209,7 @@ public static class RecordEndpoints
         }, answer: addressed =>
         {
             return WriteEndpointMapping.Answered(
+                "Copy", logger,
                 edits.Copy(addressed, request.Mode, destinations, request.Replace),
                 WriteEndpointMapping.Refusal,
                 landed => new RecordCopyLanded(Addressed(landed.Item.Record), landed.Item.Destination, landed.Outcome),

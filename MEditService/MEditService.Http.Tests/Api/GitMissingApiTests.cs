@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
@@ -47,6 +48,7 @@ public sealed class GitMissingApiTests : HostedTests
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
         Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
         Assert.Equal(before, FilesOutsideGit(modFolder));
+        Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Delete", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -146,6 +148,7 @@ public sealed class GitMissingApiTests : HostedTests
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
         Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
         Assert.Equal(before, FilesOutsideGit(modFolder));
+        Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Decompile", StringComparison.Ordinal));
     }
 
     [Fact]
