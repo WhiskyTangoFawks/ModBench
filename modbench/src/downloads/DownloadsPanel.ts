@@ -3,9 +3,7 @@ import type { DownloadSortColumn } from './downloadRows';
 import {
   deleteDownloads, excludeDownloads, includeDownloads, type DeletedDownload, type DownloadsAccess,
 } from '../downloadsCommands/downloads';
-import {
-  defaultModName, installFromArchive, type InstallAccess, type InstallChoice, type InstallTarget,
-} from '../install/install';
+import { installFromArchive, type InstallAccess } from '../install/install';
 import type { DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS } from './keyContext';
 import { pluralArgument, registerGesture, singularArgument, type GestureEntry } from '../drivingLib/gestureEntry';
@@ -18,46 +16,10 @@ import type { DownloadFile, Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import { selectUpgradeCandidates, type UpgradeCandidate, type UpgradeTier } from './upgradeCandidates';
+import { chooseInstallTarget } from './installTarget';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
-
-interface UpgradePickItem extends vscode.QuickPickItem {
-  /** What install is told this is: an upgrade naming the chosen mod's own folder, or the
-   *  trailing "Install as a new mod…" row's new mod, which the name prompt then names. */
-  choice: InstallChoice;
-}
-
-const TIER_LABEL: Record<UpgradeTier, string> = {
-  fileId: 'File ID match',
-  installationFile: 'Installed from this file',
-};
-
-const NEW_MOD_ITEM = { label: 'Install as a new mod…', choice: { kind: 'new' as const } };
-
-// The top tier, if one exists, sorts first; the new-mod row is always last.
-function upgradePickItems(candidates: readonly UpgradeCandidate[]): UpgradePickItem[] {
-  return [
-    ...candidates.map((c) => ({
-      label: c.version ? `${c.modName} (v${c.version})` : c.modName,
-      description: c.tier && TIER_LABEL[c.tier],
-      choice: { kind: 'upgrade' as const, name: c.modName },
-    })),
-    NEW_MOD_ITEM,
-  ];
-}
-
-// Esc: no choice, "install nothing". The active item is set explicitly, not left to list order —
-// with no tier present it is the new-mod row.
-async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandidate[]): Promise<InstallChoice | undefined> {
-  const items = upgradePickItems(candidates);
-  const hasTier = candidates.some((c) => c.tier !== undefined);
-  const active = hasTier ? items[0] : items.at(-1);
-  const picked = await pickWithMarked(
-    items, active, `"${name}" upgrades an installed mod — choose which one, or install it as a new mod`);
-  return picked?.choice;
-}
 
 /** The composition root's answers, which is what lets this view call install itself: the name
  *  only the user can give a new mod, the FOMOD notice, and an Output line. */
@@ -69,16 +31,6 @@ export interface DownloadInstallDeps {
   log: (line: string) => void;
 }
 
-// An upgrade arrives already confirmed from the pick above and names its own folder, so only a
-// new mod reaches the name prompt.
-async function resolveTarget(
-  choice: InstallChoice, archivePath: string, nameNewMod: DownloadInstallDeps['nameNewMod'],
-): Promise<InstallTarget | undefined> {
-  if (choice.kind === 'upgrade') return choice;
-  const name = await nameNewMod(defaultModName(archivePath));
-  return name ? { kind: 'new', name } : undefined;
-}
-
 // The row holds the archive's path and its own mod id, file id and version, so the view re-reads
 // no sidecar; install is called for what it is, and install marks the download installed.
 export async function installDownloadedFile(
@@ -88,14 +40,7 @@ export async function installDownloadedFile(
   const { name } = row;
   let downloadRefusal: string | undefined;
   try {
-    const candidates = selectUpgradeCandidates(instance.value, row);
-    let choice: InstallChoice = { kind: 'new' };
-    if (candidates.length > 0) {
-      const picked = await pickUpgradeChoice(name, candidates);
-      if (!picked) return false; // Esc: install nothing
-      choice = picked;
-    }
-    const target = await resolveTarget(choice, row.path, deps.nameNewMod);
+    const target = await chooseInstallTarget(instance.value, row, deps.nameNewMod);
     if (!target) return false;
     await runDownloadsWriting(instance, async () => {
       const outcome = await installFromArchive(access, target, row.path, {
