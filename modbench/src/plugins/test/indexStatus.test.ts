@@ -1,3 +1,4 @@
+import type { NotificationEvent } from '../../client/apiClient';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h = vi.hoisted(() => ({ items: [] as { text: string }[] }));
@@ -16,7 +17,7 @@ vi.mock('vscode', () => ({
 import { followIndexStatus, settleReconciled, syncActiveFilter, type IndexStatusDeps } from '../indexStatus';
 import { createStatusBar } from '../statusBar';
 import {
-  InMemoryMEditClient, type LoadOrderProgress, type NotificationEvent, type PluginLoadFailure,
+  InMemoryMEditClient, type LoadOrderProgress, type PluginLoadFailure,
 } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';

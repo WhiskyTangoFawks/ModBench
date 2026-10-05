@@ -1,5 +1,6 @@
+import type { NotificationEvent } from '../../client/apiClient';
 import { describe, it, expect, vi } from 'vitest';
-import type { NotificationEvent, PluginLoadFailure } from '../../client';
+import type { PluginLoadFailure } from '../../client';
 import { InMemoryMEditClient } from '../../client';
 import { trackLoadOrderStatus } from '../loadOrderStatusTracker';
 

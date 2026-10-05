@@ -1,3 +1,4 @@
+import type { NotificationEvent } from '../../client/apiClient';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import {
@@ -51,7 +52,7 @@ vi.mock('vscode', () => {
 
 import { createPluginsView, pluginsViewProgress } from '../pluginsView';
 import { PluginTreeProvider } from '../PluginTreeProvider';
-import { InMemoryMEditClient, type NotificationEvent } from '../../client';
+import { InMemoryMEditClient } from '../../client';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';

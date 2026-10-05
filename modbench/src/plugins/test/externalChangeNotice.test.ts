@@ -1,9 +1,10 @@
+import type { NotificationEvent } from '../../client/apiClient';
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('vscode', () => ({}));
 
 import { noticeExternalChanges } from '../externalChangeNotice';
-import { InMemoryMEditClient, type NotificationEvent } from '../../client';
+import { InMemoryMEditClient } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 function settled(origin: string, ...changed: [name: string, bytesSha256: string | null][]): NotificationEvent {
