@@ -200,20 +200,34 @@ public sealed class LoadOrderTests
     }
 
     [Fact]
-    public void ModFolderOf_OnDataDirectoryOrOverwrite_IsNull()
+    public void ProviderOf_DataDirectory_IsTheGame()
     {
-        var order = Order(
-            [Registered("Vanilla.esp", PluginOrigin.DataDirectory), Registered("Stray.esp", PluginOrigin.Overwrite)]);
+        var plugin = Registered("Vanilla.esp", PluginOrigin.DataDirectory);
 
-        Assert.Null(order.ModFolderOf(new PluginAddress("Vanilla.esp", PluginOrigin.DataDirectory)));
-        Assert.Null(order.ModFolderOf(new PluginAddress("Stray.esp", PluginOrigin.Overwrite)));
+        Assert.Equal(PluginProvider.Game, Order([plugin]).ProviderOf(plugin.Key));
     }
 
     [Fact]
-    public void ModFolderOf_OnAMod_IsThePluginsContainingFolder()
+    public void ProviderOf_Overwrite_IsNoMod()
+    {
+        var plugin = Registered("Stray.esp", PluginOrigin.Overwrite);
+
+        Assert.Equal(PluginProvider.NoMod, Order([plugin]).ProviderOf(plugin.Key));
+    }
+
+    [Fact]
+    public void ProviderOf_AMod_IsTheModAndThePluginsContainingFolder()
     {
         var plugin = Registered("A.esp", "ModA");
 
-        Assert.Equal(Path.Combine(@"C:\MO2\mods", "ModA"), Order([plugin]).ModFolderOf(plugin.Key));
+        Assert.Equal(
+            new PluginProvider.FromMod("ModA", Path.Combine(@"C:\MO2\mods", "ModA")),
+            Order([plugin]).ProviderOf(plugin.Key));
+    }
+
+    [Fact]
+    public void ProviderOf_APluginNoneRegistered_IsNull()
+    {
+        Assert.Null(Order([]).ProviderOf(new PluginAddress("A.esp", "ModA")));
     }
 }

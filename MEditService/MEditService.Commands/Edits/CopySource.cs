@@ -20,8 +20,8 @@ internal sealed class CopySource(
         schemaReflector.GetSchemas(loadOrder.GameRelease);
 
     // Tracked is the one condition under which a plugin has source text at all.
-    private readonly SourceRepository? _tree = SourceRepository.TrackedModFolderOf(loadOrder, plugin) is { } modFolder
-        ? SourceRepository.Open(modFolder, loadOrder.GameRelease)
+    private readonly SourceRepository? _tree = SourceRepository.TrackedModOf(loadOrder, plugin) is { } mod
+        ? SourceRepository.Open(mod, loadOrder.GameRelease)
         : null;
 
     private IPluginRecordLookup? _loaded;

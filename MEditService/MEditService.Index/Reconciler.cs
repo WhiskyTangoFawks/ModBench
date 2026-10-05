@@ -360,7 +360,7 @@ internal sealed class Reconciler(
             .ToList();
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
-        var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !scope.Failed.StillFailing(r.Key, r.Path)).ToList();
+        var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !scope.Failed.StillFailing(r.Key, r.Path, r.Provider)).ToList();
         // ADR-0007: which truth a plugin reads is its folder's answer, and the stamp
         // records the one its rows came from. Tracking and untracking move the first alone, and no
         // load-order difference above names them.
@@ -419,7 +419,7 @@ internal sealed class Reconciler(
 
             if (held.Open(plugin, snapshot.RegistrationOf(plugin.Key)) is not { } metadata)
             {
-                scope.Failed.Remember(plugin.Key, plugin.Path);
+                scope.Failed.Remember(plugin.Key, plugin.Path, plugin.Provider);
                 continue;
             }
             scope.Failed.Forget(plugin.Key);
@@ -453,8 +453,8 @@ internal sealed class Reconciler(
     // A plugin that failed the last re-derivation is not read again until what it reads from changes.
     private static bool TruthMoved(OpenScope scope, RegisteredPlugin plugin, IReadOnlySet<PluginAddress> stampedFromSource)
     {
-        var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Path);
-        return holdsTree != stampedFromSource.Contains(plugin.Key) && !scope.Failed.StillFailing(plugin.Key, plugin.Path);
+        var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Provider);
+        return holdsTree != stampedFromSource.Contains(plugin.Key) && !scope.Failed.StillFailing(plugin.Key, plugin.Path, plugin.Provider);
     }
 
     // A plugin whose folder was tracked or untracked since it was indexed. Nothing here has compared
@@ -466,7 +466,7 @@ internal sealed class Reconciler(
             token.ThrowIfCancellationRequested();
             if (scope.Held.Find(plugin.Key) is not { } metadata) continue;
 
-            var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Path);
+            var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Provider);
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation(
@@ -483,7 +483,7 @@ internal sealed class Reconciler(
                 // plugins.md, A row, Plugin: one plugin that cannot be read is that row's "Failed to
                 // read", never the whole index's failure.
                 logger.LogWarning(ex, "Failed to re-derive {Plugin} ({Origin})", plugin.Name, plugin.Origin);
-                FailRead(scope, plugin.Key, plugin.Path, PluginLoadFailure.ReasonFor(ex));
+                FailRead(scope, plugin.Key, plugin.Path, plugin.Provider, PluginLoadFailure.ReasonFor(ex));
             }
         }
     }
@@ -501,7 +501,7 @@ internal sealed class Reconciler(
 
         try
         {
-            var report = scope.Projector.Validate(plugin.Key, LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path));
+            var report = scope.Projector.Validate(plugin.Key, plugin.Provider.ModFolder);
             foreach (var failure in report.Failures)
                 logger.LogWarning("Validating {Plugin} at load: {Failure}", plugin.Name, failure);
             return !report.NeedsRebuild;
@@ -517,10 +517,10 @@ internal sealed class Reconciler(
     }
 
     // A failure that says what the plugin already said publishes nothing.
-    private void FailRead(OpenScope scope, PluginAddress key, string path, string reason)
+    private void FailRead(OpenScope scope, PluginAddress key, string path, PluginProvider provider, string reason)
     {
         var told = scope.Held.SetFailure(key, reason);
-        scope.Failed.Remember(key, path);
+        scope.Failed.Remember(key, path, provider);
         if (told) PublishStatus();
     }
 
@@ -537,7 +537,7 @@ internal sealed class Reconciler(
     private void RegisterOrIndex(OpenScope scope, PluginMetadata plugin, CancellationToken token)
     {
         var key = plugin.Key;
-        var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Path);
+        var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Provider);
         if (scope.Index.IndexedContentHash(key) != null && WarmRegister(scope, plugin, holdsTree))
         {
             if (logger.IsEnabled(LogLevel.Information))
@@ -575,7 +575,7 @@ internal sealed class Reconciler(
             // A single plugin with malformed record data must not abort the whole reconcile. Index()
             // runs in its own DuckDB transaction, so the rollback on throw leaves no partial rows.
             logger.LogWarning(ex, "Failed to index {Plugin}; its records will not be queryable", plugin.Name);
-            FailRead(scope, key, plugin.Path, PluginLoadFailure.ReasonFor(ex));
+            FailRead(scope, key, plugin.Path, plugin.Provider, PluginLoadFailure.ReasonFor(ex));
             return;
         }
 
@@ -626,16 +626,16 @@ internal sealed class Reconciler(
             scope.Held.SetFailure(plugin.Key,
                 $"Could not read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). Showing the " +
                 "compiled binary instead — edits made since the last compile are not reflected.");
-            scope.Failed.Remember(plugin.Key, plugin.Path);
+            scope.Failed.Remember(plugin.Key, plugin.Path, plugin.Provider);
         }
 
         IndexFromBinary(scope, plugin);
     }
 
     private static string ModFolderHoldingTree(PluginMetadata plugin) =>
-        LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path)
+        plugin.Provider.ModFolder
             ?? throw new InvalidOperationException(
-                $"'{plugin.Name}' from '{plugin.Origin}' holds a source tree, so its origin is neither the game's own Data directory nor Overwrite.");
+                $"'{plugin.Name}' from '{plugin.Origin}' holds a source tree, so a mod provides it.");
 
     // ADR-0005: the binary reaches the index as documents, through the adapter's own door,
     // never as a mod this side holds.
@@ -678,8 +678,8 @@ internal sealed class Reconciler(
     {
         var (held, index) = (scope.Held, scope.Index);
         var key = plugin.Key;
-        var modFolder = LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path);
-        var holdsTree = modFolder is not null && SourceRepository.HoldsTreeFor(modFolder, plugin.Name);
+        var modFolder = plugin.Provider.ModFolder;
+        var holdsTree = Projector.HoldsTree(key, plugin.Provider);
         try
         {
             if (!holdsTree && !File.Exists(plugin.Path))
@@ -691,7 +691,7 @@ internal sealed class Reconciler(
             // Rows a failed read left say nothing of what the plugin now reads from.
             if (held.IsHeldWithAFailure(key))
             {
-                if (!scope.Failed.StillFailing(key, plugin.Path)) ReindexHeldPlugin(key);
+                if (!scope.Failed.StillFailing(key, plugin.Path, plugin.Provider)) ReindexHeldPlugin(key);
                 return;
             }
 
@@ -700,7 +700,7 @@ internal sealed class Reconciler(
             {
                 foreach (var failure in report.Failures)
                     logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
-                FailRead(scope, key, plugin.Path, ValidationFailure(holdsTree, string.Join("; ", report.Failures)));
+                FailRead(scope, key, plugin.Path, plugin.Provider, ValidationFailure(holdsTree, string.Join("; ", report.Failures)));
                 return;
             }
 
@@ -723,7 +723,7 @@ internal sealed class Reconciler(
             {
                 var reason = ValidationFailure(holdsTree, PluginLoadFailure.ReasonFor(ex));
                 if (ex is IOException or UnauthorizedAccessException) FailReadUntilTheNextSnapshot(scope, key, reason);
-                else FailRead(scope, key, plugin.Path, reason);
+                else FailRead(scope, key, plugin.Path, plugin.Provider, reason);
             }
         }
     }
@@ -797,7 +797,7 @@ internal sealed class Reconciler(
 
         // Asked here as a bare "is this tracked" question; the door below resolves the tree it reads
         // for itself, so neither trusts the other about a folder either could have lost in between.
-        if (Projector.HoldsTree(metadata.Key, metadata.Path))
+        if (Projector.HoldsTree(metadata.Key, metadata.Provider))
             IngestFromSourceTree(key);
         else
             ReindexOne(metadata, scope);
@@ -815,7 +815,7 @@ internal sealed class Reconciler(
         var (metadata, scope) = RequireHeldPlugin(key);
         var index = scope.Index;
         using var projection = index.BeginProjection();
-        if (!Projector.HoldsTree(metadata.Key, metadata.Path))
+        if (!Projector.HoldsTree(metadata.Key, metadata.Provider))
         {
             throw new InvalidOperationException(
                 $"Plugin '{key.Name}' from '{key.Origin}' has no source tree to re-ingest; it is not tracked.");
@@ -837,7 +837,7 @@ internal sealed class Reconciler(
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Could not re-ingest {Plugin} from its source tree", metadata.Name);
-                FailRead(scope, key, metadata.Path,
+                FailRead(scope, key, metadata.Path, metadata.Provider,
                     $"Could not re-read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). Still " +
                     "showing what was last read from it — the compiled binary is not used for a tracked plugin.");
                 throw;
@@ -879,7 +879,7 @@ internal sealed class Reconciler(
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            FailRead(scope, metadata.Key, metadata.Path, PluginLoadFailure.ReasonFor(ex));
+            FailRead(scope, metadata.Key, metadata.Path, metadata.Provider, PluginLoadFailure.ReasonFor(ex));
             throw;
         }
         scope.Failed.Forget(metadata.Key);

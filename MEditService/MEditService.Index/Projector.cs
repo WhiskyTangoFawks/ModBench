@@ -18,13 +18,13 @@ internal sealed class Projector(
 {
     /// <summary>The folder of the tree this plugin ingests from, or null when it reads its binary.
     /// Re-derived every call: a mod manager can replace the folder wholesale.</summary>
-    internal static string? TreeFolderOf(PluginAddress key, string pluginPath) =>
-        LoadOrderSnapshot.ModFolderOf(key.Origin, pluginPath) is { } modFolder
+    internal static string? TreeFolderOf(PluginAddress key, PluginProvider provider) =>
+        provider.ModFolder is { } modFolder
         && SourceRepository.HoldsTreeFor(modFolder, key.Name)
             ? modFolder
             : null;
 
-    internal static bool HoldsTree(PluginAddress key, string pluginPath) => TreeFolderOf(key, pluginPath) is not null;
+    internal static bool HoldsTree(PluginAddress key, PluginProvider provider) => TreeFolderOf(key, provider) is not null;
 
     /// <summary>What the tree's documents stamp, or the doubly claimed FormKey it named instead.</summary>
     internal static bool TryTreeStamps(

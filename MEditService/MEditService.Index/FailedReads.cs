@@ -21,20 +21,20 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
 
     /// <summary>While what it reads from is unchanged the error state stands, and the parse is not
     /// paid again.</summary>
-    public bool StillFailing(PluginAddress key, string path)
+    public bool StillFailing(PluginAddress key, string path, PluginProvider provider)
     {
         FailedRead? failedAt;
         lock (_lock)
         {
             if (!_failed.TryGetValue(key, out failedAt)) return false;
         }
-        return failedAt is not null && ReadStateOf(key, path) is { } now && failedAt == now;
+        return failedAt is not null && ReadStateOf(key, path, provider) is { } now && failedAt == now;
     }
 
     /// <summary>Remembers the bytes (or tree) the plugin failed on.</summary>
-    public void Remember(PluginAddress key, string path)
+    public void Remember(PluginAddress key, string path, PluginProvider provider)
     {
-        var state = ReadStateOf(key, path);
+        var state = ReadStateOf(key, path, provider);
         lock (_lock) _failed[key] = state;
     }
 
@@ -52,10 +52,10 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
 
     // Null, which vouches for nothing, when what the plugin reads from cannot be read: an untracked
     // binary, or a tree with an unreadable document.
-    private FailedRead? ReadStateOf(PluginAddress key, string path)
+    private FailedRead? ReadStateOf(PluginAddress key, string path, PluginProvider provider)
     {
         var binary = index.FileContentHash(path);
-        if (Projector.TreeFolderOf(key, path) is not { } modFolder)
+        if (Projector.TreeFolderOf(key, provider) is not { } modFolder)
             return binary is null ? null : new FailedRead(binary, null);
 
         if (!Projector.TryTreeStamps(modFolder, index.Release, key, out var stamps, out var ambiguity))

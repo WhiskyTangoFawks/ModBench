@@ -6,6 +6,8 @@ namespace MEditService.LoadOrder;
 public sealed record RegisteredPlugin(string Name, string Origin, string Path)
 {
     public PluginAddress Key => new(Name, Origin);
+
+    public PluginProvider Provider => PluginProvider.Of(Origin, Path);
 }
 
 /// <summary>ADR-0013's snapshot. Immutable: nothing here opens, holds or disposes a
@@ -88,16 +90,8 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// and one loaded with no line, the game's own (editor.md's read-only status).</summary>
     public bool IsImmutable(PluginAddress address) => !IsActive(address) || _loadedWithNoLine.Contains(address);
 
-    /// <summary>The folder holding the plugin's file, or null for the game's own Data directory or
-    /// Overwrite (ADR-0012), or a plugin none registered here names.</summary>
-    public string? ModFolderOf(PluginAddress plugin) =>
-        Plugin(plugin) is { } registered ? ModFolderOf(registered.Origin, registered.Path) : null;
-
-    /// <summary>The same rule for a caller already holding a plugin's origin and path.</summary>
-    public static string? ModFolderOf(string origin, string pluginPath) =>
-        PluginOrigin.IsDataDirectory(origin) || PluginOrigin.IsOverwrite(origin)
-            ? null
-            : Path.GetDirectoryName(pluginPath);
+    /// <summary>What provides the plugin, or null for a plugin none registered here names.</summary>
+    public PluginProvider? ProviderOf(PluginAddress plugin) => Plugin(plugin)?.Provider;
 
     /// <summary>The folder holding the plugin's file, every origin alike: unlike ModFolderOf, Data
     /// and Overwrite answer their own folder rather than null.</summary>

@@ -90,4 +90,37 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
 
         Assert.Empty(SourceRepository.Over(modFolder, GameRelease.Fallout4).LastWrittenBinarySha256s(Test));
     }
+
+    [Fact]
+    public void ARepositoryOpenedForAMod_RefusesToWriteTheRecordOfAPluginAnotherModProvides()
+    {
+        using var modFolder = new ScratchDirectory("medit-last-written-");
+        TrackedOver(modFolder);
+        var repository = SourceRepository.Over(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
+
+        Assert.Throws<ArgumentException>(() => repository.WriteBinary(new PluginAddress("Test.esp", "OtherMod"), "ABC", () => { }));
+        Assert.Empty(repository.LastWrittenBinarySha256s(Test));
+    }
+
+    [Fact]
+    public void ARepositoryOpenedForAMod_RefusesToReadTheRecordOfAPluginAnotherModProvides()
+    {
+        using var modFolder = new ScratchDirectory("medit-last-written-");
+        TrackedOver(modFolder);
+        var repository = SourceRepository.Over(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
+
+        Assert.Throws<ArgumentException>(() => repository.LastWrittenBinarySha256s(new PluginAddress("Test.esp", "OtherMod")));
+    }
+
+    [Fact]
+    public void ARepositoryOpenedForAMod_AnswersThePluginsThatModProvides()
+    {
+        using var modFolder = new ScratchDirectory("medit-last-written-");
+        TrackedOver(modFolder);
+        var repository = SourceRepository.Over(new PluginProvider.FromMod("TESTMOD", modFolder), GameRelease.Fallout4);
+
+        repository.WriteBinary(Test, "ABC", () => { });
+
+        Assert.Equal(["ABC"], repository.LastWrittenBinarySha256s(Test));
+    }
 }

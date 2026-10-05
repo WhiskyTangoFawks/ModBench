@@ -20,6 +20,8 @@ public record PluginMetadata(
 {
     public PluginAddress Key => new(Name, Origin);
 
+    public PluginProvider Provider => PluginProvider.Of(Origin, Path);
+
     public Registration Registration => new(LoadOrderIndex);
 
     public PluginContent Content => new(IsLight, IsMaster, IsBlueprint, Masters, RecordCount, IsMedium);

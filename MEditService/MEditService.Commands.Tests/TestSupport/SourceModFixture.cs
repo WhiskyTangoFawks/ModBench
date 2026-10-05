@@ -26,7 +26,7 @@ internal sealed class SourceModFixture : IDisposable
         Plugin = new PluginAddress(pluginName, origin);
         _instanceRoot = Directory.CreateTempSubdirectory("medit-source-mod-").FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
-        var tracked = origin != PluginOrigin.DataDirectory && !PluginOrigin.IsOverwrite(origin);
+        var tracked = origin != PluginOrigin.DataDirectory && !string.Equals(origin, PluginOrigin.Overwrite, StringComparison.OrdinalIgnoreCase);
 
         // The game's own Data folder and Overwrite are never mod folders, and never a repository
         // either (ADR-0012).

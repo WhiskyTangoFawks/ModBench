@@ -130,9 +130,9 @@ public sealed class TrackService(
                 $"{key.Name} from '{key.Origin}' is not in the load order, so there is nothing to track.");
         }
 
-        if (LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path) is not { } modFolder)
+        if (plugin.Provider is not PluginProvider.FromMod { Folder: var modFolder })
         {
-            return PluginOrigin.IsOverwrite(plugin.Origin)
+            return plugin.Provider == PluginProvider.NoMod
                 ? Refuse(TrackRefusal.OverwriteOrigin,
                     $"{plugin.Name} is loaded from Overwrite, an origin and not a mod, so it has no repository " +
                     "to track into. Move it into a mod, then track that.")
