@@ -735,6 +735,11 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        ModTrackRefusal: {
+            item: string;
+            refusal: components["schemas"]["TrackRefusal"];
+            message: string;
+        };
         NotificationEvent: {
             kind: string;
             plugin: string;
@@ -755,11 +760,6 @@ export interface components {
         PluginAddress: {
             name: string;
             origin: string;
-        };
-        PluginAddressRefusal: {
-            plugin: components["schemas"]["PluginAddress"];
-            refusal: components["schemas"]["TrackRefusal"];
-            message: string;
         };
         PluginCompileRefusal: {
             item: components["schemas"]["PluginAddress"];
@@ -823,6 +823,11 @@ export interface components {
             hasMatchingRecords: boolean;
             isTracked: boolean;
             hasParseFailure: boolean;
+        };
+        PluginTrackRefusal: {
+            item: components["schemas"]["PluginAddress"];
+            refusal: components["schemas"]["TrackRefusal"];
+            message: string;
         };
         ProblemDetails: {
             type?: string | null;
@@ -958,19 +963,18 @@ export interface components {
             pluginsTotal: number;
         };
         /** @enum {string} */
-        TrackRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyTracked" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "GitUnavailable";
-        TrackRefusedMod: {
-            mod: string;
-            refusal: components["schemas"]["TrackRefusal"];
-            message: string;
-        };
+        TrackRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyTracked" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "NoPluginTracked" | "GitUnavailable";
         TrackRequest: {
             mods: string[];
         };
         TrackResponse: {
-            applied: components["schemas"]["PluginAddress"][];
-            refused: components["schemas"]["PluginAddressRefusal"][];
-            refusedMods: components["schemas"]["TrackRefusedMod"][];
+            applied: components["schemas"]["TrackedModResponse"][];
+            refused: components["schemas"]["ModTrackRefusal"][];
+        };
+        TrackedModResponse: {
+            mod: string;
+            tracked: components["schemas"]["PluginAddress"][];
+            refused: components["schemas"]["PluginTrackRefusal"][];
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";

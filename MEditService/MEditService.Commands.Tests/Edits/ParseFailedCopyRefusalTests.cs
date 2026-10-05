@@ -109,8 +109,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             inputs.Add(new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, inputs.Count, Enabled: true, Winning: true));
 
             var loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, _gameDirectory, GameRelease.Fallout4, inputs);
-            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(loadOrder, DestinationOrigin).GetAwaiter().GetResult();
+            TrackEveryPluginOf.ModAsync(loadOrder, DestinationOrigin).GetAwaiter().GetResult();
 
             holder.Apply(loadOrder);
             CopyHandler = TestEditService.CopyHandler(holder);

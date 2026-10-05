@@ -71,7 +71,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
         ]));
         var tracked = await TestEditService.TrackHandler(_holder)
             .TrackAsync(["TrackedMod"]);
-        Assert.True(tracked.AllApplied);
+        Assert.Empty(tracked.Refused);
+        Assert.Single(tracked.Landed);
         var first = new PluginAddress("First.esp", "TrackedMod");
         var firstBefore = TrackedTree.Records(folder, first);
 

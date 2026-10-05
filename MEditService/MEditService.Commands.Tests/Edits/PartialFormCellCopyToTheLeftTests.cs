@@ -1,10 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -48,8 +46,7 @@ public sealed class PartialFormCellCopyToTheLeftTests : IDisposable
                 new LoadOrderEntry("Fallout4.esm", masterPath, "MasterMod", Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(_override.Name, overridePath, OverrideOrigin, Slot: 1, Enabled: true, Winning: true),
             ]);
-        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(loadOrder, OverrideOrigin).GetAwaiter().GetResult();
+        TrackEveryPluginOf.ModAsync(loadOrder, OverrideOrigin).GetAwaiter().GetResult();
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
         _handler = TestEditService.EditHandler(holder);

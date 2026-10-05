@@ -53,7 +53,21 @@ public sealed class TrackHandlerTests : IDisposable
 
         var result = await handler.TrackAsync([Origin]);
 
-        Assert.Equal([new PluginAddress(PluginName, Origin)], result.Landed);
+        Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Landed).Outcome.Tracked);
         Assert.True(SourceRepository.HoldsTreeFor(_modFolder, PluginName));
+    }
+
+    [Fact]
+    public async Task Track_OverAModTwiceUnderDifferentCasing_TracksItOnce_AndRefusesTheModThatProvidesNothingOnItsOwn()
+    {
+        _holder.Apply(Snapshot);
+        var handler = TestEditService.TrackHandler(_holder);
+
+        var result = await handler.TrackAsync([Origin, "NoSuchMod", Origin.ToUpperInvariant()]);
+
+        Assert.Equal([Origin], result.Landed.Select(landed => landed.Item));
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(("NoSuchMod", TrackRefusal.ModProvidesNoPlugin), (refused.Item, refused.Refusal));
+        Assert.Null(result.SelectionRefusal);
     }
 }

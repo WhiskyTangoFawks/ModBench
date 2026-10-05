@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Composition;
-using MEditService.Commands.Edits;
 using MEditService.Http;
 using MEditService.Http.Endpoints;
 using MEditService.Http.Notifications;
@@ -72,7 +71,6 @@ try
     builder.Services.AddRecordIndex();
     builder.Services.AddQueries();
     builder.Services.AddSingleton<RecordTextCodec>();
-    builder.Services.AddSingleton<TrackService>();
     // The handlers (ADR-0014) are registered where the module they share is visible,
     // and resolved by the route that names the gesture.
     builder.Services.AddCommandHandlers();

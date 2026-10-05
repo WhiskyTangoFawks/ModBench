@@ -38,10 +38,14 @@ export interface HttpMEditClientDeps {
   reconnectDelayMs?: number;
 }
 
+function itemRefusals<R>(refused: { item: R; message: string }[]): ItemRefusal<R>[] {
+  return refused.map((r) => ({ item: r.item, reason: r.message }));
+}
+
 function selectionOutcome<L, R>(
   answer: { applied: L[]; refused: { item: R; message: string }[] },
 ): { landed: readonly L[]; refused: readonly ItemRefusal<R>[] } {
-  return { landed: answer.applied, refused: answer.refused.map((r) => ({ item: r.item, reason: r.message })) };
+  return { landed: answer.applied, refused: itemRefusals(answer.refused) };
 }
 
 function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
@@ -313,11 +317,10 @@ export class HttpMEditClient implements MEditClient {
         post: () => this.apiClient.POST('/plugins/track', { body: { mods: [...mods] } }),
       });
       if (isRefused(answer)) return answer;
-      return {
-        landed: answer.applied,
-        refused: answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
-        refusedMods: answer.refusedMods.map((r) => ({ item: r.mod, reason: r.message })),
-      };
+      return selectionOutcome({
+        applied: answer.applied.map((m) => ({ mod: m.mod, tracked: m.tracked, refused: itemRefusals(m.refused) })),
+        refused: answer.refused,
+      });
     } finally {
       unsubscribe();
     }

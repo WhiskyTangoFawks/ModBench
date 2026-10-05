@@ -118,6 +118,7 @@ public sealed class GitMissingApiTests : HostedTests
         Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
         Assert.All(modFolders, modFolder => Assert.False(Directory.Exists(Path.Combine(modFolder, ".git"))));
         Assert.Equal(before, modFolders.Select(FilesOutsideGit));
+        Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Track", StringComparison.Ordinal));
     }
 
     [Fact]

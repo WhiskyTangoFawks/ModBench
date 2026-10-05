@@ -206,25 +206,21 @@ public static class PluginEndpoints
 
         try
         {
-            var result = await trackHandler.TrackAsync(mods);
-            if (result.SelectionRefusal is { } selectionRefusal)
-            {
-                logger.LogWarning("Refused to track {Count} mod(s): {Refusal} — {Message}",
-                    mods.Count, selectionRefusal.Refusal, selectionRefusal.Message);
-                return WriteEndpointMapping.Refusal(selectionRefusal);
-            }
-
-            foreach (var refusedMod in result.RefusedMods)
-                logger.LogWarning("Refused to track {Mod}: {Refusal} — {Message}", refusedMod.Mod, refusedMod.Refusal, refusedMod.Message);
-            foreach (var refused in result.Refused)
-            {
-                logger.LogWarning("Refused to track {Plugin} ({Origin}): {Refusal} — {Message}",
-                    refused.Plugin.Name, refused.Plugin.Origin, refused.Refusal, refused.Message);
-            }
-            return Results.Ok(new TrackResponse(
-                result.Landed,
-                [.. result.Refused.Select(r => new PluginAddressRefusal(r.Plugin, r.Refusal, r.Message))],
-                result.RefusedMods));
+            return await WriteEndpointMapping.Answered(
+                "Track", logger,
+                trackHandler.TrackAsync(mods),
+                WriteEndpointMapping.Refusal,
+                landed =>
+                {
+                    foreach (var refused in landed.Outcome.Refused)
+                        WriteEndpointMapping.LogRefusal(logger, "Track", refused.Refusal, refused.Message, refused.Item);
+                    return new TrackedModResponse(
+                        landed.Item,
+                        landed.Outcome.Tracked,
+                        [.. landed.Outcome.Refused.Select(r => new PluginTrackRefusal(r.Item, r.Refusal, r.Message))]);
+                },
+                refused => new ModTrackRefusal(refused.Item, refused.Refusal, refused.Message),
+                (applied, refused) => new TrackResponse(applied, refused));
         }
         catch (NoLoadOrderException ex)
         {
@@ -321,16 +317,22 @@ public record CreatePluginRequest(string Origin, string Name, string Folder);
 /// it, and nothing registers it.</summary>
 public record PluginCreatedResponse(string Name, string Origin, string Path);
 
-/// <summary>A plugin of the selection that wrote nothing of its own: the typed refusal, and the
-/// message naming the way out.</summary>
-public record PluginAddressRefusal(PluginAddress Plugin, TrackRefusal Refusal, string Message);
-
 /// <summary>The mods by name; the load order says each one's plugins and folder.</summary>
 public record TrackRequest(IReadOnlyList<string> Mods);
 
-/// <summary>Applied or refusal, per plugin and per mod that provides no plugin (ADR-0019), never the status of the call.</summary>
-public record TrackResponse(
-    IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused, IReadOnlyList<TrackRefusedMod> RefusedMods);
+/// <summary>A plugin of a tracked mod that wrote nothing: the typed refusal, and the message naming the
+/// way out.</summary>
+public record PluginTrackRefusal(PluginAddress Item, TrackRefusal Refusal, string Message);
+
+/// <summary>A mod of the selection that tracked: the plugins whose source landed, and those of it that did not.</summary>
+public record TrackedModResponse(string Mod, IReadOnlyList<PluginAddress> Tracked, IReadOnlyList<PluginTrackRefusal> Refused);
+
+/// <summary>A mod of the selection that wrote nothing: the typed refusal, and the message naming the
+/// way out.</summary>
+public record ModTrackRefusal(string Item, TrackRefusal Refusal, string Message);
+
+/// <summary>Applied or refusal, per mod (ADR-0019), never the status of the call.</summary>
+public record TrackResponse(IReadOnlyList<TrackedModResponse> Applied, IReadOnlyList<ModTrackRefusal> Refused);
 
 public record DecompileRequest(IReadOnlyList<PluginAddress> Plugins);
 

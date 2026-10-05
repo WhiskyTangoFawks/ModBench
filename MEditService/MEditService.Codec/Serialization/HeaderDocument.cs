@@ -21,7 +21,7 @@ public static class HeaderDocument
     /// byte-identical.</summary>
     public static byte[] Write(IModGetter mod)
     {
-        // FO4-typed for the same reason TrackService's whole-mod call is: the generated mixin is
+        // FO4-typed for the same reason Track's whole-mod call is: the generated mixin is
         // seeded from an FO4 mod type, so this is the existing generalization boundary, not a new one.
         var source = (IFallout4ModGetter)mod;
         var clone = new Fallout4Mod(source.ModKey, source.GameRelease.ToFallout4Release());

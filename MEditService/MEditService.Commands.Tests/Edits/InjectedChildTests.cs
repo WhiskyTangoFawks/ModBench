@@ -1,8 +1,6 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -83,10 +81,8 @@ public sealed class InjectedChildTests : IDisposable
                 new LoadOrderEntry(BasePluginName, basePath, BaseOrigin, Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(InjectorPluginName, injectorPath, InjectorOrigin, Slot: 1, Enabled: true, Winning: true),
             ]);
-
-        var track = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
         foreach (var origin in new[] { BaseOrigin, InjectorOrigin })
-            track.TrackModAsync(_loadOrder, origin).GetAwaiter().GetResult();
+            TrackEveryPluginOf.ModAsync(_loadOrder, origin).GetAwaiter().GetResult();
     }
 
     private (FormKey Container, FormKey Child) Case(string injection) => injection switch
