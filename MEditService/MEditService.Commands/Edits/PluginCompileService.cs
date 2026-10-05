@@ -113,9 +113,10 @@ internal sealed class PluginCompileService(
                 CompileRefusal.FormIdUnmappable,
                 $"{plugin.Name} could not be compiled: {PluginDiagnosis.FromWriteException(ex).Describe()}");
         }
+        bool recorded;
         using (save)
         {
-            repository.WriteBinary(plugin, save.BinarySha256(), save.Commit);
+            recorded = repository.WriteBinary(plugin, save.BinarySha256(), save.Commit);
         }
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -123,7 +124,15 @@ internal sealed class PluginCompileService(
             logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
                 plugin.Name, plugin.Origin, tree.FormKeys.Count);
         }
-        return CompileResult.Success(_links.Report(new LinkCheckScope(plugin, registered, loadOrder, repository), content.Records, content.Links));
+        var diagnostics = _links.Report(new LinkCheckScope(plugin, registered, loadOrder, repository), content.Records, content.Links);
+        if (!recorded)
+        {
+            diagnostics.Add(CompileLinks.PluginDiagnostic(
+                plugin, repository,
+                $"{plugin.Name} compiled, but the record of the binary Modbench last wrote could not be finished. " +
+                "Compile it again to update the record."));
+        }
+        return CompileResult.Success(diagnostics);
     }
 
     private sealed record Content(IReadOnlyList<SourceRecord> Records, IReadOnlyCollection<string> Links);

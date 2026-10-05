@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceMastersTests : IDisposable
+public sealed class CompilePluginMastersTests : IDisposable
 {
     private const string PluginName = "MastersHost.esp";
     private const string BravoName = "Bravo.esm";
@@ -29,7 +29,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
 
     private readonly FormKey _bravoRace;
 
-    public PluginCompileServiceMastersTests()
+    public CompilePluginMastersTests()
     {
         var bravoPath = Path.Combine(_gameDirectory, BravoName);
         var bravoMod = new Fallout4Mod(ModKey.FromFileName(BravoName), Fallout4Release.Fallout4);

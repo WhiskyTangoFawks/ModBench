@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceLinkTests : IDisposable
+public sealed class CompilePluginLinkTests : IDisposable
 {
     private const string HostName = "LinkHost.esp";
     private const string HostOrigin = "LinkHostMod";
@@ -33,7 +33,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     private readonly FormKey _npc;
     private readonly FormKey _targetKeyword;
 
-    public PluginCompileServiceLinkTests()
+    public CompilePluginLinkTests()
     {
         _targetFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", TargetOrigin)).FullName;
         _hostFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", HostOrigin)).FullName;

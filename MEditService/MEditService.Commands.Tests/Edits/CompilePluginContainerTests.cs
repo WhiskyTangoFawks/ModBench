@@ -11,7 +11,7 @@ using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceContainerTests : IDisposable
+public sealed class CompilePluginContainerTests : IDisposable
 {
     private const string PluginName = "ContainerCompile.esp";
     private const string Origin = "ContainerCompileMod";
@@ -40,7 +40,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     private readonly FormKey _questC;
     private readonly FormKey _topicC2;
 
-    public PluginCompileServiceContainerTests()
+    public CompilePluginContainerTests()
     {
         var pluginPath = Path.Combine(_modFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);

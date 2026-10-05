@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceTests : IDisposable
+public sealed class CompilePluginTests : IDisposable
 {
     private const uint MovedNpcId = 0x000900;
     private const uint CreatedNpcId = 0x000910;

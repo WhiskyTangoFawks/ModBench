@@ -222,11 +222,13 @@ public sealed class SourceRepository
 
     /// <summary>Runs <paramref name="write"/>, which puts the plugin's binary on disk, recording
     /// <paramref name="binarySha256"/> as the one last written. An interrupted write leaves a record
-    /// naming the old and the new binary (ADR-0003).</summary>
-    public void WriteBinary(PluginAddress plugin, string binarySha256, Action write)
+    /// naming the old and the new binary (ADR-0003). A git failure before the write throws with nothing
+    /// written. One after it leaves the binary written and answers false: the record still names both
+    /// binaries.</summary>
+    public bool WriteBinary(PluginAddress plugin, string binarySha256, Action write)
     {
         RefuseUnlessProvidedByThisMod(plugin);
-        _git.WriteBinary(plugin.Name, binarySha256, write);
+        return _git.WriteBinary(plugin.Name, binarySha256, write);
     }
 
     /// <summary>Every binary hash Modbench last wrote for the plugin: one, or several while a write

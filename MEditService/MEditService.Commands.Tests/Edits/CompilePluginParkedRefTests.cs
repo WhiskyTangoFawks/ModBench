@@ -4,7 +4,7 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceParkedRefTests : IDisposable
+public sealed class CompilePluginParkedRefTests : IDisposable
 {
     private readonly CompileFixture _mod = new();
 
@@ -56,6 +56,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
             var result = await CompileService().CompileOneAsync(_mod.Plugin);
 
             Assert.Equal(CompileRefusal.WriteFailed, result.Refusal);
+            Assert.DoesNotContain(_mod.ModFolder, result.RefusalReason, StringComparison.Ordinal);
         }
         finally
         {

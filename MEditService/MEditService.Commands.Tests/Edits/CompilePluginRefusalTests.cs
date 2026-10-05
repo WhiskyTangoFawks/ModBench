@@ -4,7 +4,7 @@ using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceRefusalTests : IDisposable
+public sealed class CompilePluginRefusalTests : IDisposable
 {
     private readonly CompileFixture _mod = new();
 

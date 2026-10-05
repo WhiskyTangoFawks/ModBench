@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PluginCompileServiceLocalizedTests : IDisposable
+public sealed class CompilePluginLocalizedTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
     private const string Origin = "FixtureMod";
@@ -19,7 +19,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
     private readonly ScratchDirectory _gameDir = new("medit-compile-localized-game-");
     private readonly LoadOrderSnapshot _loadOrder;
 
-    public PluginCompileServiceLocalizedTests()
+    public CompilePluginLocalizedTests()
     {
         var pluginPath = Path.Combine(_modFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
