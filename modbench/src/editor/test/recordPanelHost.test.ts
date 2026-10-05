@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const registerCustomEditorProvider = vi.fn<(...args: unknown[]) => { dispose(): void }>(() => ({ dispose: () => undefined }));
 const commandHandlers = new Map<string, (...args: unknown[]) => unknown>();
+const registerFileSystemProvider = vi.fn<(...args: unknown[]) => { dispose(): void }>(() => ({ dispose: () => undefined }));
 const executeCommand = vi.fn<(...args: unknown[]) => unknown>();
 const pickRecord = vi.fn<(...args: unknown[]) => Promise<string | null>>();
 
@@ -12,6 +13,7 @@ vi.mock('vscode', async () => ({
   TreeItemCollapsibleState: (await import('../../test/vscodeMock')).TreeItemCollapsibleState,
   EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { return undefined; } dispose() { return undefined; } },
   Uri: { from: (parts: { path: string }) => parts.path, joinPath: vi.fn() },
+  Disposable: class { constructor(public dispose: () => void) {} },
   ViewColumn: { Active: -1, One: 1, Beside: -2 },
   commands: {
     registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => {
@@ -19,6 +21,10 @@ vi.mock('vscode', async () => ({
       return { dispose: () => undefined };
     },
     executeCommand: (...args: unknown[]) => executeCommand(...args),
+  },
+  workspace: {
+    registerFileSystemProvider: (...args: unknown[]) => registerFileSystemProvider(...args),
+    onDidCloseTextDocument: () => ({ dispose: () => undefined }),
   },
   window: {
     registerFileDecorationProvider: () => ({ dispose: () => undefined }),
@@ -64,12 +70,12 @@ function register(
     outputChannel: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
     reporterFor: () => reporter,
     ask: vi.fn(),
-    fieldFile: () => ({ folder: '', file: '' }),
   });
 }
 
 beforeEach(() => {
   commandHandlers.clear();
+  registerFileSystemProvider.mockClear();
   executeCommand.mockReset();
   pickRecord.mockReset();
 });
@@ -81,6 +87,14 @@ describe('registerEditorCommands', () => {
     expect(registerCustomEditorProvider).toHaveBeenCalledWith(
       'modbench.record', expect.anything(), { webviewOptions: { retainContextWhenHidden: true } },
     );
+  });
+});
+
+describe('the extended-field documents', () => {
+  it('are registered under a writable and a read-only scheme as soon as the Editor is', () => {
+    register();
+
+    expect(registerFileSystemProvider.mock.calls.map(([scheme]) => scheme)).toEqual(['modbench-field', 'modbench-field-readonly']);
   });
 });
 

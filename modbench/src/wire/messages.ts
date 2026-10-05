@@ -158,7 +158,7 @@ export interface StringValueContext {
   plugin: string;
   origin: string;
   // The record as every other identity-bearing surface here spells it ("EditorID [FormKey]"), for
-  // the temp file's own directory — only the webview knows the record's display label.
+  // the tab's path — only the webview knows the record's display label.
   recordLabel: string;
   // The row's own label, which is what the tab is titled by — a nested leaf names itself, not the
   // member it sits under.

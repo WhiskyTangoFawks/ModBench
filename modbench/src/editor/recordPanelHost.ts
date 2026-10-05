@@ -1,16 +1,16 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
-import type { EditsInFlight } from './followRecord';
+import type { EditAddress, EditsInFlight } from './followRecord';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { pickRecord } from './recordPicker';
 import { routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps } from './recordPanelMessageRouter';
 import type { FocusedCells } from './focusedCells';
 import type { RecordWriteDeps } from './applyRecordEdit';
-import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
+import { ExtendedFieldDocuments } from './extendedFieldEditor';
 import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecorationProvider';
-import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
+import { commitField, registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerGridKeyCommands } from './gridKeyCommands';
 import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands,
@@ -43,8 +43,6 @@ export interface EditorCommandDeps {
     | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'
     | 'getComparison' | 'subscribe' | 'onStatusChanged' | 'onReconnected' | 'getRecordOwner'>;
-  // Where an extended-editor tab is written, answered at the composition root.
-  fieldFile: ExtendedFieldEditorDeps['fieldFile'];
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
   // Each view's own selection, which that view's keys act on.
@@ -142,6 +140,11 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   // of that state.
   const recordDecorationProvider = new RecordDecorationProvider(recordBadgeSource);
   const writeDeps = recordPanelWriteDeps(deps);
+  const commitDeps = { ...writeDeps, editGateOf: (address: EditAddress) => editsInFlight.gateShowing(recordPanels, address) };
+  const extendedFields = new ExtendedFieldDocuments({
+    client: meditClient, reporter: deps.reporterFor('extendedField'),
+    commit: (field, value) => commitField(commitDeps, field, value),
+  });
   // Lives for the activation, like the decoration provider above — disposed alongside it.
   const loadOrderStatusTracker = trackLoadOrderStatus(
     meditClient, () => announceConflictsComputed(recordPanels, editsInFlight));
@@ -157,15 +160,15 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   return [
     { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker, editsInFlight) },
     recordDecorationProvider,
+    extendedFields,
     { dispose: () => { loadOrderStatusTracker.dispose(); } },
     vscode.window.registerFileDecorationProvider(recordDecorationProvider),
     vscode.window.registerCustomEditorProvider(
       RECORD_EDITOR_VIEW_TYPE, recordEditorProvider, { webviewOptions: { retainContextWhenHidden: true } }),
     // The native right-click menus write from here directly, with no panel in the path — the same
-    // write deps the router has, plus the extended editor's temp root and log.
+    // write deps the router has, plus the extended-field documents.
     ...registerRecordPanelContextCommands({
-      ...writeDeps, fieldFile: deps.fieldFile, log: (m: string) => outputChannel.debug(m),
-      editGateOf: address => editsInFlight.gateShowing(recordPanels, address),
+      ...commitDeps, extendedFields,
       focusedCell: () => focusedCells.current(),
     }),
     ...registerGridKeyCommands({
