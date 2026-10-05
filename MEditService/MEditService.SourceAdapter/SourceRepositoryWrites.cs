@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -29,7 +28,7 @@ internal sealed class SourceRepositoryWrites(
     internal void Put(PluginAddress plugin, SourceDocument document, CellPlacement? placement)
     {
         var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
-        if (locator.LocateToPlace(plugin, identity) is { } held) MoveToItsEditorId(held, document);
+        if (locator.LocateToPlace(plugin, identity) is { } held) MoveToItsLeafName(held, document);
         var unit = locator.LocateToPlace(plugin, identity)
                    ?? layout.PlaceNewDocument(plugin, identity, placement)
                    ?? throw NoPlaceInTheTree(plugin, identity);
@@ -232,43 +231,35 @@ internal sealed class SourceRepositoryWrites(
     }
 
     // Move before write: a crash between leaves the record at its new name with old content, still
-    // found by FormKey. A leaf something else renamed keeps its name while the EditorID is unchanged.
-    private void MoveToItsEditorId(SourceUnit unit, SourceDocument document)
+    // found by FormKey.
+    private void MoveToItsLeafName(SourceUnit unit, SourceDocument document)
     {
-        if (!ChangesEditorId(unit, document)) return;
+        if (!MovesToAnotherLeafName(unit, document)) return;
 
         var from = unit.IsDirectoryPerRecord ? PathShape.DirectoryOf(unit.FullPath) : unit.FullPath;
-        var to = Path.Combine(
-            PathShape.DirectoryOf(from),
-            SourceRepositoryLayout.LeafNameFor(FormKey.Factory(document.FormKey), document.EditorId, unit.IsDirectoryPerRecord));
-        if (string.Equals(from, to, StringComparison.Ordinal)) return;
+        var to = Path.Combine(PathShape.DirectoryOf(from), LayoutLeafName(unit, document));
 
         if (unit.IsDirectoryPerRecord) Directory.Move(from, to);
         else File.Move(from, to, overwrite: true);
         locator.Forget();
     }
 
-    /// <summary>Whether putting <paramref name="document"/> would rename the file it replaces. Refuses
-    /// a file whose text is not a document: its EditorID cannot be compared, and overwriting it would
-    /// drop what something else wrote.</summary>
-    internal static bool ChangesEditorId(SourceUnit unit, SourceDocument document)
+    private static string LayoutLeafName(SourceUnit unit, SourceDocument document) =>
+        SourceRepositoryLayout.LeafNameFor(FormKey.Factory(document.FormKey), document.EditorId, unit.IsDirectoryPerRecord);
+
+    /// <summary>Whether putting <paramref name="document"/> would move the file it replaces to the leaf
+    /// name the layout gives it. Refuses a file whose text is not a document: overwriting it would drop
+    /// what something else wrote.</summary>
+    internal static bool MovesToAnotherLeafName(SourceUnit unit, SourceDocument document)
     {
         if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !File.Exists(unit.FullPath))
             return false;
 
-        var text = File.ReadAllText(unit.FullPath);
-        if (SourceRepositoryLocator.NotADocument(text) is { } why)
-            throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its EditorID cannot be compared: {why}");
-        return !string.Equals(EditorIdOf(text), document.EditorId, StringComparison.Ordinal);
-    }
+        if (SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
+            throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
 
-    private static string? EditorIdOf(string text)
-    {
-        using var document = JsonDocument.Parse(text);
-        return document.RootElement.TryGetProperty(RecordMembers.EditorId, out var editorId)
-            && editorId.ValueKind == JsonValueKind.String
-            ? editorId.GetString()
-            : null;
+        var held = Path.GetFileName(unit.IsDirectoryPerRecord ? PathShape.DirectoryOf(unit.FullPath) : unit.FullPath);
+        return !string.Equals(held, LayoutLeafName(unit, document), StringComparison.Ordinal);
     }
 
     private static byte[] OwnerBytes(SourceUnit unit) => DocumentText.StripUtf8Bom(File.ReadAllBytes(unit.FullPath));

@@ -19,6 +19,8 @@ export interface GamePathInfo {
   readonly masters: readonly string[];
   /** The Creation Club list's file name in the game folder, for a release that has one. */
   readonly creationClubList?: string;
+  /** The folder a mod's script-extender files sit in, under the Data folder. */
+  readonly scriptExtenderFolder: string;
 }
 
 const FALLOUT4_MASTERS = [
@@ -32,25 +34,37 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
   Fallout4: {
     gameName: 'Fallout 4', nexusSlug: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
     masters: FALLOUT4_MASTERS, creationClubList: 'Fallout4.ccc',
+    scriptExtenderFolder: 'f4se',
   },
   Fallout4VR: {
     gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
+    scriptExtenderFolder: 'f4se',
   },
-  Fallout3: { gameName: 'Fallout 3', nexusSlug: 'fallout3', masters: ['Fallout3.esm'] },
-  FalloutNV: { gameName: 'Fallout New Vegas', nexusSlug: 'newvegas', masters: ['FalloutNV.esm'] },
-  SkyrimLE: { gameName: 'Skyrim', nexusSlug: 'skyrim', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc' },
+  Fallout3: { gameName: 'Fallout 3', nexusSlug: 'fallout3', masters: ['Fallout3.esm'], scriptExtenderFolder: 'fose' },
+  FalloutNV: { gameName: 'Fallout New Vegas', nexusSlug: 'newvegas', masters: ['FalloutNV.esm'], scriptExtenderFolder: 'nvse' },
+  SkyrimLE: { gameName: 'Skyrim', nexusSlug: 'skyrim', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse' },
   SkyrimSE: {
     gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', masters: SKYRIM_MASTERS,
     creationClubList: 'Skyrim.ccc',
+    scriptExtenderFolder: 'skse',
   },
   SkyrimVR: {
     gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
+    scriptExtenderFolder: 'skse',
   },
-  EnderalLE: { gameName: 'Enderal', nexusSlug: 'enderal', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc' },
-  Oblivion: { gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'] },
+  EnderalLE: { gameName: 'Enderal', nexusSlug: 'enderal', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse' },
+  Oblivion: { gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'], scriptExtenderFolder: 'obse' },
 };
+
+/** Mutagen's release names the table holds a row for. */
+export const GAME_RELEASES: readonly string[] = Object.keys(GAME_PATHS);
+
+/** Every script-extender folder name, lowercased. */
+export const SCRIPT_EXTENDER_FOLDERS: ReadonlySet<string> = new Set(
+  Object.values(GAME_PATHS).map((info) => info.scriptExtenderFolder.toLowerCase()),
+);
 
 // Rebuilt from the table above so the two directions can never disagree. Morrowind resolves to no
 // entry: Mutagen has no release for it.
