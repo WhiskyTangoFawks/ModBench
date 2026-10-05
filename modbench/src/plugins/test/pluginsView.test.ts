@@ -11,6 +11,7 @@ type SqlLens = { provideCodeLenses(document: Pick<vscode.TextDocument, 'getText'
 const h = vi.hoisted(() => ({
   lenses: [] as SqlLens[],
   views: [] as { description?: string; message?: string }[],
+  decorations: [] as { provideFileDecoration(uri: unknown): { badge?: string } | undefined }[],
 }));
 
 vi.mock('vscode', () => {
@@ -31,7 +32,10 @@ vi.mock('vscode', () => {
         h.views.push(view);
         return view;
       },
-      registerFileDecorationProvider: disposable,
+      registerFileDecorationProvider: (provider: (typeof h.decorations)[number]) => {
+        h.decorations.push(provider);
+        return disposable();
+      },
       withProgress: (_options: unknown, task: () => Promise<unknown>) => task(),
     },
     languages: {
@@ -73,6 +77,7 @@ function pluginsView() {
 beforeEach(() => {
   h.lenses.length = 0;
   h.views.length = 0;
+  h.decorations.length = 0;
 });
 
 describe('the Plugins view follows mEdit\'s pushes and shows the record filter', () => {
@@ -105,6 +110,17 @@ describe('the Plugins view follows mEdit\'s pushes and shows the record filter',
     const [lens] = present(h.lenses[0], 'the registered code lens provider').provideCodeLenses({ getText: () => ARMOR_SQL });
     expect(lens?.command?.command).toBe('modbench.record.clearFilter');
     expect(present(h.views[0], 'the Plugins tree view').description).toBe('records: armor.sql');
+  });
+});
+
+describe('the Plugins view badges the records beneath a plugin', () => {
+  it('registers a decoration provider that badges a record row its browser reports Modified', () => {
+    const { recordBrowser } = pluginsView();
+    vi.spyOn(recordBrowser, 'workingTreeStateOf').mockReturnValue('Modified');
+
+    const badges = h.decorations.map((provider) => provider.provideFileDecoration(uriFile('/a record row'))?.badge);
+
+    expect(badges).toContain('M');
   });
 });
 
