@@ -824,7 +824,7 @@ describe('ModListProvider', () => {
     });
 
     it('names the mod manager the value names, not MO2 over another manager\'s instance', async () => {
-      const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries(), { managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt' } })) });
+      const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries(), { managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' } })) });
       const row = expectInstanceOf((await provider.getChildren()).find((n) => n instanceof OverwriteNode), OverwriteNode);
 
       expect(row.tooltip).toBe('The files tools wrote while Another Manager ran them, which win over every mod.');

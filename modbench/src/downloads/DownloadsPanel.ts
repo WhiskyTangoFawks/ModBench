@@ -159,7 +159,7 @@ const NOTHING_CHANGED: SelectionOutcome<string> = { landed: [], refused: [] };
 // Metadata left behind is not a failure (downloads.md, Reporting story 2): the delete already
 // applied, so this is an Output-only line, never a notification.
 async function deleteSelection(
-  access: DownloadsAccess, instance: Pick<Instance, 'refresh'>, rows: readonly DownloadFile[], reporter: Reporter,
+  access: DownloadsAccess, instance: Pick<Instance, 'value' | 'refresh'>, rows: readonly DownloadFile[], reporter: Reporter,
   ask: AskQuestion, trash: MoveToTrash, log: (line: string) => void,
 ): Promise<SelectionOutcome<DeletedDownload>> {
   if (rows.length === 0 || !(await confirmDelete(rows.map((row) => row.name), ask))) return { landed: [], refused: [] };
@@ -168,7 +168,7 @@ async function deleteSelection(
     `Could not delete ${outcome.refused.length} of ${rows.length} downloaded files.`, outcome, (item) => item.name);
   for (const item of outcome.landed) {
     if (item.metadataLeftBehind !== undefined) {
-      log(`"${item.name}" was deleted, but its metadata could not be moved to the trash and was left behind: ${item.metadataLeftBehind}`);
+      log(`"${item.name}" was deleted, but its ${instance.value.managerNames.downloadMetadataFile} could not be moved to the trash and was left behind: ${item.metadataLeftBehind}`);
     }
   }
   return outcome;
@@ -223,7 +223,7 @@ function selectionRows(clicked: DownloadNode | undefined, selected: DownloadNode
  *  tool's Hide All). `viewSelection` backs the Delete key and the palette, which get no row
  *  argument. */
 export function registerDownloadsMultiRowCommands(
-  access: DownloadsAccess, instance: Pick<Instance, 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  access: DownloadsAccess, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
   const rows = (clicked?: DownloadNode, selected?: DownloadNode[]) => {

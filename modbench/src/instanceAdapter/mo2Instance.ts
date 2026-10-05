@@ -3,6 +3,7 @@
 
 import { existsSync } from 'node:fs';
 import { MODLIST_FILE_NAME } from './codecs/modlistText';
+import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { gameDirectoryResolver, type GameDetectors } from './gameDirectory';
 import type { GameDirectoryOverrides, InstanceAdapter } from './instanceAdapter';
@@ -39,7 +40,7 @@ export function mo2InstanceAdapter({
     watch: mo2Watch(instanceRoot),
   };
   return {
-    names: { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME },
+    names: { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX },
     ...mo2Reads(context), ...mo2Changes(context), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2Landing(context),
     subscribe: (listener) => context.watch.subscribe(listener),
   };

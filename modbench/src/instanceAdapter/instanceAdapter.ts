@@ -318,10 +318,11 @@ export interface FileStamp {
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
 export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
-/** How a message names the mod manager and the file it keeps mod order in. */
+/** How a message names the mod manager, the file it keeps mod order in, and the file it keeps beside a downloaded file. */
 export interface ManagerNames {
   readonly manager: string;
   readonly modOrderFile: string;
+  readonly downloadMetadataFile: string;
 }
 
 export interface InstanceAdapter {
