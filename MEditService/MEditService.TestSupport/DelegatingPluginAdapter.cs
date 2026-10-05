@@ -49,6 +49,9 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
     public virtual string? DivergenceBetween(ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
         inner.DivergenceBetween(modPath, recompiledPath, gameRelease, strings);
 
+    public virtual Task<PluginByteComparison> CompareBytesAsync(string originalPath, string recompiledPath, CancellationToken cancel = default) =>
+        inner.CompareBytesAsync(originalPath, recompiledPath, cancel);
+
     public virtual Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
         inner.CreateAndWriteAsync(modKey, folder, gameRelease);
 }

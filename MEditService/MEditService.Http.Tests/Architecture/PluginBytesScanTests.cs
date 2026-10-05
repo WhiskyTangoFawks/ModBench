@@ -16,6 +16,10 @@ public sealed class PluginBytesScanTests
 
     private static readonly string[] TreeDoorInternals = ["PluginTrees", "TreeDeserializer"];
 
+    private static readonly string[] ByteWalkInternals = ["PluginBinaryWalk", "MalformedPluginScan"];
+
+    private const string IndexStore = "MEditService.Index/Store.cs";
+
     private const string CompositionRoot = "MEditService.Http/Program.cs";
 
     [Fact]
@@ -51,6 +55,27 @@ public sealed class PluginBytesScanTests
             + "ask the adapter:\n"
             + string.Join("\n", named));
     }
+
+    [Fact]
+    public void NothingOutsideThePluginAdapter_WalksAPluginsBytes()
+    {
+        var root = ServiceProjects.SolutionDirectory();
+
+        var walked = Files(root, ProductionRoots, [AdapterRoot])
+            .Where(file => !IsIndexStore(root, file)).ToList();
+        var named = Sites(root, walked, ByteWalkInternals);
+
+        Assert.True(walked.Count > 50, $"The byte-walk scan walked only {walked.Count} files.");
+        Assert.True(
+            named.Count == 0,
+            "A type outside the Plugin adapter walks a plugin's bytes. How a file differs at the byte "
+            + "level is the adapter's answer (ADR-0004), so ask it:\n"
+            + string.Join("\n", named));
+    }
+
+    private static bool IsIndexStore(string root, string file) =>
+        Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')
+            .Equals(IndexStore, StringComparison.Ordinal);
 
     [Fact]
     public void NothingButTheCompositionRoot_NamesTheAdaptersImplementation()
