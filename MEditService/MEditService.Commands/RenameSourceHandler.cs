@@ -19,6 +19,15 @@ public sealed class RenameSourceHandler
     public RenameSourceResult RenameSource(PluginAddress plugin, string newName)
     {
         var loadOrder = _loadOrder.Require();
+        try
+        {
+            SourceRepository.EnsureTrackable();
+        }
+        catch (GitUnavailableException ex)
+        {
+            return Refused(RenameSourceRefusal.GitUnavailable, ex.Message);
+        }
+
         if (!ModKey.TryFromFileName(newName, out _))
         {
             return Refused(RenameSourceRefusal.NotAPluginFile,
@@ -40,15 +49,10 @@ public sealed class RenameSourceHandler
 
         try
         {
-            SourceRepository.EnsureTrackable();
             return repository.RenameSource(plugin, newName)
                 ? new RenameSourceResult()
                 : Refused(RenameSourceRefusal.NameTaken,
                     $"{mod.Name} already holds a plugin source named {newName}, so {plugin.Name}'s source was not renamed.");
-        }
-        catch (GitUnavailableException ex)
-        {
-            return Refused(RenameSourceRefusal.GitUnavailable, ex.Message);
         }
         catch (UnreadableSourceDocumentException ex)
         {

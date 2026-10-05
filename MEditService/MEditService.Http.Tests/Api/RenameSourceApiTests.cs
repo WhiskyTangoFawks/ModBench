@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -32,8 +31,8 @@ public sealed class RenameSourceApiTests : HostedTests
     private Task<HttpResponseMessage> RenameSource(string name, string origin, string newName) =>
         Client.PostAsJsonAsync("/plugins/rename-source", new { origin, name, newName });
 
-    private static async Task<string?> RefusalOf(HttpResponseMessage response) =>
-        (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString();
+    private static async Task<string?> RefusalOf(HttpResponseMessage response, HttpStatusCode status) =>
+        (await response.AssertIsProblem(status)).GetProperty("refusal").GetString();
 
     [Fact]
     public async Task RenamingATrackedPluginsSource_Is204_AndItsSourceTakesTheNewName()
@@ -56,8 +55,7 @@ public sealed class RenameSourceApiTests : HostedTests
 
         var response = await RenameSource(Plugin, Origin, "Renamed.txt");
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("NotAPluginFile", await RefusalOf(response));
+        Assert.Equal("NotAPluginFile", await RefusalOf(response, HttpStatusCode.BadRequest));
     }
 
     [Fact]
@@ -67,8 +65,7 @@ public sealed class RenameSourceApiTests : HostedTests
 
         var response = await RenameSource("NoSuch.esp", Origin, "Renamed.esp");
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("PluginNotLoaded", await RefusalOf(response));
+        Assert.Equal("PluginNotLoaded", await RefusalOf(response, HttpStatusCode.NotFound));
     }
 
     [Fact]
@@ -78,8 +75,7 @@ public sealed class RenameSourceApiTests : HostedTests
 
         var response = await RenameSource("Other.esp", UntrackedOrigin, "Renamed.esp");
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal("NotTracked", await RefusalOf(response));
+        Assert.Equal("NotTracked", await RefusalOf(response, HttpStatusCode.Conflict));
     }
 
     [Fact]
@@ -90,8 +86,7 @@ public sealed class RenameSourceApiTests : HostedTests
 
         var response = await RenameSource(Plugin, Origin, "Renamed.esp");
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        Assert.Equal("UnreadableSource", await RefusalOf(response));
+        Assert.Equal("UnreadableSource", await RefusalOf(response, HttpStatusCode.UnprocessableEntity));
     }
 
     [Fact]
@@ -102,8 +97,7 @@ public sealed class RenameSourceApiTests : HostedTests
 
         var response = await RenameSource(Plugin, Origin, "Renamed.esp");
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("WriteFailed", await RefusalOf(response));
+        Assert.Equal("WriteFailed", await RefusalOf(response, HttpStatusCode.InternalServerError));
     }
 
     [Fact]
@@ -111,7 +105,7 @@ public sealed class RenameSourceApiTests : HostedTests
     {
         var response = await RenameSource(Plugin, Origin, "Renamed.esp");
 
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        await response.AssertIsProblem(HttpStatusCode.ServiceUnavailable);
     }
 
     [Theory]
@@ -123,7 +117,7 @@ public sealed class RenameSourceApiTests : HostedTests
 
         var response = await RenameSource(name, origin, "Renamed.esp");
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await response.AssertIsProblem(HttpStatusCode.BadRequest);
     }
 }
 
@@ -154,8 +148,7 @@ public sealed class RenameSourceWithoutGitApiTests : HostedTests
             Environment.SetEnvironmentVariable("PATH", path);
         }
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("GitUnavailable", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
+        Assert.Equal("GitUnavailable", (await response.AssertIsProblem(HttpStatusCode.InternalServerError)).GetProperty("refusal").GetString());
         Assert.True(Directory.Exists(PluginSourceRoot.In(OtherTool.ModFolderOf(fx, Origin), Plugin)));
     }
 }
