@@ -112,6 +112,21 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
+        app.MapPost("/plugins/rename-source", RenameSource)
+            .WithName("RenameSource")
+            .WithTags(Tag)
+            .WithDescription(
+                "Moves a tracked plugin's source, and what Modbench last wrote for it, to the new name as " +
+                "working-tree changes: every FormKey of the plugin follows. The plugin file and its " +
+                "plugins.txt lines stay as they are.")
+            .Produces(204)
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(409)
+            .ProducesProblem(422)
+            .ProducesProblem(500)
+            .ProducesProblem(503);
+
         // A missing load order refuses the whole selection once; every other refusal is an item of
         // the answer.
         app.MapPost("/plugins/compile", Compile)
@@ -174,6 +189,29 @@ public static class PluginEndpoints
         return string.IsNullOrWhiteSpace(req.Folder) || string.IsNullOrWhiteSpace(req.Origin)
             ? Results.Problem("The folder and the origin are required.", statusCode: 400)
             : null;
+    }
+
+    internal static IResult RenameSource(
+        RenameSourceRequest req, RenameSourceHandler rename, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Plugin name and origin are required.", statusCode: 400);
+
+        try
+        {
+            var plugin = new PluginAddress(req.Name, req.Origin);
+            var result = rename.RenameSource(plugin, req.NewName ?? string.Empty);
+            if (result.Refusal is not { } refusal) return Results.NoContent();
+
+            WriteEndpointMapping.LogRefusal(logger, "Rename source", refusal, result.Message, plugin);
+            return WriteEndpointMapping.Refusal(refusal, result.Message);
+        }
+        catch (NoLoadOrderException ex)
+        {
+            logger.LogError(ex, "No loadOrder when renaming the source of {Name}", req.Name);
+            return WriteEndpointMapping.NoLoadOrder(ex);
+        }
     }
 
     // Track (ADR-0007) over a selection of mods (commands.md, A selection is one gesture); the
@@ -294,6 +332,9 @@ public record CreatePluginRequest(string Origin, string Name, string Folder);
 /// <summary>The plugin the create gesture wrote. Not a plugin row: the Index has not seen
 /// it, and nothing registers it.</summary>
 public record PluginCreatedResponse(string Name, string Origin);
+
+/// <summary>The plugin by its origin and file name (ADR-0012), and the file name its source takes.</summary>
+public record RenameSourceRequest(string Origin, string Name, string NewName);
 
 /// <summary>The mods by name; the load order says each one's plugins and folder.</summary>
 public record TrackRequest(IReadOnlyList<string> Mods);
