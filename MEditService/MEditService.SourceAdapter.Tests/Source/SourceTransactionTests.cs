@@ -69,6 +69,19 @@ public sealed class SourceTransactionTests : IDisposable
     }
 
     [Fact]
+    public void Put_OverAFileSomethingElseRenamed_IsRefusedBeforeTheTreeIsTouched()
+    {
+        Seed(Fk("000800"), "npc_", "Npc");
+        var group = Directory.GetFiles(_root, "*.json", SearchOption.AllDirectories).Single();
+        File.Move(group, Path.Combine(Path.GetDirectoryName(group) ?? _root, $"RenamedOutside - 000800_{PluginName}.json"));
+        var before = TreeSnapshot.Of(_root);
+
+        Assert.Throws<NotSupportedException>(() => new SourceTransaction().Put(
+            Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Npc", Body(Fk("000800"), "Npc"))));
+        Assert.Equal(before, TreeSnapshot.Of(_root));
+    }
+
+    [Fact]
     public void Rollback_PutsBackAnOverwrite_ACreate_ARemove_AndAMovedContainer()
     {
         Seed(Fk("000800"), "npc_", "ExistingNpc");
