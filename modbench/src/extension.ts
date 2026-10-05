@@ -270,7 +270,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
       showRecordFilter: (filter) => plugins.showRecordFilter(filter),
     },
     latestSent: () => sender.latest(),
-    originFiles: (origin) => originFiles(instance.value.plugins, origin),
+    originFiles: (origin) => originFiles(instance.value, origin),
     modListSelection: () => modListView.selection, pluginsSelection: () => pluginListView.selection,
     downloadsSelection: () => downloadsView.selection, trackSelection,
   };

@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
-import type { MEditClient, RecordFilter } from '../client';
-import { originFiles } from '../instanceLoader/loadOrderSnapshot';
+import type { MEditClient, PluginAddress, RecordFilter } from '../client';
 import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
 import { reorderOver, type PluginSyncRun, type PluginsAccess } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
@@ -63,7 +62,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const { instance, access, recordBrowser, client, syncPlugins, channel, statusBar, notifyConflictsComputed, log, reporterFor } = deps;
   const pluginSync = createPluginSync(syncPlugins, channel);
   const loadOrderPut = reportSyncFailures('put load order', 'The load order is not sent', (line) => channel.error(`[loadOrder] ${line}`));
-  const filesOf = (origin: string) => originFiles(instance.value.plugins, origin);
+  const pluginFile = (plugin: PluginAddress) => tree.pluginFile(plugin);
   const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
   const changedOutsideDiagnostics = vscode.languages.createDiagnosticCollection('modbench-changed-outside');
   const tree = new PluginsTreeProvider({
@@ -72,8 +71,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     dataFolderFile: deps.dataFolderFile,
     records: recordBrowser,
     client,
-    publishDiagnoses: (reports) => publishPluginWarnings(loadDiagnostics, filesOf, reports),
-    publishChangedOutside: (warnings) => publishPluginWarnings(changedOutsideDiagnostics, filesOf, warnings),
+    publishDiagnoses: (reports) => publishPluginWarnings(loadDiagnostics, pluginFile, reports),
+    publishChangedOutside: (warnings) => publishPluginWarnings(changedOutsideDiagnostics, pluginFile, warnings),
   });
   const view = vscode.window.createTreeView('modbench.pluginListTree', {
     treeDataProvider: tree,

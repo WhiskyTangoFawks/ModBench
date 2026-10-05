@@ -31,7 +31,7 @@ const MESSAGE_API_SITES = [
     `ObjectPattern > Property[key.name=${MESSAGE_API}]`,
 ];
 
-const DRIVING_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'drivingLib'];
+const PATHLESS_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'drivingLib', 'instanceLoader'];
 
 export default defineConfig(
     { ignores: ['src/wire/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
@@ -98,15 +98,15 @@ export default defineConfig(
 
 
     // modbench/CLAUDE.md: a view takes every path from the instance value and never builds one.
-    // The driving band: README's views, Toolbox, Mods, Plugins, Downloads and Editor, and the driving
-    // lib they share.
+    // The driving band, and the Instance loader, since the Instance adapter hides layout
+    // (target-architecture.d2).
     {
-        files: DRIVING_BOXES.map((box) => `src/${box}/**/*.ts`),
-        ignores: DRIVING_BOXES.map((box) => `src/${box}/test/**`),
+        files: PATHLESS_BOXES.map((box) => `src/${box}/**/*.ts`),
+        ignores: PATHLESS_BOXES.map((box) => `src/${box}/test/**`),
         rules: {
             'no-restricted-imports': ['error', { patterns: [{
                 group: ['node:path', 'node:path/*', 'path', 'path/*'],
-                message: 'A view never builds a path: take it from the instance value, or from the box that owns it, injected at the composition root when the view does not reference that box.',
+                message: 'A view or the Instance loader never builds a path: the Instance adapter answers the instance\'s, and a view takes it from the instance value, or from the box that owns it, injected at the composition root when the view does not reference that box.',
             }] }],
         },
     },
