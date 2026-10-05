@@ -1,368 +1,321 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-type FakeTextDocument = { uri: { fsPath: string }; getText?: () => string };
-type DocEventListener = (doc: { uri: { fsPath: string }; getText: () => string }) => unknown;
-type DocEventRegister = (listener: DocEventListener) => { dispose: () => void };
+interface FakeUri { scheme: string; path: string; query: string; toString(): string }
+interface ChangeEvent { type: number; uri: FakeUri }
+interface Provider {
+  stat(uri: FakeUri): Promise<{ mtime: number; size: number }>;
+  readFile(uri: FakeUri): Promise<Uint8Array>;
+  writeFile(uri: FakeUri, content: Uint8Array): Promise<void>;
+  onDidChangeFile(listener: (events: ChangeEvent[]) => void): unknown;
+}
+interface Registration { provider: Provider; options?: { isReadonly?: boolean } }
 
-const OWNER_WRITE_BIT = 0o200;
-
-const openTextDocument = vi.fn<(uri: { fsPath: string }) => Promise<FakeTextDocument>>();
-const showTextDocument = vi.fn<(doc: unknown, opts?: unknown) => Promise<unknown>>();
-const onDidSaveTextDocument = vi.fn<DocEventRegister>();
-const onDidCloseTextDocument = vi.fn<DocEventRegister>();
-const executeCommand = vi.fn<(command: string) => Promise<unknown>>();
+const providers = new Map<string, Registration>();
+const closeListeners: Array<(doc: { uri: FakeUri }) => void> = [];
+const showTextDocument = vi.fn<(doc: { uri: FakeUri }, opts?: unknown) => Promise<unknown>>();
 
 vi.mock('vscode', () => ({
   workspace: {
-    openTextDocument: (uri: { fsPath: string }) => openTextDocument(uri),
-    onDidSaveTextDocument: (listener: DocEventListener) => onDidSaveTextDocument(listener),
-    onDidCloseTextDocument: (listener: DocEventListener) => onDidCloseTextDocument(listener),
+    registerFileSystemProvider: (scheme: string, provider: Provider, options?: { isReadonly?: boolean }) => {
+      providers.set(scheme, { provider, options });
+      return { dispose: () => providers.delete(scheme) };
+    },
+    onDidCloseTextDocument: (listener: (doc: { uri: FakeUri }) => void) => {
+      closeListeners.push(listener);
+      return { dispose: () => undefined };
+    },
+    openTextDocument: (uri: FakeUri) => Promise.resolve({ uri }),
   },
-  commands: { executeCommand: (command: string) => executeCommand(command) },
-  window: { showTextDocument: (doc: unknown, opts?: unknown) => showTextDocument(doc, opts) },
-  Uri: { file: (p: string) => ({ fsPath: p, toString: () => `file://${p}` }) },
-  ViewColumn: { One: 1, Beside: -2 },
+  window: { showTextDocument: (doc: { uri: FakeUri }, opts?: unknown) => showTextDocument(doc, opts) },
+  Uri: {
+    from: (parts: { scheme: string; path: string; query: string }): FakeUri => ({
+      ...parts, toString: () => `${parts.scheme}://${parts.path}?${parts.query}`,
+    }),
+  },
+  EventEmitter: class {
+    private readonly listeners: Array<(e: unknown) => void> = [];
+    event = (listener: (e: unknown) => void) => { this.listeners.push(listener); return { dispose: () => undefined }; };
+    fire(e: unknown) { this.listeners.forEach(l => l(e)); }
+    dispose() { this.listeners.length = 0; }
+  },
+  Disposable: class { constructor(public dispose: () => void) {} },
+  FileType: { File: 1 },
+  FileChangeType: { Changed: 1 },
+  FileSystemError: {
+    FileNotFound: (what: FakeUri | string) => new Error(`FileNotFound ${typeof what === 'string' ? what : what.path}`),
+    NoPermissions: (uri: FakeUri) => new Error(`NoPermissions ${uri.path}`),
+  },
+  ViewColumn: { Beside: -2 },
 }));
 
-import { mkdtemp, rm, stat, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from '../extendedFieldEditor';
+import { ExtendedFieldDocuments, EDITABLE_FIELD_SCHEME, READONLY_FIELD_SCHEME, type OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
+import { InMemoryMEditClient, type CompareResult, type NotificationEvent } from '../../client';
+import type { Reporter } from '../../ports/reporter';
 
-type FieldFile = ExtendedFieldEditorDeps['fieldFile'];
+type Diff = CompareResult['diffs'][number];
 
-const fieldFileUnderWithEverySegmentEscaped = (tempRoot: string): FieldFile => (field) => {
-  const folder = join(tempRoot, encodeURIComponent(field.recordLabel), encodeURIComponent(field.origin));
-  return { folder, file: join(folder, `${encodeURIComponent(field.fieldName)} [${encodeURIComponent(field.plugin)}]`) };
-};
+const diff = (fieldName: string, values: Record<string, unknown>, children?: Diff[]): Diff =>
+  ({ fieldName, values, winnerColumn: '', cellStates: {}, conflictAll: 'NoConflict', children });
 
-const extendedEditorPath = (tempRoot: string, recordLabel: string, fieldName: string, plugin: string, origin: string) =>
-  fieldFileUnderWithEverySegmentEscaped(tempRoot)({ recordLabel, fieldName, plugin, origin }).file;
-
-function makeFakeDocEvent() {
-  const listeners: Array<(doc: { uri: { fsPath: string }; getText: () => string }) => unknown> = [];
-  const disposed: boolean[] = [];
-  const register = vi.fn((listener: (doc: { uri: { fsPath: string }; getText: () => string }) => unknown) => {
-    listeners.push(listener);
-    const index = listeners.length - 1;
-    disposed.push(false);
-    return { dispose: () => { disposed[index] = true; } };
-  });
-  return {
-    register,
-    fireAndAwaitEveryListener: async (doc: { uri: { fsPath: string }; getText: () => string }) => { await Promise.all(listeners.map(l => l(doc))); },
-    isDisposed: (index = 0) => disposed[index],
-  };
-}
-
-let tempRoots: string[] = [];
-async function makeTempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'medit-extended-editor-test-'));
-  tempRoots.push(root);
-  return root;
-}
-
-afterEach(async () => {
-  await Promise.all(tempRoots.map(root => rm(root, { recursive: true, force: true })));
-  tempRoots = [];
-  vi.clearAllMocks();
+const holder = (plugin: string, origin: string): CompareResult['overrides'][number] => ({
+  formKey: '000123:Fallout4.esm', plugin, origin, isWinner: true, fields: [], recordType: 'Npc', isPartialForm: false,
+  loadIndex: '00', isInOverwrite: false,
 });
 
-function makeDeps(tempRoot: string, overrides: Partial<ExtendedFieldEditorDeps> = {}): ExtendedFieldEditorDeps {
-  return {
-    fieldFile: fieldFileUnderWithEverySegmentEscaped(tempRoot),
-    onCommit: vi.fn(),
-    log: vi.fn(),
-    reporter: { report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() },
-    ...overrides,
-  };
+const comparison = (diffs: Diff[], holders: Array<[string, string]> = [['Fallout4.esm', 'Data']]): CompareResult => ({
+  overrides: holders.map(([plugin, origin]) => holder(plugin, origin)), diffs, conflictAll: 'NoConflict', recordTypeName: 'Npc',
+});
+
+const descriptionOf = (value: string) => comparison([diff('Description', { 'Fallout4.esm': value })]);
+
+const deacon: OpenExtendedFieldEditorParams = {
+  formKey: '000123:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data', path: [{ kind: 'member', name: 'Description' }],
+  recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', readOnly: false,
+};
+
+const rowsChanged = (keys: string[]): NotificationEvent =>
+  ({ kind: 'rows-changed', plugin: 'Fallout4.esm', origin: 'Data', keys, sequence: 1 });
+const pluginChanged = (plugin: string, origin: string): NotificationEvent =>
+  ({ kind: 'plugin-changed', plugin, origin, keys: [], sequence: 1 });
+
+let client: InMemoryMEditClient;
+let report: ReturnType<typeof vi.fn<Reporter['report']>>;
+let commit: ReturnType<typeof vi.fn<(field: unknown, value: string) => Promise<void>>>;
+
+function makeDocuments(): ExtendedFieldDocuments {
+  return new ExtendedFieldDocuments({
+    client, commit,
+    reporter: { report, landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() },
+  });
 }
 
-describe('openExtendedFieldEditor', () => {
-  beforeEach(() => {
-    onDidSaveTextDocument.mockImplementation(makeFakeDocEvent().register);
-    onDidCloseTextDocument.mockImplementation(makeFakeDocEvent().register);
-    openTextDocument.mockResolvedValue({ uri: { fsPath: '' } });
-    showTextDocument.mockResolvedValue(undefined);
-    executeCommand.mockResolvedValue(undefined);
+const shownUri = (call = -1): FakeUri => {
+  const shown = showTextDocument.mock.calls.at(call);
+  if (!shown) throw new Error('nothing was shown');
+  return shown[0].uri;
+};
+const registration = (scheme: string): Registration => {
+  const reg = providers.get(scheme);
+  if (!reg) throw new Error(`no provider for ${scheme}`);
+  return reg;
+};
+const provider = (scheme = EDITABLE_FIELD_SCHEME): Provider => registration(scheme).provider;
+const textOf = async (uri: FakeUri, scheme = EDITABLE_FIELD_SCHEME): Promise<string> =>
+  new TextDecoder().decode(await provider(scheme).readFile(uri));
+const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
+const closeTab = (uri: FakeUri): void => closeListeners.forEach(listener => listener({ uri }));
+function recordChanges(scheme = EDITABLE_FIELD_SCHEME): ChangeEvent[][] {
+  const seen: ChangeEvent[][] = [];
+  provider(scheme).onDidChangeFile(events => seen.push(events));
+  return seen;
+}
+
+let documents: ExtendedFieldDocuments;
+beforeEach(() => {
+  providers.clear();
+  closeListeners.length = 0;
+  showTextDocument.mockReset();
+  showTextDocument.mockResolvedValue(undefined);
+  client = new InMemoryMEditClient();
+  client.setQueryAnswer('getComparison', descriptionOf('a long description'));
+  report = vi.fn();
+  commit = vi.fn(() => Promise.resolve());
+  documents = makeDocuments();
+});
+
+describe('the extended-field documents', () => {
+  it('opens beside the panel as a non-preview tab titled <field> [<file name>], showing the value mEdit holds', async () => {
+    await documents.open(deacon);
+
+    expect(showTextDocument).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ viewColumn: -2, preview: false }));
+    expect(shownUri().path.split('/').at(-1)).toBe('Description [Fallout4.esm]');
+    expect(await textOf(shownUri())).toBe('a long description');
   });
 
-  it('writes the value to the deterministic temp path and opens it beside, as a non-preview tab', async () => {
-    const tempRoot = await makeTempRoot();
-    const path = extendedEditorPath(tempRoot, 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm', 'Data');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'a long description' });
+  it('a tab restored with no open before it reads the field\'s current value', async () => {
+    await documents.open(deacon);
+    const restored = shownUri();
+    providers.clear();
+    documents = makeDocuments();
+    client.setQueryAnswer('getComparison', descriptionOf('what mEdit holds now'));
 
-    await openExtendedFieldEditor(
-      { value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
-      makeDeps(tempRoot),
-    );
-
-    expect(await readFile(path, 'utf8')).toBe('a long description');
-    expect(showTextDocument).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: { fsPath: path } }),
-      expect.objectContaining({ viewColumn: -2, preview: false }),
-    );
+    expect(await textOf(restored)).toBe('what mEdit holds now');
   });
 
-  it('leaves a mutable temp file writable', async () => {
-    const tempRoot = await makeTempRoot();
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
+  it('after mEdit reports the record changed, the document reads the new value and tells VS Code it changed', async () => {
+    await documents.open(deacon);
+    const uri = shownUri();
+    await textOf(uri);
+    const changes = recordChanges();
+    client.setQueryAnswer('getComparison', descriptionOf('changed elsewhere'));
 
-    await openExtendedFieldEditor(
-      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
-      makeDeps(tempRoot),
-    );
+    client.emit(rowsChanged(['000123:Fallout4.esm']));
 
-    const mode = (await stat(path)).mode & 0o777;
-    expect(mode & OWNER_WRITE_BIT).not.toBe(0);
+    expect(changes).toEqual([[{ type: 1, uri }]]);
+    expect(await textOf(uri)).toBe('changed elsewhere');
   });
 
-  it('marks an immutable (readOnly) temp file non-writable', async () => {
-    const tempRoot = await makeTempRoot();
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
+  it('tells VS Code the document changed with a newer version, so a clean tab reloads', async () => {
+    await documents.open(deacon);
+    const before = await provider().stat(shownUri());
 
-    await openExtendedFieldEditor(
-      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: true },
-      makeDeps(tempRoot),
-    );
+    client.emit(rowsChanged(['000123:Fallout4.esm']));
 
-    const mode = (await stat(path)).mode & 0o777;
-    expect(mode & OWNER_WRITE_BIT).toBe(0);
+    expect((await provider().stat(shownUri())).mtime).toBeGreaterThan(before.mtime);
   });
 
-  it('commits the saved content on every save, not just the first', async () => {
-    const tempRoot = await makeTempRoot();
-    const saveEvent = makeFakeDocEvent();
-    onDidSaveTextDocument.mockImplementation(saveEvent.register);
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
-    const deps = makeDeps(tempRoot);
+  it('a change to another record leaves the document alone', async () => {
+    await documents.open(deacon);
+    await textOf(shownUri());
+    const changes = recordChanges();
 
-    await openExtendedFieldEditor(
-      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
-      deps,
-    );
-    await saveEvent.fireAndAwaitEveryListener({ uri: { fsPath: path }, getText: () => 'first save' });
-    await saveEvent.fireAndAwaitEveryListener({ uri: { fsPath: path }, getText: () => 'second save' });
+    client.emit(rowsChanged(['000999:Fallout4.esm']));
 
-    expect(deps.onCommit).toHaveBeenNthCalledWith(1, 'first save');
-    expect(deps.onCommit).toHaveBeenNthCalledWith(2, 'second save');
+    expect(changes).toEqual([]);
   });
 
-  it('ignores a save event for a different document', async () => {
-    const tempRoot = await makeTempRoot();
-    const saveEvent = makeFakeDocEvent();
-    onDidSaveTextDocument.mockImplementation(saveEvent.register);
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
-    const deps = makeDeps(tempRoot);
+  it('a change to the plugin copy it shows tells VS Code, and to another plugin does not', async () => {
+    await documents.open(deacon);
+    await textOf(shownUri());
+    const changes = recordChanges();
 
-    await openExtendedFieldEditor(
-      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
-      deps,
-    );
-    await saveEvent.fireAndAwaitEveryListener({ uri: { fsPath: '/some/other/file.txt' }, getText: () => 'unrelated' });
+    client.emit(pluginChanged('Other.esp', 'Data'));
+    client.emit(pluginChanged('Fallout4.esm', 'Data'));
 
-    expect(deps.onCommit).not.toHaveBeenCalled();
+    expect(changes).toHaveLength(1);
   });
 
-  it('on close: deletes the temp file and disposes both listeners', async () => {
-    const tempRoot = await makeTempRoot();
-    const saveEvent = makeFakeDocEvent();
-    const closeEvent = makeFakeDocEvent();
-    onDidSaveTextDocument.mockImplementation(saveEvent.register);
-    onDidCloseTextDocument.mockImplementation(closeEvent.register);
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
-    const deps = makeDeps(tempRoot);
+  it('a closed tab is told of nothing', async () => {
+    await documents.open(deacon);
+    await textOf(shownUri());
+    const changes = recordChanges();
+    closeTab(shownUri());
 
-    await openExtendedFieldEditor(
-      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
-      deps,
-    );
-    await closeEvent.fireAndAwaitEveryListener({ uri: { fsPath: path }, getText: () => 'x' });
+    client.emit(rowsChanged(['000123:Fallout4.esm']));
 
-    expect(saveEvent.isDisposed()).toBe(true);
-    expect(closeEvent.isDisposed()).toBe(true);
-    await expect(stat(path)).rejects.toThrow();
+    expect(changes).toEqual([]);
   });
 
-  it('reports an error and does not throw when opening fails', async () => {
-    const deps = makeDeps('/nonexistent-root-\0-invalid');
+  it('a record mEdit does not hold reads as gone, naming it', async () => {
+    await documents.open(deacon);
+    client.setQueryAnswer('getComparison', null);
 
-    await expect(openExtendedFieldEditor(
-      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
-      deps,
-    )).resolves.toBeUndefined();
-
-    expect(deps.reporter.report).toHaveBeenCalledWith('error', 'Could not open the extended editor.', expect.any(String));
+    await expect(textOf(shownUri())).rejects.toThrow('FileNotFound The record 000123:Fallout4.esm is gone.');
   });
 
-  it('a second open of the same immutable cell succeeds identically to the first, though the first chmod\'ed the file 0o444 and a rewrite would throw EACCES', async () => {
-    const tempRoot = await makeTempRoot();
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
-    const params = { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: true };
+  it('a field the record lacks reads as gone, naming the record and plugin', async () => {
+    await documents.open(deacon);
+    client.setQueryAnswer('getComparison', comparison([diff('Name', { 'Fallout4.esm': 'x' })]));
 
-    const firstDeps = makeDeps(tempRoot);
-    await openExtendedFieldEditor(params, firstDeps);
-    expect(firstDeps.reporter.report).not.toHaveBeenCalled();
-
-    const secondDeps = makeDeps(tempRoot);
-    await openExtendedFieldEditor(params, secondDeps);
-
-    expect(secondDeps.reporter.report).not.toHaveBeenCalled();
-    const mode = (await stat(path)).mode & 0o777;
-    expect(mode & OWNER_WRITE_BIT).toBe(0);
+    await expect(textOf(shownUri())).rejects.toThrow('FileNotFound The record 000123:Fallout4.esm has no such field in Fallout4.esm.');
   });
 
-  it('two columns sharing a filename but differing in origin open independent temp files', async () => {
-    const tempRoot = await makeTempRoot();
-    const colAPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Shared.esp', 'ModA');
-    const colBPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Shared.esp', 'ModB');
-    openTextDocument.mockImplementation((uri: { fsPath: string }) => Promise.resolve({ uri, getText: () => '' }));
+  it('a plugin copy the record lacks reads as gone', async () => {
+    await documents.open(deacon);
+    client.setQueryAnswer('getComparison', comparison([diff('Description', { 'Other.esp': 'x' })], [['Other.esp', 'Data']]));
 
-    await openExtendedFieldEditor(
-      { value: 'from ModA', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModA', readOnly: false },
-      makeDeps(tempRoot),
-    );
-    await openExtendedFieldEditor(
-      { value: 'from ModB', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModB', readOnly: false },
-      makeDeps(tempRoot),
-    );
-
-    expect(colAPath).not.toBe(colBPath);
-    expect(await readFile(colAPath, 'utf8')).toBe('from ModA');
-    expect(await readFile(colBPath, 'utf8')).toBe('from ModB');
+    await expect(textOf(shownUri())).rejects.toThrow('has no such field');
   });
 
-  it('a hostile origin cannot make the write land outside the file the port answers', async () => {
-    const tempRoot = await makeTempRoot();
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', '../../../etc/passwd');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
+  it('reads a nested leaf at its own index in the column', async () => {
+    const leaf = diff('Name', { 'Fallout4.esm': 'second' });
+    client.setQueryAnswer('getComparison', comparison([
+      diff('Items', {}, [
+        { ...diff('[0]', {}, [diff('Name', { 'Fallout4.esm': 'first' })]), indexes: { 'Fallout4.esm': 0 } },
+        { ...diff('[1]', {}, [leaf]), indexes: { 'Fallout4.esm': 1 } },
+      ]),
+    ]));
 
-    await openExtendedFieldEditor(
-      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: '../../../etc/passwd', readOnly: false },
-      makeDeps(tempRoot),
-    );
+    await documents.open({
+      ...deacon, fieldName: 'Name',
+      path: [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }, { kind: 'member', name: 'Name' }],
+    });
 
-    expect(path.startsWith(tempRoot)).toBe(true);
-    expect(await readFile(path, 'utf8')).toBe('x');
+    expect(await textOf(shownUri())).toBe('second');
   });
 
-  it('a multi-line value, whose newlines VS Code\'s EOL normalization and insertFinalNewline could alter, survives the full write -> save -> commit path unchanged', async () => {
-    const tempRoot = await makeTempRoot();
-    const saveEvent = makeFakeDocEvent();
-    onDidSaveTextDocument.mockImplementation(saveEvent.register);
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    const multiline = 'First line.\nSecond line.\n\nFourth line, after a blank one.';
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
-    const deps = makeDeps(tempRoot);
+  it('each save commits the saved text at the cell\'s address, every time', async () => {
+    await documents.open(deacon);
 
-    await openExtendedFieldEditor(
-      { value: multiline, recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
-      deps,
-    );
-    expect(await readFile(path, 'utf8')).toBe(multiline);
+    await provider().writeFile(shownUri(), encode('first'));
+    await provider().writeFile(shownUri(), encode('second'));
 
-    const edited = `${multiline}\nA fifth line, added in the editor.`;
-    await saveEvent.fireAndAwaitEveryListener({ uri: { fsPath: path }, getText: () => edited });
-
-    expect(deps.onCommit).toHaveBeenCalledWith(edited);
+    const address = { formKey: deacon.formKey, plugin: 'Fallout4.esm', origin: 'Data', path: deacon.path };
+    expect(commit.mock.calls).toEqual([[address, 'first'], [address, 'second']]);
   });
 
-  const deacon = { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data' };
+  it('closing without saving commits nothing', async () => {
+    await documents.open(deacon);
+    await textOf(shownUri());
 
-  it('a second open of a tab still open shows it without rewriting the file or adding a listener', async () => {
-    const tempRoot = await makeTempRoot();
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
-    await openExtendedFieldEditor({ ...deacon, readOnly: false }, makeDeps(tempRoot));
-    await writeFile(path, 'unsaved edit on disk');
-    const saveRegistrations = onDidSaveTextDocument.mock.calls.length;
+    closeTab(shownUri());
 
-    await openExtendedFieldEditor({ ...deacon, value: 'newer', readOnly: false }, makeDeps(tempRoot));
-
-    expect(await readFile(path, 'utf8')).toBe('unsaved edit on disk');
-    expect(onDidSaveTextDocument).toHaveBeenCalledTimes(saveRegistrations);
-    expect(showTextDocument).toHaveBeenCalledTimes(2);
+    expect(commit).not.toHaveBeenCalled();
   });
 
-  it('opened again after its tab closed, writes the value afresh', async () => {
-    const tempRoot = await makeTempRoot();
-    const closeEvent = makeFakeDocEvent();
-    onDidCloseTextDocument.mockImplementation(closeEvent.register);
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
-    await openExtendedFieldEditor({ ...deacon, readOnly: false }, makeDeps(tempRoot));
-    await closeEvent.fireAndAwaitEveryListener({ uri: { fsPath: path }, getText: () => 'x' });
+  it('a multi-line value reads back byte for byte', async () => {
+    const multiline = 'First line.\nSecond line.\n\nFourth line.';
+    client.setQueryAnswer('getComparison', descriptionOf(multiline));
+    await documents.open(deacon);
 
-    await openExtendedFieldEditor({ ...deacon, value: 'again', readOnly: false }, makeDeps(tempRoot));
-
-    expect(await readFile(path, 'utf8')).toBe('again');
+    expect(await textOf(shownUri())).toBe(multiline);
   });
 
-  it('holds a read-only tab read-only whatever files.readonlyFromPermissions says', async () => {
-    const tempRoot = await makeTempRoot();
-    await openExtendedFieldEditor({ ...deacon, readOnly: true }, makeDeps(tempRoot));
+  it('opening the same cell again shows the same document', async () => {
+    await documents.open(deacon);
+    await documents.open(deacon);
 
-    expect(executeCommand).toHaveBeenCalledWith('workbench.action.files.setActiveEditorReadonlyInSession');
+    expect(shownUri(0).toString()).toBe(shownUri(1).toString());
   });
 
-  it('leaves an editable tab alone', async () => {
-    const tempRoot = await makeTempRoot();
-    await openExtendedFieldEditor({ ...deacon, readOnly: false }, makeDeps(tempRoot));
+  it('two columns sharing a filename but differing in origin are two documents, each reading its own column', async () => {
+    client.setQueryAnswer('getComparison', comparison(
+      [diff('Description', { 'Shared.esp|ModA': 'from ModA', 'Shared.esp|ModB': 'from ModB' })],
+      [['Shared.esp', 'ModA'], ['Shared.esp', 'ModB']],
+    ));
+    await documents.open({ ...deacon, plugin: 'Shared.esp', origin: 'ModA' });
+    await documents.open({ ...deacon, plugin: 'Shared.esp', origin: 'ModB' });
 
-    expect(executeCommand).not.toHaveBeenCalled();
+    expect(shownUri(0).toString()).not.toBe(shownUri(1).toString());
+    expect(await textOf(shownUri(0))).toBe('from ModA');
+    expect(await textOf(shownUri(1))).toBe('from ModB');
   });
 
-  it('two concurrent opens of one cell write once and register one listener pair', async () => {
-    const tempRoot = await makeTempRoot();
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
+  it('a slash in a label cannot change which segment is the tab\'s title', async () => {
+    await documents.open({ ...deacon, fieldName: 'A/B' });
 
-    await Promise.all([
-      openExtendedFieldEditor({ ...deacon, readOnly: false }, makeDeps(tempRoot)),
-      openExtendedFieldEditor({ ...deacon, value: 'second', readOnly: false }, makeDeps(tempRoot)),
-    ]);
-
-    expect(await readFile(path, 'utf8')).toBe('x');
-    expect(onDidSaveTextDocument).toHaveBeenCalledTimes(1);
-    expect(onDidCloseTextDocument).toHaveBeenCalledTimes(1);
+    expect(shownUri().path.split('/').at(-1)).toBe('A_B [Fallout4.esm]');
   });
 
-  it('a failing show on a tab already open keeps it known, so a later open still does not rewrite', async () => {
-    const tempRoot = await makeTempRoot();
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
-    await openExtendedFieldEditor({ ...deacon, readOnly: false }, makeDeps(tempRoot));
+  it('reports an error when opening fails', async () => {
     showTextDocument.mockRejectedValueOnce(new Error('no window'));
-    const failing = makeDeps(tempRoot);
-    await openExtendedFieldEditor({ ...deacon, readOnly: false }, failing);
-    expect(failing.reporter.report).toHaveBeenCalledWith('error', 'Could not open the extended editor.', 'no window');
-    await writeFile(path, 'unsaved edit on disk');
 
-    await openExtendedFieldEditor({ ...deacon, readOnly: false }, makeDeps(tempRoot));
+    await documents.open(deacon);
 
-    expect(await readFile(path, 'utf8')).toBe('unsaved edit on disk');
-    expect(onDidSaveTextDocument).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith('error', 'Could not open the extended editor.', 'no window');
   });
 
-  it('a failing read-only command is reported and the tab still saves', async () => {
-    const tempRoot = await makeTempRoot();
-    const saveEvent = makeFakeDocEvent();
-    onDidSaveTextDocument.mockImplementation(saveEvent.register);
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
-    executeCommand.mockRejectedValueOnce(new Error('no such command'));
-    const deps = makeDeps(tempRoot);
+  describe('in a column that cannot be edited', () => {
+    it('opens under the read-only scheme, registered read-only, and the editable one is not', async () => {
+      await documents.open({ ...deacon, readOnly: true });
 
-    await openExtendedFieldEditor({ ...deacon, readOnly: true }, deps);
-    await saveEvent.fireAndAwaitEveryListener({ uri: { fsPath: path }, getText: () => 'saved' });
+      expect(shownUri().scheme).toBe(READONLY_FIELD_SCHEME);
+      expect(registration(READONLY_FIELD_SCHEME).options).toEqual({ isReadonly: true });
+      expect(registration(EDITABLE_FIELD_SCHEME).options).toBeUndefined();
+    });
 
-    expect(deps.reporter.report).toHaveBeenCalledWith('error', 'Could not open the extended editor.', 'no such command');
-    expect(deps.onCommit).toHaveBeenCalledWith('saved');
+    it('shows the value, refuses a write and commits nothing', async () => {
+      await documents.open({ ...deacon, readOnly: true });
+
+      expect(await textOf(shownUri(), READONLY_FIELD_SCHEME)).toBe('a long description');
+      await expect(provider(READONLY_FIELD_SCHEME).writeFile(shownUri(), encode('x'))).rejects.toThrow('NoPermissions');
+      expect(commit).not.toHaveBeenCalled();
+    });
+  });
+
+  it('disposing unregisters both schemes', () => {
+    documents.dispose();
+
+    expect([...providers.keys()]).toEqual([]);
   });
 });

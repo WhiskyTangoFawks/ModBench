@@ -90,7 +90,7 @@ function boxOffenders(): Record<string, string[]> {
 
 const rootFiles = (): string[] => productionFiles(SRC).filter((path) => {
   const rel = relative(SRC, path);
-  return !rel.includes(sep) || dirname(rel) === 'medit';
+  return !rel.includes(sep);
 });
 
 const MO2_CONSTRUCTION = { file: join(SRC, 'toolbox.ts'), module: join(boxRoot('instanceAdapter'), 'mo2Instance') };
@@ -242,9 +242,9 @@ describe('a box reaches only the boxes its project references', () => {
 });
 
 describe('the composition root reaches the Instance adapter through its interface', () => {
-  it('scans the activation file, its wiring and medit/', () => {
+  it('scans the activation file and its wiring', () => {
     const files = rootFiles().map((path) => relative(SRC, path));
-    expect(files).toEqual(expect.arrayContaining(['extension.ts', 'toolbox.ts', join('medit', 'extendedFieldFiles.ts')]));
+    expect(files).toEqual(expect.arrayContaining(['extension.ts', 'toolbox.ts']));
     expect(files.filter((f) => f.startsWith('instanceAdapter'))).toEqual([]);
   });
 
