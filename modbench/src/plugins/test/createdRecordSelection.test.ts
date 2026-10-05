@@ -34,7 +34,7 @@ function harness(shown: (formKey: string) => boolean = () => true) {
   const reporter = recordingReporter();
   const revealed: string[] = [];
   const selection = createdRecordSelection<string>({
-    client: { subscribe: (kind, listener) => stream.subscribe(kind, listener), getRecords },
+    client: { onNotification: (kind, listener) => stream.onNotification(kind, listener), getRecords },
     reporter,
     rowOf: (address, formKey) => Promise.resolve(address.recordType === NPCS.recordType && shown(formKey) ? `row ${formKey}` : undefined),
     view: {

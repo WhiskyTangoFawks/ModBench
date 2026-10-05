@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import { modOfOrigin } from './modOfOrigin';
 import type {
-  PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress,
-  NotificationEvent,
+  PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress, NotificationPayloads,
 } from '../client';
 import { lastGoodReadMessage, type Instance, type InstanceValue, type InstanceView, type PluginEntry } from '../instanceLoader/instance';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
@@ -66,7 +65,7 @@ export interface PluginListSource {
 /** The mEdit reads every plugin-keyed fact comes from — the port narrowed to what this tree
  *  calls. Pulled once per reconcile, never per rendered row; and its attaching, which makes the
  *  locked plugins askable. */
-export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onStatusChanged' | 'subscribe' | 'getRecordHolders'>;
+export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onStatusChanged' | 'onNotification' | 'getRecordHolders'>;
 
 /** The record browser a row's children are delegated to (ADR-0017). `PluginTreeProvider`
  *  satisfies it. */
@@ -338,14 +337,14 @@ export class PluginsTreeProvider
     if (options.records) {
       this.subscriptions.push(options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)));
     }
-    const unsubscribeChanges = options.client?.subscribe('external-change', (event) => this.applyExternalChange(event));
+    const unsubscribeChanges = options.client?.onNotification('external-change', (change) => this.applyExternalChange(change));
     if (unsubscribeChanges) this.subscriptions.push({ dispose: unsubscribeChanges });
   }
 
   // plugins.md, A row: each settle of a tracked mod names every plugin of it that changed outside
   // Modbench, so it replaces what the mod's last settle named.
-  private applyExternalChange(event: NotificationEvent): void {
-    this.changedOutsideByMod.set(event.origin, (event.changedPlugins ?? []).map(({ name }) => ({ name, origin: event.origin })));
+  private applyExternalChange(event: NotificationPayloads['external-change']): void {
+    this.changedOutsideByMod.set(event.origin, event.changedPlugins.map(({ name }) => ({ name, origin: event.origin })));
     const changed = [...this.changedOutsideByMod.values()].flat();
     this.changedOutside = new ByPluginAddress<true>();
     for (const { name, origin } of changed) this.changedOutside.set(name, origin, true);

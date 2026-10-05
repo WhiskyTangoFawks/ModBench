@@ -125,7 +125,7 @@ function referrerNode(target: string, copies: readonly ReferenceResult[]): Refer
 }
 
 type ReferencedByClient =
-  Pick<MEditClient, 'getReferences' | 'getComparison' | 'subscribe' | 'onStatusChanged' | 'onReconnected'>;
+  Pick<MEditClient, 'getReferences' | 'getComparison' | 'onNotification' | 'onStatusChanged' | 'onReconnected'>;
 
 function messageLine(...parts: (string | undefined)[]): string | undefined {
   return parts.filter(part => part !== undefined).join(' ') || undefined;
@@ -161,8 +161,8 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
   ) {
     this.indexed = trackLoadOrderStatus(client, undefined, () => this.reread());
     this.unsubscribe = [
-      client.subscribe('rows-changed', () => this.reread()),
-      client.subscribe('plugin-changed', () => this.reread()),
+      client.onNotification('rows-changed', () => this.reread()),
+      client.onNotification('plugin-changed', () => this.reread()),
       client.onReconnected(() => this.reread()),
     ];
   }

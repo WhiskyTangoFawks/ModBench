@@ -149,6 +149,7 @@ export class InMemoryMEditClient implements MEditClient {
   }
 
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
+    this.record('onNotification', [kind]);
     return this.notifications.onNotification(kind, listener);
   }
 

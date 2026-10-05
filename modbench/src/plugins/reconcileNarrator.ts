@@ -1,5 +1,5 @@
 import {
-  toLoadOrderStatus, type LoadOrderProgress, type LoadOrderRefusal, type MEditClient, type PluginAddress,
+  type LoadOrderProgress, type LoadOrderRefusal, type MEditClient, type PluginAddress,
   type PluginLoadFailure,
 } from '../client';
 import { errorMessage } from '../ports/errorMessage';
@@ -44,11 +44,9 @@ const terminal = (status: LoadOrderProgress): boolean =>
 
 /** The narrator hears every index status the stream carries; the answer is the unsubscribe. */
 export function subscribeNarratorToLoadOrderStatus(
-  client: Pick<MEditClient, 'subscribe'>, narrator: ReconcileNarrator,
+  client: Pick<MEditClient, 'onNotification'>, narrator: ReconcileNarrator,
 ): () => void {
-  return client.subscribe('load-order-status', (event) => {
-    if (event.loadOrderStatus) narrator.hear(toLoadOrderStatus(event.loadOrderStatus));
-  });
+  return client.onNotification('load-order-status', (status) => narrator.hear(status));
 }
 
 // plugins.md, States 2: the index status says what the Plugins view shows, whoever started the
