@@ -299,20 +299,19 @@ const RECORDS = { kind: 'records' } as const;
 const INDEXING = { kind: 'indexing' } as const;
 const errorOf = (message: string) => ({ kind: 'error', message }) as const;
 
-// A is held; B has not been reached.
-const midReload: Scene = (facts) => facts.indexed([A], []);
+const heldAOnly: Scene = (facts) => facts.indexed([A], []);
 
 describe('PluginFacts — what a row expands into (plugins.md, States, stories 2-4 and 6)', () => {
   it.each([
     ['before any tick', scenes(), INDEXING, INDEXING],
-    ['a tick holding A', midReload, RECORDS, INDEXING],
+    ['a tick holding A', heldAOnly, RECORDS, INDEXING],
     ['a tick holding nothing', (facts: PluginFacts) => facts.indexed([], []), INDEXING, INDEXING],
     ['a tick that failed B', (facts: PluginFacts) => facts.indexed([A], [failure('Malformed record', B)]),
       RECORDS, errorOf('Malformed record')],
-    ['mEdit unreachable', scenes(midReload, (facts) => facts.unreachable('mEdit is down')), RECORDS, errorOf('mEdit is down')],
-    ['another window holds the index', scenes(midReload, (facts) => facts.refused(heldElsewhere)),
+    ['mEdit unreachable', scenes(heldAOnly, (facts) => facts.unreachable('mEdit is down')), RECORDS, errorOf('mEdit is down')],
+    ['another window holds the index', scenes(heldAOnly, (facts) => facts.refused(heldElsewhere)),
       errorOf(heldElsewhere.message), errorOf(heldElsewhere.message)],
-    ['the snapshot failed', scenes(midReload, (facts) => facts.refused(failedIndex)), RECORDS, errorOf(failedIndex.message)],
+    ['the snapshot failed', scenes(heldAOnly, (facts) => facts.refused(failedIndex)), RECORDS, errorOf(failedIndex.message)],
     ['a failure of B over mEdit unreachable',
       scenes((facts) => facts.indexed([A], [failure('Malformed record', B)]), (facts) => facts.unreachable('mEdit is down')),
       RECORDS, errorOf('Malformed record')],
@@ -321,8 +320,8 @@ describe('PluginFacts — what a row expands into (plugins.md, States, stories 2
       errorOf(heldElsewhere.message), errorOf(heldElsewhere.message)],
     ['mEdit unreachable, then another window', scenes((facts) => facts.unreachable('mEdit is down'), (facts) => facts.refused(heldElsewhere)),
       errorOf(heldElsewhere.message), errorOf(heldElsewhere.message)],
-    ['a tick after a refusal', scenes((facts) => facts.refused(heldElsewhere), midReload), RECORDS, INDEXING],
-    ['a tick after mEdit was unreachable', scenes((facts) => facts.unreachable('mEdit is down'), midReload), RECORDS, INDEXING],
+    ['a tick after a refusal', scenes((facts) => facts.refused(heldElsewhere), heldAOnly), RECORDS, INDEXING],
+    ['a tick after mEdit was unreachable', scenes((facts) => facts.unreachable('mEdit is down'), heldAOnly), RECORDS, INDEXING],
     ['the hand-off after a refusal', scenes((facts) => facts.refused(failedIndex), (facts) => facts.reconciled([held()], [])),
       RECORDS, INDEXING],
   ] as const)('%s', (_label, scene, forA, forB) => {
@@ -333,7 +332,7 @@ describe('PluginFacts — what a row expands into (plugins.md, States, stories 2
     expect(facts.expansion(B)).toEqual(forB);
   });
 
-  it('a failure the last reload named is forgotten once a tick no longer names it', () => {
+  it('a tick that names no failure replaces the last tick's', () => {
     const facts = new PluginFacts();
     facts.indexed([], [failure('Malformed record', B)]);
     facts.indexed([], []);
@@ -351,7 +350,7 @@ describe('PluginFacts — the view message line (plugins.md, States, stories 1, 
     ['no rows', scenes(), { ...none, noRowsMessage: 'no plugins' }, 'no plugins'],
     ['the snapshot failed', (facts: PluginFacts) => facts.refused(failedIndex), none, 'Indexing failed: the index threw'],
     ['another window holds the index', (facts: PluginFacts) => facts.refused(heldElsewhere), none, undefined],
-    ['a tick after the failure', scenes((facts) => facts.refused(failedIndex), midReload), none, undefined],
+    ['a tick after the failure', scenes((facts) => facts.refused(failedIndex), heldAOnly), none, undefined],
     ['the hand-off after the failure', scenes((facts) => facts.refused(failedIndex), (facts) => facts.reconciled([held()], [])),
       none, undefined],
     ['the game folder over the failure', (facts: PluginFacts) => facts.refused(failedIndex),
