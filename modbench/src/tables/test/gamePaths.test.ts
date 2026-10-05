@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease,
+  creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionsOf,
 } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
@@ -120,5 +120,23 @@ describe('creationClubListFile', () => {
   it('names none for a release with no Creation Club, or no release', () => {
     expect(creationClubListFile('/game', 'Oblivion')).toBeUndefined();
     expect(creationClubListFile('/game', undefined)).toBeUndefined();
+  });
+});
+
+describe('pluginCompanionsOf', () => {
+  it('names the archive extension and the strings languages the release names a plugin\'s files with, as Mutagen\'s release constants', () => {
+    expect(pluginCompanionsOf('Fallout4')).toMatchObject({ archiveExtension: '.ba2' });
+    expect(pluginCompanionsOf('Fallout4')?.stringsLanguages).toContain('en');
+    expect(pluginCompanionsOf('SkyrimSE')).toMatchObject({ archiveExtension: '.bsa' });
+    expect(pluginCompanionsOf('SkyrimSE')?.stringsLanguages).toContain('English');
+  });
+
+  it('names no strings language for a release whose plugins carry no strings', () => {
+    expect(pluginCompanionsOf('Oblivion')).toEqual({ archiveExtension: '.bsa', stringsLanguages: [] });
+  });
+
+  it('answers undefined for no release, or a release the table holds no row for', () => {
+    expect(pluginCompanionsOf(undefined)).toBeUndefined();
+    expect(pluginCompanionsOf('SomeRelease')).toBeUndefined();
   });
 });

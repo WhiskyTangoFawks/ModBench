@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parsePlugins, setPluginEnabledInText, movePluginsInText, appendPluginInText, removePluginFromText } from '../pluginsText';
+import {
+  parsePlugins, setPluginEnabledInText, movePluginsInText, appendPluginInText, removePluginFromText, renamePluginInText,
+} from '../pluginsText';
 import type { PluginEntry } from '../pluginsText';
 
 const fixtureDir = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance');
@@ -175,6 +177,26 @@ describe('removePluginFromText — byte-faithful line removal', () => {
 
   it('throws when the name has no entry line', () => {
     expect(() => removePluginFromText('*A.esp\r\n', 'Nope.esp')).toThrow(/Nope\.esp/);
+  });
+});
+
+describe('renamePluginInText — byte-faithful rename of one line, in place', () => {
+  it('names the line anew where it stands, keeping its enabled mark and every other byte', () => {
+    const input = '# header\r\n*A.esp\r\n\r\nB.esp\r\n*C.esp\r\n';
+    expect(renamePluginInText(input, 'A.esp', 'Z.esp')).toBe('# header\r\n*Z.esp\r\n\r\nB.esp\r\n*C.esp\r\n');
+    expect(renamePluginInText(input, 'B.esp', 'Z.esp')).toBe('# header\r\n*A.esp\r\n\r\nZ.esp\r\n*C.esp\r\n');
+  });
+
+  it('keeps a leading BOM, a hand-padded line\'s padding, and a last line with no EOL', () => {
+    expect(renamePluginInText('\uFEFF*First.esp\r\n  *Second.esp  ', 'Second.esp', 'Third.esp')).toBe('\uFEFF*First.esp\r\n  *Third.esp  ');
+  });
+
+  it('leaves a comment that holds the name alone', () => {
+    expect(renamePluginInText('# A.esp\n*A.esp\n', 'A.esp', 'B.esp')).toBe('# A.esp\n*B.esp\n');
+  });
+
+  it('throws when the name has no entry line', () => {
+    expect(() => renamePluginInText('*A.esp\r\n', 'Nope.esp', 'B.esp')).toThrow(/Nope\.esp/);
   });
 });
 

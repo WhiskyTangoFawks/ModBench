@@ -21,6 +21,16 @@ export interface GamePathInfo {
   readonly creationClubList?: string;
   /** The folder a mod's script-extender files sit in, under the Data folder. */
   readonly scriptExtenderFolder: string;
+  readonly pluginCompanions: PluginCompanions;
+}
+
+/** What the game names for a plugin, besides the plugin: its archives, and its strings in each
+ *  language. Mutagen's `ArchiveExtensionProvider` and `StringsLanguageFormat` for the release. */
+export interface PluginCompanions {
+  /** With its period. */
+  readonly archiveExtension: string;
+  /** As the strings files spell them: `<plugin>_<language>.STRINGS`. None for a game with no strings. */
+  readonly stringsLanguages: readonly string[];
 }
 
 const FALLOUT4_MASTERS = [
@@ -28,34 +38,43 @@ const FALLOUT4_MASTERS = [
   'DLCNukaWorld.esm',
 ];
 const SKYRIM_MASTERS = ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm'];
+const FALLOUT4_COMPANIONS: PluginCompanions = {
+  archiveExtension: '.ba2',
+  stringsLanguages: ['en', 'de', 'it', 'es', 'esmx', 'fr', 'pl', 'cn', 'zhhans', 'ja', 'ptbr', 'ru'],
+};
+const SKYRIM_COMPANIONS: PluginCompanions = {
+  archiveExtension: '.bsa',
+  stringsLanguages: ['English', 'German', 'Italian', 'Spanish', 'French', 'Polish', 'Russian', 'Japanese', 'Czech', 'Chinese'],
+};
+const NO_STRINGS_COMPANIONS: PluginCompanions = { archiveExtension: '.bsa', stringsLanguages: [] };
 
 // Only Fallout 4 carries Steam autodetection facts today — a fixture choice, not a platform lock.
 const GAME_PATHS: Record<string, GamePathInfo> = {
   Fallout4: {
     gameName: 'Fallout 4', nexusSlug: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
     masters: FALLOUT4_MASTERS, creationClubList: 'Fallout4.ccc',
-    scriptExtenderFolder: 'f4se',
+    scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS,
   },
   Fallout4VR: {
     gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
-    scriptExtenderFolder: 'f4se',
+    scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS,
   },
-  Fallout3: { gameName: 'Fallout 3', nexusSlug: 'fallout3', masters: ['Fallout3.esm'], scriptExtenderFolder: 'fose' },
-  FalloutNV: { gameName: 'Fallout New Vegas', nexusSlug: 'newvegas', masters: ['FalloutNV.esm'], scriptExtenderFolder: 'nvse' },
-  SkyrimLE: { gameName: 'Skyrim', nexusSlug: 'skyrim', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse' },
+  Fallout3: { gameName: 'Fallout 3', nexusSlug: 'fallout3', masters: ['Fallout3.esm'], scriptExtenderFolder: 'fose', pluginCompanions: NO_STRINGS_COMPANIONS },
+  FalloutNV: { gameName: 'Fallout New Vegas', nexusSlug: 'newvegas', masters: ['FalloutNV.esm'], scriptExtenderFolder: 'nvse', pluginCompanions: NO_STRINGS_COMPANIONS },
+  SkyrimLE: { gameName: 'Skyrim', nexusSlug: 'skyrim', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS },
   SkyrimSE: {
     gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', masters: SKYRIM_MASTERS,
     creationClubList: 'Skyrim.ccc',
-    scriptExtenderFolder: 'skse',
+    scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS,
   },
   SkyrimVR: {
     gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
-    scriptExtenderFolder: 'skse',
+    scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS,
   },
-  EnderalLE: { gameName: 'Enderal', nexusSlug: 'enderal', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse' },
-  Oblivion: { gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'], scriptExtenderFolder: 'obse' },
+  EnderalLE: { gameName: 'Enderal', nexusSlug: 'enderal', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS },
+  Oblivion: { gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'], scriptExtenderFolder: 'obse', pluginCompanions: NO_STRINGS_COMPANIONS },
 };
 
 /** Mutagen's release names the table holds a row for. */
@@ -102,6 +121,12 @@ export function gameMastersOf(release: string | undefined): readonly string[] {
 export function creationClubListFile(root: string, release: string | undefined): string | undefined {
   const file = release === undefined ? undefined : GAME_PATHS[release]?.creationClubList;
   return file === undefined ? undefined : join(root, file);
+}
+
+/** What the release names for a plugin, besides the plugin; none for a release the table holds no
+ *  row for. */
+export function pluginCompanionsOf(release: string | undefined): PluginCompanions | undefined {
+  return release === undefined ? undefined : GAME_PATHS[release]?.pluginCompanions;
 }
 
 /** A game folder as plain data: found, with its Data folder, or not found. */
