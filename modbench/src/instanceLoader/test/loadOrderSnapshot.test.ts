@@ -358,7 +358,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
   });
 
   it('asks the mod folders which folder is the mod\'s, as the manager matches names, and guesses no case-folding of its own', () => {
-    expect(outcomeOf([row('a.esp', 'moda', 0)])).toMatchObject({ refusal: expect.stringContaining('moda') });
+    expect(outcomeOf([row('a.esp', 'moda', 0)])).toEqual({ refusal: 'a.esp is provided by the mod moda, which has no mod folder' });
   });
 
   it('omits a line-only row rather than sending it with path: undefined', () => {
