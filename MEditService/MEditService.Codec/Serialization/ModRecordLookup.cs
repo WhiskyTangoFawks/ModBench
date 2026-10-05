@@ -14,7 +14,7 @@ namespace MEditService.Codec.Serialization;
 internal sealed class ModRecordLookup : IPluginRecordLookup
 {
     private readonly IModGetter _mod;
-    private readonly PluginRecordBytes _file;
+    private readonly IRecordFieldProbe _file;
     private readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas;
     private readonly IDisposable? _open;
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
@@ -24,7 +24,7 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
     private readonly Lazy<Dictionary<(string Worldspace, int X, int Y), string>> _cellsByGrid;
 
     internal ModRecordLookup(
-        IModGetter mod, PluginRecordBytes file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open)
+        IModGetter mod, IRecordFieldProbe file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open)
     {
         _mod = mod;
         _file = file;

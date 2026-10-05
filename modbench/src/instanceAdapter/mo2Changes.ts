@@ -8,13 +8,13 @@ import {
 import { parseDownloadMeta, setHiddenInText, setInstalledInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadMeta, trashDownloadMeta } from './downloadMeta';
-import { ensureDir, exists, putIfChanged } from './files';
-import type { DownloadedFileMark, InstanceAdapter, PluginOrderChange } from './instanceAdapter';
+import { ensureDir, exists, putIfChanged, rename } from './files';
+import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from './instanceAdapter';
 import { downloadFile, pluginsFile, settingsFile } from './layout';
-import { currentDownloadsDir, folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
+import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 
 export type Mo2Changes = Pick<InstanceAdapter,
-  | 'changePluginOrder' | 'createModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
+  | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
   | 'trashDownloadedFileMeta' | 'selectProfile'>;
 
 function listedPlugin(order: readonly PluginEntry[], plugin: string): string {
@@ -62,6 +62,16 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
       const folder = newModFolder(context, mod);
       await refuseFolderTaken(context, { kind: 'mod', name: mod }, folder);
       await ensureDir(folder);
+    },
+
+    async renameModFolder(from, to) {
+      const holding = await folderHolding(context, { kind: 'mod', name: from });
+      if (holding === undefined) throw new Error(entryNotFound({ kind: 'mod', name: from }));
+      const target = newModFolder(context, to);
+      if (entryKey(holding) !== entryKey({ kind: 'mod', name: to })) {
+        await refuseFolderTaken(context, { kind: 'mod', name: to }, target);
+      }
+      await rename(holding.path, target);
     },
 
     async trashEntryFolder(entry, trash) {

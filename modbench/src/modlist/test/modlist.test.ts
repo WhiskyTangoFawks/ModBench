@@ -63,6 +63,7 @@ import {
   insertSeparator,
   moveMods,
   moveSeparators,
+  renameMod,
   renameSeparator,
   setModsEnabled,
   syncMods,
@@ -893,6 +894,42 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
       expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Harder VATS' }], refused: [] } });
       expect((await readModlist()).some((e) => e.name === 'Harder VATS')).toBe(false);
+    });
+  });
+
+  describe('renameMod', () => {
+    const secondaryPath = () => join(dir, 'profiles', 'Secondary', 'modlist.txt');
+    const rename = (to = 'Harder VATS 2') => renameMod(accessTo(dir), 'Default', ['Secondary', 'Default'], 'Harder VATS', to);
+
+    it('renames the folder and the line in every profile, keeping each state', async () => {
+      const outcome = await rename();
+
+      expect(outcome).toEqual({ applied: true, lineRefusals: [] });
+      expect((await stat(join(dir, 'mods', 'Harder VATS 2'))).isDirectory()).toBe(true);
+      expect(await readFile(modlistPath(), 'utf8')).toContain('-Harder VATS 2');
+      expect(await readFile(secondaryPath(), 'utf8')).toContain('-Harder VATS 2');
+    });
+
+    it('names each profile whose line could not be written, the folder staying renamed', async () => {
+      const passthrough = present(vi.mocked(writeFile).getMockImplementation(), 'the writeFile passthrough');
+      vi.mocked(writeFile).mockImplementationOnce(passthrough).mockRejectedValueOnce(new Error('disk full'));
+      const secondaryBefore = await readFile(secondaryPath(), 'utf8');
+
+      const outcome = await rename();
+
+      expect(outcome).toEqual({ applied: true, lineRefusals: [{ profile: 'Secondary', refusal: 'disk full' }] });
+      expect((await stat(join(dir, 'mods', 'Harder VATS 2'))).isDirectory()).toBe(true);
+      expect(await readFile(modlistPath(), 'utf8')).toContain('-Harder VATS 2');
+      expect(await readFile(secondaryPath(), 'utf8')).toBe(secondaryBefore);
+    });
+
+    it('writes no line when the folder did not move', async () => {
+      const before = await readFile(modlistPath(), 'utf8');
+
+      const outcome = await rename('Unofficial Fallout 4 Patch');
+
+      assertRefusalNarrowedByHandSinceExpectMatchersAreTypedAny(outcome, 'is in the way');
+      expect(await readFile(modlistPath(), 'utf8')).toBe(before);
     });
   });
 

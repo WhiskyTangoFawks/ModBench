@@ -1213,6 +1213,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.mod.enable', '2_change'],
       ['modbench.mod.disable', '2_change'],
       ['modbench.mod.move', '2_change'],
+      ['modbench.mod.rename', '2_change'],
       ['modbench.separator.add', '3_create'],
       ['modbench.mod.createEmpty', '3_create'],
       ['modbench.mod.install', '3_create'],
@@ -1289,6 +1290,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     expect(menuOn('folder')).toEqual([['modbench.mod.openFolder', '1_open'], ['modbench.copyValue', '5_copy']]);
   });
 
+  const ONE_MOD = 'modbench.mod.selectionKind == mod && modbench.mod.singleRow';
   const ONE_SEPARATOR = 'modbench.mod.selectionKind == separator && modbench.mod.singleRow';
   const ON_THE_TREE = `focusedView == modbench.modList && listFocus && !inputFocus && ${IN_AN_INSTANCE}`;
 
@@ -1301,6 +1303,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       { command: 'modbench.mod.disable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.mod.selectionToggle == disable`, args: undefined },
       { command: 'modbench.mod.uninstall', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.mod.selectionKind == mod`, args: undefined },
       { command: 'modbench.separator.delete', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.mod.selectionKind == separator`, args: undefined },
+      { command: 'modbench.mod.rename', key: 'f2', mac: 'enter', when: `${ON_THE_TREE} && ${ONE_MOD}`, args: undefined },
       { command: 'modbench.separator.rename', key: 'f2', mac: 'enter', when: `${ON_THE_TREE} && ${ONE_SEPARATOR}`, args: undefined },
       { command: 'modbench.copyValue', key: 'ctrl+c', mac: 'cmd+c', when: ON_THE_TREE, args: MODS_KEY_ARGS },
     ]);
@@ -1311,6 +1314,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.disable', 'modbench.mod.holdsEnabledMod'],
     ['modbench.mod.move', 'modbench.mod.selectionKind'],
     ['modbench.separator.add', 'modbench.mod.selectionKind && modbench.mod.singleRow'],
+    ['modbench.mod.rename', ONE_MOD],
     ['modbench.separator.rename', ONE_SEPARATOR],
     ['modbench.separator.delete', 'modbench.mod.selectionKind == separator'],
     ['modbench.mod.uninstall', 'modbench.mod.selectionKind == mod'],

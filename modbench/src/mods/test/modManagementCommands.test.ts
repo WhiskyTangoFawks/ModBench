@@ -31,16 +31,16 @@ vi.mock('vscode', async () => {
 import { progressSteps } from '../../test/recordedProgress';
 
 const {
-  uninstallMods, deleteSeparators, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators, markFiles,
+  uninstallMods, deleteSeparators, renameMod, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators, markFiles,
 } = vi.hoisted(() => ({
-  uninstallMods: vi.fn(), deleteSeparators: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
+  uninstallMods: vi.fn(), deleteSeparators: vi.fn(), renameMod: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
   createEmptyMod: vi.fn(), setModsEnabled: vi.fn(), moveMods: vi.fn(), moveSeparators: vi.fn(), markFiles: vi.fn(),
 }));
 
 vi.mock('../../modlist/modlist', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../modlist/modlist')>()),
   createEmptyMod, deleteSeparators, insertSeparator,
-  moveMods, moveSeparators, renameSeparator, uninstallMods, setModsEnabled, markFiles,
+  moveMods, moveSeparators, renameMod, renameSeparator, uninstallMods, setModsEnabled, markFiles,
 }));
 
 import {
@@ -172,6 +172,89 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
       message: 'Failed to create "New Mod".',
       detail: 'A mod named "New Mod" already exists.',
     }]);
+  });
+});
+
+describe('registerModContextCommands: modbench.mod.rename', () => {
+  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
+
+  const instance = {
+    ...instanceThatReads,
+    value: instanceValueFixture({
+      activeProfile: 'Default',
+      profiles: ['Default', 'Secondary'],
+      mods: [{ kind: 'mod', name: 'Mod A', enabled: true }, { kind: 'mod', name: 'Mod B', enabled: true }],
+    }),
+  };
+  const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true });
+  const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
+  const register = (reporter = recordingReporter(), selection: readonly ModlistNode[] = []) =>
+    registerModContextCommands({ access, instance, viewSelection: () => selection, reporter, ask: scriptedDialog(), trash: vi.fn(), log: vi.fn() });
+
+  it('prompts with the right-clicked mod\'s name and renames it in every profile', async () => {
+    renameMod.mockResolvedValue({ applied: true, lineRefusals: [] });
+    showInputBox.mockResolvedValueOnce('Renamed');
+    const reporter = recordingReporter();
+
+    register(reporter);
+    await invoke('modbench.mod.rename', modB, [modA, modB]);
+
+    expect(showInputBox.mock.calls[0]?.[0]).toMatchObject({ prompt: 'Rename mod', value: 'Mod B' });
+    expect(renameMod.mock.calls).toEqual([[access, 'Default', ['Default', 'Secondary'], 'Mod B', 'Renamed']]);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it.each([['Esc', undefined], ['an empty name', ''], ['the same name', 'Mod A']])('renames nothing on %s', async (_, answer) => {
+    showInputBox.mockResolvedValueOnce(answer);
+
+    register();
+    await invoke('modbench.mod.rename', modA);
+
+    expect(renameMod).not.toHaveBeenCalled();
+  });
+
+  it('renames the one selected mod from F2', async () => {
+    renameMod.mockResolvedValue({ applied: true, lineRefusals: [] });
+    showInputBox.mockResolvedValueOnce('Renamed');
+
+    register(recordingReporter(), [modA]);
+    await invoke('modbench.mod.rename', MODS_KEY_ARGS);
+
+    expect(renameMod).toHaveBeenCalledWith(access, 'Default', ['Default', 'Secondary'], 'Mod A', 'Renamed');
+  });
+
+  it('asks nothing while several rows are selected', async () => {
+    register(recordingReporter(), [modA, modB]);
+    await invoke('modbench.mod.rename', MODS_KEY_ARGS);
+
+    expect(showInputBox).not.toHaveBeenCalled();
+  });
+
+  it('reports a refusal, the folder not having moved, as a failed rename', async () => {
+    renameMod.mockResolvedValue({ applied: false, refusal: 'is in the way' });
+    showInputBox.mockResolvedValueOnce('Renamed');
+    const reporter = recordingReporter();
+
+    register(reporter);
+    await invoke('modbench.mod.rename', modA);
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to rename mod.', detail: 'is in the way' }]);
+  });
+
+  it('warns once for each profile whose line could not be renamed, naming it and the mod order file', async () => {
+    renameMod.mockResolvedValue({
+      applied: true, lineRefusals: [{ profile: 'Default', refusal: 'disk full' }, { profile: 'Secondary', refusal: 'locked' }],
+    });
+    showInputBox.mockResolvedValueOnce('Renamed');
+    const reporter = recordingReporter();
+
+    register(reporter);
+    await invoke('modbench.mod.rename', modA);
+
+    expect(reporter.reports).toEqual([
+      { severity: 'warning', message: '"Mod A" was renamed, but its modlist.txt line in profile "Default" could not be renamed.', detail: 'disk full' },
+      { severity: 'warning', message: '"Mod A" was renamed, but its modlist.txt line in profile "Secondary" could not be renamed.', detail: 'locked' },
+    ]);
   });
 });
 
