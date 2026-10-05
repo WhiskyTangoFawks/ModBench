@@ -192,7 +192,7 @@ public sealed class TrackServiceTests
         await trackTask;
 
         Assert.Contains(observed, p => p.Phase == TrackPhase.Serializing && p.PluginsDone > 0 && p.PluginsDone < p.PluginsTotal);
-        Assert.All(observed.Where(p => p.Phase != TrackPhase.Idle), p => Assert.Equal("FixtureMod", p.Origin));
+        Assert.All(observed.Where(p => p.Phase != TrackPhase.Idle), p => Assert.Equal("FixtureMod", p.Mod));
         Assert.Equal(TrackPhase.Idle, service.Progress.Phase);
     }
 

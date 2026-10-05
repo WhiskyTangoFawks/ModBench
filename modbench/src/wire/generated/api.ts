@@ -946,7 +946,7 @@ export interface components {
         /** @enum {string} */
         TrackPhase: "Idle" | "Parsing" | "Serializing" | "Committing";
         TrackProgress: {
-            origin?: string | null;
+            mod?: string | null;
             phase: components["schemas"]["TrackPhase"];
             /** Format: int32 */
             pluginsDone: number;

@@ -126,7 +126,6 @@ public sealed class TrackService(
         }
     }
 
-    // Every refusal comes before the track's commit (commands.md, A selection is one gesture).
     private async Task<Verification> VerifyAsync(
         LoadOrderSnapshot loadOrder, PluginProvider.FromMod mod, RegisteredPlugin plugin, Action onParsed, CancellationToken cancel)
     {
@@ -160,9 +159,9 @@ public sealed class TrackService(
             null);
     }
 
-    private void SetProgress(string? origin, TrackPhase phase, int pluginsDone, int pluginsTotal)
+    private void SetProgress(string? mod, TrackPhase phase, int pluginsDone, int pluginsTotal)
     {
-        var progress = new TrackProgress(origin, phase, pluginsDone, pluginsTotal);
+        var progress = new TrackProgress(mod, phase, pluginsDone, pluginsTotal);
         Volatile.Write(ref _progress, progress);
         _notifications?.Publish(new TrackProgressNotification(progress));
     }

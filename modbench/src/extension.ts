@@ -22,7 +22,7 @@ import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText, type Focus
 import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 import {
-  registerTrackCommand, registerDecompileCommand, registerCompileCommand, CompileProblems, type CompileDeps,
+  registerTrackCommand, registerDecompileCommand, registerCompileCommand, CompileProblems, type CompileDeps, type TrackDeps,
   conflictsComputedOver, refreshSourceControlFor, type PluginsViewProgress,
 } from './plugins/pluginRowCommands';
 import type { OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
@@ -126,6 +126,7 @@ export function activate(context: vscode.ExtensionContext) {
     conflictsComputed, instance, recordWrite,
     originFiles: (origin) => toolbox.originFiles(origin),
     trackSelection: () => toolbox.trackSelection(),
+    modDirs: () => toolbox.instance?.value.paths.modDirs ?? new Map(),
   };
   // The instance side, whole: the Instance, the four views, their gestures and the backend sync.
   const toolbox = createToolbox({
@@ -206,18 +207,19 @@ interface PluginRowCommandDeps {
   recordWrite: RecordWrite;
   originFiles: OriginFilesOf;
   trackSelection: () => readonly unknown[];
+  modDirs: TrackDeps['modDirs'];
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, outputChannel, conflictsComputed, instance, trackSelection } = deps;
+  const { session, client, outputChannel, conflictsComputed, instance, trackSelection, modDirs } = deps;
   const progress = pluginsProgress(session);
   return [
     registerTrackCommand({
       progress, instance,
       client, reporter: makeReporter(outputChannel, 'mod.track'), onTracked: conflictsComputed,
-      modsView: MODS_KEY_ARGS.view,
+      modDirs, modsView: MODS_KEY_ARGS.view,
     }, trackSelection),
     registerDecompileCommand({
       client,

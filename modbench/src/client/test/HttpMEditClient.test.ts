@@ -358,10 +358,8 @@ describe('HttpMEditClient — tracking mods answers per plugin and per mod', () 
 
     expect(outcome).toEqual({
       landed: [first],
-      refused: [
-        { item: second, reason: 'Second.esp does not round-trip.' },
-        { item: 'ModC', reason: 'ModC provides no plugin.' },
-      ],
+      refused: [{ item: second, reason: 'Second.esp does not round-trip.' }],
+      refusedMods: [{ item: 'ModC', reason: 'ModC provides no plugin.' }],
     });
     const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/track$/.test(req.url));
     expect(await request?.json()).toEqual({ mods: ['ModA', 'ModC'] });

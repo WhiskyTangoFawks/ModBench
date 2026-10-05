@@ -309,10 +309,8 @@ export class HttpMEditClient implements MEditClient {
       if (isRefused(answer)) return answer;
       return {
         landed: answer.applied,
-        refused: [
-          ...answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
-          ...answer.refusedMods.map((r) => ({ item: r.mod, reason: r.message })),
-        ],
+        refused: answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
+        refusedMods: answer.refusedMods.map((r) => ({ item: r.mod, reason: r.message })),
       };
     } finally {
       unsubscribe();

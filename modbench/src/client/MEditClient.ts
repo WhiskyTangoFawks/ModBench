@@ -116,11 +116,12 @@ export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse
 /** ADR-0012. */
 export type PluginAddress = components['schemas']['PluginAddress'];
 
-/** Track's answer: each plugin landed, and each plugin or mod refused with its reason. A mod that
- *  provides no plugin is refused as the mod. */
+/** Track's answer: each plugin landed or refused, and each mod refused as a mod, such as one that
+ *  provides no plugin. */
 export interface TrackOutcome {
   landed: readonly PluginAddress[];
-  refused: readonly ItemRefusal<PluginAddress | string>[];
+  refused: readonly ItemRefusal<PluginAddress>[];
+  refusedMods: readonly ItemRefusal<string>[];
 }
 
 /** Compile's answer: each plugin compiled, with its diagnostics, or refused with its reason. */
