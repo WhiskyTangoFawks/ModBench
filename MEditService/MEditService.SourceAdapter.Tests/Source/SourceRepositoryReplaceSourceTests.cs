@@ -96,7 +96,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     private SourceRepository Repository =>
-        SourceRepository.Open(_modFolder, GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
+        SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
 
     private string Root => PluginSourceRoot.In(_modFolder, Plugin);
 
@@ -125,7 +125,7 @@ public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
     [Fact]
     public void ReplaceSourceFrom_WithGitGoneFromPathAfterTheUpFrontCheck_ThrowsTheOsReason_AndLeavesTheSourceAsItWas()
     {
-        var repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
+        var repository = SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
         var path = Environment.GetEnvironmentVariable("PATH");
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try

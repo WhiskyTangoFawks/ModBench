@@ -19,7 +19,7 @@ public sealed class SourceRepositoryMintingTests : IDisposable
         PluginBaselines.Track(
             _modFolder,
             [new TreeFile("plugin-source/Other.esp/Npcs/Other - 000001_Other.esp.json", "{}"u8.ToArray())]);
-        return SourceRepository.Open(_modFolder, GameRelease.Fallout4)
+        return SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be tracked.");
     }
 

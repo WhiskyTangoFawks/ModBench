@@ -16,23 +16,23 @@ internal sealed class Projector(
     DuckDbRecordIndex index, Func<PluginAddress, PluginMetadata?> held, INotificationPublisher? notifications,
     ILogger logger)
 {
-    /// <summary>The folder of the tree this plugin ingests from, or null when it reads its binary.
+    /// <summary>The mod of the tree this plugin ingests from, or null when it reads its binary.
     /// Re-derived every call: a mod manager can replace the folder wholesale.</summary>
-    internal static string? TreeFolderOf(PluginAddress key, PluginProvider provider) =>
+    internal static PluginProvider.FromMod? TreeModOf(PluginAddress key, PluginProvider provider) =>
         provider is PluginProvider.FromMod mod && SourceRepository.HoldsTreeFor(mod.Folder, key.Name)
-            ? mod.Folder
+            ? mod
             : null;
 
-    internal static bool HoldsTree(PluginAddress key, PluginProvider provider) => TreeFolderOf(key, provider) is not null;
+    internal static bool HoldsTree(PluginAddress key, PluginProvider provider) => TreeModOf(key, provider) is not null;
 
     /// <summary>What the tree's documents stamp, or the doubly claimed FormKey it named instead.</summary>
     internal static bool TryTreeStamps(
-        string modFolder, GameRelease release, PluginAddress key,
+        PluginProvider.FromMod mod, GameRelease release, PluginAddress key,
         [NotNullWhen(true)] out RecordStamps? stamps, [NotNullWhen(false)] out string? ambiguity)
     {
         try
         {
-            stamps = SourceRepository.Over(modFolder, release).StampsOf(key);
+            stamps = SourceRepository.Over(mod, release).StampsOf(key);
             ambiguity = null;
             return true;
         }
@@ -46,13 +46,13 @@ internal sealed class Projector(
 
     /// <summary>Indexes the whole tree as the plugin. Throws whatever the tree throws: "quietly served
     /// the binary instead" is a silent lie. The plugin's binary path only stamps the rows.</summary>
-    internal void Ingest(PluginMetadata plugin, string modFolder, CancellationToken cancel = default)
+    internal void Ingest(PluginMetadata plugin, PluginProvider.FromMod mod, CancellationToken cancel = default)
     {
         cancel.ThrowIfCancellationRequested();
 
         // Over rather than Open: the documents read the same either way, and a repository verb over an
         // untracked folder answers empty instead of throwing.
-        var repository = SourceRepository.Over(modFolder, index.Release);
+        var repository = SourceRepository.Over(mod, index.Release);
 
         var timer = Stopwatch.StartNew();
         using (var documents = repository.OpenDocuments(plugin.Key, index.Schemas))
@@ -60,7 +60,7 @@ internal sealed class Projector(
         var indexMs = timer.ElapsedMilliseconds;
 
         timer.Restart();
-        LearnWorkingTreeStates(plugin.Key, modFolder);
+        LearnWorkingTreeStates(plugin.Key, mod);
         if (logger.IsEnabled(LogLevel.Debug))
         {
             logger.LogDebug(
@@ -72,9 +72,9 @@ internal sealed class Projector(
     /// <summary>Sets each of <paramref name="key"/>'s rows to how the Source repository says its
     /// record stands against the last commit (ADR-0007). Returns the keys that moved, for the caller
     /// to announce.</summary>
-    internal IReadOnlyList<string> LearnWorkingTreeStates(PluginAddress key, string modFolder)
+    internal IReadOnlyList<string> LearnWorkingTreeStates(PluginAddress key, PluginProvider.FromMod mod)
     {
-        var changes = SourceRepository.Over(modFolder, index.Release).ChangedSinceLastCommit(key, index.Schemas);
+        var changes = SourceRepository.Over(mod, index.Release).ChangedSinceLastCommit(key, index.Schemas);
 
         var learned = changes.ToDictionary(
             change => change.Key,
@@ -99,7 +99,7 @@ internal sealed class Projector(
     /// <summary>ADR-0015: the one projection verb. Re-derives <paramref name="formKeys"/>' rows from the
     /// Source repository, idempotent by content. A key the index does not hold re-derives the whole
     /// plugin.</summary>
-    internal void RefreshByKeys(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys)
+    internal void RefreshByKeys(PluginAddress key, PluginProvider.FromMod mod, IReadOnlyList<string> formKeys)
     {
         // One signal, one advance, however many documents it moves.
         using var projection = index.BeginProjection();
@@ -107,24 +107,24 @@ internal sealed class Projector(
         // The tree is what these rows are re-derived from, so it is what the plugin is derived from
         // (ADR-0007), bytes moved or not: a plugin tracked after indexing arrives here
         // still stamped from its binary.
-        if (SourceRepository.HoldsTreeFor(modFolder, key.Name))
+        if (SourceRepository.HoldsTreeFor(mod.Folder, key.Name))
             index.RestampDerivation(key, DerivedFrom.SourceTree);
 
         // A key the index does not hold is a record the tree has gained or got back, and no document
         // says where the tree puts it: a new exterior cell's block is a directory, not a field.
         if (formKeys.Any(formKey => index.StoredRow(key, formKey) == null))
         {
-            RederiveWholePluginFromSource(key, modFolder, formKeys);
+            RederiveWholePluginFromSource(key, mod, formKeys);
             return;
         }
 
         // One repository for the batch, so its listing memo and embedded-owner map are built once
         // rather than once per key.
-        var repository = SourceRepository.Over(modFolder, index.Release);
+        var repository = SourceRepository.Over(mod, index.Release);
         var touched = new List<string>();
         foreach (var formKey in formKeys)
             touched.AddRange(RefreshOneKey(repository, key, formKey));
-        touched.AddRange(LearnWorkingTreeStates(key, modFolder));
+        touched.AddRange(LearnWorkingTreeStates(key, mod));
 
         // ADR-0015: after the commit, so a subscriber re-reading on receipt sees the rows this names.
         // Embedded children are named, since a record panel open on a placed ref inside a refreshed
@@ -171,11 +171,11 @@ internal sealed class Projector(
 
     // The whole tree, read as one mod: where a record sits is a fact about the tree, not about one
     // document. Idempotent by construction, being the ingest Track and a re-index run.
-    private void RederiveWholePluginFromSource(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys)
+    private void RederiveWholePluginFromSource(PluginAddress key, PluginProvider.FromMod mod, IReadOnlyList<string> formKeys)
     {
         // Nothing to re-derive from: the tree went away between the signal and this line, or the
         // rows came from its binary and a source key is not its to answer for.
-        if (!SourceRepository.HoldsTreeFor(modFolder, key.Name)) return;
+        if (!SourceRepository.HoldsTreeFor(mod.Folder, key.Name)) return;
         if (held(key) is not { } plugin)
         {
             logger.LogWarning(
@@ -189,7 +189,7 @@ internal sealed class Projector(
         var statesBefore = index.HeldWorkingTreeStates(key);
         using (index.BeginProjection())
         {
-            Ingest(plugin, modFolder);
+            Ingest(plugin, mod);
             index.ResweepWinners();
         }
         var after = index.EffectiveContentHashes(key);
@@ -208,8 +208,8 @@ internal sealed class Projector(
     /// came from (source documents when <paramref name="provider"/>'s mod holds its tree, the binary
     /// otherwise) and refreshes what differs.</summary>
     internal ValidationReport Validate(PluginAddress key, PluginProvider provider) =>
-        TreeFolderOf(key, provider) is { } modFolder
-            ? ValidateAgainstTree(key, modFolder)
+        TreeModOf(key, provider) is { } mod
+            ? ValidateAgainstTree(key, mod)
             : ValidateAgainstBinary(key);
 
     // ADR-0003, asked of one plugin. A binary has no smaller unit, so a mismatch is a
@@ -243,10 +243,10 @@ internal sealed class Projector(
     }
 
     // A plugin's rows against the source documents they came from, by content stamp (ADR-0003).
-    private ValidationReport ValidateAgainstTree(PluginAddress key, string modFolder)
+    private ValidationReport ValidateAgainstTree(PluginAddress key, PluginProvider.FromMod mod)
     {
         var failures = new List<string>();
-        if (!TryTreeStamps(modFolder, index.Release, key, out var stamps, out var ambiguity))
+        if (!TryTreeStamps(mod, index.Release, key, out var stamps, out var ambiguity))
         {
             // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
             failures.Add(ambiguity);
@@ -256,13 +256,13 @@ internal sealed class Projector(
         failures.AddRange(stamps.Unreadable);
         // A file that could not be read is no evidence that a record is gone.
         var treeFullyRead = stamps.Unreadable.Count == 0;
-        return Reconcile(key, modFolder, stamps.ByFormKey, index.HeldDocumentStamps(key), treeFullyRead, failures);
+        return Reconcile(key, mod, stamps.ByFormKey, index.HeldDocumentStamps(key), treeFullyRead, failures);
     }
 
     // An embedded child's system of record is its owner's document, so a matching document vouches
     // for every row derived from it.
     private ValidationReport Reconcile(
-        PluginAddress key, string modFolder, IReadOnlyDictionary<string, string> onDisk,
+        PluginAddress key, PluginProvider.FromMod mod, IReadOnlyDictionary<string, string> onDisk,
         Dictionary<string, string> heldStamps, bool treeFullyRead, List<string> failures)
     {
         // A document the index never saw moves which records the plugin has, which only a rebuild
@@ -290,9 +290,9 @@ internal sealed class Projector(
         List<string> stale = [.. deleted, .. drifted];
         if (stale.Count > 0)
         {
-            RefreshByKeys(key, modFolder, stale);
+            RefreshByKeys(key, mod, stale);
         }
-        else if (LearnWorkingTreeStates(key, modFolder) is { Count: > 0 } moved)
+        else if (LearnWorkingTreeStates(key, mod) is { Count: > 0 } moved)
         {
             PublishRowsChanged(key, moved);
         }

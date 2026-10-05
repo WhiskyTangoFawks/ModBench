@@ -29,7 +29,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
     {
         if (files.Length == 0) PluginBaselines.TrackWithNoRecords(_modFolder);
         else PluginBaselines.Track(_modFolder, files);
-        return SourceRepository.Open(_modFolder, Release)
+        return SourceRepository.Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
 

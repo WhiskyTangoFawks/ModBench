@@ -607,7 +607,7 @@ internal sealed class Reconciler(
             {
                 logger.LogInformation("Ingesting {Plugin} from its source tree", plugin.Name);
             }
-            scope.Projector.Ingest(plugin, ModFolderHoldingTree(plugin), token);
+            scope.Projector.Ingest(plugin, ModHoldingTree(plugin), token);
             return;
         }
         catch (OperationCanceledException)
@@ -632,8 +632,8 @@ internal sealed class Reconciler(
         IndexFromBinary(scope, plugin);
     }
 
-    private static string ModFolderHoldingTree(PluginMetadata plugin) =>
-        plugin.Provider is PluginProvider.FromMod mod ? mod.Folder : throw new InvalidOperationException(
+    private static PluginProvider.FromMod ModHoldingTree(PluginMetadata plugin) =>
+        plugin.Provider is PluginProvider.FromMod mod ? mod : throw new InvalidOperationException(
                 $"'{plugin.Name}' from '{plugin.Origin}' holds a source tree, so a mod provides it.");
 
     // ADR-0005: the binary reaches the index as documents, through the adapter's own door,
@@ -705,7 +705,7 @@ internal sealed class Reconciler(
             // Gained records are refreshed by key so the rows that moved are named (ADR-0015).
             if (report.NeedsRebuild && report.ChangedKeys.Count > 0 && plugin.Provider is PluginProvider.FromMod mod)
             {
-                RefreshByKeysOrReadWhole(scope, key, mod.Folder, report.ChangedKeys);
+                RefreshByKeysOrReadWhole(scope, key, mod, report.ChangedKeys);
             }
             // An untracked plugin's rows went with its file, and the file is back.
             else if (report.NeedsRebuild || (!holdsTree && index.IndexedContentHash(key) is null))
@@ -763,11 +763,11 @@ internal sealed class Reconciler(
     // A tree the keys cannot be read from is diagnosed on the plugin by the whole read, as a first
     // ingest would diagnose it.
     private void RefreshByKeysOrReadWhole(
-        OpenScope scope, PluginAddress key, string modFolder, IReadOnlyList<string> formKeys)
+        OpenScope scope, PluginAddress key, PluginProvider.FromMod mod, IReadOnlyList<string> formKeys)
     {
         try
         {
-            scope.Projector.RefreshByKeys(key, modFolder, formKeys);
+            scope.Projector.RefreshByKeys(key, mod, formKeys);
         }
         catch (Exception ex) when (ex is AmbiguousSourceUnitException or UnreadableSourceDocumentException)
         {
@@ -830,7 +830,7 @@ internal sealed class Reconciler(
         {
             try
             {
-                scope.Projector.Ingest(metadata, ModFolderHoldingTree(metadata));
+                scope.Projector.Ingest(metadata, ModHoldingTree(metadata));
             }
             catch (Exception ex)
             {

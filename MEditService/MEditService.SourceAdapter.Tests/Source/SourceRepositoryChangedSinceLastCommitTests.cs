@@ -35,7 +35,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         var files = new[] { new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody)) }.Concat(extraFiles).ToArray();
         PluginBaselines.Track(
             _modFolder, files);
-        return SourceRepository.Open(_modFolder, Release)
+        return SourceRepository.Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
 
@@ -63,7 +63,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         var oldFolder = Directory.CreateDirectory(Path.Combine(_modFolder, lookalikeFolderName, PluginName)).FullName;
         File.WriteAllText(Path.Combine(oldFolder, "notes.txt"), "notes");
         PluginBaselines.Track(_modFolder, [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
-        var repository = SourceRepository.Open(_modFolder, Release)
+        var repository = SourceRepository.Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
         var gitDir = Path.Combine(_modFolder, ".git");
         GitProbe.Run(gitDir, _modFolder, "add", "-f", $"{lookalikeFolderName}/{PluginName}/notes.txt");
@@ -154,7 +154,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(path).Require());
         File.WriteAllText(path, NpcBody);
 
-        var only = Assert.Single(ChangesIn(SourceRepository.Over(_modFolder, Release)));
+        var only = Assert.Single(ChangesIn(SourceRepository.Over(TestMod.In(_modFolder), Release)));
 
         Assert.Equal((NpcFormKey, RecordChange.Added), (only.Key, only.Value));
     }
