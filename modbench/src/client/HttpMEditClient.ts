@@ -14,7 +14,7 @@ import {
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type CreatableRecordType,
   type RebuildIndexOutcome, type CopyItem, type CopyMode,
-  type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
+  type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
@@ -311,14 +311,16 @@ export class HttpMEditClient implements MEditClient {
     }
   }
 
-  async createRecord({ name: plugin, origin }: PluginAddress, recordType: string): Promise<RecordCreateResponse | WriteRefused> {
+  async createRecord(
+    { name: plugin, origin }: PluginAddress, recordType: string, into?: { container?: string; position?: GridPosition },
+  ): Promise<RecordCreateResponse | WriteRefused> {
     const failMsg = `Could not create a new ${recordType} record in "${plugin}"`;
     const answer = await this.mutate<RecordCreateResponse>({
       op: `createRecord(${plugin}, ${recordType})`,
       failMsg,
       post: () => this.apiClient.POST('/plugins/{plugin}/records', {
         params: { path: { plugin } },
-        body: { origin, recordType },
+        body: { origin, recordType, ...into },
       }),
     });
     return answer;

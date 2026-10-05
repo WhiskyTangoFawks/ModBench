@@ -59,7 +59,9 @@ public record RecordEditResponse(bool Applied, string FormKey, string Path, stri
 // identity, refusals as ProblemDetails carrying the same `refusal` extension) Edit already
 // established.
 
-public record RecordCreateRequest(string Origin, string RecordType);
+/// <summary>Container is the FormKey, in the plugin the request names, of the record the new one goes into;
+/// Position is an exterior cell's grid position, and only a worldspace takes one.</summary>
+public record RecordCreateRequest(string Origin, string RecordType, string? Container = null, GridPosition? Position = null);
 
 public record RecordCreateResponse(bool Applied, string FormKey, string RecordType);
 

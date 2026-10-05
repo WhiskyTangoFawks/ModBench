@@ -148,6 +148,7 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<RecordCreateResponse>()
             .ProducesProblem(400)
+            .ProducesProblem(404)
             .ProducesProblem(409)
             .ProducesProblem(422)
             .ProducesProblem(500);
@@ -320,7 +321,7 @@ public static class PluginEndpoints
                     return Results.Problem("A record type is required.", statusCode: 400);
                 return null;
             },
-            execute: () => edits.CreateRecord(WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType),
+            execute: () => edits.CreateRecord(WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType, req.Container, req.Position),
             onApplied: result => Results.Ok(new RecordCreateResponse(true, WriteEndpointMapping.RequireNewFormKey(result), req.RecordType)));
     }
 }

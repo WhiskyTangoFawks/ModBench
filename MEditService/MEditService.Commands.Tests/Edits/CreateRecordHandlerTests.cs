@@ -37,7 +37,7 @@ public sealed class CreateRecordHandlerTests
     public void CreateRecord_WhenTheFileSystemRefusesTheWrite_RefusesWithItsWords_AndLeavesTheTreeAsItWas()
     {
         using var mod = SourceEditFixture.Tracked();
-        const string newFormKey = "000804:Fixture.esp";
+        const string newFormKey = "000807:Fixture.esp";
         TreeTampering.BlockWrite(mod.ModFolder, mod.Plugin, new RecordIdentity(newFormKey, "npc_", null));
         var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
@@ -73,6 +73,62 @@ public sealed class CreateRecordHandlerTests
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType);
 
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+    }
+
+    [Fact]
+    public void CreateRecord_NamingAWorldspace_RefusesAsNotYetSupported()
+    {
+        using var mod = SourceEditFixture.Tracked();
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "cell", mod.Worldspace.ToString(), new GridPosition(1, -2));
+
+        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.Contains(mod.Worldspace.ToString(), result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CreateRecord_NamingACell_RefusesAsNotYetSupported()
+    {
+        using var mod = SourceEditFixture.Tracked();
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", mod.Cell.ToString());
+
+        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.Contains(mod.Cell.ToString(), result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CreateRecord_NamingAQuest_RefusesAsNotYetSupported()
+    {
+        using var mod = SourceEditFixture.Tracked();
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "dial", mod.Quest.ToString());
+
+        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.Contains(mod.Quest.ToString(), result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CreateRecord_NamingAContainerThePluginLacks_RefusesRecordNotFound()
+    {
+        using var mod = SourceEditFixture.Tracked();
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", "000FFF:" + SourceEditFixture.PluginName);
+
+        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreateRecord_WithAGridPositionAndNoWorldspace_RefusesAsAMalformedEnvelope(bool inACell)
+    {
+        using var mod = SourceEditFixture.Tracked();
+        var container = inACell ? mod.Cell.ToString() : null;
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "cell", container, new GridPosition(0, 0));
+
+        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
     }
 
     [Fact]

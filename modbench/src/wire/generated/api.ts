@@ -763,6 +763,12 @@ export interface components {
         };
         /** @enum {string} */
         FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
+        GridPosition: {
+            /** Format: int32 */
+            x: number;
+            /** Format: int32 */
+            y: number;
+        };
         InteriorCellBlock: {
             /** Format: int32 */
             number: number;
@@ -962,6 +968,8 @@ export interface components {
         RecordCreateRequest: {
             origin: string;
             recordType: string;
+            container?: string | null;
+            position?: components["schemas"]["GridPosition"] | null;
         };
         RecordCreateResponse: {
             applied: boolean;
@@ -1877,6 +1885,15 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
