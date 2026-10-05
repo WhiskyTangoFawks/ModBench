@@ -40,7 +40,7 @@ export interface EditorCommandDeps {
     | 'editRecord' | 'searchRecords'
     | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'
-    | 'getComparison' | 'subscribe' | 'onStatusChanged' | 'onReconnected' | 'getRecordOwner'>;
+    | 'getComparison' | 'onNotification' | 'onStatusChanged' | 'onReconnected' | 'getRecordOwner'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
   // Each view's own selection, which that view's keys act on.

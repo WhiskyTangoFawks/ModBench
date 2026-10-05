@@ -9,7 +9,7 @@ export interface LoadOrderStatusTracker {
 }
 
 export function trackLoadOrderStatus(
-  client: Pick<MEditClient, 'subscribe' | 'onStatusChanged' | 'onReconnected'>,
+  client: Pick<MEditClient, 'onNotification' | 'onStatusChanged' | 'onReconnected'>,
   onFailuresChanged: () => void = () => undefined,
   onCurrentChanged: () => void = () => undefined,
 ): LoadOrderStatusTracker {
@@ -21,10 +21,9 @@ export function trackLoadOrderStatus(
     onCurrentChanged();
   };
   const forget = () => { settle(false); failures = []; };
-  const unsubscribeStatus = client.subscribe('load-order-status', (event) => {
-    if (!event.loadOrderStatus) return;
-    settle(event.loadOrderStatus.conflictsComputed);
-    const arrived = event.loadOrderStatus.failures;
+  const unsubscribeStatus = client.onNotification('load-order-status', (status) => {
+    settle(status.conflictsComputed);
+    const arrived = status.failures;
     if (JSON.stringify(arrived) === JSON.stringify(failures)) return;
     failures = arrived;
     onFailuresChanged();

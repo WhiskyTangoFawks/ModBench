@@ -19,7 +19,7 @@ export interface OpenExtendedFieldEditorParams extends FieldAddress {
 }
 
 export interface ExtendedFieldDocumentsDeps {
-  client: Pick<MEditClient, 'getComparison' | 'subscribe'>;
+  client: Pick<MEditClient, 'getComparison' | 'onNotification'>;
   reporter: Reporter;
   // Runs once per save, not once per tab: a tab can be saved any number of times while open, and
   // each save is its own commit of the leaf.
@@ -149,10 +149,10 @@ export class ExtendedFieldDocuments implements vscode.Disposable {
     this.readOnly = new FieldFileSystem(deps, true);
     const both = [this.editable, this.readOnly];
     const unsubscribes = [
-      deps.client.subscribe('rows-changed', event => {
+      deps.client.onNotification('rows-changed', event => {
         for (const files of both) files.changedWhere(field => event.keys.includes(field.formKey));
       }),
-      deps.client.subscribe('plugin-changed', event => {
+      deps.client.onNotification('plugin-changed', event => {
         for (const files of both) files.changedWhere(field => field.plugin === event.plugin && field.origin === event.origin);
       }),
     ];

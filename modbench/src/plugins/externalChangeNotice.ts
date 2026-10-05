@@ -9,22 +9,22 @@ export const DECOMPILE_PLUGIN_TITLE = 'Decompile Plugin';
  *  bytes, and one for each untracked plugin of a tracked mod once in a session. Returns the
  *  unsubscribe. */
 export function noticeExternalChanges(
-  reporter: Pick<Reporter, 'report'>, notifications: Pick<MEditClient, 'subscribe'>,
+  reporter: Pick<Reporter, 'report'>, notifications: Pick<MEditClient, 'onNotification'>,
 ): () => void {
   // Each mod's last settle: plugin name to the state of its bytes, null when they could not be read.
   const toldByMod = new Map<string, Map<string, string | null>>();
   const toldUntracked = new Set<string>();
 
-  const offChanges = notifications.subscribe('external-change', ({ origin, changedPlugins }) => {
+  const offChanges = notifications.onNotification('external-change', ({ origin, changedPlugins }) => {
     const told = toldByMod.get(origin);
-    const now = new Map((changedPlugins ?? []).map((p) => [p.name, p.bytesSha256 ?? null]));
+    const now = new Map(changedPlugins.map((p) => [p.name, p.bytesSha256 ?? null]));
     toldByMod.set(origin, now);
     const fresh = [...now].filter(([name, state]) => !told?.has(name) || told.get(name) !== state).map(([name]) => name);
     if (fresh.length > 0) reporter.report('warning', `${fresh.join(', ')} in ${origin} changed outside Modbench`);
   });
 
-  const offUntracked = notifications.subscribe('untracked-plugins', ({ origin, keys }) => {
-    for (const plugin of keys) {
+  const offUntracked = notifications.onNotification('untracked-plugins', ({ origin, plugins }) => {
+    for (const plugin of plugins) {
       const key = pluginAddressKey(plugin, origin);
       if (toldUntracked.has(key)) continue;
       toldUntracked.add(key);
