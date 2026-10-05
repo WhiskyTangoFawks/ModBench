@@ -1067,6 +1067,18 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(writesToModlist()).toBe(1);
   });
 
+  it('writes the modlist.txt of the profile it is handed, and leaves the active profile\'s alone', async () => {
+    await mkdir(join(dir, 'profiles', 'Other'));
+    await writeFile(join(dir, 'profiles', 'Other', 'modlist.txt'), '+Gone Mod\r\n');
+    const active = await readFile(modlistPath(), 'utf8');
+
+    const outcome = await syncMods(accessTo(dir), 'Other', await foldersAsAValueListsThem(dir, []));
+
+    expect(outcome).toEqual({ applied: true, added: [], dropped: ['Gone Mod'] });
+    expect(await readFile(join(dir, 'profiles', 'Other', 'modlist.txt'), 'utf8')).toBe('');
+    expect(await readFile(modlistPath(), 'utf8')).toBe(active);
+  });
+
   it('writes nothing when every folder has a line and every mod line has a folder, rather than putting the bytes back to fire the watcher forever', async () => {
     await sync([...FIXTURE_MOD_FOLDERS, '[NODELETE] Radfall']);
     vi.mocked(rename).mockClear();
