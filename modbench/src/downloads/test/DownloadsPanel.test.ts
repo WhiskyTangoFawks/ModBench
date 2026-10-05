@@ -1077,7 +1077,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     expect(question).toMatch(/installed mod.*untouched/i);
   });
 
-  it('a `.meta` left behind after the file landed is one Output line, no notification', async () => {
+  it('metadata left behind after the file landed is one Output line, no notification', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');
@@ -1090,11 +1090,11 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     registerDownloadsMultiRowCommands(accessTo(root), instanceThatReads, reporter, scriptedDialog('Delete'), trash, downloadsLog, () => []);
     const outcome = await invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
 
-    expect(outcome).toEqual({ landed: [{ name: 'foo.7z', metaLeftBehind: 'EPERM: operation not permitted' }], refused: [] });
+    expect(outcome).toEqual({ landed: [{ name: 'foo.7z', metadataLeftBehind: 'EPERM: operation not permitted' }], refused: [] });
     expect(await onDisk(archive)).toBe(false);
     expect(await onDisk(meta)).toBe(true);
     expect(downloadsLogLines).toEqual([
-      '"foo.7z" was deleted, but its ".meta" could not be moved to the trash and was left behind: EPERM: operation not permitted',
+      '"foo.7z" was deleted, but its metadata could not be moved to the trash and was left behind: EPERM: operation not permitted',
     ]);
     expect(reporter.reports).toEqual([]);
   });
