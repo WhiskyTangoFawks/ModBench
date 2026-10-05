@@ -29,6 +29,12 @@ export const endAtTop = (direction: SortDirection): OrderEnd => (direction === '
 
 const CURRENT = { description: 'current' } as const;
 
+/** The pick opens on the current place when the selected mods sit in one, and on none otherwise. */
+export function onlyCurrent<T>(items: readonly MovePickItem<T>[]): MovePickItem<T> | undefined {
+  const current = items.filter((i) => i.description === CURRENT.description);
+  return current.length === 1 ? current[0] : undefined;
+}
+
 /** "Ungrouped", then each separator as the view shows them. A place that holds a selected mod is
  *  marked current. */
 export function modsMovePick(

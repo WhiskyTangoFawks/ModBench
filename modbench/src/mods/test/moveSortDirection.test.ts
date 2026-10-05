@@ -8,14 +8,14 @@ import {
   uriFile, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
 } from '../../test/vscodeMock';
 
-const { registerCommand, executeCommand, showQuickPick } = vi.hoisted(() => {
+const { registerCommand, executeCommand, createQuickPick } = vi.hoisted(() => {
   const registerCommand = vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler }));
   const executeCommandRunningTheHandlerRegisteredLastUnderItsId = vi.fn((id: string, ...args: unknown[]) => {
     const registered = registerCommand.mock.calls.findLast((c) => c[0] === id);
     if (!registered) return Promise.reject(new Error(`${id} is not registered`));
     return Promise.resolve(registered[1](...args));
   });
-  return { registerCommand, executeCommand: executeCommandRunningTheHandlerRegisteredLastUnderItsId, showQuickPick: vi.fn() };
+  return { registerCommand, executeCommand: executeCommandRunningTheHandlerRegisteredLastUnderItsId, createQuickPick: vi.fn() };
 });
 
 vi.mock('vscode', async () => {
@@ -23,12 +23,13 @@ vi.mock('vscode', async () => {
   return {
     ...fakeVscodeModule(),
     commands: { registerCommand, executeCommand },
-    window: { showQuickPick, withProgress: recordedWithProgress },
+    window: { createQuickPick, withProgress: recordedWithProgress },
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
     Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
   };
 });
 
+import { quickPickChoosing } from '../../drivingLib/test/quickPickDouble';
 import { Instance } from '../../instanceLoader/instance';
 import { ModListProvider, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import type { SortDirection } from '../../drivingLib/sortDirectionToggle';
@@ -89,8 +90,8 @@ async function viewShownAfterTheInstanceReadsBackTheFileTheActWrote(
 const rightClickFirstOfSelectedAndPick = (direction: SortDirection, selected: readonly RowName[], placeLabel: string) =>
   viewShownAfterTheInstanceReadsBackTheFileTheActWrote(direction, async (_provider, rows) => {
     const selection = rowsNamed(rows, selected);
-    showQuickPick.mockImplementationOnce((items: { label: string }[]) =>
-      Promise.resolve(items.find((i) => i.label === placeLabel)));
+    createQuickPick.mockImplementationOnce(() =>
+      quickPickChoosing<{ label: string }>((items) => items.find((i) => i.label === placeLabel)));
     await executeCommand('modbench.mod.move', selection[0], selection);
   });
 
