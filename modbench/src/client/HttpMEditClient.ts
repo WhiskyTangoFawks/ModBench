@@ -38,7 +38,6 @@ export interface HttpMEditClientDeps {
   reconnectDelayMs?: number;
 }
 
-/** The one reading of an answer over a selection whose refusals name their item. */
 function selectionOutcome<L, R>(answer: { applied: L[]; refused: { item: R; message: string }[] }): SelectionOutcome<L | R> {
   return { landed: answer.applied, refused: answer.refused.map((r) => ({ item: r.item, reason: r.message })) };
 }
