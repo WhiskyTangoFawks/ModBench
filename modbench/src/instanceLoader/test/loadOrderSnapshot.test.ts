@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { GameFolder, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
@@ -256,19 +256,23 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
   const NOT_FOUND = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameDirectory' } as const;
   const row = (name: string, origin: string, slot: number | null, facts: Partial<LoadOrderPlugin> = {}): LoadOrderPlugin =>
     ({ name, path: `/mods/${origin}/${name}`, origin, slot, enabled: true, winning: true, ...facts });
-  const sent = ({ name, path, origin }: LoadOrderPlugin) => ({ name, path, origin });
+  const folderOf = (mod: string) => `/mo2/mod-folders/${mod}`;
+  const modFolders = ['ModA', 'ModS', 'ModF', 'ModD', 'ModO', 'ModU', 'ModM', 'ModOff']
+    .map((name) => ({ kind: 'mod' as const, name, path: folderOf(name) }));
+  const provider = (origin: string) => origin === 'Data' ? { kind: 'Game' } : { kind: 'Mod', mod: origin, folder: folderOf(origin) };
+  const sent = ({ name, path, origin }: LoadOrderPlugin) => ({ name, path, origin, provider: provider(origin) });
   const address = ({ name, origin }: { name: string; origin: string }) => ({ name, origin });
   const snapshotOf = (plugins: LoadOrderPluginRow[], pluginsLoadedWithNoLine: readonly PluginAddress[] = []) =>
-    loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine });
+    loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine, modFolders });
   const inGameFolder = (name: string): PluginAddress => ({ name, origin: 'Data' });
 
   it('is undefined — no put at all — while the game folder\'s plugins cannot be listed, as a snapshot lacking the game\'s masters is not sent', () => {
-    expect(loadOrderSnapshotOf({ plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: undefined }))
+    expect(loadOrderSnapshotOf({ plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: undefined, modFolders }))
       .toBeUndefined();
   });
 
   it('is undefined — no put at all — when the game folder is not found', () => {
-    expect(loadOrderSnapshotOf({ plugins: [row('a.esp', 'ModA', 0)], gameFolder: NOT_FOUND, pluginsLoadedWithNoLine: [] }))
+    expect(loadOrderSnapshotOf({ plugins: [row('a.esp', 'ModA', 0)], gameFolder: NOT_FOUND, pluginsLoadedWithNoLine: [], modFolders }))
       .toBeUndefined();
   });
 
@@ -307,7 +311,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(snapshot?.active).toEqual([
       { name: 'Master.esm', origin: 'Data' }, { name: 'cc.esl', origin: 'Data' }, address(a),
     ]);
-    expect(snapshot?.plugins).toContainEqual({ name: 'Master.esm', origin: 'Data', path: join('/game/Data', 'Master.esm') });
+    expect(snapshot?.plugins).toContainEqual({ name: 'Master.esm', origin: 'Data', path: join('/game/Data', 'Master.esm'), provider: { kind: 'Game' } });
     expect(snapshot?.loadedWithNoLine).toEqual([{ name: 'Master.esm', origin: 'Data' }, { name: 'cc.esl', origin: 'Data' }]);
   });
 
@@ -329,6 +333,21 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
 
     expect(snapshot?.active).toEqual([address(lined), address(a)]);
     expect(snapshot?.plugins.filter((p) => p.name.toLowerCase() === 'master.esm')).toHaveLength(1);
+  });
+
+  it('names what provides each plugin: its mod with the mod\'s own folder, not the plugin\'s directory, the game for Data, no mod for overwrite', () => {
+    const inMod = row('a.esp', 'ModA', 0);
+    const inGame = { ...row('b.esp', 'Data', 1), path: '/game/Data/b.esp' };
+    const stray = { ...row('c.esp', 'overwrite', null), path: '/instance/overwrite/c.esp' };
+
+    const providers = snapshotOf([inMod, inGame, stray])?.plugins.map((p) => p.provider);
+
+    expect(providers).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA' }, { kind: 'Game' }, { kind: 'None' }]);
+    expect(dirname(inMod.path)).not.toBe(folderOf('ModA'));
+  });
+
+  it('is undefined when a mod provides a plugin but no mod folder is the mod\'s, as no folder to send would be a silently wrong snapshot', () => {
+    expect(snapshotOf([row('a.esp', 'ModUnknown', 0)])).toBeUndefined();
   });
 
   it('omits a line-only row rather than sending it with path: undefined', () => {

@@ -69,6 +69,7 @@ export interface LoadOrderPluginInput {
   name: string;
   path: string;
   origin: string;
+  provider: components['schemas']['PluginProviderRequest'];
 }
 
 /** A tagged union, not a sentinel value. `abandoned`: a newer snapshot replaced this one before

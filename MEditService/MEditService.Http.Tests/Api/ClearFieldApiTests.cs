@@ -26,7 +26,7 @@ public sealed class ClearFieldApiTests(LoadedApiFixture<TestPluginFixture> loade
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
-            plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            plugins = plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(plugins),
             gameRelease = "Fallout4",

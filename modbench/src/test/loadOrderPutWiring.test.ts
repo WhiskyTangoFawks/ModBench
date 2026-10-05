@@ -10,6 +10,7 @@ function valueWith(name: string) {
   const derived = {
     gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const,
     pluginsLoadedWithNoLine: [],
+    modFolders: [],
     plugins: [{ name, path: `/game/Data/${name}`, origin: 'Data', slot: 0, enabled: true, winning: true }],
   };
   return instanceValueFixture({ ...derived, loadOrderSnapshot: loadOrderSnapshotOf(derived) });

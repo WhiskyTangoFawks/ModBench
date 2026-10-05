@@ -8,7 +8,7 @@ public sealed class LoadOrderTests
     private const string Instance = @"C:\MO2\Fallout4";
 
     private static RegisteredPlugin Registered(string name, string origin) =>
-        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name));
+        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), new PluginProvider.FromMod(origin, Path.Combine(@"C:\MO2\mods", origin)));
 
     private static LoadOrderSnapshot Order(RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
         new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], []);
@@ -200,29 +200,18 @@ public sealed class LoadOrderTests
     }
 
     [Fact]
-    public void ProviderOf_DataDirectory_IsTheGame()
+    public void ProviderOf_IsWhatTheSnapshotNamed_WhateverTheOriginOrThePath()
     {
-        var plugin = Registered("Vanilla.esp", PluginOrigin.DataDirectory);
+        var game = new RegisteredPlugin("Vanilla.esp", "ModA", @"C:\Elsewhere\Vanilla.esp", PluginProvider.Game);
+        var stray = new RegisteredPlugin("Stray.esp", "ModA", @"C:\Elsewhere\Stray.esp", PluginProvider.NoMod);
+        var inFolder = new PluginProvider.FromMod("ModA", @"C:\MO2\mods\ModA");
+        var mod = new RegisteredPlugin("A.esp", "ModA", @"C:\MO2\mods\ModA\deep\A.esp", inFolder);
 
-        Assert.Equal(PluginProvider.Game, Order([plugin]).ProviderOf(plugin.Key));
-    }
-
-    [Fact]
-    public void ProviderOf_Overwrite_IsNoMod()
-    {
-        var plugin = Registered("Stray.esp", PluginOrigin.Overwrite);
-
-        Assert.Equal(PluginProvider.NoMod, Order([plugin]).ProviderOf(plugin.Key));
-    }
-
-    [Fact]
-    public void ProviderOf_AMod_IsTheModAndThePluginsContainingFolder()
-    {
-        var plugin = Registered("A.esp", "ModA");
+        var order = Order([game, stray, mod]);
 
         Assert.Equal(
-            new PluginProvider.FromMod("ModA", Path.Combine(@"C:\MO2\mods", "ModA")),
-            Order([plugin]).ProviderOf(plugin.Key));
+            (PluginProvider.Game, PluginProvider.NoMod, (PluginProvider)inFolder),
+            (order.ProviderOf(game.Key), order.ProviderOf(stray.Key), order.ProviderOf(mod.Key)));
     }
 
     [Fact]

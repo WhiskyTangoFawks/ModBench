@@ -13,7 +13,7 @@ const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: STATUS };
 const NO_SNAPSHOT: LoadOrderSource = { gameName: 'Fallout 4', gameRelease: 'Fallout4', loadOrderSnapshot: undefined };
 
 function valueWith(name: string): LoadOrderSource {
-  const plugin = { name, path: `/game/Data/${name}`, origin: 'Data' };
+  const plugin = { name, path: `/game/Data/${name}`, origin: 'Data', provider: { kind: 'Game' as const } };
   return {
     ...NO_SNAPSHOT,
     loadOrderSnapshot: { plugins: [plugin], active: [{ name, origin: 'Data' }], loadedWithNoLine: [], dataFolder: '/game/Data' },

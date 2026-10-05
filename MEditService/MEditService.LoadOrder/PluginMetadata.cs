@@ -16,13 +16,12 @@ public record PluginMetadata(
     bool IsBlueprint,
     IReadOnlyList<string> Masters,
     int RecordCount,
-    string Origin)
+    string Origin,
+    PluginProvider Provider)
 {
     public PluginAddress Key => new(Name, Origin);
 
-    public RegisteredPlugin Registered => new(Name, Origin, Path);
-
-    public PluginProvider Provider => Registered.Provider;
+    public RegisteredPlugin Registered => new(Name, Origin, Path, Provider);
 
     public Registration Registration => new(LoadOrderIndex);
 

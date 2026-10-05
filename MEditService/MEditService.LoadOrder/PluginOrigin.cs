@@ -10,12 +10,4 @@ public static class PluginOrigin
 
     /// <summary>The other reserved origin (ADR-0012): the files outside every mod.</summary>
     public const string Overwrite = "overwrite";
-
-    /// <summary>Whether origin is the reserved value above, compared as the load order compares
-    /// every origin.</summary>
-    internal static bool IsOverwrite(string origin) =>
-        string.Equals(origin, Overwrite, StringComparison.OrdinalIgnoreCase);
-
-    internal static bool IsDataDirectory(string origin) =>
-        string.Equals(origin, DataDirectory, StringComparison.OrdinalIgnoreCase);
 }

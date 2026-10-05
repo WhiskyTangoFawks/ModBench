@@ -12,13 +12,4 @@ public abstract record PluginProvider
     private sealed record GameProvider : PluginProvider;
 
     private sealed record NoModProvider : PluginProvider;
-
-    internal static PluginProvider Of(string origin, string pluginPath)
-    {
-        if (PluginOrigin.IsDataDirectory(origin)) return Game;
-        if (PluginOrigin.IsOverwrite(origin)) return NoMod;
-        var folder = Path.GetDirectoryName(pluginPath)
-            ?? throw new ArgumentException($"'{pluginPath}' is a root, and no root is a mod folder.", nameof(pluginPath));
-        return new FromMod(origin, folder);
-    }
 }

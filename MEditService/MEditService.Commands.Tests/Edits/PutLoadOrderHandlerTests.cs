@@ -14,7 +14,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
 
     private PutLoadOrderHandler Handler => TestEditService.PutLoadOrderHandler(_holder);
 
-    private static RegisteredPlugin Plugin(string name) => new(name, "ModA", $"C:\\Instance\\mods\\ModA\\{name}");
+    private static RegisteredPlugin Plugin(string name) => new(name, "ModA", $"C:\\Instance\\mods\\ModA\\{name}", new PluginProvider.FromMod("ModA", "C:\\Instance\\mods\\ModA"));
 
     private PutLoadOrderResult Put(GameRelease release, RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
         Handler.Put(_dataFolder, InstanceRoot, release, plugins, [.. active.Select(p => p.Key)], []);

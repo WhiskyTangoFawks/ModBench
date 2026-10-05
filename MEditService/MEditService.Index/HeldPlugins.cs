@@ -229,5 +229,6 @@ internal sealed class HeldPlugins
             IsBlueprint: content.IsBlueprint,
             Masters: content.Masters,
             RecordCount: content.RecordCount,
-            Origin: plugin.Origin);
+            Origin: plugin.Origin,
+            Provider: plugin.Provider);
 }

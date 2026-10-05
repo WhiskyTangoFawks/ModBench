@@ -3,7 +3,7 @@
 import { basename, dirname, join, sep } from 'node:path';
 import { foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 import {
-  isPluginFile, OVERWRITE_ORIGIN, type DataFolderPlugins, type GameFolder, type OriginFile, type PluginEntry,
+  isPluginFile, OVERWRITE_ORIGIN, type DataFolderPlugins, type GameFolder, type ModFolder, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile } from '../tables/gamePaths';
@@ -32,8 +32,11 @@ export interface LoadOrderPlugin {
   winning: boolean;
 }
 
+/** What provides a plugin file (ADR-0012): a mod and the mod's own folder, the game, or no mod. */
+export type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string } | { kind: 'Game' } | { kind: 'None' };
+
 /** ADR-0013. */
-export type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'>;
+export type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'> & { provider: SnapshotProvider };
 
 /** ADR-0013's snapshot. */
 export interface LoadOrderSnapshotValue {
@@ -198,12 +201,14 @@ export function buildLoadOrderRows(
   return [...listed, ...outside, ...strays];
 }
 
-/** ADR-0013's snapshot, none without a listable game folder. Active: the plugins the game loads
- *  with no line, then each enabled line's winner. */
+/** ADR-0013's snapshot, none without a listable game folder, and none while a mod provides a
+ *  plugin and no mod folder is that mod's. Active: the plugins the game loads with no line, then
+ *  each enabled line's winner. */
 export function loadOrderSnapshotOf(value: {
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   readonly gameFolder: GameFolder;
   readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
+  readonly modFolders: readonly ModFolder[] | undefined;
 }): LoadOrderSnapshotValue | undefined {
   // Without the game's masters the snapshot would be silently wrong (principles.md), so the index
   // keeps what it holds until the folder can be read (common.md, States, story 5).
@@ -213,7 +218,14 @@ export function loadOrderSnapshotOf(value: {
   const rows = value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined);
   const addressOf = (p: PluginAddress) => `${foldPath(p.origin)}\u0000${foldPath(p.name)}`;
   const rowAt = new Map(rows.map((p) => [addressOf(p), p] as const));
-  const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p): SnapshotPlugin =>
+  const modFolderOf = new Map((value.modFolders ?? []).filter((f) => f.kind === 'mod').map((f) => [foldPath(f.name), f.path] as const));
+  const providerOf = (origin: string): SnapshotProvider | undefined => {
+    if (origin === OVERWRITE_ORIGIN) return { kind: 'None' };
+    if (origin === DATA_DIRECTORY_ORIGIN) return { kind: 'Game' };
+    const folder = modFolderOf.get(foldPath(origin));
+    return folder === undefined ? undefined : { kind: 'Mod', mod: origin, folder };
+  };
+  const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) =>
     rowAt.get(addressOf(p)) ?? { ...p, path: join(dataFolder, p.name) });
   const placed = new Set(loadedWithNoLine.map((p) => foldPath(p.name)));
   const fromLines = rows
@@ -227,8 +239,10 @@ export function loadOrderSnapshotOf(value: {
     });
   const sent = new Map<string, SnapshotPlugin>();
   for (const { name, path, origin } of [...loadedWithNoLine, ...rows]) {
+    const provider = providerOf(origin);
+    if (provider === undefined) return undefined;
     const key = addressOf({ name, origin });
-    if (!sent.has(key)) sent.set(key, { name, path, origin });
+    if (!sent.has(key)) sent.set(key, { name, path, origin, provider });
   }
   return {
     dataFolder,

@@ -35,7 +35,7 @@ public sealed class LoadOrderStatusApiTests : IDisposable
 
         var load = await _client.PutLoadOrderAndAwaitReady(new
         {
-            plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            plugins = fx.Plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(fx.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins),
             gameDirectory = fx.DataFolder,
@@ -65,7 +65,7 @@ public sealed class LoadOrderStatusApiTests : IDisposable
 
         var load = await _client.PutAsJsonAsync("/load-order", new
         {
-            plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            plugins = fx.Plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(fx.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins),
             gameDirectory = fx.DataFolder,
