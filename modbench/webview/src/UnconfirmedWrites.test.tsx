@@ -553,3 +553,14 @@ describe('an element added, removed or moved, until mEdit confirms it (common.md
     expect(marked()).toEqual(['[1]']);
   });
 });
+
+describe('a write whose mark is still pending when the panel closes', () => {
+  it('leaves no timer behind', async () => {
+    const { unmount } = renderPanel();
+    await editName('After');
+
+    unmount();
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
