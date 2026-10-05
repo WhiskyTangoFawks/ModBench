@@ -115,9 +115,20 @@ public static class ContainerChildFields
             ?? throw new InvalidOperationException(
                 $"{parent.GetType().Name} has no property '{slotName}' to add a child to — its child members are the assembly's own.");
 
-        var value = property.GetValue(parent);
-        if (value is System.Collections.IEnumerable and not string) ((dynamic)value).Add((dynamic)child);
-        else property.SetValue(parent, child);
+        if (typeof(System.Collections.IEnumerable).IsAssignableFrom(property.PropertyType))
+        {
+            var list = property.GetValue(parent)
+                ?? throw new InvalidOperationException($"Expected {parent.GetType().Name}.{slotName} to hold a collection to add a child to.");
+            ((dynamic)list).Add((dynamic)child);
+            return;
+        }
+
+        if (property.GetValue(parent) is IMajorRecordGetter held)
+        {
+            throw new InvalidOperationException(
+                $"{parent.GetType().Name}.{slotName} already holds {held.FormKey}, so {child.FormKey} cannot take its place.");
+        }
+        property.SetValue(parent, child);
     }
 
     /// <summary>The own-fields-replace half: the replacing record arrives child-stripped, and

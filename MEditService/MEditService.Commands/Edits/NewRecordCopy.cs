@@ -40,8 +40,6 @@ internal sealed class NewRecordCopy
         var (source, identity, destination, release, _) = copy;
         if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType) is { } disallowedRefusal) return disallowedRefusal;
 
-        // A record with no group of its own copies into its container's document (a topic into its
-        // quest, a response into its topic); a placed reference has no such container and refuses.
         if (RecordTypeDispatch.For(release).FolderNameFor(identity.RecordType) is null)
         {
             if (source.ContainerOf(identity) is { } container)
@@ -66,8 +64,6 @@ internal sealed class NewRecordCopy
             duplicate => _recordCopy.AppendEmbeddedChild(copy.Source, container, duplicate, copy.Destination, copy.Release),
             $"inside {container.ParentFormKey}'s {container.SlotName} slot");
 
-    // The record under the next free FormKey, EditorID derived past the destination's, child records
-    // left behind, and landed as <paramref name="land"/> says.
     private RecordEditResult CopyUnderNextFormKey(
         WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, Func<SourceDocument, RecordEditResult> land, string landedAt)
     {

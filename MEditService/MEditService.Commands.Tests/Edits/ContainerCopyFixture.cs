@@ -37,7 +37,7 @@ public sealed class ContainerCopyFixture : TestInstance, ITrackedPlugins
     public const string DialogTopicEditorId = "SourceTopic";
     public FormKey DialogTopic { get; }
 
-    // Two responses under the topic: DIAL with INFOs.
+    // Two responses under the topic: DIAL with INFOs. Response1 links to itself, Response2 to Response1.
     public const string Response1EditorId = "SourceResponse1";
     public FormKey Response1 { get; }
 
@@ -128,7 +128,8 @@ public sealed class ContainerCopyFixture : TestInstance, ITrackedPlugins
         var dialogTopic = new DialogTopic(sourceMod) { EditorID = DialogTopicEditorId };
         var response1 = new DialogResponses(sourceMod) { EditorID = Response1EditorId };
         var response2 = new DialogResponses(sourceMod) { EditorID = Response2EditorId };
-        response2.PreviousDialog.SetTo(response2);
+        response1.PreviousDialog.SetTo(response1);
+        response2.PreviousDialog.SetTo(response1);
         dialogTopic.Responses.Add(response1);
         dialogTopic.Responses.Add(response2);
         quest.DialogTopics.Add(dialogTopic);

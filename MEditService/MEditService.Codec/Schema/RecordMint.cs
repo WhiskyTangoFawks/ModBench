@@ -5,15 +5,13 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Schema;
 
-/// <summary>A record holding nothing but its identity, for the gestures that have to invent one: the
-/// Create gesture's new record, and the Partial Form ancestor a copy mints around a child.</summary>
+/// <summary>A record holding nothing but its identity, for the gestures that have to invent one.</summary>
 public static class RecordMint
 {
     /// <summary>The codec is the one constructor: a record begins as the document naming its identity,
-    /// read back through the door every edit goes through. <paramref name="partialForm"/> sets the
-    /// header bit a bare container ancestor carries.</summary>
+    /// read back through the door every edit goes through.</summary>
     internal static IMajorRecord Bare(
-        RecordTextCodec codec, RecordTableSchema schema, GameRelease release, string formKey, string? editorId, bool partialForm)
+        RecordTextCodec codec, RecordTableSchema schema, GameRelease release, string formKey, string? editorId)
     {
         var members = new JsonObject();
         // A path-ambiguous document leads with its concrete type.
@@ -24,13 +22,11 @@ public static class RecordMint
         }
         members[nameof(IMajorRecordGetter.FormKey)] = formKey;
         if (editorId != null) members[nameof(IMajorRecordGetter.EditorID)] = editorId;
-        if (partialForm) members[RecordHeaderFlags.Member] = PartialFormFlag.Bit;
         return codec.Deserialize(members.ToJsonString(), release, schema.TableName);
     }
 
-    /// <summary>The same record as the document a copy places, for a caller that writes text rather
-    /// than a graph.</summary>
+    /// <summary>The same record as a document, for a caller that writes text rather than a graph.</summary>
     public static string BareDocument(
-        RecordTextCodec codec, RecordTableSchema schema, GameRelease release, string formKey, string? editorId, bool partialForm) =>
-        codec.SerializeToText(Bare(codec, schema, release, formKey, editorId, partialForm), release);
+        RecordTextCodec codec, RecordTableSchema schema, GameRelease release, string formKey, string? editorId) =>
+        codec.SerializeToText(Bare(codec, schema, release, formKey, editorId), release);
 }

@@ -118,13 +118,16 @@ public sealed class ResponseWriteApiTests : IDisposable
             fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.False(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require().IsPartialForm());
-        var mintedTopic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
-        Assert.NotNull(mintedTopic);
-        Assert.False(mintedTopic.IsPartialForm());
+        var copiedQuest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require();
+        Assert.False(copiedQuest.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.QuestEditorId, copiedQuest.EditorId);
+        var copiedTopic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
+        Assert.NotNull(copiedTopic);
+        Assert.False(copiedTopic.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, copiedTopic.EditorId);
         Assert.Equal(
             fixture.Response1.ToString(),
-            Assert.Single(JsonDocument.Parse(mintedTopic.Body).RootElement.GetProperty("Responses").EnumerateArray())
+            Assert.Single(JsonDocument.Parse(copiedTopic.Body).RootElement.GetProperty("Responses").EnumerateArray())
                 .GetProperty("FormKey").GetString());
 
         Assert.Equal(fixture.Quest.ToString(), fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response1EditorId).FormKey);

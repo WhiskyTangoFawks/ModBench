@@ -43,6 +43,10 @@ internal sealed class CopySource(
         return JsonNode.Parse(body) is JsonObject document ? RecordFlagsWrite.HeldBy(document) : 0;
     }
 
+    /// <summary>Whether the record's header carries Partial Form, on a type that can.</summary>
+    internal bool IsPartialForm(RecordIdentity identity) =>
+        ContainerChildFields.HasChildFields(identity.RecordType, _release) && (RecordFlags(identity) & PartialFormFlag.Bit) != 0;
+
     /// <summary>The record's own text: the working tree's own bytes when tracked, otherwise the loaded
     /// plugin's record through the codec — byte for byte what Track would have written.</summary>
     internal string Body(RecordIdentity identity)

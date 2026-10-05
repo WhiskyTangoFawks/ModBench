@@ -117,7 +117,7 @@ public sealed class CopyAsOverrideContainerTests
         var topCell = JsonNode.Parse(worldspace.Body).Require()["TopCell"].Require();
         Assert.Equal(fixture.TopCell.ToString(), topCell["FormKey"].Require().GetValue<string>());
         Assert.Equal(ContainerCopyFixture.TopCellEditorId, topCell["EditorID"].Require().GetValue<string>());
-        Assert.False(topCell["MajorRecordFlagsRaw"]?.GetValue<int>() is { } flags && (flags & 0x4000) != 0);
+        Assert.False(topCell.AsObject().ContainsKey("MajorRecordFlagsRaw"));
         var placed = Assert.Single(topCell["Temporary"].Require().AsArray());
         Assert.Equal(fixture.TopCellRef.ToString(), placed.Require()["FormKey"].Require().GetValue<string>());
     }
@@ -246,6 +246,7 @@ public sealed class CopyAsOverrideContainerTests
         var cell = fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString());
         Assert.NotNull(cell);
         Assert.False(cell.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.ExteriorCellEditorId, cell.EditorId);
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorTemporaryRef.ToString()));
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorPersistentRef.ToString()));
 
@@ -293,10 +294,10 @@ public sealed class CopyAsOverrideContainerTests
 
         Assert.True(result.Applied, result.Message);
 
-        var mintedCell = fixture.Document(fixture.DestinationPlugin, fixture.InteriorCell.ToString());
-        Assert.NotNull(mintedCell);
-        Assert.False(mintedCell.IsPartialForm());
-        Assert.Equal(ContainerCopyFixture.InteriorCellEditorId, mintedCell.EditorId);
+        var copiedCell = fixture.Document(fixture.DestinationPlugin, fixture.InteriorCell.ToString());
+        Assert.NotNull(copiedCell);
+        Assert.False(copiedCell.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.InteriorCellEditorId, copiedCell.EditorId);
 
         var cellText = fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.PersistentRefEditorId).Body;
         Assert.Contains(

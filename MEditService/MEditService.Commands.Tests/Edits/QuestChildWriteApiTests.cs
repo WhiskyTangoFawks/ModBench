@@ -219,6 +219,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
         var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
         Assert.NotNull(quest);
         Assert.False(quest.Require().IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.QuestEditorId, quest.EditorId);
         Assert.Equal(
             fixture.Scene.ToString(),
             Assert.Single(JsonDocument.Parse(quest.Body).RootElement.GetProperty("Scenes").EnumerateArray())
@@ -240,7 +241,9 @@ public sealed class QuestChildWriteApiTests : IDisposable
             fixture.SourcePlugin, fixture.DialogTopic.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.False(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require().IsPartialForm());
+        var copiedQuest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require();
+        Assert.False(copiedQuest.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.QuestEditorId, copiedQuest.EditorId);
         var topic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
         Assert.NotNull(topic);
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, topic.Require().EditorId);
@@ -264,9 +267,11 @@ public sealed class QuestChildWriteApiTests : IDisposable
         var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
         Assert.NotNull(quest);
         Assert.False(quest.Require().IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.QuestEditorId, quest.EditorId);
         var topic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
         Assert.NotNull(topic);
         Assert.False(topic.Require().IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, topic.EditorId);
         Assert.Equal(
             fixture.DialogTopic.ToString(),
             Assert.Single(JsonDocument.Parse(quest.Body).RootElement.GetProperty("DialogTopics").EnumerateArray())

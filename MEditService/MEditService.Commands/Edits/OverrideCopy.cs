@@ -78,20 +78,20 @@ internal sealed class OverrideCopy
         var isCell = RecordTypeDispatch.For(release).IsCell(identity.RecordType);
         if (isCell && source.WorldspaceOf(identity) is { } worldspace)
         {
-            var mintResult = _recordCopy.MintExteriorCell(
+            var placed = _recordCopy.PlaceExteriorCell(
                 source, worldspace,
                 new SourceDocument(
                     formKey, identity.RecordType, identity.EditorId,
                     StripEmbeddedChildrenForShallowCopy(body, identity.RecordType, release)),
                 destination, release);
-            if (mintResult.Applied && _logger.IsEnabled(LogLevel.Information))
+            if (placed.Applied && _logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation(
                     "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into " +
                     "{DestinationPlugin} ({DestinationOrigin}) — copied in its worldspace as an override",
                     formKey, source.Plugin.Name, source.Plugin.Origin, destinationPlugin.Name, destinationPlugin.Origin);
             }
-            return mintResult;
+            return placed;
         }
 
         // A plain Copy as Override is own-fields-only, so a container's inline children are stripped.
