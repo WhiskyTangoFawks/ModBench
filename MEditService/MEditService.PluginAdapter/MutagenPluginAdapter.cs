@@ -34,7 +34,7 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         ILoadedMod? loaded = OpenForRead(modPath, gameRelease, strings);
         try
         {
-            var documents = ModDocuments.Of(loaded.Getter, modPath, schemas, loaded);
+            var documents = ModDocuments.Of(loaded.Getter, new PluginRecordBytes(modPath, gameRelease), schemas, loaded);
             loaded = null;
             return documents;
         }
@@ -52,7 +52,7 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         ILoadedMod? loaded = OpenForRead(modPath, gameRelease);
         try
         {
-            var lookup = ModDocuments.LookupOf(loaded.Getter, modPath, schemas, loaded);
+            var lookup = ModDocuments.LookupOf(loaded.Getter, new PluginRecordBytes(modPath, gameRelease), schemas, loaded);
             loaded = null;
             return lookup;
         }

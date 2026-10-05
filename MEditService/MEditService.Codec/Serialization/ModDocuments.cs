@@ -6,7 +6,6 @@ using System.Runtime.ExceptionServices;
 using System.Text;
 using MEditService.Codec.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
@@ -22,20 +21,20 @@ public static class ModDocuments
     /// <summary><paramref name="open"/> is disposed with the result, so a caller that opened the
     /// plugin hands ownership over rather than outliving the read.</summary>
     public static IPluginDocuments Of(
-        IModGetter mod, ModPath path, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
-        new MutagenModDocuments(mod, new PluginRecordBytes(path, mod.GameRelease), schemas, open);
+        IModGetter mod, IRecordFieldProbe file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
+        new MutagenModDocuments(mod, file, schemas, open);
 
     /// <summary>The same mod for a caller asking about a handful of records by key rather than
     /// streaming the whole plugin. <paramref name="open"/> is disposed with the result.</summary>
     public static IPluginRecordLookup LookupOf(
-        IModGetter mod, ModPath path, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
-        new ModRecordLookup(mod, new PluginRecordBytes(path, mod.GameRelease), schemas, open);
+        IModGetter mod, IRecordFieldProbe file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
+        new ModRecordLookup(mod, file, schemas, open);
 }
 
 // Large enough to keep eight cores busy on cheap records; small enough that a batch of the largest
 // cell documents stays inside a few hundred MB.
 internal sealed class MutagenModDocuments(
-    IModGetter mod, PluginRecordBytes file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open) : IPluginDocuments
+    IModGetter mod, IRecordFieldProbe file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open) : IPluginDocuments
 {
     private const int SerializeBatchSize = 2048;
 
