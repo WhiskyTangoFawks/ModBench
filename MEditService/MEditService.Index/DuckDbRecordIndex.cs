@@ -1,136 +1,79 @@
 using System.Data;
 using System.Diagnostics;
-using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.Ports;
-using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-// The single DuckDB implementation of IRecordIndex, over a Store that answers the reads, split into four collaborators:
-// Store, PluginIngest, WorkingTreeOverlay and SourceValidation. This class owns every
-// transaction boundary, registration and the winner sweep.
-internal sealed class DuckDbRecordIndex : IRecordIndex
+// The Store's write verbs: every transaction boundary, registration and the winner sweep.
+internal sealed class DuckDbRecordIndex : IDisposable
 {
-    private readonly SchemaReflector _schemaReflector;
     private readonly ILogger _logger;
 
     // Constructed rather than injected: it is stateless apart from static reflection caches, and
     // every construction site would otherwise learn a dependency it has no say in.
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
-    // Connection forwards to Store rather than being held here, so a rebuild that reassigns its
-    // Connection is transparent to every `.Connection` reader.
     private readonly Store _store;
+    private readonly PluginIngest _pluginIngest;
+    private readonly WorkingTreeOverlay _workingTreeOverlay;
 
-    // Constructed at the end of Initialize, once Connection is stable and the schemas and release
-    // are resolved, so every dependency is captured once rather than chased through a mutable
-    // back-reference.
-    private PluginIngest? _pluginIngest;
-
-    private PluginIngest RequirePluginIngest() =>
-        _pluginIngest ?? throw new InvalidOperationException("Call Initialize before using the repository.");
-
-    // Constructed after _pluginIngest, for the same reason and because it depends on PluginIngest
-    // one-directionally.
-    private WorkingTreeOverlay? _workingTreeOverlay;
-
-    private WorkingTreeOverlay RequireWorkingTreeOverlay() =>
-        _workingTreeOverlay ?? throw new InvalidOperationException("Call Initialize before using the repository.");
-
-    // Validate's tracked half. Constructed alongside its siblings, for the same reason.
-    private SourceValidation? _sourceValidation;
-
-    public DuckDBConnection Connection => _store.Connection;
+    private DuckDBConnection Connection => _store.Connection;
     private DuckDBConnection OpenRead() => _store.OpenReadConnection();
 
-    // Null in every test that does not care.
-    private readonly INotificationPublisher? _notifications;
-
-    public DuckDbRecordIndex(
-        SchemaReflector schemaReflector,
-        TableDdlBuilder ddlBuilder,
-        ILogger logger,
-        string? databasePath = null,
-        INotificationPublisher? notifications = null,
-        TimeProvider? timeProvider = null)
+    /// <summary>Over a store whose tables <see cref="Store.Initialize"/> has created. Unindexes
+    /// what the file holds that disagrees with the disk (ADR-0003), which is this class's
+    /// cross-cutting verb: registration plus every ingest-owned table.</summary>
+    public DuckDbRecordIndex(Store store, ILogger logger)
     {
-        _schemaReflector = schemaReflector;
+        _store = store;
         _logger = logger;
-        _notifications = notifications;
-        _store = new Store(logger, databasePath, schemaReflector, ddlBuilder, timeProvider);
-    }
 
-    public string? HeldElsewhere { get; private set; }
+        var containers = new ContainerDocuments(store.Release, store.Schemas);
+        _pluginIngest = new PluginIngest(Connection, logger, containers);
+        _workingTreeOverlay = new WorkingTreeOverlay(Connection, logger, _codec, containers, store.Schemas, store.Release);
 
-    public void Open() => HeldElsewhere = _store.Open();
-
-    // Reading a record back out of its document needs the release it was written under, and this
-    // repository is one game for its whole lifetime — the same reasoning that resolves the schemas
-    // once, here.
-    private GameRelease _release;
-
-    public void Initialize(GameRelease release)
-    {
-        // Store's own version check throws away a file written under a different shape *before*
-        // this process starts appending to tables it only half recognizes.
-        _store.Initialize(release);
-
-        var schemas = _store.Schemas;
-        _release = release;
-
-        var containers = new ContainerDocuments(release, schemas);
-        _pluginIngest = new PluginIngest(Connection, _logger, containers);
-        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _codec, containers, schemas, release);
-        _sourceValidation = new SourceValidation(this, Connection, release, _logger);
-
-        // Unindex is this class's cross-cutting verb (registration plus every ingest-owned table), so
-        // acting on the stale set stays here.
-        foreach (var key in _store.ValidateAgainstDisk())
+        foreach (var key in store.ValidateAgainstDisk())
             Unindex(key);
     }
 
-    // ADR-0010: the rebuild's whole job on an already-opened index — the open
-    // already refused if another process held the file, so nothing
-    // here re-checks that. atLeastSequence keeps Sequence monotonic within this process.
-    internal void RebuildEmpty(GameRelease release, long atLeastSequence)
-    {
-        _store.RebuildFile();
-        Initialize(release);
-        _store.SeedSequence(atLeastSequence);
-    }
+    public GameRelease Release => _store.Release;
+
+    public IReadOnlyDictionary<string, RecordTableSchema> Schemas => _store.Schemas;
 
     // --- Indexing ---
 
-    public void Index(IPluginDocuments documents, Registration registration, PluginAddress key, string? filePath, DerivedFrom derivedFrom) =>
-        Index(documents, registration, key.Name, key.Origin, filePath, derivedFrom);
-
-    /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
+    /// <summary>The hash of the file <paramref name="key"/>'s rows were built from, or null when the
+    /// index holds no validated rows for it. Independent of registration, so a returning profile
+    /// switch is cheap (ADR-0012).</summary>
     public string? IndexedContentHash(PluginAddress key) => _store.IndexedContentHash(key);
 
-    /// <summary>See <see cref="IRecordIndex.FileContentHash"/>.</summary>
+    /// <summary>The hash of the file at <paramref name="path"/> now (ADR-0003). Null when the file
+    /// cannot be read.</summary>
     public string? FileContentHash(string path) => _store.FileContentHash(path);
 
-    /// <summary>See <see cref="IRecordIndex.Sequence"/>.</summary>
+    /// <summary>ADR-0015: one monotonic counter, advanced in the same transaction as any row change.
+    /// Zero until the first change lands.</summary>
     public long Sequence => _store.CurrentSequence();
 
-    /// <summary>See <see cref="IRecordIndex.BeginProjection"/>.</summary>
+    /// <summary>ADR-0015: everything projected inside the scope advances <see cref="Sequence"/> once,
+    /// when the outermost scope closes. Nested scopes count.</summary>
     public IDisposable BeginProjection() => _store.BeginProjection();
 
-    /// <summary>See <see cref="IRecordIndex.Announce"/>.</summary>
+    /// <summary>Runs <paramref name="publish"/> once the projection it was raised in has landed:
+    /// immediately outside a scope, after that scope's advance inside one.</summary>
     public void Announce(Action publish) => _store.Announce(publish);
 
-    // ADR-0012.
-    private void Index(
-        IPluginDocuments documents, Registration registration, string plugin, string origin, string? filePath,
-        DerivedFrom derivedFrom)
+    /// <summary>Indexes one plugin's documents, replacing whatever the key held. Stamps the file's
+    /// hash and diagnosis (ADR-0003); a null path claims no file backs the rows (ADR-0012).</summary>
+    public void Index(IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom)
     {
+        var (plugin, origin) = (registered.Name, registered.Origin);
         var schemas = _store.Schemas;
 
         // One transaction for the whole reindex so a throw partway leaves the read model intact
@@ -140,18 +83,18 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         // The `registrations` row lands in the same transaction as the rows, which answer nothing
         // without it.
-        UpsertRegistration(plugin, origin, registration);
+        UpsertRegistration(registered);
         // And the facts about these rows — the disk claim, the derivation, the diagnosis — replaced
         // with them rather than beside them.
         _store.StampPluginFacts(plugin, origin, filePath, derivedFrom);
 
         // Must run before the appender is created.
-        RequirePluginIngest().DeletePriorDocuments(plugin, origin);
+        _pluginIngest.DeletePriorDocuments(plugin, origin);
 
         // The appender's `using` stays here so its disposal keeps the required ordering relative to
         // tx.Commit() below: tx declared first, appender second, both disposed LIFO after the commit.
         using var documentAppender = Connection.CreateAppender("mirror", "records");
-        var timing = RequirePluginIngest().IndexPlugin(documents, plugin, origin, schemas, documentAppender);
+        var timing = _pluginIngest.IndexPlugin(documents, plugin, origin, schemas, documentAppender);
         _store.BumpSequence();
 
         var commitTimer = Stopwatch.StartNew();
@@ -167,6 +110,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
     }
 
+    /// <summary>Removes every trace of <paramref name="key"/>, rows and registration alike. ADR-0012's
+    /// file-gone verb, never the meaning of a plugin leaving the load order, which is
+    /// <see cref="Unregister"/>.</summary>
     public void Unindex(PluginAddress key) => Unindex(key.Name, key.Origin);
 
     // The `registrations` row is dropped last: while it exists this (origin, plugin) is still a
@@ -179,7 +125,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
         using var tx = Connection.BeginTransaction();
 
-        RequirePluginIngest().DeleteAllRowsFor(plugin, origin);
+        _pluginIngest.DeleteAllRowsFor(plugin, origin);
         // The plugin's facts go with the rows they describe — Unindex is the file-gone verb, so
         // leaving them behind would leave the files table asserting rows the index does not hold.
         _store.DeletePluginFacts(plugin, origin);
@@ -190,34 +136,34 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     // ADR-0013: one row per registered plugin, carrying its load index.
-    private void UpsertRegistration(string plugin, string origin, Registration registration)
+    private void UpsertRegistration(PluginMetadata registered)
     {
-        DeleteRegistration(plugin, origin);
+        DeleteRegistration(registered.Name, registered.Origin);
         using var cmd = Connection.CreateCommand();
         cmd.CommandText =
             $"INSERT INTO {TableDdlBuilder.RegistrationsRelation} (plugin, origin, load_order_idx, is_light) VALUES ($1, $2, $3, $4)";
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = registered.Name });
+        cmd.Parameters.Add(new DuckDBParameter { Value = registered.Origin });
         cmd.Parameters.Add(new DuckDBParameter
         {
-            Value = registration.LoadOrderIndex is { } loadOrderIndex ? (object)loadOrderIndex : DBNull.Value,
+            Value = registered.LoadOrderIndex is { } loadOrderIndex ? (object)loadOrderIndex : DBNull.Value,
         });
-        cmd.Parameters.Add(new DuckDBParameter
-        {
-            Value = _store.OpenedPlugins().TryGetValue(new PluginAddress(plugin, origin), out var content) && content.IsLight,
-        });
+        cmd.Parameters.Add(new DuckDBParameter { Value = registered.IsLight });
         cmd.ExecuteNonQuery();
     }
 
-    // Neither verb touches a data row: which rows answer is TableDdlBuilder.RegistrationsRelation's.
-    public void Register(PluginAddress key, Registration registration)
+    /// <summary>Upserts the plugin's <c>registrations</c> row: its indexed facts answer with no re-index
+    /// (ADR-0012). Winners stay stale until the next sweep.</summary>
+    public void Register(PluginMetadata registered)
     {
         using var tx = Connection.BeginTransaction();
-        UpsertRegistration(key.Name, key.Origin, registration);
+        UpsertRegistration(registered);
         _store.BumpSequence();
         tx.Commit();
     }
 
+    /// <summary>Removes <paramref name="key"/>'s <c>registrations</c> row and nothing else: its rows
+    /// remain and answer nothing. Winner state is stale until the next sweep.</summary>
     public void Unregister(PluginAddress key)
     {
         if (_logger.IsEnabled(LogLevel.Information))
@@ -230,7 +176,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
-    /// <summary>See <see cref="IRecordIndex.RegisteredPlugins"/>.</summary>
+    /// <summary>ADR-0013: every plugin the index currently registers: what a reconcile diffs the
+    /// incoming snapshot against, since a freshly opened file still carries the last run's
+    /// registrations.</summary>
     public IReadOnlyList<PluginAddress> RegisteredPlugins()
     {
         var keys = new List<PluginAddress>();
@@ -266,7 +214,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // The same sweep for a projection that moved rows without moving the load order: which plugins
     // are active cannot change here, so the set the last sweep was handed still holds.
-    private void ResweepWinners()
+    public void ResweepWinners()
     {
         using var tx = Connection.BeginTransaction();
         UpdateWinnersCore();
@@ -312,9 +260,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // --- Working-tree changes ---
 
+    private const string EffectiveRows = $"{TableDdlBuilder.MirrorSchema}.records";
+
     // One transaction for the batch, so a throw partway leaves no row half-projected. A null body is
     // the document gone. Returns every key whose rows moved, embedded children included.
-    private List<string> ProjectDocuments(PluginAddress key, IReadOnlyList<(string FormKey, string? Body)> deltas)
+    public List<string> ProjectDocuments(PluginAddress key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
         if (deltas.Count == 0) return [];
 
@@ -324,7 +274,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             // Only a delta that added or removed a row can move winner status. Re-swept for the whole
             // load order rather than per FormKey because UpdateWinners is the one definition of winning
             // (measured at 18 ms over 48k records).
-            var projected = RequireWorkingTreeOverlay().ProjectDocuments(key, deltas);
+            var projected = _workingTreeOverlay.ProjectDocuments(key, deltas);
             if (projected.Structural) UpdateWinnersCore();
             touched = projected.Touched;
             _store.BumpSequence();
@@ -334,44 +284,22 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         return touched;
     }
 
-    /// <summary>See <see cref="IRecordIndex.LearnWorkingTreeStates"/>.</summary>
-    public IReadOnlyList<string> LearnWorkingTreeStates(PluginAddress key, string modFolder)
+    /// <summary>Sets each listed row to the state it is now in (ADR-0007), in one advance.</summary>
+    public void SetWorkingTreeStates(PluginAddress key, IReadOnlyList<(string FormKey, WorkingTreeState State)> moved)
     {
-        var changes = SourceRepository.Over(modFolder, _release)
-            .ChangedSinceLastCommit(key, _schemaReflector.GetSchemas(_release));
-
-        var learned = changes.ToDictionary(
-            change => change.Key,
-            change => change.Value == RecordChange.Added ? WorkingTreeState.Added : WorkingTreeState.Modified,
-            StringComparer.Ordinal);
-        var moved = KeysDiffering(HeldWorkingTreeStates(key), learned)
-            .Select(formKey => (FormKey: formKey, State: learned.GetValueOrDefault(formKey)))
-            .ToList();
-        if (moved.Count == 0) return [];
-
-        using (var tx = Connection.BeginTransaction())
+        using var tx = Connection.BeginTransaction();
+        foreach (var (formKey, state) in moved)
         {
-            foreach (var (formKey, state) in moved)
-            {
-                DuckDbSql.ExecuteFor(Connection, $"""
-                    UPDATE {EffectiveRows} SET working_tree_state = $4
-                    WHERE form_key = $1 AND plugin = $2 AND origin = $3
-                    """, formKey, key.Name, key.Origin, state.Stored());
-            }
-            _store.BumpSequence();
-            tx.Commit();
+            DuckDbSql.ExecuteFor(Connection, $"""
+                UPDATE {EffectiveRows} SET working_tree_state = $4
+                WHERE form_key = $1 AND plugin = $2 AND origin = $3
+                """, formKey, key.Name, key.Origin, state.Stored());
         }
-        return [.. moved.Select(m => m.FormKey)];
+        _store.BumpSequence();
+        tx.Commit();
     }
 
-    // A key absent from one side reads as that value's default: a clean row, or no row.
-    private static IEnumerable<string> KeysDiffering<T>(
-        IReadOnlyDictionary<string, T> before, IReadOnlyDictionary<string, T> after) =>
-        before.Keys.Union(after.Keys, StringComparer.Ordinal)
-            .Where(formKey => !EqualityComparer<T>.Default.Equals(
-                before.GetValueOrDefault(formKey), after.GetValueOrDefault(formKey)));
-
-    private Dictionary<string, WorkingTreeState> HeldWorkingTreeStates(PluginAddress key)
+    public Dictionary<string, WorkingTreeState> HeldWorkingTreeStates(PluginAddress key)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
@@ -385,70 +313,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         return held;
     }
 
-    // --- Refresh ---
-
-    /// <summary>See <see cref="IRecordIndex.RefreshByKeys"/>.</summary>
-    public void RefreshByKeys(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys)
-    {
-        // One signal, one advance, however many documents it moves.
-        using var projection = BeginProjection();
-
-        // The tree is what these rows are re-derived from, so it is what the plugin is derived from
-        // (ADR-0007), bytes moved or not: a plugin tracked after indexing arrives here
-        // still stamped from its binary.
-        if (SourceRepository.HoldsTreeFor(modFolder, key.Name))
-            _store.RestampDerivation(key, DerivedFrom.SourceTree);
-
-        // A key the index does not hold is a record the tree has gained or got back, and no document
-        // says where the tree puts it: a new exterior cell's block is a directory, not a field.
-        if (formKeys.Any(formKey => StoredRow(key, formKey) == null))
-        {
-            RederiveWholePluginFromSource(key, modFolder, formKeys);
-            return;
-        }
-
-        // One repository for the batch, so its listing memo and embedded-owner map are built once
-        // rather than once per key.
-        var repository = SourceRepository.Over(modFolder, _release);
-        var touched = new List<string>();
-        foreach (var formKey in formKeys)
-            touched.AddRange(RefreshOneKey(repository, key, formKey));
-        touched.AddRange(LearnWorkingTreeStates(key, modFolder));
-
-        // ADR-0015: after the commit, so a subscriber re-reading on receipt sees the rows this names.
-        // Embedded children are named, since a record panel open on a placed ref inside a refreshed
-        // cell has no other signal.
-        if (touched.Count > 0) PublishRowsChanged(key, [.. touched.Distinct(StringComparer.Ordinal)]);
-    }
-
-    // Re-derives one key's rows. Called again with the same bytes, nothing below fires.
-    private List<string> RefreshOneKey(SourceRepository repository, PluginAddress key, string formKey)
-    {
-        // Gone since the batch was read: another key's projection in this same batch took it (a
-        // container's document carries its children's rows).
-        if (StoredRow(key, formKey) is not { } effective) return [];
-
-        var identity = new RecordIdentity(formKey, effective.RecordType, effective.EditorId);
-        var workingTreeText = repository.Get(key, identity)?.Body;
-
-        // Never exclusive owners of the file: it can be caught mid-save, or hand-edited into
-        // something that is not a document. Rows stay as they stand until it reads as one again, and
-        // the caller says why.
-        if (workingTreeText != null && !IsDocument(workingTreeText))
-        {
-            throw new UnreadableSourceDocumentException(
-                $"The source of {formKey} in {key.Name} ({key.Origin}) is not a readable document.");
-        }
-
-        return string.Equals(workingTreeText, effective.Body, StringComparison.Ordinal)
-            ? []
-            : ProjectDocuments(key, [(formKey, workingTreeText)]);
-    }
-
-    private const string EffectiveRows = $"{TableDdlBuilder.MirrorSchema}.records";
+    // --- What the rows hold ---
 
     // The projection reads the plugin's rows whether it is active or not (ADR-0012).
-    private (string RecordType, string? EditorId, string Body)? StoredRow(PluginAddress key, string formKey)
+    public (string RecordType, string? EditorId, string Body)? StoredRow(PluginAddress key, string formKey)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT record_type, editor_id, body FROM {EffectiveRows} WHERE form_key = $1 AND plugin = $2 AND origin = $3";
@@ -458,49 +326,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         return (reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1), reader.GetString(2));
     }
 
-    private static bool IsDocument(string text)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(text);
-            return document.RootElement.ValueKind == JsonValueKind.Object;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
-    // The whole tree, read as one mod: where a record sits is a fact about the tree, not about one
-    // document. Idempotent by construction, being the ingest Track and a re-index run.
-    private void RederiveWholePluginFromSource(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys)
-    {
-        // Nothing to re-derive from: the tree went away between the signal and this line, or this
-        // plugin's rows came from its binary and a source key is not its to answer for.
-        if (!SourceRepository.HoldsTreeFor(modFolder, key.Name)) return;
-        if (RegistrationOf(key) is not { } registration) return;
-
-        // Ingest and winner sweep are one whole-plugin projection, so they are one
-        // advance and the notification below carries the number a subscriber can await.
-        var before = EffectiveContentHashes(key);
-        var statesBefore = HeldWorkingTreeStates(key);
-        using (BeginProjection())
-        {
-            SourceIngest.Ingest(
-                this, modFolder, registration, key, _store.IndexedFile(key)?.FilePath,
-                _release, _schemaReflector, _logger);
-            ResweepWinners();
-        }
-        var after = EffectiveContentHashes(key);
-        var statesAfter = HeldWorkingTreeStates(key);
-
-        // ADR-0015: the keys asked about, and every row the tree read again moved, gone
-        // or gained, at the sequence it landed on.
-        var moved = KeysDiffering(before, after).Union(KeysDiffering(statesBefore, statesAfter), StringComparer.Ordinal);
-        PublishRowsChanged(key, [.. formKeys.Union(moved, StringComparer.Ordinal)]);
-    }
-
-    private Dictionary<string, string> EffectiveContentHashes(PluginAddress key)
+    public Dictionary<string, string> EffectiveContentHashes(PluginAddress key)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT form_key, content_hash FROM {EffectiveRows} WHERE plugin = $1 AND origin = $2";
@@ -511,76 +337,58 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         return hashes;
     }
 
-    // What the plugin's registration row carries (ADR-0013), read back for a re-ingest that must not
-    // change what the load order said about this plugin.
-    private Registration? RegistrationOf(PluginAddress key)
+    // One row per source document: every Effective record no document embeds. A worldspace's TopCell
+    // is embedded, and its null block coordinates tell it from an exterior cell, which has a directory.
+    private const string DocumentStamps = """
+        SELECT r.form_key, r.content_hash
+        FROM mirror.records r
+        WHERE r.plugin = $1 AND r.origin = $2
+          AND NOT EXISTS (
+            SELECT 1 FROM mirror.container_child c
+            WHERE c.child_form_key = r.form_key AND c.plugin = r.plugin AND c.origin = r.origin)
+          AND NOT EXISTS (
+            SELECT 1 FROM mirror.placement p
+            WHERE p.form_key = r.form_key AND p.plugin = r.plugin AND p.origin = r.origin)
+          AND NOT EXISTS (
+            SELECT 1 FROM mirror.cell_location l
+            WHERE l.cell_form_key = r.form_key AND l.plugin = r.plugin AND l.origin = r.origin
+              AND l.parent_worldspace IS NOT NULL AND l.block_x IS NULL)
+        """;
+
+    /// <summary>The content stamp of each source document the rows were derived from, by the key of
+    /// the record it files.</summary>
+    public Dictionary<string, string> HeldDocumentStamps(PluginAddress key)
     {
+        var stamps = new Dictionary<string, string>(StringComparer.Ordinal);
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText =
-            $"SELECT load_order_idx FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2";
+        cmd.CommandText = DocumentStamps;
         DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
         using var reader = cmd.ExecuteReader();
-        if (!reader.Read()) return null;
-        return new Registration(reader.IsDBNull(0) ? null : reader.GetInt32(0));
+        while (reader.Read())
+            stamps[reader.GetString(0)] = reader.GetString(1);
+        return stamps;
     }
 
-    // --- Validate ---
+    /// <summary>The disk claim <paramref name="key"/>'s rows carry, or null when nothing backs them.</summary>
+    public (string FilePath, string ContentHash)? IndexedFile(PluginAddress key) => _store.IndexedFile(key);
 
-    /// <summary>See <see cref="IRecordIndex.Validate"/>.</summary>
-    public ValidationReport Validate(PluginAddress key, string? modFolder)
-    {
-        var sourceValidation = _sourceValidation ?? throw new InvalidOperationException("Call Initialize before using the repository.");
-        return modFolder != null && SourceRepository.HoldsTreeFor(modFolder, key.Name)
-            ? sourceValidation.Validate(key, modFolder)
-            : ValidateAgainstBinary(key);
-    }
+    /// <summary>Which truth <paramref name="key"/>'s rows were derived from, or null when the store
+    /// holds no rows for it.</summary>
+    public DerivedFrom? DerivationOf(PluginAddress key) => _store.DerivationOf(key);
 
-    /// <summary>Restates which truth <paramref name="key"/>'s rows read as, for Validate's tracked
-    /// half.</summary>
-    internal void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom) =>
+    /// <summary>Restates which truth <paramref name="key"/>'s rows read as, leaving the file claim
+    /// beside it.</summary>
+    public void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom) =>
         _store.RestampDerivation(key, derivedFrom);
-
-    internal void PublishRowsChanged(PluginAddress key, IReadOnlyList<string> formKeys) =>
-        _store.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence)));
-
-    // ADR-0003, asked of one plugin. A binary has no smaller unit, so a mismatch is a
-    // rebuild the caller owns.
-    private ValidationReport ValidateAgainstBinary(PluginAddress key)
-    {
-        // Nothing vouches for these rows (an in-memory mod, or a tracked plugin whose folder went
-        // away), so there is nothing to compare them against.
-        if (_store.IndexedFile(key) is not { } claim) return ValidationReport.Clean;
-
-        if (!File.Exists(claim.FilePath))
-        {
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation(
-                    "{Plugin} ({Origin}) is absent from disk at {Path}; removing its rows",
-                    key.Name, key.Origin, claim.FilePath);
-            }
-            Unindex(key);
-            return ValidationReport.Clean;
-        }
-
-        // Reached only for a plugin no repository holds, so rows stamped from a source tree came from
-        // one destroyed outside Modbench (ADR-0007), which the caller re-derives.
-        if (_store.DerivationOf(key) == DerivedFrom.SourceTree)
-            return new ValidationReport([], NeedsRebuild: true, []);
-
-        return _store.FileContentHash(claim.FilePath) == claim.ContentHash
-            ? ValidationReport.Clean
-            : new ValidationReport([], NeedsRebuild: true, []);
-    }
 
     // --- Queries ---
 
-    public void ReadOpenedPluginsFrom(Func<IReadOnlyDictionary<PluginAddress, PluginContent>> opened) =>
-        _store.ReadOpenedPluginsFrom(opened);
-
-    /// <summary>See <see cref="IRecordIndex.Reads"/>.</summary>
+    /// <summary>Every read the index answers.</summary>
     public IRecordReads Reads => _store.Reads;
 
+    /// <summary>Materializes <paramref name="sql"/>'s matches and the records holding them (null
+    /// clears both), the one door SQL crosses. Throws if the SQL returns no <c>form_key</c>
+    /// column.</summary>
     public void SetFilter(string? sql) => _store.Filter.Set(sql);
 
     private void Execute(string sql)

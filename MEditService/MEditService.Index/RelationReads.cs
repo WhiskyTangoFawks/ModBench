@@ -8,11 +8,12 @@ using Mutagen.Bethesda;
 namespace MEditService.Index;
 
 /// <summary>Every read the index answers, over the Store's relations (ADR-0010).</summary>
-internal sealed class RelationReads(Store store) : IRecordReads
+internal sealed class RelationReads(
+    Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins) : IRecordReads
 {
     private static readonly string[] CellChildTypeNames = ["refr", "achr", "land", "navm"];
 
-    public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => store.OpenedPlugins();
+    public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => openedPlugins();
 
     // A SELECT COUNT(*) always answers exactly one row with a non-null count.
     private static long ExecuteCount(DuckDBCommand cmd) =>
@@ -266,7 +267,7 @@ internal sealed class RelationReads(Store store) : IRecordReads
         using var connection = store.OpenReadConnection();
 
         var (where, paramValues) = BuildWhere(
-            null, null, $"form_key IN (SELECT form_key FROM {RecordFilter.Matches})", origin: null, recordTypes: types);
+            null, null, RecordFilter.Matching, origin: null, recordTypes: types);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"SELECT DISTINCT plugin, origin FROM records{where}";

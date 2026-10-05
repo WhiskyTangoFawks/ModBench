@@ -2,7 +2,7 @@ namespace MEditService.Index;
 
 /// <summary>The one gate every index write passes through; reads never take it. A reentrant
 /// <see cref="Lock"/>, not a SemaphoreSlim, because doors nest on the ordinary path. Always taken
-/// outside <c>Indexer._lock</c>, never inside.</summary>
+/// outside <c>Reconciler._lock</c>, never inside.</summary>
 internal sealed class IndexWriteGate
 {
     // On one DuckDBConnection a second BeginTransaction throws and an unwrapped statement joins the
