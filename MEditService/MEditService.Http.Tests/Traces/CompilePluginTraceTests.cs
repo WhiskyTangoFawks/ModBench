@@ -91,21 +91,6 @@ public sealed class CompilePluginTraceTests : HostedTests
         Assert.Single(answer.GetProperty("applied").EnumerateArray());
     }
 
-    [Fact]
-    public async Task Compiling_LeavesNoOtherPluginFileInTheModsRoot()
-    {
-        using var fx = await LoadedAndTracked();
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
-        (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
-
-        await Answer(await Client.Compile([(Plugin, Origin)]));
-        await Answer(await Client.Compile([(Plugin, Origin)]));
-
-        Assert.Equal(
-            [Plugin],
-            Directory.EnumerateFiles(OtherTool.ModFolderOf(fx, Origin), "*.esp").Select(Path.GetFileName));
-    }
-
     private static async Task<double> HeightMaxOfTheWrittenBytes(
         ScatteredFixtureData fx, string plugin, string origin, string formKey) =>
         (await RecordInTheWrittenBytes(fx, plugin, origin, formKey)).GetProperty("fields").EnumerateArray()

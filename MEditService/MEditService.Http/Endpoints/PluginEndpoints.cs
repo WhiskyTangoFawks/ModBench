@@ -92,7 +92,6 @@ public static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(409)
             .ProducesProblem(422)
-            .ProducesProblem(500)
             .ProducesProblem(503);
 
         app.MapPost("/plugins/track", Track)
@@ -151,8 +150,7 @@ public static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(409)
             .ProducesProblem(422)
-            .ProducesProblem(500)
-            .ProducesProblem(503);
+            .ProducesProblem(500);
 
         return app;
     }
@@ -311,7 +309,6 @@ public static class PluginEndpoints
         string plugin, RecordCreateRequest req, CreateRecordHandler edits, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        var decoded = Uri.UnescapeDataString(plugin);
         return WriteEndpointMapping.Execute(
             "Create record", logger,
             logReceived: null,
@@ -324,12 +321,7 @@ public static class PluginEndpoints
                 return null;
             },
             execute: () => edits.CreateRecord(WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType),
-            onApplied: result => Results.Ok(new RecordCreateResponse(true, WriteEndpointMapping.RequireNewFormKey(result), req.RecordType)),
-            onNoLoadOrder: ex =>
-            {
-                logger.LogError(ex, "No usable loadOrder while creating a record in {Plugin}", decoded);
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            });
+            onApplied: result => Results.Ok(new RecordCreateResponse(true, WriteEndpointMapping.RequireNewFormKey(result), req.RecordType)));
     }
 }
 

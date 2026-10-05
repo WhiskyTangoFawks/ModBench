@@ -51,6 +51,20 @@ internal static class ItemWrite
         return SelectionResult<TItem, TRefusal, TOutcome>.PerItem(landed, refused);
     }
 
+    /// <summary>The refusal of a single write that needs git when git is missing, before any write.</summary>
+    internal static RecordEditResult? RefuseWithoutGit()
+    {
+        try
+        {
+            SourceRepository.EnsureTrackable();
+            return null;
+        }
+        catch (GitUnavailableException ex)
+        {
+            return RecordEditResult.Refused(RecordEditRefusal.GitUnavailable, ex.Message);
+        }
+    }
+
     /// <summary>A tree another tool changed, or a file system that refused the write, is that item's
     /// answer. <paramref name="failure"/> names what could not be written; the file system's words
     /// follow it.</summary>
