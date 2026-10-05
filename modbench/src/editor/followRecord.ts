@@ -21,9 +21,9 @@ interface InFlight { writes: number; reported: Set<string>; refreshed: boolean }
 // address taken after it names what it means.
 interface Move { plugin: string; origin: string; from: string; to: string; readAt: number | undefined }
 
-/** The one place a record tab reads again, under the FormKey it shows. A panel with an edit in
- *  flight reads again once, after the answer, under the FormKey it then shows, and only on mEdit's
- *  report of the change, which may land first (editor.md, States, story 5). */
+/** The one place a record tab reads again. With an edit in flight, it reads once after the
+ *  answer, under the FormKey it then shows, and only on mEdit's report, which may land first
+ *  (editor.md, States, story 5). */
 export class EditsInFlight<Panel extends FollowedPanel> {
   private readonly inFlight = new Map<Panel, InFlight>();
   private readonly moves = new Map<Panel, Move[]>();
