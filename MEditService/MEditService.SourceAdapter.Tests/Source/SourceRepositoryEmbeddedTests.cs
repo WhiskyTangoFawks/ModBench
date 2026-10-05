@@ -358,13 +358,14 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void Rekey_OfARecordNoDocumentCarries_RefusesBeforeTheTreeIsTouched()
+    public void ChangesToRekey_OfARecordNoDocumentCarries_Refuses()
     {
-        var before = TreeSnapshot.Of(_modFolder);
+        var absent = new SourceDocument("00FFFF:Embedded.esp", "refr", "Absent", "{}");
 
-        Assert.Throws<InvalidOperationException>(() => new SourceTransaction().Rekey(
-            Repository, Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent"), FreeFormKey, Schemas, Rekeying));
-        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+        var refused = Assert.Throws<InvalidOperationException>(() => Repository.ChangesToRekey(
+            Plugin, absent, absent.Identity, FreeFormKey, Rekeying));
+
+        Assert.Contains("00FFFF:Embedded.esp", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

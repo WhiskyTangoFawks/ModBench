@@ -1,6 +1,3 @@
-using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
-using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
@@ -29,104 +26,48 @@ public enum UnrestoredReason
 public sealed record UnrestoredPath(
     string RelativePath, string FullPath, UnrestoredReason Reason, string? Error = null);
 
-/// <summary>A batch of puts, removes and moves, each by identity, across one or more repositories,
-/// applied all or restored all (commands.md, A failed gesture writes nothing;
-/// ADR-0003).</summary>
+/// <summary>Source changes across one or more repositories, applied all or restored all (commands.md,
+/// A failed gesture writes nothing; ADR-0003).</summary>
 public sealed class SourceTransaction
 {
-    /// <summary>Creates or replaces one repository's document, holding its bytes so a later failure in
-    /// this batch puts the file back. A record no document can hold throws before anything is
-    /// recorded.</summary>
-    public void Put(SourceRepository repository, PluginAddress plugin, SourceDocument document)
+    /// <summary>Makes each move of <paramref name="changes"/> and then writes each document, holding what
+    /// each act replaced so a later failure in this batch puts it back.</summary>
+    public void Apply(SourceRepository repository, SourceChanges changes)
     {
-        var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
-
-        // Refused before the tree is touched, as a container's removal is: putting a record no
-        // document holds would have the repository decide its place and mint the levels above it,
-        // which one document's bytes cannot take back.
-        if (repository.Locator.LocateToPlace(plugin, identity) is not { } unit) throw NotRestorableCreate(plugin, identity);
-
-        // Refused before the tree is touched: the move to another leaf name is a path this
-        // batch holds no bytes for.
-        if (SourceRepositoryWrites.MovesToAnotherLeafName(unit, document)) throw NotRestorableMove(unit, identity);
-
-        var before = Snapshot(unit.FullPath);
-        var minted = SourceRepositoryLayout.LevelsMintedBy(PathShape.DirectoryOf(unit.FullPath));
         try
         {
-            repository.Put(plugin, document);
+            foreach (var move in changes.Moves)
+            {
+                var (from, to) = (Path.Combine(repository.ModFolder, move.From), Path.Combine(repository.ModFolder, move.To));
+                SourceRepositoryLayout.MoveEntry(from, to);
+                _log.Add(new EntryMove(repository.ModFolder, from, to));
+            }
+
+            foreach (var document in changes.Documents) Write(repository.ModFolder, document);
+        }
+        finally
+        {
+            repository.Locator.Forget();
+        }
+    }
+
+    private void Write(string modFolder, DocumentChange document)
+    {
+        var path = Path.Combine(modFolder, document.Path);
+        var before = Snapshot(path);
+        var directory = PathShape.DirectoryOf(path);
+        var minted = SourceRepositoryLayout.LevelsMintedBy(directory);
+        try
+        {
+            SourceRepositoryLayout.InMintedDirectory(directory, () => SourceRepositoryLayout.WriteTextAtomic(path, document.Text));
         }
         finally
         {
             // Ahead of the write it enabled, so the reverse pass empties the directory before taking it.
-            RecordMint(repository.ModFolder, minted);
-            _log.Add(new FileState(repository.ModFolder, unit.FullPath, before, Snapshot(unit.FullPath)));
+            RecordMint(modFolder, minted);
+            _log.Add(new FileState(modFolder, path, before, Snapshot(path)));
         }
     }
-
-    /// <summary>The put of an exterior cell at <paramref name="placement"/>, holding the bytes of every file
-    /// it may write and the directories it mints, so the rollback takes a new cell's document away again.</summary>
-    internal void Put(SourceRepository repository, PluginAddress plugin, SourceDocument document, CellPlacement placement)
-    {
-        var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
-        if (repository.Locator.LocateToPlace(plugin, identity) is not null)
-        {
-            Put(repository, plugin, document);
-            return;
-        }
-
-        var (block, subBlock, cell) = repository.Layout.ExteriorCellLevels(plugin, identity, placement);
-        string[] files =
-        [
-            Path.Combine(block, SourceRepositoryLayout.GroupRecordDataFileName),
-            Path.Combine(subBlock, SourceRepositoryLayout.GroupRecordDataFileName),
-            Path.Combine(cell, SourceRepositoryLayout.RecordDataFileName),
-        ];
-        var before = files.Select(Snapshot).ToList();
-        var minted = SourceRepositoryLayout.LevelsMintedBy(cell);
-        try
-        {
-            repository.Writes.Put(plugin, document, placement);
-        }
-        finally
-        {
-            RecordMint(repository.ModFolder, minted);
-            for (var i = 0; i < files.Length; i++)
-                _log.Add(new FileState(repository.ModFolder, files[i], before[i], Snapshot(files[i])));
-        }
-    }
-
-    /// <summary><see cref="SourceRepository.PutInWorldspace"/>, holding what the put writes so the rollback
-    /// takes a new cell away again.</summary>
-    public void PutInWorldspace(SourceRepository repository, PluginAddress plugin, SourceDocument cell, string worldspace) =>
-        Put(repository, plugin, cell, SourceRepositoryWrites.PlacementIn(worldspace, cell));
-
-    /// <summary>Takes one repository's record out of the tree, holding the document's bytes so the
-    /// rollback puts it back. The pre-image is that one document, so a shape whose removal takes more
-    /// than it is refused.</summary>
-    internal SourceRemoval Remove(SourceRepository repository, PluginAddress plugin, RecordIdentity identity)
-    {
-        if (repository.Locator.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
-
-        var before = Snapshot(unit.FullPath);
-        try
-        {
-            return repository.Remove(plugin, identity);
-        }
-        finally
-        {
-            _log.Add(new FileState(repository.ModFolder, unit.FullPath, before, Snapshot(unit.FullPath)));
-        }
-    }
-
-    private static NotSupportedException NotRestorableCreate(PluginAddress plugin, RecordIdentity identity) =>
-        new($"No document in {plugin.Name}'s tree holds {identity.FormKey} and its type has no file of its " +
-            "own, so putting it would create one and mint the levels above it. A batch holds one " +
-            "document's bytes per act, so it cannot put that back — put it outside the batch.");
-
-    private static NotSupportedException NotRestorableMove(SourceUnit unit, RecordIdentity identity) =>
-        new($"Putting {identity.FormKey} would move {unit.RelativePath}, and a batch " +
-            "holds the bytes of one path per act, so it cannot put that back — put it outside the batch.");
 
     // Recorded in execution order and undone in reverse, so a rename is put back before the create that
     // provoked it.
@@ -148,27 +89,6 @@ public sealed class SourceTransaction
     private void RecordMint(string modFolder, List<string> minted)
     {
         if (minted.Count > 0) _log.Add(new MintedDirectories(modFolder, minted));
-    }
-
-    /// <summary>Moves a container to <paramref name="newFormKey"/>'s leaf and records what moved. A
-    /// no-op — nothing found, not a container, or already at that leaf — logs nothing.</summary>
-    internal void Move(SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey)
-    {
-        if (repository.Writes.Move(plugin, identity, newFormKey) is not { } moved) return;
-        _log.Add(new EntryMove(repository.ModFolder, moved.From, moved.To));
-    }
-
-    /// <summary>Changes a record's FormKey. The repository decides what that moves or rewrites: a
-    /// container's folder, an embedded child's owner text, or a flat file.</summary>
-    public void Rekey(
-        SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, DocumentRekey rekey)
-    {
-        var rekeyed = repository.Writes.RekeyedDocument(plugin, identity, newFormKey, schemas, rekey);
-        Move(repository, plugin, identity, newFormKey);
-        Put(repository, plugin, rekeyed);
-        if (Remove(repository, plugin, identity) == SourceRemoval.OwnerDoesNotCarryIt)
-            throw new IOException($"The document holding {identity.FormKey} does not carry it, so the FormID change cannot take it out.");
     }
 
     /// <summary>Puts every recorded act back, most recent first, so a name this action took is vacated

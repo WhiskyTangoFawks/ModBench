@@ -8,11 +8,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>The full, absolute path a container's subtree moved from and to — what a transaction
-/// needs to log the move without computing either path itself. A caller reporting one relativises it
-/// to a mod folder.</summary>
-internal readonly record struct MovedContainer(string From, string To);
-
 /// <summary>How the text of a document changes under a new FormKey: a record's own, or an embedded
 /// child inside its owner's (null when the owner does not carry it).</summary>
 public sealed record DocumentRekey(
@@ -84,54 +79,69 @@ internal sealed class SourceRepositoryWrites(
         return SourceRemoval.Removed;
     }
 
-    /// <summary>Moves the container <paramref name="identity"/> names to the leaf
-    /// <paramref name="newFormKey"/> computes, keeping its EditorID. Null when nothing moved. Refuses
-    /// before touching the tree when that leaf is already occupied.</summary>
-    internal MovedContainer? Move(PluginAddress plugin, RecordIdentity identity, string newFormKey)
+    /// <summary>What putting a document the tree holds whole changes: its text, and the move of its file
+    /// or folder when its EditorID gives it another leaf name.</summary>
+    internal SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document)
     {
-        if (locator.Locate(plugin, identity) is not { IsEmbedded: false, IsDirectoryPerRecord: true } unit) return null;
+        if (locator.LocateToPlace(plugin, document.Identity) is not { IsEmbedded: false } unit)
+            throw NoPlaceInTheTree(plugin, document.Identity);
 
-        var from = PathShape.DirectoryOf(unit.FullPath);
-        var to = Path.Combine(
-            PathShape.DirectoryOf(from),
-            SourceRepositoryLayout.LeafNameFor(FormKey.Factory(newFormKey), identity.EditorId, isDirectory: true));
-        if (string.Equals(from, to, StringComparison.Ordinal)) return null;
+        if (LeafMove(unit, document) is not var (from, to)) return Written(unit.FullPath, document.Body);
 
-        if (Directory.Exists(to) || File.Exists(to))
-        {
-            throw new IOException(
-                $"{Path.GetFileName(to)} already exists in {Path.GetDirectoryName(to)}, so the container whose FormID changed " +
-                "has nowhere to move to.");
-        }
-
-        Directory.Move(from, to);
-        locator.Forget();
-        return new MovedContainer(from, to);
+        var written = unit.IsDirectoryPerRecord ? Path.Combine(to, Path.GetFileName(unit.FullPath)) : to;
+        return new SourceChanges([Moved(from, to)], [Document(written, document.Body)]);
     }
 
-    /// <summary>The document a FormKey change writes: the record's own under its new key, or the
-    /// owner's text with the embedded child under it. Throws when no readable document carries the
-    /// record.</summary>
-    internal SourceDocument RekeyedDocument(
-        PluginAddress plugin, RecordIdentity identity, string newFormKey,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, DocumentRekey rekey)
+    /// <summary>What putting an exterior cell at its grid changes: a held cell as <see cref="ChangesToPut"/>
+    /// says, else its document and each block level the tree lacks.</summary>
+    internal SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace)
     {
-        var carrying = locator.ContainerDocument(plugin, identity, schemas)
-            ?? throw new InvalidOperationException(
-                $"No readable document in {plugin.Name}'s tree carries {identity.FormKey}.");
+        if (locator.LocateToPlace(plugin, cell.Identity) is not null) return ChangesToPut(plugin, cell);
 
-        if (carrying.FormKey.Equals(identity.FormKey, StringComparison.Ordinal))
+        var (levels, cellPath) = layout.ExteriorCellDocuments(plugin, cell.Identity, PlacementIn(worldspace, cell));
+        return new SourceChanges([], [.. levels.Select(level => Document(level.Path, level.Text)), Document(cellPath, cell.Body)]);
+    }
+
+    /// <summary>What changing <paramref name="identity"/>'s FormKey changes, read from the text of the document
+    /// <paramref name="carrying"/> it: its own file or folder moves to the new leaf name, or its owner's text changes.</summary>
+    internal SourceChanges ChangesToRekey(
+        PluginAddress plugin, SourceDocument carrying, RecordIdentity identity, string newFormKey, DocumentRekey rekey)
+    {
+        var unit = locator.Locate(plugin, identity)
+            ?? throw new InvalidOperationException($"No document in {plugin.Name}'s tree carries {identity.FormKey}.");
+
+        if (!carrying.FormKey.Equals(identity.FormKey, StringComparison.Ordinal))
         {
-            return new SourceDocument(
-                newFormKey, identity.RecordType, identity.EditorId,
-                rekey.Own(carrying, newFormKey));
+            var ownerText = rekey.ChildOfOwner(carrying, identity.FormKey, newFormKey) ?? throw NoLongerCarried(unit, identity.FormKey);
+            return Written(unit.FullPath, ownerText);
         }
 
-        var ownerText = rekey.ChildOfOwner(carrying, identity.FormKey, newFormKey)
-            ?? throw new InvalidOperationException(
-                $"{locator.Locate(plugin, identity)?.RelativePath} was found holding {identity.FormKey}, but its own text does not carry it.");
-        return carrying with { Body = ownerText };
+        var text = rekey.Own(carrying, newFormKey);
+        if (unit.IsDirectoryPerRecord)
+        {
+            var from = PathShape.DirectoryOf(unit.FullPath);
+            var to = Path.Combine(
+                PathShape.DirectoryOf(from), SourceRepositoryLayout.LeafNameFor(FormKey.Factory(newFormKey), identity.EditorId, isDirectory: true));
+            if (Directory.Exists(to) || File.Exists(to))
+            {
+                throw new IOException(
+                    $"{Path.GetFileName(to)} already exists in {Path.GetDirectoryName(to)}, so the container whose FormID changed " +
+                    "has nowhere to move to.");
+            }
+            return new SourceChanges([Moved(from, to)], [Document(Path.Combine(to, Path.GetFileName(unit.FullPath)), text)]);
+        }
+
+        var placed = layout.PlaceNewDocument(plugin, identity with { FormKey = newFormKey }, placement: null)
+            ?? throw NoPlaceInTheTree(plugin, identity);
+        return new SourceChanges([Moved(unit.FullPath, placed.FullPath)], [Document(placed.FullPath, text)]);
     }
+
+    private SourceChanges Written(string fullPath, string text) => new([], [Document(fullPath, text)]);
+
+    private SourceMove Moved(string from, string to) =>
+        new(Path.GetRelativePath(_modFolder, from), Path.GetRelativePath(_modFolder, to));
+
+    private DocumentChange Document(string fullPath, string text) => new(Path.GetRelativePath(_modFolder, fullPath), text);
 
     internal void ReplaceSourceFrom(string pluginFileName, IReadOnlyList<TreeFile> files, string binarySha256)
     {
@@ -286,14 +296,19 @@ internal sealed class SourceRepositoryWrites(
     // found by FormKey.
     private void MoveToItsLeafName(SourceUnit unit, SourceDocument document)
     {
-        if (!MovesToAnotherLeafName(unit, document)) return;
+        if (LeafMove(unit, document) is not var (from, to)) return;
+
+        SourceRepositoryLayout.MoveEntry(from, to);
+        locator.Forget();
+    }
+
+    // The file or folder that holds the document, and where its layout leaf name puts it.
+    private static (string From, string To)? LeafMove(SourceUnit unit, SourceDocument document)
+    {
+        if (!MovesToAnotherLeafName(unit, document)) return null;
 
         var from = unit.IsDirectoryPerRecord ? PathShape.DirectoryOf(unit.FullPath) : unit.FullPath;
-        var to = Path.Combine(PathShape.DirectoryOf(from), LayoutLeafName(unit, document));
-
-        if (unit.IsDirectoryPerRecord) Directory.Move(from, to);
-        else File.Move(from, to);
-        locator.Forget();
+        return (from, Path.Combine(PathShape.DirectoryOf(from), LayoutLeafName(unit, document)));
     }
 
     private static string LayoutLeafName(SourceUnit unit, SourceDocument document) =>

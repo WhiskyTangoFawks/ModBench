@@ -216,6 +216,19 @@ public sealed class SourceRepository
     public void PutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
         Writes.Put(plugin, cell, SourceRepositoryWrites.PlacementIn(worldspace, cell));
 
+    /// <summary>What <see cref="Put"/> of a document the tree holds whole changes, written nowhere.</summary>
+    public SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document) => Writes.ChangesToPut(plugin, document);
+
+    /// <summary>What <see cref="PutInWorldspace"/> changes, written nowhere.</summary>
+    public SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
+        Writes.ChangesToPutInWorldspace(plugin, cell, worldspace);
+
+    /// <summary>What changing the FormKey of <paramref name="identity"/> changes, from the text of the document
+    /// <paramref name="carrying"/> it, written nowhere. A folder already at the new key's leaf name throws.</summary>
+    public SourceChanges ChangesToRekey(
+        PluginAddress plugin, SourceDocument carrying, RecordIdentity identity, string newFormKey, DocumentRekey rekey) =>
+        Writes.ChangesToRekey(plugin, carrying, identity, newFormKey, rekey);
+
     /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
     /// record's document. Already gone is the state asked for; the other two outcomes say what
     /// stopped it.</summary>

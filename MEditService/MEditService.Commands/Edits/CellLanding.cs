@@ -48,17 +48,18 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
     /// <summary>Lands the record that <paramref name="written"/>, <paramref name="holder"/>'s new text,
     /// still carries at the crossing's prefix. A tree it cannot read refuses, with nothing written.</summary>
     internal RecordEditResult Land(
-        PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder, string written, CellCrossing crossing, string spelled)
+        PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder, string written, CellCrossing crossing, string spelled,
+        SourceWrite write)
     {
         var transaction = new SourceTransaction();
         return SourceCommit.Write(
                 transaction, edit.Repository, logger, $"Moving {edit.Identity.FormKey} into another cell failed.",
-                () => Cross(transaction, plugin, edit, holder, written, crossing, spelled))
+                () => Cross(changes => write(transaction, edit.Repository, changes), plugin, edit, holder, written, crossing, spelled))
             ?? RecordEditResult.Success();
     }
 
     private RecordEditResult? Cross(
-        SourceTransaction transaction, PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder,
+        Action<SourceChanges> write, PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder,
         string written, CellCrossing crossing, string spelled)
     {
         var (release, moved, repository) = edit;
@@ -80,22 +81,13 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
             plugin, repository, release, moved, worldspace,
             schemaReflector.GetSchemas(release).Keys.Single(RecordTypeDispatch.For(release).IsCell), spelled);
         var landing = crossing.Into is AnotherCell.GridCell grid ? IntoGridCell(move, grid, record) : IntoPersistentCell(move, record);
-        return landing.Finish(landed => Write(transaction, move, given, landed));
-    }
-
-    private RecordEditResult? Write(SourceTransaction transaction, Move move, SourceDocument given, Landed landed)
-    {
-        transaction.Put(move.Repository, move.Plugin, given);
-        if (landed.NewInWorldspace is { } worldspace) transaction.PutInWorldspace(move.Repository, move.Plugin, landed.Cell, worldspace);
-        else transaction.Put(move.Repository, move.Plugin, landed.Cell);
-
-        if (logger.IsEnabled(LogLevel.Information))
+        return landing.Finish(landed =>
         {
-            logger.LogInformation(
-                "Moved {FormKey} out of {Holder} into {Cell} in {Plugin} ({Origin}), as its Persistent changed",
-                move.Moved.FormKey, given.FormKey, landed.Cell.FormKey, move.Plugin.Name, move.Plugin.Origin);
-        }
-        return null;
+            write(move.Repository.ChangesToPut(plugin, given).Then(landed.NewInWorldspace is { } into
+                ? move.Repository.ChangesToPutInWorldspace(plugin, landed.Cell, into)
+                : move.Repository.ChangesToPut(plugin, landed.Cell)));
+            return null;
+        });
     }
 
     private Step<Landed> IntoPersistentCell(Move move, JsonNode record)
