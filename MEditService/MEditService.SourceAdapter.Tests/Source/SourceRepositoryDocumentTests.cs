@@ -274,6 +274,22 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
+    public void Put_OfAFileRenamedByHandWhileAnotherHoldsTheLayoutsName_RefusesAndLeavesBothFiles()
+    {
+        var repository = Opened();
+        var atLayoutName = Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json");
+        var renamed = Path.Combine(NpcGroupFolder, $"RenamedOutside - 000800_{PluginName}.json");
+        File.Copy(atLayoutName, renamed);
+        File.WriteAllText(atLayoutName, NpcBody.Replace("FixtureNpc", "Another", StringComparison.Ordinal));
+        var before = (File.ReadAllText(atLayoutName), File.ReadAllText(renamed));
+
+        Assert.Throws<AmbiguousSourceUnitException>(
+            () => repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody)));
+
+        Assert.Equal(before, (File.ReadAllText(atLayoutName), File.ReadAllText(renamed)));
+    }
+
+    [Fact]
     public void Put_OverADocumentThatIsNotJson_RefusesWithAReason_AndLeavesTheFileAsItWas()
     {
         var repository = Opened();

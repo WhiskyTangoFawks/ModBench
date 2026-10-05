@@ -91,7 +91,8 @@ internal sealed class PluginCompileService(
                 $"{string.Join(", ", collidingFormKeys)}.");
         }
 
-        var roundTripRefusal = await RefuseIfSourceDoesNotRoundTrip(tree, plugin, repository);
+        var comparison = repository.Compare(plugin, await tree.SerializeTreeAsync());
+        var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(comparison.Divergence, plugin);
         if (roundTripRefusal != null)
             return CompileResult.Refused(CompileRefusal.SourceDoesNotRoundTrip, roundTripRefusal);
 
@@ -125,6 +126,7 @@ internal sealed class PluginCompileService(
                 plugin.Name, plugin.Origin, tree.FormKeys.Count);
         }
         var diagnostics = _links.Report(new LinkCheckScope(plugin, registered, loadOrder, repository), content.Records, content.Links);
+        diagnostics.AddRange(comparison.Misplaced.Select(MisplacedDiagnostic));
         if (!recorded)
         {
             diagnostics.Add(CompileLinks.PluginDiagnostic(
@@ -173,10 +175,9 @@ internal sealed class PluginCompileService(
 
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
     // parses an external binary, never from Compile.
-    private static async Task<string?> RefuseIfSourceDoesNotRoundTrip(
-        CompiledTree tree, PluginAddress plugin, SourceRepository repository)
+    private static string? RefuseIfSourceDoesNotRoundTrip(SourceDivergence? found, PluginAddress plugin)
     {
-        if (repository.DivergenceFrom(plugin, await tree.SerializeTreeAsync()) is not { } divergence) return null;
+        if (found is not { } divergence) return null;
 
         if (divergence.Kind != SourceDivergenceKind.Unproduced)
         {
@@ -189,4 +190,8 @@ internal sealed class PluginCompileService(
             "but the current codec produces no such file from it, so nothing it holds reaches the plugin " +
             $"(a document left over from an earlier source layout, or a stray file). {RegenerateTheSource}";
     }
+
+    private static CompileDiagnostic MisplacedDiagnostic(MisplacedFile file) =>
+        new(file.FormKey, file.HeldPath,
+            $"{file.HeldPath} belongs at {file.BelongsAt}. Modbench moves it there the next time it writes this record.");
 }

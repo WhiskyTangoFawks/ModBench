@@ -30,6 +30,20 @@ public sealed class EditRecordHandlerTests : IDisposable
     }
 
     [Fact]
+    public void EditField_OfARecordFileRenamedByHandToANameWithNoFormKey_MovesItToTheLayoutsName()
+    {
+        var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
+        var byHand = Path.Combine(Path.GetDirectoryName(file) ?? string.Empty, "ByHand.json");
+        File.Move(file, byHand);
+
+        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+
+        Assert.True(result.Applied, result.Message);
+        Assert.True(File.Exists(file));
+        Assert.False(File.Exists(byHand));
+    }
+
+    [Fact]
     public void EditField_OnATrackedPlugin_LeavesTheRecordChangedSinceTheLastCommit()
     {
         Assert.Empty(_mod.ChangedFormKeys());
