@@ -87,7 +87,6 @@ public sealed class ContainerModFixture : IDisposable, ITrackedPlugin
     public ContainerModFixture()
     {
         var holder = new LoadOrderHolder();
-        _instanceRoot = Directory.CreateTempSubdirectory("medit-container-mod-").FullName;
         ModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", ModFolderOrigin)).FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
 
@@ -137,14 +136,7 @@ public sealed class ContainerModFixture : IDisposable, ITrackedPlugin
         CreateHandler = TestEditService.CreateHandler(holder);
     }
 
-    private readonly string _instanceRoot;
+    private readonly ScratchDirectory _instanceRoot = new("medit-container-mod-");
 
-    // A tracked mod folder holds a .git tree whose object files are read-only on some filesystems,
-    // and a test failing on cleanup would mask the real assertion that already ran.
-    public void Dispose()
-    {
-        try { Directory.Delete(_instanceRoot, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => _instanceRoot.Dispose();
 }

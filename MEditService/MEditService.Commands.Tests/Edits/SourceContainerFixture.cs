@@ -33,9 +33,8 @@ public sealed class SourceContainerFixture : IDisposable, ITrackedPlugin
     public SourceContainerFixture()
     {
         var holder = new LoadOrderHolder();
-        var instanceRoot = Directory.CreateTempSubdirectory("medit-source-container-").FullName;
-        ModFolder = Directory.CreateDirectory(Path.Combine(instanceRoot, "mods", Origin)).FullName;
-        GameDirectory = Directory.CreateDirectory(Path.Combine(instanceRoot, "game")).FullName;
+        ModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot.Path, "mods", Origin)).FullName;
+        GameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot.Path, "game")).FullName;
 
         var pluginPath = Path.Combine(ModFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
@@ -54,20 +53,13 @@ public sealed class SourceContainerFixture : IDisposable, ITrackedPlugin
         (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
 
         Entries = [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)];
-        LoadOrder = SnapshotPlugins.Snapshot(GameDirectory, instanceRoot, GameRelease.Fallout4, Entries);
-
+        LoadOrder = SnapshotPlugins.Snapshot(GameDirectory, _instanceRoot, GameRelease.Fallout4, Entries);
 
         holder.Apply(LoadOrder);
         EditHandler = TestEditService.EditHandler(holder);
-        _instanceRoot = instanceRoot;
     }
 
-    private readonly string _instanceRoot;
+    private readonly ScratchDirectory _instanceRoot = new("medit-source-container-");
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_instanceRoot, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => _instanceRoot.Dispose();
 }

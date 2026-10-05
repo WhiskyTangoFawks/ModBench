@@ -16,7 +16,7 @@ internal sealed class LoadOrderOfPlugins : IDisposable
 {
     internal static readonly ModKey Fallout4Esm = ModKey.FromFileName("Fallout4.esm");
 
-    private readonly string _root = Directory.CreateTempSubdirectory("medit-load-order-").FullName;
+    private readonly ScratchDirectory _root = new("medit-load-order-");
     private LoadOrderHolder? _holder;
 
     internal static Fallout4Mod Plugin(string name, Action<Fallout4Mod> holds)
@@ -68,7 +68,7 @@ internal sealed class LoadOrderOfPlugins : IDisposable
     /// <summary>Writes an untracked plugin's file anew, for bytes Mutagen's writer would not produce.</summary>
     internal void Rewrite(IModGetter mod, Action<string> write) => write(Path.Combine(FolderOf(mod), mod.ModKey.FileName));
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose() => _root.Dispose();
 
     private LoadOrderHolder Holder => _holder ?? throw new InvalidOperationException("Load the plugins first.");
 

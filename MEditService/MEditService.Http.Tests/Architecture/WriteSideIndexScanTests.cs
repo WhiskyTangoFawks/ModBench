@@ -60,32 +60,25 @@ public sealed class WriteSideIndexScanTests
     [Fact]
     public void TheScan_CountsPerFileAndSymbol_AndSkipsBuildOutputAndAnExcludedSubtree()
     {
-        var root = Directory.CreateTempSubdirectory("medit-write-side-index-scan-").FullName;
-        try
-        {
-            Directory.CreateDirectory(Path.Combine(root, "Edits", "obj"));
-            File.WriteAllText(
-                Path.Combine(root, "Edits", "EditService.cs"),
-                "IRecordReads reads = index.Reads!;\nvar rows = reads.Search(query);\n");
-            File.WriteAllText(Path.Combine(root, "Edits", "Factory.cs"), "new DuckDbRecordIndexFactory();");
-            File.WriteAllText(Path.Combine(root, "Edits", "obj", "Generated.cs"), "DuckDbRecordIndex index;");
-            File.WriteAllText(Path.Combine(root, "Edits", "Clean.cs"), "repository.Put(plugin, document);");
-            Directory.CreateDirectory(Path.Combine(root, "Records"));
-            File.WriteAllText(Path.Combine(root, "Records", "Store.cs"), "DuckDbRecordIndex index;");
+        using var root = new ScratchDirectory("medit-write-side-index-scan-");
+        Directory.CreateDirectory(Path.Combine(root, "Edits", "obj"));
+        File.WriteAllText(
+            Path.Combine(root, "Edits", "EditService.cs"),
+            "IRecordReads reads = index.Reads!;\nvar rows = reads.Search(query);\n");
+        File.WriteAllText(Path.Combine(root, "Edits", "Factory.cs"), "new DuckDbRecordIndexFactory();");
+        File.WriteAllText(Path.Combine(root, "Edits", "obj", "Generated.cs"), "DuckDbRecordIndex index;");
+        File.WriteAllText(Path.Combine(root, "Edits", "Clean.cs"), "repository.Put(plugin, document);");
+        Directory.CreateDirectory(Path.Combine(root, "Records"));
+        File.WriteAllText(Path.Combine(root, "Records", "Store.cs"), "DuckDbRecordIndex index;");
 
-            var counts = Counts(root, [""], ["Records"], Symbols);
+        var counts = Counts(root, [""], ["Records"], Symbols);
 
-            Assert.Equal(
-                [
-                    "Edits/EditService.cs: IRecordReads: 1",
-                    "Edits/Factory.cs: DuckDbRecordIndexFactory: 1",
-                ],
-                counts);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.Equal(
+            [
+                "Edits/EditService.cs: IRecordReads: 1",
+                "Edits/Factory.cs: DuckDbRecordIndexFactory: 1",
+            ],
+            counts);
     }
 
     private const string EndpointRoot = "MEditService.Http/Endpoints";

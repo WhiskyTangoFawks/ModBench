@@ -34,8 +34,8 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 
     public PluginFixtureData Build()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"{_prefix}-{Guid.NewGuid():N}");
-        var dataFolder = Path.Combine(root, "Data");
+        var data = new PluginFixtureData($"{_prefix}-");
+        var dataFolder = data.DataFolder;
         Directory.CreateDirectory(dataFolder);
 
         var builtMods = new List<Fallout4Mod>();
@@ -54,7 +54,8 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
             .Select((p, slot) => new LoadOrderEntry(p.Name, Path.Combine(dataFolder, p.Name), p.Origin, slot, p.Enabled, Winning: true))
             .ToList();
 
-        return new PluginFixtureData(dataFolder, OneWinnerPerFilename(explicitPlugins), root);
+        data.Plugins = OneWinnerPerFilename(explicitPlugins);
+        return data;
     }
 
     public ScatteredFixtureData BuildScattered()
@@ -67,8 +68,9 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
             .Where(name => _plugins.Exists(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
-        var root = Path.Combine(Path.GetTempPath(), $"{_prefix}-scatter-{Guid.NewGuid():N}");
-        var gameDir = Path.Combine(root, "GameDir");
+        var data = new ScatteredFixtureData($"{_prefix}-scatter-");
+        var root = data.Root;
+        var gameDir = data.GameDirectory;
         Directory.CreateDirectory(gameDir);
 
         var builtMods = new List<Fallout4Mod>();
@@ -101,7 +103,8 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         List<LoadOrderEntry> forced = [.. loadedWithNoLine.Select((name, slot) => new LoadOrderEntry(
             name, Path.Combine(gameDir, name), PluginOrigin.DataDirectory, slot, Enabled: true, Winning: true,
             LoadedWithNoLine: true))];
-        return new ScatteredFixtureData(root, gameDir, [.. forced, .. OneWinnerPerFilename(explicitPlugins)]);
+        data.Plugins = [.. forced, .. OneWinnerPerFilename(explicitPlugins)];
+        return data;
     }
 
     // The mod declared later overrides an earlier mod's file of the same name, and the overridden copy
@@ -122,12 +125,17 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 /// <summary>A fixture whose plugins all live in one folder, the game's own <c>Data</c>, where
 /// implicit masters, DLC and Creation Club content really sit. <see cref="Plugins"/> is the
 /// load order to hand <c>Reconcile</c>.</summary>
-public sealed record PluginFixtureData(
-    string DataFolder, IReadOnlyList<LoadOrderEntry> Plugins, string CleanupRoot) : IDisposable
+public sealed class PluginFixtureData(string prefix) : IDisposable
 {
-    public string InstanceRoot => CleanupRoot;
+    private readonly ScratchDirectory _scratch = new(prefix);
 
-    public void Dispose() => Directory.Delete(CleanupRoot, recursive: true);
+    public string InstanceRoot => _scratch.Path;
+
+    public string DataFolder => Path.Combine(InstanceRoot, "Data");
+
+    public IReadOnlyList<LoadOrderEntry> Plugins { get; set; } = [];
+
+    public void Dispose() => _scratch.Dispose();
 }
 
 /// <summary>A plugin-data fixture loadable through the API test host, with a construction hook so
@@ -140,10 +148,17 @@ public interface IApiPluginFixture<TSelf> : IDisposable where TSelf : IApiPlugin
     static abstract TSelf Create();
 }
 
-public sealed record ScatteredFixtureData(
-    string Root, string GameDirectory, IReadOnlyList<LoadOrderEntry> Plugins) : IDisposable
+public sealed class ScatteredFixtureData(string prefix) : IDisposable
 {
+    private readonly ScratchDirectory _scratch = new(prefix);
+
+    public string Root => _scratch.Path;
+
     public string InstanceRoot => Root;
 
-    public void Dispose() => Directory.Delete(Root, recursive: true);
+    public string GameDirectory => Path.Combine(Root, "GameDir");
+
+    public IReadOnlyList<LoadOrderEntry> Plugins { get; set; } = [];
+
+    public void Dispose() => _scratch.Dispose();
 }

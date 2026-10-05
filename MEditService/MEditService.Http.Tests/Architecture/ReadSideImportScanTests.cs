@@ -26,20 +26,13 @@ public sealed class ReadSideImportScanTests
     [Fact]
     public void TheScan_NamesAnImportingFile_AndSkipsACleanOneAndBuildOutput()
     {
-        var root = Directory.CreateTempSubdirectory("medit-read-side-import-scan-").FullName;
-        try
-        {
-            Directory.CreateDirectory(Path.Combine(root, "Schema", "obj"));
-            File.WriteAllText(Path.Combine(root, "Schema", "Leaf.cs"), ReadSideImport + "\n");
-            File.WriteAllText(Path.Combine(root, "Schema", "obj", "Generated.cs"), ReadSideImport + "\n");
-            File.WriteAllText(Path.Combine(root, "Schema", "Clean.cs"), "using MEditService.Index;\n");
+        using var root = new ScratchDirectory("medit-read-side-import-scan-");
+        Directory.CreateDirectory(Path.Combine(root, "Schema", "obj"));
+        File.WriteAllText(Path.Combine(root, "Schema", "Leaf.cs"), ReadSideImport + "\n");
+        File.WriteAllText(Path.Combine(root, "Schema", "obj", "Generated.cs"), ReadSideImport + "\n");
+        File.WriteAllText(Path.Combine(root, "Schema", "Clean.cs"), "using MEditService.Index;\n");
 
-            Assert.Equal(["Schema/Leaf.cs"], Importers(root, ["Schema"]));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.Equal(["Schema/Leaf.cs"], Importers(root, ["Schema"]));
     }
 
     private static List<string> Importers(string root, IReadOnlyList<string> scannedRoots) =>

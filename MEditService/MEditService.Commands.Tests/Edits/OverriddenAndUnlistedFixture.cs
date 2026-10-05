@@ -27,12 +27,12 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable, ITrackedPlugins
     public const string CopySourceNpcEditorId = "CopySourceNpc";
     public const string UnlistedNpcEditorId = "UnlistedNpc";
 
-    public string WinningModFolder { get; }
-    public string OverriddenModFolder { get; }
-    public string SourceModFolder { get; }
-    public string DestinationModFolder { get; }
-    public string UnlistedModFolder { get; }
-    public string GameDirectory { get; }
+    public ScratchDirectory WinningModFolder { get; } = new("medit-overridden-unlisted-winner-");
+    public ScratchDirectory OverriddenModFolder { get; } = new("medit-overridden-unlisted-overridden-");
+    public ScratchDirectory SourceModFolder { get; } = new("medit-overridden-unlisted-source-");
+    public ScratchDirectory DestinationModFolder { get; } = new("medit-overridden-unlisted-dest-");
+    public ScratchDirectory UnlistedModFolder { get; } = new("medit-overridden-unlisted-unlisted-");
+    public ScratchDirectory GameDirectory { get; } = new("medit-overridden-unlisted-game-");
 
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
     public LoadOrderSnapshot LoadOrder { get; }
@@ -57,12 +57,6 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable, ITrackedPlugins
     private OverriddenAndUnlistedFixture()
     {
         var holder = new LoadOrderHolder();
-        WinningModFolder = Directory.CreateTempSubdirectory("medit-overridden-unlisted-winner-").FullName;
-        OverriddenModFolder = Directory.CreateTempSubdirectory("medit-overridden-unlisted-overridden-").FullName;
-        SourceModFolder = Directory.CreateTempSubdirectory("medit-overridden-unlisted-source-").FullName;
-        DestinationModFolder = Directory.CreateTempSubdirectory("medit-overridden-unlisted-dest-").FullName;
-        UnlistedModFolder = Directory.CreateTempSubdirectory("medit-overridden-unlisted-unlisted-").FullName;
-        GameDirectory = Directory.CreateTempSubdirectory("medit-overridden-unlisted-game-").FullName;
 
         var winningPath = Path.Combine(WinningModFolder, PluginName);
         var winningMod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
@@ -129,18 +123,11 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable, ITrackedPlugins
 
     public void Dispose()
     {
-        TryDelete(WinningModFolder);
-        TryDelete(OverriddenModFolder);
-        TryDelete(SourceModFolder);
-        TryDelete(DestinationModFolder);
-        TryDelete(UnlistedModFolder);
-        TryDelete(GameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
+        WinningModFolder.Dispose();
+        OverriddenModFolder.Dispose();
+        SourceModFolder.Dispose();
+        DestinationModFolder.Dispose();
+        UnlistedModFolder.Dispose();
+        GameDirectory.Dispose();
     }
 }

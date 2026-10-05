@@ -11,7 +11,7 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// (ADR-0015).</summary>
 internal sealed class SourceModFixture : IDisposable
 {
-    private readonly string _instanceRoot;
+    private readonly ScratchDirectory _instanceRoot = new("medit-source-mod-");
 
     public string ModFolder { get; }
     internal string GameDirectory { get; }
@@ -24,7 +24,6 @@ internal sealed class SourceModFixture : IDisposable
     {
         var holder = new LoadOrderHolder();
         Plugin = new PluginAddress(pluginName, origin);
-        _instanceRoot = Directory.CreateTempSubdirectory("medit-source-mod-").FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
 
         // The game's own Data folder and Overwrite are never mod folders, and never a repository
@@ -81,10 +80,5 @@ internal sealed class SourceModFixture : IDisposable
     /// side wrote through — the whole read model this fixture has.</summary>
     internal string Body(FormKey formKey) => TrackedTree.Body(ModFolder, Plugin, formKey.ToString());
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_instanceRoot, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => _instanceRoot.Dispose();
 }

@@ -57,31 +57,24 @@ public sealed class SharedConcernScanTests
     [Fact]
     public void TheScan_CountsPerFileAndNeedle_AndPassesTheModuleAndBuildOutput()
     {
-        var root = Directory.CreateTempSubdirectory("medit-shared-concern-scan-").FullName;
-        try
-        {
-            Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
-            File.WriteAllText(
-                Path.Combine(root, "Layer", "Second.cs"),
-                "found = repository.Get(plugin, formKey, schemaReflector.GetSchemas(release));\n"
-                + "var floor = PluginFlagPredicates.HighRangeFormIdFloor(release);\n");
-            File.WriteAllText(Path.Combine(root, "Layer", SharedModuleFileName), "repository.Get(plugin, id, schemaReflector.GetSchemas(release));");
-            File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "repository.Get(plugin, formKey, schemaReflector.GetSchemas(release));");
-            File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "repository.Put(plugin, document);");
+        using var root = new ScratchDirectory("medit-shared-concern-scan-");
+        Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
+        File.WriteAllText(
+            Path.Combine(root, "Layer", "Second.cs"),
+            "found = repository.Get(plugin, formKey, schemaReflector.GetSchemas(release));\n"
+            + "var floor = PluginFlagPredicates.HighRangeFormIdFloor(release);\n");
+        File.WriteAllText(Path.Combine(root, "Layer", SharedModuleFileName), "repository.Get(plugin, id, schemaReflector.GetSchemas(release));");
+        File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "repository.Get(plugin, formKey, schemaReflector.GetSchemas(release));");
+        File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "repository.Put(plugin, document);");
 
-            var counts = Counts(root, ["Layer"]);
+        var counts = Counts(root, ["Layer"]);
 
-            Assert.Equal(
-                [
-                    @"Layer/Second.cs: \.Get\(plugin, formKey, schemaReflector\b: 1",
-                    @"Layer/Second.cs: \bHighRangeFormIdFloor\b: 1",
-                ],
-                counts);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.Equal(
+            [
+                @"Layer/Second.cs: \.Get\(plugin, formKey, schemaReflector\b: 1",
+                @"Layer/Second.cs: \bHighRangeFormIdFloor\b: 1",
+            ],
+            counts);
     }
 
     private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots) =>

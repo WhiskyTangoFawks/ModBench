@@ -56,7 +56,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.False(SourceRepository.IsTracked(folder));
         Assert.Equal(["NewPlugin.esp"], Directory.EnumerateFileSystemEntries(folder).Select(Path.GetFileName));
         Assert.Empty(Directory.EnumerateFiles(
-            _data.CleanupRoot, "plugins.txt", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, RecurseSubdirectories = true }));
+            _data.InstanceRoot, "plugins.txt", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, RecurseSubdirectories = true }));
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
@@ -22,20 +23,13 @@ public sealed class PluginSourceFolderNameCrossSideTests
     [Fact]
     public void TheScan_CatchesAPlantedMismatch()
     {
-        var dir = Directory.CreateTempSubdirectory("medit-plugin-source-cross-side-").FullName;
-        try
-        {
-            var backendFile = Path.Combine(dir, "SourceRepositoryLayout.cs");
-            var frontendFile = Path.Combine(dir, "layout.ts");
-            File.WriteAllText(backendFile, "internal const string RootFolderName = \"plugin-source\";");
-            File.WriteAllText(frontendFile, "export const PLUGIN_SOURCE_FOLDER = 'source';");
+        using var dir = new ScratchDirectory("medit-plugin-source-cross-side-");
+        var backendFile = Path.Combine(dir, "SourceRepositoryLayout.cs");
+        var frontendFile = Path.Combine(dir, "layout.ts");
+        File.WriteAllText(backendFile, "internal const string RootFolderName = \"plugin-source\";");
+        File.WriteAllText(frontendFile, "export const PLUGIN_SOURCE_FOLDER = 'source';");
 
-            Assert.NotEqual(ValueIn(backendFile, BackendValue), ValueIn(frontendFile, FrontendValue));
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
+        Assert.NotEqual(ValueIn(backendFile, BackendValue), ValueIn(frontendFile, FrontendValue));
     }
 
     private static string ValueIn(string file, Regex pattern)

@@ -134,20 +134,13 @@ public class IndexScopeTests(TestPluginFixture fixture)
     public void Reconcile_AnotherInstance_DropsTheFilter()
     {
         var holder = new LoadOrderHolder();
-        var manager = MakeLoadedManager(holder);
+        using var manager = MakeLoadedManager(holder);
         manager.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
-        var otherInstance = Directory.CreateTempSubdirectory("medit-filter-other-instance-");
-        try
-        {
-            manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance.FullName);
+        using var otherInstance = new ScratchDirectory("medit-filter-other-instance-");
 
-            Assert.Null(manager.ActiveFilter);
-        }
-        finally
-        {
-            manager.Dispose();
-            otherInstance.Delete(recursive: true);
-        }
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
+
+        Assert.Null(manager.ActiveFilter);
     }
 
     [Fact]

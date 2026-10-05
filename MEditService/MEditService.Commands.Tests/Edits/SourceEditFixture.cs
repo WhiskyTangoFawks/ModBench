@@ -20,7 +20,7 @@ public sealed class SourceEditFixture : IDisposable, ITrackedPlugin
     public const string KeywordEditorId = "FixtureKeyword";
     public const string OtherNpcEditorId = "UntouchedNpc";
 
-    public string InstanceRoot { get; }
+    public ScratchDirectory InstanceRoot { get; } = new("medit-source-edit-");
 
     public string ModFolder { get; }
     public string GameDirectory { get; }
@@ -47,7 +47,6 @@ public sealed class SourceEditFixture : IDisposable, ITrackedPlugin
         var holder = new LoadOrderHolder();
         ActualPluginName = pluginName;
         Plugin = new PluginAddress(pluginName, ModFolderOrigin);
-        InstanceRoot = Directory.CreateTempSubdirectory("medit-source-edit-").FullName;
         ModFolder = Directory.CreateDirectory(Path.Combine(InstanceRoot, "mods", ModFolderOrigin)).FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(InstanceRoot, "game")).FullName;
 
@@ -93,14 +92,5 @@ public sealed class SourceEditFixture : IDisposable, ITrackedPlugin
 
     public RecordIdentity NpcIdentity => new(Npc.ToString(), "npc_", NpcEditorId);
 
-    public void Dispose() => TryDelete(InstanceRoot);
-
-    // A tracked mod folder holds a .git tree whose object files are read-only on some filesystems,
-    // and a test failing on cleanup would mask the real assertion that already ran.
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => InstanceRoot.Dispose();
 }

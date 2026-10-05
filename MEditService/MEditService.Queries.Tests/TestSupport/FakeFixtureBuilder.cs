@@ -37,7 +37,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
     internal FakeFixtureData Build(params string[] fieldNames)
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(release);
-        var scratch = Directory.CreateTempSubdirectory("medit-fake-fixture-");
+        using var scratch = new ScratchDirectory("medit-fake-fixture-");
         var overlays = new List<IModDisposeGetter>();
         try
         {
@@ -55,7 +55,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
 
                 // The round trip Mutagen's own master computation needs: a bare in-memory FormLink
                 // carries no master until a real write derives one from the object graph.
-                var scratchPath = Path.Combine(scratch.FullName, name);
+                var scratchPath = Path.Combine(scratch.Path, name);
                 mod.WriteToBinary(scratchPath);
                 var overlay = ModFactory.ImportGetter(new ModPath(ModKey.FromFileName(name), scratchPath), release);
                 overlays.Add(overlay);
@@ -93,7 +93,6 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
         finally
         {
             foreach (var overlay in overlays) overlay.Dispose();
-            try { Directory.Delete(scratch.FullName, recursive: true); } catch (IOException) { /* scratch, best-effort */ }
         }
     }
 

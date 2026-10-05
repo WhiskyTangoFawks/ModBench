@@ -18,8 +18,8 @@ internal sealed class DocumentEditFixture : IDisposable
     private const string PluginName = "DocEdit.esp";
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-docedit-").FullName;
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-docedit-game-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-docedit-");
+    private readonly ScratchDirectory _gameDirectory = new("medit-docedit-game-");
     private readonly SourceRepository _repository;
 
     internal PluginAddress Plugin { get; } = new(PluginName, "DocEditMod");
@@ -76,10 +76,7 @@ internal sealed class DocumentEditFixture : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-        try { Directory.Delete(_gameDirectory, recursive: true); }
-        catch (IOException) { /* ditto */ }
+        _modFolder.Dispose();
+        _gameDirectory.Dispose();
     }
 }

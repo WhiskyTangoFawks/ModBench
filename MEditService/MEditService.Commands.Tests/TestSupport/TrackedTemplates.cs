@@ -13,13 +13,13 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// own.</summary>
 internal static class TrackedTemplates
 {
-    private static readonly ConcurrentDictionary<string, Lazy<string>> Folders = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, Lazy<ScratchDirectory>> Folders = new(StringComparer.Ordinal);
 
     static TrackedTemplates() =>
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
             foreach (var folder in Folders.Values.Where(folder => folder.IsValueCreated))
-                TryDelete(folder.Value);
+                folder.Value.Dispose();
         };
 
     /// <summary>Fills <paramref name="modFolder"/> as <paramref name="make"/> fills an empty mod
@@ -27,13 +27,13 @@ internal static class TrackedTemplates
     /// once per key.</summary>
     internal static void CopyInto(string modFolder, string key, Action<string> make)
     {
-        var template = Folders.GetOrAdd(key, _ => new Lazy<string>(() =>
+        var template = Folders.GetOrAdd(key, _ => new Lazy<ScratchDirectory>(() =>
         {
-            var folder = Directory.CreateTempSubdirectory("medit-tracked-template-").FullName;
-            make(folder);
+            var folder = new ScratchDirectory("medit-tracked-template-");
+            make(folder.Path);
             return folder;
         })).Value;
-        CopyDirectory(template, modFolder);
+        CopyDirectory(template.Path, modFolder);
     }
 
     /// <summary><paramref name="mod"/>, which has no masters, written into
@@ -57,21 +57,14 @@ internal static class TrackedTemplates
     internal static void TrackAlone(string modFolder, string pluginName)
     {
         const string origin = "TemplateMod";
-        var gameDirectory = Directory.CreateTempSubdirectory("medit-tracked-template-game-").FullName;
-        try
-        {
-            var loadOrder = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-                [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Slot: 0, Enabled: true, Winning: true)]);
-            var result = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(loadOrder, origin)
-                .GetAwaiter().GetResult();
-            if (result.Landed.Count != 1)
-                throw new InvalidOperationException($"Expected {pluginName} to track: {string.Join("; ", result.Refused.Select(r => r.Message))}");
-        }
-        finally
-        {
-            TryDelete(gameDirectory);
-        }
+        using var gameDirectory = new ScratchDirectory("medit-tracked-template-game-");
+        var loadOrder = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, GameRelease.Fallout4,
+            [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Slot: 0, Enabled: true, Winning: true)]);
+        var result = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
+            .TrackModAsync(loadOrder, origin)
+            .GetAwaiter().GetResult();
+        if (result.Landed.Count != 1)
+            throw new InvalidOperationException($"Expected {pluginName} to track: {string.Join("; ", result.Refused.Select(r => r.Message))}");
     }
 
     internal static void CopyDirectory(string sourceFolder, string destinationFolder)
@@ -81,14 +74,5 @@ internal static class TrackedTemplates
 
         foreach (var file in Directory.EnumerateFiles(sourceFolder, "*", SearchOption.AllDirectories))
             File.Copy(file, Path.Combine(destinationFolder, Path.GetRelativePath(sourceFolder, file)));
-    }
-
-    // A tracked mod folder holds a .git tree whose object files are read-only on some filesystems,
-    // and a test failing on cleanup would mask the real assertion that already ran.
-    internal static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
     }
 }

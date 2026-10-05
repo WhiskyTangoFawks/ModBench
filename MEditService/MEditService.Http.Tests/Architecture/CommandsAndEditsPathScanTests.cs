@@ -37,43 +37,36 @@ public sealed class CommandsAndEditsPathScanTests
     [Fact]
     public void TheScan_CountsAPlantedOperationPerFile_AndPassesTheCallsThatAreNotOne()
     {
-        var root = Directory.CreateTempSubdirectory("medit-commands-edits-path-scan-").FullName;
-        try
-        {
-            Directory.CreateDirectory(Path.Combine(root, "MEditService.Commands", "Edits", "obj"));
-            File.WriteAllText(
-                Path.Combine(root, "MEditService.Commands", "Edits", "PluginCompileService.cs"),
-                "var tree = Path.Combine(modFolder, root);\n"
-                + "var held = System.IO.File.ReadAllBytes(unit.FullPath);\n"
-                + "var entry = new FileInfo(tree);\n"
-                + "var folder = new System.IO.DirectoryInfo(tree);\n"
-                + "var anchored = file.RelativePath.Equals(other.RelativePath);\n"
-                + "if (edit.Path.Count == 0) return;\n"
-                + "var again = Path.Combine(tree, \"x\");\n");
-            File.WriteAllText(
-                Path.Combine(root, "MEditService.Commands", "Edits", "obj", "Generated.cs"),
-                "var tree = Path.Combine(modFolder, root);\n");
-            Directory.CreateDirectory(Path.Combine(root, "MEditService.Commands"));
-            File.WriteAllText(
-                Path.Combine(root, "MEditService.Commands", "TrackHandler.cs"),
-                "var bytes = File.ReadAllBytes(plugin.Path);\n");
+        using var root = new ScratchDirectory("medit-commands-edits-path-scan-");
+        Directory.CreateDirectory(Path.Combine(root, "MEditService.Commands", "Edits", "obj"));
+        File.WriteAllText(
+            Path.Combine(root, "MEditService.Commands", "Edits", "PluginCompileService.cs"),
+            "var tree = Path.Combine(modFolder, root);\n"
+            + "var held = System.IO.File.ReadAllBytes(unit.FullPath);\n"
+            + "var entry = new FileInfo(tree);\n"
+            + "var folder = new System.IO.DirectoryInfo(tree);\n"
+            + "var anchored = file.RelativePath.Equals(other.RelativePath);\n"
+            + "if (edit.Path.Count == 0) return;\n"
+            + "var again = Path.Combine(tree, \"x\");\n");
+        File.WriteAllText(
+            Path.Combine(root, "MEditService.Commands", "Edits", "obj", "Generated.cs"),
+            "var tree = Path.Combine(modFolder, root);\n");
+        Directory.CreateDirectory(Path.Combine(root, "MEditService.Commands"));
+        File.WriteAllText(
+            Path.Combine(root, "MEditService.Commands", "TrackHandler.cs"),
+            "var bytes = File.ReadAllBytes(plugin.Path);\n");
 
-            var counts = Counts(root, ScannedRoots);
+        var counts = Counts(root, ScannedRoots);
 
-            Assert.Equal(
-                [
-                    "MEditService.Commands/Edits/PluginCompileService.cs: File.ReadAllBytes: 1",
-                    "MEditService.Commands/Edits/PluginCompileService.cs: Path.Combine: 2",
-                    "MEditService.Commands/Edits/PluginCompileService.cs: new FileInfo: 1",
-                    "MEditService.Commands/Edits/PluginCompileService.cs: new System.IO.DirectoryInfo: 1",
-                    "MEditService.Commands/TrackHandler.cs: File.ReadAllBytes: 1",
-                ],
-                counts);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.Equal(
+            [
+                "MEditService.Commands/Edits/PluginCompileService.cs: File.ReadAllBytes: 1",
+                "MEditService.Commands/Edits/PluginCompileService.cs: Path.Combine: 2",
+                "MEditService.Commands/Edits/PluginCompileService.cs: new FileInfo: 1",
+                "MEditService.Commands/Edits/PluginCompileService.cs: new System.IO.DirectoryInfo: 1",
+                "MEditService.Commands/TrackHandler.cs: File.ReadAllBytes: 1",
+            ],
+            counts);
     }
 
     private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots) =>

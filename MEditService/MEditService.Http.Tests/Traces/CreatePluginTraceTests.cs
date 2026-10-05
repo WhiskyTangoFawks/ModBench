@@ -67,17 +67,11 @@ public sealed class CreatePluginTraceTests : HostedTests
     [Fact]
     public async Task CreatingAPluginWithNoLoadOrderHeld_IsRefused_AndWritesNoFile()
     {
-        var folder = Directory.CreateTempSubdirectory("medit-trace-create-homeless-").FullName;
-        try
-        {
-            var created = await Create(Client, "Homeless.esp", folder);
+        using var folder = new ScratchDirectory("medit-trace-create-homeless-");
 
-            Assert.Equal(HttpStatusCode.ServiceUnavailable, created.StatusCode);
-            Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
-        }
-        finally
-        {
-            Directory.Delete(folder, recursive: true);
-        }
+        var created = await Create(Client, "Homeless.esp", folder);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, created.StatusCode);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
     }
 }

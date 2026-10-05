@@ -16,8 +16,8 @@ public sealed class ColorCompileFixture : IDisposable
     public const string PluginName = "Color649.esp";
     private const string Origin = "Color649Mod";
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-649-mod-").FullName;
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-649-game-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-649-mod-");
+    private readonly ScratchDirectory _gameDirectory = new("medit-649-game-");
 
     public string ModFolder => _modFolder;
     public PluginAddress Plugin { get; } = new(PluginName, Origin);
@@ -78,14 +78,7 @@ public sealed class ColorCompileFixture : IDisposable
 
     public void Dispose()
     {
-        TryDelete(_modFolder);
-        TryDelete(_gameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
+        _modFolder.Dispose();
+        _gameDirectory.Dispose();
     }
 }

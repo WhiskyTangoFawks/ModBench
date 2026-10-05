@@ -21,9 +21,9 @@ public sealed class TwoModReferenceFixture : IDisposable, ITrackedPlugins
     public const string TargetRaceEditorId = "TargetRace";
     public const string ReferencerNpcEditorId = "ReferencerNpc";
 
-    public string TargetModFolder { get; }
-    public string ReferencerModFolder { get; }
-    public string GameDirectory { get; }
+    public ScratchDirectory TargetModFolder { get; } = new("medit-formid-target-");
+    public ScratchDirectory ReferencerModFolder { get; } = new("medit-formid-ref-");
+    public ScratchDirectory GameDirectory { get; } = new("medit-formid-game-");
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over these trees.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
@@ -44,9 +44,6 @@ public sealed class TwoModReferenceFixture : IDisposable, ITrackedPlugins
     private TwoModReferenceFixture(bool trackReferencer)
     {
         var holder = new LoadOrderHolder();
-        TargetModFolder = Directory.CreateTempSubdirectory("medit-formid-target-").FullName;
-        ReferencerModFolder = Directory.CreateTempSubdirectory("medit-formid-ref-").FullName;
-        GameDirectory = Directory.CreateTempSubdirectory("medit-formid-game-").FullName;
 
         var targetPath = Path.Combine(TargetModFolder, TargetPluginName);
         var targetMod = new Fallout4Mod(ModKey.FromFileName(TargetPluginName), Fallout4Release.Fallout4);
@@ -89,15 +86,8 @@ public sealed class TwoModReferenceFixture : IDisposable, ITrackedPlugins
 
     public void Dispose()
     {
-        TryDelete(TargetModFolder);
-        TryDelete(ReferencerModFolder);
-        TryDelete(GameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
+        TargetModFolder.Dispose();
+        ReferencerModFolder.Dispose();
+        GameDirectory.Dispose();
     }
 }

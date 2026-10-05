@@ -25,29 +25,22 @@ public sealed class GitProcessScanTests
     [Fact]
     public void TheScan_PassesTheRunner_AndNamesAProcessStartedElsewhere()
     {
-        var root = Directory.CreateTempSubdirectory("medit-git-process-scan-").FullName;
-        try
-        {
-            var runner = Path.Combine(root, GitRunner.Replace('/', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(Path.GetDirectoryName(runner).Require());
-            File.WriteAllText(runner, "var psi = new ProcessStartInfo(\"git\");\nProcess.Start(psi);\n");
-            var rival = Path.Combine(root, "MEditService.Commands", "StatusProbe.cs");
-            Directory.CreateDirectory(Path.GetDirectoryName(rival).Require());
-            File.WriteAllText(rival, "using var git = Process.Start(new ProcessStartInfo(\"git\", \"status\"));\n");
+        using var root = new ScratchDirectory("medit-git-process-scan-");
+        var runner = Path.Combine(root, GitRunner.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(runner).Require());
+        File.WriteAllText(runner, "var psi = new ProcessStartInfo(\"git\");\nProcess.Start(psi);\n");
+        var rival = Path.Combine(root, "MEditService.Commands", "StatusProbe.cs");
+        Directory.CreateDirectory(Path.GetDirectoryName(rival).Require());
+        File.WriteAllText(rival, "using var git = Process.Start(new ProcessStartInfo(\"git\", \"status\"));\n");
 
-            var initializerRival = Path.Combine(root, "MEditService.Commands", "InitializerProbe.cs");
-            File.WriteAllText(initializerRival, "using var git = new Process { StartInfo = info }.Start();\n");
+        var initializerRival = Path.Combine(root, "MEditService.Commands", "InitializerProbe.cs");
+        File.WriteAllText(initializerRival, "using var git = new Process { StartInfo = info }.Start();\n");
 
-            Assert.Equal(
-                ["MEditService.Commands/InitializerProbe.cs", "MEditService.Commands/StatusProbe.cs"],
-                StartsOutsideTheRunner(root, [runner, rival, initializerRival]));
-            var failure = Assert.Throws<Xunit.Sdk.TrueException>(() => AssertOnlyTheRunnerStarts(root, [runner, rival]));
-            Assert.Contains("MEditService.Commands/StatusProbe.cs", failure.Message, StringComparison.Ordinal);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.Equal(
+            ["MEditService.Commands/InitializerProbe.cs", "MEditService.Commands/StatusProbe.cs"],
+            StartsOutsideTheRunner(root, [runner, rival, initializerRival]));
+        var failure = Assert.Throws<Xunit.Sdk.TrueException>(() => AssertOnlyTheRunnerStarts(root, [runner, rival]));
+        Assert.Contains("MEditService.Commands/StatusProbe.cs", failure.Message, StringComparison.Ordinal);
     }
 
     private static void AssertOnlyTheRunnerStarts(string root, IReadOnlyList<string> files)

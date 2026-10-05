@@ -44,29 +44,22 @@ public sealed class GameNamespaceScanTests
     [Fact]
     public void TheScan_PassesTheExemptFoldersAndBuildOutput_AndNamesAGameNamespaceOrTypeElsewhere()
     {
-        var root = Directory.CreateTempSubdirectory("medit-game-namespace-scan-").FullName;
-        try
-        {
-            Directory.CreateDirectory(Path.Combine(root, "Codec"));
-            Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
-            File.WriteAllText(
-                Path.Combine(root, "Codec", "Codec.cs"),
-                "using Mutagen.Bethesda.Fallout4;\nvar mod = new Fallout4Mod(key, release);");
-            File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "using Mutagen.Bethesda.Fallout4;");
-            File.WriteAllText(Path.Combine(root, "Layer", "Rival.cs"), "using Mutagen.Bethesda.Fallout4;");
-            File.WriteAllText(Path.Combine(root, "Layer", "Unqualified.cs"), "IFallout4ModGetter mod = Open(path);");
-            File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "var release = GameRelease.Fallout4; // Fallout4.esm");
+        using var root = new ScratchDirectory("medit-game-namespace-scan-");
+        Directory.CreateDirectory(Path.Combine(root, "Codec"));
+        Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
+        File.WriteAllText(
+            Path.Combine(root, "Codec", "Codec.cs"),
+            "using Mutagen.Bethesda.Fallout4;\nvar mod = new Fallout4Mod(key, release);");
+        File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "using Mutagen.Bethesda.Fallout4;");
+        File.WriteAllText(Path.Combine(root, "Layer", "Rival.cs"), "using Mutagen.Bethesda.Fallout4;");
+        File.WriteAllText(Path.Combine(root, "Layer", "Unqualified.cs"), "IFallout4ModGetter mod = Open(path);");
+        File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "var release = GameRelease.Fallout4; // Fallout4.esm");
 
-            var sites = Sites(root, ["Codec", "Layer"], ["Codec"]);
+        var sites = Sites(root, ["Codec", "Layer"], ["Codec"]);
 
-            Assert.Equal(
-                ["Layer/Rival.cs: using Mutagen.Bethesda.Fallout4;", "Layer/Unqualified.cs: IFallout4ModGetter mod = Open(path);"],
-                sites);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.Equal(
+            ["Layer/Rival.cs: using Mutagen.Bethesda.Fallout4;", "Layer/Unqualified.cs: IFallout4ModGetter mod = Open(path);"],
+            sites);
     }
 
     private static List<string> Sites(string root, IReadOnlyList<string> scannedRoots, string[] exemptFolders) =>

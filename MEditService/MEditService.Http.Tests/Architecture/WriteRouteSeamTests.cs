@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
@@ -139,17 +140,10 @@ public sealed class WriteRouteSeamTests
 
     private static void WithPlantedFile(string source, Action<string> assert)
     {
-        var root = Directory.CreateTempSubdirectory("medit-write-route-seam-scan-").FullName;
-        try
-        {
-            var file = Path.Combine(root, "PlantedEndpoints.cs");
-            File.WriteAllText(file, source);
-            assert(file);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        using var root = new ScratchDirectory("medit-write-route-seam-scan-");
+        var file = Path.Combine(root, "PlantedEndpoints.cs");
+        File.WriteAllText(file, source);
+        assert(file);
     }
 
     private static string EndpointFile(string name) =>

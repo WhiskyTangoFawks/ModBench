@@ -26,10 +26,8 @@ public class CompoundPluginIdentityTests
             .WithPlugin("Shared.esp", mod => key = mod.Npcs.AddNew("FromModA").FormKey, origin: "ModA")
             .BuildScattered();
         npcKey = key;
-        return fixture with
-        {
-            Plugins = [.. fixture.Plugins.Select(p => p.Origin == "ModB" ? p with { Slot = modBSlot } : p)],
-        };
+        fixture.Plugins = [.. fixture.Plugins.Select(p => p.Origin == "ModB" ? p with { Slot = modBSlot } : p)];
+        return fixture;
     }
 
     [Fact]
