@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { columnKey } from './columnKey';
 import { displayValue } from './modelValue';
 import { defaultOf, recordLabel, variantFor } from './recordUtils';
@@ -97,6 +97,8 @@ export function useCellWrites(log: (line: string) => void) {
   const latest = useRef(held);
   const lastRead = useRef<CompareResult | null>(null);
   const nextId = useRef(0);
+  const markTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => () => { markTimers.current.forEach(clearTimeout); }, []);
   const change = useCallback((next: (writes: ReadonlyMap<string, CellWrite>) => ReadonlyMap<string, CellWrite>) => {
     latest.current = next(latest.current);
     setHeld(latest.current);
@@ -112,10 +114,12 @@ export function useCellWrites(log: (line: string) => void) {
     const id = ++nextId.current;
     const array = edit.op === 'set' || !lastRead.current ? undefined : diskCellAt(lastRead.current, column, arrayPathOf(edit));
     change(writes => new Map(writes).set(cell, { id, cell, column, edit, array, readsAsked, marked: false }));
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      markTimers.current.delete(timer);
       const write = latest.current.get(cell);
       if (write?.id === id) change(writes => new Map(writes).set(cell, { ...write, marked: true }));
     }, MARK_DELAY_MS);
+    markTimers.current.add(timer);
   }, [change]);
 
   const refused = useCallback((column: ColumnKey, edit: RecordEditEnvelope) => {
