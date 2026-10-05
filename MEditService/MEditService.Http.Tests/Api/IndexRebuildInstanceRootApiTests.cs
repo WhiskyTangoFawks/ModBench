@@ -19,4 +19,14 @@ public sealed class IndexRebuildInstanceRootApiTests : HostedTests
 
         Assert.Equal(HttpStatusCode.BadRequest, rebuilt.StatusCode);
     }
+
+    [Fact]
+    public async Task RebuildingWithNoGameRelease_Is400()
+    {
+        using var instance = new ScratchDirectory("medit-rebuild-");
+
+        var rebuilt = await Client.PostAsJsonAsync("/index/rebuild", new { instanceRoot = instance.ToString() });
+
+        Assert.Equal(HttpStatusCode.BadRequest, rebuilt.StatusCode);
+    }
 }
