@@ -5,10 +5,8 @@ namespace MEditService.Http.Tests.Architecture;
 
 public sealed class SourceRepositoryInterfaceScanTests
 {
-    private static readonly string[] ProductionRoots =
-        ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
-         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceAdapter"];
+    private static readonly IReadOnlyList<string> ProductionRoots =
+        ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
     private const string RepositoryRoot = "MEditService.SourceAdapter";
 
@@ -22,7 +20,7 @@ public sealed class SourceRepositoryInterfaceScanTests
     [Fact]
     public void NothingOutsideTheSourceRepository_NamesItsGitOrLayoutMechanism()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var walked = ScannedFiles(root);
         var named = Sites(root, walked, HiddenMechanism);
@@ -39,7 +37,7 @@ public sealed class SourceRepositoryInterfaceScanTests
     [Fact]
     public void TheScan_ReadsTheRepositoryItselfAndNamesItsOwnMechanism()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var named = Sites(
             root,

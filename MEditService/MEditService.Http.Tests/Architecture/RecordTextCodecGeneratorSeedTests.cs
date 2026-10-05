@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
@@ -113,19 +113,10 @@ public class RecordTextCodecGeneratorSeedTests
         Assert.Empty(offendingFiles);
     }
 
-    private static readonly string[] ProductionProjects =
-    [
-        "MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
-        "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-        "MEditService.Queries", "MEditService.SourceAdapter",
-    ];
+    private static readonly IReadOnlyList<string> ProductionProjects =
+        ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
-    private static string[] ProductionSources([CallerFilePath] string here = "")
-    {
-        var hereDirectory = Path.GetDirectoryName(here)
-            ?? throw new InvalidOperationException($"Expected '{here}' to have a directory.");
-        var solution = Path.GetFullPath(Path.Combine(hereDirectory, "..", ".."));
-        return [.. ProductionProjects.SelectMany(
-            project => Directory.GetFiles(Path.Combine(solution, project), "*.cs", SearchOption.AllDirectories))];
-    }
+    private static string[] ProductionSources() =>
+        [.. ProductionProjects.SelectMany(project => SourceTree.CSharpFiles(
+            ServiceProjects.Folder(ServiceProjects.SolutionDirectory(), project)))];
 }

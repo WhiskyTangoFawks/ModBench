@@ -9,7 +9,7 @@ public sealed class InternalsVisibleToScanTests
     [Fact]
     public void NoProductionProject_GrantsInternalsVisibleTo()
     {
-        var solution = ArchitectureTests.SolutionDirectory();
+        var solution = ServiceProjects.SolutionDirectory();
         var projects = ServiceProjects.Production(solution);
         var grants = projects.SelectMany(project => Grants(solution, project)).ToList();
 

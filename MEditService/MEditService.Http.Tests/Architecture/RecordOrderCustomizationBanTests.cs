@@ -5,7 +5,7 @@ public sealed class RecordOrderCustomizationBanTests
     [Fact]
     public void NoProductionSource_CallsEnforceRecordOrder()
     {
-        var root = RepositoryRoot();
+        var root = ServiceProjects.SolutionDirectory();
         var offenders = Directory
             .EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
             .Where(IsProductionSource)
@@ -22,7 +22,7 @@ public sealed class RecordOrderCustomizationBanTests
     [Fact]
     public void TheScan_ActuallyReachesTheCustomizationItGuards()
     {
-        var root = RepositoryRoot();
+        var root = ServiceProjects.SolutionDirectory();
         var scanned = Directory
             .EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
             .Where(IsProductionSource)
@@ -38,16 +38,5 @@ public sealed class RecordOrderCustomizationBanTests
         return !segments.Contains("obj", StringComparer.Ordinal)
             && !segments.Contains("bin", StringComparer.Ordinal)
             && !segments.Any(s => s.EndsWith(".Tests", StringComparison.Ordinal));
-    }
-
-    private static string RepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "MEditService.sln"))) return directory.FullName;
-        }
-
-        throw new InvalidOperationException(
-            "Could not find MEditService.sln above the test assembly — this guard cannot scan what it cannot locate.");
     }
 }

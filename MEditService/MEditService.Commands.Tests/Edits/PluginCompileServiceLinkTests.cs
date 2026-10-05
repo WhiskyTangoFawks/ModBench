@@ -160,7 +160,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
         Assert.Equal([_targetKeyword], KeywordsInTheBinary());
     }
 
-    private sealed class FaultyLinkAdapter : ReadOnlyPluginAdapter
+    private sealed class FaultyLinkAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         internal const string Fault = "the link cache could not be built";
 

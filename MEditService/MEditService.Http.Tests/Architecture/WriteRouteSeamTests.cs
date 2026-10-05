@@ -153,7 +153,7 @@ public sealed class WriteRouteSeamTests
     }
 
     private static string EndpointFile(string name) =>
-        Path.Combine(ArchitectureTests.SolutionDirectory(), "MEditService.Http", "Endpoints", name);
+        Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.Http", "Endpoints", name);
 
     private static bool MapsThroughSeamIn(IEnumerable<string> files, string methodName) =>
         ReachInFollowingEachHelperOnce(files, methodName).Any(body => body.Contains("WriteEndpointMapping.", StringComparison.Ordinal));

@@ -5,13 +5,8 @@ public sealed class ComparisonDoorBoundaryTests
     [Fact]
     public void GeneratedEqualityMask_IsOnlyConsultedByModelIdentity_BecauseMutagensGeneratedComparersLieInBothDirections()
     {
-        var offenders = new[]
-        {
-            "MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
-            "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-            "MEditService.Queries", "MEditService.SourceAdapter",
-        }
-            .Select(FindProjectSourceRoot)
+        var offenders = ServiceProjects.Production(ServiceProjects.SolutionDirectory())
+            .Select(project => ServiceProjects.Folder(ServiceProjects.SolutionDirectory(), project))
             .SelectMany(ScanForMaskConsultation)
             .ToList();
 
@@ -31,14 +26,5 @@ public sealed class ComparisonDoorBoundaryTests
             })
             .Select(Path.GetFileName)
             .OfType<string>();
-    }
-
-    private static string FindProjectSourceRoot(string projectName)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, projectName)))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        return Path.Combine(dir.FullName, projectName);
     }
 }
