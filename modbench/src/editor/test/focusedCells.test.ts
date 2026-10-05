@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText } from '../focusedCells';
+import { describe, it, expect, vi } from 'vitest';
+import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText, publishFocusedCell } from '../focusedCells';
 
 const element = { webviewSection: 'arrayElement', canMoveUp: false, canMoveDown: true };
 const text = { webviewSection: 'stringValue' };
@@ -70,6 +70,16 @@ describe('the focused cell of the record tab in focus, which the palette\'s fiel
     expect(focusedCellKeys({ webviewSection: 'cell', copyText: '' })).toMatchObject({
       focusedCellCopies: false, focusedCellEditorOpen: false,
     });
+  });
+});
+
+describe('publishing the focused cell as context keys', () => {
+  it('sets each key under modbench.record.', () => {
+    const set = vi.fn();
+    publishFocusedCell(element, set);
+    expect(set).toHaveBeenCalledWith('modbench.record.focusedCellSection', 'arrayElement');
+    expect(set).toHaveBeenCalledWith('modbench.record.focusedCellCanMoveDown', true);
+    expect(set).toHaveBeenCalledTimes(Object.keys(focusedCellKeys(element)).length);
   });
 });
 

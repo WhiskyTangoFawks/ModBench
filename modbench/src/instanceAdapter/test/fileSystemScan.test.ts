@@ -14,7 +14,7 @@ const FS_SPECIFIERS = new Set(['node:fs', 'node:fs/promises', 'fs', 'fs/promises
 const QUEUE_NAMES = new Set(['createWriteQueue', 'WriteQueue']);
 
 const NOT_THE_INSTANCE = [
-  join('extension.ts'),
+  join('workspaceConfig.ts'),
 ];
 
 const productionFiles = (dir: string): string[] =>
@@ -105,7 +105,7 @@ describe('no file outside the Instance adapter imports the file system to read t
   });
 
   it('the allowlist is exactly the file that opens storage of the extension’s own, the scripts folder under its storage path, and it imports the file system', () => {
-    expect(NOT_THE_INSTANCE).toEqual(['extension.ts']);
+    expect(NOT_THE_INSTANCE).toEqual(['workspaceConfig.ts']);
     const listedFilesImportingNoFileSystem = NOT_THE_INSTANCE.filter((rel) => fsImportsIn(join(SRC, rel)).length === 0);
     expect(listedFilesImportingNoFileSystem).toEqual([]);
   });

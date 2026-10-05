@@ -1,0 +1,38 @@
+import * as vscode from 'vscode';
+import { FOLDER_KEY, INSTANCE_READ_KEY, type FolderCheck } from './folderContext';
+import type { InstanceView } from '../instanceLoader/instance';
+
+export function answerInstanceCheck(root: string | undefined, isInstance: (root: string) => boolean): FolderCheck {
+  const answer: FolderCheck = root !== undefined && isInstance(root) ? 'instance' : 'notAnInstance';
+  void vscode.commands.executeCommand('setContext', FOLDER_KEY, answer);
+  return answer;
+}
+
+export type OpenedFolder = { folder: 'instance'; instanceRoot: string } | { folder: 'notAnInstance' };
+
+/** Outside an instance only the Toolbox registers, row-less, and each view's `viewsWelcome` says
+ *  why. An instance whose files cannot be read is still an instance: its views show the error row
+ *  (common.md, States, stories 2 and 4). */
+export function openedFolder(isInstance: (root: string) => boolean, log: (message: string) => void): OpenedFolder {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const folder = answerInstanceCheck(root, isInstance);
+  if (folder === 'instance' && root !== undefined) return { folder, instanceRoot: root };
+  const what = root === undefined ? 'No folder is open' : `"${root}" is not an instance`;
+  log(`[toolbox] ${what}; every view says how to open one.`);
+  return { folder: 'notAnInstance' };
+}
+
+export interface FirstReadMark extends vscode.Disposable {
+  readonly landed: boolean;
+}
+
+/** A failed read lands no value, so the key waits for the first read that does. */
+export function markFirstReadLanded(instance: Pick<InstanceView, 'subscribe'>): FirstReadMark {
+  let landed = false;
+  const subscription = instance.subscribe(() => {
+    subscription.dispose();
+    landed = true;
+    void vscode.commands.executeCommand('setContext', INSTANCE_READ_KEY, true);
+  });
+  return { get landed() { return landed; }, dispose: () => { subscription.dispose(); } };
+}

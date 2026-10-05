@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { present } from '../ports/present';
-import { FOLDER_KEY, INSTANCE_READ_KEY } from '../folderContext';
+import { FOLDER_KEY, INSTANCE_READ_KEY } from '../toolbox/folderContext';
 import { IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom,

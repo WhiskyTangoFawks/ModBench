@@ -3,7 +3,7 @@ import {
   SETTING_SETTLE_MS, refreshOnGameDirectoryChange,
   type ConfigChangeEvent, type Subscription,
 } from '../gameDirectorySetting';
-import { GAME_FOLDER_SETTING } from '../instanceAdapter/instanceAdapter';
+const GAME_FOLDER_SETTING = 'modbench.mods.gameDirectory';
 
 function fakeConfigChange() {
   let listener: ((e: ConfigChangeEvent) => void) | undefined;
@@ -22,16 +22,12 @@ function fakeConfigChange() {
 afterEach(() => { vi.useRealTimers(); });
 
 describe('the game-directory setting reaches the Instance as one refresh', () => {
-  it('names the setting the override lives at', () => {
-    expect(GAME_FOLDER_SETTING).toBe('modbench.mods.gameDirectory');
-  });
-
   it('refreshes once the settle has elapsed, not on the spot', async () => {
     vi.useFakeTimers();
     const config = fakeConfigChange();
     const refresh = vi.fn().mockResolvedValue(undefined);
 
-    refreshOnGameDirectoryChange(config.subscribe, refresh);
+    refreshOnGameDirectoryChange(GAME_FOLDER_SETTING, config.subscribe, refresh);
     config.fire(GAME_FOLDER_SETTING);
     expect(refresh).not.toHaveBeenCalled();
 
@@ -45,7 +41,7 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
     const config = fakeConfigChange();
     const refresh = vi.fn().mockResolvedValue(undefined);
 
-    refreshOnGameDirectoryChange(config.subscribe, refresh);
+    refreshOnGameDirectoryChange(GAME_FOLDER_SETTING, config.subscribe, refresh);
     for (let i = 0; i < 5; i++) {
       config.fire(GAME_FOLDER_SETTING);
       await vi.advanceTimersByTimeAsync(SETTING_SETTLE_MS / 2);
@@ -62,7 +58,7 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
     const config = fakeConfigChange();
     const refresh = vi.fn().mockResolvedValue(undefined);
 
-    refreshOnGameDirectoryChange(config.subscribe, refresh);
+    refreshOnGameDirectoryChange(GAME_FOLDER_SETTING, config.subscribe, refresh);
     config.fire('modbench.attachToBackendPort');
     await vi.advanceTimersByTimeAsync(SETTING_SETTLE_MS * 5);
 
@@ -74,7 +70,7 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
     const config = fakeConfigChange();
     const refresh = vi.fn().mockResolvedValue(undefined);
 
-    const subscription = refreshOnGameDirectoryChange(config.subscribe, refresh);
+    const subscription = refreshOnGameDirectoryChange(GAME_FOLDER_SETTING, config.subscribe, refresh);
     config.fire(GAME_FOLDER_SETTING);
     subscription.dispose();
     await vi.advanceTimersByTimeAsync(SETTING_SETTLE_MS * 5);

@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
 import type { GameDirectoryOverrides } from './instanceAdapter/instanceAdapter';
-import { FOLDER_KEY, INSTANCE_READ_KEY, type FolderCheck } from './folderContext';
-import type { InstanceView } from './instanceLoader/instance';
+import type { FilterScripts } from './plugins/recordFilterCommands';
 
-/** Vocabulary-neutral workspace facts both bounded contexts read, so they belong to neither
- *  context's folder nor to the composition root. */
 export const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
 /** The setting that overrides where the game is, read fresh on each resolve. Reading it is all
@@ -13,23 +13,16 @@ export function gameDirectoryOverrides(): GameDirectoryOverrides {
   return { gameDirectory: meditConfig().get<string>('mods.gameDirectory') };
 }
 
-export function answerInstanceCheck(root: string | undefined, isInstance: (root: string) => boolean): FolderCheck {
-  const answer: FolderCheck = root !== undefined && isInstance(root) ? 'instance' : 'notAnInstance';
-  void vscode.commands.executeCommand('setContext', FOLDER_KEY, answer);
-  return answer;
-}
+/** The record filter's scripts folder over the disk, which the Plugins view holds no door onto. */
+export function setupScriptsFolder(cfg: vscode.WorkspaceConfiguration): FilterScripts {
+  const scriptsPathCfg: string = cfg.get('scriptsPath') ?? '';
+  const scriptsPath = scriptsPathCfg || path.join(os.homedir(), '.medit', 'scripts');
+  fs.mkdirSync(scriptsPath, { recursive: true });
 
-export interface FirstReadMark extends vscode.Disposable {
-  readonly landed: boolean;
-}
-
-/** A failed read lands no value, so the key waits for the first read that does. */
-export function markFirstReadLanded(instance: Pick<InstanceView, 'subscribe'>): FirstReadMark {
-  let landed = false;
-  const subscription = instance.subscribe(() => {
-    subscription.dispose();
-    landed = true;
-    void vscode.commands.executeCommand('setContext', INSTANCE_READ_KEY, true);
-  });
-  return { get landed() { return landed; }, dispose: () => { subscription.dispose(); } };
+  return {
+    folder: scriptsPath,
+    sqlFiles: () => (fs.existsSync(scriptsPath) ? fs.readdirSync(scriptsPath).filter((f) => f.endsWith('.sql')) : []),
+    read: (name) => fs.readFileSync(path.join(scriptsPath, name), 'utf8'),
+    nameOf: (uri) => path.basename(uri.fsPath),
+  };
 }

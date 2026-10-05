@@ -62,6 +62,12 @@ export function focusedCellKeys(cell: FocusedCellContext | undefined): Record<st
   };
 }
 
+export function publishFocusedCell(
+  cell: FocusedCellContext | undefined, setContext: (key: string, value: unknown) => void,
+): void {
+  Object.entries(focusedCellKeys(cell)).forEach(([name, value]) => { setContext(`modbench.record.${name}`, value); });
+}
+
 /** What a copy value key or the palette names as the record grid, as `focusedView` names a list. */
 export const GRID_VIEW = 'modbench.recordGrid';
 

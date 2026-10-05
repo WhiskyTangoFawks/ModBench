@@ -12,7 +12,7 @@ const SRC_ROOTS = [SRC, WEBVIEW_SRC];
 
 const ADAPTER = 'instanceAdapter';
 const ADAPTER_INTERFACE = join(ADAPTER, 'instanceAdapter.ts');
-const MO2_CONSTRUCTION = 'toolbox.ts';
+const MO2_CONSTRUCTION = 'extension.ts';
 const MO2_ENTRY = './instanceAdapter/mo2Instance';
 
 const NAMES_ANYWHERE_IN_FILE = [/mo2/i, /\bMod Organizer\b/i];
