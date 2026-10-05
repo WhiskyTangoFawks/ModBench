@@ -14,6 +14,8 @@ public interface IRecordQueryService
 
     CompareResult? GetCompare(string formKey);
 
+    CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies);
+
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(PluginAddress plugin);
     IReadOnlyList<CreatableRecordType> GetCreatableRecordTypes();
     bool GetLightPluginsSupported();

@@ -20,6 +20,11 @@ public interface IRecordReads
     /// that plugin never indexed this FormKey.</summary>
     RecordDocument? GetDocument(string formKey, PluginAddress plugin);
 
+    /// <summary>The copy <paramref name="plugin"/> would hold were its document <paramref name="text"/>,
+    /// active or not. Null if no plugin indexes the FormKey, which gives the type. Text that is no
+    /// JSON object throws JsonException.</summary>
+    RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text);
+
     /// <summary>Every document <paramref name="plugin"/> holds, in one bulk read, for consumers that
     /// scan a whole plugin and would otherwise pay two point queries per record.</summary>
     IReadOnlyList<RecordDocument> GetDocuments(PluginAddress plugin);

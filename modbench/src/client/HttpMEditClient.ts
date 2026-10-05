@@ -1,7 +1,7 @@
 import type { RecordEditEnvelope } from '../wire/messages';
 import {
   createApiClient, errorText, isTerminalLoadOrderStatusFor, openNotificationStream,
-  toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult,
+  toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult, type RecordCopy,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
 import { bundledBackendPath, spawnPiped } from './bundledBackend';
@@ -544,6 +544,14 @@ export class HttpMEditClient implements MEditClient {
     if (response.status === 404) return null;
     this.ensureOk(`getComparison(${formKey})`, response, error);
     if (!data) throw new Error(`getComparison(${formKey}): ok response carried no body`);
+    return data;
+  }
+
+  async getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult | null> {
+    const { data, error, response } = await this.apiClient.POST('/records/compare', { body: { copies } });
+    if (response.status === 404) return null;
+    this.ensureOk('getRecordsComparison', response, error);
+    if (!data) throw new Error('getRecordsComparison: ok response carried no body');
     return data;
   }
 
