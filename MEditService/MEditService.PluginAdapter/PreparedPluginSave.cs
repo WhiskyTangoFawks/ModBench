@@ -1,3 +1,4 @@
+using MEditService.RepositoriesLib;
 namespace MEditService.PluginAdapter;
 
 /// <summary>An uncommitted plugin write: temp-written binary and strings files. Commit renames them
