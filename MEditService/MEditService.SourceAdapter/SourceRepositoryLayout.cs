@@ -17,8 +17,7 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 internal readonly record struct SourcePlacement(string RelativePath);
 
 /// <summary>The source tree's layout: the only type spelling the root folder, the door's file names
-/// and the JSON suffix. Everything else asks for a path rather than composing one. The instance
-/// places a new document and mints the levels above it.</summary>
+/// and the JSON suffix. The instance places a new document and mints the levels above it.</summary>
 internal sealed class SourceRepositoryLayout(string modFolder, GameRelease release, SourceRepositoryLocator locator)
 {
     private readonly string _modFolder = modFolder;
