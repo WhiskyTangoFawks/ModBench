@@ -1,8 +1,5 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -12,7 +9,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Two mod folders, because the interesting question — does a FormID edit rewrite a FormLink
 /// in a different mod folder's own repo — cannot be asked of one. No index anywhere in it.</summary>
-public sealed class TwoModReferenceFixture : IDisposable, ITrackedPlugins
+public sealed class TwoModReferenceFixture : TestInstance, ITrackedPlugins
 {
     public const string ReferencerPluginName = "Winner.esp";
     public const string TargetPluginName = "Base.esm";
@@ -21,18 +18,11 @@ public sealed class TwoModReferenceFixture : IDisposable, ITrackedPlugins
     public const string TargetRaceEditorId = "TargetRace";
     public const string ReferencerNpcEditorId = "ReferencerNpc";
 
-    public ScratchDirectory TargetModFolder { get; } = new("medit-formid-target-");
-    public ScratchDirectory ReferencerModFolder { get; } = new("medit-formid-ref-");
-    public ScratchDirectory GameDirectory { get; } = new("medit-formid-game-");
+    public string TargetModFolder => FolderOf(TargetOrigin);
+    public string ReferencerModFolder => FolderOf(ReferencerOrigin);
 
-    /// <summary>The same snapshot as a list, for a test reconciling an index over these trees.</summary>
-    public IReadOnlyList<LoadOrderEntry> Entries { get; }
-
-    public LoadOrderSnapshot LoadOrder { get; }
-    public EditRecordHandler EditHandler { get; }
-
-    public PluginAddress TargetPlugin { get; } = new(TargetPluginName, TargetOrigin);
-    public PluginAddress ReferencerPlugin { get; } = new(ReferencerPluginName, ReferencerOrigin);
+    public PluginAddress TargetPlugin { get; }
+    public PluginAddress ReferencerPlugin { get; }
 
     /// <summary>Native to Base.esm and overridden unedited in Winner.esp, so the override case has a
     /// record to be asked about.</summary>
@@ -43,51 +33,21 @@ public sealed class TwoModReferenceFixture : IDisposable, ITrackedPlugins
 
     private TwoModReferenceFixture(bool trackReferencer)
     {
-        var holder = new LoadOrderHolder();
-
-        var targetPath = Path.Combine(TargetModFolder, TargetPluginName);
         var targetMod = new Fallout4Mod(ModKey.FromFileName(TargetPluginName), Fallout4Release.Fallout4);
         var race = targetMod.Races.AddNew(TargetRaceEditorId);
         var npc = targetMod.Npcs.AddNew("BaseNpc");
-        targetMod.WriteToBinary(targetPath);
         (TargetRace, Npc) = (race.FormKey, npc.FormKey);
+        TargetPlugin = Add(targetMod, TargetOrigin);
 
-        var referencerPath = Path.Combine(ReferencerModFolder, ReferencerPluginName);
         var referencerMod = new Fallout4Mod(ModKey.FromFileName(ReferencerPluginName), Fallout4Release.Fallout4);
         referencerMod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName(TargetPluginName) });
         referencerMod.Npcs.Set(targetMod.Npcs.First(n => n.FormKey == npc.FormKey).DeepCopy());
         var referencerNpc = referencerMod.Npcs.AddNew(ReferencerNpcEditorId);
         referencerNpc.Race.SetTo(race);
-        referencerMod.WriteToBinary(referencerPath);
         ReferencerNpc = referencerNpc.FormKey;
-
-        Entries =
-        [
-            new LoadOrderEntry(TargetPluginName, targetPath, TargetOrigin, Slot: 0, Enabled: true, Winning: true),
-            new LoadOrderEntry(ReferencerPluginName, referencerPath, ReferencerOrigin, Slot: 1, Enabled: true, Winning: true),
-        ];
-        LoadOrder = SnapshotPlugins.Snapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, Entries);
-
-        Track(TargetOrigin);
-        if (trackReferencer) Track(ReferencerOrigin);
-
-        holder.Apply(LoadOrder);
-        EditHandler = TestEditService.EditHandler(holder);
+        ReferencerPlugin = Add(referencerMod, ReferencerOrigin, trackReferencer);
+        Seal();
     }
 
     public static TwoModReferenceFixture Create(bool trackReferencer) => new(trackReferencer);
-
-    private void Track(string origin) =>
-        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(LoadOrder, origin).GetAwaiter().GetResult();
-
-    public string ModFolderOf(PluginAddress plugin) =>
-        plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder;
-
-    public void Dispose()
-    {
-        TargetModFolder.Dispose();
-        ReferencerModFolder.Dispose();
-        GameDirectory.Dispose();
-    }
 }

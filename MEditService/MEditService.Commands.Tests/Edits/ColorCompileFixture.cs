@@ -1,7 +1,6 @@
 using System.Drawing;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -11,18 +10,13 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>One record per Color shape: Light (<c>wbByteColors</c>, an alpha on disk that must
 /// survive a 3-leaf edit), the four <c>wbByteRGBA</c> records, and MaterialObject
 /// (float storage).</summary>
-public sealed class ColorCompileFixture : IDisposable
+public sealed class ColorCompileFixture : TestInstance
 {
     public const string PluginName = "Color649.esp";
     private const string Origin = "Color649Mod";
 
-    private readonly ScratchDirectory _modFolder = new("medit-649-mod-");
-    private readonly ScratchDirectory _gameDirectory = new("medit-649-game-");
-
-    public string ModFolder => _modFolder;
-    public PluginAddress Plugin { get; } = new(PluginName, Origin);
-    public LoadOrderSnapshot LoadOrder { get; }
-    public EditRecordHandler EditHandler { get; }
+    public string ModFolder => FolderOf(Origin);
+    public PluginAddress Plugin { get; }
 
     // Neither 0 nor 255, so surviving a 3-leaf edit cannot pass by coincidence against a default.
     public const byte SeededLightAlpha = 137;
@@ -36,8 +30,6 @@ public sealed class ColorCompileFixture : IDisposable
 
     public ColorCompileFixture()
     {
-        var holder = new LoadOrderHolder();
-        var pluginPath = Path.Combine(_modFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
         var light = mod.Lights.AddNew("Light649");
@@ -66,19 +58,6 @@ public sealed class ColorCompileFixture : IDisposable
         materialObject.SinglePassColor = Color.FromArgb(0, 60, 120, 180);
         MaterialObject = materialObject.FormKey;
 
-        TrackedTemplates.WriteTracked(_modFolder, mod);
-
-        LoadOrder = SnapshotPlugins.Snapshot(
-            _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-
-        holder.Apply(LoadOrder);
-        EditHandler = TestEditService.EditHandler(holder);
-    }
-
-    public void Dispose()
-    {
-        _modFolder.Dispose();
-        _gameDirectory.Dispose();
+        Plugin = Add(mod, Origin);
     }
 }
