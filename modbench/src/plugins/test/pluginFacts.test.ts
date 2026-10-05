@@ -332,7 +332,7 @@ describe('PluginFacts — what a row expands into (plugins.md, States, stories 2
     expect(facts.expansion(B)).toEqual(forB);
   });
 
-  it('a tick that names no failure replaces the last tick's', () => {
+  it('a tick that names no failure replaces the last tick\'s failures', () => {
     const facts = new PluginFacts();
     facts.indexed([], [failure('Malformed record', B)]);
     facts.indexed([], []);
