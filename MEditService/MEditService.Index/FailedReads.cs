@@ -55,20 +55,11 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
     private FailedRead? ReadStateOf(PluginAddress key, string path)
     {
         var binary = index.FileContentHash(path);
-        if (LoadOrderSnapshot.ModFolderOf(key.Origin, path) is not { } modFolder
-            || !SourceRepository.HoldsTreeFor(modFolder, key.Name))
-        {
+        if (Projector.TreeFolderOf(key, path) is not { } modFolder)
             return binary is null ? null : new FailedRead(binary, null);
-        }
 
-        try
-        {
-            var stamps = SourceRepository.Over(modFolder, index.Release).StampsOf(key);
-            return stamps.Unreadable.Count == 0 ? new FailedRead(binary, stamps) : null;
-        }
-        catch (AmbiguousSourceUnitException ex)
-        {
-            return new FailedRead(binary, null, ex.Message);
-        }
+        if (!Projector.TryTreeStamps(modFolder, index.Release, key, out var stamps, out var ambiguity))
+            return new FailedRead(binary, null, ambiguity);
+        return stamps.Unreadable.Count == 0 ? new FailedRead(binary, stamps) : null;
     }
 }

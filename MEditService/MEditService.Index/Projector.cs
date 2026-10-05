@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
@@ -14,11 +16,34 @@ internal sealed class Projector(
     DuckDbRecordIndex index, Func<PluginAddress, PluginMetadata?> held, INotificationPublisher? notifications,
     ILogger logger)
 {
-    /// <summary>Whether this plugin has a tree to ingest from; false reads the binary instead.
-    /// Re-derived every call: MO2's Replace install shell-deletes the folder.</summary>
-    internal static bool HoldsTree(string origin, string pluginPath, string pluginName) =>
-        LoadOrderSnapshot.ModFolderOf(origin, pluginPath) is { } modFolder
-        && SourceRepository.HoldsTreeFor(modFolder, pluginName);
+    /// <summary>The folder of the tree this plugin ingests from, or null when it reads its binary.
+    /// Re-derived every call: a mod manager can replace the folder wholesale.</summary>
+    internal static string? TreeFolderOf(PluginAddress key, string pluginPath) =>
+        LoadOrderSnapshot.ModFolderOf(key.Origin, pluginPath) is { } modFolder
+        && SourceRepository.HoldsTreeFor(modFolder, key.Name)
+            ? modFolder
+            : null;
+
+    internal static bool HoldsTree(PluginAddress key, string pluginPath) => TreeFolderOf(key, pluginPath) is not null;
+
+    /// <summary>What the tree's documents stamp, or the doubly claimed FormKey it named instead.</summary>
+    internal static bool TryTreeStamps(
+        string modFolder, GameRelease release, PluginAddress key,
+        [NotNullWhen(true)] out RecordStamps? stamps, [NotNullWhen(false)] out string? ambiguity)
+    {
+        try
+        {
+            stamps = SourceRepository.Over(modFolder, release).StampsOf(key);
+            ambiguity = null;
+            return true;
+        }
+        catch (AmbiguousSourceUnitException ex)
+        {
+            stamps = null;
+            ambiguity = ex.Message;
+            return false;
+        }
+    }
 
     /// <summary>Indexes the whole tree as the plugin. Throws whatever the tree throws: "quietly served
     /// the binary instead" is a silent lie. The plugin's binary path only stamps the rows.</summary>
@@ -149,10 +174,15 @@ internal sealed class Projector(
     // document. Idempotent by construction, being the ingest Track and a re-index run.
     private void RederiveWholePluginFromSource(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys)
     {
-        // Nothing to re-derive from: the tree went away between the signal and this line, the plugin
-        // is not held, or its rows came from its binary and a source key is not its to answer for.
+        // Nothing to re-derive from: the tree went away between the signal and this line, or the
+        // rows came from its binary and a source key is not its to answer for.
         if (!SourceRepository.HoldsTreeFor(modFolder, key.Name)) return;
-        if (held(key) is not { } plugin) return;
+        if (held(key) is not { } plugin)
+        {
+            logger.LogWarning(
+                "Not re-deriving {Plugin} ({Origin}) from its source tree: it is not held", key.Name, key.Origin);
+            return;
+        }
 
         // Ingest and winner sweep are one whole-plugin projection, so they are one
         // advance and the notification below carries the number a subscriber can await.
@@ -217,24 +247,17 @@ internal sealed class Projector(
     private ValidationReport ValidateAgainstTree(PluginAddress key, string modFolder)
     {
         var failures = new List<string>();
-        IReadOnlyDictionary<string, string> onDisk;
-        bool treeFullyRead;
-        try
-        {
-            var stamps = SourceRepository.Over(modFolder, index.Release).StampsOf(key);
-            onDisk = stamps.ByFormKey;
-            failures.AddRange(stamps.Unreadable);
-            // A file that could not be read is no evidence that a record is gone.
-            treeFullyRead = stamps.Unreadable.Count == 0;
-        }
-        catch (AmbiguousSourceUnitException ex)
+        if (!TryTreeStamps(modFolder, index.Release, key, out var stamps, out var ambiguity))
         {
             // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
-            failures.Add(ex.Message);
+            failures.Add(ambiguity);
             return new ValidationReport([], NeedsRebuild: true, failures);
         }
 
-        return Reconcile(key, modFolder, onDisk, index.HeldDocumentStamps(key), treeFullyRead, failures);
+        failures.AddRange(stamps.Unreadable);
+        // A file that could not be read is no evidence that a record is gone.
+        var treeFullyRead = stamps.Unreadable.Count == 0;
+        return Reconcile(key, modFolder, stamps.ByFormKey, index.HeldDocumentStamps(key), treeFullyRead, failures);
     }
 
     // An embedded child's system of record is its owner's document, so a matching document vouches

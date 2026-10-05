@@ -10,9 +10,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-// The Store's write verbs, split into three collaborators: PluginIngest, WorkingTreeOverlay and the
-// Store. This class owns every transaction boundary, registration and the winner sweep, and reads
-// no system of record: what to write is the Indexer's decision.
+// The Store's write verbs: every transaction boundary, registration and the winner sweep.
 internal sealed class DuckDbRecordIndex : IDisposable
 {
     private readonly ILogger _logger;

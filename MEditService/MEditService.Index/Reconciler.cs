@@ -21,8 +21,11 @@ internal sealed class Reconciler(
     INotificationPublisher? notifications,
     TimeProvider timeProvider) : IDisposable
 {
+    // Lock order: _lock, then the Store's projection lock, which a projection's announcements run
+    // under. An announcement may read Sequence, which takes only the latter, and never Status or
+    // RequireReads, which take _lock.
     private readonly Lock _lock = new();
-    private OpenScope? _scope;
+    private volatile OpenScope? _scope;
 
     // The reconcile's own progress. Guarded by _lock like _scope: written by the reconciling thread
     // as each plugin lands, read by whoever asks for Status meanwhile.
@@ -126,7 +129,7 @@ internal sealed class Reconciler(
     // so this is safe to call from inside a lock a caller already holds.
     private void PublishStatus() => notifications?.Publish(new LoadOrderStatusNotification(Status));
 
-    public long Sequence { get { lock (_lock) return _scope?.Index.Sequence ?? 0; } }
+    public long Sequence => _scope?.Index.Sequence ?? 0;
 
     // ADR-0015: a whole plugin re-derived or removed has too many rows to name, so the
     // announcement names the plugin and the sequence the store reached once the projection landed.
@@ -450,7 +453,7 @@ internal sealed class Reconciler(
     // A plugin that failed the last re-derivation is not read again until what it reads from changes.
     private static bool TruthMoved(OpenScope scope, RegisteredPlugin plugin, IReadOnlySet<PluginAddress> stampedFromSource)
     {
-        var holdsTree = Projector.HoldsTree(plugin.Origin, plugin.Path, plugin.Name);
+        var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Path);
         return holdsTree != stampedFromSource.Contains(plugin.Key) && !scope.Failed.StillFailing(plugin.Key, plugin.Path);
     }
 
@@ -463,7 +466,7 @@ internal sealed class Reconciler(
             token.ThrowIfCancellationRequested();
             if (scope.Held.Find(plugin.Key) is not { } metadata) continue;
 
-            var holdsTree = Projector.HoldsTree(plugin.Origin, plugin.Path, plugin.Name);
+            var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Path);
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation(
@@ -534,7 +537,7 @@ internal sealed class Reconciler(
     private void RegisterOrIndex(OpenScope scope, PluginMetadata plugin, CancellationToken token)
     {
         var key = plugin.Key;
-        var holdsTree = Projector.HoldsTree(plugin.Origin, plugin.Path, plugin.Name);
+        var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Path);
         if (scope.Index.IndexedContentHash(key) != null && WarmRegister(scope, plugin, holdsTree))
         {
             if (logger.IsEnabled(LogLevel.Information))
@@ -794,7 +797,7 @@ internal sealed class Reconciler(
 
         // Asked here as a bare "is this tracked" question; the door below resolves the tree it reads
         // for itself, so neither trusts the other about a folder either could have lost in between.
-        if (Projector.HoldsTree(metadata.Origin, metadata.Path, metadata.Name))
+        if (Projector.HoldsTree(metadata.Key, metadata.Path))
             IngestFromSourceTree(key);
         else
             ReindexOne(metadata, scope);
@@ -812,7 +815,7 @@ internal sealed class Reconciler(
         var (metadata, scope) = RequireHeldPlugin(key);
         var index = scope.Index;
         using var projection = index.BeginProjection();
-        if (!Projector.HoldsTree(metadata.Origin, metadata.Path, metadata.Name))
+        if (!Projector.HoldsTree(metadata.Key, metadata.Path))
         {
             throw new InvalidOperationException(
                 $"Plugin '{key.Name}' from '{key.Origin}' has no source tree to re-ingest; it is not tracked.");

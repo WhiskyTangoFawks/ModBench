@@ -19,26 +19,26 @@ internal sealed class DuckDbRecordIndexFactory(
 
     /// <summary>A null <paramref name="instanceRoot"/> means an in-memory index that dies with this
     /// object. <paramref name="openedPlugins"/> is what the index's reads answer
-    /// <see cref="IRecordReads.OpenedPlugins"/> with; null means none are open.</summary>
+    /// <see cref="IRecordReads.OpenedPlugins"/> with.</summary>
     public DuckDbRecordIndex? Create(
         GameRelease gameRelease, string? instanceRoot,
-        Func<IReadOnlyDictionary<PluginAddress, PluginContent>>? openedPlugins, out string? refusal) =>
+        Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, out string? refusal) =>
         Open(gameRelease, instanceRoot, openedPlugins, atLeastSequence: null, out refusal);
 
     /// <summary>The reopened sequence is floored at <paramref name="atLeastSequence"/>: this process
     /// may already have answered a caller with a higher value, and Sequence must never regress.</summary>
     public DuckDbRecordIndex? Rebuild(
         GameRelease gameRelease, string instanceRoot, long atLeastSequence, out string? refusal) =>
-        Open(gameRelease, instanceRoot, openedPlugins: null, atLeastSequence, out refusal);
+        Open(gameRelease, instanceRoot, () => new Dictionary<PluginAddress, PluginContent>(), atLeastSequence, out refusal);
 
     private DuckDbRecordIndex? Open(
         GameRelease gameRelease, string? instanceRoot,
-        Func<IReadOnlyDictionary<PluginAddress, PluginContent>>? openedPlugins,
+        Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins,
         long? atLeastSequence, out string? refusal)
     {
         var store = new Store(
             _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), schemaReflector, ddlBuilder,
-            timeProvider, openedPlugins ?? (() => new Dictionary<PluginAddress, PluginContent>()));
+            timeProvider, openedPlugins);
         refusal = store.Open();
         if (refusal is not null)
         {
