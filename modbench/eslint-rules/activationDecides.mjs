@@ -4,4 +4,5 @@ export const ACTIVATION_DECIDES_MESSAGE =
 export const ACTIVATION_DECIDES_SELECTORS = [
     'IfStatement', 'SwitchStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement',
     'WhileStatement', 'DoWhileStatement', 'TryStatement', 'ConditionalExpression', 'LogicalExpression',
+    'AssignmentExpression[operator=/^(\\?\\?|\\|\\||&&)=$/]',
 ];

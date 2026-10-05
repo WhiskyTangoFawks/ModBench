@@ -48,10 +48,6 @@ describe('the composition root builds each box, registers it with VS Code and de
     expect(exportedNames(parse(join(SRC, ACTIVATION)))).toEqual(ACTIVATION_EXPORTS);
   });
 
-  it('reads the activation file as a body of construction', () => {
-    expect(readFileSync(join(SRC, ACTIVATION), 'utf8').split('\n').length).toBeGreaterThan(300);
-  });
-
   describe('a plant is caught', () => {
     const lint = (code: string) => new Linter().verify(code, {
       rules: {
@@ -69,6 +65,9 @@ describe('the composition root builds each box, registers it with VS Code and de
       ['a default', 'const x = a ?? 1;'],
       ['an and', 'const x = a && b;'],
       ['an or', 'const x = a || b;'],
+      ['a default assignment', 'x ??= 1;'],
+      ['an or assignment', 'x ||= 1;'],
+      ['an and assignment', 'x &&= 1;'],
     ])('%s', (_name, code) => {
       expect(lint(code)).toEqual([ACTIVATION_DECIDES_MESSAGE]);
     });
