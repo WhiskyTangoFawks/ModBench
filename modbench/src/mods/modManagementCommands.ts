@@ -23,6 +23,7 @@ import {
   renameSeparator,
   setModsEnabled,
   uninstallMods,
+  renameModNameRefusal,
   separatorNameRefusal,
   type ModlistAccess,
   type ModlistSelectionResult,
@@ -164,7 +165,7 @@ export function registerModContextCommands(
         const node = singularArgument(entry, 'mod');
         if (!node) return;
         const oldName = node.mod.name;
-        const newName = await promptRename('Rename mod', oldName, () => undefined);
+        const newName = await promptRename('Rename mod', oldName, modNamePrompt(access, instance, oldName));
         if (newName === undefined) return;
         await runModsWriting(instance, async () => {
           const { activeProfile, profiles, managerNames } = instance.value;
@@ -209,6 +210,12 @@ function separatorNamePrompt(
   access: ModlistAccess, instance: Pick<Instance, 'value'>, own?: string,
 ): (value: string) => Promise<string | undefined> {
   return async (value) => (value === '' ? undefined : separatorNameRefusal(access, instance.value.activeProfile, value, own));
+}
+
+function modNamePrompt(
+  access: ModlistAccess, instance: Pick<Instance, 'value'>, own: string,
+): (value: string) => Promise<string | undefined> {
+  return async (value) => (value === '' ? undefined : renameModNameRefusal(access, instance.value.activeProfile, value, own));
 }
 
 async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion): Promise<boolean> {

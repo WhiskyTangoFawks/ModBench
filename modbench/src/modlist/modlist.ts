@@ -107,20 +107,36 @@ export async function markFiles(
 }
 
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
+const MOD_NAME_CLASH = 'A mod with this name already exists';
+const MOD_NAME_WITH_PATH_SEPARATOR = 'A mod name cannot contain / or \\';
+
+async function entryNameRefusal(
+  access: ModlistAccess, profile: string, kind: EntryKind, requested: string, clash: string, own?: string,
+): Promise<string | undefined> {
+  const listed = await access.adapter.orderEntry(profile, { kind, name: requested });
+  if (listed !== undefined && listed.name !== own) return clash;
+  const holding = await access.adapter.entryFolder({ kind, name: requested });
+  if (holding === undefined) return undefined;
+  const ownFolder = own === undefined ? undefined : await access.adapter.entryFolder({ kind, name: own });
+  return ownFolder?.path === holding.path ? undefined : clash;
+}
 
 /** Why `requested` cannot name a separator, or `undefined` when it can: the profile's mod order
  *  lists one of that name, or a folder holds one, matched as the instance matches names. `own`, the
  *  separator being renamed, is no clash. */
-export async function separatorNameRefusal(
+export const separatorNameRefusal = (
   access: ModlistAccess, profile: string, requested: string, own?: string,
-): Promise<string | undefined> {
-  const listed = await access.adapter.orderEntry(profile, { kind: 'separator', name: requested });
-  if (listed !== undefined && listed.name !== own) return SEPARATOR_NAME_CLASH;
-  const holding = await access.adapter.entryFolder({ kind: 'separator', name: requested });
-  if (holding === undefined) return undefined;
-  const ownFolder = own === undefined ? undefined : await access.adapter.entryFolder({ kind: 'separator', name: own });
-  return ownFolder?.path === holding.path ? undefined : SEPARATOR_NAME_CLASH;
-}
+): Promise<string | undefined> => entryNameRefusal(access, profile, 'separator', requested, SEPARATOR_NAME_CLASH, own);
+
+/** Why `requested` cannot rename mod `own`, or `undefined` when it can: it holds a path separator,
+ *  or another mod of that name is listed or has a folder, matched as the instance matches names.
+ *  `own` in another case is no clash. */
+export const renameModNameRefusal = (
+  access: ModlistAccess, profile: string, requested: string, own: string,
+): Promise<string | undefined> =>
+  (/[\\/]/.test(requested)
+    ? Promise.resolve(MOD_NAME_WITH_PATH_SEPARATOR)
+    : entryNameRefusal(access, profile, 'mod', requested, MOD_NAME_CLASH, own));
 
 // The first index of the run of mods directly on the winning side of the separator at `at`.
 function groupStartOf(order: readonly ModlistEntry[], at: number): number {
