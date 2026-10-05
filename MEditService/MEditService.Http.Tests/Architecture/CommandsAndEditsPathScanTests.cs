@@ -76,7 +76,7 @@ public sealed class CommandsAndEditsPathScanTests
         }
     }
 
-    private static List<string> Counts(string root, string[] scannedRoots) =>
+    private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots) =>
         [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)))
             .SelectMany(file => Occurrences(File.ReadAllText(file))

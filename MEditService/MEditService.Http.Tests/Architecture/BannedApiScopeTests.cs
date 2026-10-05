@@ -104,19 +104,8 @@ public sealed class BannedApiScopeTests
         Assert.Contains("'$(MSBuildProjectName)' != 'MEditService.TestSupport'", condition, StringComparison.Ordinal);
     }
 
-    private static IReadOnlyList<string> ProductionProjectsByProjectFile() =>
-        [.. Directory.EnumerateFiles(
-                ArchitectureTests.SolutionDirectory(), "MEditService.*.csproj", SearchOption.AllDirectories)
-            .Select(project => Path.GetFileNameWithoutExtension(project))
-            .Where(name => !IsATestProject(name))
-            .Order(StringComparer.Ordinal)];
-
-    private static bool IsATestProject(string name) =>
-        name.EndsWith(".Tests", StringComparison.Ordinal)
-        || string.Equals(name, "MEditService.TestSupport", StringComparison.Ordinal);
-
     private static bool HoldsAGameAssembly(string project) =>
-        XDocument.Load(Path.Combine(ArchitectureTests.SolutionDirectory(), project, project + ".csproj"))
+        XDocument.Load(ServiceProjects.Csproj(ArchitectureTests.SolutionDirectory(), project))
             .Descendants("PackageReference")
             .Select(e => (string?)e.Attribute("Include") ?? "")
             .Any(IsAPerGameMutagenPackage);
@@ -129,7 +118,7 @@ public sealed class BannedApiScopeTests
     [Fact]
     public void TheGameAssemblies_AreTheCodecsAndTheAdapters_AndNeitherCarriesTheMutagenBanFile()
     {
-        var projects = ProductionProjectsByProjectFile();
+        var projects = ServiceProjects.Production(ArchitectureTests.SolutionDirectory());
 
         Assert.True(projects.Count > 5, $"The project scan found only {projects.Count} production projects.");
 

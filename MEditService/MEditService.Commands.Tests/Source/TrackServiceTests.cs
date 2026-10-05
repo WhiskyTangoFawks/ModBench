@@ -61,7 +61,7 @@ public sealed class TrackServiceTests
         Assert.False(SourceRepository.HoldsTreeFor(modFolder, "Locked.esp"));
     }
 
-    private sealed class LockedPluginAdapter(string lockedName) : ReadOnlyPluginAdapter
+    private sealed class LockedPluginAdapter(string lockedName) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override bool CanRead(ModPath modPath) =>
             !modPath.ModKey.FileName.String.Equals(lockedName, StringComparison.OrdinalIgnoreCase) && base.CanRead(modPath);

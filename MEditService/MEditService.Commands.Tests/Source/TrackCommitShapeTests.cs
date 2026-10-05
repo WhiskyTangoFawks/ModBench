@@ -126,7 +126,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.False(SourceRepository.IsTracked(_modFolder));
     }
 
-    private sealed class RoundTripFailsFor(string plugin) : ReadOnlyPluginAdapter
+    private sealed class RoundTripFailsFor(string plugin) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Task WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>

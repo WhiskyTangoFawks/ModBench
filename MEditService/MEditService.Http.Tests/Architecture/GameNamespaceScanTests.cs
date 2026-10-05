@@ -10,10 +10,8 @@ public sealed class GameNamespaceScanTests
 
     private static readonly string[] GameNamespaces = [.. GameNames.Select(game => $"Mutagen.Bethesda.{game}")];
 
-    private static readonly string[] ScannedRoots =
-    ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
-         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceAdapter"];
+    private static readonly IReadOnlyList<string> ScannedRoots =
+        ServiceProjects.Production(ArchitectureTests.SolutionDirectory());
 
     private static readonly string[] ExemptFolders =
     [
@@ -71,7 +69,7 @@ public sealed class GameNamespaceScanTests
         }
     }
 
-    private static List<string> Sites(string root, string[] scannedRoots, string[] exemptFolders) =>
+    private static List<string> Sites(string root, IReadOnlyList<string> scannedRoots, string[] exemptFolders) =>
         [.. scannedRoots
             .SelectMany(scanned => SourceTree.CSharpFiles(Path.Combine(root, scanned)))
             .Select(file => (File: file, Relative: Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')))

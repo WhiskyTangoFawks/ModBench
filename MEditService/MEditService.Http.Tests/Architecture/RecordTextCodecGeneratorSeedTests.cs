@@ -113,12 +113,8 @@ public class RecordTextCodecGeneratorSeedTests
         Assert.Empty(offendingFiles);
     }
 
-    private static readonly string[] ProductionProjects =
-    [
-        "MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
-        "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-        "MEditService.Queries", "MEditService.SourceAdapter",
-    ];
+    private static readonly IReadOnlyList<string> ProductionProjects =
+        ServiceProjects.Production(ArchitectureTests.SolutionDirectory());
 
     private static string[] ProductionSources([CallerFilePath] string here = "")
     {

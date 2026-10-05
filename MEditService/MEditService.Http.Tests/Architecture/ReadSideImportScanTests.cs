@@ -7,16 +7,9 @@ public sealed class ReadSideImportScanTests
 {
     private const string ReadSideImport = "using MEditService.Queries;";
 
-    private static readonly string[] ScannedRoots =
-    [
-        "MEditService.Codec",
-        "MEditService.LoadOrder",
-        "MEditService.Ports",
-        "MEditService.Commands",
-        "MEditService.Index",
-        "MEditService.PluginAdapter",
-        "MEditService.SourceAdapter",
-    ];
+    private static readonly IReadOnlyList<string> ScannedRoots =
+        [.. ServiceProjects.Production(ArchitectureTests.SolutionDirectory())
+            .Where(project => project is not ("MEditService.Http" or "MEditService.Queries"))];
 
     [Fact]
     public void NoKernelOrWriteSideFile_ImportsTheReadSide()
@@ -49,7 +42,7 @@ public sealed class ReadSideImportScanTests
         }
     }
 
-    private static List<string> Importers(string root, string[] scannedRoots) =>
+    private static List<string> Importers(string root, IReadOnlyList<string> scannedRoots) =>
         [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar))))
             .Where(file => File.ReadAllText(file).Contains(ReadSideImport, StringComparison.Ordinal))

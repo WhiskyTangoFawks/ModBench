@@ -164,7 +164,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         return TestEditService.PluginCreateHandler(holder, adapter);
     }
 
-    private sealed class RecordingAdapter : ReadOnlyPluginAdapter
+    private sealed class RecordingAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public List<(string Name, GameRelease Release)> Asked { get; } = [];
         public EmptyPluginWrite Outcome { get; init; } = EmptyPluginWrite.Written;

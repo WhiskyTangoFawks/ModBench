@@ -84,7 +84,7 @@ public sealed class SharedConcernScanTests
         }
     }
 
-    private static List<string> Counts(string root, string[] scannedRoots) =>
+    private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots) =>
         [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar))))
             .Where(file => !Path.GetFileName(file).Equals(SharedModuleFileName, StringComparison.Ordinal))

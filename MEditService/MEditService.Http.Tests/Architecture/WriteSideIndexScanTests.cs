@@ -17,12 +17,8 @@ public sealed class WriteSideIndexScanTests
         "FormKeyResolutionCache", "PlacementWalker",
     ];
 
-    private static readonly string[] WholeProductionProjectsExceptTheCompositionRoot =
-    [
-        "MEditService.Codec", "MEditService.Commands", "MEditService.Index", "MEditService.LoadOrder",
-        "MEditService.PluginAdapter", "MEditService.Ports", "MEditService.Queries",
-        "MEditService.SourceAdapter",
-    ];
+    private static readonly IReadOnlyList<string> WholeProductionProjectsExceptTheCompositionRoot =
+        [.. ServiceProjects.Production(ArchitectureTests.SolutionDirectory()).Where(project => project != "MEditService.Http")];
 
     private static readonly string[] IndexItselfAndTheReadSideWhichNameTheseTypesByDefinition =
         ["MEditService.Index", "MEditService.Queries"];
@@ -172,13 +168,13 @@ public sealed class WriteSideIndexScanTests
     }
 
     private static List<string> Counts(
-        string root, string[] scannedRoots, string[] excludedRoots, string[] symbols) =>
+        string root, IReadOnlyList<string> scannedRoots, string[] excludedRoots, string[] symbols) =>
         [.. ScannedFiles(root, scannedRoots, excludedRoots)
             .SelectMany(file => References(File.ReadAllText(file), symbols)
                 .Select(r => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {r.Symbol}: {r.Count}"))
             .Order(StringComparer.Ordinal)];
 
-    private static List<string> ScannedFiles(string root, string[] scannedRoots, string[] excludedRoots)
+    private static List<string> ScannedFiles(string root, IReadOnlyList<string> scannedRoots, string[] excludedRoots)
     {
         var excluded = excludedRoots
             .Select(r => Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar)) + Path.DirectorySeparatorChar)

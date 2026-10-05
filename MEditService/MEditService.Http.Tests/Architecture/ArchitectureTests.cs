@@ -168,7 +168,7 @@ public sealed class ArchitectureTests
         Assert.Contains("Registration.cs", walked);
     }
 
-    internal static List<string> HolderWrites(string root, string[] projects, string verb) =>
+    internal static List<string> HolderWrites(string root, IReadOnlyList<string> projects, string verb) =>
         [.. projects
             .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))
             .Where(f => CallsVerbOnAReceiverTypedAsHolder(File.ReadAllText(f), verb))
@@ -381,15 +381,13 @@ public sealed class ArchitectureTests
         Assert.Equal(allowed.Order(), present.Order());
     }
 
-    private static readonly string[] Projects =
-    ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
-         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceAdapter"];
+    private static readonly IReadOnlyList<string> Projects =
+        ServiceProjects.Production(ArchitectureTests.SolutionDirectory());
 
-    internal static List<string> Offenders(string root, string[] projects, string needle, string[] allowedFiles) =>
+    internal static List<string> Offenders(string root, IReadOnlyList<string> projects, string needle, string[] allowedFiles) =>
         Offenders(root, projects, [needle], allowedFiles);
 
-    internal static List<string> Offenders(string root, string[] projects, string[] needles, string[] allowedFiles)
+    internal static List<string> Offenders(string root, IReadOnlyList<string> projects, string[] needles, string[] allowedFiles)
     {
         return projects
             .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))

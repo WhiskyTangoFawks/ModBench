@@ -64,7 +64,7 @@ public sealed class HandWrittenApplierScanTests
         }
     }
 
-    private static List<string> Sites(string root, string[] scannedRoots) =>
+    private static List<string> Sites(string root, IReadOnlyList<string> scannedRoots) =>
         [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)).Order(StringComparer.Ordinal))
             .SelectMany(file => File.ReadLines(file)

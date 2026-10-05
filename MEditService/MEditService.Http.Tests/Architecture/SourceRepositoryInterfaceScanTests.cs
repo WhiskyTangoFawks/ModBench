@@ -5,10 +5,8 @@ namespace MEditService.Http.Tests.Architecture;
 
 public sealed class SourceRepositoryInterfaceScanTests
 {
-    private static readonly string[] ProductionRoots =
-        ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
-         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceAdapter"];
+    private static readonly IReadOnlyList<string> ProductionRoots =
+        ServiceProjects.Production(ArchitectureTests.SolutionDirectory());
 
     private const string RepositoryRoot = "MEditService.SourceAdapter";
 

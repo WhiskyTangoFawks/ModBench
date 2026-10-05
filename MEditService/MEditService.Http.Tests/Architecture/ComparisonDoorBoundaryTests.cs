@@ -5,12 +5,7 @@ public sealed class ComparisonDoorBoundaryTests
     [Fact]
     public void GeneratedEqualityMask_IsOnlyConsultedByModelIdentity_BecauseMutagensGeneratedComparersLieInBothDirections()
     {
-        var offenders = new[]
-        {
-            "MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
-            "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-            "MEditService.Queries", "MEditService.SourceAdapter",
-        }
+        var offenders = ServiceProjects.Production(ArchitectureTests.SolutionDirectory())
             .Select(FindProjectSourceRoot)
             .SelectMany(ScanForMaskConsultation)
             .ToList();
