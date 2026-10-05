@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease,
+  creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionRule, type PluginCompanionRule,
 } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
@@ -120,5 +120,45 @@ describe('creationClubListFile', () => {
   it('names none for a release with no Creation Club, or no release', () => {
     expect(creationClubListFile('/game', 'Oblivion')).toBeUndefined();
     expect(creationClubListFile('/game', undefined)).toBeUndefined();
+  });
+});
+
+describe('pluginCompanionRule', () => {
+  const rule = (release: string): PluginCompanionRule => {
+    const found = pluginCompanionRule(release);
+    if (found === undefined) throw new Error(`no rule for ${release}`);
+    return found;
+  };
+
+  it('takes the archive of a plugin: its own name, or its name cut at the last " - ", with the release\'s extension', () => {
+    expect(rule('Fallout4').inRoot('Foo.esp', 'Foo.ba2')).toBe(true);
+    expect(rule('Fallout4').inRoot('Foo.esp', 'FOO - Main.BA2')).toBe(true);
+    expect(rule('Fallout4').inRoot('Foo.esp', 'Foo - Bar - Main.ba2')).toBe(false);
+    expect(rule('Fallout4').inRoot('Foo - Bar.esp', 'Foo - Bar - Main.ba2')).toBe(true);
+    expect(rule('Fallout4').inRoot('Foo.esp', 'Foo - Main.bsa')).toBe(false);
+    expect(rule('SkyrimSE').inRoot('Foo.esp', 'Foo - Main.bsa')).toBe(true);
+    expect(rule('Fallout4').inRoot('Foo.esp', 'Foobar.ba2')).toBe(false);
+  });
+
+  it('takes the ini of the plugin\'s name for a release that ties one to its plugins', () => {
+    expect(rule('Fallout4').inRoot('Foo.esp', 'foo.INI')).toBe(true);
+    expect(rule('Oblivion').inRoot('Foo.esp', 'Foo.ini')).toBe(false);
+  });
+
+  it('takes the strings of the plugin in each language of the release, whatever their case', () => {
+    expect(rule('Fallout4').inStringsFolder('Foo.esp', 'FOO_en.STRINGS')).toBe(true);
+    expect(rule('Fallout4').inStringsFolder('Foo.esp', 'Foo_en.ilstrings')).toBe(true);
+    expect(rule('Fallout4').inStringsFolder('Foo.esp', 'Foo_English.STRINGS')).toBe(false);
+    expect(rule('SkyrimSE').inStringsFolder('Foo.esp', 'Foo_English.STRINGS')).toBe(true);
+    expect(rule('Fallout4').inStringsFolder('Foo.esp', 'Foo_Bar_en.STRINGS')).toBe(false);
+  });
+
+  it('takes no strings for a release whose plugins carry none', () => {
+    expect(rule('Oblivion').inStringsFolder('Foo.esp', 'Foo_en.STRINGS')).toBe(false);
+  });
+
+  it('answers undefined for no release, or a release the table holds no row for', () => {
+    expect(pluginCompanionRule(undefined)).toBeUndefined();
+    expect(pluginCompanionRule('SomeRelease')).toBeUndefined();
   });
 });

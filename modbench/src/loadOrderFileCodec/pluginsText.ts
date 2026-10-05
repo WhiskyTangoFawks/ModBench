@@ -110,6 +110,19 @@ export function removePluginFromText(text: string, pluginName: string): string {
   });
 }
 
+/** The line keeps its place, its enabled mark and its padding. Throws if the name has no entry line. */
+export function renamePluginInText(text: string, pluginName: string, newName: string): string {
+  return withBomPreserved(text, (bomless) => {
+    for (const { start, contentEnd } of lineRanges(bomless)) {
+      const content = bomless.slice(start, contentEnd);
+      if (!isEntryLine(content) || pluginNameOf(content) !== pluginName) continue;
+      const nameAt = start + content.indexOf(pluginName, content.length - content.trimStart().length);
+      return bomless.slice(0, nameAt) + newName + bomless.slice(nameAt + pluginName.length);
+    }
+    throw new Error(`Plugin not found in plugins.txt: ${pluginName}`);
+  });
+}
+
 /** `toIndex` counts entries with the moved lines already removed, and clamps to
  *  the last slot. The block keeps its source order, whatever order the names came
  *  in; comment and blank lines keep their positions. */
