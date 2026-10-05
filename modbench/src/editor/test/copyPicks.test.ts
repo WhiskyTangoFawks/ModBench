@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { COPY_MODE_ITEMS, copiesWritten, copyDestinationItems, heldCopies } from '../copyPicks';
+import { copyModeItems, copiesWritten, copyDestinationItems, heldCopies } from '../copyPicks';
 import type { PluginMetadata, RecordAddress } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
@@ -13,7 +13,15 @@ const elsewhere: RecordAddress = { formKey: '000803:Other.esp', plugin: 'Other.e
 
 describe('the mode pick', () => {
   it('offers override and new, override first as xEdit\'s navigator does', () => {
-    expect(COPY_MODE_ITEMS.map((item) => item.mode)).toEqual(['Override', 'New']);
+    expect(copyModeItems(false).map((item) => item.mode)).toEqual(['Override', 'New']);
+  });
+
+  it('offers deep copy as override, in xEdit\'s words, after new when a selected record has child records', () => {
+    expect(copyModeItems(true).map(({ label, mode }) => ({ label, mode }))).toEqual([
+      { label: 'Override', mode: 'Override' },
+      { label: 'New record', mode: 'New' },
+      { label: 'Deep copy as override', mode: 'DeepOverride' },
+    ]);
   });
 });
 
@@ -40,6 +48,10 @@ describe('the destination pick', () => {
 
   it('does not offer an override the plugin every record already lives in', () => {
     expect(copyDestinationItems(plugins, 'Override', [npc, faction]).map((item) => item.label)).toEqual(['Patch.esp', 'Other.esp']);
+  });
+
+  it('does not offer a deep copy the plugin every record already lives in, as an override is not', () => {
+    expect(copyDestinationItems(plugins, 'DeepOverride', [npc, faction]).map((item) => item.label)).toEqual(['Patch.esp', 'Other.esp']);
   });
 
   it('knows the plugin every record lives in whatever the case of its origin', () => {
@@ -93,6 +105,10 @@ describe('copiesWritten, leaving out a copy that would write nothing', () => {
   it('leaves out an override into the record\'s own plugin, which wrote nothing', () => {
     expect(copiesWritten([{ record: npc, destination: own }, { record: npc, destination: patch }], 'Override'))
       .toEqual([{ record: npc, destination: patch }]);
+  });
+
+  it('leaves out a deep copy into the record\'s own plugin as it does an override', () => {
+    expect(copiesWritten([{ record: npc, destination: own }], 'DeepOverride')).toEqual([]);
   });
 
   it('keeps a copy as new into the record\'s own plugin, which is a duplicate beside it', () => {
