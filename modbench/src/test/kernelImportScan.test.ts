@@ -2,44 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, resolve, sep } from 'node:path';
-import { importSpecifiers } from './scanSource';
-import { tsFiles } from './tsFiles';
-import { CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, REFERENCING_BOXES, referencesOf } from './boxes';
-
-const SRC = join(__dirname, '..');
+import { dirname, join, relative, resolve } from 'node:path';
+import { importSpecifiers, MO2_CONSTRUCTION as MO2_CONSTRUCTION_SITE, productionFiles, rootFiles, SRC } from './scanSource';
+import { BOXES, CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, REFERENCING_BOXES } from './boxes';
 
 const boxRoot = (box: string): string => join(SRC, box);
 
-const productionFiles = (root: string): string[] =>
-  tsFiles(root, { exclude: ['test'], tsx: false, includeTests: false });
-
-const kernelFiles = (): string[] => KERNEL_BOXES.flatMap((box) => productionFiles(boxRoot(box)));
-
 const FS_SPECIFIERS = new Set(['node:fs', 'node:fs/promises', 'fs', 'fs/promises']);
-
-function isAllowedSpecifier(spec: string, fromFile: string, root: string): boolean {
-  if (FS_SPECIFIERS.has(spec)) return false;
-  if (spec.startsWith('node:')) return true;
-  if (!spec.startsWith('.')) return false;
-  const resolved = resolve(dirname(fromFile), spec);
-  return resolved === root || resolved.startsWith(root + '/');
-}
-
-function disallowedSpecifiers(path: string, root: string): string[] {
-  return importSpecifiers(readFileSync(path, 'utf8'), path).filter((s) => !isAllowedSpecifier(s, path, root));
-}
-
-function offenders(): Record<string, string[]> {
-  const found: Record<string, string[]> = {};
-  for (const box of KERNEL_BOXES) {
-    for (const path of productionFiles(boxRoot(box))) {
-      const bad = disallowedSpecifiers(path, boxRoot(box));
-      if (bad.length > 0) found[relative(SRC, path)] = bad;
-    }
-  }
-  return found;
-}
 
 const PACKAGE_IMPORTERS = new Set(['client']);
 
@@ -50,33 +19,31 @@ const isIn = (root: string, path: string): boolean => path === root || path.star
 const ADAPTER_INTERFACE = join(boxRoot('instanceAdapter'), 'instanceAdapter');
 
 function isAllowedBoxSpecifier(spec: string, fromFile: string, box: string): boolean {
+  if (KERNEL_BOXES.includes(box) && FS_SPECIFIERS.has(spec)) return false;
   if (spec.startsWith('node:')) return true;
   if (spec === 'vscode') return DRIVING_BOXES.includes(box) || fromFile === ADAPTER_WATCH;
   if (!spec.startsWith('.')) return PACKAGE_IMPORTERS.has(box);
   const resolved = resolve(dirname(fromFile), spec);
   if (box !== 'instanceAdapter' && isIn(boxRoot('instanceAdapter'), resolved)) return resolved === ADAPTER_INTERFACE;
-  const roots = [boxRoot(box), ...referencesOf(box).map(boxRoot)];
-  return roots.some((root) => isIn(root, resolved));
+  return true;
+}
+
+function disallowedSpecifiers(path: string, box: string): string[] {
+  return importSpecifiers(readFileSync(path, 'utf8'), path).filter((spec) => !isAllowedBoxSpecifier(spec, path, box));
 }
 
 function boxOffenders(): Record<string, string[]> {
   const found: Record<string, string[]> = {};
-  for (const box of REFERENCING_BOXES) {
+  for (const box of BOXES) {
     for (const path of productionFiles(boxRoot(box))) {
-      const bad = importSpecifiers(readFileSync(path, 'utf8'), path)
-        .filter((spec) => !isAllowedBoxSpecifier(spec, path, box));
+      const bad = disallowedSpecifiers(path, box);
       if (bad.length > 0) found[relative(SRC, path)] = bad;
     }
   }
   return found;
 }
 
-const rootFiles = (): string[] => productionFiles(SRC).filter((path) => {
-  const rel = relative(SRC, path);
-  return !rel.includes(sep);
-});
-
-const MO2_CONSTRUCTION = { file: join(SRC, 'extension.ts'), module: join(boxRoot('instanceAdapter'), 'mo2Instance') };
+const MO2_CONSTRUCTION = { file: join(SRC, MO2_CONSTRUCTION_SITE.file), module: join(SRC, MO2_CONSTRUCTION_SITE.module) };
 
 function isAllowedRootSpecifier(spec: string, fromFile: string): boolean {
   if (!spec.startsWith('.')) return true;
@@ -94,75 +61,40 @@ function rootOffenders(): Record<string, string[]> {
   return found;
 }
 
-async function plantedSpecifiers(source: string): Promise<string[]> {
+async function plantedKernelSpecifiers(source: string): Promise<string[]> {
   const root = await mkdtemp(join(tmpdir(), 'medit-kernel-import-scan-'));
   try {
     const planted = join(root, 'planted.ts');
     await writeFile(planted, source);
-    return disallowedSpecifiers(planted, root);
+    return disallowedSpecifiers(planted, KERNEL_BOXES[0] ?? '');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 }
 
-describe('a kernel box references nothing', () => {
+describe('what a box may import beyond its reference list, which the build holds', () => {
   it('every box is a real directory holding production files', () => {
-    for (const box of KERNEL_BOXES) {
+    for (const box of BOXES) {
       expect(existsSync(boxRoot(box))).toBe(true);
       expect(productionFiles(boxRoot(box)).length).toBeGreaterThan(0);
     }
   });
 
-  it('scans a real body of kernel files', () => {
-    expect(kernelFiles().length).toBeGreaterThan(10);
-  });
-
-  it('every production file in a kernel box imports only node: builtins and files in its own box', () => {
-    expect(offenders()).toEqual({});
-  });
-
-  it('flags an import planted upward out of the box', async () => {
-    expect(await plantedSpecifiers("import type { ModlistEntry } from '../model';\n")).toEqual(['../model']);
-  });
-
-  it('flags a sibling kernel box import planted in a kernel module', async () => {
-    expect(await plantedSpecifiers("import { present } from '../ports/present';\n")).toEqual(['../ports/present']);
+  it('every production file imports only what its box may', () => {
+    expect(boxOffenders()).toEqual({});
   });
 
   it('flags a vscode import planted in a kernel module', async () => {
-    expect(await plantedSpecifiers("import * as vscode from 'vscode';\n")).toEqual(['vscode']);
+    expect(await plantedKernelSpecifiers("import * as vscode from 'vscode';\n")).toEqual(['vscode']);
   });
 
   it('flags a node:fs or node:fs/promises import planted in a kernel module', async () => {
-    expect(await plantedSpecifiers("import { readFile } from 'node:fs/promises';\nimport { existsSync } from 'node:fs';\n"))
+    expect(await plantedKernelSpecifiers("import { readFile } from 'node:fs/promises';\nimport { existsSync } from 'node:fs';\n"))
       .toEqual(['node:fs/promises', 'node:fs']);
   });
 
   it('allows node:path, which a pure path function needs', async () => {
-    expect(await plantedSpecifiers("import { join } from 'node:path';\n")).toEqual([]);
-  });
-
-  it('allows a file inside the same box', async () => {
-    expect(await plantedSpecifiers("import { lineRanges } from './lineScan';\n")).toEqual([]);
-  });
-});
-
-describe('a box reaches only the boxes its project references', () => {
-  it('every box is a real directory holding production files', () => {
-    for (const box of REFERENCING_BOXES) {
-      expect(existsSync(boxRoot(box))).toBe(true);
-      expect(productionFiles(boxRoot(box)).length).toBeGreaterThan(0);
-    }
-  });
-
-  it('every production file imports only node: builtins, its own box and the boxes it references', () => {
-    expect(boxOffenders()).toEqual({});
-  });
-
-  it('flags an import of a box the project does not reference', () => {
-    const planted = join(boxRoot('instanceLoader'), 'planted.ts');
-    expect(isAllowedBoxSpecifier('../modmanager/ModListProvider', planted, 'instanceLoader')).toBe(false);
-    expect(isAllowedBoxSpecifier('../client/MEditClient', planted, 'instanceLoader')).toBe(false);
+    expect(await plantedKernelSpecifiers("import { join } from 'node:path';\n")).toEqual([]);
   });
 
   it('allows vscode below the views in the Instance adapter\'s watch alone', () => {
@@ -183,23 +115,10 @@ describe('a box reaches only the boxes its project references', () => {
     expect(isAllowedBoxSpecifier('openapi-fetch', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
   });
 
-  it('refuses a codec and a table in every driving box', () => {
-    for (const box of DRIVING_BOXES) {
-      expect(isAllowedBoxSpecifier('../loadOrderFileCodec/pluginsText', join(boxRoot(box), 'p.ts'), box)).toBe(false);
-      expect(isAllowedBoxSpecifier('../tables/gamePaths', join(boxRoot(box), 'p.ts'), box)).toBe(false);
-    }
-  });
-
   it('allows vscode in every driving box', () => {
     for (const box of DRIVING_BOXES) {
       expect(isAllowedBoxSpecifier('vscode', join(boxRoot(box), 'p.ts'), box)).toBe(true);
     }
-  });
-
-  it('refuses one view reaching into another', () => {
-    expect(isAllowedBoxSpecifier('../downloads/DownloadsProvider', join(boxRoot('mods'), 'p.ts'), 'mods')).toBe(false);
-    expect(isAllowedBoxSpecifier('../plugins/PluginTreeProvider', join(boxRoot('editor'), 'p.ts'), 'editor')).toBe(false);
-    expect(isAllowedBoxSpecifier('../mods/ModListProvider', join(boxRoot('plugins'), 'p.ts'), 'plugins')).toBe(false);
   });
 
   it('refuses every box but the Instance adapter anything of the adapter\'s beyond its interface', () => {
@@ -212,15 +131,9 @@ describe('a box reaches only the boxes its project references', () => {
     expect(isAllowedBoxSpecifier('./codecs/modlistText', inAdapter, 'instanceAdapter')).toBe(true);
   });
 
-  it('allows the boxes each one does reference', () => {
+  it('allows the interface of the adapter, and node:fs outside the kernel', () => {
     expect(isAllowedBoxSpecifier('../instanceAdapter/instanceAdapter', join(boxRoot('instanceLoader'), 'p.ts'), 'instanceLoader')).toBe(true);
-    expect(isAllowedBoxSpecifier(
-      '../loadOrderFileCodec/pluginsText', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter',
-    )).toBe(true);
     expect(isAllowedBoxSpecifier('node:fs/promises', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter')).toBe(true);
-    expect(isAllowedBoxSpecifier('../loadOrderFileCodec/pluginsText', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands')).toBe(true);
-    expect(isAllowedBoxSpecifier('../instanceLoader/fileConflictIndex', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands')).toBe(false);
-    expect(isAllowedBoxSpecifier('../instanceLoader/instance', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
   });
 });
 
