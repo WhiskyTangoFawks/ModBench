@@ -131,7 +131,10 @@ function boundExport(element: ts.BindingElement): string | undefined {
   return ts.isIdentifier(element.name) ? element.name.text : undefined;
 }
 
+const MAY_READ_FILES = /['"`](?:node:)?fs(?:\/promises)?['"`]|readFile/;
+
 function scan(sourceText: string, fileName: string): Offences {
+  if (!MAY_READ_FILES.test(sourceText)) return { byteReads: [], undecodedReads: [] };
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
   const aliases = fsAliases(source);
   const byteReads: string[] = [];
@@ -314,6 +317,11 @@ describe('the extension interprets no plugin binary (ADR-0004): its one byte-lev
 
   it('flags a header read destructured out of a dynamic import', () => {
     const planted = "const { open } = await import('node:fs/promises');\nexport const h = () => open(p, 'r');\n";
+    expect(scan(planted, 'masterReader.ts').byteReads).toEqual(['open']);
+  });
+
+  it('flags a header read through a specifier written as a template literal', () => {
+    const planted = "const { open } = await import(`node:fs/promises`);\nexport const h = () => open(p, 'r');\n";
     expect(scan(planted, 'masterReader.ts').byteReads).toEqual(['open']);
   });
 
