@@ -342,34 +342,38 @@ describe('HttpMEditClient — getComparison', () => {
   });
 });
 
-describe('HttpMEditClient — tracking plugins answers per plugin', () => {
+describe('HttpMEditClient — tracking mods answers per plugin and per mod', () => {
   const first = { name: 'First.esp', origin: 'ModA' };
   const second = { name: 'Second.esp', origin: 'ModA' };
 
-  it('sends the whole selection, the preset and the upstream versions as one call and reads what was applied as landed, each refusal with its message', async () => {
+  it('sends the mods as one call and reads what was applied as landed, each refused plugin and refused mod with its message', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
       applied: [first],
       refused: [{ plugin: second, refusal: 'RoundTripFailed', message: 'Second.esp does not round-trip.' }],
+      refusedMods: [{ mod: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }],
     })));
     const client = makeClient(fetch);
 
-    const outcome = await client.track([first, second], 'Edits', { ModA: '1.2.3' });
+    const outcome = await client.track(['ModA', 'ModC']);
 
     expect(outcome).toEqual({
       landed: [first],
-      refused: [{ item: second, reason: 'Second.esp does not round-trip.' }],
+      refused: [
+        { item: second, reason: 'Second.esp does not round-trip.' },
+        { item: 'ModC', reason: 'ModC provides no plugin.' },
+      ],
     });
     const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/track$/.test(req.url));
-    expect(await request?.json()).toEqual({ plugins: [first, second], preset: 'Edits', upstreamVersionByOrigin: { ModA: '1.2.3' } });
+    expect(await request?.json()).toEqual({ mods: ['ModA', 'ModC'] });
   });
 
   it('resolves a WriteRefused carrying the count and the server text when the whole selection is refused', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(500, 'git was not found on PATH.')));
     const client = makeClient(fetch);
 
-    const result = await client.track([first, second], 'Edits', {});
+    const result = await client.track(['ModA', 'ModB']);
 
-    expect(result).toEqual({ refused: true, message: 'Could not track 2 plugins — git was not found on PATH.' });
+    expect(result).toEqual({ refused: true, message: 'Could not track 2 mods — git was not found on PATH.' });
   });
 });
 

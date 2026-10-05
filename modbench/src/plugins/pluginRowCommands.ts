@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import {
-  isRefused, type MEditClient, type CompileDiagnostic, type CompileOutcome, type PluginAddress, type UpstreamVersionByOrigin,
+  isRefused, type MEditClient, type CompileDiagnostic, type CompileOutcome, type PluginAddress, type TrackOutcome,
 } from '../client';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
-import type { Instance, InstanceValue } from '../instanceLoader/instance';
+import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
+import { modOfRow } from '../drivingLib/modRow';
 import {
   trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey,
 } from './trackedRepositories';
@@ -32,58 +33,25 @@ function rowName(row: PluginAddress): string {
   return `${row.name} (${row.origin})`;
 }
 
-type PresetOption = vscode.QuickPickItem & { label: 'Edits' | 'Everything' };
-
-// plugins.md, Track, story 2: what each preset's repository tracks.
-const EDITS_OPTION: PresetOption = { label: 'Edits', description: 'Keeps plugin-source/ and .gitignore' };
-const EVERYTHING_OPTION: PresetOption = { label: 'Everything', description: 'Keeps every file except the plugin binaries' };
-const PRESET_OPTIONS: readonly [PresetOption, PresetOption] = [EDITS_OPTION, EVERYTHING_OPTION];
-
-// createQuickPick, not showQuickPick: only the former lets Edits show pre-selected
-// (plugins.md, Pickers, Track), the same pattern DownloadsPanel.ts's pickSort uses.
-function pickTrackPreset(placeholder: string): Promise<PresetOption | undefined> {
-  return new Promise((resolve) => {
-    const quickPick = vscode.window.createQuickPick<PresetOption>();
-    quickPick.items = PRESET_OPTIONS;
-    quickPick.placeholder = placeholder;
-    quickPick.activeItems = [EDITS_OPTION];
-    let accepted = false;
-    quickPick.onDidAccept(() => {
-      accepted = true;
-      const [picked] = quickPick.selectedItems;
-      quickPick.hide();
-      resolve(picked);
-    });
-    quickPick.onDidHide(() => {
-      if (!accepted) resolve(undefined);
-      quickPick.dispose();
-    });
-    quickPick.show();
-  });
-}
-
 export interface TrackDeps {
   progress: Pick<PluginsViewProgress, 'say'>;
   instance: Pick<Instance, 'refresh'>;
   client: Pick<MEditClient, 'track'>;
   reporter: Reporter;
   onTracked: () => Promise<void>;
-  plugins: () => readonly PluginAddress[];
-  mods: () => InstanceValue['mods'];
-  modOfRow: (value: unknown) => string | undefined;
   /** The Mods view's id, whose bar a gesture from a Mods row runs under. */
   modsView: string;
 }
 
 /** commands.md, `track`: the mods of Mods rows, plugin rows, a column header, or the palette's
- *  selection, each sent to mEdit as its plugins, in one call and one pick. */
+ *  selection, in one call. */
 export function registerTrackCommand(deps: TrackDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
   return vscode.commands.registerCommand(
     'modbench.mod.track',
     async (clicked?: unknown, selected?: readonly unknown[]) => {
       const rows = clicked === undefined ? paletteSelection() : selected ?? [clicked];
-      const mods = rows.map((row) => deps.modOfRow(row) ?? pluginOriginOf(row)).filter((mod) => mod !== undefined);
-      const invokedFrom = rows.some((row) => deps.modOfRow(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
+      const mods = rows.map((row) => modOfRow(row) ?? pluginOriginOf(row)).filter((mod) => mod !== undefined);
+      const invokedFrom = rows.some((row) => modOfRow(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
       await trackMods(deps, [...new Set(mods)], invokedFrom);
     },
   );
@@ -94,71 +62,43 @@ function pluginOriginOf(row: unknown): string | undefined {
   return row instanceof PluginNode ? row.origin : columnHeaderOf(row)?.origin;
 }
 
-const PROVIDES_NO_PLUGIN = 'it provides no plugin';
-
-// Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
-// mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost, so this
-// runs under the Plugins-view progress indicator.
+// A mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost, so this runs
+// under the Plugins-view progress indicator.
 async function trackMods(deps: TrackDeps, mods: readonly string[], invokedFrom: string): Promise<void> {
   const { progress, instance, client, reporter, onTracked } = deps;
-  const instancePlugins = deps.plugins();
-  const pluginsOf = (mod: string): PluginAddress[] =>
-    instancePlugins.filter((p) => p.origin === mod).map(({ name, origin }) => ({ name, origin }));
-  const withPlugins = mods.filter((mod) => pluginsOf(mod).length > 0);
-  const pluginless = mods.filter((mod) => !withPlugins.includes(mod));
-  const [firstMod] = withPlugins;
-  if (firstMod === undefined) {
-    reportRefused(reporter, mods, pluginless);
-    return;
-  }
-  const addressed = withPlugins.flatMap(pluginsOf);
-  const upstreamVersionByOrigin = upstreamVersionByOriginOf(deps.mods(), withPlugins);
-  const what = withPlugins.length === 1 ? `"${firstMod}"` : `${withPlugins.length} mods`;
-
-  const choice = await pickTrackPreset(`Track ${what}`);
-  if (!choice) return;
+  const [firstMod] = mods;
+  if (firstMod === undefined) return;
+  const what = mods.length === 1 ? `"${firstMod}"` : `${mods.length} mods`;
 
   await runWritingGesture(invokedFrom, instance, async () => {
     try {
       progress.say(trackProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
-      const result = await client.track(addressed, choice.label, upstreamVersionByOrigin, {
+      const result = await client.track(mods, {
         onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? firstMod, status)); },
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
       if (result.landed.length > 0) await onTracked();
-      const refused = reportRefused(reporter, mods, pluginless, { total: addressed.length, outcome: result });
-      if (!refused && result.landed.length > 0) reporter.landed(`Tracked ${what}.`);
+      if (result.refused.length > 0) reportRefused(reporter, mods.length, result);
+      else if (result.landed.length > 0) reporter.landed(`Tracked ${what}.`);
     } finally {
       progress.say(undefined);
     }
   });
 }
 
-function upstreamVersionByOriginOf(entries: InstanceValue['mods'], mods: readonly string[]): UpstreamVersionByOrigin {
-  return Object.fromEntries(entries.flatMap((entry) =>
-    (entry.kind === 'mod' && entry.version !== undefined && mods.includes(entry.name) ? [[entry.name, entry.version]] : [])));
-}
-
-// commands.md, "each item lands on its own": one notification naming each mod that provides no
-// plugin and each plugin mEdit refused. Returns whether it named any.
-function reportRefused(
-  reporter: Reporter, mods: readonly string[], pluginless: readonly string[],
-  plugins?: { total: number; outcome: SelectionOutcome<PluginAddress> },
-): boolean {
-  const refusedPlugins = plugins?.outcome.refused ?? [];
+// commands.md, "each item lands on its own": one notification naming each mod and each plugin
+// mEdit refused.
+function reportRefused(reporter: Reporter, modCount: number, outcome: TrackOutcome): void {
+  const refusedMods = outcome.refused.filter(({ item }) => typeof item === 'string');
+  const refusedPlugins = outcome.refused.length - refusedMods.length;
   const counts = [
-    ...(pluginless.length > 0 ? [`${pluginless.length} of ${mods.length} mods`] : []),
-    ...(plugins && refusedPlugins.length > 0 ? [`${refusedPlugins.length} of ${plugins.total} plugins`] : []),
+    ...(refusedMods.length > 0 ? [`${refusedMods.length} of ${modCount} mods`] : []),
+    ...(refusedPlugins > 0 ? [`${refusedPlugins} of ${outcome.landed.length + refusedPlugins} plugins`] : []),
   ];
-  if (counts.length === 0) return false;
   reporter.selectionOutcome(`Could not track ${counts.join(' and ')}.`, {
-    landed: (plugins?.outcome.landed ?? []).map(rowName),
-    refused: [
-      ...pluginless.map((mod) => ({ item: mod, reason: PROVIDES_NO_PLUGIN })),
-      ...refusedPlugins.map(({ item, reason }) => ({ item: rowName(item), reason })),
-    ],
+    landed: outcome.landed.map(rowName),
+    refused: outcome.refused.map(({ item, reason }) => ({ item: typeof item === 'string' ? item : rowName(item), reason })),
   }, (name) => name);
-  return true;
 }
 
 /** What decompile needs: the call, the Instance loader's refresh, its one confirmation, and how the user
