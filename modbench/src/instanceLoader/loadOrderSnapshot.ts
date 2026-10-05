@@ -51,8 +51,8 @@ export interface LoadOrderSnapshotRefusal {
 export interface LoadOrderSnapshotValue {
   readonly dataFolder: string;
   readonly plugins: SnapshotPlugin[];
-  readonly active: Pick<LoadOrderPlugin, 'name' | 'origin'>[];
-  readonly loadedWithNoLine: Pick<LoadOrderPlugin, 'name' | 'origin'>[];
+  readonly active: PluginAddress[];
+  readonly loadedWithNoLine: PluginAddress[];
 }
 
 /** A plugins.txt line with no resolvable plugin file: no mod or overwrite/ provides it, and

@@ -2,7 +2,7 @@ import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagn
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import type { PluginOrderFacts } from '../pluginsCommands/pluginOrder';
 import { modOfOrigin } from './modOfOrigin';
-import { ByPluginAddress } from '../wire/pluginAddress';
+import { ByPluginAddress } from './pluginAddress';
 
 /** A warning on one plugin's file, as the Problems panel shows it. */
 export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;

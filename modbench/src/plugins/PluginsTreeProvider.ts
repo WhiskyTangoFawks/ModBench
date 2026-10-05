@@ -179,7 +179,7 @@ export function pluginFileOf(node: PluginListNode): string {
   return node.kind === 'plugin' ? node.plugin.name : node.name;
 }
 
-function pluginAddressOf(node: PluginListNode): PluginAddress {
+function addressOfRow(node: PluginListNode): PluginAddress {
   return { name: pluginFileOf(node), origin: node.origin };
 }
 
@@ -321,7 +321,7 @@ export class PluginsTreeProvider
   }
 
   resolvePluginPath(row: PluginNode | ImplicitMasterNode): Promise<string | undefined> {
-    return Promise.resolve(this.pluginFile(pluginAddressOf(row)));
+    return Promise.resolve(this.pluginFile(addressOfRow(row)));
   }
 
   /** The plugin's own file (ADR-0012), or the game folder's copy for a game-folder plugin the
@@ -333,7 +333,7 @@ export class PluginsTreeProvider
 
   /** Whether the row's line is enabled now: a row the view still holds may predate the value. */
   isEnabled(row: PluginNode): boolean {
-    const address = pluginAddressOf(row);
+    const address = addressOfRow(row);
     return this.instanceValue.plugins.some((p) => p.winning && p.enabled && samePluginAddress(p, address));
   }
 
@@ -370,12 +370,12 @@ export class PluginsTreeProvider
   private pluginOf(node: PluginsTreeNode): PluginAddress | undefined {
     let current: PluginsTreeNode | undefined = node;
     while (current !== undefined && !isRow(current)) current = this.parentOf.get(current);
-    return current && pluginAddressOf(current);
+    return current && addressOfRow(current);
   }
 
   /** The row of a record, once mEdit lists it in its group. */
   async recordRow({ plugin, recordType }: RecordGroup, formKey: string): Promise<PluginsTreeNode | undefined> {
-    const pluginRow = (await this.rows()).find((row) => row.kind === 'plugin' && samePluginAddress(pluginAddressOf(row), plugin));
+    const pluginRow = (await this.rows()).find((row) => row.kind === 'plugin' && samePluginAddress(addressOfRow(row), plugin));
     if (pluginRow === undefined) return undefined;
     const group = (await this.getChildren(pluginRow)).find((row) => row.kind === 'recordType' && row.recordType === recordType);
     if (group === undefined) return undefined;
@@ -383,7 +383,7 @@ export class PluginsTreeProvider
   }
 
   private async expandPluginRow(element: PluginListNode, file: string): Promise<PluginsTreeNode[]> {
-    const address = pluginAddressOf(element);
+    const address = addressOfRow(element);
     const expansion = this.facts.expansion(address);
     if (expansion.kind === 'error') return [new ErrorNode(expansion.message)];
     if (expansion.kind === 'indexing') return [new IndexingNode()];
@@ -420,17 +420,17 @@ export class PluginsTreeProvider
     // While Mod Management cannot name the plugins the game loads with no line (ADR-0013), a
     // plugins.txt line for one renders as an ordinary row, which is what the file says.
     const loadedWithNoLine = this.instanceValue.pluginsLoadedWithNoLine ?? [];
-    const implicitLower = new Set(loadedWithNoLine.map((p) => p.name.toLowerCase()));
+    const implicitKeys = new Set(loadedWithNoLine.map(pluginAddressKey));
 
     const listed = listedPlugins(this.instanceValue);
 
     // A name in both sets renders once, as the implicit row: the game loads it first, wherever its
     // line sits. A name on two lines renders once, at its first.
-    const shown = new Set(implicitLower);
+    const shown = new Set(implicitKeys);
     const dedupedOrder = listed.filter((p) => {
-      const folded = p.name.toLowerCase();
-      if (shown.has(folded)) return false;
-      shown.add(folded);
+      const key = pluginAddressKey(p);
+      if (shown.has(key)) return false;
+      shown.add(key);
       return true;
     });
     this.lastOrder = dedupedOrder.map(({ name, origin }) => ({ name, origin }));
@@ -480,7 +480,7 @@ export class PluginsTreeProvider
 
   // plugins.md, A row: description and icon stay unset when no status applies.
   private decoratePlugin(row: PluginNode): void {
-    const address = pluginAddressOf(row);
+    const address = addressOfRow(row);
     const icon = this.facts.icon(address);
     if (icon !== undefined) {
       row.iconPath = icon === 'warning' ? warningIcon() : failurePrefixIcon();
@@ -572,7 +572,7 @@ export class PluginsTreeProvider
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {
     if (!this.client) return undefined;
     try {
-      const shown = new Set(this.builtRows().map((row) => pluginAddressKey(pluginAddressOf(row))));
+      const shown = new Set(this.builtRows().map((row) => pluginAddressKey(addressOfRow(row))));
       return (await this.client.getPlugins()).filter((p) => shown.has(pluginAddressKey(p)));
     } catch (err) {
       const message = errorMessage(err);
@@ -600,7 +600,7 @@ export class PluginsTreeProvider
   }
 
   private isHiddenByFilter(row: PluginListNode): boolean {
-    return this.facts.hiddenByRecordFilter(pluginAddressOf(row));
+    return this.facts.hiddenByRecordFilter(addressOfRow(row));
   }
 
   // ── drag and drop ─────────────────────────────────────────────────────────
@@ -613,7 +613,7 @@ export class PluginsTreeProvider
     _token: vscode.CancellationToken,
   ): void {
     const plugins = source.filter((n): n is PluginNode => n instanceof PluginNode)
-      .map(pluginAddressOf);
+      .map(addressOfRow);
     if (plugins.length === 0) return;
     dataTransfer.set(DND_MIME, new vscode.DataTransferItem({ plugins }));
   }

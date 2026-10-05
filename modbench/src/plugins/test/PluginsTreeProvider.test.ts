@@ -1104,8 +1104,8 @@ describe('PluginsTreeProvider — implicit master rows', () => {
 
   it('a name the backend calls implicit which plugins.txt also lists renders exactly once, as the implicit row (an .esl the game loads on its own)', async () => {
     const rows = await treeFor([
-      plugin({ name: 'Fallout4.esm', slot: 0 }),
-      plugin({ name: 'ccBGSFO4044-HellfirePowerArmor.esl', slot: 1 }),
+      plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data' }),
+      plugin({ name: 'ccBGSFO4044-HellfirePowerArmor.esl', slot: 1, origin: 'Data' }),
     ], ['Fallout4.esm', 'ccBGSFO4044-HellfirePowerArmor.esl']).getChildren();
 
     const labels = rows.map((r) => r.label);
@@ -1113,8 +1113,13 @@ describe('PluginsTreeProvider — implicit master rows', () => {
     expect(rows.every((r) => r instanceof ImplicitMasterNode)).toBe(true);
   });
 
+  it('renders a plugins.txt line of the same filename from another origin as its own row (ADR-0012)', async () => {
+    const rows = await treeFor([plugin({ name: 'Fallout4.esm', slot: 0, origin: 'SomeMod' })], ['Fallout4.esm']).getChildren();
+    expect(rows.map((r) => r.kind)).toEqual(['implicitMaster', 'plugin']);
+  });
+
   it('matches a plugins.txt line to an implicit name case-insensitively', async () => {
-    const rows = await treeFor([plugin({ name: 'FALLOUT4.ESM', slot: 0 })], ['Fallout4.esm']).getChildren();
+    const rows = await treeFor([plugin({ name: 'FALLOUT4.ESM', slot: 0, origin: 'Data' })], ['Fallout4.esm']).getChildren();
     expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
   });
 

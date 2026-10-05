@@ -471,9 +471,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // A returned "dial" child is itself expandable to its Responses; every other type is a leaf.
   private fetchContainerChildren(node: RecordNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchContainerChildren(${node.record.formKey})`, async () => {
-      const cacheKey = `${pluginAddressKey(pluginAddressOf({ plugin: node.record.plugin, origin: node.origin }))}::${node.record.formKey}`;
+      const cacheKey = `${pluginAddressKey({ name: node.record.plugin, origin: node.origin })}::${node.record.formKey}`;
       const children = await this.getOrLoad(this.containerChildCache, cacheKey,
-        () => this.repository.getContainerChildren(pluginAddressOf({ plugin: node.record.plugin, origin: node.origin }), node.record.formKey));
+        () => this.repository.getContainerChildren({ name: node.record.plugin, origin: node.origin }, node.record.formKey));
       return children.map(c => new RecordNode(
         c, node.origin, node.conditions, containerChildTypeOf(c.recordType), c.hasContainerChildren));
     });
