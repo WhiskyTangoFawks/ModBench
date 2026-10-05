@@ -4,15 +4,13 @@
 import * as vscode from 'vscode';
 import { HttpMEditClient, createLoadOrderSender, type LoadOrderSender, type MEditClient } from './client';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
-import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
-import { createReferencedByView } from './editor/referencedByView';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
-import { registerEditorCommands, announceConflictsComputed, ActiveRecordTracker, EditsInFlight } from './editor';
-import { registerNameFilter, registerFilterCommands as registerNameFilterCommands, type NameFilter } from './drivingLib/nameFilter';
+import { createEditor, type Editor } from './editor';
+import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand } from './drivingLib/copyValue';
 import { reportFailure } from './drivingLib/reportFailure';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
@@ -21,7 +19,6 @@ import { dataFolderFile } from './tables/gamePaths';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { createStatusBar, type StatusBar } from './plugins/statusBar';
-import { FocusedCells, GRID_VIEW, publishFocusedCell, gridCopyValueText, type FocusedCellContext } from './editor/focusedCells';
 import { meditConfig, gameDirectoryOverrides } from './workspaceConfig';
 import {
   registerTrackCommand, registerDecompileCommand, registerCompileCommand, CompileProblems, type CompileDeps, type TrackDeps,
@@ -97,9 +94,7 @@ interface ViewsDeps {
   extensionId: string;
   extensionUri: vscode.Uri;
   focusedView: FocusedView;
-  viewFilters: ReadonlyMap<string, Pick<NameFilter, 'open' | 'clear'>>;
-  referencedByCopyValueText: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined;
-  gridCopyValueText: (invocation: unknown) => string | undefined;
+  editor: Pick<Editor, 'nameFilters' | 'copyValue'>;
 }
 
 interface PluginsHandle {
@@ -255,7 +250,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     () => deps.focusedView.id(),
     new Map([
       ['modbench.modList', modListFilter], ['modbench.pluginListTree', pluginsFilter], ['modbench.downloads', downloadsFilter],
-      ...deps.viewFilters,
+      ...deps.editor.nameFilters,
     ]),
     () => vscode.window.setStatusBarMessage('Focus a list to filter it.', 5000)));
   const trackSelection = selectionInFocusedView(
@@ -305,8 +300,7 @@ function buildViews(deps: ViewsDeps): Views {
       { text: modsCopyValueText(side.modListSelection), reporterTag: 'mod.copyValue' },
       { text: pluginsCopyValueText(side.pluginsSelection), reporterTag: 'pluginListTree.copyValue' },
       { text: downloadsCopyValueText(side.downloadsSelection), reporterTag: 'downloadedFile.copyValue' },
-      { text: deps.gridCopyValueText, reporterTag: 'recordGrid.copy' },
-      { text: deps.referencedByCopyValueText, reporterTag: 'referencedByTree.copy' },
+      ...deps.editor.copyValue,
     ],
     reporterFor,
     () => deps.focusedView.id(),
@@ -342,14 +336,7 @@ export function activate(context: vscode.ExtensionContext) {
   const statusBar = createStatusBar(meditClient);
   context.subscriptions.push(statusBar);
   const treeProvider = new PluginTreeProvider(meditClient, log);
-  const recordPanels = new Set<vscode.WebviewPanel>();
-  const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
-  const editsInFlight = new EditsInFlight(activeRecordTracker);
-
   const focusedView = createFocusedView();
-  const focusedCells = new FocusedCells<vscode.WebviewPanel>(
-    (cell) => { publishFocusedCell(cell, (key, value) => { void vscode.commands.executeCommand('setContext', key, value); }); },
-    () => focusedView.enter(GRID_VIEW));
 
   const trackedRepositories = trackedRepositoriesOver({
     client: meditClient,
@@ -357,20 +344,19 @@ export function activate(context: vscode.ExtensionContext) {
     trackedMods: () => views.facts.trackedMods(),
     modDirs: () => views.facts.modDirs(),
   });
-  const conflictsComputed = trackedRepositories.conflictsComputedOver(
-    () => announceConflictsComputed(recordPanels, editsInFlight));
+  const instance = { refresh: () => views.facts.refresh() };
+  const recordWrite = recordWriteOver(instance, { latest: () => views.latestSent() });
+  const editor = createEditor({
+    context, meditClient, outputChannel,
+    reporterFor: (tag) => makeReporter(outputChannel, tag),
+    ask: askQuestion,
+    focusedView,
+    viewSelections: new Map([['modbench.pluginListTree', () => views.plugins.selection()]]),
+    recordWrite,
+    refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
+  });
+  const conflictsComputed = trackedRepositories.conflictsComputedOver(() => { editor.announceConflictsComputed(); });
   const notifyConflictsComputed = () => { void conflictsComputed(); };
-  const referencedBy = createReferencedByView(meditClient, log, registerNameFilter);
-  const { provider: referencedByTreeProvider, view: referencedByTreeView } = referencedBy;
-  context.subscriptions.push(
-    focusedView.follow(REFERENCED_BY_VIEW, referencedByTreeView),
-    referencedByTreeView.onDidChangeSelection(() => {
-      void vscode.commands.executeCommand('setContext', 'modbench.referencedBy.allHolders', allHolders(referencedByTreeView.selection));
-    }),
-  );
-  const activeRecordSubscription = activeRecordTracker.onDidChangeActiveRecord(
-    (formKey) => referencedByTreeProvider.showFor(formKey));
-  referencedByTreeProvider.showFor(activeRecordTracker.current());
   const views = buildViews({
     outputChannel, session, client: meditClient,
     reporterFor: (tag) => makeReporter(outputChannel, tag),
@@ -383,12 +369,8 @@ export function activate(context: vscode.ExtensionContext) {
     extensionId: context.extension.id,
     extensionUri: context.extensionUri,
     focusedView,
-    viewFilters: new Map([[REFERENCED_BY_VIEW, referencedBy.filter]]),
-    referencedByCopyValueText: (clicked, allSelected) => referencedByCopyValueText(referencedByTreeView, clicked, allSelected),
-    gridCopyValueText: gridCopyValueText(() => focusedCells.current()),
+    editor,
   });
-  const instance = { refresh: () => views.facts.refresh() };
-  const recordWrite = recordWriteOver(instance, { latest: () => views.latestSent() });
   const pluginRowDeps: PluginRowCommandDeps = {
     client: meditClient, outputChannel, compileProblems: new CompileProblems(compileDiagnostics),
     conflictsComputed, instance, recordWrite, plugins: views.plugins,
@@ -396,32 +378,16 @@ export function activate(context: vscode.ExtensionContext) {
     trackSelection: () => views.trackSelection(),
     modDirs: () => views.facts.modDirs(),
   };
-  const recordViews = [
-    { id: REFERENCED_BY_VIEW, selection: () => referencedByTreeView.selection },
-    { id: 'modbench.pluginListTree', selection: views.plugins.selection },
-  ];
   context.subscriptions.push(
     views,
     { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
-    referencedBy,
-    activeRecordSubscription,
+    editor,
     ...registerPluginRowCommands(pluginRowDeps),
     ...registerFilterCommands({
       client: meditClient, treeProvider,
       refreshMatchingPlugins: () => { void views.plugins.refreshFacts(); },
       showRecordFilter: views.plugins.showRecordFilter,
       reporter: makeReporter(outputChannel, 'recordFilter'),
-    }),
-    ...registerEditorCommands({
-      context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, meditClient, outputChannel,
-      reporterFor: (tag) => makeReporter(outputChannel, tag),
-      ask: askQuestion,
-      focusedViewSelection: selectionInFocusedView(
-        (disposable) => { context.subscriptions.push(disposable); return disposable; }, focusedView,
-        recordViews.map(({ id }) => id), 'modbench.record.selectionIn'),
-      viewSelections: new Map(recordViews.map(({ id, selection }) => [id, selection])),
-      recordWrite,
-      refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
     }),
     launchBackend({
       setting: GAME_FOLDER_SETTING, client: meditClient, enterEditing: views.enterEditing,
@@ -440,7 +406,7 @@ export function activate(context: vscode.ExtensionContext) {
     pluginListView: views.pluginListView,
     outputChannel, enterEditing: views.enterEditing, exitEditing: () => exitEditing(session, meditClient),
     client: meditClient, instance: views.instance,
-    focusRecordCell: (cell: FocusedCellContext) => { focusedCells.setActiveCell(cell); },
+    focusRecordCell: editor.focusRecordCell,
   };
 }
 
