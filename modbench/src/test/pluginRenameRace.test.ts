@@ -54,7 +54,7 @@ describe('a rename while a recompute is reading', () => {
         },
       },
     });
-    const pluginSync = wirePluginSync(instance, pluginSyncOver({ instanceRoot: root, adapter: writer }), { error: () => {}, info: () => {} });
+    const pluginSync = wirePluginSync(instance, pluginSyncOver({ adapter: writer }), { error: () => {}, info: () => {} });
     await instance.refresh();
     await pluginSync.settled();
     const before = (await readPluginLines(root)).map((line) => ({ ...line, name: line.name === PLUGIN.name ? RENAMED : line.name }));
@@ -65,7 +65,7 @@ describe('a rename while a recompute is reading', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('renameSource', { renamed: true });
     await instance.quiet(async () => {
-      await renamePlugin({ instanceRoot: root, adapter: writer, client }, PLUGIN, RENAMED, 'Fallout4');
+      await renamePlugin({ adapter: writer, client }, PLUGIN, RENAMED, 'Fallout4');
       release();
     });
     await overlapping;

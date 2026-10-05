@@ -57,7 +57,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const adapter = accessTo(root).adapter;
     const renamePluginOnAdapter = vi.spyOn(adapter, 'renamePlugin').mockResolvedValue();
 
-    await renamePlugin({ instanceRoot: root, adapter, client }, { name: 'Run.esp', origin: OVERWRITE_ORIGIN }, 'Ran.esp', 'Fallout4');
+    await renamePlugin({ adapter, client }, { name: 'Run.esp', origin: OVERWRITE_ORIGIN }, 'Ran.esp', 'Fallout4');
 
     expect(renamePluginOnAdapter).toHaveBeenCalledWith({ kind: 'runtimeOutput' }, 'Run.esp', 'Ran.esp', 'Fallout4');
   });
