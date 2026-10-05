@@ -7,8 +7,16 @@ namespace MEditService.PluginAdapter.Tests.Changes;
 
 public sealed class PluginWriterSaveTests
 {
+    private static async Task RewriteAsync(string pluginPath)
+    {
+        var mod = Fallout4Mod.CreateFromBinary(
+            new ModPath(ModKey.FromFileName(Path.GetFileName(pluginPath)), pluginPath), Fallout4Release.Fallout4);
+        using var prep = await PluginWriter.PrepareFromModAsync(mod, pluginPath);
+        prep.Commit();
+    }
+
     [Fact]
-    public async Task SaveAsync_Success_OriginalPathHoldsValidPlugin()
+    public async Task Commit_OriginalPathHoldsValidPlugin()
     {
         using var data = new PluginFixtureBuilder("pw-save-original")
             .WithPlugin("TestPlugin.esp")
@@ -16,7 +24,7 @@ public sealed class PluginWriterSaveTests
 
         var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
 
-        await PluginWriter.SaveAsync(pluginPath, GameRelease.Fallout4);
+        await RewriteAsync(pluginPath);
 
         var reloaded = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("TestPlugin.esp"), pluginPath), Fallout4Release.Fallout4);
@@ -24,7 +32,7 @@ public sealed class PluginWriterSaveTests
     }
 
     [Fact]
-    public async Task SaveAsync_Success_LeavesNoTempSubdirectory()
+    public async Task Commit_LeavesNoTempSubdirectory()
     {
         using var data = new PluginFixtureBuilder("pw-save-no-tmpdir")
             .WithPlugin("TestPlugin.esp")
@@ -32,22 +40,22 @@ public sealed class PluginWriterSaveTests
 
         var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
 
-        await PluginWriter.SaveAsync(pluginPath, GameRelease.Fallout4);
+        await RewriteAsync(pluginPath);
 
         var leftoverDirs = Directory.GetDirectories(data.DataFolder, ".medit_tmp_*");
         Assert.Empty(leftoverDirs);
     }
 
     [Fact]
-    public async Task SaveAsync_KeepsNoCopyOfTheBinaryItReplaces()
+    public async Task Commit_KeepsNoCopyOfTheBinaryItReplaces()
     {
         using var data = new PluginFixtureBuilder("pw-save-no-copy")
             .WithPlugin("TestPlugin.esp")
             .Build();
         var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
 
-        await PluginWriter.SaveAsync(pluginPath, GameRelease.Fallout4);
-        await PluginWriter.SaveAsync(pluginPath, GameRelease.Fallout4);
+        await RewriteAsync(pluginPath);
+        await RewriteAsync(pluginPath);
 
         Assert.Equal([pluginPath], Directory.GetFiles(data.DataFolder, "TestPlugin*"));
     }

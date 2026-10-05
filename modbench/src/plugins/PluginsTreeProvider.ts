@@ -73,13 +73,6 @@ export type RecordBrowser = Pick<
   'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData'
 >;
 
-/** One held plugin as the record filter's own state reads it. The reconcile hands these back so
- *  the caller needs no second `GET /plugins` for the same answer. */
-export interface PluginMatch {
-  name: string;
-  hasMatchingRecords: boolean;
-}
-
 export type { PluginWarning };
 
 export interface PluginsTreeProviderOptions {
@@ -537,9 +530,9 @@ export class PluginsTreeProvider
   }
 
   /** The completed reconcile's whole hand-off, in one read: which files the backend holds, and
-   *  every fact it answers about each plugin. Returns what the record filter matched;
+   *  every fact it answers about each plugin. Returns how many plugins it holds;
    *  `undefined` when the read failed. */
-  async applyReconciled(failures: PluginLoadFailure[]): Promise<PluginMatch[] | undefined> {
+  async applyReconciled(failures: PluginLoadFailure[]): Promise<number | undefined> {
     const generation = ++this.generation;
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation) return undefined;
@@ -550,20 +543,18 @@ export class PluginsTreeProvider
     // Fire-and-forget: the tree hand-off must not wait on a whole-load-order scan. A failed scan is
     // ADR-0019's background tier, and retries at the next reconcile.
     void this.scanDiagnoses(generation);
-    return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
+    return plugins.length;
   }
 
-  /** Re-reads the facts alone, leaving the held load order as it is. `undefined` when the read
-   *  failed. A later re-read wins, and none supersedes a reconcile's hand-off, the only answer
-   *  to which plugins are held. */
-  async refreshFacts(): Promise<PluginMatch[] | undefined> {
+  /** Re-reads the facts alone, leaving the held load order as it is. A later re-read wins, and
+   *  none supersedes a reconcile's hand-off. */
+  async refreshFacts(): Promise<void> {
     const generation = this.generation;
     const factsRead = ++this.factsRead;
     const plugins = await this.readPlugins();
-    if (plugins === undefined || generation !== this.generation || factsRead !== this.factsRead) return undefined;
+    if (plugins === undefined || generation !== this.generation || factsRead !== this.factsRead) return;
     this.facts.refreshed(plugins);
     this._onDidChangeTreeData.fire(undefined);
-    return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
   }
 
   // The plugins of the rows the tree shows, joined by (origin, filename). A failed read is never

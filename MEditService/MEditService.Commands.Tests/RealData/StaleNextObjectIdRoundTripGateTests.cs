@@ -39,7 +39,12 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         Assert.Equal((storedNextObjectId, storedNumRecords), ReadHeaderStats(scratch.PluginPath));
         var oneAboveTheHighestNativeId = HighestNativeId(scratch.PluginPath) + 1;
 
-        await PluginWriter.SaveAsync(scratch.PluginPath, GameRelease.Fallout4);
+        var mod = Fallout4Mod.CreateFromBinary(
+            new ModPath(ModKey.FromFileName(fileName), scratch.PluginPath), Fallout4Release.Fallout4);
+        using (var prep = await PluginWriter.PrepareFromModAsync(mod, scratch.PluginPath))
+        {
+            prep.Commit();
+        }
 
         Assert.Equal((oneAboveTheHighestNativeId, derivedNumRecords), ReadHeaderStats(scratch.PluginPath));
     }

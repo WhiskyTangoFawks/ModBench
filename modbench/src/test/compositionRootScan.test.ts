@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { basename, join, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -35,6 +35,9 @@ async function flatConfigBlocks(path: string): Promise<unknown[]> {
   return Array.isArray(blocks) ? blocks as unknown[] : [];
 }
 
+let LINT_CONFIG_BLOCKS: unknown[] = [];
+beforeAll(async () => { LINT_CONFIG_BLOCKS = await flatConfigBlocks(ESLINT_CONFIG); });
+
 const namesFile = (block: unknown, file: string): boolean =>
   typeof block === 'object' && block !== null && 'files' in block && Array.isArray(block.files) && block.files.includes(file);
 
@@ -62,8 +65,8 @@ describe('the composition root builds each box, registers it with VS Code and de
     expect(rootFiles().map((path) => basename(path)).sort()).toEqual([ACTIVATION, ...WIRING, ...PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API].sort());
   });
 
-  it.each([ACTIVATION, ...WIRING])('the lint config applies the deciding selectors to %s', async (file) => {
-    expect(restrictedSyntaxOf(await flatConfigBlocks(ESLINT_CONFIG), file, ACTIVATION_DECIDES_MESSAGE)).toEqual(ACTIVATION_DECIDES_SELECTORS);
+  it.each([ACTIVATION, ...WIRING])('the lint config applies the deciding selectors to %s', (file) => {
+    expect(restrictedSyntaxOf(LINT_CONFIG_BLOCKS, file, ACTIVATION_DECIDES_MESSAGE)).toEqual(ACTIVATION_DECIDES_SELECTORS);
   });
 
   it('a config block that names the root files without the deciding selectors is not the rule', () => {
