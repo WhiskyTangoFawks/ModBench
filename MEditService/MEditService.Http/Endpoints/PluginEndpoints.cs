@@ -333,10 +333,10 @@ public record CreatePluginRequest(string Origin, string Name, string Folder);
 /// it, and nothing registers it.</summary>
 public record PluginCreatedResponse(string Name, string Origin);
 
-/// <summary>The mods by name; the load order says each one's plugins and folder.</summary>
 /// <summary>The plugin by its origin and file name (ADR-0012), and the file name its source takes.</summary>
 public record RenameSourceRequest(string Origin, string Name, string NewName);
 
+/// <summary>The mods by name; the load order says each one's plugins and folder.</summary>
 public record TrackRequest(IReadOnlyList<string> Mods);
 
 /// <summary>A plugin of a tracked mod that wrote nothing: the typed refusal, and the message naming the

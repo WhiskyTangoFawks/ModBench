@@ -136,6 +136,27 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
     internal static string FilesafeFormKey(FormKey formKey) => $"{formKey.ID:X6}_{formKey.ModKey.FileName}";
 
+    private const int FormIdDigits = 6;
+
+    /// <summary><paramref name="leaf"/> under <paramref name="to"/> when it names a record that
+    /// originates in <paramref name="from"/>; any other leaf as it is.</summary>
+    internal static string LeafWithOrigin(string leaf, ModKey from, ModKey to)
+    {
+        var extension = leaf.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase) ? leaf[^JsonSuffix.Length..] : "";
+        var name = leaf[..^extension.Length];
+        var filesafeLength = FormIdDigits + 1 + from.FileName.String.Length;
+        if (name.Length < filesafeLength) return leaf;
+
+        var filesafe = name[^filesafeLength..];
+        if (!FormKey.TryFactory($"{filesafe[..FormIdDigits]}:{filesafe[(FormIdDigits + 1)..]}", out var formKey)
+            || formKey.ModKey != from
+            || !NameCarries(name, filesafe))
+        {
+            return leaf;
+        }
+        return $"{name[..^filesafeLength]}{FilesafeFormKey(new FormKey(to, formKey.ID))}{extension}";
+    }
+
     /// <summary>The record type of the document at <paramref name="relativePath"/>. Null means the
     /// path does not decide it, so the document names its own type.</summary>
     internal static string? RecordTypeOf(string relativePath, GameRelease gameRelease)

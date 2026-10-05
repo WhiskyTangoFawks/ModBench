@@ -19,7 +19,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
             {
               "ModKey": "Old.esp",
               "ModHeader": {
-                "MasterReferences": [ { "Master": "Master.esm" } ]
+                "MasterReferences": [ { "Master": "DLC.esm" } ]
               }
             }
             """),
@@ -32,15 +32,15 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
               "Race": "000802:Old.esp"
             }
             """),
-        ("Npcs/MasterNpc - 000800_Master.esm.json", """
+        ("Npcs/MasterNpc - 000800_DLC.esm.json", """
             {
-              "FormKey": "000800:Master.esm",
+              "FormKey": "000800:DLC.esm",
               "Race": "000802:Old.esp"
             }
             """),
-        ("Npcs/000803_My_Old.esp.json", """
+        ("Npcs/000803_BEEF01_Old.esp.json", """
             {
-              "FormKey": "000803:My_Old.esp"
+              "FormKey": "000803:BEEF01_Old.esp"
             }
             """),
         ("Cells/0/0/GroupRecordData.json", "{}"),
@@ -48,7 +48,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
             {
               "FormKey": "000804:Old.esp",
               "Temporary": [
-                { "FormKey": "000805:Old.esp", "Base": "000800:Master.esm" }
+                { "FormKey": "000805:Old.esp", "Base": "000800:DLC.esm" }
               ]
             }
             """),
@@ -76,19 +76,19 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
                     {
                       "FormKey": "000804:New.esm",
                       "Temporary": [
-                        { "FormKey": "000805:New.esm", "Base": "000800:Master.esm" }
+                        { "FormKey": "000805:New.esm", "Base": "000800:DLC.esm" }
                       ]
                     }
                     """),
                 ("Cells/0/0/GroupRecordData.json", "{}"),
-                ("Npcs/000803_My_Old.esp.json", """
+                ("Npcs/000803_BEEF01_Old.esp.json", """
                     {
-                      "FormKey": "000803:My_Old.esp"
+                      "FormKey": "000803:BEEF01_Old.esp"
                     }
                     """),
-                ("Npcs/MasterNpc - 000800_Master.esm.json", """
+                ("Npcs/MasterNpc - 000800_DLC.esm.json", """
                     {
-                      "FormKey": "000800:Master.esm",
+                      "FormKey": "000800:DLC.esm",
                       "Race": "000802:New.esm"
                     }
                     """),
@@ -105,7 +105,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
                     {
                       "ModKey": "New.esm",
                       "ModHeader": {
-                        "MasterReferences": [ { "Master": "Master.esm" } ]
+                        "MasterReferences": [ { "Master": "DLC.esm" } ]
                       }
                     }
                     """),
@@ -160,11 +160,13 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old));
     }
 
-    [Fact]
-    public void RenameSource_OfATreeHoldingADocumentThatIsNoJson_RefusesNamingIt_AndWritesNothing()
+    [Theory]
+    [InlineData("""{ "FormKey": "000801:Old.esp", """)]
+    [InlineData("""{ "FormKey": "000801:Old.esp" } // a comment no document reader takes""")]
+    public void RenameSource_OfATreeHoldingADocumentThatIsNoJson_RefusesNamingIt_AndWritesNothing(string text)
     {
         var broken = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Npcs", "SelfNpc - 000801_Old.esp.json");
-        File.WriteAllText(broken, """{ "FormKey": "000801:Old.esp", """);
+        File.WriteAllText(broken, text);
         var before = TreeOf(Old.Name);
 
         var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.RenameSource(Old, "New.esp"));
@@ -186,6 +188,22 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         Assert.Equal(before, TreeOf(Old.Name));
         Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
         Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old));
+    }
+
+    [Fact]
+    public void RenameSource_WhenGitRefusesToClearTheOldNamesRef_PutsBackBothRefs_TheNewNamesEarlierOneIncluded()
+    {
+        var newName = Old with { Name = "New.esp" };
+        Repository.WriteBinary(newName, "EARLIER-UNDER-THE-NEW-NAME", () => { });
+        var before = TreeOf(Old.Name);
+        File.WriteAllText(Path.Combine(_modFolder, ".git", "refs", "medit", "last-compile", "Old.esp.lock"), "");
+
+        Assert.ThrowsAny<InvalidOperationException>(() => Repository.RenameSource(Old, "New.esp"));
+
+        Assert.Equal(before, TreeOf(Old.Name));
+        Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
+        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old));
+        Assert.Equal(["EARLIER-UNDER-THE-NEW-NAME"], Repository.LastWrittenBinarySha256s(newName));
     }
 
     [Fact]

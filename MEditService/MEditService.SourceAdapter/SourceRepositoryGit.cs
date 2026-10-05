@@ -179,28 +179,38 @@ internal sealed class SourceRepositoryGit(string modFolder)
         ParkSnapshot("Decompile", pluginFileName, tree, headSha, [$"{BinaryTrailer}: {binarySha256}"]);
     }
 
-    /// <summary>What Modbench last wrote for <paramref name="from"/> becomes <paramref name="to"/>'s, and
-    /// <paramref name="from"/> has none. Answers the act that puts both back.</summary>
-    internal Action MoveLastWritten(string from, string to)
+    /// <summary>The act that puts what Modbench last wrote for both names back as it stands now, however
+    /// much of a move ran since.</summary>
+    internal Action LastWrittenPutBack(string from, string to)
     {
         var (fromRef, toRef) = (LastCompileRef(from), LastCompileRef(to));
-        var (moving, replaced) = (CommitOf(fromRef), CommitOf(toRef));
-        SetRef(toRef, moving);
-        SetRef(fromRef, null);
+        var (held, replaced) = (CommitOf(fromRef), CommitOf(toRef));
         return () =>
         {
-            SetRef(fromRef, moving);
+            SetRef(fromRef, held);
             SetRef(toRef, replaced);
         };
+    }
+
+    /// <summary>What Modbench last wrote for <paramref name="from"/> becomes <paramref name="to"/>'s, and
+    /// <paramref name="from"/> has none.</summary>
+    internal void MoveLastWritten(string from, string to)
+    {
+        var fromRef = LastCompileRef(from);
+        SetRef(LastCompileRef(to), CommitOf(fromRef));
+        SetRef(fromRef, null);
     }
 
     private string? CommitOf(string gitRef) =>
         TryRun(out var sha, "rev-parse", "--verify", "--quiet", gitRef) ? sha.Trim() : null;
 
+    // A ref already as asked is left untouched, so a put-back over a move that never reached it does
+    // not need its lock.
     private void SetRef(string gitRef, string? commitSha)
     {
+        if (CommitOf(gitRef) == commitSha) return;
         if (commitSha is not null) Run("update-ref", gitRef, commitSha);
-        else if (CommitOf(gitRef) is not null) Run("update-ref", "-d", gitRef);
+        else Run("update-ref", "-d", gitRef);
     }
 
     // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written. The

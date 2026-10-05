@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
@@ -12,46 +11,30 @@ namespace MEditService.SourceAdapter;
 internal static class PluginSourceRename
 {
     private const string ModKeyMember = "ModKey";
-    private const int FormIdDigits = 6;
-    private const string EditorIdSeparator = " - ";
 
-    internal static TreeFile Renamed(string relativePath, byte[] bytes, ModKey from, ModKey to)
+    /// <summary><paramref name="relativePath"/>, a file of <paramref name="fromPlugin"/>'s source, as it
+    /// reads in <paramref name="toPlugin"/>'s.</summary>
+    internal static TreeFile Renamed(string relativePath, byte[] bytes, string fromPlugin, string toPlugin)
     {
-        var segments = relativePath.Split(Path.DirectorySeparatorChar);
+        var (from, to) = (ModKey.FromFileName(fromPlugin), ModKey.FromFileName(toPlugin));
+        var underRoot = Path.GetRelativePath(SourceRepositoryLayout.RootFor(fromPlugin), relativePath);
         var renamedPath = Path.Combine(
-            [segments[0], to.FileName, .. segments[2..].Select(segment => RenamedLeaf(segment, from, to))]);
+        [
+            SourceRepositoryLayout.RootFor(toPlugin),
+            .. underRoot.Split(Path.DirectorySeparatorChar).Select(leaf => SourceRepositoryLayout.LeafWithOrigin(leaf, from, to)),
+        ]);
         return relativePath.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)
             ? new TreeFile(renamedPath, RenamedDocument(relativePath, bytes, from, to))
             : new TreeFile(renamedPath, bytes);
     }
 
-    // The layout's leaf grammar, "[<EditorID> - ]<hex6>_<originModKey>", with the JSON suffix on a flat file.
-    private static string RenamedLeaf(string leaf, ModKey from, ModKey to)
-    {
-        var extension = leaf.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)
-            ? leaf[^SourceRepositoryLayout.JsonSuffix.Length..]
-            : "";
-        var name = leaf[..^extension.Length];
-        var origin = $"_{from.FileName}";
-        if (!name.EndsWith(origin, StringComparison.OrdinalIgnoreCase)) return leaf;
-
-        var named = name[..^origin.Length];
-        return NamesAFormId(named) ? $"{named}_{to.FileName}{extension}" : leaf;
-    }
-
-    private static bool NamesAFormId(string named) =>
-        named.Length >= FormIdDigits
-        && uint.TryParse(named[^FormIdDigits..], NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out _)
-        && (named.Length == FormIdDigits || named[..^FormIdDigits].EndsWith(EditorIdSeparator, StringComparison.Ordinal));
-
-    // Each string the document holds is spliced in place, so the rest of the file keeps its bytes.
     private static byte[] RenamedDocument(string relativePath, byte[] bytes, ModKey from, ModKey to)
     {
         var text = DocumentText.StripUtf8Bom(bytes);
         var bom = bytes[..^text.Length];
         var isHeader = new LayoutPath(relativePath).IsHeaderDocument;
         var splices = new List<(int Start, int Length, byte[] Value)>();
-        var reader = new Utf8JsonReader(text, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip });
+        var reader = new Utf8JsonReader(text);
         var atModKey = false;
         try
         {

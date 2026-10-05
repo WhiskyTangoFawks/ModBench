@@ -12,6 +12,7 @@ public enum RenameSourceRefusal
     /// <summary>The new name does not end <c>.esp</c>, <c>.esm</c> or <c>.esl</c>.</summary>
     NotAPluginFile,
 
+    /// <summary>No loaded plugin is the file name and origin the gesture named.</summary>
     PluginNotLoaded,
 
     /// <summary>The plugin has no plugin source, so there is none to rename.</summary>
