@@ -42,8 +42,6 @@ function diff(partial: Partial<FieldDiff> = {}): FieldDiff {
   });
 }
 
-// The row model's inputs beside the row's own props, so each case names the field, its placement
-// and the columns that can be edited, and the row is built as the panel builds it.
 type RowProps = Omit<React.ComponentProps<typeof DiffRow>, 'row'> & {
   diff: FieldDiff;
   meta: FieldMetadata;
