@@ -9,11 +9,10 @@ namespace MEditService.SourceAdapter.Tests.Source;
 
 public sealed class SourceRepositoryTrackTests : IDisposable
 {
-    private const string ModName = "SomeMod";
     private readonly ScratchDirectory _root = new("medit-track-");
     private readonly string _modFolder;
 
-    public SourceRepositoryTrackTests() => _modFolder = Directory.CreateDirectory(Path.Combine(_root, ModName)).FullName;
+    public SourceRepositoryTrackTests() => _modFolder = Directory.CreateDirectory(Path.Combine(_root, TestMod.Name)).FullName;
 
     public void Dispose() => _root.Dispose();
 
@@ -33,7 +32,7 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     {
         PluginBaselines.Track(_modFolder, [.. SourceOf("A.esp"), .. SourceOf("B.esp")]);
 
-        Assert.Equal(["Track SomeMod"], SubjectsOnMain());
+        Assert.Equal([$"Track {TestMod.Name}"], SubjectsOnMain());
         Assert.Equal(
             [".gitignore", "plugin-source/A.esp/npc_/A.esp/000001.json", "plugin-source/B.esp/npc_/B.esp/000001.json"],
             PathsIn("main"));
@@ -64,9 +63,9 @@ public sealed class SourceRepositoryTrackTests : IDisposable
                 (SourceOf("Second.esp"), new DecompiledPlugin("Second.esp", "BBBB")),
             ]);
 
-        var repository = SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4);
-        Assert.Equal(["AAAA"], repository.LastWrittenBinarySha256s(new PluginAddress("First.esp", ModName)));
-        Assert.Equal(["BBBB"], repository.LastWrittenBinarySha256s(new PluginAddress("Second.esp", ModName)));
+        var repository = SourceRepository.Over(TestMod.In(_modFolder), GameRelease.Fallout4);
+        Assert.Equal(["AAAA"], repository.LastWrittenBinarySha256s(new PluginAddress("First.esp", TestMod.Name)));
+        Assert.Equal(["BBBB"], repository.LastWrittenBinarySha256s(new PluginAddress("Second.esp", TestMod.Name)));
     }
 
     [Fact]

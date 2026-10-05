@@ -225,7 +225,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     public async Task Compile_AfterDeletingTheMiddleOfThreeDialogTopics_Succeeds_KeepingSurvivorsInOrder()
     {
         SourceEdits.Rewrite<Quest>(
-            SourceRepository.Open(_modFolder, GameRelease.Fallout4).Require(), _plugin,
+            SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require(), _plugin,
             new RecordIdentity(_questC.ToString(), QuestRecordType, "QuestC"), GameRelease.Fallout4,
             quest => quest.DialogTopics.Remove(quest.DialogTopics.Single(t => t.FormKey == _topicC2)));
 

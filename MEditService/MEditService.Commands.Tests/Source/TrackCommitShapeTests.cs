@@ -77,7 +77,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal((Key("First.esp"), TrackRefusal.AlreadyTracked), (refused.Plugin, refused.Refusal));
         Assert.Contains(_modFolder, refused.Message, StringComparison.Ordinal);
-        Assert.Empty(SourceRepository.Over(_modFolder, GameRelease.Fallout4).FormKeysUsed(Key("First.esp")));
+        Assert.Empty(SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4).FormKeysUsed(Key("First.esp")));
         Assert.Empty(HeldBy("First.esp"));
         Assert.Equal(gitignoreBefore, File.ReadAllBytes(Path.Combine(_modFolder, ".gitignore")));
     }
@@ -155,5 +155,5 @@ public sealed class TrackCommitShapeTests : IDisposable
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
     private IReadOnlyList<SourceDocument> HeldBy(string plugin) =>
-        TreeDocuments.Of(SourceRepository.Over(_modFolder, GameRelease.Fallout4), Key(plugin));
+        TreeDocuments.Of(SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4), Key(plugin));
 }

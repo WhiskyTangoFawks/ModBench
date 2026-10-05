@@ -55,7 +55,7 @@ public static class CutDownPluginFixture
             .SerializeWholeMod((IFallout4ModGetter)mod, root, InlineWorkDropoff.Instance, CancellationToken.None)
             .GetAwaiter().GetResult();
 
-        return DocumentsOf(SourceRepository.Over(scratch, GameRelease.Fallout4))
+        return DocumentsOf(SourceRepository.Over(TestMod.In(scratch), GameRelease.Fallout4))
             .ToDictionary(document => document.Key, document => StripCarriageReturns(document.Value));
     }
 

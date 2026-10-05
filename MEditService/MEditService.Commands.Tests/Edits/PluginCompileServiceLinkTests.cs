@@ -72,7 +72,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     }
 
     private static SourceRepository Repository(string modFolder) =>
-        SourceRepository.Open(modFolder, GameRelease.Fallout4)
+        SourceRepository.Open(TestMod.In(modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected {modFolder} to already be a tracked repository.");
 
     private void PointTheNpcAt(FormKey keyword) =>
