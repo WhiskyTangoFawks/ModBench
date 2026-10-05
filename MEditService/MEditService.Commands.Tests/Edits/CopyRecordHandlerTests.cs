@@ -81,4 +81,24 @@ public sealed class CopyRecordHandlerTests
         Assert.Single(result.Landed);
         Assert.Empty(result.Refused);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CopyingAsDeepOverride_RefusesEveryItem_AndWritesNothing(bool replace)
+    {
+        using var mod = CopyFixture.Create();
+        var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
+        var faction = new RecordAt(mod.SourcePlugin, mod.SelfLinkingFaction.ToString());
+        var before = TreeSnapshot.Of(mod.DestinationModFolder);
+
+        var result = mod.CopyHandler.CopySync([npc, faction], CopyMode.DeepOverride, [mod.DestinationPlugin], replace);
+
+        Assert.Empty(result.Landed);
+        Assert.Equal(
+            [new CopyItem(npc, mod.DestinationPlugin), new CopyItem(faction, mod.DestinationPlugin)],
+            result.Refused.Select(refused => refused.Item));
+        Assert.All(result.Refused, refused => Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, refused.Refusal));
+        Assert.Equal(before, TreeSnapshot.Of(mod.DestinationModFolder));
+    }
 }
