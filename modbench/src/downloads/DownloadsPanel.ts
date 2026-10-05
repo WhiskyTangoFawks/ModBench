@@ -6,7 +6,7 @@ import {
 import {
   defaultModName, installFromArchive, type InstallAccess, type InstallChoice, type InstallTarget,
 } from '../install/install';
-import type { DownloadNode, DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
+import type { DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS } from './keyContext';
 import { pluralArgument, registerGesture, singularArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
