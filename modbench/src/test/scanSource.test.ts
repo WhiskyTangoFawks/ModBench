@@ -1,9 +1,11 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
+import ts from 'typescript';
 import { SOURCE_ROOTS, SRC, WEBVIEW_SRC, importSpecifiers, isTestSupport, productionFiles, rootFiles } from './scanSource';
 import { boxesIn, referencesOf } from './boxes';
+import { tsFiles } from './tsFiles';
 
 let root: string | undefined;
 
@@ -134,5 +136,37 @@ describe('boxesIn and referencesOf, parameterised by root', () => {
   it('defaults to the real source tree', () => {
     expect(boxesIn().map((box) => box.name)).toContain('loadOrderFileCodec');
     expect(referencesOf('modlist')).toEqual(['instanceAdapter', 'ports']);
+  });
+});
+
+describe('the scans declare no walker, filter or specifier reader of their own', () => {
+  const OWN_DECLARATIONS = ['isTestSupport', 'importSpecifiers'];
+  const HELPERS = ['scanSource.ts', 'tsFiles.ts', 'boxes.ts'];
+
+  function declaredShared(sourceText: string): string[] {
+    const found: string[] = [];
+    const visit = (node: ts.Node): void => {
+      if ((ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) && node.name !== undefined && ts.isIdentifier(node.name)
+        && OWN_DECLARATIONS.includes(node.name.text)) found.push(node.name.text);
+      if (ts.isImportSpecifier(node) && node.name.text === 'readdirSync') found.push(node.name.text);
+      ts.forEachChild(node, visit);
+    };
+    visit(ts.createSourceFile('scan.ts', sourceText, ts.ScriptTarget.Latest, true));
+    return found;
+  }
+
+  it('flags each name however it is declared', () => {
+    expect(declaredShared("import { readdirSync } from 'node:fs';")).toEqual(['readdirSync']);
+    expect(declaredShared('const isTestSupport = (p: string) => p.includes("test");')).toEqual(['isTestSupport']);
+    expect(declaredShared('function importSpecifiers(text: string) { return [text]; }')).toEqual(['importSpecifiers']);
+  });
+
+  it('holds for every file under src/test and src/*/test but the helpers', () => {
+    const scans = tsFiles(SRC).filter((path) => relative(SRC, path).split(sep).includes('test') && !HELPERS.includes(basename(path)));
+    expect(scans.length).toBeGreaterThan(100);
+    const offenders = Object.fromEntries(scans
+      .map((path) => [relative(SRC, path), declaredShared(readFileSync(path, 'utf8'))] as const)
+      .filter(([, names]) => names.length > 0));
+    expect(offenders).toEqual({});
   });
 });

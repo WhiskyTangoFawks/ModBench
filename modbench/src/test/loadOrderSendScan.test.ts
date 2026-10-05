@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, dirname, resolve } from 'node:path';
-import { tsFiles } from './tsFiles';
+import { productionFiles, SRC } from './scanSource';
 
 const SENDS = join('instanceCommands', 'loadOrder.ts');
 const PUTS = join('client', 'loadOrderSender.ts');
@@ -28,19 +28,15 @@ function bindsTheCommand(text: string, path: string, root: string): boolean {
 const PUT_CALL: CallCheck = (text, path, root) =>
   MEMBER_PUT.test(text) || (BARE_PUT.test(text) && !bindsTheCommand(text, path, root));
 
-const PRODUCTION_FILES: Parameters<typeof tsFiles>[1] = { exclude: ['generated'], tsx: false, includeTests: false };
-
 function findOffenders(root: string, call: CallCheck, allowed: string[]): string[] {
-  return tsFiles(root, PRODUCTION_FILES)
+  return productionFiles(root)
     .filter((path) => !allowed.includes(relative(root, path)))
     .filter((path) => call(readFileSync(path, 'utf8'), path, root));
 }
 
-const SRC = join(__dirname, '..');
-
 describe('only instance commands hand the client a load order', () => {
   it('covers the whole extension source tree', () => {
-    expect(tsFiles(SRC, PRODUCTION_FILES).length).toBeGreaterThan(50);
+    expect(productionFiles(SRC).length).toBeGreaterThan(50);
   });
 
   it('no file but instance commands\' loadOrder.ts calls .send()', () => {
@@ -52,7 +48,7 @@ describe('only instance commands hand the client a load order', () => {
   });
 
   it('every allowed path is a file the walk actually reaches', () => {
-    const reached = tsFiles(SRC, PRODUCTION_FILES).map((path) => relative(SRC, path));
+    const reached = productionFiles(SRC).map((path) => relative(SRC, path));
     expect(reached).toEqual(expect.arrayContaining([SENDS, PUTS, ...PORT]));
   });
 });

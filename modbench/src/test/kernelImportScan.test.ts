@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import ts from 'typescript';
+import { importSpecifiers } from './scanSource';
 import { tsFiles } from './tsFiles';
 import { CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, REFERENCING_BOXES, referencesOf } from './boxes';
 
@@ -15,23 +15,6 @@ const productionFiles = (root: string): string[] =>
   tsFiles(root, { exclude: ['test'], tsx: false, includeTests: false });
 
 const kernelFiles = (): string[] => KERNEL_BOXES.flatMap((box) => productionFiles(boxRoot(box)));
-
-function importSpecifiers(sourceText: string, fileName: string): string[] {
-  const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
-  const found: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      found.push(node.moduleSpecifier.text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return found;
-}
 
 const FS_SPECIFIERS = new Set(['node:fs', 'node:fs/promises', 'fs', 'fs/promises']);
 

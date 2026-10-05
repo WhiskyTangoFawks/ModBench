@@ -2,17 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
-import { present } from '../ports/present';
+import { importSpecifiers, isTestSupport, rootFiles, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
-
-const SRC = join(__dirname, '..');
 
 const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'utf8');
 
-function importsOf(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)]
-    .map((m) => present(m[1], 'the module-path capture group the pattern always matches'));
-}
+const importsOf = (source: string): string[] => importSpecifiers(source, 'source.ts');
 
 const CLIENT_DIR = 'client';
 const PLUGINS_VIEW_DIR = 'plugins';
@@ -22,11 +17,7 @@ const WIRE_DIR = 'wire';
 
 const CLIENT_CALLERS = ['instanceCommands'];
 
-const COMPOSITION_ROOT = ['extension.ts'];
-
-function isTestSupport(relativePath: string): boolean {
-  return relativePath.split(sep).some((seg) => seg === 'test' || seg === 'integration') || relativePath.includes('.test.');
-}
+const COMPOSITION_ROOT = rootFiles().map((path) => relative(SRC, path));
 
 function isExcluded(relativePath: string): boolean {
   const segments = relativePath.split(sep);
@@ -113,8 +104,9 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(isExcluded(join('mods', 'modList.ts'))).toBe(false);
   });
 
-  it('the activation file is the one file excluded as the composition root', () => {
-    expect(COMPOSITION_ROOT).toEqual(['extension.ts']);
+  it('the files at the root of src are excluded as the composition root', () => {
+    expect(COMPOSITION_ROOT).toContain('extension.ts');
+    expect(COMPOSITION_ROOT.every((file) => isExcluded(file))).toBe(true);
   });
 
   describe('a plant in each MO2-side directory is caught, and the same plant inside an excluded one is not', () => {

@@ -4,12 +4,8 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
+import { isTestSupport, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
-
-const SRC = join(__dirname, '..');
-
-const isTestSupport = (relPath: string): boolean =>
-  relPath.split(/[\\/]/).some((segment) => segment === 'test' || segment === 'integration') || relPath.includes('.test.');
 
 function erasedAsTypes(clause: ts.ImportClause | ts.NamedExportBindings | undefined, declarationIsTypeOnly: boolean): boolean {
   if (declarationIsTypeOnly) return true;

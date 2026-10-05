@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
+import { importSpecifiers } from '../../test/scanSource';
 import { tsFiles } from '../../test/tsFiles';
 
 const SRC = join(__dirname, '..', '..');
@@ -15,23 +16,6 @@ const QUEUE_NAMES = new Set(['createWriteQueue', 'WriteQueue']);
 
 const productionFiles = (dir: string): string[] =>
   tsFiles(dir, { exclude: ['generated', 'test'], tsx: false, includeTests: false });
-
-function importSpecifiers(sourceText: string, fileName: string): string[] {
-  const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
-  const found: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      found.push(node.moduleSpecifier.text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return found;
-}
 
 function fsImportsIn(path: string): string[] {
   return importSpecifiers(readFileSync(path, 'utf8'), path).filter((spec) => FS_SPECIFIERS.has(spec));

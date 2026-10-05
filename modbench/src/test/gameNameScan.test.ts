@@ -2,14 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, relative, sep } from 'node:path';
+import { join, relative } from 'node:path';
 import { gamePathInfoForRelease } from '../tables/gamePaths';
 import { present } from '../ports/present';
+import { isTestSupport, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
-const SRC = join(__dirname, '..');
-const WEBVIEW_SRC = join(__dirname, '..', '..', 'webview', 'src');
-const SRC_ROOTS = [SRC, WEBVIEW_SRC];
 const THIS_FILE_QUOTING_THE_LITERALS = 'gameNameScan.test.ts';
 
 const TABLE_FILES = [join('tables', 'gamePaths.ts')];
@@ -52,10 +50,6 @@ function gameNameLiteralsIn(text: string): string[] {
   return [...found];
 }
 
-function isTestSupport(path: string): boolean {
-  return path.split(sep).some((seg) => seg === 'test' || seg === 'integration') || path.includes('.test.');
-}
-
 function findOffenders(roots: readonly string[], tableFiles: string[], allowlist: string[]): Record<string, string[]> {
   const offenders: Record<string, string[]> = {};
   for (const root of roots) {
@@ -79,15 +73,15 @@ describe('no extension file names a game outside the table, in a literal a stati
   });
 
   it('covers the whole extension source tree', () => {
-    expect(allFiles(SRC_ROOTS).filter((path) => !path.endsWith(THIS_FILE_QUOTING_THE_LITERALS)).length).toBeGreaterThan(100);
+    expect(allFiles(SOURCE_ROOTS).filter((path) => !path.endsWith(THIS_FILE_QUOTING_THE_LITERALS)).length).toBeGreaterThan(100);
   });
 
   it('reaches the webview tree too, not only the extension host’s', () => {
-    expect(allFiles(SRC_ROOTS)).toContain(join(WEBVIEW_SRC, 'presentation.ts'));
+    expect(allFiles(SOURCE_ROOTS)).toContain(join(WEBVIEW_SRC, 'presentation.ts'));
   });
 
   it('scans clean outside the table and the allowlist', () => {
-    expect(findOffenders(SRC_ROOTS, TABLE_FILES, ALLOWLIST)).toEqual({});
+    expect(findOffenders(SOURCE_ROOTS, TABLE_FILES, ALLOWLIST)).toEqual({});
   });
 
   it('the tree walk itself catches a planted game name, not just the matcher', async () => {

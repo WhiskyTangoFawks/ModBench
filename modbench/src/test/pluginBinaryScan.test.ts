@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { join, basename, sep } from 'node:path';
+import { join, basename, relative } from 'node:path';
 import ts from 'typescript';
 import { present } from '../ports/present';
+import { isTestSupport, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 const BYTE_READS = new Set(['open', 'openSync', 'openAsBlob', 'createReadStream', 'read', 'readSync', 'readv', 'readvSync']);
@@ -218,11 +219,6 @@ function digestModuleOffences(sourceText: string, fileName: string): string[] {
   return offences;
 }
 
-export function isTestSupport(path: string): boolean {
-  return basename(path).includes('.test.') || path.split(sep).includes('test');
-}
-
-const SRC = join(__dirname, '..');
 const THE_DIGEST = join(SRC, 'instanceAdapter', 'contentDigest.ts');
 
 describe('the extension interprets no plugin binary (ADR-0004): its one byte-level read feeds a hash, through the bindings a static scan follows', () => {
@@ -243,7 +239,7 @@ describe('the extension interprets no plugin binary (ADR-0004): its one byte-lev
   it('decodes every file it reads, so no production read can yield a plugin\'s bytes', () => {
     const offenders: Record<string, string[]> = {};
     for (const path of tsFiles(SRC, { exclude: ['generated'] })) {
-      if (basename(path) === THIS_FILE_QUOTING_THE_PATTERNS || isTestSupport(path)) continue;
+      if (basename(path) === THIS_FILE_QUOTING_THE_PATTERNS || isTestSupport(relative(SRC, path))) continue;
       const { undecodedReads } = scan(readFileSync(path, 'utf8'), path);
       if (undecodedReads.length > 0) offenders[path] = undecodedReads;
     }
@@ -390,11 +386,5 @@ describe('the extension interprets no plugin binary (ADR-0004): its one byte-lev
   it('does not flag a directory listing or a stat, which read no file content', () => {
     const listing = "import { readdir, stat } from 'node:fs/promises';\nreaddir(d);\nstat(f);\n";
     expect(scan(listing, 'x.ts').byteReads).toEqual([]);
-  });
-
-  it('holds the undecoded-read rule to production files, exempting test support', () => {
-    expect(isTestSupport(join('src', 'test', 'mo2', 'corpusFixture.ts'))).toBe(true);
-    expect(isTestSupport(join('src', 'modmanager', 'instance.test.ts'))).toBe(true);
-    expect(isTestSupport(join('src', 'modmanager', 'instance.ts'))).toBe(false);
   });
 });
