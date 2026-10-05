@@ -150,20 +150,49 @@ const recordOf = async (referencedBy: FakeTreeView) => {
 const opened = () => h.executed.filter(([id]) => id === 'vscode.openWith').map(([, uri]) => uri);
 
 describe('Referenced By follows the record tab in focus', () => {
-  it('names the record of the tab opened, then of the tab focused, and asks for one once the focused tab closes', async () => {
+  function followed() {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
     const { open, referencedBy } = makeEditor(client);
+    return { open, aboutNow: () => recordOf(referencedBy) };
+  }
+
+  it('names the record of the tab opened, then of the tab focused', async () => {
+    const { open, aboutNow } = followed();
 
     const first = open('000801:A.esp');
-    expect((await recordOf(referencedBy)).description).toBe('000801:A.esp');
+    expect((await aboutNow()).description).toBe('000801:A.esp');
     open('000802:A.esp');
-    expect((await recordOf(referencedBy)).description).toBe('000802:A.esp');
+    expect((await aboutNow()).description).toBe('000802:A.esp');
     first.focus();
-    expect((await recordOf(referencedBy)).description).toBe('000801:A.esp');
+    expect((await aboutNow()).description).toBe('000801:A.esp');
+  });
+
+  it('keeps the record of a tab that closes while other record tabs stay open, until another is focused', async () => {
+    const { open, aboutNow } = followed();
+    const first = open('000801:A.esp');
+    const second = open('000802:A.esp');
+    second.focus();
+    first.focus();
+    await aboutNow();
+
     first.close();
-    expect((await recordOf(referencedBy)).message).toBe('Open a record to see what references it.');
+    expect((await aboutNow()).description).toBe('000801:A.esp');
+    second.focus();
+    expect((await aboutNow()).description).toBe('000802:A.esp');
+  });
+
+  it('asks for a record once the last record tab closes, even when it was not the tab last in focus', async () => {
+    const { open, aboutNow } = followed();
+    const first = open('000801:A.esp');
+    const second = open('000802:A.esp');
+    first.focus();
+    await aboutNow();
+
+    first.close();
+    second.close();
+    expect((await aboutNow()).message).toBe('Open a record to see what references it.');
   });
 });
 
