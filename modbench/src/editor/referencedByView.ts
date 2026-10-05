@@ -7,8 +7,6 @@ export function referencedByTitle(count: number | undefined): string {
   return count === undefined ? 'Referenced By' : `Referenced By (${count})`;
 }
 
-/** The part of the shared name filter this view asks for, handed in because the filter belongs to
- *  no box. */
 export interface ReferencedByFilter extends vscode.Disposable {
   setBaseDescription(text: string | undefined): void;
   refresh(): void;
