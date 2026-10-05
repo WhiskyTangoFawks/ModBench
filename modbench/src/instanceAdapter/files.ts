@@ -237,7 +237,7 @@ export function putIfChanged(
 
 export type Undo = () => Promise<void>;
 
-// Every undo is tried, newest first, and each one that fails is named beside the failure it
+// Every undo is tried in the order given, and each one that fails is named beside the failure it
 // followed.
 export async function undoAll(undos: readonly Undo[], err: unknown): Promise<unknown> {
   const failures: string[] = [];

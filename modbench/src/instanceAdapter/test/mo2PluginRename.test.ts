@@ -97,6 +97,30 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     for (const path of NOT_NAMED_FOR_IT) expect(after.has(path), path).toBe(true);
   });
 
+  it('leaves an archive that belongs to a plugin whose name starts with this one, as the archive\'s name cut at its last " - " is that plugin\'s', async () => {
+    await put(`${MOD}/Tracked Patch Mod - Bar.esp`);
+    await put(`${MOD}/Tracked Patch Mod - Bar - Main.ba2`);
+
+    await rename();
+
+    const after = await snapshotTree(root);
+    expect(after.has(`${MOD}/Tracked Patch Mod - Bar - Main.ba2`)).toBe(true);
+    expect(after.has(`${MOD}/Renamed Patch - Bar - Main.ba2`)).toBe(false);
+  });
+
+  it('renames the files a release of another game names for a plugin, by that release\'s archive extension and language spellings', async () => {
+    await put(`${MOD}/Tracked Patch Mod - Main.bsa`);
+    await put(`${MOD}/Strings/Tracked Patch Mod_English.STRINGS`);
+
+    await adapter.renamePlugin(ORIGIN, 'Tracked Patch Mod.esp', 'Renamed Patch.esp', 'SkyrimSE');
+
+    const after = await snapshotTree(root);
+    expect(after.has(`${MOD}/Renamed Patch - Main.bsa`)).toBe(true);
+    expect(after.has(`${MOD}/Strings/Renamed Patch_English.STRINGS`)).toBe(true);
+    expect(after.has(`${MOD}/Tracked Patch Mod - Main.ba2`)).toBe(true);
+    expect(after.has(`${MOD}/Strings/Tracked Patch Mod_en.STRINGS`)).toBe(true);
+  });
+
   it('renames a plugin whose name changes only its case, and its files and line with it', async () => {
     await rename('TRACKED PATCH MOD.esp');
 
@@ -149,6 +173,11 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     it('refuses a name a profile already lists for another plugin', async () => {
       await put(SECONDARY_PLUGINS, 'Tracked Patch Mod.esp\r\n*renamed patch.ESP\r\n');
       await refused(() => rename(), /renamed patch\.ESP/);
+    });
+
+    it('refuses two files that the rename would put on one name, which on a file system that tells case apart would overwrite one with the other', async () => {
+      await put(`${MOD}/tracked patch mod.ini`);
+      await refused(() => rename(), /is in the way/);
     });
 
     it.each(['a/b.esp', 'a\\b.esp', '..', ''])('refuses the name "%s", which is no file of the origin', (name) =>

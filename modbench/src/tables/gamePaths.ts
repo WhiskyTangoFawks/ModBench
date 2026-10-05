@@ -1,7 +1,7 @@
 // Every per-game fact needed to find an install, speak to Nexus and name the plugins the game loads
 // with no line, keyed by Mutagen's GameRelease, and where a plugin sits in an install.
 
-import { join } from 'node:path';
+import { join, parse } from 'node:path';
 
 export interface GamePathInfo {
   /** The game's name as an instance's settings spell it. */
@@ -24,13 +24,16 @@ export interface GamePathInfo {
   readonly pluginCompanions: PluginCompanions;
 }
 
-/** What the game names for a plugin, besides the plugin: its archives, and its strings in each
- *  language. Mutagen's `ArchiveExtensionProvider` and `StringsLanguageFormat` for the release. */
+/** What the game names for a plugin, besides the plugin. */
 export interface PluginCompanions {
-  /** With its period. */
+  /** With its period: Mutagen's `ArchiveExtensionProvider` for the release. */
   readonly archiveExtension: string;
-  /** As the strings files spell them: `<plugin>_<language>.STRINGS`. None for a game with no strings. */
+  /** As Mutagen's `StringsLanguageFormat` for the release spells them in `<plugin>_<language>.STRINGS`;
+   *  which of them the game ships is this table's own. None for a game with no strings. */
   readonly stringsLanguages: readonly string[];
+  /** Whether the game ties `<plugin>.ini` to the plugin. No reference defines this: it is the
+   *  Creation Engine's convention, which Oblivion and the Fallout 3 engine do not share. */
+  readonly pluginIni: boolean;
 }
 
 const FALLOUT4_MASTERS = [
@@ -41,12 +44,14 @@ const SKYRIM_MASTERS = ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFire
 const FALLOUT4_COMPANIONS: PluginCompanions = {
   archiveExtension: '.ba2',
   stringsLanguages: ['en', 'de', 'it', 'es', 'esmx', 'fr', 'pl', 'cn', 'zhhans', 'ja', 'ptbr', 'ru'],
+  pluginIni: true,
 };
 const SKYRIM_COMPANIONS: PluginCompanions = {
   archiveExtension: '.bsa',
   stringsLanguages: ['English', 'German', 'Italian', 'Spanish', 'French', 'Polish', 'Russian', 'Japanese', 'Czech', 'Chinese'],
+  pluginIni: true,
 };
-const NO_STRINGS_COMPANIONS: PluginCompanions = { archiveExtension: '.bsa', stringsLanguages: [] };
+const NO_STRINGS_COMPANIONS: PluginCompanions = { archiveExtension: '.bsa', stringsLanguages: [], pluginIni: false };
 
 // Only Fallout 4 carries Steam autodetection facts today — a fixture choice, not a platform lock.
 const GAME_PATHS: Record<string, GamePathInfo> = {
@@ -123,10 +128,46 @@ export function creationClubListFile(root: string, release: string | undefined):
   return file === undefined ? undefined : join(root, file);
 }
 
-/** What the release names for a plugin, besides the plugin; none for a release the table holds no
- *  row for. */
-export function pluginCompanionsOf(release: string | undefined): PluginCompanions | undefined {
-  return release === undefined ? undefined : GAME_PATHS[release]?.pluginCompanions;
+/** Which names in a mod folder are the files the game names for a plugin: the ones at its root, and
+ *  the ones in its strings folder. Names match without case. */
+export interface PluginCompanionRule {
+  readonly stringsFolder: string;
+  inRoot(plugin: string, name: string): boolean;
+  inStringsFolder(plugin: string, name: string): boolean;
+}
+
+const STRINGS_EXTENSIONS = ['.strings', '.dlstrings', '.ilstrings'];
+const ARCHIVE_PART_DELIMITER = ' - ';
+
+const stemOf = (plugin: string): string => parse(plugin).name.toLowerCase();
+
+// Mutagen's `CheckArchiveApplicability`: the archive's name, or its name cut at the last delimiter,
+// is the plugin's name.
+function isArchiveOf(stem: string, name: string, extension: string): boolean {
+  const key = name.toLowerCase();
+  if (!key.endsWith(extension)) return false;
+  const bare = key.slice(0, key.length - extension.length);
+  const cut = bare.lastIndexOf(ARCHIVE_PART_DELIMITER);
+  return bare === stem || (cut !== -1 && bare.slice(0, cut) === stem);
+}
+
+/** The rule for what the release names for a plugin; none for a release the table holds no row for. */
+export function pluginCompanionRule(release: string | undefined): PluginCompanionRule | undefined {
+  const companions = release === undefined ? undefined : GAME_PATHS[release]?.pluginCompanions;
+  if (companions === undefined) return undefined;
+  const languages = companions.stringsLanguages.map((language) => language.toLowerCase());
+  return {
+    stringsFolder: 'strings',
+    inRoot: (plugin, name) => {
+      const stem = stemOf(plugin);
+      return isArchiveOf(stem, name, companions.archiveExtension) || (companions.pluginIni && name.toLowerCase() === `${stem}.ini`);
+    },
+    inStringsFolder: (plugin, name) => {
+      const key = name.toLowerCase();
+      const stem = stemOf(plugin);
+      return languages.some((language) => STRINGS_EXTENSIONS.some((extension) => key === `${stem}_${language}${extension}`));
+    },
+  };
 }
 
 /** A game folder as plain data: found, with its Data folder, or not found. */

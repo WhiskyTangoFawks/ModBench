@@ -1,18 +1,15 @@
 // MO2's rename of a plugin: its files and its line in every profile's plugin order, under every
 // plugin order's lock, and put back if a write fails.
 
-import { extname } from 'node:path';
+import { parse } from 'node:path';
 import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCodec/pluginsText';
-import { pluginCompanionsOf, type PluginCompanions } from '../tables/gamePaths';
+import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
 import { get, listDir, rename, undoAll, type Undo, withLock, write } from './files';
 import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
 import { fileInFolder, originDir, pluginsFile, profilesDir } from './layout';
 import { readOrAbsent, type Mo2Context } from './mo2Context';
 
 export type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin'>;
-
-const STRINGS_FOLDER = 'strings';
-const STRINGS_EXTENSIONS = ['.strings', '.dlstrings', '.ilstrings'];
 
 interface Move {
   readonly from: string;
@@ -24,8 +21,6 @@ interface Entry {
   readonly isFolder: boolean;
 }
 
-const stemOf = (plugin: string): string => plugin.slice(0, plugin.length - extname(plugin).length);
-
 const sameName = (a: string, b: string): boolean => pluginKey(a) === pluginKey(b);
 
 const notAFileOf = (origin: FileOrigin, name: string): Error =>
@@ -36,25 +31,6 @@ const namedFile = (name: string): boolean => name !== '' && name !== '.' && name
 async function entriesIn(folder: string): Promise<Entry[]> {
   const dirents = await readOrAbsent(() => listDir(folder), []);
   return dirents.map((d) => ({ name: d.name, isFolder: d.isDirectory() }));
-}
-
-// The plugin, its ini, its archives (`stem.ext`, `stem - Part.ext`) and its strings in each
-// language, matched without case.
-function namedForPlugin(
-  names: readonly string[], stringsNames: readonly string[], plugin: string, companions: PluginCompanions,
-): { root: string[]; strings: string[] } {
-  const stem = pluginKey(stemOf(plugin));
-  const archive = (name: string): boolean => {
-    const key = pluginKey(name);
-    const extension = companions.archiveExtension;
-    return key === stem + extension || (key.startsWith(`${stem} - `) && key.endsWith(extension));
-  };
-  const strings = (name: string): boolean => companions.stringsLanguages.some((language) =>
-    STRINGS_EXTENSIONS.some((extension) => pluginKey(name) === `${stem}_${pluginKey(language)}${extension}`));
-  return {
-    root: names.filter((name) => sameName(name, plugin) || pluginKey(name) === `${stem}.ini` || archive(name)),
-    strings: stringsNames.filter(strings),
-  };
 }
 
 interface Line {
@@ -87,36 +63,38 @@ function withLocks<T>(keys: readonly string[], task: () => Promise<T>): Promise<
 export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
   const { instanceRoot } = context;
 
-  async function moves(origin: FileOrigin, folder: string, from: string, to: string, companions: PluginCompanions): Promise<Move[]> {
+  // Each file of a folder that `named` picks, renamed by `target`. Two files that land on one name
+  // refuse, as does one that lands on a file already there under another name.
+  function movesIn(folder: string, entries: readonly Entry[], named: (name: string) => boolean, target: (name: string) => string): Move[] {
+    const moves = entries.filter((e) => !e.isFolder && named(e.name)).map((e) => ({ name: e.name, newName: target(e.name) }));
+    for (const { name, newName } of moves) {
+      const taken = entries.find((e) => sameName(e.name, newName) && !moves.some((m) => m.name === e.name));
+      const twin = moves.find((m) => m.name !== name && sameName(m.newName, newName));
+      if (taken !== undefined || twin !== undefined) throw new Error(`The file "${fileInFolder(folder, taken?.name ?? newName)}" is in the way`);
+    }
+    return moves.map(({ name, newName }) => ({ from: fileInFolder(folder, name), to: fileInFolder(folder, newName) }));
+  }
+
+  async function moves(origin: FileOrigin, folder: string, from: string, to: string, rule: PluginCompanionRule): Promise<Move[]> {
     const root = await entriesIn(folder);
-    const stringsFolder = root.find((entry) => entry.isFolder && pluginKey(entry.name) === STRINGS_FOLDER);
+    const stringsFolder = root.find((e) => e.isFolder && sameName(e.name, rule.stringsFolder));
     const stringsPath = stringsFolder === undefined ? undefined : fileInFolder(folder, stringsFolder.name);
     const stringsEntries = stringsPath === undefined ? [] : await entriesIn(stringsPath);
-    const named = namedForPlugin(
-      root.filter((e) => !e.isFolder).map((e) => e.name), stringsEntries.filter((e) => !e.isFolder).map((e) => e.name), from, companions,
-    );
-    if (!named.root.some((name) => sameName(name, from))) {
-      throw notAFileOf(origin, from);
-    }
-    const stem = stemOf(from).length;
-    const newStem = stemOf(to);
-    const moved = (inFolder: string, existing: readonly Entry[], names: readonly string[], target: (name: string) => string): Move[] =>
-      names.map((name) => {
-        const newName = target(name);
-        const taken = existing.find((e) => sameName(e.name, newName) && !sameName(e.name, name) && e.name !== name);
-        if (taken !== undefined) throw new Error(`The file "${fileInFolder(inFolder, taken.name)}" is in the way`);
-        return { from: fileInFolder(inFolder, name), to: fileInFolder(inFolder, newName) };
-      });
+    const stemLength = parse(from).name.length;
+    const newStem = parse(to).name;
+    const keepingTail = (name: string): string => newStem + name.slice(stemLength);
+    const ownFile = (name: string): boolean => sameName(name, from);
+    if (!root.some((e) => !e.isFolder && ownFile(e.name))) throw notAFileOf(origin, from);
     return [
-      ...moved(folder, root, named.root, (name) => (sameName(name, from) ? to : newStem + name.slice(stem))),
-      ...(stringsPath === undefined ? [] : moved(stringsPath, stringsEntries, named.strings, (name) => newStem + name.slice(stem))),
+      ...movesIn(folder, root, (name) => ownFile(name) || rule.inRoot(from, name), (name) => (ownFile(name) ? to : keepingTail(name))),
+      ...(stringsPath === undefined ? [] : movesIn(stringsPath, stringsEntries, (name) => rule.inStringsFolder(from, name), keepingTail)),
     ];
   }
 
   return {
     async renamePlugin(origin, from, to, gameRelease) {
-      const companions = pluginCompanionsOf(gameRelease);
-      if (companions === undefined) throw new Error(`No table of the files named for a plugin for the release ${gameRelease ?? 'of this game'}`);
+      const rule = pluginCompanionRule(gameRelease);
+      if (rule === undefined) throw new Error(`No table of the files named for a plugin for the release ${gameRelease ?? 'of this game'}`);
       if (!namedFile(to)) throw new Error(`Not a valid plugin file name: "${to}"`);
       const folder = originDir(instanceRoot, origin);
       if (folder === undefined) throw notAFileOf(origin, from);
@@ -125,7 +103,7 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
       const orders = profiles.map((d) => pluginsFile(instanceRoot, d.name)).sort();
       await withLocks(orders, async () => {
         const lines = await renamedLines(orders, from, to);
-        const files = await moves(origin, folder, from, to, companions);
+        const files = await moves(origin, folder, from, to, rule);
         const undos: Undo[] = [];
         try {
           for (const move of files) {
