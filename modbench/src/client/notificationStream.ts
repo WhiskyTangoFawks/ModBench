@@ -33,12 +33,12 @@ export class NotificationListenerRegistry {
     // undelivered.
     if (!isNotificationKind(event.kind)) return;
     for (const listener of this.listeners.get(event.kind) ?? []) listener(event);
-    this.dispatchTyped(event);
+    this.dispatchTyped(event.kind, event);
   }
 
-  private dispatchTyped(event: NotificationEvent): void {
+  private dispatchTyped(kind: NotificationKind, event: NotificationEvent): void {
     const { origin, plugin, keys } = event;
-    switch (event.kind) {
+    switch (kind) {
       case 'load-order-status':
         if (event.loadOrderStatus) this.deliver('load-order-status', toLoadOrderStatus(event.loadOrderStatus));
         break;

@@ -247,7 +247,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
   const changedPlugins = [{ name: 'A.esp', bytesSha256: 'abc' }];
 
   const cases: [NotificationKind, NotificationEvent, unknown][] = [
-    ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), toLoadOrderStatus(loadOrderStatus!)],
+    ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), toLoadOrderStatus(loadOrderStatus)],
     ['track-progress', rowsChanged([], { kind: 'track-progress', trackProgress }), trackProgress],
     ['external-change', rowsChanged([], { kind: 'external-change', changedPlugins }), { origin: 'ModA', changedPlugins }],
     ['untracked-plugins', rowsChanged(['A.esp', 'B.esp'], { kind: 'untracked-plugins' }), { origin: 'ModA', plugins: ['A.esp', 'B.esp'] }],
