@@ -83,7 +83,7 @@ The tracker is yours to read, assign, close and comment on. Tickets come from th
 
 ## 4. Drain
 
-The run ends when the epic is achieved. Post one comment on the epic. It lists what landed, both ticketed and not, what needs human eyes and why, what parked and the strategic question each park waits on, what was never dispatched, and every break in the chain of authority's form. Tactical decisions stay in the commit messages. The epic is the user's review surface.
+The run ends when the epic is achieved. Post one comment on the epic. It lists what landed, both ticketed and not, what needs human eyes and why, what parked and the strategic question each park waits on, what was never dispatched, and every break in the chain of authority's form. Tactical decisions stay in the commit messages. The epic is the user's review surface. If everyticket is closed and no open questions remain, close the epic ticket.
 
 **Criterion:** the comment is posted, no worktree remains, and `main` is clean.
 
