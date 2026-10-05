@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using MEditService.Codec.Serialization;
 
 namespace MEditService.PluginAdapter;
 
@@ -34,16 +35,27 @@ public static class PluginBinaryHash
         return Convert.ToHexString(SHA256.HashData(stream));
     }
 
-    /// <summary>Every byte of the file, for a caller that hashes several plugins in one pass rather than
-    /// one at a time. Null on the same no-evidence terms as <see cref="OfFile"/>.
-    /// </summary>
-    public static byte[]? BytesOfFile(string path)
+    /// <summary>The hash and diagnoses from one read of the file. Null on <see cref="OfFile"/>'s
+    /// no-evidence terms; null Diagnoses when the scan threw.</summary>
+    public static FileClaim? ClaimOfFile(string path)
     {
+        byte[] bytes;
         try
         {
-            return File.ReadAllBytes(path);
+            bytes = File.ReadAllBytes(path);
         }
         catch (IOException) { return null; }
         catch (UnauthorizedAccessException) { return null; }
+
+        try
+        {
+            return new FileClaim(OfBytes(bytes), MalformedPluginScan.Scan(bytes));
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return new FileClaim(OfBytes(bytes), null, ex);
+        }
     }
 }
+
+public sealed record FileClaim(string Hash, IReadOnlyList<PluginDiagnosis>? Diagnoses, Exception? ScanError = null);
