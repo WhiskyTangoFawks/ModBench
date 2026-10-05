@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { modOfOrigin } from './modOfOrigin';
 import type {
   PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress, NotificationPayloads,
 } from '../client';
@@ -9,17 +8,18 @@ import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
 import { headerFormKeyFor } from './formKeyIdentity';
 import type { PluginsDrop } from '../pluginsCommands/plugins';
-import { moveOrderRefusal, type PluginOrderFacts, type PluginOrderFactsOf } from '../pluginsCommands/pluginOrder';
+import { moveOrderRefusal, type PluginOrderFactsOf } from '../pluginsCommands/pluginOrder';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { lockedRowUri } from './ImplicitMasterDecorationProvider';
-import { IndexingNode, type PluginConditions, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
+import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from '../drivingLib/errorNode';
-import { pluginAddressKey } from './trackedRepositories';
+import { pluginAddressKey } from './pluginAddress';
+import { PluginFacts, placeOf, type PluginWarning } from './pluginFacts';
 import { isRecordRow, PLUGINS_KEY_ARGS } from './gestureEntry';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { RecordGroup } from './createdRecordSelection';
 import { errorMessage } from '../ports/errorMessage';
-import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
+import { DATA_DIRECTORY_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
 export type PluginsInstance = InstanceView & Pick<Instance, 'refresh'>;
 
@@ -81,8 +81,7 @@ export interface PluginMatch {
   hasMatchingRecords: boolean;
 }
 
-/** A warning on one plugin's file, as the Problems panel shows it. */
-export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
+export type { PluginWarning };
 
 export interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin: the row input. */
@@ -180,40 +179,6 @@ export function pluginFileOf(node: PluginListNode): string {
   return node.kind === 'plugin' ? node.plugin.name : node.name;
 }
 
-// Everything one `GET /plugins` read knows about one plugin. One value rather than three
-// parallel collections: they arrive together, change together, and are keyed the same way.
-interface PluginFacts {
-  readOnly?: boolean;
-  tracked?: boolean;
-  masterIssues?: string[];
-  // Whether this plugin holds a record that could not be read into its document.
-  parseFailure?: boolean;
-  order?: PluginOrderFacts;
-}
-
-// Every fact is filed and read under origin and filename (ADR-0012).
-class ByPluginAddress<T> {
-  private readonly byAddress = new Map<string, T>();
-
-  set(name: string, origin: string, value: T): void {
-    this.byAddress.set(pluginAddressKey(name, origin), value);
-  }
-
-  // `this` narrows to an array-valued instance.
-  append<U>(this: ByPluginAddress<U[]>, name: string, origin: string, item: U): void {
-    const addressKey = pluginAddressKey(name, origin);
-    this.byAddress.set(addressKey, [...(this.byAddress.get(addressKey) ?? []), item]);
-  }
-
-  get(name: string, origin: string): T | undefined {
-    return this.byAddress.get(pluginAddressKey(name, origin));
-  }
-
-  has(name: string, origin: string): boolean {
-    return this.byAddress.has(pluginAddressKey(name, origin));
-  }
-}
-
 type RowDecoration = {
   description: vscode.TreeItem['description'];
   iconPath: vscode.TreeItem['iconPath'];
@@ -223,62 +188,9 @@ type RowDecoration = {
 // `everyRow`: a second window (ADR-0010). `unheldRow`: mEdit unreachable, or a `Failed` reconcile.
 type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
-// plugins.md, A row: the five statuses, in the order that sets the icon. `words` is the
-// description's vocabulary; `tooltipLine` is that status's one tooltip line.
-interface PluginStatus {
-  kind: 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'changedOutside' | 'malformed';
-  words: string;
-  tooltipLine: string;
-}
-
-// The yellow status icon (plugins.md, A row). A plugin changed outside Modbench or malformed still
-// loads and plays, unlike the three red statuses.
+// The yellow status icon (plugins.md, A row).
 function warningIcon(): vscode.ThemeIcon {
   return new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
-}
-
-function failedToReadStatus(failure: string | undefined): PluginStatus | undefined {
-  if (failure === undefined) return undefined;
-  return { kind: 'failedToRead', words: 'failed to read', tooltipLine: `Failed to read: ${failure}` };
-}
-
-// "Missing" is the reference tool's word for a master that is not active, file present or not.
-function masterIssuesStatus(inactiveMasters: string[]): PluginStatus | undefined {
-  if (inactiveMasters.length === 0) return undefined;
-  const words = inactiveMasters.length === 1 ? '1 master issue' : `${inactiveMasters.length} master issues`;
-  return { kind: 'masterIssues', words, tooltipLine: `Missing masters: ${inactiveMasters.join(', ')}` };
-}
-
-function unreadableRecordsStatus(hasParseFailure: boolean): PluginStatus | undefined {
-  if (!hasParseFailure) return undefined;
-  return {
-    kind: 'unreadableRecords', words: 'unreadable records',
-    tooltipLine: 'This plugin holds a record that could not be read into its document.',
-  };
-}
-
-// Nothing until mEdit answers: an unknown is neither tracked nor untracked, nor editable.
-function factFlags(facts: PluginFacts | undefined): string[] {
-  const flags: string[] = [];
-  if (facts?.tracked !== undefined) flags.push(facts.tracked ? 'tracked' : 'untracked');
-  if (facts?.readOnly === false) flags.push('editable');
-  return flags;
-}
-
-// The status's words beyond the row, in its tooltip and the Problems panel.
-const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
-
-function changedOutsideStatus(changed: boolean): PluginStatus | undefined {
-  if (!changed) return undefined;
-  return {
-    kind: 'changedOutside', words: 'changed outside Modbench',
-    tooltipLine: CHANGED_OUTSIDE_TEXT,
-  };
-}
-
-function malformedStatus(diagnosisTexts: string[]): PluginStatus | undefined {
-  if (diagnosisTexts.length === 0) return undefined;
-  return { kind: 'malformed', words: 'malformed', tooltipLine: `Malformed: ${diagnosisTexts.join('; ')}` };
 }
 
 /** The one Plugins tree (ADR-0017). Rows are plugins.txt's lines, read from the Instance; their
@@ -341,14 +253,9 @@ export class PluginsTreeProvider
     if (unsubscribeChanges) this.subscriptions.push({ dispose: unsubscribeChanges });
   }
 
-  // plugins.md, A row: each settle of a tracked mod names every plugin of it that changed outside
-  // Modbench, so it replaces what the mod's last settle named.
   private applyExternalChange(event: NotificationPayloads['external-change']): void {
-    this.changedOutsideByMod.set(event.origin, event.changedPlugins.map(({ name }) => ({ name, origin: event.origin })));
-    const changed = [...this.changedOutsideByMod.values()].flat();
-    this.changedOutside = new ByPluginAddress<true>();
-    for (const { name, origin } of changed) this.changedOutside.set(name, origin, true);
-    this.publishChangedOutside?.(changed.map(({ name, origin }) => ({ plugin: name, origin, text: CHANGED_OUTSIDE_TEXT })));
+    this.facts.externalChange(event);
+    this.publishChangedOutside?.(this.facts.problems().changedOutside);
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -390,7 +297,7 @@ export class PluginsTreeProvider
     }
     if (this.indexFailure !== undefined) return `Indexing failed: ${this.indexFailure}`;
     if (this.lastBuildHadNoRows) return NO_PLUGINS_MESSAGE;
-    if (this.recordFilterSource !== undefined && this.matches !== undefined && this.recordFilterMatchesNothing) {
+    if (this.recordFilterSource !== undefined && this.facts.recordFilterMatchesNothing()) {
       return `No records match ${this.recordFilterSource}.`;
     }
     return undefined;
@@ -480,12 +387,13 @@ export class PluginsTreeProvider
 
   // plugins.md, States 2-4: what a plugin row expands into, in precedence order.
   private async expandPluginRow(element: PluginListNode, file: string): Promise<PluginsTreeNode[]> {
+    const address = { name: file, origin: element.origin };
     if (this.expansionOverride?.scope === 'everyRow') return [new ErrorNode(this.expansionOverride.message)];
-    if (this.held?.has(file, element.origin) === true) {
-      return this.records?.getPluginChildren(file, element.origin, this.conditionsOf(element, file)) ?? noRecordBrowser();
+    if (this.facts.isHeld(address)) {
+      return this.records?.getPluginChildren(file, element.origin, this.facts.conditions(address)) ?? noRecordBrowser();
     }
     // plugins.md, States, stories 2, 3 and 6.
-    const failure = this.reachableFailureOf(element);
+    const failure = this.facts.reachableFailure(address);
     if (failure !== undefined) return [new ErrorNode(failure)];
     if (this.expansionOverride?.scope === 'unheldRow') return [new ErrorNode(this.expansionOverride.message)];
     return [new IndexingNode()];
@@ -579,88 +487,34 @@ export class PluginsTreeProvider
     return captured;
   }
 
-  // plugins.md, A row: the tooltip always carries the file name and mod; description and icon
-  // stay unset when no status applies.
+  // plugins.md, A row: description and icon stay unset when no status applies.
   private decoratePlugin(row: PluginNode): void {
-    const file = row.plugin.name;
-    const statuses = this.statusesOf(row);
-    const [first] = statuses;
-    if (first !== undefined) {
-      row.iconPath = first.kind === 'changedOutside' || first.kind === 'malformed' ? warningIcon() : failurePrefixIcon();
-      row.description = statuses.map((s) => s.words).join(', ');
+    const address = { name: row.plugin.name, origin: row.origin };
+    const icon = this.facts.icon(address);
+    if (icon !== undefined) {
+      row.iconPath = icon === 'warning' ? warningIcon() : failurePrefixIcon();
+      row.description = this.facts.description(address);
     }
-    const lines = [file, row.origin];
-    if (this.facts?.get(file, row.origin)?.readOnly === true) lines.push('read-only');
-    for (const status of statuses) lines.push(status.tooltipLine);
-    row.tooltip = lines.join('\n');
-    row.contextValue = this.contextValueOf(row);
+    row.tooltip = this.facts.tooltipLines(address).join('\n');
+    row.contextValue = this.contextValueOf(row, address);
   }
 
   // plugins.md, Menus and keys: what every plugin menu condition reads. Where the plugin lives and
   // whether its line is enabled are the instance value's; tracked and editable wait on mEdit.
-  private contextValueOf(row: PluginNode): string {
-    const place = this.placeOf(row.origin);
-    const facts = this.facts?.get(row.plugin.name, row.origin);
-    return ['plugin', row.plugin.enabled ? 'enabled' : 'disabled', ...(place === undefined ? [] : [place]), ...factFlags(facts)]
+  private contextValueOf(row: PluginNode, address: PluginAddress): string {
+    const place = placeOf(row.origin, { modDirs: this.instanceValue.paths.modDirs, trackedMods: this.instanceValue.trackedMods });
+    return ['plugin', row.plugin.enabled ? 'enabled' : 'disabled', ...(place === undefined ? [] : [place]), ...this.facts.contextFlags(address)]
       .join(' ');
-  }
-
-  // What the rows beneath a plugin row state about it: its tracked and editable flags.
-  private conditionsOf(row: PluginListNode, file: string): PluginConditions {
-    const facts = this.facts?.get(file, row.origin);
-    return { tracked: facts?.tracked === true, editable: facts?.readOnly === false };
-  }
-
-  // The instance value names each mod's folder, whatever the mod manager calls the others, and
-  // each mod whose folder holds a repository.
-  private placeOf(origin: string): 'inTrackedMod' | 'inUntrackedMod' | 'inOverwrite' | undefined {
-    if (origin === OVERWRITE_ORIGIN) return 'inOverwrite';
-    const mod = modOfOrigin(this.instanceValue.paths.modDirs, origin);
-    if (mod === undefined) return undefined;
-    return this.instanceValue.trackedMods.has(mod) ? 'inTrackedMod' : 'inUntrackedMod';
   }
 
   /** Whether compile applies to any plugin, which compile's palette entry reads. */
   anyCompilable(): boolean {
-    return this.someCompilable;
-  }
-
-  // plugins.md, Menus and keys: compile (tracked). A plugin that is not active has no record to
-  // edit, yet its source still compiles.
-  private compilable(file: string, origin: string): boolean {
-    return this.facts?.get(file, origin)?.tracked === true;
-  }
-
-  // plugins.md, A row: every status the plugin carries, spec order.
-  private statusesOf(row: PluginNode): PluginStatus[] {
-    const file = row.plugin.name;
-    const facts = this.facts?.get(file, row.origin);
-    const statuses = [
-      failedToReadStatus(this.loadFailures.get(file, row.origin)),
-      masterIssuesStatus(facts?.masterIssues ?? []),
-      unreadableRecordsStatus(facts?.parseFailure === true),
-      changedOutsideStatus(this.changedOutside.has(file, row.origin)),
-      malformedStatus(this.diagnoses?.get(file, row.origin) ?? []),
-    ];
-    return statuses.filter((s): s is PluginStatus => s !== undefined);
+    return this.facts.anyCompilable();
   }
 
   // ── the load order and its facts ──────────────────────────────────────────
 
-  private held?: ByPluginAddress<true>;
-  private facts?: ByPluginAddress<PluginFacts>;
-  private someCompilable = false;
-  private matches?: ByPluginAddress<boolean>;
-  private diagnoses?: ByPluginAddress<string[]>;
-  private readonly changedOutsideByMod = new Map<string, readonly PluginAddress[]>();
-  private changedOutside = new ByPluginAddress<true>();
-  // Row status only (plugins.md, A row: "no blink") — merges across a reload's ticks and
-  // persists until `applyReconciled` lands the new answer.
-  private loadFailures = new ByPluginAddress<string>();
-  // Children expansion only (plugins.md, States 2) — this reload's own ticks, replaced wholesale
-  // each time: a plugin not yet reached this reload reads as "still indexing", never a stale
-  // failure from before the reload began.
-  private reachableFailures = new ByPluginAddress<string>();
+  private readonly facts = new PluginFacts();
   // plugins.md, States 3-4: what an unheld row shows in place of "Still indexing…", and whether
   // that reaches even an already-held row. One field, so the two never disagree on precedence.
   private expansionOverride?: ExpansionOverride;
@@ -679,9 +533,7 @@ export class PluginsTreeProvider
     this.generation++;
     this.expansionOverride = undefined;
     this.indexFailure = undefined;
-    this.held = heldSet(indexedPlugins);
-    this.reachableFailures = indexLoadFailures(failures);
-    mergeLoadFailures(this.loadFailures, failures);
+    this.facts.indexed(indexedPlugins, failures);
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -711,10 +563,7 @@ export class PluginsTreeProvider
     if (plugins === undefined || generation !== this.generation) return undefined;
     this.expansionOverride = undefined;
     this.indexFailure = undefined;
-    this.held = heldSet(plugins);
-    this.loadFailures = indexLoadFailures(failures);
-    this.reachableFailures = this.loadFailures;
-    this.applyPluginFacts(plugins);
+    this.facts.reconciled(plugins, failures);
     // Diagnoses stay as the last scan left them (no blink) until `scanDiagnoses` below lands a
     // fresh answer; a failed scan leaves them alone too.
     this._onDidChangeTreeData.fire(undefined);
@@ -732,7 +581,7 @@ export class PluginsTreeProvider
     const factsRead = ++this.factsRead;
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation || factsRead !== this.factsRead) return undefined;
-    this.applyPluginFacts(plugins);
+    this.facts.refreshed(plugins);
     this._onDidChangeTreeData.fire(undefined);
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
   }
@@ -750,28 +599,10 @@ export class PluginsTreeProvider
       // A second window's refusal is not this read's to downgrade.
       if (this.expansionOverride?.scope !== 'everyRow') this.expansionOverride = { scope: 'unheldRow', message };
       // Briefly over-showing rows beats freezing every one behind a stale filter answer.
-      this.matches = undefined;
+      this.facts.matchesUnknown();
       this._onDidChangeTreeData.fire(undefined);
       return undefined;
     }
-  }
-
-  // plugins.md: no `masterIssues` means not yet checked, so the last answer stays until one lands.
-  private applyPluginFacts(plugins: PluginMetadata[]): void {
-    const facts = new ByPluginAddress<PluginFacts>();
-    const matches = new ByPluginAddress<boolean>();
-    for (const p of plugins) {
-      facts.set(p.name, p.origin, {
-        readOnly: p.isImmutable, tracked: p.isTracked, parseFailure: p.hasParseFailure,
-        masterIssues: p.masterIssues ?? this.facts?.get(p.name, p.origin)?.masterIssues,
-        order: { masters: p.masters, blueprint: p.isBlueprint },
-      });
-      matches.set(p.name, p.origin, p.hasMatchingRecords);
-    }
-    this.facts = facts;
-    this.someCompilable = plugins.some((p) => this.compilable(p.name, p.origin));
-    this.matches = matches;
-    this.recordFilterMatchesNothing = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
   }
 
   private async scanDiagnoses(generation: number): Promise<void> {
@@ -780,26 +611,16 @@ export class PluginsTreeProvider
       const reports = await this.client.getDiagnoses();
       if (generation !== this.generation) return;
       // One derivation, two surfaces — the tree badge and the Problems panel cannot disagree.
-      this.publishDiagnoses?.(reports);
-      const diagnoses = new ByPluginAddress<string[]>();
-      for (const r of reports) diagnoses.append(r.plugin, r.origin, r.text);
-      this.diagnoses = diagnoses;
+      this.facts.diagnosed(reports);
+      this.publishDiagnoses?.(this.facts.problems().malformed);
       this._onDidChangeTreeData.fire(undefined);
     } catch (err) {
       this.log('warn', `[PluginsTreeProvider] the malformed-plugin scan could not be read: ${errorMessage(err)}`);
     }
   }
 
-  // `hasMatchingRecords` only ever answers `false` while a filter is active, so no separate
-  // "is a filter active" signal has to be threaded in here.
   private isHiddenByFilter(row: PluginListNode): boolean {
-    const file = pluginFileOf(row);
-    return this.matches?.get(file, row.origin) === false;
-  }
-
-  // Children expansion only (plugins.md, States 2): this reload's own ticks.
-  private reachableFailureOf(row: PluginListNode): string | undefined {
-    return this.reachableFailures.get(pluginFileOf(row), row.origin);
+    return this.facts.hiddenByRecordFilter({ name: pluginFileOf(row), origin: row.origin });
   }
 
   // ── drag and drop ─────────────────────────────────────────────────────────
@@ -848,7 +669,7 @@ export class PluginsTreeProvider
     const originOf = new Map(this.lastOrder.map((line) => [line.name, line.origin] as const));
     return (name) => {
       const origin = originOf.get(name);
-      return origin === undefined ? undefined : this.facts?.get(name, origin)?.order;
+      return origin === undefined ? undefined : this.facts.orderFacts({ name, origin });
     };
   }
 
@@ -877,20 +698,3 @@ function recordFormKeyOf(row: PluginsTreeNode): string | undefined {
   if (!isRecordRow(row)) return undefined;
   return row.kind === 'record' ? row.record.formKey : row.formKey;
 }
-
-function heldSet(plugins: readonly PluginAddress[]): ByPluginAddress<true> {
-  const held = new ByPluginAddress<true>();
-  for (const { name, origin } of plugins) held.set(name, origin, true);
-  return held;
-}
-
-function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginAddress<string> {
-  const byAddress = new ByPluginAddress<string>();
-  mergeLoadFailures(byAddress, failures);
-  return byAddress;
-}
-
-function mergeLoadFailures(target: ByPluginAddress<string>, failures: PluginLoadFailure[]): void {
-  for (const f of failures) target.set(f.name, f.origin, f.reason);
-}
-

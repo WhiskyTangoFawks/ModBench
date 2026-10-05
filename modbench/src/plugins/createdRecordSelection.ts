@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { UNLIMITED_RECORDS, type MEditClient, type PluginAddress } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
-import { pluginAddressKey } from './trackedRepositories';
+import { pluginAddressKey } from './pluginAddress';
 
 /** A plugin's group of one record type. */
 export interface RecordGroup {
