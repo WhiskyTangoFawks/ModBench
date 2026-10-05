@@ -85,6 +85,23 @@ internal static class WriteEndpointMapping
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
 
+    /// <summary>Rename source's own refusal, each leaving the plugin's source as it was: the status says
+    /// what kind of problem, the refusal extension says exactly which (ADR-0019).</summary>
+    internal static IResult Refusal(RenameSourceRefusal refusal, string? message) => Results.Problem(
+        detail: message,
+        statusCode: refusal switch
+        {
+            RenameSourceRefusal.NotAPluginFile => 400,
+            RenameSourceRefusal.PluginNotLoaded => 404,
+            // The request is sound; the plugin's present state refuses it until that state changes.
+            RenameSourceRefusal.NotTracked or RenameSourceRefusal.NameTaken => 409,
+            // The request is sound; the machine lacks git, or git or the disk refused the write.
+            RenameSourceRefusal.GitUnavailable or RenameSourceRefusal.WriteFailed => 500,
+            // Well-formed, addressed at something real, and its source holds a file nothing can read.
+            _ => 422,
+        },
+        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
+
     /// <summary>Put load order's own refusal: a bad request, since the only one this handler
     /// answers is discovered by validating the release, never by touching the Index.</summary>
     internal static IResult Refusal(PutLoadOrderResult result) => Results.Problem(

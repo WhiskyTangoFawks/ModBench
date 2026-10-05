@@ -179,6 +179,30 @@ internal sealed class SourceRepositoryGit(string modFolder)
         ParkSnapshot("Decompile", pluginFileName, tree, headSha, [$"{BinaryTrailer}: {binarySha256}"]);
     }
 
+    /// <summary>What Modbench last wrote for <paramref name="from"/> becomes <paramref name="to"/>'s, and
+    /// <paramref name="from"/> has none. Answers the act that puts both back.</summary>
+    internal Action MoveLastWritten(string from, string to)
+    {
+        var (fromRef, toRef) = (LastCompileRef(from), LastCompileRef(to));
+        var (moving, replaced) = (CommitOf(fromRef), CommitOf(toRef));
+        SetRef(toRef, moving);
+        SetRef(fromRef, null);
+        return () =>
+        {
+            SetRef(fromRef, moving);
+            SetRef(toRef, replaced);
+        };
+    }
+
+    private string? CommitOf(string gitRef) =>
+        TryRun(out var sha, "rev-parse", "--verify", "--quiet", gitRef) ? sha.Trim() : null;
+
+    private void SetRef(string gitRef, string? commitSha)
+    {
+        if (commitSha is not null) Run("update-ref", gitRef, commitSha);
+        else if (CommitOf(gitRef) is not null) Run("update-ref", "-d", gitRef);
+    }
+
     // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written. The
     // subject names the gesture that made the snapshot.
     private void ParkSnapshot(string gesture, string pluginFileName, string tree, string parent, IEnumerable<string> trailers)

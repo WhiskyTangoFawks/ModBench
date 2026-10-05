@@ -168,6 +168,50 @@ internal sealed class SourceRepositoryWrites(
         }
     }
 
+    internal void RenameSource(string from, string to)
+    {
+        var (fromRoot, toRoot) = (SourceRepositoryLayout.RootIn(_modFolder, from), SourceRepositoryLayout.RootIn(_modFolder, to));
+        var (fromKey, toKey) = (ModKey.FromFileName(from), ModKey.FromFileName(to));
+        var before = PreImageOf(fromRoot);
+        var renamed = before.Files
+            .Select(file => PluginSourceRename.Renamed(Path.GetRelativePath(_modFolder, file.Path), file.Bytes, fromKey, toKey))
+            .ToList();
+
+        Action? putBackLastWritten = null;
+        try
+        {
+            PristineFileWriter.WriteAll(renamed, _modFolder);
+            putBackLastWritten = git.MoveLastWritten(from, to);
+            Directory.Delete(fromRoot, recursive: true);
+        }
+        catch (Exception cause) when (cause is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            var unrestored = new List<string>();
+            TryPutBack(toRoot, () => { if (Directory.Exists(toRoot)) Directory.Delete(toRoot, recursive: true); }, unrestored);
+            unrestored.AddRange(PutBack(before));
+            if (putBackLastWritten is not null) TryPutBackLastWritten(putBackLastWritten, from, unrestored);
+            if (unrestored.Count == 0) throw;
+            throw new IOException(
+                $"{cause.Message} Its source is back as it was except: {string.Join(" ", unrestored)}", cause);
+        }
+        finally
+        {
+            locator.Forget();
+        }
+    }
+
+    private static void TryPutBackLastWritten(Action putBack, string plugin, List<string> unrestored)
+    {
+        try
+        {
+            putBack();
+        }
+        catch (GitCommandFailedException ex)
+        {
+            unrestored.Add($"what Modbench last wrote for {plugin} could not be put back: {ex.Message}");
+        }
+    }
+
     private static void DeleteEmptyDirectories(string directory)
     {
         if (!Directory.Exists(directory)) return;
