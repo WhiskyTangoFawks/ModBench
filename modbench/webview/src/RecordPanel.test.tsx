@@ -1178,21 +1178,31 @@ describe('RecordPanel — column collapse', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
 
-  it('clicking a plugin column header chip collapses that column, hiding its field values while the chip itself stays visible', async () => {
+  const collapseButton = (plugin: string) => within(required(screen.getByText(plugin).closest('th'), 'the column\u2019s header')).getByRole('button');
+
+  it('the button in a plugin column header collapses that column, hiding its field values while the chip itself stays visible', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
 
-    fireEvent.click(screen.getByText('MyMod.esp'));
+    fireEvent.click(collapseButton('MyMod.esp'));
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
     expect(screen.getByText('MyMod.esp')).toBeInTheDocument();
   });
 
-  it('clicking a collapsed column chip again expands it', async () => {
+  it('the button of a collapsed column expands it again', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
 
-    fireEvent.click(screen.getByText('MyMod.esp'));
+    fireEvent.click(collapseButton('MyMod.esp'));
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
+    fireEvent.click(collapseButton('MyMod.esp'));
+    expect(screen.getByText('Override Name')).toBeInTheDocument();
+  });
+
+  it('a click on a column header away from its button collapses nothing', async () => {
+    renderPanel(compareResult);
+    await waitFor(() => screen.getByText('Override Name'));
+
     fireEvent.click(screen.getByText('MyMod.esp'));
     expect(screen.getByText('Override Name')).toBeInTheDocument();
   });
@@ -1202,14 +1212,14 @@ describe('RecordPanel — column collapse', () => {
     await waitFor(() => screen.getByText('(read-only)'));
     expect(screen.getByText('(read-only)')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Fallout4.esm'));
+    fireEvent.click(collapseButton('Fallout4.esm'));
     expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
   });
 
   it('collapsed state survives a read of the record under the FormKey it moved to', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
-    fireEvent.click(screen.getByText('MyMod.esp'));
+    fireEvent.click(collapseButton('MyMod.esp'));
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
 
     act(() => {
@@ -1243,7 +1253,7 @@ describe('RecordPanel — column widths: a column\'s header and every cell under
     renderPanel(compareResult);
     await screen.findByText('Override Name');
 
-    fireEvent.click(screen.getByText('MyMod.esp'));
+    fireEvent.click(within(required(screen.getByText('MyMod.esp').closest('th'), 'the header')).getByRole('button'));
 
     expect(new Set(widthsOfColumn(2))).toEqual(new Set(['48px']));
     expect(new Set(widthsOfColumn(1))).toEqual(new Set(['']));
