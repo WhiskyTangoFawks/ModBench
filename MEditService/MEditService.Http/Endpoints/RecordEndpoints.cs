@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
@@ -68,6 +67,19 @@ public static class RecordEndpoints
         .WithTags("Records")
         .Produces<CompareResult>()
         .ProducesProblem(404);
+
+        app.MapPost("/records/{formKey}/compare", (string formKey, CopyText copy, IRecordQueryService svc) =>
+            CompareRecord(Uri.UnescapeDataString(formKey), copy, svc, logger))
+        .WithName("CompareRecordWithText")
+        .WithSummary("One record as every active plugin has it, one plugin's copy read from the document text given.")
+        .WithDescription(
+            "The named plugin's column, and the conflict states, are read from the text whether or not that plugin " +
+            "is active. Text that is no record document is a column that could not be parsed. Nothing is stored.")
+        .WithTags("Records")
+        .Produces<CompareResult>()
+        .ProducesProblem(400)
+        .ProducesProblem(404)
+        .ProducesProblem(503);
 
         app.MapPost("/records/compare", (CompareRecordsRequest request, IRecordQueryService svc) =>
             CompareRecords(request.Copies ?? [], svc, logger))
@@ -306,9 +318,22 @@ public static class RecordEndpoints
             logger.LogError(ex, "No load order for comparing {Count} records", copies.Count);
             return WriteEndpointMapping.NoLoadOrder(ex);
         }
-        catch (JsonException ex)
+    }
+
+    internal static IResult CompareRecord(string formKey, CopyText copy, IRecordQueryService svc, ILogger logger)
+    {
+        if (copy.DocumentText is null || string.IsNullOrWhiteSpace(copy.Plugin.Name) || string.IsNullOrWhiteSpace(copy.Plugin.Origin))
+            return Results.Problem("A plugin name, an origin and a document text are required.", statusCode: 400);
+        try
         {
-            return Results.Problem($"A document text is not valid JSON: {ex.Message}", statusCode: 400);
+            return svc.GetCompare(formKey, copy) is { } result
+                ? Results.Ok(result)
+                : Results.Problem("No plugin indexes this record.", statusCode: 404);
+        }
+        catch (NoLoadOrderException ex)
+        {
+            logger.LogError(ex, "No load order for comparing {FormKey}", formKey);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
 

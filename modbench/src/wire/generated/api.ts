@@ -356,7 +356,11 @@ export interface paths {
         };
         get: operations["CompareRecord"];
         put?: never;
-        post?: never;
+        /**
+         * One record as every active plugin has it, one plugin's copy read from the document text given.
+         * @description The named plugin's column, and the conflict states, are read from the text whether or not that plugin is active. Text that is no record document is a column that could not be parsed. Nothing is stored.
+         */
+        post: operations["CompareRecordWithText"];
         delete?: never;
         options?: never;
         head?: never;
@@ -672,6 +676,10 @@ export interface components {
         };
         /** @enum {string} */
         CopyMode: "New" | "Override" | "DeepOverride";
+        CopyText: {
+            plugin: components["schemas"]["PluginAddress"];
+            documentText: string;
+        };
         CreatableRecordType: {
             type: string;
             displayName: string;
@@ -2021,6 +2029,59 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    CompareRecordWithText: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyText"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompareResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -38,13 +38,26 @@ internal sealed class RelationReads(
         using var connection = store.OpenReadConnection();
         var tableName = FindRecordTypeInAnyPlugin(connection, formKey);
         if (tableName == null) return null;
-        using var parsed = JsonDocument.Parse(text);
-        if (parsed.RootElement.ValueKind != JsonValueKind.Object)
-            throw new JsonException("A record's document is a JSON object.");
-        var editorId = DocumentNodes.At(parsed.RootElement, "EditorID")?.GetString();
+        var (body, editorId, parseDiagnosis) = ReadDocumentText(text);
         return DocumentFromBody(
-            connection, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, text,
-            store.Schemas[tableName], LinkResolution.ForLinksOf(connection, formKey, Resolve), parseDiagnosis: null);
+            connection, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, body,
+            store.Schemas[tableName], LinkResolution.ForLinksOf(connection, formKey, Resolve), parseDiagnosis);
+    }
+
+    // Text that is no record document holds nothing to show: an empty body and the reason.
+    private static (string Body, string? EditorId, string? ParseDiagnosis) ReadDocumentText(string text)
+    {
+        try
+        {
+            using var parsed = JsonDocument.Parse(text);
+            return parsed.RootElement.ValueKind == JsonValueKind.Object
+                ? (text, DocumentNodes.At(parsed.RootElement, "EditorID")?.GetString(), null)
+                : ("{}", null, "A record's document is a JSON object.");
+        }
+        catch (JsonException ex)
+        {
+            return ("{}", null, ex.Message);
+        }
     }
 
     // One query rather than two point queries per record. Rows are materialized before

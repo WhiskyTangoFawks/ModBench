@@ -22,7 +22,7 @@ public interface IRecordReads
 
     /// <summary>The copy <paramref name="plugin"/> would hold were its document <paramref name="text"/>,
     /// active or not. Null if no plugin indexes the FormKey, which gives the type. Text that is no
-    /// JSON object throws JsonException.</summary>
+    /// record document gives a copy with no fields and a <c>ParseDiagnosis</c>.</summary>
     RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text);
 
     /// <summary>Every document <paramref name="plugin"/> holds, in one bulk read, for consumers that

@@ -80,19 +80,28 @@ public sealed class RecordQueryService(
         return document == null ? null : ToRecordDetail(document);
     }
 
-    public CompareResult? GetCompare(string formKey)
+    public CompareResult? GetCompare(string formKey, CopyText? text = null)
     {
         var reads = RequireReads();
+        var stack = reads.GetOverrideStack(formKey);
+        var snapshot = _loadOrder.Require();
+
+        var copies = stack?.Entries.Select(e => e.Effective).ToList() ?? [];
+        if (text is not null)
+        {
+            var at = copies.FindIndex(c => PluginAddress.Comparer.Equals(c.Plugin, text.Plugin));
+            var loadOrderIndex = at >= 0 ? copies[at].LoadOrderIndex : snapshot.LoadOrderIndex(text.Plugin) ?? NotInLoadOrder;
+            var fromText = reads.DocumentFromText(formKey, text.Plugin, loadOrderIndex, text.DocumentText);
+            if (fromText is null) return null;
+            if (at >= 0) copies[at] = fromText with { IsWinner = copies[at].IsWinner };
+            else copies = [.. copies.Append(fromText).OrderBy(c => c.LoadOrderIndex)];
+        }
+        if (copies.Count == 0) return null;
+
         // One memoizing cache per response (ADR-0005): a FormKey repeated across sibling
         // cells/plugins/leaves (generic fields and VMAD alike) is resolved at most once.
         var resolveFormKey = reads.LinkResolver(formKey);
-
-        var stack = reads.GetOverrideStack(formKey);
-        if (stack == null) return null;
-
-        var committedOverrides = stack.Entries.Select(e => ToRecordDetail(e.Effective)).ToList();
-
-        var snapshot = _loadOrder.Require();
+        var committedOverrides = copies.ConvertAll(ToRecordDetail);
         var (classification, conflictAll) = ClassifyStack(
             committedOverrides, resolveFormKey, LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins));
         // PluginStates is keyed by ColumnKey.Of (ADR-0012), so a bare-plugin lookup
@@ -103,7 +112,7 @@ public sealed class RecordQueryService(
                 column: null, snapshot, reads));
 
         return new CompareResult(
-            annotated, classification.Diffs, conflictAll, RequireSchemas().DisplayNameFor(stack.RecordType));
+            annotated, classification.Diffs, conflictAll, RequireSchemas().DisplayNameFor(copies[0].RecordType));
     }
 
     public CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies)

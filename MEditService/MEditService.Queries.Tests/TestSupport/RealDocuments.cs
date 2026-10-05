@@ -61,7 +61,16 @@ internal static class RealDocuments
     {
         var release = GameRelease.Fallout4;
         var schema = SharedSchemaReflector.Instance.GetSchemas(release)[recordType];
-        using var parsed = JsonDocument.Parse(body);
+        JsonDocument parsed;
+        try
+        {
+            parsed = JsonDocument.Parse(body);
+        }
+        catch (JsonException ex)
+        {
+            return new RecordDocument(formKey, plugin, loadOrderIndex, false, null, recordType, "{}", [], ParseDiagnosis: ex.Message);
+        }
+        using var _ = parsed;
         var fields = fieldNames
             .Where(n => schema.RecordColumns.Any(c => c.Name == n))
             .Select(n => FieldOf(schema, parsed.RootElement, n, release))
