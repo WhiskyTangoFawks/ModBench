@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { compareOverride, compareResultFixture, diffNode, fieldMeta } from './test/fixtures';
 import { buildColumns } from './recordUtils';
-import { columnKey } from './columnKey';
+import { columnKey } from '../../src/wire/columnKey';
 import { navRows, recordRows, shownCell, visibleRows, FORM_ID_ROW, RECORD_HEADER_ROW, type FieldRow, type RecordRow } from './recordRows';
 import type { ColumnKey, CompareResult, FieldMetadata } from './types';
 
-const MASTER = columnKey('Fallout4.esm', null);
-const MOD = columnKey('MyMod.esp', null);
+const MASTER = columnKey({ name: 'Fallout4.esm', origin: 'Data' });
+const MOD = columnKey({ name: 'MyMod.esp', origin: 'Data' });
 
 const bounds = fieldMeta({
   name: 'Bounds', type: 'struct',

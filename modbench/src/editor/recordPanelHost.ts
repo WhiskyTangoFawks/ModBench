@@ -20,7 +20,7 @@ import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE, type RecordAddress } from './recordUri';
+import { recordUri, recordTabAddressOf, formKeyOf, RECORD_EDITOR_VIEW_TYPE, type RecordTabAddress } from './recordUri';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
 
@@ -87,7 +87,7 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
   constructor(private readonly deps: RecordEditorProviderDeps) {}
 
   openCustomDocument(uri: vscode.Uri): RecordDocument {
-    return new RecordDocument(uri, formKeyOfRecordUri(uri));
+    return new RecordDocument(uri, formKeyOf(recordTabAddressOf(uri)));
   }
 
   resolveCustomEditor(document: RecordDocument, panel: vscode.WebviewPanel): void {
@@ -192,9 +192,9 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
 }
 
 async function openRecordTab(
-  reporter: Reporter, address: RecordAddress, viewColumn: vscode.ViewColumn, preview: boolean,
+  reporter: Reporter, address: RecordTabAddress, viewColumn: vscode.ViewColumn, preview: boolean,
 ): Promise<void> {
-  await reportFailure(reporter, `Failed to open "${address.formKey}".`, async () => {
+  await reportFailure(reporter, `Failed to open "${recordTitle(formKeyOf(address), undefined)}".`, async () => {
     await vscode.commands.executeCommand('vscode.openWith', recordUri(address), RECORD_EDITOR_VIEW_TYPE, { viewColumn, preview });
   });
 }

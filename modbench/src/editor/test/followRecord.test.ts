@@ -15,7 +15,7 @@ function fakeActiveRecordTracker() {
   };
 }
 
-const EDITED_MOD_ESP_FROM_MODA = { formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'ModA' };
+const EDITED_MOD_ESP_FROM_MODA = { formKey: '000800:Mod.esp', plugin: { name: 'Mod.esp', origin: 'ModA' } };
 
 const rowsChanged = (keys: string[]) =>
   ({ kind: 'rows-changed' as const, plugin: 'Mod.esp', origin: 'ModA', keys, sequence: 2 });
@@ -196,14 +196,14 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
       const { panel, edits } = openOn('000800:Mod.esp');
       await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
-      expect(await sentTo(edits, panel, { ...EDITED_MOD_ESP_FROM_MODA, plugin: 'Other.esp', origin: 'ModB' })).toEqual(['000800:Mod.esp']);
+      expect(await sentTo(edits, panel, { ...EDITED_MOD_ESP_FROM_MODA, plugin: { name: 'Other.esp', origin: 'ModB' } })).toEqual(['000800:Mod.esp']);
     });
 
     it('in the other plugin of that filename is untouched', async () => {
       const { panel, edits } = openOn('000800:Mod.esp');
       await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
-      expect(await sentTo(edits, panel, { ...EDITED_MOD_ESP_FROM_MODA, origin: 'ModB' })).toEqual(['000800:Mod.esp']);
+      expect(await sentTo(edits, panel, { ...EDITED_MOD_ESP_FROM_MODA, plugin: { name: 'Mod.esp', origin: 'ModB' } })).toEqual(['000800:Mod.esp']);
     });
 
     it('from a gate taken before the move goes to the new FormKey after the tab reads it (an extended editor keeps the address it was opened on), and one taken after does not', async () => {
