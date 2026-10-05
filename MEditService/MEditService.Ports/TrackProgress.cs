@@ -14,10 +14,10 @@ public enum TrackPhase
     Committing,
 }
 
-/// <summary>What Track can say about itself in flight. One shared instance, not
-/// per-origin: Track is a single user gesture and nothing runs two at once. Counts plugins, not
+/// <summary>What Track can say about itself in flight. One shared instance, naming the mod in flight:
+/// Track is a single user gesture and nothing runs two at once. Counts plugins, not
 /// records.</summary>
-public sealed record TrackProgress(string? Origin, TrackPhase Phase, int PluginsDone, int PluginsTotal)
+public sealed record TrackProgress(string? Mod, TrackPhase Phase, int PluginsDone, int PluginsTotal)
 {
     public static readonly TrackProgress Idle = new(null, TrackPhase.Idle, 0, 0);
 }

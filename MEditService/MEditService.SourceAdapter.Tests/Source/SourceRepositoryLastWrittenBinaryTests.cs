@@ -15,12 +15,12 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     private static SourceRepository TrackedOver(ScratchDirectory modFolder)
     {
         SourceRepository.Track(
-            modFolder, SourcePreset.Edits,
+            modFolder,
             [
                 ([new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
-                    new BaselineTrailers("Test.esp", null, null)),
+                    new DecompiledPlugin("Test.esp", null)),
                 ([new TreeFile("plugin-source/Other.esp/npc_/Other.esp/000002.json", "{}"u8.ToArray())],
-                    new BaselineTrailers("Other.esp", null, OthersTrackedBinary)),
+                    new DecompiledPlugin("Other.esp", OthersTrackedBinary)),
             ]);
         return SourceRepository.Over(modFolder, GameRelease.Fallout4);
     }

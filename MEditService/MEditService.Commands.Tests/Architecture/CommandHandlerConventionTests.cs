@@ -34,6 +34,7 @@ public sealed class CommandHandlerConventionTests
         typeof(PutLoadOrderResult),
         typeof(TrackRefusal),
         typeof(TrackRefused),
+        typeof(TrackRefusedMod),
         typeof(TrackResult),
         typeof(TrackSelectionResult),
     ];

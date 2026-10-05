@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using MEditService.Commands.Edits;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -55,14 +54,14 @@ internal static class TrackedTemplates
 
     /// <summary>Tracks the one plugin <paramref name="modFolder"/> holds, in a load order of that
     /// plugin alone.</summary>
-    internal static void TrackAlone(string modFolder, string pluginName, SourcePreset preset = SourcePreset.Edits)
+    internal static void TrackAlone(string modFolder, string pluginName)
     {
         const string origin = "TemplateMod";
         using var gameDirectory = new ScratchDirectory("medit-tracked-template-game-");
         var loadOrder = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Slot: 0, Enabled: true, Winning: true)]);
         var result = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(loadOrder, origin, preset)
+            .TrackModAsync(loadOrder, origin)
             .GetAwaiter().GetResult();
         if (result.Landed.Count != 1)
             throw new InvalidOperationException($"Expected {pluginName} to track: {string.Join("; ", result.Refused.Select(r => r.Message))}");

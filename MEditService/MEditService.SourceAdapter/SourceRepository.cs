@@ -77,8 +77,8 @@ public sealed class SourceRepository
     /// <summary>Whether this repository holds a source tree for the plugin.</summary>
     public bool HoldsTreeFor(PluginAddress plugin) => HoldsTreeFor(_modFolder, plugin.Name);
 
-    /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and a
-    /// re-baseline commit.</summary>
+    /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and
+    /// decompile write.</summary>
     public static IReadOnlyList<TreeFile> PristineFilesOf(string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
         SourceRepositoryLayout.PristineFilesOf(pluginFileName, treeFiles);
 
@@ -89,9 +89,8 @@ public sealed class SourceRepository
     /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, holding every plugin that
     /// tracked, on <c>main</c>, which stays checked out. Answers each plugin whose files could not be written.</summary>
     public static IReadOnlyList<(string Plugin, string Reason)> Track(
-        string modFolder, SourcePreset preset,
-        IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines) =>
-        GitTracking.Track(modFolder, preset, baselines);
+        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin)> plugins) =>
+        GitTracking.Track(modFolder, plugins);
 
     /// <summary>A scratch folder for <paramref name="pluginFileName"/>, outside every mod folder so
     /// a half-written plugin is never mistaken for a tracked one.</summary>

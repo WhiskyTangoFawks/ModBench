@@ -26,19 +26,24 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         _trackedMod = Directory.CreateDirectory(Path.Combine(_root, "mods", TrackedModName)).FullName;
         _untrackedMod = Directory.CreateDirectory(Path.Combine(_root, "mods", UntrackedModName)).FullName;
         WritePlugin(_trackedMod, "First.esp", "FirstNpc");
-        WritePlugin(_trackedMod, "Second.esp", "SecondNpc");
         WritePlugin(_untrackedMod, "Other.esp", "OtherNpc");
         var game = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
+        _holder.Apply(SnapshotPlugins.Snapshot(game, _root, GameRelease.Fallout4,
+        [
+            new LoadOrderEntry("First.esp", Path.Combine(_trackedMod, "First.esp"), TrackedModName, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry("Other.esp", Path.Combine(_untrackedMod, "Other.esp"), UntrackedModName, 2, Enabled: true, Winning: true),
+        ]));
+        var tracked = TestEditService.TrackHandler(_holder)
+            .TrackAsync([TrackedModName])
+            .GetAwaiter().GetResult();
+        Assert.Equal([Tracked("First.esp")], tracked.Landed);
+        WritePlugin(_trackedMod, "Second.esp", "SecondNpc");
         _holder.Apply(SnapshotPlugins.Snapshot(game, _root, GameRelease.Fallout4,
         [
             new LoadOrderEntry("First.esp", Path.Combine(_trackedMod, "First.esp"), TrackedModName, 0, Enabled: true, Winning: true),
             new LoadOrderEntry("Second.esp", Path.Combine(_trackedMod, "Second.esp"), TrackedModName, 1, Enabled: true, Winning: true),
             new LoadOrderEntry("Other.esp", Path.Combine(_untrackedMod, "Other.esp"), UntrackedModName, 2, Enabled: true, Winning: true),
         ]));
-        var tracked = TestEditService.TrackHandler(_holder)
-            .TrackAsync([Tracked("First.esp")], SourcePreset.Edits, new Dictionary<string, string>())
-            .GetAwaiter().GetResult();
-        Assert.Equal([Tracked("First.esp")], tracked.Landed);
     }
 
     public void Dispose() => _root.Dispose();

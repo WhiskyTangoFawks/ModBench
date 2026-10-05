@@ -26,9 +26,9 @@ internal static class TrackedMods
             throw new InvalidOperationException($"{pluginName} declares strings file '{missingStrings}' and the disk has none.");
 
         SourceRepository.Track(
-            modFolder, SourcePreset.Edits,
+            modFolder,
             [(SourceRepository.PristineFilesOf(pluginName, files),
-              new BaselineTrailers(pluginName, null, PluginBinaryHash.TrailerFormOfFile(pluginPath)))]);
+              new DecompiledPlugin(pluginName, PluginBinaryHash.TrailerFormOfFile(pluginPath)))]);
     }
 
     internal static void Track(LoadOrderEntry entry, string dataFolder, GameRelease release = GameRelease.Fallout4) =>

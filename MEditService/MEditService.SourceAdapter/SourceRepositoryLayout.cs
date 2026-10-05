@@ -51,8 +51,8 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal static string RootIn(string modFolder, string pluginFileName) =>
         Path.Combine(modFolder, RootFor(pluginFileName));
 
-    /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and a
-    /// re-baseline commit. The name is verbatim: that is how the load order spells the root a reader
+    /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and
+    /// decompile write. The name is verbatim: that is how the load order spells the root a reader
     /// looks under.</summary>
     internal static IReadOnlyList<TreeFile> PristineFilesOf(
         string pluginFileName, IEnumerable<TreeFile> treeFiles) =>

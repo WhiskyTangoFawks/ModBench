@@ -47,7 +47,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     }
 
     private async Task Track(string origin) =>
-        (await _client.Track(origin == DestOrigin ? DestPlugin : Plugin, origin)).EnsureSuccessStatusCode();
+        (await _client.Track(origin)).EnsureSuccessStatusCode();
 
     private async Task<string> FirstNpcFormKey(string plugin, string origin)
     {

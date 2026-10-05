@@ -26,7 +26,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var fx = TwoMods();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         foreach (var origin in tracked)
-            (await Client.Track(fx.Plugins.Where(p => p.Origin == origin).Select(p => (p.Name, p.Origin)))).EnsureSuccessStatusCode();
+            (await Client.Track(origin)).EnsureSuccessStatusCode();
         if (tracked.Length == 0) return fx;
 
         await Client.NextSnapshot(fx);
@@ -199,7 +199,7 @@ public sealed class EditRecordTraceTests : HostedTests
             .WithPlugin(UntrackedPlugin, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: UntrackedOrigin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(OtherPlugin, OtherOrigin)).EnsureSuccessStatusCode();
+        (await Client.Track(OtherOrigin)).EnsureSuccessStatusCode();
         return fx;
     }
 

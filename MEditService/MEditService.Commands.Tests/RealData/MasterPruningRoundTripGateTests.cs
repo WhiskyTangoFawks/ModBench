@@ -74,7 +74,7 @@ public sealed class MasterPruningRoundTripGateTests
 
         public async Task<TrackResult> TrackAsync() =>
             (await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(_loadOrder, _origin, SourcePreset.Edits)).Only();
+                .TrackModAsync(_loadOrder, _origin)).Only();
 
         public void Dispose()
         {

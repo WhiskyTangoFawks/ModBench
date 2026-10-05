@@ -9,7 +9,7 @@ public sealed class SourceRepositoryTrackConfigTests
 {
     private static void Track(string modFolder) =>
         PluginBaselines.Track(
-            modFolder, SourcePreset.Edits,
+            modFolder,
             [new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())]);
 
     private static string RepoLocalConfigAfterTrack(string key)

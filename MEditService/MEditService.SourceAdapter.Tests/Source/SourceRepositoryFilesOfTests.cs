@@ -22,7 +22,6 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
     {
         PluginBaselines.Track(
             _modFolder,
-            SourcePreset.Edits,
             [new TreeFile(Path.Combine(PluginSourceRoot.For(PluginName), "RecordData.json"), "{\"MasterReferences\": []}"u8.ToArray())]);
         Repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody));
         CommitSoBothRefsHoldTheTree();

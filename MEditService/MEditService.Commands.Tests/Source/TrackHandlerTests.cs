@@ -42,7 +42,7 @@ public sealed class TrackHandlerTests : IDisposable
         var handler = TestEditService.TrackHandler(_holder);
 
         await Assert.ThrowsAsync<NoLoadOrderException>(
-            () => handler.TrackAsync([new PluginAddress(PluginName, Origin)], SourcePreset.Edits, new Dictionary<string, string>()));
+            () => handler.TrackAsync([Origin]));
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public sealed class TrackHandlerTests : IDisposable
         _holder.Apply(Snapshot);
         var handler = TestEditService.TrackHandler(_holder);
 
-        var result = await handler.TrackAsync([new PluginAddress(PluginName, Origin)], SourcePreset.Edits, new Dictionary<string, string>());
+        var result = await handler.TrackAsync([Origin]);
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], result.Landed);
         Assert.True(SourceRepository.HoldsTreeFor(_modFolder, PluginName));

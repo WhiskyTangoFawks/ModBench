@@ -17,7 +17,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     public void Track_APluginWhoseFilesCannotAllBeWritten_IsRefused_LeavingNoneOfItsFiles_WhileThePluginsAroundItLand()
     {
         var refused = SourceRepository.Track(
-            _modFolder, SourcePreset.Edits, [Baseline("A.esp"), BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp"), Baseline("C.esp")]);
+            _modFolder, [Baseline("A.esp"), BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp"), Baseline("C.esp")]);
 
         Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
         Assert.Equal(["Track SomeMod"], SubjectsOnMain());
@@ -31,7 +31,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     public void Track_WhenEveryPluginIsRefused_LeavesNoRepositoryAndNoGitignore()
     {
         var refused = SourceRepository.Track(
-            _modFolder, SourcePreset.Edits, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
+            _modFolder, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
 
         Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
         Assert.False(SourceRepository.IsTracked(_modFolder));
@@ -47,7 +47,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         File.WriteAllText(Path.Combine(theirs, "config"), "[remote \"origin\"]\n");
 
         SourceRepository.Track(
-            _modFolder, SourcePreset.Edits, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
+            _modFolder, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
 
         Assert.Equal("[remote \"origin\"]\n", File.ReadAllText(Path.Combine(theirs, "config")));
     }
@@ -57,13 +57,12 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     {
         var theirs = Directory.CreateDirectory(Path.Combine(_modFolder, ".git")).FullName;
         File.WriteAllText(Path.Combine(theirs, "marker"), "theirs");
-        var asset = Path.Combine(_modFolder, "Locked.dds");
-        File.WriteAllText(asset, "pixels");
+        var asset = UnreadableFileTheCommitCannotAdd();
         FileModes.Set(asset, "000");
         try
         {
             Assert.ThrowsAny<InvalidOperationException>(
-                () => SourceRepository.Track(_modFolder, SourcePreset.Everything, [Baseline("A.esp")]));
+                () => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
         }
         finally
         {
@@ -79,13 +78,12 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var existing = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
         Directory.CreateDirectory(Path.GetDirectoryName(existing).Require());
         File.WriteAllText(existing, "theirs");
-        var asset = Path.Combine(_modFolder, "Locked.dds");
-        File.WriteAllText(asset, "pixels");
+        var asset = UnreadableFileTheCommitCannotAdd();
         FileModes.Set(asset, "000");
         try
         {
             Assert.ThrowsAny<InvalidOperationException>(
-                () => SourceRepository.Track(_modFolder, SourcePreset.Everything, [Baseline("A.esp")]));
+                () => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
         }
         finally
         {
@@ -101,7 +99,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var nulInPath = new TreeFile("plugin-source/Bad.esp/npc_/\0.json", "{}"u8.ToArray());
 
         Assert.ThrowsAny<ArgumentException>(
-            () => SourceRepository.Track(_modFolder, SourcePreset.Edits, [Baseline("A.esp"), ([nulInPath], new BaselineTrailers("Bad.esp", null, null))]));
+            () => SourceRepository.Track(_modFolder, [Baseline("A.esp"), ([nulInPath], new DecompiledPlugin("Bad.esp", null))]));
 
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
@@ -110,13 +108,12 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     [Fact]
     public void Track_WhenTheCommitFails_TakesBackWhatItMade_AndTrackingAgainCreatesTheRepository()
     {
-        var asset = Path.Combine(_modFolder, "Locked.dds");
-        File.WriteAllText(asset, "pixels");
+        var asset = UnreadableFileTheCommitCannotAdd();
         FileModes.Set(asset, "000");
         try
         {
             Assert.ThrowsAny<InvalidOperationException>(
-                () => SourceRepository.Track(_modFolder, SourcePreset.Everything, [Baseline("A.esp")]));
+                () => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
         }
         finally
         {
@@ -124,9 +121,10 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         }
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
         Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
-        Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
+        Assert.Equal([asset], Directory.GetFiles(Path.Combine(_modFolder, "plugin-source"), "*", SearchOption.AllDirectories));
+        File.Delete(asset);
 
-        var refused = SourceRepository.Track(_modFolder, SourcePreset.Everything, [Baseline("A.esp")]);
+        var refused = SourceRepository.Track(_modFolder, [Baseline("A.esp")]);
 
         Assert.Empty(refused);
         Assert.Equal(["Track SomeMod"], SubjectsOnMain());
@@ -146,7 +144,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
 
         Assert.True(SourceRepository.HoldsAnotherRepository(_modFolder));
         Assert.Throws<InvalidOperationException>(
-            () => SourceRepository.Track(_modFolder, SourcePreset.Edits, [Baseline("A.esp")]));
+            () => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
 
         Assert.Equal(logBefore, Git("log", "--all", "--format=%H %s"));
         Assert.Equal("theirs\n", File.ReadAllText(Path.Combine(_modFolder, ".gitignore")));
@@ -154,14 +152,22 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
     }
 
-    private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) Baseline(string plugin) =>
-        ([new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())], new BaselineTrailers(plugin, null, null));
+    private string UnreadableFileTheCommitCannotAdd()
+    {
+        var path = Path.Combine(_modFolder, "plugin-source", "Other.esp", "Locked.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path).Require());
+        File.WriteAllText(path, "{}");
+        return path;
+    }
 
-    private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies(string plugin) =>
+    private static (IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin) Baseline(string plugin) =>
+        ([new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())], new DecompiledPlugin(plugin, null));
+
+    private static (IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin) BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies(string plugin) =>
         ([
             new TreeFile($"plugin-source/{plugin}/npc_", "{}"u8.ToArray()),
             new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()),
-        ], new BaselineTrailers(plugin, null, null));
+        ], new DecompiledPlugin(plugin, null));
 
     private string[] SubjectsOnMain() =>
         Git("log", "--reverse", "--format=%s", "refs/heads/main").Split('\n', StringSplitOptions.RemoveEmptyEntries);

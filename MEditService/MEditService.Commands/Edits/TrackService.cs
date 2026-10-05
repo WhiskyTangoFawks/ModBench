@@ -19,12 +19,11 @@ public sealed class TrackService(
     private readonly INotificationPublisher? _notifications = notifications;
     private readonly PluginDecompiler _decompiler = new(logger, adapter);
 
-    /// <summary>Per plugin (commands.md, A selection is one gesture).</summary>
+    /// <summary>A mod's plugins are the ones the load order says it provides. Refusals are per plugin
+    /// (commands.md, A selection is one gesture).</summary>
     public async Task<TrackSelectionResult> TrackAsync(
         LoadOrderSnapshot loadOrder,
-        IReadOnlyList<PluginAddress> plugins,
-        SourcePreset preset,
-        IReadOnlyDictionary<string, string> upstreamVersionByOrigin,
+        IReadOnlyList<string> mods,
         CancellationToken cancel = default)
     {
         try
@@ -36,7 +35,13 @@ public sealed class TrackService(
             return TrackSelectionResult.WholeSelectionRefused(TrackRefusal.GitUnavailable, ex.Message);
         }
 
-        var selection = plugins.Distinct(PluginAddress.Comparer).ToList();
+        var modNames = mods.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var refusedMods = modNames
+            .Where(mod => ProvidedBy(loadOrder, mod).Count == 0)
+            .Select(mod => new TrackRefusedMod(mod, TrackRefusal.ModProvidesNoPlugin,
+                $"'{mod}' provides no plugin in the load order, so there is nothing to track."))
+            .ToList();
+        var selection = modNames.SelectMany(mod => ProvidedBy(loadOrder, mod)).ToList();
         var refused = new List<TrackRefused>();
         var verified = new List<VerifiedPlugin>();
         try
@@ -44,22 +49,22 @@ public sealed class TrackService(
             for (var done = 0; done < selection.Count; done++)
             {
                 cancel.ThrowIfCancellationRequested();
-                var plugin = selection[done];
-                SetProgress(plugin.Origin, TrackPhase.Parsing, done, selection.Count);
+                var (mod, plugin) = selection[done];
+                SetProgress(mod.Name, TrackPhase.Parsing, done, selection.Count);
                 var outcome = await VerifyAsync(
-                    loadOrder, plugin, upstreamVersionByOrigin.GetValueOrDefault(plugin.Origin),
-                    onParsed: () => SetProgress(plugin.Origin, TrackPhase.Serializing, done, selection.Count), cancel);
+                    loadOrder, mod, plugin,
+                    onParsed: () => SetProgress(mod.Name, TrackPhase.Serializing, done, selection.Count), cancel);
                 if (outcome.Verified is { } passed) verified.Add(passed);
                 if (outcome.Refused is { } refusal) refused.Add(refusal);
-                SetProgress(plugin.Origin, TrackPhase.Serializing, done + 1, selection.Count);
+                SetProgress(mod.Name, TrackPhase.Serializing, done + 1, selection.Count);
             }
 
-            SetProgress(verified.FirstOrDefault()?.Plugin.Origin, TrackPhase.Committing, selection.Count, selection.Count);
+            SetProgress(verified.FirstOrDefault()?.ModName, TrackPhase.Committing, selection.Count, selection.Count);
             var landed = new List<PluginAddress>();
             foreach (var mod in verified.GroupBy(v => v.ModFolder, StringComparer.Ordinal))
-                Commit(mod.Key, preset, [.. mod], landed, refused);
+                Commit(mod.Key, [.. mod], landed, refused);
 
-            return TrackSelectionResult.PerPlugin(InSelectionOrder(landed, p => p), InSelectionOrder(refused, r => r.Plugin));
+            return TrackSelectionResult.PerPlugin(InSelectionOrder(landed, p => p), InSelectionOrder(refused, r => r.Plugin), refusedMods);
         }
         finally
         {
@@ -69,19 +74,25 @@ public sealed class TrackService(
         }
 
         List<T> InSelectionOrder<T>(IEnumerable<T> items, Func<T, PluginAddress> keyOf) =>
-            [.. items.OrderBy(item => selection.FindIndex(p => PluginAddress.Comparer.Equals(p, keyOf(item))))];
+            [.. items.OrderBy(item => selection.FindIndex(s => PluginAddress.Comparer.Equals(s.Plugin.Key, keyOf(item))))];
     }
 
-    private sealed record VerifiedPlugin(PluginAddress Plugin, string ModFolder, IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers);
+    private static List<(PluginProvider.FromMod Mod, RegisteredPlugin Plugin)> ProvidedBy(LoadOrderSnapshot loadOrder, string modName) =>
+        [.. loadOrder.Plugins.SelectMany(plugin => plugin.Provider is PluginProvider.FromMod mod
+            && string.Equals(mod.Name, modName, StringComparison.OrdinalIgnoreCase)
+                ? new[] { (mod, plugin) }
+                : [])];
+
+    private sealed record VerifiedPlugin(
+        PluginAddress Plugin, string ModName, string ModFolder, IReadOnlyList<TreeFile> Files, DecompiledPlugin Decompiled);
 
     private sealed record Verification(VerifiedPlugin? Verified, TrackRefused? Refused);
 
     // One repository per mod folder: the plugins that passed their gate, in one commit.
     private void Commit(
-        string modFolder, SourcePreset preset, IReadOnlyList<VerifiedPlugin> plugins,
-        List<PluginAddress> landed, List<TrackRefused> refused)
+        string modFolder, IReadOnlyList<VerifiedPlugin> plugins, List<PluginAddress> landed, List<TrackRefused> refused)
     {
-        IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines = [.. plugins.Select(v => (v.Files, v.Trailers))];
+        IReadOnlyList<(IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin)> decompiled = [.. plugins.Select(v => (v.Files, v.Decompiled))];
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Tracking {PluginCount} plugin(s) into {ModFolder}: {FileCount} source files",
@@ -91,7 +102,7 @@ public sealed class TrackService(
         IReadOnlyList<(string Plugin, string Reason)> failed;
         try
         {
-            failed = SourceRepository.Track(modFolder, preset, baselines);
+            failed = SourceRepository.Track(modFolder, decompiled);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -115,28 +126,12 @@ public sealed class TrackService(
         }
     }
 
-    // Every refusal comes before the plugin's commit (commands.md, A selection is one gesture).
     private async Task<Verification> VerifyAsync(
-        LoadOrderSnapshot loadOrder, PluginAddress key, string? upstreamVersion, Action onParsed, CancellationToken cancel)
+        LoadOrderSnapshot loadOrder, PluginProvider.FromMod mod, RegisteredPlugin plugin, Action onParsed, CancellationToken cancel)
     {
+        var key = plugin.Key;
+        var modFolder = mod.Folder;
         Verification Refuse(TrackRefusal refusal, string message) => new(null, new TrackRefused(key, refusal, message));
-
-        if (loadOrder.Plugin(key) is not { } plugin)
-        {
-            return Refuse(TrackRefusal.PluginNotLoaded,
-                $"{key.Name} from '{key.Origin}' is not in the load order, so there is nothing to track.");
-        }
-
-        if (plugin.Provider is not PluginProvider.FromMod { Folder: var modFolder })
-        {
-            return plugin.Provider == PluginProvider.NoMod
-                ? Refuse(TrackRefusal.OverwriteOrigin,
-                    $"{plugin.Name} is loaded from Overwrite, an origin and not a mod, so it has no repository " +
-                    "to track into. Move it into a mod, then track that.")
-                : Refuse(TrackRefusal.DataDirectoryOrigin,
-                    $"{plugin.Name} is a base-game plugin loaded from the game's own Data folder, " +
-                    "and the game's own plugins cannot be tracked in place. Author a patch plugin and track that instead.");
-        }
 
         // Track takes a mod with no repository (ADR-0007).
         if (SourceRepository.IsTracked(modFolder))
@@ -159,14 +154,14 @@ public sealed class TrackService(
 
         return new Verification(
             new VerifiedPlugin(
-                key, modFolder, files,
-                new BaselineTrailers(key.Name, upstreamVersion, PluginBinaryHash.TrailerFormOfFile(plugin.Path))),
+                key, mod.Name, modFolder, files,
+                new DecompiledPlugin(key.Name, PluginBinaryHash.TrailerFormOfFile(plugin.Path))),
             null);
     }
 
-    private void SetProgress(string? origin, TrackPhase phase, int pluginsDone, int pluginsTotal)
+    private void SetProgress(string? mod, TrackPhase phase, int pluginsDone, int pluginsTotal)
     {
-        var progress = new TrackProgress(origin, phase, pluginsDone, pluginsTotal);
+        var progress = new TrackProgress(mod, phase, pluginsDone, pluginsTotal);
         Volatile.Write(ref _progress, progress);
         _notifications?.Publish(new TrackProgressNotification(progress));
     }

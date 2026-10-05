@@ -1,15 +1,14 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Tests;
 
-/// <summary>A fixture's Track of every plugin one origin holds, as one selection.</summary>
+/// <summary>A fixture's Track of one mod.</summary>
 internal static class TrackEveryPluginOf
 {
     internal static Task<TrackSelectionResult> TrackModAsync(
-        this TrackService track, LoadOrderSnapshot loadOrder, string origin, SourcePreset preset) =>
-        track.TrackAsync(loadOrder, [.. loadOrder.Plugins.Where(plugin => plugin.Origin == origin).Select(plugin => plugin.Key)], preset, new Dictionary<string, string>());
+        this TrackService track, LoadOrderSnapshot loadOrder, string mod) =>
+        track.TrackAsync(loadOrder, [mod]);
 
     /// <summary>The answer for a selection of one plugin.</summary>
     internal static TrackResult Only(this TrackSelectionResult result) =>

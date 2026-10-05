@@ -15,7 +15,7 @@ import {
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type CreatableRecordType,
   type RebuildIndexOutcome, type CopyItem, type CopyMode,
   type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
-  type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type UpstreamVersionByOrigin,
+  type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -295,23 +295,22 @@ export class HttpMEditClient implements MEditClient {
 
   /** ADR-0007; commands.md, A selection is one gesture, and each item lands on its own. */
   async track(
-    plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything',
-    upstreamVersionByOrigin: UpstreamVersionByOrigin,
-    options: { onProgress?: (status: TrackStatus) => void } = {},
-  ): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
-    const counted = plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`;
+    mods: readonly string[], options: { onProgress?: (status: TrackStatus) => void } = {},
+  ): Promise<TrackOutcome | WriteRefused> {
+    const counted = mods.length === 1 ? '1 mod' : `${mods.length} mods`;
     // The POST stays blocking, so progress rides the track-progress notification alongside it.
     const unsubscribe = this.subscribeStatus('track-progress', (event) => event.trackProgress ?? undefined, options.onProgress);
     try {
       const answer = await this.mutate({
         op: `track(${counted})`,
         failMsg: `Could not track ${counted}`,
-        post: () => this.apiClient.POST('/plugins/track', { body: { plugins: [...plugins], preset, upstreamVersionByOrigin } }),
+        post: () => this.apiClient.POST('/plugins/track', { body: { mods: [...mods] } }),
       });
       if (isRefused(answer)) return answer;
       return {
         landed: answer.applied,
         refused: answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
+        refusedMods: answer.refusedMods.map((r) => ({ item: r.mod, reason: r.message })),
       };
     } finally {
       unsubscribe();

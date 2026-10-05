@@ -20,7 +20,7 @@ public sealed class GitMissingApiTests : HostedTests
             .WithPlugin(Plugin, mod => { mod.Npcs.AddNew("FirstNpc"); mod.Npcs.AddNew("SecondNpc"); }, origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
         var npcs = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
             .GetProperty("items").EnumerateArray().Select(r => r.GetProperty("formKey").GetString().Require()).ToArray();
         Assert.Equal(2, npcs.Length);
@@ -65,7 +65,7 @@ public sealed class GitMissingApiTests : HostedTests
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try
         {
-            response = await Client.Track([(Plugin, Origin), ("Second.esp", "SecondMod")]);
+            response = await Client.Track([Origin, "SecondMod"]);
         }
         finally
         {
@@ -87,7 +87,7 @@ public sealed class GitMissingApiTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
         var before = FilesOutsideGit(modFolder);
 

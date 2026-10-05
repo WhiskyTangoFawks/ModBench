@@ -33,7 +33,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     private static SourceRepository Track(string modFolder, string pluginName, params TreeFile[] alsoWrite)
     {
         PluginBaselines.Track(
-            modFolder, SourcePreset.Edits,
+            modFolder,
             [
                 new TreeFile(OriginalNpcPathSpelledBeforeAnyRepositoryExistsToAsk(pluginName), Encoding.UTF8.GetBytes(BodyOf(pluginName, "Original"))),
                 .. alsoWrite,

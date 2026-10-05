@@ -33,6 +33,8 @@ export interface SyncFailureReport extends SyncMessage {
   /** Runs the command once. Its landed outcome is returned even when a later run overtook it,
    *  since what it wrote stands; only the latest run decides the failure shown. */
   run<T extends SyncOutcome>(sync: () => Promise<T>): Promise<Extract<T, { applied: true }> | undefined>;
+  /** A landed value with nothing to tell: the message line clears, as when a run lands. */
+  clear(): void;
 }
 
 /** common.md, Reporting: a system command reports a failure once when it begins, and again only
@@ -52,6 +54,7 @@ export function reportSyncFailures(
   };
   const landed = <T extends SyncOutcome>(outcome: T): outcome is Extract<T, { applied: true }> => outcome.applied;
   return {
+    clear: () => { latest++; settle(undefined); },
     message: () => (reason === undefined ? undefined : `${unsynced}: ${reason}.`),
     onMessageChanged: (listener) => {
       listeners.add(listener);

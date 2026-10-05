@@ -39,7 +39,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             }, origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(Plugin);
         return fx;
@@ -114,7 +114,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             }, origin: patchOrigin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(patch, patchOrigin)).EnsureSuccessStatusCode();
+        (await Client.Track(patchOrigin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(patch);
         var patchFolder = OtherTool.ModFolderOf(fx, patchOrigin);

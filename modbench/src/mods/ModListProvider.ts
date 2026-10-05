@@ -94,11 +94,6 @@ export class ModNode extends vscode.TreeItem {
   }
 }
 
-/** The mod a value stands for when it is a mod row. */
-export function modOfRow(value: unknown): string | undefined {
-  return value instanceof ModNode ? value.mod.name : undefined;
-}
-
 /** Pinned row over the instance's `overwrite/` folder. Not a modlist.txt entry, so it has no
  *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
 export class OverwriteNode extends vscode.TreeItem {

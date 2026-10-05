@@ -18,7 +18,7 @@ export interface EditingViewDeps {
   log: { info(message: string): void; error(message: string): void };
   revealLog: () => void;
   /** The load order the loader refused to build, the Plugins view's message line and the Output. */
-  loadOrderPut: Pick<SyncFailureReport, 'run'>;
+  loadOrderPut: Pick<SyncFailureReport, 'run' | 'clear'>;
 }
 
 export function editingView(deps: EditingViewDeps) {
@@ -55,7 +55,7 @@ export function editingView(deps: EditingViewDeps) {
       if (refusal !== undefined) await loadOrderPut.run(() => Promise.resolve({ applied: false as const, refusal }));
       return;
     }
-    await loadOrderPut.run(() => Promise.resolve({ applied: true as const, added: [], dropped: [] }));
+    loadOrderPut.clear();
     const { plugins, active } = put.snapshot;
     log.info(`[toolbox] handed mEdit the load order snapshot (${plugins.length} plugins, ${active.length} active)`);
     const { outcome } = put;

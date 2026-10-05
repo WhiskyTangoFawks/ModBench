@@ -1,7 +1,6 @@
 using MEditService.Commands;
 using MEditService.LoadOrder;
 using MEditService.Queries;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -197,30 +196,30 @@ public static class PluginEndpoints
                 $"Invalid plugin extension '{extension}'. Must be .esp, .esm, or .esl.", statusCode: 400);
     }
 
-    // Track (ADR-0007) over a selection (commands.md, A selection is one gesture); the
-    // load order resolves each plugin's folder.
+    // Track (ADR-0007) over a selection of mods (commands.md, A selection is one gesture); the
+    // load order says each mod's plugins and folder.
     internal static async Task<IResult> Track(
         TrackRequest req, TrackHandler trackHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        var plugins = req.Plugins ?? [];
-        if (plugins.Count == 0)
-            return Results.Problem("At least one plugin is required.", statusCode: 400);
-        if (plugins.Any(p => string.IsNullOrWhiteSpace(p.Name) || string.IsNullOrWhiteSpace(p.Origin)))
-            return Results.Problem("Every plugin needs a name and an origin.", statusCode: 400);
-        if (!Enum.TryParse<SourcePreset>(req.Preset, ignoreCase: true, out var preset))
-            return Results.Problem($"Unknown source preset '{req.Preset}'.", statusCode: 400);
+        var mods = req.Mods ?? [];
+        if (mods.Count == 0)
+            return Results.Problem("At least one mod is required.", statusCode: 400);
+        if (mods.Any(string.IsNullOrWhiteSpace))
+            return Results.Problem("Every mod needs a name.", statusCode: 400);
 
         try
         {
-            var result = await trackHandler.TrackAsync(plugins, preset, req.UpstreamVersionByOrigin ?? new Dictionary<string, string>());
+            var result = await trackHandler.TrackAsync(mods);
             if (result.SelectionRefusal is { } selectionRefusal)
             {
-                logger.LogWarning("Refused to track {Count} plugin(s): {Refusal} — {Message}",
-                    plugins.Count, selectionRefusal.Refusal, selectionRefusal.Message);
+                logger.LogWarning("Refused to track {Count} mod(s): {Refusal} — {Message}",
+                    mods.Count, selectionRefusal.Refusal, selectionRefusal.Message);
                 return WriteEndpointMapping.Refusal(selectionRefusal);
             }
 
+            foreach (var refusedMod in result.RefusedMods)
+                logger.LogWarning("Refused to track {Mod}: {Refusal} — {Message}", refusedMod.Mod, refusedMod.Refusal, refusedMod.Message);
             foreach (var refused in result.Refused)
             {
                 logger.LogWarning("Refused to track {Plugin} ({Origin}): {Refusal} — {Message}",
@@ -228,11 +227,12 @@ public static class PluginEndpoints
             }
             return Results.Ok(new TrackResponse(
                 result.Landed,
-                [.. result.Refused.Select(r => new PluginAddressRefusal(r.Plugin, r.Refusal, r.Message))]));
+                [.. result.Refused.Select(r => new PluginAddressRefusal(r.Plugin, r.Refusal, r.Message))],
+                result.RefusedMods));
         }
         catch (NoLoadOrderException ex)
         {
-            logger.LogError(ex, "No loadOrder when tracking {Count} plugin(s)", plugins.Count);
+            logger.LogError(ex, "No loadOrder when tracking {Count} mod(s)", mods.Count);
             return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
@@ -345,12 +345,12 @@ public record PluginCreatedResponse(string Name, string Origin, string Path);
 /// message naming the way out.</summary>
 public record PluginAddressRefusal(PluginAddress Plugin, TrackRefusal Refusal, string Message);
 
-// Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything").
-public record TrackRequest(
-    IReadOnlyList<PluginAddress> Plugins, string Preset, IReadOnlyDictionary<string, string> UpstreamVersionByOrigin);
+/// <summary>The mods by name; the load order says each one's plugins and folder.</summary>
+public record TrackRequest(IReadOnlyList<string> Mods);
 
-/// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
-public record TrackResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused);
+/// <summary>Applied or refusal, per plugin and per mod that provides no plugin (ADR-0019), never the status of the call.</summary>
+public record TrackResponse(
+    IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused, IReadOnlyList<TrackRefusedMod> RefusedMods);
 
 public record DecompileRequest(IReadOnlyList<PluginAddress> Plugins);
 

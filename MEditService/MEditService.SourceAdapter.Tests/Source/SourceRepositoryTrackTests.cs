@@ -23,7 +23,7 @@ public sealed class SourceRepositoryTrackTests : IDisposable
         var relativePath = Path.Combine("plugin-source", "StillHere.esp", "npc_", "StillHere.esp", "000800.json");
         var content = "{\"formKey\":\"000800:StillHere.esp\"}"u8.ToArray();
 
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits, [new TreeFile(relativePath, content)]);
+        PluginBaselines.Track(_modFolder, [new TreeFile(relativePath, content)]);
 
         Assert.Equal("{\"formKey\":\"000800:StillHere.esp\"}", Git("show", $"main:{relativePath.Replace('\\', '/')}"));
     }
@@ -31,7 +31,7 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     [Fact]
     public void Track_MakesOneCommitNamedForTheMod_HoldingEveryPluginsSource()
     {
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits, [.. SourceOf("A.esp"), .. SourceOf("B.esp")]);
+        PluginBaselines.Track(_modFolder, [.. SourceOf("A.esp"), .. SourceOf("B.esp")]);
 
         Assert.Equal(["Track SomeMod"], SubjectsOnMain());
         Assert.Equal(
@@ -40,24 +40,12 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     }
 
     [Fact]
-    public void Track_UnderEverything_CommitsTheModsAssetsInTheSameCommit()
-    {
-        Directory.CreateDirectory(Path.Combine(_modFolder, "Textures"));
-        File.WriteAllText(Path.Combine(_modFolder, "Textures", "Thing.dds"), "pixels");
-
-        PluginBaselines.Track(_modFolder, SourcePreset.Everything, SourceOf("A.esp"));
-
-        Assert.Equal(["Track SomeMod"], SubjectsOnMain());
-        Assert.Equal([".gitignore", "Textures/Thing.dds", "plugin-source/A.esp/npc_/A.esp/000001.json"], PathsIn("main"));
-    }
-
-    [Fact]
     public void Track_KeepsEachFilesLineEndingsAsWritten()
     {
         var crlf = "{\r\n  \"a\": 1\r\n}\r\n"u8.ToArray();
         var lf = "{\n  \"a\": 1\n}\n"u8.ToArray();
 
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits,
+        PluginBaselines.Track(_modFolder,
             [new TreeFile("plugin-source/A.esp/npc_/A.esp/crlf.json", crlf), new TreeFile("plugin-source/A.esp/npc_/A.esp/lf.json", lf)]);
 
         Assert.Equal(crlf, File.ReadAllBytes(Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "crlf.json")));
@@ -70,10 +58,10 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     public void Track_ParksEachPluginsBinaryOnItsOwnRef()
     {
         SourceRepository.Track(
-            _modFolder, SourcePreset.Edits,
+            _modFolder,
             [
-                (SourceOf("First.esp"), new BaselineTrailers("First.esp", null, "AAAA")),
-                (SourceOf("Second.esp"), new BaselineTrailers("Second.esp", null, "BBBB")),
+                (SourceOf("First.esp"), new DecompiledPlugin("First.esp", "AAAA")),
+                (SourceOf("Second.esp"), new DecompiledPlugin("Second.esp", "BBBB")),
             ]);
 
         var repository = SourceRepository.Over(_modFolder, GameRelease.Fallout4);
@@ -84,7 +72,7 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     [Fact]
     public void Track_LeavesMainCheckedOut_WithNothingUncommitted()
     {
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits, [.. SourceOf("A.esp"), .. SourceOf("B.esp")]);
+        PluginBaselines.Track(_modFolder, [.. SourceOf("A.esp"), .. SourceOf("B.esp")]);
 
         Assert.Equal(["main"], Git("branch", "--format=%(refname:short)").Split('\n', StringSplitOptions.RemoveEmptyEntries));
         Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
@@ -94,10 +82,10 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     [Fact]
     public void Track_IntoAModThatAlreadyHasARepository_ThrowsAndChangesNothingOfIt()
     {
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits, SourceOf("A.esp"));
+        PluginBaselines.Track(_modFolder, SourceOf("A.esp"));
         var mainBefore = Git("rev-parse", "refs/heads/main");
 
-        Assert.Throws<InvalidOperationException>(() => PluginBaselines.Track(_modFolder, SourcePreset.Edits, SourceOf("B.esp")));
+        Assert.Throws<InvalidOperationException>(() => PluginBaselines.Track(_modFolder, SourceOf("B.esp")));
 
         Assert.Equal(mainBefore, Git("rev-parse", "refs/heads/main"));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source", "B.esp")));

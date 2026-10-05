@@ -44,7 +44,7 @@ public sealed record LoadOrderStatusNotification(LoadOrderStatus Status) : Notif
 /// serializing and committing.</summary>
 public sealed record TrackProgressNotification(TrackProgress Progress) : Notification("track-progress")
 {
-    public override NotificationEvent ToEvent() => new(Kind, "", Progress.Origin ?? "", [], 0, TrackProgress: Progress);
+    public override NotificationEvent ToEvent() => new(Kind, "", Progress.Mod ?? "", [], 0, TrackProgress: Progress);
 }
 
 /// <summary>At a snapshot: each tracked plugin whose bytes differ from what Modbench last wrote

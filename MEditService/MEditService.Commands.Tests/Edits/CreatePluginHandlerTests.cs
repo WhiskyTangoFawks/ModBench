@@ -70,7 +70,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
             new LoadOrderEntry("First.esp", Path.Combine(folder, "First.esp"), "TrackedMod", Slot: 1, Enabled: true, Winning: true),
         ]));
         var tracked = await TestEditService.TrackHandler(_holder)
-            .TrackAsync([new PluginAddress("First.esp", "TrackedMod")], SourcePreset.Edits, new Dictionary<string, string>());
+            .TrackAsync(["TrackedMod"]);
         Assert.True(tracked.AllApplied);
         var first = new PluginAddress("First.esp", "TrackedMod");
         var firstBefore = TrackedTree.Records(folder, first);

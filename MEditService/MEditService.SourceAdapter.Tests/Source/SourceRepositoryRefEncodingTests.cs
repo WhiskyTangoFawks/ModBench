@@ -14,7 +14,7 @@ public sealed class SourceRepositoryRefEncodingTests
         using var modFolder = new ScratchDirectory("medit-refencoding-");
         const string plugin = "LitR - Settings Holotapes Sorting.esp";
         PluginBaselines.Track(
-            modFolder, SourcePreset.Edits, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
+            modFolder, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
 
         Assert.Equal("Track " + Path.GetFileName(modFolder), GitProbeSubject(modFolder));
     }
@@ -39,7 +39,7 @@ public sealed class SourceRepositoryRefEncodingTests
     public void ASpaceName_AndTheUnderscoreNameAnUnderscoreReplacementWouldMergeItWith_RecordTheirOwnBinaries()
     {
         using var modFolder = new ScratchDirectory("medit-refencoding-");
-        PluginBaselines.Track(modFolder, SourcePreset.Edits, [.. FilesOf("A B.esp"), .. FilesOf("A_B.esp")]);
+        PluginBaselines.Track(modFolder, [.. FilesOf("A B.esp"), .. FilesOf("A_B.esp")]);
         var repository = SourceRepository.Over(modFolder, GameRelease.Fallout4);
         var spaced = new PluginAddress("A B.esp", "TestMod");
         var underscored = new PluginAddress("A_B.esp", "TestMod");
@@ -65,7 +65,7 @@ public sealed class SourceRepositoryRefEncodingTests
 
     private static SourceRepository TrackedOver(ScratchDirectory modFolder, string plugin)
     {
-        PluginBaselines.Track(modFolder, SourcePreset.Edits, FilesOf(plugin));
+        PluginBaselines.Track(modFolder, FilesOf(plugin));
         return SourceRepository.Over(modFolder, GameRelease.Fallout4);
     }
 

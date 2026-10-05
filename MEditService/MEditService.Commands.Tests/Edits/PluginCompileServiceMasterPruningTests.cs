@@ -46,7 +46,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
             PluginStrings.In(_modFolder)).GetAwaiter().GetResult();
         var pristineFiles = SourceRepository.PristineFilesOf(FixtureFileName, treeFiles);
         SourceRepository.Track(
-            _modFolder, SourcePreset.Edits, [(pristineFiles, new BaselineTrailers(FixtureFileName, null, null))]);
+            _modFolder, [(pristineFiles, new DecompiledPlugin(FixtureFileName, null))]);
     }
 
     [Fact]

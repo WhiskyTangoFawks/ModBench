@@ -1,6 +1,5 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
@@ -15,11 +14,8 @@ public sealed class TrackHandler
     internal TrackHandler(TrackService trackService, LoadOrderHolder loadOrder) =>
         (_trackService, _loadOrder) = (trackService, loadOrder);
 
-    /// <summary>Each address names its plugin, which the held load order resolves to a mod folder
-    /// (ADR-0013). Throws <see cref="NoLoadOrderException"/> with nothing written when none
-    /// is held.</summary>
-    public Task<TrackSelectionResult> TrackAsync(
-        IReadOnlyList<PluginAddress> plugins, SourcePreset preset, IReadOnlyDictionary<string, string> upstreamVersionByOrigin,
-        CancellationToken cancel = default) =>
-        _trackService.TrackAsync(_loadOrder.Require(), plugins, preset, upstreamVersionByOrigin, cancel);
+    /// <summary>Each name is a mod, whose plugins and folder the held load order says. Throws
+    /// <see cref="NoLoadOrderException"/> with nothing written when none is held.</summary>
+    public Task<TrackSelectionResult> TrackAsync(IReadOnlyList<string> mods, CancellationToken cancel = default) =>
+        _trackService.TrackAsync(_loadOrder.Require(), mods, cancel);
 }

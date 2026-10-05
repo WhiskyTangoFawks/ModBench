@@ -115,7 +115,14 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 /** ADR-0012. */
 export type PluginAddress = components['schemas']['PluginAddress'];
-export type UpstreamVersionByOrigin = components['schemas']['TrackRequest']['upstreamVersionByOrigin'];
+
+/** Track's answer: each plugin landed or refused, and each mod refused as a mod, such as one that
+ *  provides no plugin. */
+export interface TrackOutcome {
+  landed: readonly PluginAddress[];
+  refused: readonly ItemRefusal<PluginAddress>[];
+  refusedMods: readonly ItemRefusal<string>[];
+}
 
 /** Compile's answer: each plugin compiled, with its diagnostics, or refused with its reason. */
 export interface CompileOutcome {
@@ -142,10 +149,7 @@ export interface MEditClient {
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
   createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
-  track(
-    plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything', upstreamVersionByOrigin: UpstreamVersionByOrigin,
-    options?: { onProgress?: (status: TrackStatus) => void },
-  ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
+  track(mods: readonly string[], options?: { onProgress?: (status: TrackStatus) => void }): Promise<TrackOutcome | WriteRefused>;
   createRecord(plugin: string, origin: string, recordType: string): Promise<RecordCreateResponse | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself failing, with nothing deleted.

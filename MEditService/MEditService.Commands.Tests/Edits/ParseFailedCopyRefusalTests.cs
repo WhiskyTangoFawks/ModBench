@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -111,7 +110,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
             var loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, _gameDirectory, GameRelease.Fallout4, inputs);
             new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(loadOrder, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+                .TrackModAsync(loadOrder, DestinationOrigin).GetAwaiter().GetResult();
 
             holder.Apply(loadOrder);
             CopyHandler = TestEditService.CopyHandler(holder);

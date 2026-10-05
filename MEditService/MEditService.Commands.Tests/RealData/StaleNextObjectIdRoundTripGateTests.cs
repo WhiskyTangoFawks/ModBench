@@ -130,7 +130,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             (await new TrackService(
                     NullLogger<TrackService>.Instance,
                     deserialize is { } forged ? new ForgedTreeWriteAdapter(Plugin.Name, forged) : TestAdapters.Mutagen())
-                .TrackModAsync(_loadOrder, Plugin.Origin, SourcePreset.Edits)).Only();
+                .TrackModAsync(_loadOrder, Plugin.Origin)).Only();
 
         public PluginCompileService CompileService() =>
             CompileServices.Over(Holder.Current);

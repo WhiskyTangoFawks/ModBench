@@ -3,7 +3,7 @@ export type {
   NotificationKind, NotificationEvent, BackendStatus, RecordEditOutcome, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
   PluginRecordTypeCount, CreatableRecordType, PluginCreatedResponse, PluginAddress, RecordCreateResponse, RecordAddress,
   CopyMode, CopyItem, ReferenceResult, RecordFilter,
-  TrackStatus, UpstreamVersionByOrigin, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, RecordSummary,
+  TrackStatus, TrackOutcome, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, RecordSummary,
   WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords, CellSummary,
   ChildRecordSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic, CompileOutcome,
   LoadOrderStatus,

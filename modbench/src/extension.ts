@@ -34,7 +34,6 @@ import { createdRecordSelection } from './plugins/createdRecordSelection';
 import { recordWriteOver } from './plugins/recordWrite';
 import type { RecordWrite } from './drivingLib/writingGesture';
 import { errorMessage } from './ports/errorMessage';
-import { modOfRow } from './mods/ModListProvider';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 
 // The backend launches with the extension (ADR-0002), and a change to the game folder setting is
@@ -126,9 +125,8 @@ export function activate(context: vscode.ExtensionContext) {
     session, client: meditClient, outputChannel, compileProblems: new CompileProblems(compileDiagnostics),
     conflictsComputed, instance, recordWrite,
     originFiles: (origin) => toolbox.originFiles(origin),
-    instancePlugins: () => toolbox.instance?.value.plugins ?? [],
-    instanceMods: () => toolbox.instance?.value.mods ?? [],
     trackSelection: () => toolbox.trackSelection(),
+    modDirs: () => toolbox.instance?.value.paths.modDirs ?? new Map(),
   };
   // The instance side, whole: the Instance, the four views, their gestures and the backend sync.
   const toolbox = createToolbox({
@@ -208,23 +206,20 @@ interface PluginRowCommandDeps {
   instance: Pick<Instance, 'refresh'>;
   recordWrite: RecordWrite;
   originFiles: OriginFilesOf;
-  instancePlugins: TrackDeps['plugins'];
-  instanceMods: TrackDeps['mods'];
   trackSelection: () => readonly unknown[];
+  modDirs: TrackDeps['modDirs'];
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, outputChannel, conflictsComputed, instance, instancePlugins, instanceMods, trackSelection } = deps;
+  const { session, client, outputChannel, conflictsComputed, instance, trackSelection, modDirs } = deps;
   const progress = pluginsProgress(session);
   return [
     registerTrackCommand({
       progress, instance,
       client, reporter: makeReporter(outputChannel, 'mod.track'), onTracked: conflictsComputed,
-      plugins: instancePlugins,
-      mods: instanceMods,
-      modOfRow, modsView: MODS_KEY_ARGS.view,
+      modDirs, modsView: MODS_KEY_ARGS.view,
     }, trackSelection),
     registerDecompileCommand({
       client,

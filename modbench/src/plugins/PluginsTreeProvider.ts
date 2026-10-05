@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { modOfOrigin } from './modOfOrigin';
 import type {
   PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress,
   NotificationEvent,
@@ -615,8 +616,7 @@ export class PluginsTreeProvider
   // each mod whose folder holds a repository.
   private placeOf(origin: string): 'inTrackedMod' | 'inUntrackedMod' | 'inOverwrite' | undefined {
     if (origin === OVERWRITE_ORIGIN) return 'inOverwrite';
-    const folded = origin.toLowerCase();
-    const mod = [...this.instanceValue.paths.modDirs.keys()].find((name) => name.toLowerCase() === folded);
+    const mod = modOfOrigin(this.instanceValue.paths.modDirs, origin);
     if (mod === undefined) return undefined;
     return this.instanceValue.trackedMods.has(mod) ? 'inTrackedMod' : 'inUntrackedMod';
   }

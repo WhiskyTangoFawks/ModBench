@@ -17,7 +17,8 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
 }));
 
-import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, modOfRow, type ModlistNode } from '../ModListProvider';
+import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
+import { modOfRow } from '../../drivingLib/modRow';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
@@ -436,19 +437,16 @@ describe('ModListProvider', () => {
     ]);
   });
 
-  it('names the mod a mod row stands for, and no mod for any other row or value', async () => {
+  it('hands the driving lib its mod from a mod row, and none from a separator or the Overwrite row', async () => {
     const provider = makeProvider([mod('Patch'), sep('Tools')]);
     const roots = await provider.getChildren();
     const separator = present(roots.find((n) => n instanceof SeparatorNode), 'the separator row');
-    const rows = [...roots, ...await provider.getChildren(separator)];
-    const patch = present(rows.find((n) => n instanceof ModNode), 'the mod row');
+    const patch = present((await provider.getChildren(separator)).concat(roots).find((n) => n instanceof ModNode), 'the mod row');
     const overwrite = present(roots.find((n) => n instanceof OverwriteNode), 'the Overwrite row');
 
     expect(modOfRow(patch)).toBe('Patch');
     expect(modOfRow(separator)).toBeUndefined();
     expect(modOfRow(overwrite)).toBeUndefined();
-    expect(modOfRow({ kind: 'mod', mod: { name: 'Patch' } })).toBeUndefined();
-    expect(modOfRow(undefined)).toBeUndefined();
   });
 
   it('re-renders on a second, later value published after construction, not only the value handed to the constructor', async () => {

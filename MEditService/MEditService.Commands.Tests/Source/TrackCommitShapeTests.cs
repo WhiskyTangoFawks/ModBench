@@ -36,35 +36,21 @@ public sealed class TrackCommitShapeTests : IDisposable
         var first = WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         var second = WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
-        await Track("First.esp", "Second.esp");
+        await Track();
 
         Assert.Equal([first], LastWriteRecord.Of(_modFolder, "First.esp"));
         Assert.Equal([second], LastWriteRecord.Of(_modFolder, "Second.esp"));
     }
 
     [Fact]
-    public async Task Track_OfOnePluginInAModWithTwo_LeavesTheOtherUntracked()
-    {
-        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
-
-        var result = await Track("First.esp");
-
-        Assert.Equal([Key("First.esp")], result.Landed);
-        Assert.Empty(HeldBy("Second.esp"));
-        Assert.NotEmpty(HeldBy("First.esp"));
-        Assert.Empty(LastWriteRecord.Of(_modFolder, "Second.esp"));
-    }
-
-    [Fact]
     public async Task Track_OfAPluginInAModThatAlreadyHasARepository_RefusesIt_PointingAtDecompile_AndCommitsNothing()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
-        await Track("First.esp");
+        await Track();
         var firstBefore = HeldBy("First.esp");
+        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
-        var result = await Track("First.esp", "Second.esp");
+        var result = await Track();
 
         Assert.Empty(result.Landed);
         Assert.Equal(
@@ -85,7 +71,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         Git("-c", "user.name=Them", "-c", "user.email=them@localhost", "commit", "-q", "-m", "Their own commit");
         var gitignoreBefore = File.ReadAllBytes(Path.Combine(_modFolder, ".gitignore"));
 
-        var result = await Track("First.esp");
+        var result = await Track();
 
         Assert.Empty(result.Landed);
         var refused = Assert.Single(result.Refused);
@@ -103,7 +89,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
         WritePluginReturningItsBinarySha256("Third.esp", "ThirdNpc");
 
-        var result = await Track(new RoundTripFailsFor("Second.esp"), "First.esp", "Second.esp", "Third.esp");
+        var result = await Track(new RoundTripFailsFor("Second.esp"));
 
         Assert.Equal([Key("First.esp"), Key("Third.esp")], result.Landed);
         var refused = Assert.Single(result.Refused);
@@ -119,7 +105,7 @@ public sealed class TrackCommitShapeTests : IDisposable
     {
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
-        var result = await Track(new RoundTripFailsFor("Second.esp"), "Second.esp");
+        var result = await Track(new RoundTripFailsFor("Second.esp"));
 
         Assert.Empty(result.Landed);
         Assert.Single(result.Refused);
@@ -153,9 +139,9 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private static PluginAddress Key(string plugin) => new(plugin, ModName);
 
-    private Task<TrackSelectionResult> Track(params string[] plugins) => Track(TestAdapters.Mutagen(), plugins);
+    private Task<TrackSelectionResult> Track() => Track(TestAdapters.Mutagen());
 
-    private Task<TrackSelectionResult> Track(IPluginAdapter adapter, params string[] plugins)
+    private Task<TrackSelectionResult> Track(IPluginAdapter adapter)
     {
         var entries = Directory.GetFiles(_modFolder, "*.esp")
             .Order(StringComparer.Ordinal)
@@ -163,7 +149,7 @@ public sealed class TrackCommitShapeTests : IDisposable
             .ToList();
         var loadOrder = SnapshotPlugins.Snapshot(_gameDir, _gameDir, GameRelease.Fallout4, entries);
         return new TrackService(NullLogger<TrackService>.Instance, adapter)
-            .TrackAsync(loadOrder, [.. plugins.Select(Key)], SourcePreset.Edits, new Dictionary<string, string>());
+            .TrackAsync(loadOrder, [ModName]);
     }
 
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);

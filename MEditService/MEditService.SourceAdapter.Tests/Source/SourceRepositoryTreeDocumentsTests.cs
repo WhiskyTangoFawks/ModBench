@@ -32,7 +32,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     private SourceRepository Tracked()
     {
         PluginBaselines.Track(
-            _modFolder, SourcePreset.Edits,
+            _modFolder,
             [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
         return SourceRepository.Open(_modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
@@ -51,7 +51,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     private SourceRepository TrackedWithHeader()
     {
         PluginBaselines.Track(
-            _modFolder, SourcePreset.Edits,
+            _modFolder,
             [new TreeFile(HeaderRelativePath, Encoding.UTF8.GetBytes(HeaderBody)),
              new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
         return SourceRepository.Open(_modFolder, Release)
