@@ -6,7 +6,8 @@ vi.mock('vscode', () => ({ window: { createQuickPick } }));
 
 import { pickWithMarked } from '../pickWithMarked';
 
-const items = [{ label: 'A' }, { label: 'B' }, { label: 'C' }];
+const [a, b, c] = [{ label: 'A' }, { label: 'B' }, { label: 'C' }] as const;
+const items = [a, b, c];
 
 function open(marked: { label: string } | undefined) {
   const fake = fakeQuickPick<{ label: string }>();
@@ -17,13 +18,13 @@ function open(marked: { label: string } | undefined) {
 
 describe('pickWithMarked', () => {
   it('opens with the items, the placeholder and the marked item active', async () => {
-    const { qp, escape, result } = open(items[1]);
+    const { qp, escape, result } = open(b);
     escape();
     await result;
 
     expect(qp.items).toEqual(items);
     expect(qp.placeholder).toBe('Pick one');
-    expect(qp.activeItems).toEqual([items[1]]);
+    expect(qp.activeItems).toEqual([b]);
     expect(qp.show).toHaveBeenCalled();
   });
 
@@ -36,15 +37,15 @@ describe('pickWithMarked', () => {
   });
 
   it('yields the accepted item and closes the pick', async () => {
-    const { qp, accept, result } = open(items[0]);
-    accept(items[2]);
+    const { qp, accept, result } = open(a);
+    accept(c);
 
-    expect(await result).toBe(items[2]);
+    expect(await result).toBe(c);
     expect(qp.dispose).toHaveBeenCalled();
   });
 
   it('yields undefined on Esc and disposes the pick', async () => {
-    const { qp, escape, result } = open(items[0]);
+    const { qp, escape, result } = open(a);
     escape();
 
     expect(await result).toBeUndefined();
