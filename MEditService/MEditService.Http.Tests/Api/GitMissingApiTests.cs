@@ -198,6 +198,17 @@ public sealed class GitMissingApiTests : HostedTests
     }
 
     [Fact]
+    public async Task AskingForAnEditsChanges_WithGitMissing_Is500_AsTheEditIs()
+    {
+        using var fx = await TrackedMod("trace-edit-changes-without-git");
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
+
+        var response = await WithGitMissing(() => Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75, "{}"));
+
+        await AssertRefusedGitUnavailable(response);
+    }
+
+    [Fact]
     public async Task CreatingARecord_WithGitMissing_Is500_AndChangesNoFile()
     {
         using var fx = await TrackedMod("trace-create-record-without-git");

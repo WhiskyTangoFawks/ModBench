@@ -2,6 +2,7 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.Queries;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -84,6 +85,25 @@ public static class RecordEndpoints
         .WithName("EditRecord")
         .WithTags("Records")
         .Produces<RecordEditResponse>()
+        .ProducesProblem(400)
+        .ProducesProblem(404)
+        .ProducesProblem(409)
+        .ProducesProblem(422)
+        .ProducesProblem(500);
+
+        // ADR-0001: the document is the caller's to change and save.
+        app.MapPost("/records/{formKey}/edit-changes", (
+            string formKey, RecordEditChangesRequest request, EditRecordChangesHandler edits) =>
+            EditRecordChanges(formKey, request, edits, logger))
+        .WithName("EditRecordChanges")
+        .WithSummary("The changes an edit of a record makes to plugin source, writing nothing.")
+        .WithDescription(
+            "Given the edit and the current text of the document carrying the record, the text each document the edit " +
+            "changes or creates holds afterwards, and each file or folder it moves. Moves come first, and each document's " +
+            "path is where it stands once moved, relative to the mod folder. Any other document the edit reads is read from " +
+            "disk. A refusal is the one the edit itself gives.")
+        .WithTags("Records")
+        .Produces<RecordEditChangesResponse>()
         .ProducesProblem(400)
         .ProducesProblem(404)
         .ProducesProblem(409)
@@ -182,18 +202,52 @@ public static class RecordEndpoints
                         request.Op, spelled, decoded, request.Plugin, request.Origin);
                 }
             },
-            validate: () =>
-            {
-                if (string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
-                    return Results.Problem("Plugin name and origin are required.", statusCode: 400);
-                if (string.IsNullOrWhiteSpace(request.Op) || request.Path is not { Count: > 0 })
-                    return Results.Problem("An operation and a path are required.", statusCode: 400);
-                return null;
-            },
+            validate: () => EditRequestProblem(request.Plugin, request.Origin, request.Op, request.Path),
             execute: () => edits.Edit(
                 new PluginAddress(request.Plugin, request.Origin), decoded,
                 new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value)),
             onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled, result.NewFormKey)));
+    }
+
+    internal static IResult EditRecordChanges(
+        string formKey, RecordEditChangesRequest request, EditRecordChangesHandler edits, ILogger logger)
+    {
+        var decoded = Uri.UnescapeDataString(formKey);
+        var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
+        var changes = SourceChanges.None;
+        return WriteEndpointMapping.Execute(
+            "EditChanges", logger,
+            logReceived: () =>
+            {
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation(
+                        "Received EditRecordChanges {Op} {Path} for {FormKey} in {Plugin} ({Origin})",
+                        request.Op, spelled, decoded, request.Plugin, request.Origin);
+                }
+            },
+            validate: () => request.Text is null
+                ? Results.Problem("The text of the document carrying the record is required.", statusCode: 400)
+                : EditRequestProblem(request.Plugin, request.Origin, request.Op, request.Path),
+            execute: () =>
+            {
+                var answer = edits.Changes(
+                    new PluginAddress(request.Plugin, request.Origin), decoded,
+                    new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value), request.Text);
+                changes = answer.Changes;
+                return answer.Outcome;
+            },
+            onApplied: result => Results.Ok(
+                new RecordEditChangesResponse(decoded, spelled, changes.Moves, changes.Documents, result.NewFormKey)));
+    }
+
+    private static IResult? EditRequestProblem(string? plugin, string? origin, string? op, IReadOnlyList<PathHop>? path)
+    {
+        if (string.IsNullOrWhiteSpace(plugin) || string.IsNullOrWhiteSpace(origin))
+            return Results.Problem("Plugin name and origin are required.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(op) || path is not { Count: > 0 })
+            return Results.Problem("An operation and a path are required.", statusCode: 400);
+        return null;
     }
 
     internal static Task<IResult> DeleteRecord(RecordDeleteRequest request, DeleteRecordHandler edits, ILogger logger)
