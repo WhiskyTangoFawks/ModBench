@@ -25,41 +25,6 @@ public static class RecordDocumentEdits
         return Named(codec, duplicate, release);
     }
 
-    /// <summary>Every record the document carries inline, outermost first: the descendants a copy
-    /// has to draw a fresh FormKey for before it can duplicate the subtree.</summary>
-    public static IReadOnlyList<string> EmbeddedDescendantFormKeys(
-        RecordTextCodec codec, string text, GameRelease release, string? recordType) =>
-        [.. EmbeddedDescendants(codec.Deserialize(text, release, recordType))
-            .Select(child => child.FormKey.ToString())];
-
-    /// <summary>The record under <paramref name="newFormKey"/> carrying its whole embedded subtree,
-    /// each descendant re-keyed by <paramref name="rekeys"/> with its own self-link moved with it,
-    /// and every EditorID replaced through <paramref name="deriveEditorId"/>.</summary>
-    public static NamedDocument DuplicatedWithSubtreeRekeyed(
-        RecordTextCodec codec, string text, GameRelease release, string? recordType, string newFormKey,
-        IReadOnlyDictionary<string, string> rekeys, Func<string?, string?> deriveEditorId)
-    {
-        var duplicate = Duplicated(codec, text, release, recordType, newFormKey);
-        duplicate.EditorID = deriveEditorId(duplicate.EditorID);
-        // Links between copied siblings are left alone, which is xEdit's own behavior.
-        foreach (var child in EmbeddedDescendants(duplicate))
-        {
-            var oldFormKey = child.FormKey.ToString();
-            if (!rekeys.TryGetValue(oldFormKey, out var childFormKey))
-            {
-                throw new InvalidOperationException(
-                    $"The duplicate of {newFormKey} embeds {oldFormKey}, which "
-                    + $"{nameof(EmbeddedDescendantFormKeys)} did not name, so no fresh FormKey was drawn for it. "
-                    + "Copying it would land two records under one key.");
-            }
-
-            child.FormKey = FormKey.Factory(childFormKey);
-            child.EditorID = deriveEditorId(child.EditorID);
-            RemapSelfLink(child, oldFormKey, childFormKey);
-        }
-        return Named(codec, duplicate, release);
-    }
-
     /// <summary>The record under <paramref name="newFormKey"/> and otherwise as it was: what a
     /// FormID edit writes for the record it was asked about.</summary>
     public static string WithFormKey(
@@ -95,21 +60,6 @@ public static class RecordDocumentEdits
         var duplicate = source.Duplicate(FormKey.Factory(newFormKey));
         RemapSelfLink(duplicate, oldFormKey, newFormKey);
         return duplicate;
-    }
-
-    // Embedded slots at every level: a worldspace embeds its top cell, which embeds its placed
-    // references, while its blocks have directories of their own and are nobody's document.
-    private static IEnumerable<IMajorRecordInternal> EmbeddedDescendants(IMajorRecordGetter container)
-    {
-        var containerType = ContainerChildFields.NormalizedTypeName(container.GetType());
-        var embeddedSlots = ContainerChildFields.EmbeddedSlotsFor(container.GetType());
-        foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(container).ToList())
-        {
-            if (!embeddedSlots.Contains((containerType, slotName))) continue;
-
-            yield return (IMajorRecordInternal)child;
-            foreach (var deeper in EmbeddedDescendants(child)) yield return deeper;
-        }
     }
 
     // A record holding no links at all is left alone: a duplicate's self-link is optional.
