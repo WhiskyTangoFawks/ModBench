@@ -72,5 +72,5 @@ export async function providedPluginsIn(root: string, profile = 'Default'): Prom
   const adapter = adapterOver(root);
   const [entries, runtimeOutput] = await Promise.all([adapter.modOrder(profile), adapter.originFiles({ kind: 'runtimeOutput' })]);
   const index = await buildFileConflictIndex(entries, runtimeOutput.files, adapter, () => {});
-  return providedPluginsOf(index.files, runtimeOutput.files);
+  return providedPluginsOf(index.files);
 }

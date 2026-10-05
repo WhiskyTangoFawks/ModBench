@@ -17,9 +17,7 @@ export interface PluginSyncArguments {
   readonly loadedWithNoLine: readonly string[] | undefined;
 }
 
-type SyncSource = Pick<
-  InstanceValue, 'activeProfile' | 'modFolders' | 'files' | 'overwriteFiles' | 'dataFolderPlugins' | 'pluginsLoadedWithNoLine'
->;
+type SyncSource = Pick<InstanceValue, 'activeProfile' | 'modFolders' | 'files' | 'dataFolderPlugins' | 'pluginsLoadedWithNoLine'>;
 
 export function modSyncArgumentsOf(source: SyncSource): ModSyncArguments {
   return { profile: source.activeProfile, modFolders: source.modFolders };
@@ -28,7 +26,7 @@ export function modSyncArgumentsOf(source: SyncSource): ModSyncArguments {
 export function pluginSyncArgumentsOf(source: SyncSource): PluginSyncArguments {
   return {
     profile: source.activeProfile,
-    provided: providedPluginsOf(source.files, source.overwriteFiles),
+    provided: providedPluginsOf(source.files),
     inData: source.dataFolderPlugins,
     loadedWithNoLine: source.pluginsLoadedWithNoLine?.map((plugin) => plugin.name),
   };

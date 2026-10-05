@@ -106,7 +106,7 @@ export default defineConfig(
         rules: {
             'no-restricted-imports': ['error', { patterns: [{
                 group: ['node:path', 'node:path/*', 'path', 'path/*'],
-                message: 'A view or the Instance loader never builds a path: take it from the instance value, or from the box that owns it, injected at the composition root when the box does not reference the owner.',
+                message: 'A view or the Instance loader never builds a path: the Instance adapter answers the instance\'s, and a view takes it from the instance value, or from the box that owns it, injected at the composition root when the view does not reference that box.',
             }] }],
         },
     },

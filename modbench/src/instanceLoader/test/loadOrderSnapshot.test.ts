@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import type { GameFolder, ModFolders, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
+import { buildFileConflictIndex, FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
   buildLoadOrderRows, loadOrderSnapshotOf, originFiles, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
   type LoadOrderPluginLine, type PluginAddress,
@@ -192,13 +192,17 @@ describe('providedPluginsOf, what plugin sync is handed instead of walking mods/
   it('keys each provided plugin by its folded name, at its own on-disk name rather than the name of the file a link points at', () => {
     const files = index({ 'Zeta.esp': { winner: join('/store', 'abc123.esp'), winnerMod: 'TS Mod' } }).files;
 
-    expect(providedPluginsOf(files, [])).toEqual(new Map([['zeta.esp', 'Zeta.esp']]));
+    expect(providedPluginsOf(files)).toEqual(new Map([['zeta.esp', 'Zeta.esp']]));
   });
 
-  it('answers a name Overwrite provides at Overwrite\u2019s casing, over the mod\u2019s', () => {
-    const files = index({ 'a.esp': { winner: join('/instance', 'mods', 'TS Mod', 'a.esp'), winnerMod: 'TS Mod' } }).files;
+  it('answers a name Overwrite provides at Overwrite\u2019s casing, over the mod\u2019s', async () => {
+    const overwrite = runtimeOutput('A.esp');
+    const modCopy = { ...runtimeOutput('a.esp'), path: join('/instance', 'mods', 'TS Mod', 'a.esp') };
+    const adapter = { originFiles: () => Promise.resolve({ origin: 'TS Mod', folder: undefined, files: [modCopy], folders: [], notes: [] }) };
 
-    expect(providedPluginsOf(files, [runtimeOutput('A.esp')])).toEqual(new Map([['a.esp', 'A.esp']]));
+    const { files } = await buildFileConflictIndex([{ kind: 'mod', name: 'TS Mod', enabled: true }], [overwrite], adapter, () => undefined);
+
+    expect(providedPluginsOf(files)).toEqual(new Map([['a.esp', 'A.esp']]));
   });
 
   it('leaves out a file that is not a plugin, and a plugin below an origin\u2019s root', () => {
@@ -207,7 +211,7 @@ describe('providedPluginsOf, what plugin sync is handed instead of walking mods/
       'Optional/B.esp': { winner: join('/instance', 'mods', 'TS Mod', 'Optional', 'B.esp'), winnerMod: 'TS Mod' },
     }).files;
 
-    expect(providedPluginsOf(files, [runtimeOutput('notes.txt'), runtimeOutput('Optional/C.esp')])).toEqual(new Map());
+    expect(providedPluginsOf(files)).toEqual(new Map());
   });
 });
 

@@ -414,8 +414,7 @@ export class Instance implements Subscription {
       : undefined;
     const modFolderList = modFolders?.all;
     const syncSource = {
-      activeProfile: profile, modFolders: modFolderList, files: index.files, overwriteFiles: runtimeOutput.files,
-      dataFolderPlugins, pluginsLoadedWithNoLine,
+      activeProfile: profile, modFolders: modFolderList, files: index.files, dataFolderPlugins, pluginsLoadedWithNoLine,
     };
     return {
       mods: entries,
