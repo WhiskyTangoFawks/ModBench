@@ -27,8 +27,8 @@ public sealed class CompileFixture : IDisposable, ITrackedPlugin
     public string ModFolder { get; }
     public PluginAddress Plugin { get; }
 
-    private readonly string _instanceRoot;
-    private readonly string _gameDirectory;
+    private readonly ScratchDirectory _instanceRoot = new("medit-compile-instance-");
+    private readonly ScratchDirectory _gameDirectory = new("medit-compile-game-");
     private readonly LoadOrderSnapshot _loadOrder;
 
     // Keyword is a valid target for the NPC's keywords field and Race a resolvable target of the
@@ -40,9 +40,7 @@ public sealed class CompileFixture : IDisposable, ITrackedPlugin
 
     public CompileFixture()
     {
-        _instanceRoot = Directory.CreateTempSubdirectory("medit-compile-instance-").FullName;
         ModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
-        _gameDirectory = Directory.CreateTempSubdirectory("medit-compile-game-").FullName;
         Plugin = new PluginAddress(PluginName, Origin);
 
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
@@ -106,16 +104,7 @@ public sealed class CompileFixture : IDisposable, ITrackedPlugin
 
     public void Dispose()
     {
-        TryDelete(_instanceRoot);
-        TryDelete(_gameDirectory);
-    }
-
-    // A tracked mod folder holds a .git tree whose object files are read-only on some filesystems,
-    // and a test failing on cleanup would mask the real assertion that already ran.
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
+        _instanceRoot.Dispose();
+        _gameDirectory.Dispose();
     }
 }

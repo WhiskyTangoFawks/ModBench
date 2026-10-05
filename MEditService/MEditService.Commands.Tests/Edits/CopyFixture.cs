@@ -17,9 +17,9 @@ public sealed class CopyFixture : IDisposable, ITrackedPlugins
     public const string DestinationPluginName = "Destination.esp";
     public const string DestinationOrigin = "DestinationMod";
 
-    public string SourceModFolder { get; }
-    public string DestinationModFolder { get; }
-    public string GameDirectory { get; }
+    public ScratchDirectory SourceModFolder { get; } = new("medit-copy-source-");
+    public ScratchDirectory DestinationModFolder { get; } = new("medit-copy-dest-");
+    public ScratchDirectory GameDirectory { get; } = new("medit-copy-game-");
     /// <summary>The same snapshot as a list, for a test that reconciles an index over these trees.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
 
@@ -49,9 +49,6 @@ public sealed class CopyFixture : IDisposable, ITrackedPlugins
     private CopyFixture(bool trackSource)
     {
         var holder = new LoadOrderHolder();
-        SourceModFolder = Directory.CreateTempSubdirectory("medit-copy-source-").FullName;
-        DestinationModFolder = Directory.CreateTempSubdirectory("medit-copy-dest-").FullName;
-        GameDirectory = Directory.CreateTempSubdirectory("medit-copy-game-").FullName;
 
         var sourcePath = Path.Combine(SourceModFolder, SourcePluginName);
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
@@ -104,15 +101,8 @@ public sealed class CopyFixture : IDisposable, ITrackedPlugins
 
     public void Dispose()
     {
-        TryDelete(SourceModFolder);
-        TryDelete(DestinationModFolder);
-        TryDelete(GameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
+        SourceModFolder.Dispose();
+        DestinationModFolder.Dispose();
+        GameDirectory.Dispose();
     }
 }
