@@ -30,7 +30,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
     public void Dispose() => _modFolder.Dispose();
 
     private SourceRepository Repository =>
-        SourceRepository.Open(_modFolder, GameRelease.Fallout4)
+        SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private static string HeaderPath => Path.Combine(PluginSourceRoot.For(PluginName), "RecordData.json");

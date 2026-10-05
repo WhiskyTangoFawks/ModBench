@@ -47,7 +47,7 @@ public sealed class BlockLevelNameParityTests
     {
         var modFolder = Directory.CreateDirectory(Path.Combine(scratch, "put")).FullName;
         var key = new PluginAddress(Plugin, "DestinationMod");
-        var repository = SourceRepository.Over(modFolder, Release);
+        var repository = SourceRepository.Over(TestMod.In(modFolder), Release);
 
         repository.Put(key, new SourceDocument(WorldspaceFormKey, "wrld", null, Body(WorldspaceFormKey)));
         repository.PutInWorldspace(

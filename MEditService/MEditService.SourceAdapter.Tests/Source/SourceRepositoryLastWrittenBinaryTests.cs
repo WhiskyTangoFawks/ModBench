@@ -22,7 +22,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
                 ([new TreeFile("plugin-source/Other.esp/npc_/Other.esp/000002.json", "{}"u8.ToArray())],
                     new DecompiledPlugin("Other.esp", OthersTrackedBinary)),
             ]);
-        return SourceRepository.Over(modFolder, GameRelease.Fallout4);
+        return SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
 
-        Assert.Empty(SourceRepository.Over(modFolder, GameRelease.Fallout4).LastWrittenBinarySha256s(Test));
+        Assert.Empty(SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4).LastWrittenBinarySha256s(Test));
     }
 
     [Fact]

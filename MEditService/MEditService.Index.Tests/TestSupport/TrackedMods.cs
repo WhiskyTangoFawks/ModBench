@@ -42,9 +42,7 @@ internal static class TrackedMods
     }
 
     internal static SourceRepository RepositoryOf(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
-        SourceRepository.Over(
-            Path.GetDirectoryName(entry.Path) ?? throw new ArgumentException("A tracked entry sits in a mod folder.", nameof(entry)),
-            release);
+        SourceRepository.Over(new PluginProvider.FromMod(entry.Origin, entry.ModFolderOf()), release);
 
     internal static PluginAddress KeyOf(this LoadOrderEntry entry) => new(entry.Name, entry.Origin);
 

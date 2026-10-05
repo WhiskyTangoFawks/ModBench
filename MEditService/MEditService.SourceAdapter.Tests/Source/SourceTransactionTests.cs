@@ -18,7 +18,7 @@ public sealed class SourceTransactionTests : IDisposable
 
     private readonly ScratchDirectory _root = new("medit-swt-");
 
-    private SourceRepository Repo => SourceRepository.Over(_root, Release);
+    private SourceRepository Repo => SourceRepository.Over(TestMod.In(_root), Release);
 
     public void Dispose() => _root.Dispose();
 

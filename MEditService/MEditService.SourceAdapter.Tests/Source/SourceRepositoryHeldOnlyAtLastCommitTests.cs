@@ -22,7 +22,7 @@ public sealed class SourceRepositoryHeldOnlyAtLastCommitTests : IDisposable
     private SourceRepository TrackedWithTheRecordCommitted()
     {
         PluginBaselines.Track(_modFolder, [new TreeFile($"plugin-source/{PluginName}/Npcs/HeldNpc - 000800_Held.esp.json", System.Text.Encoding.UTF8.GetBytes(NpcDocument.Body))]);
-        return SourceRepository.Open(_modFolder, GameRelease.Fallout4)
+        return SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be tracked.");
     }
 
@@ -69,7 +69,7 @@ public sealed class SourceRepositoryHeldOnlyAtLastCommitTests : IDisposable
         const string withTheChild =
             "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Held.esp\",\n  \"Temporary\": [ { \"FormKey\": \"00A001:Held.esp\" } ]\n}";
         PluginBaselines.Track(_modFolder, [new TreeFile(relativePath, System.Text.Encoding.UTF8.GetBytes(withTheChild))]);
-        var repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)
+        var repository = SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be tracked.");
         File.WriteAllText(
             Path.Combine(_modFolder, relativePath),

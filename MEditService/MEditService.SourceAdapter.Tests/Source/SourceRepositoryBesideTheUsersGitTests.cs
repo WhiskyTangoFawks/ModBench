@@ -27,7 +27,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
         File.SetLastWriteTimeUtc(Path.Combine(modFolder, Document), new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         var before = File.ReadAllBytes(IndexOf(modFolder));
 
-        var repository = SourceRepository.Open(modFolder, GameRelease.Fallout4)
+        var repository = SourceRepository.Open(TestMod.In(modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{modFolder}' to be tracked.");
         Assert.Empty(repository.ChangedSinceLastCommit(
             new PluginAddress(Plugin, "TestMod"), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)));
@@ -47,7 +47,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
         File.WriteAllText(usersLock, "");
 
         string? parked = null;
-        SourceRepository.Over(modFolder, GameRelease.Fallout4).WriteBinary(
+        SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4).WriteBinary(
             new PluginAddress(Plugin, "TestMod"), "DEADBEEF",
             () => parked = GitProbe.Run(
                 Path.Combine(modFolder, ".git"), modFolder, "cat-file", "-p",

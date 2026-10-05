@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.TestSupport;
@@ -11,9 +12,9 @@ public static class SourceDocumentPath
         string modFolder, string pluginFileName, string recordType, string formKey, string? editorId,
         GameRelease release)
     {
-        var repository = SourceRepository.Open(modFolder, release) ?? SourceRepository.Over(modFolder, release);
+        var repository = SourceRepository.Over(TestMod.In(modFolder), release);
         var relativePath = repository.RelativePathOf(
-            new PluginAddress(pluginFileName, "TestMod"), new RecordIdentity(formKey, recordType, editorId));
+            new PluginAddress(pluginFileName, TestMod.Name), new RecordIdentity(formKey, recordType, editorId));
 
         return relativePath is null
             ? throw new InvalidOperationException(

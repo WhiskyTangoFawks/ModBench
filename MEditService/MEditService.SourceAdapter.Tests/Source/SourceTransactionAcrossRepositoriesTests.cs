@@ -38,7 +38,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
                 new TreeFile(OriginalNpcPathSpelledBeforeAnyRepositoryExistsToAsk(pluginName), Encoding.UTF8.GetBytes(BodyOf(pluginName, "Original"))),
                 .. alsoWrite,
             ]);
-        return SourceRepository.Open(modFolder, Release)
+        return SourceRepository.Open(TestMod.In(modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
     }
 
