@@ -43,10 +43,6 @@ public sealed class SchemaReflector
         return GetCache(category, assembly).Schemas;
     }
 
-    /// <summary>Never throws. Discovery walking several installs asks this before
-    /// <see cref="GetSchemas"/> to decide whether a release is offered at all.</summary>
-    public bool IsSupported(GameRelease release) => ResolveAssembly(release, release.ToCategory()) is not null;
-
     private static string AssemblyNameFor(GameCategory category) => $"Mutagen.Bethesda.{category}";
 
     /// <summary>The Mutagen build this schema and every generated serializer came from — part of an
