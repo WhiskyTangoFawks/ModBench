@@ -6,11 +6,9 @@ type Schemas = components['schemas'];
 // `string` to the closed set this side switches on exhaustively stays; re-declaring a field the
 // schema already describes does not.
 
-export type FormKeyResolutionState = Schemas['FormKeyResolutionState'];
 export type FormKeyResolution = Schemas['FormKeyResolution'];
 export type ConflictAll = Schemas['ConflictAll'];
 export type ConflictThis = Schemas['ConflictThis'];
-export type EnumMember = Schemas['EnumMember'];
 /** The closed set this side switches on. Each names the codec's spelling: a translated string is
  *  an object, a color "#AARRGGBB" or "#RRGGBB" when opaque, a vector "x, y, z", flags an array of names. */
 export type FieldType =
@@ -39,8 +37,6 @@ export type FieldMetadata =
 export type FieldValue = Omit<Schemas['FieldValue'], 'metadata'> & { metadata: FieldMetadata };
 
 export type { ColumnKey } from '../../src/wire/columnKey';
-
-export type RecordDetail = Omit<Schemas['RecordDetail'], 'fields'> & { fields: FieldValue[] };
 
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 export type CompareOverride = Omit<Schemas['CompareOverride'], 'fields'> & { fields: FieldValue[] };
