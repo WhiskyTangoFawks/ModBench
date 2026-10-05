@@ -191,9 +191,9 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         }
     }
 
-    /// <summary>Bytes at <paramref name="destinationPath"/>, written in place: the temp file and rename
-    /// that replace a plugin are <see cref="PluginWriter"/>'s. A mod read from a source tree has no
-    /// header masters (ADR-0008), so it needs <paramref name="masterOrder"/>.</summary>
+    /// <summary>Bytes written in place; the temp file and rename are <see cref="PluginWriter"/>'s. A
+    /// mod read from a source tree has no header masters (ADR-0008), so it needs
+    /// <paramref name="masterOrder"/>.</summary>
     internal static async Task WriteAsync(
         IMod plugin,
         string destinationPath,
