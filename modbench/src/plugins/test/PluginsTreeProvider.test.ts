@@ -35,7 +35,6 @@ import {
   PluginTreeProvider, RecordTypeNode, RecordNode, WorldspacesNode, WorldspaceNode, BlockNode,
   SubBlockNode, CellNode, InteriorCellsNode, InteriorBlockNode, InteriorSubBlockNode, IndexingNode,
 } from '../PluginTreeProvider';
-import { followIndexStatus } from '../indexStatus';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
@@ -912,7 +911,6 @@ describe('PluginsTreeProvider — a drop keeps master and blueprint order', () =
   });
 });
 
-
 describe('PluginsTreeProvider — isEnabled', () => {
   it('answers from the Instance value, matching the row\'s file name and origin without case', () => {
     const { tree } = makeTree([
@@ -1723,21 +1721,41 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     expect(await h.tree.getChildren()).toEqual([]);
   });
 
-  it('keeps a filter-hidden row hidden when the client stops and the fact re-read fails', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
-    followIndexStatus({
-      client: h.client, tree: h.tree, recordBrowser: h.records, reporter: recordingReporter(),
-      progress: { while: (work) => work(), say: () => undefined },
-      statusBar: { ready: () => undefined, showMEditState: () => undefined },
-      showRecordFilter: () => undefined, notifyConflictsComputed: () => undefined, log: () => undefined,
+  describe('when the fact re-read fails', () => {
+    const hiddenByA = async (): Promise<Harness> => {
+      const h = makeTree([A_ROW(), B_ROW()]);
+      h.tree.setRecordFilterSource('a.sql');
+      await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
+      h.client.setQueryFailure('getPlugins', new Error('GET /plugins failed (503)'));
+      return h;
+    };
+    const labels = async (h: Harness) => (await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label);
+
+    it('keeps a row hidden by the filter still in force', async () => {
+      const h = await hiddenByA();
+
+      await h.tree.refreshFacts();
+
+      expect(await labels(h)).toEqual(['B.esp']);
     });
 
-    h.client.setQueryFailure('getPlugins', new Error('GET /plugins failed (503)'));
-    h.client.setStatus('stopped');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    it('shows the row again when the filter was cleared', async () => {
+      const h = await hiddenByA();
 
-    expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp']);
+      h.tree.setRecordFilterSource(undefined);
+      await h.tree.refreshFacts();
+
+      expect(await labels(h)).toEqual(['A.esp', 'B.esp']);
+    });
+
+    it('shows the row again when another filter replaced the one that hid it', async () => {
+      const h = await hiddenByA();
+
+      h.tree.setRecordFilterSource('b.sql');
+      await h.tree.refreshFacts();
+
+      expect(await labels(h)).toEqual(['A.esp', 'B.esp']);
+    });
   });
 
   it('keeps a filter-hidden row hidden while a fresh load is in progress', async () => {

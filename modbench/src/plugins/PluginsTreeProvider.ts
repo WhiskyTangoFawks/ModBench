@@ -294,6 +294,7 @@ export class PluginsTreeProvider
   /** The source of the record filter in force, which the no-match message names; undefined while
    *  none is. */
   setRecordFilterSource(source: string | undefined): void {
+    if (source !== this.recordFilterSource) this.facts.forgetMatches();
     this.recordFilterSource = source;
     this.render();
   }

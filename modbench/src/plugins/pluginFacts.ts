@@ -176,6 +176,11 @@ export class PluginFacts {
     for (const address of [...this.changedByMod.values()].flat()) this.changed.set(address, true);
   }
 
+  /** The record filter changed, so the last answer belongs to another filter. */
+  forgetMatches(): void {
+    this.matches = undefined;
+  }
+
   isHeld(address: PluginAddress): boolean {
     return this.held.has(address);
   }
