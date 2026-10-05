@@ -16,10 +16,9 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
     private const string AffectedWeaponEditorId = "VRWorkshopShared_AlienBlaster_NonPlayable";
 
     [Fact]
-    public async Task OverlayAndDeepParse_SerializeToIdenticalText_OnARealWeaponAtThe0531PinWhere0540OverlayRegressionSplitsItsObjectTemplatesFrom2To3()
+    public void OverlayAndDeepParse_SerializeToIdenticalText_OnARealWeaponAtThe0531PinWhere0540OverlayRegressionSplitsItsObjectTemplatesFrom2To3()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        using var dir = new ScratchDirectory("medit-codec-realdata-");
         using var overlayImport = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
             GameRelease.Fallout4);
@@ -39,19 +38,16 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
         Assert.True(deepParsedTemplateCount > 0,
             "Expected this fixture weapon to carry ObjectTemplates content; pick a different affected weapon if it does not.");
 
-        var overlayPath = Path.Combine(dir.Path, "overlay.json");
-        var deepParsedPath = Path.Combine(dir.Path, "deep-parsed.json");
-
         var swSerializeOverlay = Stopwatch.StartNew();
-        await codec.SerializeAsync(overlayWeapon, overlayPath, GameRelease.Fallout4);
+        var overlayBytes = codec.SerializeToBytes(overlayWeapon, GameRelease.Fallout4);
         swSerializeOverlay.Stop();
 
         var swSerializeDeep = Stopwatch.StartNew();
-        await codec.SerializeAsync(deepParsedWeapon, deepParsedPath, GameRelease.Fallout4);
+        var deepParsedBytes = codec.SerializeToBytes(deepParsedWeapon, GameRelease.Fallout4);
         swSerializeDeep.Stop();
 
         var swDeserialize = Stopwatch.StartNew();
-        var roundTripped = (Weapon)codec.DeserializeFile(deepParsedPath, GameRelease.Fallout4, "weap");
+        var roundTripped = (Weapon)codec.DeserializeFromBytes(deepParsedBytes, GameRelease.Fallout4, "weap");
         swDeserialize.Stop();
 
         output.WriteLine($"AC4: serialize (overlay) {swSerializeOverlay.ElapsedMilliseconds} ms, " +
@@ -59,10 +55,7 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
             $"deserialize {swDeserialize.ElapsedMilliseconds} ms " +
             "(129 ms serialize / 55 ms deserialize measured on a 20 MB plugin).");
 
-        var overlayText = await File.ReadAllTextAsync(overlayPath);
-        var deepParsedText = await File.ReadAllTextAsync(deepParsedPath);
-
-        Assert.Equal(deepParsedText, overlayText);
+        Assert.Equal(deepParsedBytes, overlayBytes);
 
         var mask = deepParsedWeapon.GetEqualsMask(roundTripped);
         var leaves = MaskInspector.CountLeaves(mask).ToList();
