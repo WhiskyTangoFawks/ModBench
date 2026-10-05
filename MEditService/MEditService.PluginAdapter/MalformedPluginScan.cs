@@ -1,7 +1,8 @@
 using System.Text;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 
-namespace MEditService.Codec.Serialization;
+namespace MEditService.PluginAdapter;
 
 /// <summary>Kind B detectors (ADR-0006, a plugin malformed by another tool): byte-level
 /// scans of the plugin's original bytes, with no Mutagen. Expected values come from vanilla

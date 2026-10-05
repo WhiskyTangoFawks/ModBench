@@ -3,7 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using MEditService.Codec.Schema;
 
-namespace MEditService.Codec.Serialization;
+namespace MEditService.PluginAdapter;
 
 /// <summary>Mutagen-free byte-level walker over a plugin's record/GRUP/subrecord structure, shared by
 /// Track's tripwire and the Repair surface (ADR-0006).</summary>
