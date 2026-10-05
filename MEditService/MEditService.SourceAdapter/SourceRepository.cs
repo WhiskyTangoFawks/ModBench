@@ -47,7 +47,7 @@ public sealed class SourceRepository
     /// exists.</summary>
     public static bool IsTracked(string modFolder) => SourceRepositoryGit.IsTracked(modFolder);
 
-    /// <summary>A repository with history but no <c>main</c>: someone else's, which Track never
+    /// <summary>A <c>.git</c> with no <c>main</c> that Track did not mark as its own: someone else's, which Track never
     /// writes to (ADR-0003).</summary>
     public static bool HoldsAnotherRepository(string modFolder) => SourceRepositoryGit.HoldsAnotherRepository(modFolder);
 

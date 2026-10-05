@@ -20,26 +20,27 @@ internal sealed class SourceRepositoryGit(string modFolder)
         return Directory.Exists(gitDir) && HasMainBranch(gitDir);
     }
 
-    /// <summary>A repository with history but no <c>main</c>: someone else's, which Track never
-    /// writes to (ADR-0003). A <c>.git</c> with no branch at all is Track's own, half made.</summary>
+    internal const string TrackMarkSection = "medit";
+    internal const string TrackMarkKey = "track";
+
+    /// <summary>A <c>.git</c> with no <c>main</c> and no Track mark: someone else's, which Track never
+    /// writes to (ADR-0003). The mark is a config key set right after <c>git init</c>.</summary>
     internal static bool HoldsAnotherRepository(string modFolder)
     {
         var gitDir = Path.Combine(modFolder, ".git");
-        return Directory.Exists(gitDir) && !HasMainBranch(gitDir) && HasAnyBranch(gitDir);
+        return Directory.Exists(gitDir) && !HasMainBranch(gitDir) && !IsMarkedAsTracks(gitDir);
+    }
+
+    private static bool IsMarkedAsTracks(string gitDir)
+    {
+        var config = Path.Combine(gitDir, "config");
+        return File.Exists(config) && File.ReadLines(config).Any(line => line.Trim() == $"[{TrackMarkSection}]");
     }
 
     // Read off the ref store's files, not by running git: every read of a tracked plugin asks this.
     // A branch is a loose ref file until git packs it into packed-refs.
     private static bool HasMainBranch(string gitDir) =>
         File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedBranches(gitDir).Contains("main");
-
-    private static bool HasAnyBranch(string gitDir)
-    {
-        var heads = Path.Combine(gitDir, "refs", "heads");
-        // A .lock file is a ref being written, never a ref.
-        return (Directory.Exists(heads) && Directory.EnumerateFiles(heads, "*", SearchOption.AllDirectories).Any(file => !file.EndsWith(".lock", StringComparison.Ordinal)))
-            || PackedBranches(gitDir).Count > 0;
-    }
 
     private static HashSet<string> PackedBranches(string gitDir)
     {
