@@ -9,8 +9,8 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>The container half of both copy modes: a child lands inside its container's document,
-/// copied in as an override with its own fields when the destination lacks it. Shares the write side's schema and
-/// codec: one write path (ADR-0007).</summary>
+/// copied in as an override with its own fields when the destination lacks it. One write path with
+/// the write side (ADR-0007).</summary>
 internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger, RecordTextCodec codec)
 {
     /// <summary>The tracked plugin a copy lands in: its repository and its key. No folder — every
@@ -50,7 +50,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
 
     /// <summary>The container rule: the child lands at the end of its slot in the destination's copy
     /// of the container's document, the container copied in with its own fields when absent,
-    /// transitively; the index derives its rows from that document.</summary>
+    /// transitively.</summary>
     internal RecordEditResult AppendEmbeddedChild(
         CopySource source, DocumentContainment container, SourceDocument child,
         Destination destination, GameRelease release)

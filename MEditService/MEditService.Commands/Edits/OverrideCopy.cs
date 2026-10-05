@@ -52,9 +52,8 @@ internal sealed class OverrideCopy
         var formKey = identity.FormKey;
         if (RefuseIfUnderride(formKey, destinationPlugin) is { } underrideRefusal) return underrideRefusal;
 
-        // A record a container's document carries lands inside the destination's copy of that
-        // document (the container rule), a worldspace's persistent cell among them; the refusal below
-        // is for a record with no group of its own that no container document carries.
+        // A record a container's document carries, a worldspace's persistent cell among them, lands
+        // inside the destination's copy of that document (the container rule).
         if (source.ContainerOf(identity) is { } container)
         {
             return _recordCopy.CopyEmbeddedChildAsOverride(
