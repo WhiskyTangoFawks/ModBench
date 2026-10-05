@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { exitEditing } from '../editingTeardown';
+import { exitEditing } from '../editing';
 
 function makeSession() {
   return { loadOrderSender: { abandon: vi.fn() } };

@@ -254,7 +254,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
       panel.webview.receive?.(ready);
       await posted(panel, 1);
 
-      settingListeners.forEach((listener) => listener({ affectsConfiguration: (section) => section === 'modbench.scriptsPath' }));
+      settingListeners.forEach((listener) => listener({ affectsConfiguration: (section) => section === 'modbench.something' }));
       cellValueSetting = 'contents';
       settingListeners.forEach((listener) => listener({ affectsConfiguration: (section) => section === CELL_VALUE_SETTING }));
       await posted(panel, 2);

@@ -1,4 +1,4 @@
-import { FOLDER_KEY } from '../folderContext';
+import { FOLDER_KEY } from '../toolbox/folderContext';
 
 export const IN_AN_INSTANCE = `${FOLDER_KEY} == instance`;
 

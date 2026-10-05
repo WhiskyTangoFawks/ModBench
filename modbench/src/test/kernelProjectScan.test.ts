@@ -121,7 +121,7 @@ describe('the composition root is one project referencing every box', () => {
   it('compiles the activation file, its wiring and no box file', () => {
     const files = fileNames(ROOT_PROJECT);
     expect(files).toContain(join('src', 'extension.ts'));
-    expect(files).toContain(join('src', 'toolbox.ts'));
+    expect(files).toContain(join('src', 'syncWiring.ts'));
     expect(files.filter(isTest)).toEqual([]);
     for (const box of BOXES) expect(files.filter((f) => f.startsWith(join('src', box) + '/'))).toEqual([]);
   });
@@ -155,7 +155,7 @@ describe('the test project holds every test and no production file', () => {
     expect(parsed(TEST_PROJECT).options.noEmit).toBe(true);
   });
 
-  it.each([...BOXES, 'medit'])('compiles every test on disk under %s', (dir) => {
+  it.each(BOXES)('compiles every test on disk under %s', (dir) => {
     const compiled = new Set(fileNames(TEST_PROJECT));
     expect(testFilesOnDisk(join('src', dir)).filter((f) => !compiled.has(f))).toEqual([]);
   });

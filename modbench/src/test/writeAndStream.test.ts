@@ -1,20 +1,20 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom } from './vscodeMock';
 
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri: { from: uriFrom },
 }));
 
-import { applyRecordEdit } from '../../editor/applyRecordEdit';
-import { RecordDecorationProvider } from '../../editor/RecordDecorationProvider';
-import { PluginTreeProvider, RecordNode, RecordTypeNode } from '../../plugins/PluginTreeProvider';
-import { subscribeRecordPanelsToNotifications } from '../../editor/notificationWiring';
-import { subscribeTreeToNotifications } from '../../plugins/treeNotifications';
-import { InMemoryMEditClient, type RecordSummary } from '../../client';
-import { recordingReporter } from '../../test/surfacingDoubles';
-import { recordTypeCountFixture } from '../../client/test/fixtures';
-import { expectInstanceOf } from '../../test/expectInstanceOf';
-import { present } from '../../ports/present';
+import { applyRecordEdit } from '../editor/applyRecordEdit';
+import { RecordDecorationProvider } from '../editor/RecordDecorationProvider';
+import { PluginTreeProvider, RecordNode, RecordTypeNode } from '../plugins/PluginTreeProvider';
+import { subscribeRecordPanelsToNotifications } from '../editor/notificationWiring';
+import { subscribeTreeToNotifications } from '../plugins/treeNotifications';
+import { InMemoryMEditClient, type RecordSummary } from '../client';
+import { recordingReporter } from './surfacingDoubles';
+import { recordTypeCountFixture } from '../client/test/fixtures';
+import { expectInstanceOf } from './expectInstanceOf';
+import { present } from '../ports/present';
 
 function fakePanel(): { webview: { postMessage: ReturnType<typeof vi.fn> } } {
   return { webview: { postMessage: vi.fn() } };

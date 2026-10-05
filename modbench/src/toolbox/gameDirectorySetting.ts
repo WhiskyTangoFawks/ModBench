@@ -1,8 +1,5 @@
-// The setting that overrides where the game is, editable while Modbench runs. The Instance
-// watches files and takes a resolver, so the composition root turns an edit into the same
+// The Instance watches files, so an edit to the game-directory setting reaches it as the same
 // recompute Refresh's re-read runs.
-
-import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 
 /** The Toolbox's own settle: a burst of edits (a pasted path, keystroke by keystroke) becomes
  *  one recompute, as a burst of file events does under the Instance's own settle. */
@@ -19,12 +16,13 @@ export interface Subscription {
 
 /** Subscribes `refresh` to the game-directory setting: one call per burst, after the settle. */
 export function refreshOnGameDirectoryChange(
+  setting: string,
   onConfigChange: (listener: (e: ConfigChangeEvent) => void) => Subscription,
   refresh: () => Promise<unknown>,
 ): Subscription {
   let settle: ReturnType<typeof setTimeout> | undefined;
   const subscription = onConfigChange((e) => {
-    if (!e.affectsConfiguration(GAME_FOLDER_SETTING)) return;
+    if (!e.affectsConfiguration(setting)) return;
     clearTimeout(settle);
     settle = setTimeout(() => void refresh(), SETTING_SETTLE_MS);
   });

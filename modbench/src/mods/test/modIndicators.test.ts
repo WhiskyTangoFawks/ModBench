@@ -193,7 +193,7 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
     });
     const changing = (id: ModIndicator) => (key: string) => key === indicatorSetting(id, 'colour');
 
-    changed.fire({ affectsConfiguration: (key) => key === 'modbench.scriptsPath' });
+    changed.fire({ affectsConfiguration: (key) => key === 'modbench.something' });
     changed.fire({ affectsConfiguration: changing('redundant') });
 
     expect(fired.map((listener) => listener.mock.calls.length)).toEqual([0, 0, 1, 0]);

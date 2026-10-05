@@ -4,7 +4,7 @@ import { join, relative } from 'node:path';
 import ts from 'typescript';
 
 const SRC = join(__dirname, '..');
-const TOOLBOX = join(SRC, 'toolbox.ts');
+const TOOLBOX = join(SRC, 'extension.ts');
 const TOOLBOX_COMMANDS = join(SRC, 'toolbox', 'toolboxCommands.ts');
 
 const DISPOSABLE_PRODUCERS = [
@@ -63,7 +63,7 @@ function unownedProducers(source: ts.SourceFile): string[] {
 const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =>
   ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
 
-describe('the Toolbox owns every disposable it constructs', () => {
+describe('the activation file and Toolbox commands own every disposable they construct', () => {
   it.each([TOOLBOX, TOOLBOX_COMMANDS].map((path) => relative(SRC, path)))(
     'every registration in %s is owned, or returned to a caller that owns it',
     (relativePath) => {

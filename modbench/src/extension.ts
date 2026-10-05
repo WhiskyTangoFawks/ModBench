@@ -1,61 +1,326 @@
+// The composition root (target-architecture.d2, Activation): builds every box and registers it
+// with VS Code, and decides nothing: eslint.config.mjs holds that.
+
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as os from 'os';
-import * as fs from 'fs';
-import { HttpMEditClient } from './client';
+import { HttpMEditClient, createLoadOrderSender, type LoadOrderSender, type MEditClient } from './client';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
 import { createReferencedByView } from './editor/referencedByView';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
-import { selectionInFocusedView } from './drivingLib/inFocusedView';
-import { createFocusedView } from './drivingLib/focusedView';
 import { moveToTrash } from './trash';
+import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
+import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { registerEditorCommands, announceConflictsComputed, ActiveRecordTracker, EditsInFlight } from './editor';
-import { exitEditing } from './editingTeardown';
-import { createToolbox } from './toolbox';
-import { registerNameFilter } from './drivingLib/nameFilter';
-import type { ExtensionSession } from './session';
-import { createStatusBar } from './plugins/statusBar';
-import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText, type FocusedCellContext } from './editor/focusedCells';
-import { meditConfig } from './workspaceConfig';
+import { registerNameFilter, registerFilterCommands as registerNameFilterCommands, type NameFilter } from './drivingLib/nameFilter';
+import { registerCopyValueCommand } from './drivingLib/copyValue';
+import { reportFailure } from './drivingLib/reportFailure';
+import { Instance, type InstanceValue } from './instanceLoader/instance';
+import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
+import { dataFolderFile } from './tables/gamePaths';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
+import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
+import { createStatusBar, type StatusBar } from './plugins/statusBar';
+import { FocusedCells, GRID_VIEW, publishFocusedCell, gridCopyValueText, type FocusedCellContext } from './editor/focusedCells';
+import { meditConfig, gameDirectoryOverrides } from './workspaceConfig';
 import {
   registerTrackCommand, registerDecompileCommand, registerCompileCommand, CompileProblems, type CompileDeps, type TrackDeps,
-  conflictsComputedOver, refreshSourceControlFor, type PluginsViewProgress,
+  conflictsComputedOver, refreshSourceControlFor, type PluginsViewProgress, type MinimalRepository,
 } from './plugins/pluginRowCommands';
-import type { OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
-import type { Instance } from './instanceLoader/instance';
-import { registerFilterCommands, type FilterScripts } from './plugins/recordFilterCommands';
+import { registerFilterCommands } from './plugins/recordFilterCommands';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
 import { registerRecordCreateCommand } from './plugins/createRecordCommand';
 import { createdRecordSelection } from './plugins/createdRecordSelection';
 import { recordWriteOver } from './plugins/recordWrite';
+import { createPluginsView, type PluginsView, type PluginsViewDeps } from './plugins/pluginsView';
+import { editingView } from './plugins/editingView';
+import { pluginsCopyValueText, registerCreatePluginCommand } from './plugins/pluginListCommands';
+import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
 import type { RecordWrite } from './drivingLib/writingGesture';
-import { errorMessage } from './ports/errorMessage';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
+import type { ModListProvider, ModlistNode } from './mods/ModListProvider';
+import { registerModDecorations } from './mods/modDecorations';
+import { showModRepositories } from './mods/modRepositories';
+import { createModsView } from './mods/modsView';
+import { registerModInstallCommands } from './mods/installCommands';
+import { registerCompareFileCommand } from './mods/compareFile';
+import { registerGoToModCommand } from './mods/goToMod';
+import { registerConflictTable } from './mods/conflictTableEditor';
+import {
+  registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand,
+  registerSeparatorCommands, registerCreateEmptyModCommand, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText,
+} from './mods/modManagementCommands';
+import { DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
+import { downloadsCopyValueText } from './downloads/keyContext';
+import { createDownloadsView } from './downloads/downloadsView';
+import { ToolboxProvider } from './toolbox/ToolboxProvider';
+import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
+import { openedFolder, whenOpened, markFirstReadLanded } from './toolbox/instanceCheck';
+import type { FolderCheck } from './toolbox/folderContext';
+import { refreshOnGameDirectoryChange } from './toolbox/gameDirectorySetting';
+import { launchBackend } from './toolbox/autoLaunch';
+import { pluginSyncOver } from './pluginsCommands/plugins';
+import { modSyncOver } from './modlist/modlist';
+import { installNameRefusal } from './install/install';
+import { warnIfFomod } from './install/fomodWarning';
+import { refresh } from './instanceCommands/loadOrder';
+import { editingFlow, exitEditing } from './instanceCommands/editing';
+import { loadOrderPutOnEachValue, modSyncOnEachValue, pluginSyncOnEachValue } from './syncWiring';
+import type { Reporter } from './ports/reporter';
+import type { AskQuestion } from './ports/dialog';
+import type { MoveToTrash } from './ports/trash';
 
-// The backend launches with the extension (ADR-0002), and a change to the game folder setting is
-// its only retry.
-function wireAutoLaunch(
-  session: ExtensionSession, client: HttpMEditClient, context: vscode.ExtensionContext,
-  outputChannel: vscode.LogOutputChannel, enterEditing: (() => Promise<void>) | undefined,
-): void {
-  const reporter = makeReporter(outputChannel, 'launch');
-  const launch = async () => {
-    try {
-      await enterEditing?.();
-    } catch (err) {
-      exitEditing(session, client); // tear down any half-started backend
-      reporter.report('error', 'Failed to launch mEdit.', errorMessage(err));
-    }
+interface ExtensionSession {
+  loadOrderSender?: LoadOrderSender;
+  pluginRepositories?: Map<string, MinimalRepository>;
+}
+
+// Records a disposable against its owner's teardown and hands it back. `src/test/toolboxScan.test.ts`
+// fails on a registration that skips it.
+type Own = <T extends vscode.Disposable>(disposable: T) => T;
+
+type ViewsClient = Pick<MEditClient,
+  'putLoadOrder' | 'rebuildIndex' | 'createPlugin' | 'getLightPluginsSupported'
+  | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected'>;
+
+interface ViewsDeps {
+  outputChannel: vscode.LogOutputChannel;
+  session: ExtensionSession;
+  client: ViewsClient;
+  recordBrowser: PluginTreeProvider;
+  pluginFacts: PluginsViewDeps['client'];
+  statusBar: StatusBar;
+  notifyConflictsComputed: () => void;
+  reporterFor: (tag: string) => Reporter;
+  ask: AskQuestion;
+  trash: MoveToTrash;
+  extensionId: string;
+  extensionUri: vscode.Uri;
+  focusedView: FocusedView;
+  viewFilters: ReadonlyMap<string, Pick<NameFilter, 'open' | 'clear'>>;
+  referencedByCopyValueText: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined;
+  gridCopyValueText: (invocation: unknown) => string | undefined;
+}
+
+interface PluginsHandle {
+  selection: () => readonly PluginsTreeNode[];
+  progress: PluginsViewProgress;
+  recordRow: PluginsTreeProvider['recordRow'];
+  reveal: PluginsView['view']['reveal'];
+  refreshFacts: PluginsTreeProvider['refreshFacts'];
+  showRecordFilter: PluginsView['showRecordFilter'];
+}
+
+interface InstanceFacts {
+  trackedMods: () => ReadonlySet<string>;
+  modDirs: () => ReadonlyMap<string, string>;
+  refresh: () => Promise<void>;
+}
+
+interface InstanceSide {
+  instanceRead: () => boolean;
+  /** Absent together, on the paths with no instance to read. Exposed for integration
+   *  tests — production reaches all of these through the views. */
+  instance?: Instance;
+  modListProvider?: ModListProvider;
+  downloadsProvider?: DownloadsProvider;
+  pluginsTree?: PluginsTreeProvider;
+  pluginListView?: PluginsView['view'];
+  enterEditing?: () => Promise<void>;
+  toolboxProvider: ToolboxProvider;
+  facts: InstanceFacts;
+  plugins: PluginsHandle;
+  latestSent: LoadOrderSender['latest'];
+  originFiles: OriginFilesOf;
+  modListSelection: () => readonly ModlistNode[];
+  pluginsSelection: () => readonly PluginsTreeNode[];
+  downloadsSelection: () => readonly DownloadsTreeNode[];
+  trackSelection: () => readonly unknown[];
+}
+
+type Views = InstanceSide & vscode.Disposable & { folder: FolderCheck };
+
+const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
+  disposables.forEach((disposable) => own(disposable));
+};
+
+function buildBareSide(own: Own): InstanceSide {
+  return {
+    instanceRead: () => false,
+    toolboxProvider: own(new ToolboxProvider({ instance: undefined })),
+    facts: { trackedMods: () => new Set(), modDirs: () => new Map(), refresh: () => Promise.resolve() },
+    plugins: {
+      selection: () => [], progress: { while: (work) => work(), say: () => undefined },
+      recordRow: () => Promise.resolve(undefined), reveal: () => Promise.resolve(), refreshFacts: () => Promise.resolve(undefined),
+      showRecordFilter: () => undefined,
+    },
+    latestSent: () => Promise.resolve(undefined),
+    originFiles: () => undefined,
+    modListSelection: () => [], pluginsSelection: () => [], downloadsSelection: () => [],
+    trackSelection: () => [],
   };
-  void launch();
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration(GAME_FOLDER_SETTING) && client.status !== 'running') void launch();
-    }),
-  );
+}
+
+function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): InstanceSide {
+  const {
+    outputChannel, session, client, recordBrowser, pluginFacts,
+    statusBar, notifyConflictsComputed, reporterFor, ask, trash, extensionId,
+  } = deps;
+  const log = (msg: string) => outputChannel.info(msg);
+  const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides });
+  const access = { instanceRoot, adapter };
+  const instance = own(new Instance({
+    adapter, window: vscode.window, log, logReadFailure: (line) => outputChannel.error(line),
+  }));
+  const firstRead = own(markFirstReadLanded(instance));
+  own(refreshOnGameDirectoryChange(GAME_FOLDER_SETTING, vscode.workspace.onDidChangeConfiguration, () => instance.refresh()));
+  // Fire-and-forget: watchers alone leave the value at its EMPTY sentinel until a change, so
+  // this kicks off the first real read. The Plugins tree's own `sequence === 0` guard is
+  // what keeps activation from being blocking here.
+  void instance.refresh();
+  ownAll(own, registerModDecorations(instance, vscode.workspace));
+  const sender = own(createLoadOrderSender(client));
+  session.loadOrderSender = sender;
+  const refreshIndex = () => refresh(client, instanceRoot, instance.value);
+  const plugins = own(createPluginsView({
+    instance, access, recordBrowser, client: pluginFacts, syncPlugins: pluginSyncOver(access), channel: outputChannel, statusBar, notifyConflictsComputed, reporterFor,
+    dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
+    log: (level, msg) => outputChannel[level](msg),
+  }));
+  const { tree: pluginsTree, view: pluginListView, nameFilter: pluginsFilter } = plugins;
+  const { provider: modListProvider, view: modListView, nameFilter: modListFilter, modSync } = own(createModsView({
+    instance, log: (line) => outputChannel.warn(`[modList] ${line}`), syncMods: modSyncOver(access), channel: outputChannel,
+  }));
+  own(modSyncOnEachValue(instance, modSync));
+  own(pluginSyncOnEachValue(instance, plugins.pluginSync));
+  own(showModRepositories(instance));
+  const runModAction = (logLabel: string, failMessage: string, action: () => Promise<void>) =>
+    reportFailure(reporterFor(logLabel), failMessage, action);
+  const promptModName = (
+    defaultName: string, validateInput?: (value: string) => Thenable<string | undefined> | string | undefined,
+  ) =>
+    vscode.window.showInputBox({ prompt: 'Mod name', value: defaultName, validateInput });
+  const fomodWarning = warnIfFomod(reporterFor('install'));
+  const view = editingView({
+    narrator: plugins.narrator, progress: plugins.progress, log: outputChannel, revealLog: () => outputChannel.show(true), loadOrderPut: plugins.loadOrderPut,
+    reportPut: (message) => reporterFor('loadOrder').report('error', message),
+    reportEntry: (message) => reporterFor('enterEditing').report('error', message),
+  });
+  const editing = own(editingFlow({
+    client, sender, instanceRoot, exitEditing: () => exitEditing(session, client),
+    around: view.around, tell: view.tell, log: (message) => outputChannel.error(message),
+  }));
+  own(loadOrderPutOnEachValue(instance, editing));
+  own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', (value: InstanceValue) => editing.put(value)));
+  const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
+  ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor }));
+  ownAll(own, registerModContextCommands({
+    access, instance, viewSelection: () => modListView.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
+    log: (line) => outputChannel.warn(`[modList] ${line}`),
+  }));
+  ownAll(own, registerModEnableCommands(access, instance, () => modListView.selection, reporterFor('mod.enableDisable')));
+  ownAll(own, registerFileExclusionCommands(access, instance, () => modListView.selection, reporterFor('mod.excludeFile')));
+  own(registerModMoveCommand(
+    access, instance,
+    { selection: () => modListView.selection, direction: () => modListProvider.viewDirection() },
+    reporterFor('mod.move')));
+  ownAll(own, registerSeparatorCommands(access, instance, reporterFor('separator'), ask, trash, () => modListView.selection));
+  own(registerCreateEmptyModCommand(access, instance, reporterFor('mod.createEmpty')));
+  own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => modListView.selection));
+  own(registerGoToModCommand(instance, reporterFor('mod.goToMod'), {
+    selection: () => modListView.selection,
+    rowFor: (origin) => modListProvider.rowFor(origin),
+    reveal: (row) => modListView.reveal(row, { select: true, focus: true }),
+  }));
+  own(registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => modListView.selection));
+  ownAll(own, registerConflictTable(instance, deps.extensionUri, () => modListView.selection, reporterFor('mod.openConflicts'), vscode.workspace));
+  own(vscode.commands.registerCommand('modbench.mod.sync', (value: InstanceValue) => modSync.run(value.modSyncArguments)));
+  own(vscode.commands.registerCommand('modbench.plugin.sync', (value: InstanceValue) => plugins.pluginSync.run(value.pluginSyncArguments)));
+  const { provider: downloadsProvider, view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
+    access, instance, reporter: reporterFor('downloadList'), ask, trash,
+    install: {
+      nameNewMod: (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)),
+      warnIfFomod: fomodWarning,
+      log: (line) => outputChannel.warn(`[downloads] ${line}`),
+    },
+    logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
+  }));
+  ownAll(own, registerModInstallCommands({ access, instance, runModAction, promptModName, warnIfFomod: fomodWarning, installDownloaded }));
+  own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), nexusRowInFocusedView(
+    own, deps.focusedView, ['modbench.modList', 'modbench.downloads'], 'modbench.mod.nexusRowIn')));
+  own(deps.focusedView.follow('modbench.modList', modListView));
+  own(deps.focusedView.follow('modbench.pluginListTree', pluginListView));
+  own(deps.focusedView.follow('modbench.downloads', downloadsView));
+  ownAll(own, registerNameFilterCommands(
+    () => deps.focusedView.id(),
+    new Map([
+      ['modbench.modList', modListFilter], ['modbench.pluginListTree', pluginsFilter], ['modbench.downloads', downloadsFilter],
+      ...deps.viewFilters,
+    ]),
+    () => vscode.window.setStatusBarMessage('Focus a list to filter it.', 5000)));
+  const trackSelection = selectionInFocusedView(
+    own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
+  own(registerRefreshCommand({
+    refresh: refreshIndex, nextRefill: () => plugins.narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
+  }));
+  return {
+    instance, instanceRead: () => firstRead.landed, modListProvider, toolboxProvider, downloadsProvider, pluginsTree, pluginListView,
+    enterEditing: () => editing.enter(instance.landed()),
+    facts: { trackedMods: () => instance.value.trackedMods, modDirs: () => instance.value.paths.modDirs, refresh: () => instance.refresh() },
+    plugins: {
+      selection: () => pluginListView.selection, progress: plugins.progress,
+      recordRow: (group, formKey) => pluginsTree.recordRow(group, formKey),
+      reveal: (row, options) => pluginListView.reveal(row, options),
+      refreshFacts: () => pluginsTree.refreshFacts(),
+      showRecordFilter: (filter) => plugins.showRecordFilter(filter),
+    },
+    latestSent: () => sender.latest(),
+    originFiles: (origin) => originFiles(instance.value.plugins, origin),
+    modListSelection: () => modListView.selection, pluginsSelection: () => pluginListView.selection,
+    downloadsSelection: () => downloadsView.selection, trackSelection,
+  };
+}
+
+function buildViews(deps: ViewsDeps): Views {
+  const { client, reporterFor } = deps;
+  const owned: vscode.Disposable[] = [];
+  const own: Own = (disposable) => {
+    owned.push(disposable);
+    return disposable;
+  };
+
+  const opened = openedFolder(isMo2Instance, (line) => deps.outputChannel.info(line));
+  const side = whenOpened(opened, {
+    instance: (instanceRoot) => buildInstanceSide(own, instanceRoot, deps),
+    notAnInstance: () => buildBareSide(own),
+  });
+
+  const toolboxView = own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: side.toolboxProvider }));
+  const showMessage = () => { toolboxView.message = side.toolboxProvider.viewMessage(); };
+  showMessage();
+  own(side.toolboxProvider.onDidChangeTreeData(showMessage));
+  own(registerCreatePluginCommand(client, side.instance, reporterFor('newPlugin')));
+  own(registerCopyValueCommand(
+    [
+      { text: modsCopyValueText(side.modListSelection), reporterTag: 'mod.copyValue' },
+      { text: pluginsCopyValueText(side.pluginsSelection), reporterTag: 'pluginListTree.copyValue' },
+      { text: downloadsCopyValueText(side.downloadsSelection), reporterTag: 'downloadedFile.copyValue' },
+      { text: deps.gridCopyValueText, reporterTag: 'recordGrid.copy' },
+      { text: deps.referencedByCopyValueText, reporterTag: 'referencedByTree.copy' },
+    ],
+    reporterFor,
+    () => deps.focusedView.id(),
+    () => vscode.window.setStatusBarMessage('Focus a list or a record cell to copy its value.', 5000),
+  ));
+
+  return {
+    ...side,
+    folder: opened.folder,
+    dispose: () => {
+      owned.reverse().forEach((disposable) => { disposable.dispose(); });
+      owned.length = 0;
+    },
+  };
 }
 
 export type ActivateExports = ReturnType<typeof activate>;
@@ -66,11 +331,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);
-  // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
 
-  // Compile's diagnostics — one collection for every tracked mod's source files, in which
-  // CompileProblems replaces a plugin's own entries each time it compiles.
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
 
@@ -81,26 +343,20 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(statusBar);
   const treeProvider = new PluginTreeProvider(meditClient, log);
   const recordPanels = new Set<vscode.WebviewPanel>();
-  // The Referenced By view's input — which record panel is active and what FormKey it shows.
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const editsInFlight = new EditsInFlight(activeRecordTracker);
-  const filterScripts = setupScriptsFolder(meditConfig());
 
   const focusedView = createFocusedView();
-  const focusedCells = new FocusedCells<vscode.WebviewPanel>((cell) => {
-    for (const [name, value] of Object.entries(focusedCellKeys(cell))) {
-      void vscode.commands.executeCommand('setContext', `modbench.record.${name}`, value);
-    }
-  }, () => focusedView.enter(GRID_VIEW));
+  const focusedCells = new FocusedCells<vscode.WebviewPanel>(
+    (cell) => { publishFocusedCell(cell, (key, value) => { void vscode.commands.executeCommand('setContext', key, value); }); },
+    () => focusedView.enter(GRID_VIEW));
 
-  // Fires on every completed reconcile and on a landed Track, the one reliable point to register
-  // the tracked repositories.
   const conflictsComputed = conflictsComputedOver(() => announceConflictsComputed(recordPanels, editsInFlight), {
     client: meditClient,
     outputChannel,
     setPluginRepositories: (repos) => { session.pluginRepositories = repos; },
-    trackedMods: () => toolbox.instance?.value.trackedMods ?? new Set(),
-    modDirs: () => toolbox.instance?.value.paths.modDirs ?? new Map(),
+    trackedMods: () => views.facts.trackedMods(),
+    modDirs: () => views.facts.modDirs(),
   });
   const notifyConflictsComputed = () => { void conflictsComputed(); };
   const referencedBy = createReferencedByView(meditClient, log, registerNameFilter);
@@ -113,22 +369,8 @@ export function activate(context: vscode.ExtensionContext) {
   );
   const activeRecordSubscription = activeRecordTracker.onDidChangeActiveRecord(
     (formKey) => referencedByTreeProvider.showFor(formKey));
-  // Primes the view with whatever activeRecordTracker already knows — a no-op today, but it makes
-  // ActiveRecordTracker.current()'s "initial state" contract true rather than aspirational.
   referencedByTreeProvider.showFor(activeRecordTracker.current());
-  const instance = { refresh: () => toolbox.instance?.refresh() ?? Promise.resolve() };
-  const recordWrite = recordWriteOver(instance, { latest: () => session.loadOrderSender?.latest() ?? Promise.resolve(undefined) });
-  // Its `originFiles` closes over the Toolbox built below and re-reads the value each call, so a
-  // compile always asks the generation on screen.
-  const pluginRowDeps: PluginRowCommandDeps = {
-    session, client: meditClient, outputChannel, compileProblems: new CompileProblems(compileDiagnostics),
-    conflictsComputed, instance, recordWrite,
-    originFiles: (origin) => toolbox.originFiles(origin),
-    trackSelection: () => toolbox.trackSelection(),
-    modDirs: () => toolbox.instance?.value.paths.modDirs ?? new Map(),
-  };
-  // The instance side, whole: the Instance, the four views, their gestures and the backend sync.
-  const toolbox = createToolbox({
+  const views = buildViews({
     outputChannel, session, client: meditClient,
     reporterFor: (tag) => makeReporter(outputChannel, tag),
     ask: askQuestion,
@@ -139,29 +381,34 @@ export function activate(context: vscode.ExtensionContext) {
     notifyConflictsComputed,
     extensionId: context.extension.id,
     extensionUri: context.extensionUri,
-    // Copy value's Referenced By and grid adapters (commands.md, Every view) — the Toolbox owns
-    // the command's one registration, alongside the other lists' gestures.
     focusedView,
     viewFilters: new Map([[REFERENCED_BY_VIEW, referencedBy.filter]]),
     referencedByCopyValueText: (clicked, allSelected) => referencedByCopyValueText(referencedByTreeView, clicked, allSelected),
     gridCopyValueText: gridCopyValueText(() => focusedCells.current()),
   });
+  const instance = { refresh: () => views.facts.refresh() };
+  const recordWrite = recordWriteOver(instance, { latest: () => views.latestSent() });
+  const pluginRowDeps: PluginRowCommandDeps = {
+    client: meditClient, outputChannel, compileProblems: new CompileProblems(compileDiagnostics),
+    conflictsComputed, instance, recordWrite, plugins: views.plugins,
+    originFiles: (origin) => views.originFiles(origin),
+    trackSelection: () => views.trackSelection(),
+    modDirs: () => views.facts.modDirs(),
+  };
   const recordViews = [
-    { id: REFERENCED_BY_VIEW, view: referencedByTreeView },
-    ...(session.plugins ? [{ id: 'modbench.pluginListTree', view: session.plugins.view }] : []),
+    { id: REFERENCED_BY_VIEW, selection: () => referencedByTreeView.selection },
+    { id: 'modbench.pluginListTree', selection: views.plugins.selection },
   ];
   context.subscriptions.push(
-    toolbox,
+    views,
     { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
     referencedBy,
     activeRecordSubscription,
     ...registerPluginRowCommands(pluginRowDeps),
-    // The record filter scopes the Plugins tree's own rows — a Plugins-view concern (its module
-    // lives under plugins/), so it is wired here rather than inside Editor's own registration.
     ...registerFilterCommands({
-      scripts: filterScripts, client: meditClient, treeProvider,
-      refreshMatchingPlugins: () => { void session.plugins?.tree.refreshFacts(); },
-      showRecordFilter: (filter) => session.plugins?.showRecordFilter(filter),
+      client: meditClient, treeProvider,
+      refreshMatchingPlugins: () => { void views.plugins.refreshFacts(); },
+      showRecordFilter: views.plugins.showRecordFilter,
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
@@ -171,32 +418,33 @@ export function activate(context: vscode.ExtensionContext) {
       focusedViewSelection: selectionInFocusedView(
         (disposable) => { context.subscriptions.push(disposable); return disposable; }, focusedView,
         recordViews.map(({ id }) => id), 'modbench.record.selectionIn'),
-      viewSelections: new Map(recordViews.map(({ id, view }) => [id, () => view.selection])),
+      viewSelections: new Map(recordViews.map(({ id, selection }) => [id, selection])),
       recordWrite,
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
     }),
+    launchBackend({
+      setting: GAME_FOLDER_SETTING, client: meditClient, enterEditing: views.enterEditing,
+      exitEditing: () => exitEditing(session, meditClient), reporter: makeReporter(outputChannel, 'launch'),
+      onConfigChange: vscode.workspace.onDidChangeConfiguration,
+    }),
   );
-
-  wireAutoLaunch(session, meditClient, context, outputChannel, toolbox.enterEditing);
 
   // Exposed for integration tests — unused in production. `client`: a test drives a status
   // transition directly, outside exitEditing. `instance`: lets a test await past a sequence
   // instead of sleeping.
   return {
-    folder: toolbox.folder, instanceRead: toolbox.instanceRead,
-    modListProvider: toolbox.modListProvider, downloadsProvider: toolbox.downloadsProvider,
-    pluginsTree: toolbox.pluginsTree,
-    pluginListView: session.plugins?.view,
-    outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session, meditClient),
-    client: meditClient, instance: toolbox.instance,
-    // The record tab in focus reporting its focused cell, as its webview's `focusCell` does.
+    folder: views.folder, instanceRead: views.instanceRead,
+    modListProvider: views.modListProvider, downloadsProvider: views.downloadsProvider,
+    pluginsTree: views.pluginsTree,
+    pluginListView: views.pluginListView,
+    outputChannel, enterEditing: views.enterEditing, exitEditing: () => exitEditing(session, meditClient),
+    client: meditClient, instance: views.instance,
     focusRecordCell: (cell: FocusedCellContext) => { focusedCells.setActiveCell(cell); },
   };
 }
 
-
 interface PluginRowCommandDeps {
-  session: ExtensionSession;
+  plugins: PluginsHandle;
   client: HttpMEditClient;
   outputChannel: vscode.LogOutputChannel;
   compileProblems: CompileProblems;
@@ -208,11 +456,9 @@ interface PluginRowCommandDeps {
   modDirs: TrackDeps['modDirs'];
 }
 
-// One shared concern, the Plugins-tree row's own context menu, as distinct from the record
-// editor's own commands (delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, outputChannel, conflictsComputed, instance, trackSelection, modDirs } = deps;
-  const progress = pluginsProgress(session);
+  const { client, outputChannel, conflictsComputed, instance, trackSelection, modDirs } = deps;
+  const progress = deps.plugins.progress;
   return [
     registerTrackCommand({
       progress, instance,
@@ -224,26 +470,18 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       instance,
       reporter: makeReporter(outputChannel, 'plugin.decompile'),
       ask: askQuestion,
-    }, () => session.plugins?.view.selection ?? []),
-    registerCompileCommand(compileDeps(deps), () => session.plugins?.view.selection ?? []),
+    }, deps.plugins.selection),
+    registerCompileCommand(compileDeps(deps), deps.plugins.selection),
     registerRecordCreateCommand({
       client, reporter: makeReporter(outputChannel, 'record.create'),
       write: deps.recordWrite,
       createdRecords: createdRecordSelection({
         client, reporter: makeReporter(outputChannel, 'record.create'),
-        rowOf: (group, formKey) => session.plugins?.tree.recordRow(group, formKey) ?? Promise.resolve(undefined),
-        view: { reveal: (row, options) => session.plugins?.view.reveal(row, options) ?? Promise.resolve() },
+        rowOf: deps.plugins.recordRow,
+        view: { reveal: deps.plugins.reveal },
       }),
-    }, () => session.plugins?.view.selection ?? []),
+    }, deps.plugins.selection),
   ];
-}
-
-// Outside an instance there is no Plugins view to show the work.
-function pluginsProgress(session: ExtensionSession): PluginsViewProgress {
-  return {
-    while: (work) => session.plugins?.progress.while(work) ?? work(),
-    say: (message) => session.plugins?.progress.say(message),
-  };
 }
 
 function compileDeps(deps: PluginRowCommandDeps): CompileDeps {
@@ -256,21 +494,6 @@ function compileDeps(deps: PluginRowCommandDeps): CompileDeps {
     originFiles,
   };
 }
-
-
-function setupScriptsFolder(cfg: vscode.WorkspaceConfiguration): FilterScripts {
-  const scriptsPathCfg: string = cfg.get('scriptsPath') ?? '';
-  const scriptsPath = scriptsPathCfg || path.join(os.homedir(), '.medit', 'scripts');
-  fs.mkdirSync(scriptsPath, { recursive: true });
-
-  return {
-    folder: scriptsPath,
-    sqlFiles: () => (fs.existsSync(scriptsPath) ? fs.readdirSync(scriptsPath).filter((f) => f.endsWith('.sql')) : []),
-    read: (name) => fs.readFileSync(path.join(scriptsPath, name), 'utf8'),
-    nameOf: (uri) => path.basename(uri.fsPath),
-  };
-}
-
 
 // VS Code's own `deactivate()` takes no arguments, so it has no way to receive what `activate()`
 // built — this module-level reference exists solely to bridge that gap.

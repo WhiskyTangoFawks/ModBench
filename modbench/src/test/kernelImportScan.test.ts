@@ -93,7 +93,7 @@ const rootFiles = (): string[] => productionFiles(SRC).filter((path) => {
   return !rel.includes(sep);
 });
 
-const MO2_CONSTRUCTION = { file: join(SRC, 'toolbox.ts'), module: join(boxRoot('instanceAdapter'), 'mo2Instance') };
+const MO2_CONSTRUCTION = { file: join(SRC, 'extension.ts'), module: join(boxRoot('instanceAdapter'), 'mo2Instance') };
 
 function isAllowedRootSpecifier(spec: string, fromFile: string): boolean {
   if (!spec.startsWith('.')) return true;
@@ -244,16 +244,16 @@ describe('a box reaches only the boxes its project references', () => {
 describe('the composition root reaches the Instance adapter through its interface', () => {
   it('scans the activation file and its wiring', () => {
     const files = rootFiles().map((path) => relative(SRC, path));
-    expect(files).toEqual(expect.arrayContaining(['extension.ts', 'toolbox.ts']));
+    expect(files).toEqual(expect.arrayContaining(['extension.ts', 'syncWiring.ts']));
     expect(files.filter((f) => f.startsWith('instanceAdapter'))).toEqual([]);
   });
 
-  it('every root file imports only the adapter\'s interface, but where toolbox.ts constructs MO2\'s implementation', () => {
+  it('every root file imports only the adapter\'s interface, but where extension.ts constructs MO2\'s implementation', () => {
     expect(rootOffenders()).toEqual({});
   });
 
   it('refuses the adapter\'s layout, files and codecs from any root file, and its implementation outside the construction', () => {
-    const extension = join(SRC, 'extension.ts');
+    const extension = join(SRC, 'syncWiring.ts');
     expect(isAllowedRootSpecifier('./instanceAdapter/layout', extension)).toBe(false);
     expect(isAllowedRootSpecifier('./instanceAdapter/files', MO2_CONSTRUCTION.file)).toBe(false);
     expect(isAllowedRootSpecifier('./instanceAdapter/codecs/modlistText', MO2_CONSTRUCTION.file)).toBe(false);

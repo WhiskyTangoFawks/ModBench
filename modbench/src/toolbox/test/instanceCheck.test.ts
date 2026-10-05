@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { tsFiles } from './tsFiles';
-import { FakeInstance } from './mo2/fakeInstance';
-import { instanceValueFixture } from './mo2/instanceValueFixture';
+import { tsFiles } from '../../test/tsFiles';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn() }));
 vi.mock('vscode', () => ({ commands: { executeCommand }, workspace: {} }));
 
-import { answerInstanceCheck, markFirstReadLanded } from '../workspaceConfig';
+import { answerInstanceCheck, markFirstReadLanded } from '../instanceCheck';
 import { FOLDER_KEY, INSTANCE_READ_KEY } from '../folderContext';
 
 const writesOfTheKey = () => executeCommand.mock.calls.filter(([command, key]) => command === 'setContext' && key === FOLDER_KEY);
@@ -76,8 +76,8 @@ describe("the instance's first read", () => {
 });
 
 describe('each key has one writer', () => {
-  const SRC = join(__dirname, '..');
-  const OWNERS = ['folderContext.ts', 'workspaceConfig.ts'];
+  const SRC = join(__dirname, '..', '..');
+  const OWNERS = ['toolbox/folderContext.ts', 'toolbox/instanceCheck.ts'];
   const production = tsFiles(SRC, { exclude: ['generated', 'test'] });
   const naming = (pattern: RegExp) =>
     production.filter((path) => pattern.test(readFileSync(path, 'utf8'))).map((path) => relative(SRC, path));
@@ -95,6 +95,6 @@ describe('each key has one writer', () => {
   });
 
   it('marks the first read from the one place the Instance is built', () => {
-    expect(naming(/\bmarkFirstReadLanded\(/).sort()).toEqual(['toolbox.ts', 'workspaceConfig.ts']);
+    expect(naming(/\bmarkFirstReadLanded\(/).sort()).toEqual(['extension.ts', 'toolbox/instanceCheck.ts']);
   });
 });

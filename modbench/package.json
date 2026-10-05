@@ -49,11 +49,6 @@
           "type": "number",
           "description": "Attach to an mEdit already running on this port instead of starting one. Never a fallback: if nothing answers, Modbench reports it. Leave unset: each window starts its own mEdit."
         },
-        "modbench.scriptsPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to folder containing .sql filter files and .py scripts. Defaults to ~/.medit/scripts."
-        },
         "modbench.mods.gameDirectory": {
           "type": "string",
           "default": "",

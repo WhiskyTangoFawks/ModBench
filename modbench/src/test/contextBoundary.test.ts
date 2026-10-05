@@ -14,20 +14,15 @@ function importsOf(source: string): string[] {
     .map((m) => present(m[1], 'the module-path capture group the pattern always matches'));
 }
 
-const EDITING_DIR = 'medit';
 const CLIENT_DIR = 'client';
 const PLUGINS_VIEW_DIR = 'plugins';
 const EDITOR_DIR = 'editor';
 const GENERATED_DIR = 'generated';
 const WIRE_DIR = 'wire';
 
-const WIRES_EVERY_CONTEXT = ['toolbox.ts', 'extension.ts'];
-const SHARED_ACTIVATION_STATE = ['session.ts'];
-const MEDIT_PATH_FALSE_POSITIVE = ['workspaceConfig.ts'];
 const CLIENT_CALLERS = ['instanceCommands'];
 
-const COMPOSITION_ROOT =
-  [...WIRES_EVERY_CONTEXT, ...SHARED_ACTIVATION_STATE, ...MEDIT_PATH_FALSE_POSITIVE];
+const COMPOSITION_ROOT = ['extension.ts'];
 
 function isTestSupport(relativePath: string): boolean {
   return relativePath.split(sep).some((seg) => seg === 'test' || seg === 'integration') || relativePath.includes('.test.');
@@ -38,7 +33,6 @@ function isExcluded(relativePath: string): boolean {
   if (segments.includes(GENERATED_DIR)) return true;
   if (segments[0] === WIRE_DIR) return true;
   if (segments[0] === PLUGINS_VIEW_DIR) return true;
-  if (segments[0] === EDITING_DIR) return true;
   if (segments[0] === CLIENT_DIR) return true;
   if (segments[0] === EDITOR_DIR) return true;
   if (COMPOSITION_ROOT.includes(relativePath)) return true;
@@ -66,7 +60,7 @@ function findOffenders(root: string): Offense[] {
     const imports = importsOf(text);
     const clientImports = CLIENT_CALLERS.includes(relPath.split(sep)[0] ?? '') ? [] : importsFromDir(imports, CLIENT_DIR);
     const crossContext = [
-      ...importsFromDir(imports, EDITING_DIR), ...clientImports,
+      ...clientImports,
       ...importsFromDir(imports, PLUGINS_VIEW_DIR), ...importsFromDir(imports, EDITOR_DIR),
     ];
     const vocab = domainVocabIn(text);
@@ -110,10 +104,6 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(isExcluded(join(CLIENT_DIR, 'MEditClient.ts'))).toBe(true);
   });
 
-  it('Editing\'s folder is excluded because it is its own context, not the MO2 side', () => {
-    expect(isExcluded(join(EDITING_DIR, 'editing.ts'))).toBe(true);
-  });
-
   it('test files and test folders are excluded because their names and fixtures are prose and corpus data', () => {
     expect(isExcluded(join('mods', 'modList.test.ts'))).toBe(true);
     expect(isExcluded(join('mods', 'test', 'fixture.ts'))).toBe(true);
@@ -123,8 +113,8 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(isExcluded(join('mods', 'modList.ts'))).toBe(false);
   });
 
-  it('the composition-root allowlist is exactly these files', () => {
-    expect(COMPOSITION_ROOT.sort()).toEqual(['extension.ts', 'session.ts', 'toolbox.ts', 'workspaceConfig.ts']);
+  it('the activation file is the one file excluded as the composition root', () => {
+    expect(COMPOSITION_ROOT).toEqual(['extension.ts']);
   });
 
   describe('a plant in each MO2-side directory is caught, and the same plant inside an excluded one is not', () => {
@@ -140,7 +130,7 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     it('a FormKey import planted in a Mods-shaped file is caught', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'mods'), { recursive: true });
-        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), "import type { FormKey } from '../medit/ApiClient';\n");
+        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), "import type { FormKey } from '../wire/ApiClient';\n");
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
       });
     });
@@ -148,7 +138,7 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     it('an mEdit-client import planted in a Downloads-shaped file is caught', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'downloads'), { recursive: true });
-        writeFileSync(join(root, 'downloads', 'DownloadsProvider.ts'), "import { ApiPluginRepository } from '../medit/PluginRepository';\n");
+        writeFileSync(join(root, 'downloads', 'DownloadsProvider.ts'), "import { HttpMEditClient } from '../client';\n");
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('downloads', 'DownloadsProvider.ts')]);
       });
     });
@@ -173,7 +163,7 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     it('an mEdit-client import planted in the Instance file itself is caught, at its real nested depth', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'instanceLoader'), { recursive: true });
-        writeFileSync(join(root, 'instanceLoader', 'instance.ts'), "import { EditingController } from '../medit/EditingController';\n");
+        writeFileSync(join(root, 'instanceLoader', 'instance.ts'), "import { HttpMEditClient } from '../client';\n");
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('instanceLoader', 'instance.ts')]);
       });
     });
@@ -209,22 +199,11 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       withPlantedTree((root) => {
         mkdirSync(join(root, 'mods'), { recursive: true });
         mkdirSync(join(root, 'plugins'), { recursive: true });
-        const planted = "import type { FormKey } from '../medit/ApiClient';\n";
+        const planted = "import type { FormKey } from '../wire/ApiClient';\n";
         writeFileSync(join(root, 'mods', 'ModListProvider.ts'), planted);
         writeFileSync(join(root, 'plugins', 'PluginTreeProvider.ts'), planted);
         const reached = tsFiles(root).map((p) => relative(root, p));
         expect(reached).toEqual(expect.arrayContaining([join('plugins', 'PluginTreeProvider.ts')]));
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
-      });
-    });
-
-    it('the same mEdit-client import inside Editing\'s own directory is not caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'mods'), { recursive: true });
-        mkdirSync(join(root, 'medit'), { recursive: true });
-        const planted = "import { ApiPluginRepository } from '../medit/PluginRepository';\n";
-        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), planted);
-        writeFileSync(join(root, 'medit', 'EditingController.ts'), planted);
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
       });
     });
@@ -277,13 +256,6 @@ describe('the driving lib\'s name filter imports from neither context', () => {
   });
 });
 
-describe('composition-root modules import from neither context', () => {
-  it('the editing teardown module imports from neither context', () => {
-    expect(importsOf(read('editingTeardown.ts'))).toEqual([]);
-  });
-
-});
-
 describe('the load-order sender belongs to Editing alone', () => {
   const SENDER = 'client/loadOrderSender.ts';
 
@@ -297,60 +269,5 @@ describe('the load-order sender belongs to Editing alone', () => {
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
       .join('\n');
     expect([...code.matchAll(/\b(mods?|modlists?|profiles?)\b/gi)].map((m) => m[0])).toEqual([]);
-  });
-});
-
-function crossFolderOffenders(root: string, sourceDir: string, forbiddenDirs: string[]): { path: string; imports: string[] }[] {
-  const base = join(root, sourceDir);
-  let files: string[];
-  try {
-    files = tsFiles(base);
-  } catch {
-    return [];
-  }
-  const offenses: { path: string; imports: string[] }[] = [];
-  for (const path of files) {
-    const relPath = relative(root, path);
-    if (isTestSupport(relPath)) continue;
-    const imports = importsOf(readFileSync(path, 'utf8'));
-    const forbidden = forbiddenDirs.flatMap((dir) => importsFromDir(imports, dir));
-    if (forbidden.length > 0) offenses.push({ path: relPath, imports: forbidden });
-  }
-  return offenses;
-}
-
-describe('Editing imports nothing from Editor', () => {
-  it('nothing under Editing imports from Editor', () => {
-    expect(crossFolderOffenders(SRC, EDITING_DIR, [EDITOR_DIR])).toEqual([]);
-  });
-
-  describe('a plant is caught, and a sibling import beside it is not', () => {
-    function withPlantedTree(run: (root: string) => void): void {
-      const root = mkdtempSync(join(tmpdir(), 'medit-editing-editor-boundary-'));
-      try {
-        run(root);
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
-    }
-
-    it('an Editor import planted in an Editing-shaped file is caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'medit'), { recursive: true });
-        writeFileSync(join(root, 'medit', 'someModule.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
-        expect(crossFolderOffenders(root, EDITING_DIR, [EDITOR_DIR]).map((o) => o.path))
-          .toEqual([join('medit', 'someModule.ts')]);
-      });
-    });
-
-    it('an Editing file importing its own sibling is not caught alongside one that crosses to Editor', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'medit'), { recursive: true });
-        writeFileSync(join(root, 'medit', 'someModule.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
-        writeFileSync(join(root, 'medit', 'otherModule.ts'), "import { pluginFailures } from './pluginFailures';\n");
-        expect(crossFolderOffenders(root, EDITING_DIR, [EDITOR_DIR]).map((o) => o.path))
-          .toEqual([join('medit', 'someModule.ts')]);
-      });
-    });
   });
 });
