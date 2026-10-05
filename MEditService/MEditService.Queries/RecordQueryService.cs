@@ -50,7 +50,7 @@ public sealed class RecordQueryService(
     // GetCompare resolve it by FormKey, but both browse paths below exclude it.
 
     public PagedResult<RecordSummary> GetRecords(
-        IReadOnlyList<string>? types, string? plugin, string? search, int limit, int offset, string? origin = null, bool unfiltered = false)
+        IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset, bool unfiltered = false)
     {
         var reads = RequireReads();
         var schemas = RequireSchemas();
@@ -60,15 +60,10 @@ public sealed class RecordQueryService(
             : [.. types.Where(schemas.ContainsKey)];
         if (recordTypes.Count == 0)
             return new PagedResult<RecordSummary>([], 0);
-        // ADR-0012.
-        if (RecordFilterGuard.NamesOnlyPluginOrOnlyOrigin(plugin, origin))
-            throw new ArgumentException("A plugin filter requires its origin, and an origin requires a plugin.");
-
         PluginName? pluginFilter = null;
-        if (!string.IsNullOrWhiteSpace(plugin)) pluginFilter = plugin;
-        var originFilter = string.IsNullOrWhiteSpace(origin) ? null : origin;
+        if (plugin is { } address) pluginFilter = address.Name;
         var query = new RecordQuery(
-            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: originFilter, Search: search,
+            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: plugin?.Origin, Search: search,
             SearchFormKey: FormKeyOfFormId(search, reads), Limit: limit, Offset: offset,
             GroupOnly: search is null, Unfiltered: unfiltered);
         return reads.Search(query).ToQuery();
@@ -123,7 +118,7 @@ public sealed class RecordQueryService(
         return (classification, classification.ConflictAll);
     }
 
-    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string origin)
+    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(PluginAddress plugin)
     {
         var reads = RequireReads();
         var schemas = RequireSchemas();
@@ -131,7 +126,7 @@ public sealed class RecordQueryService(
 
         // The header is one `records` row per plugin, so this exclusion has to be real; without it
         // "Main File Header" appears as a browsable record-type node under every plugin.
-        return [.. reads.GetRecordTypeCounts(new PluginAddress(plugin, origin))
+        return [.. reads.GetRecordTypeCounts(plugin)
             .Where(c => c.Type != PluginHeader.RecordType && schemas.ContainsKey(c.Type))
             .Select(c => new PluginRecordTypeCount(
                 c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure,

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using MEditService.LoadOrder;
 
 namespace MEditService.Ports;
 
@@ -28,10 +29,6 @@ public enum LoadOrderState
     Failed,
 }
 
-/// <summary>Carries origin as well as filename because two plugins that share a filename can be
-/// held at once, and a bare name cannot say which one landed.</summary>
-public sealed record IndexedPlugin(string Name, string Origin);
-
 /// <summary>Exists so an absent conflict badge is never mistakable for "no conflict": a caller
 /// reading <see cref="ConflictsComputed"/> false knows nothing has looked yet, which is a different
 /// question from the state being Ready.</summary>
@@ -40,7 +37,7 @@ public sealed record LoadOrderStatus(
     // Every plugin the snapshot holds, which the reconcile indexes.
     int TotalPlugins,
     int ActivePlugins,
-    IReadOnlyList<IndexedPlugin> IndexedPlugins,
+    IReadOnlyList<PluginAddress> IndexedPlugins,
     bool ConflictsComputed,
     IReadOnlyList<PluginLoadFailure> Failures,
     // Non-null only for HeldElsewhere or Failed: the ready-to-show reason, carried here because
