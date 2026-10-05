@@ -196,6 +196,10 @@ export class Instance implements Subscription {
   // Recomputes never overlap, so a slow walk cannot publish over a newer one.
   private queue: Promise<unknown> = Promise.resolve();
 
+  private quiets = 0;
+
+  private quietEpoch = 0;
+
   private readonly changes: Subscription;
 
   private readonly focus: Subscription;
@@ -262,6 +266,20 @@ export class Instance implements Subscription {
     return this.run();
   }
 
+  /** Runs `work`, a write to several files the value reads, then refreshes. A read that overlapped
+   *  it never lands: it may hold some files from before the write and some after. */
+  async quiet<T>(work: () => Promise<T>): Promise<T> {
+    this.quietEpoch++;
+    this.quiets++;
+    try {
+      return await work();
+    } finally {
+      this.quiets--;
+      this.quietEpoch++;
+      await this.refresh();
+    }
+  }
+
   /** The value once the first read has landed: reads when none has, and holds the read it has. */
   async landed(): Promise<InstanceValue> {
     if (this.seq === 0) await this.refresh();
@@ -317,6 +335,7 @@ export class Instance implements Subscription {
   // another tool is half-way through writing never empties the trees.
   private async recompute(): Promise<void> {
     let next: InstanceValue;
+    const epoch = this.quietEpoch;
     try {
       next = await this.read();
     } catch (err) {
@@ -326,6 +345,7 @@ export class Instance implements Subscription {
       this.notify(this.failureListeners, (listener) => listener());
       return;
     }
+    if (epoch !== this.quietEpoch || this.quiets > 0) return;
     this.current = next;
     this.failure = undefined;
     this.seq++;

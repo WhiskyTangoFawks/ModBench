@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { pluginPlaces, placeFolder } from '../pluginPlaces';
+import { holdsPlugin, pluginPlaces, placeFolder } from '../pluginPlaces';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -37,6 +37,14 @@ describe('pluginPlaces', () => {
   it('leaves out only a place that already holds a plugin of that name, whatever its case', () => {
     expect(pluginPlaces(value, 'held.ESP').map((p) => p.origin)).toEqual(['Winning Mod', 'overwrite']);
     expect(pluginPlaces(value, 'Other.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod']);
+  });
+});
+
+describe('holdsPlugin', () => {
+  it('holds a plugin of that name in that origin, whatever its case, and not the same name in another origin', () => {
+    expect(holdsPlugin(value, { name: 'held.ESP', origin: 'Losing Mod' })).toBe(true);
+    expect(holdsPlugin(value, { name: 'Held.esp', origin: 'Winning Mod' })).toBe(false);
+    expect(holdsPlugin(value, { name: 'Gone.esp', origin: 'Losing Mod' })).toBe(false);
   });
 });
 

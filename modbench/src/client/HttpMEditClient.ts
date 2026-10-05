@@ -121,6 +121,8 @@ export class HttpMEditClient implements MEditClient {
     op: string;
     failMsg: string;
     post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
+    /** What a 2xx with no body answers. */
+    noContent?: T;
   }): Promise<T | WriteRefused> {
     try {
       const { data, error, response } = await spec.post();
@@ -129,7 +131,7 @@ export class HttpMEditClient implements MEditClient {
         this.log(`[HttpMEditClient] ${spec.op} failed (${response.status}): ${text}`);
         return { refused: true, message: `${spec.failMsg} — ${text}` };
       }
-      return data ?? { refused: true, message: `${spec.failMsg} — no answer` };
+      return data ?? spec.noContent ?? { refused: true, message: `${spec.failMsg} — no answer` };
     } catch (e) {
       const message = errorMessage(e);
       this.log(`[HttpMEditClient] ${spec.op} threw: ${message}`);
@@ -145,6 +147,15 @@ export class HttpMEditClient implements MEditClient {
       post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder } }),
     });
     return answer;
+  }
+
+  async renameSource(plugin: PluginAddress, newName: string): Promise<{ renamed: true } | WriteRefused> {
+    return this.mutate({
+      op: `renameSource(${plugin.name}, ${plugin.origin})`,
+      failMsg: `Could not rename the source of "${plugin.name}"`,
+      post: () => this.apiClient.POST('/plugins/rename-source', { body: { origin: plugin.origin, name: plugin.name, newName } }),
+      noContent: { renamed: true },
+    });
   }
 
   /** Refresh's first step (commands.md, Instance), which refills the index against the load order

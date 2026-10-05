@@ -2,7 +2,7 @@
 // call, and no path joined here.
 
 import type { InstanceValue } from '../instanceLoader/instance';
-import { samePluginAddress } from '../wire/pluginAddress';
+import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
 export interface PluginPlace {
@@ -13,15 +13,19 @@ export interface PluginPlace {
 const enabledModNames = (value: Pick<InstanceValue, 'mods'>): string[] =>
   value.mods.filter((entry) => entry.kind === 'mod' && entry.enabled).map((entry) => entry.name);
 
+/** Whether the origin holds a plugin of that name, compared without case. The same name
+ *  elsewhere in the load order is not checked. */
+export function holdsPlugin(value: Pick<InstanceValue, 'plugins'>, plugin: PluginAddress): boolean {
+  return value.plugins.some((p) => p.path !== undefined && samePluginAddress(p, plugin));
+}
+
 /** The enabled mods first, then Overwrite, each left out when it already holds a plugin named
- *  `name`. The same name elsewhere in the load order is not checked. */
+ *  `name`. */
 export function pluginPlaces(value: Pick<InstanceValue, 'mods' | 'plugins'>, name: string): PluginPlace[] {
-  const holds = (origin: string): boolean =>
-    value.plugins.some((p) => p.path !== undefined && samePluginAddress(p, { name, origin }));
   return [
     ...enabledModNames(value).map((mod) => ({ label: mod, origin: mod })),
     { label: 'Overwrite', origin: OVERWRITE_ORIGIN },
-  ].filter((place) => !holds(place.origin));
+  ].filter((place) => !holdsPlugin(value, { name, origin: place.origin }));
 }
 
 /** The place's folder; or what became of a mod between the pick and the answer, or that the
