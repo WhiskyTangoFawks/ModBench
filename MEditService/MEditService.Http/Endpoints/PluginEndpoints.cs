@@ -38,7 +38,30 @@ public static class PluginEndpoints
             .Produces<IReadOnlyList<PluginDiagnosisReport>>()
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IRecordQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/dependants", (string plugin, string? origin, PluginDependantsQueryService svc) =>
+        {
+            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
+            try
+            {
+                return svc.GetDependants(WriteEndpointMapping.PluginAddressOf(plugin, origin)) is { } dependants
+                    ? Results.Ok(new PluginDependantsResponse(dependants.Plugins, dependants.Unreadable))
+                    : Results.Problem("mEdit has not finished indexing the plugins.", statusCode: 503);
+            }
+            catch (NoLoadOrderException ex)
+            {
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            }
+        })
+            .WithName("GetPluginDependants")
+            .WithTags(Tag)
+            .WithDescription(
+                "The plugins that list the plugin's file name as a master, and the plugins whose masters " +
+                "mEdit could not read. Answers only once the index is ready.")
+            .Produces<PluginDependantsResponse>()
+            .ProducesProblem(400)
+            .ProducesProblem(503);
+
+        app.MapGet("/plugins/{plugin}/record-types",(string plugin, string? origin, IRecordQueryService svc) =>
         {
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             return Results.Ok(svc.GetPluginRecordTypes(WriteEndpointMapping.PluginAddressOf(plugin, origin)));
@@ -329,6 +352,9 @@ public static class PluginEndpoints
 /// <summary>The origin and the file name are the plugin (ADR-0012); the folder is where
 /// the instance holds that origin's files.</summary>
 public record CreatePluginRequest(string Origin, string Name, string Folder);
+
+/// <summary>The plugins that list the plugin as a master, and those whose masters could not be read.</summary>
+public record PluginDependantsResponse(IReadOnlyList<PluginAddress> Dependants, IReadOnlyList<PluginAddress> Unreadable);
 
 /// <summary>The plugin the create gesture wrote. Not a plugin row: the Index has not seen
 /// it, and nothing registers it.</summary>
