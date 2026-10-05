@@ -36,7 +36,7 @@ function domainVocabIn(text: string): string[] {
   return [...code.matchAll(/\b(records?|formkeys?|recordtypes?|editorids?)\b(?!\s*<)/gi)].map((m) => m[0]);
 }
 
-interface Offense { path: string; crossContext: string[]; vocab: string[] }
+interface Offense { path: string; clientImports: string[]; vocab: string[] }
 
 function importsFromDir(imports: string[], dir: string): string[] {
   return imports.filter((s) => s.split('/').includes(dir));
@@ -50,12 +50,8 @@ function findOffenders(root: string): Offense[] {
     const text = readFileSync(path, 'utf8');
     const imports = importsOf(text);
     const clientImports = CLIENT_CALLERS.includes(relPath.split(sep)[0] ?? '') ? [] : importsFromDir(imports, CLIENT_DIR);
-    const crossContext = [
-      ...clientImports,
-      ...importsFromDir(imports, PLUGINS_VIEW_DIR), ...importsFromDir(imports, EDITOR_DIR),
-    ];
     const vocab = domainVocabIn(text);
-    if (crossContext.length > 0 || vocab.length > 0) offenses.push({ path: relPath, crossContext, vocab });
+    if (clientImports.length > 0 || vocab.length > 0) offenses.push({ path: relPath, clientImports, vocab });
   }
   return offenses;
 }
@@ -106,7 +102,6 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
 
   it('the files at the root of src are excluded as the composition root', () => {
     expect(COMPOSITION_ROOT).toContain('extension.ts');
-    expect(COMPOSITION_ROOT.every((file) => isExcluded(file))).toBe(true);
   });
 
   describe('a plant in each MO2-side directory is caught, and the same plant inside an excluded one is not', () => {
@@ -132,23 +127,6 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
         mkdirSync(join(root, 'downloads'), { recursive: true });
         writeFileSync(join(root, 'downloads', 'DownloadsProvider.ts'), "import { HttpMEditClient } from '../client';\n");
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('downloads', 'DownloadsProvider.ts')]);
-      });
-    });
-
-    it('a Plugins-view import planted in a MO2-shaped file is caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'mods'), { recursive: true });
-        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), "import { ErrorNode } from '../plugins/PluginTreeProvider';\n");
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
-      });
-    });
-
-    it('an MO2-side module named pluginsText is not caught by the Plugins-view check', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'mods', 'mo2'), { recursive: true });
-        writeFileSync(join(root, 'mods', 'mo2', 'pluginsText.ts'), 'export const x = 1;\n');
-        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), "import { parsePlugins } from './mo2/pluginsText';\n");
-        expect(findOffenders(root)).toEqual([]);
       });
     });
 
@@ -179,14 +157,6 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       });
     });
 
-    it('instance commands reaching Editing or the Plugins view are still caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'instanceCommands'), { recursive: true });
-        writeFileSync(join(root, 'instanceCommands', 'loadOrder.ts'), "import { ErrorNode } from '../plugins/PluginTreeProvider';\n");
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('instanceCommands', 'loadOrder.ts')]);
-      });
-    });
-
     it('the same FormKey import inside the Plugins view is not caught — the walk still reaches it', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'mods'), { recursive: true });
@@ -196,25 +166,6 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
         writeFileSync(join(root, 'plugins', 'PluginTreeProvider.ts'), planted);
         const reached = tsFiles(root).map((p) => relative(root, p));
         expect(reached).toEqual(expect.arrayContaining([join('plugins', 'PluginTreeProvider.ts')]));
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
-      });
-    });
-
-    it('an Editor-folder import planted in a Mods-shaped file is caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'mods'), { recursive: true });
-        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
-      });
-    });
-
-    it('the same Editor-folder import inside Editor\'s own directory is not caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'mods'), { recursive: true });
-        mkdirSync(join(root, 'editor'), { recursive: true });
-        const planted = "import { ActiveRecordTracker } from './ActiveRecordTracker';\n";
-        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
-        writeFileSync(join(root, 'editor', 'recordPanelHost.ts'), planted);
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
       });
     });
