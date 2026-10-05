@@ -24,7 +24,7 @@ function boxIdsByBand(): Record<string, string[]> {
   return bands;
 }
 
-export const PROJECT_FOLDERS: string[] = readdirSync(SRC, { withFileTypes: true })
+const PROJECT_FOLDERS: string[] = readdirSync(SRC, { withFileTypes: true })
   .filter((entry) => entry.isDirectory() && entry.name !== 'test' && existsSync(join(SRC, entry.name, 'tsconfig.json')))
   .map((entry) => entry.name)
   .sort();
