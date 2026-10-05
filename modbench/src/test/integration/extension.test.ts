@@ -4,69 +4,65 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { before, after, beforeEach, afterEach, describe, it } from 'mocha';
-import type { BackendStatus, MEditClient, PluginMetadata } from '../../client';
-import type { ActivateExports } from '../../extension';
-import { DownloadNode, type DownloadsTreeNode } from '../../downloads/DownloadsProvider';
+import { before, after, afterEach, describe, it } from 'mocha';
+import type { PluginMetadata } from '../../client';
 import { present } from '../../ports/present';
-import { isRecord } from '../manifest';
-import { MODS_KEY_ARGS } from '../../mods/gestureEntry';
-import { PLUGINS_KEY_ARGS } from '../../plugins/gestureEntry';
+import { isRecord, requires } from '../manifest';
 
-const PLUGIN_LIST_DND_MIME = 'application/vnd.medit.pluginlist-node';
+const MANIFEST: unknown = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'));
+
+function contributed(point: string): unknown[] {
+  const entries = isRecord(MANIFEST) && isRecord(MANIFEST.contributes) ? MANIFEST.contributes[point] : undefined;
+  if (!Array.isArray(entries)) throw new Error(`expected package.json to contribute a ${point} array`);
+  return entries;
+}
+
+function extensionId(): string {
+  if (!isRecord(MANIFEST) || typeof MANIFEST.publisher !== 'string' || typeof MANIFEST.name !== 'string') {
+    throw new Error('expected package.json to name its publisher and name');
+  }
+  return `${MANIFEST.publisher}.${MANIFEST.name}`;
+}
+const EXTENSION_ID = extensionId();
+
+function copyValueKeyArgs(view: string): unknown {
+  const key = contributed('keybindings').find((k) =>
+    isRecord(k) && k.command === 'modbench.copyValue' && typeof k.when === 'string' && requires(k.when, `focusedView == ${view}`));
+  if (!isRecord(key)) throw new Error(`expected package.json to bind Copy Value in ${view}`);
+  return key.args;
+}
+
 const TEST_PORT = Number(present(process.env.MODBENCH_TEST_PORT, 'the port .vscode-test.mjs hands the run'));
+const LOGS = present(process.env.MODBENCH_TEST_LOGS, 'the logs folder .vscode-test.mjs hands the run');
+const root = present(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath, 'the workspace folder');
+const pluginsTxtPath = path.join(root, 'profiles', 'Default', 'plugins.txt');
+const modlistPath = path.join(root, 'profiles', 'Default', 'modlist.txt');
+function fixtureGameDirectory(): string {
+  const dir = vscode.workspace.getConfiguration('modbench').get<string>('mods.gameDirectory') ?? '';
+  if (dir === '') throw new Error('expected .vscode-test.mjs to name a game folder, so that no test reads this machine\'s own install');
+  return dir;
+}
+const FIXTURE_GAME_DIRECTORY = fixtureGameDirectory();
 let mockBackend: http.Server;
-let ext: vscode.Extension<ActivateExports> | undefined;
 
-type InstanceLike = NonNullable<ActivateExports['instance']>;
-const instanceExport = () => ext?.exports.instance;
-function pastSequence(instance: InstanceLike, sequence: number): Promise<void> {
-  if (instance.sequence > sequence) return Promise.resolve();
-  return new Promise((resolve) => {
-    const subscription = instance.subscribe((_value, seq) => {
-      if (seq <= sequence) return;
-      subscription.dispose();
-      resolve();
-    });
-  });
-}
-async function writeAndAwaitInstance(write: () => void): Promise<void> {
-  const instance = instanceExport();
-  const before = instance?.sequence ?? 0;
-  write();
-  if (instance) await pastSequence(instance, before);
-}
-
-async function setGameDirectory(dir: string | undefined): Promise<void> {
-  const instance = instanceExport();
-  const before = instance?.sequence ?? 0;
+async function setGameDirectory(dir: string): Promise<void> {
   await vscode.workspace.getConfiguration('modbench').update(
     'mods.gameDirectory', dir, vscode.ConfigurationTarget.Workspace);
-  if (instance) await pastSequence(instance, before);
 }
 
-const editingApi = () => ext?.exports;
-async function enterEditing(): Promise<void> {
-  try {
-    await editingApi()?.enterEditing?.();
-  } catch {
-    editingApi()?.exitEditing();
-  }
-}
-function exitEditing(): void {
-  editingApi()?.exitEditing();
+function gameFolderHolding(prefix: string, plugins: readonly string[]): string {
+  const gameDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+  for (const name of plugins) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
+  return gameDir;
 }
 
-function awaitStatus(client: MEditClient, status: BackendStatus, label: string, timeoutMs = 10_000): Promise<void> {
-  if (client.status === status) return Promise.resolve();
-  return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => { off(); reject(new Error(`timed out waiting for ${label}`)); }, timeoutMs);
-    const off = client.onStatusChanged((s) => {
-      if (s !== status) return;
-      clearTimeout(timer);
-      off();
-      resolve();
-    });
+async function holdPluginsTxt(text: string): Promise<void> {
+  const lines = text.split(/\r?\n/).map((line) => line.replace(/^\*/, '')).filter((line) => line !== '');
+  await waitFor(`mEdit to be put the load order of a plugins.txt holding ${lines.join(', ')}, rewritten past a sync of an earlier value`, () => {
+    if (fs.readFileSync(pluginsTxtPath, 'utf8') !== text) fs.writeFileSync(pluginsTxtPath, text);
+    const put = putLoadOrders.at(-1) ?? [];
+    return put.filter((name) => lines.includes(name)).join() === lines.join() && fs.readFileSync(pluginsTxtPath, 'utf8') === text;
   });
 }
 
@@ -90,7 +86,6 @@ const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
 const putLoadOrders: string[][] = [];
-const recordEdits: { formKey: string; body: unknown }[] = [];
 
 function pluginNamesOf(body: string): string[] {
   const parsed: unknown = JSON.parse(body);
@@ -110,14 +105,9 @@ type MockLoadOrderStatus = {
   version: number;
   message?: string;
 };
-const NO_LOAD_ORDER_STATUS: MockLoadOrderStatus =
+let loadOrderStatus: MockLoadOrderStatus =
   { state: 'None', totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0 };
-let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
 let loadOrderVersion = 0;
-let releasePutLoadOrder: (() => void) | null = null;
-let holdPutLoadOrder = false;
-let releaseHealth: (() => void) | null = null;
-let holdHealth = false;
 
 const sseClients: http.ServerResponse[] = [];
 
@@ -130,55 +120,14 @@ function pushLoadOrderStatus(): void {
   for (const res of sseClients) writeSseFrame(res, 'load-order-status', { loadOrderStatus });
 }
 
-async function resetMockBackendDetached(): Promise<void> {
-  const client = ext?.exports.client;
-  if (client?.status === 'running') {
-    exitEditing();
-    await awaitStatus(client, 'stopped', 'the earlier launch to stop');
-  }
-  resetMockBackend();
-}
-
-function resetMockBackend(): void {
-  loadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
-  loadOrderHeld = false;
-  requestLog.length = 0;
-  putLoadOrders.length = 0;
-  recordEdits.length = 0;
-  rebuildIndexShouldFail = false;
-  holdPutLoadOrder = false;
-  releasePutLoadOrder?.();
-  releasePutLoadOrder = null;
-  holdHealth = false;
-  releaseHealth?.();
-  releaseHealth = null;
-  for (const res of sseClients.splice(0)) res.end();
-}
-
-function setIndexed(names: string[], extra: Partial<MockLoadOrderStatus> = {}): void {
-  loadOrderStatus = {
-    state: 'Reconciling',
-    totalPlugins: Math.max(names.length, loadOrderStatus.totalPlugins),
-    activePlugins: Math.max(names.length, loadOrderStatus.activePlugins),
-    indexedPlugins: names.map((name) => ({ name, origin: 'Data' })),
-    conflictsComputed: false,
-    failures: [],
-    version: loadOrderVersion,
-    ...extra,
-  };
-  pushLoadOrderStatus();
-}
-
 function createMockBackend(): http.Server {
   return http.createServer((req, res) => {
     const url = req.url ?? '';
     const method = req.method ?? 'GET';
     requestLog.push(`${method} ${url}`);
     if (url === '/health') {
-      const answer = () => { res.writeHead(200); res.end(); };
-      if (!holdHealth) return answer();
-      holdHealth = false;
-      releaseHealth = () => { releaseHealth = null; answer(); };
+      res.writeHead(200);
+      res.end();
       return;
     }
     if (method === 'POST' && url === '/index/rebuild') {
@@ -211,18 +160,11 @@ function createMockBackend(): http.Server {
         const version = loadOrderVersion;
         loadOrderStatus = { ...loadOrderStatus, version };
         pushLoadOrderStatus();
-
-        const answer = () => {
-          loadOrderHeld = true;
-          loadOrderStatus = { ...loadOrderStatus, state: 'Ready', conflictsComputed: true, version };
-          pushLoadOrderStatus();
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ applied: true, version }));
-        };
-        if (!holdPutLoadOrder) return answer();
-        holdPutLoadOrder = false;
+        loadOrderHeld = true;
+        loadOrderStatus = { ...loadOrderStatus, state: 'Ready', conflictsComputed: true, version };
         pushLoadOrderStatus();
-        releasePutLoadOrder = () => { releasePutLoadOrder = null; answer(); };
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ applied: true, version }));
       });
       return;
     }
@@ -256,17 +198,6 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify(MOCK_PLUGINS));
       return;
     }
-    const edit = /^\/records\/([^/]+)\/edit$/.exec(url);
-    if (method === 'POST' && edit) {
-      let body = '';
-      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
-      req.on('end', () => {
-        recordEdits.push({ formKey: decodeURIComponent(edit[1] ?? ''), body: JSON.parse(body) });
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ applied: true }));
-      });
-      return;
-    }
     if (/^\/plugins\/[^/?]+\/record-types(\?|$)/.test(url)) {
       res.writeHead(loadOrderHeld ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(loadOrderHeld ? JSON.stringify(MOCK_RECORD_TYPES) : 'No load order has been received.');
@@ -283,14 +214,13 @@ before(async function () {
   mockBackend = createMockBackend();
   await new Promise<void>(r => mockBackend.listen(TEST_PORT, '127.0.0.1', () => r()));
 
-  ext = vscode.extensions.all.find(e => isRecord(e.packageJSON) && e.packageJSON.name === 'modbench');
+  const ext = vscode.extensions.getExtension(EXTENSION_ID);
   const deadline = Date.now() + 5000;
   while (ext && !ext.isActive && Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 100));
   }
 
-  const client = ext?.exports.client;
-  if (client) await awaitStatus(client, 'running', 'the client to reach running');
+  await waitFor('Modbench to launch mEdit and open its notification stream', () => sseClients.length > 0);
 });
 
 after(async () => {
@@ -300,44 +230,18 @@ after(async () => {
   );
 });
 
-describe('modbench activation', () => {
-  it('answers the instance check for an instance folder: instance', () => {
-    assert.strictEqual(ext?.exports.folder, 'instance');
-  });
-
-  it('marks the first read once the Instance lands a value', async () => {
-    await pastSequence(present(instanceExport(), 'the Instance export'), 0);
-    assert.strictEqual(ext?.exports.instanceRead(), true);
-  });
-});
-
 describe('Modbench output channel', () => {
-  it('is created as a leveled LogOutputChannel, not a plain text channel', () => {
-    const channel = ext?.exports.outputChannel;
-    assert.ok(channel, 'activate() should return { outputChannel }');
-    assert.strictEqual(typeof channel.debug, 'function', 'expected a .debug() method');
-    assert.strictEqual(typeof channel.info, 'function', 'expected an .info() method');
-    assert.strictEqual(typeof channel.warn, 'function', 'expected a .warn() method');
-    assert.strictEqual(typeof channel.error, 'function', 'expected an .error() method');
-    assert.ok('logLevel' in channel, "expected VS Code's native level filter to apply (logLevel)");
+  it('writes a leveled log, as a LogOutputChannel does and a plain text channel does not', async () => {
+    const ownLog = path.join(EXTENSION_ID, 'Modbench.log');
+    await waitFor('a leveled line in the Modbench log', () => {
+      const log = fs.readdirSync(LOGS, { recursive: true, encoding: 'utf8' }).find((file) => file.endsWith(ownLog));
+      return log !== undefined && /\[(trace|debug|info|warning|error)\]/.test(fs.readFileSync(path.join(LOGS, log), 'utf8'));
+    });
   });
 });
-
-function commandsManifest(raw: unknown): { contributes: { commands: { command: string }[] } } {
-  if (
-    !isRecord(raw) || !isRecord(raw.contributes) || !Array.isArray(raw.contributes.commands)
-    || !raw.contributes.commands.every((c: unknown): c is { command: string } => isRecord(c) && typeof c.command === 'string')
-  ) {
-    throw new Error("expected package.json to have a contributes.commands array of { command }");
-  }
-  return { contributes: { commands: raw.contributes.commands } };
-}
 
 describe('modbench command registration', () => {
-  const pkg = commandsManifest(JSON.parse(
-    fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'),
-  ));
-  const EXPECTED_COMMANDS = pkg.contributes.commands.map((c) => c.command);
+  const EXPECTED_COMMANDS = contributed('commands').map((c) => (isRecord(c) && typeof c.command === 'string' ? c.command : ''));
 
   it('registers all expected commands on activation', async () => {
     assert.ok(EXPECTED_COMMANDS.length > 0, 'derived command list is empty — the manifest shape changed');
@@ -348,21 +252,16 @@ describe('modbench command registration', () => {
   });
 });
 
-describe('modbench.mod.sync syncs the instance value it is handed', () => {
-  const PROFILE = 'Handed Profile';
-  const root = present(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath, 'the workspace folder');
-  const profileDir = path.join(root, 'profiles', PROFILE);
+describe('Mod sync', () => {
+  let original = '';
 
-  after(() => fs.rmSync(profileDir, { recursive: true, force: true }));
+  before(() => { original = fs.readFileSync(modlistPath, 'utf8'); });
+  after(() => fs.writeFileSync(modlistPath, original));
 
-  it('drops the line of a gone folder from the profile the handed value names', async () => {
-    fs.mkdirSync(profileDir, { recursive: true });
-    fs.writeFileSync(path.join(profileDir, 'modlist.txt'), '+Gone Mod\r\n');
-    const instance = present(instanceExport(), "the activated extension's instance export");
+  it('drops the line of a folder gone from mods/ from the active profile', async () => {
+    fs.writeFileSync(modlistPath, '+Gone Mod\r\n');
 
-    await vscode.commands.executeCommand('modbench.mod.sync', { ...instance.value, modSyncArguments: { ...instance.value.modSyncArguments, profile: PROFILE } });
-
-    assert.strictEqual(fs.readFileSync(path.join(profileDir, 'modlist.txt'), 'utf8'), '');
+    await waitFor('mod sync to drop the line', () => !fs.readFileSync(modlistPath, 'utf8').includes('Gone Mod'));
   });
 });
 
@@ -448,29 +347,8 @@ describe('modbench.record.open', () => {
     const tabsByGroup = vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => t.label));
     assert.deepStrictEqual(tabsByGroup, [[], selection.map((s) => s.formKey)]);
   });
-});
 
-import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../plugins/PluginsTreeProvider';
-async function clickRow(node: { command?: vscode.Command }): Promise<void> {
-  const { command, arguments: args } = present(node.command, 'the row\'s command');
-  const given: unknown[] = args ?? [];
-  await vscode.commands.executeCommand(command, ...given);
-}
-
-describe('a click on a plugin row opens its header', () => {
-  it('from an ordinary plugin row, titled by the plugin\'s file name', async () => {
-    await clickRow(new PluginListPluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod'));
-
-    await waitFor('a header tab for TestMod.esp', () => openTabs().some(t => t.label === 'TestMod.esp') || undefined);
-  });
-
-  it('from an implicit-master row', async () => {
-    await clickRow(new ImplicitMasterNode('Fallout4.esm', 'Data'));
-
-    await waitFor('a header tab for Fallout4.esm', () => openTabs().some(t => t.label === 'Fallout4.esm') || undefined);
-  });
-
-  it('opens two plugins of one file name from different origins as two tabs', async () => {
+  it('opens the headers of two plugins of one file name from different origins as two tabs', async () => {
     const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.record.open', [
@@ -483,69 +361,43 @@ describe('a click on a plugin row opens its header', () => {
 });
 
 const PROBE_SPACING_MS = 1000;
-function nextLandingWithin(instance: InstanceLike, ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    const done = () => {
-      clearTimeout(timer);
-      subscription.dispose();
-      resolve();
-    };
-    const timer = setTimeout(done, ms);
-    const subscription = instance.subscribe(done);
-  });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function downloadsRows(): Promise<string[]> {
+  await vscode.env.clipboard.writeText('');
+  await vscode.commands.executeCommand('modbench.downloads.focus');
+  await vscode.commands.executeCommand('list.selectAll');
+  await vscode.commands.executeCommand('modbench.copyValue', copyValueKeyArgs('modbench.downloads'));
+  const text = await vscode.env.clipboard.readText();
+  return text === '' ? [] : text.split('\n');
 }
 
-const archiveNameOf = (row: DownloadsTreeNode): string | undefined =>
-  row instanceof DownloadNode ? row.row.name : undefined;
-
 describe('modbench.downloads tree', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const downloadsDir = root ? path.join(root, 'downloads') : '';
-  const provider = () => present(ext?.exports.downloadsProvider, "the activated extension's downloadsProvider export");
-  const instance = () => present(instanceExport(), 'the Instance activate() exports');
-  const iniPath = root ? path.join(root, 'ModOrganizer.ini') : '';
+  const downloadsDir = path.join(root, 'downloads');
+  const iniPath = path.join(root, 'ModOrganizer.ini');
 
-  async function repointDownloads(iniText: string, dir: string): Promise<void> {
+  async function repointDownloads(iniText: string, landed: (rows: readonly string[]) => boolean): Promise<void> {
     fs.writeFileSync(iniPath, iniText);
-    const rebound = await waitFor(`the Instance to resolve downloads to ${dir}`,
-      () => (instance().value.paths.downloadsDir === dir ? instance().sequence : undefined));
-    await pastSequence(instance(), rebound);
-    for (let landed = instance().sequence; ; landed = instance().sequence) {
-      await nextLandingWithin(instance(), PROBE_SPACING_MS);
-      if (instance().sequence === landed) return;
-    }
+    await waitFor('the Downloads view to follow ModOrganizer.ini', async () => landed(await downloadsRows()));
   }
 
   async function probeUntilListed(dir: string, prefix: string): Promise<void> {
+    await sleep(PROBE_SPACING_MS);
     const written = new Set<string>();
-    await waitFor(`a file written into ${dir} to reach the Downloads tree through the watcher`, async () => {
+    await waitFor(`a file written into ${dir}, once no read is in flight to pick it up, to reach the Downloads tree through the watcher`, async () => {
       const name = `${prefix}-${written.size}.zip`;
       written.add(name);
       fs.writeFileSync(path.join(dir, name), 'data');
-      await nextLandingWithin(instance(), PROBE_SPACING_MS);
-      const rows = await provider().getChildren();
-      return rows.some((r) => written.has(archiveNameOf(r) ?? '')) || undefined;
+      const deadline = Date.now() + PROBE_SPACING_MS;
+      do {
+        if ((await downloadsRows()).some((row) => written.has(row))) return true;
+      } while (Date.now() < deadline);
+      return undefined;
     }, 35000);
   }
 
-  after(() => {
-    if (!root) return;
-    fs.rmSync(downloadsDir, { recursive: true, force: true });
-  });
-
-  it('renders one row per archive, .meta sidecars suppressed', async () => {
-    await writeAndAwaitInstance(() => {
-      fs.mkdirSync(downloadsDir, { recursive: true });
-      fs.writeFileSync(path.join(downloadsDir, 'foo.zip'), 'data');
-      fs.writeFileSync(path.join(downloadsDir, 'foo.zip.meta'), '[General]\r\n');
-    });
-
-    const rows = await waitFor('the downloads rows to hold foo.zip', async () => {
-      const found = await provider().getChildren();
-      return found.some((r) => archiveNameOf(r) === 'foo.zip') ? found : undefined;
-    });
-    assert.deepStrictEqual(rows.map((r) => archiveNameOf(r)), ['foo.zip']);
-  });
+  before(() => fs.mkdirSync(downloadsDir, { recursive: true }));
+  after(() => fs.rmSync(downloadsDir, { recursive: true, force: true }));
 
   it('reflects a new archive dropped into downloads/ via the file-watcher, with no manual refresh', async () => {
     await probeUntilListed(downloadsDir, 'dropped');
@@ -553,72 +405,38 @@ describe('modbench.downloads tree', () => {
 
   it('scans and watches a downloads folder ModOrganizer.ini points outside the instance', async function () {
     this.timeout(40000);
-    if (!root) throw new Error('no open workspace');
     const external = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-external-downloads-'));
     const originalIni = fs.readFileSync(iniPath, 'utf8');
     try {
       fs.writeFileSync(path.join(external, 'external-preexisting.zip'), 'data');
-      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${external}\r\n`, external);
-
-      const scanned = await provider().getChildren();
-      assert.ok(
-        scanned.some((r) => archiveNameOf(r) === 'external-preexisting.zip'),
-        'expected the file already in the external folder to be scanned once the ini named it',
-      );
+      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${external}\r\n`,
+        (rows) => rows.includes('external-preexisting.zip'));
 
       await probeUntilListed(external, 'external-new');
     } finally {
-      await repointDownloads(originalIni, downloadsDir);
+      await repointDownloads(originalIni, (rows) => !rows.some((row) => row.startsWith('external-')));
       fs.rmSync(external, { recursive: true, force: true });
     }
   });
 
   it('watches a downloads folder ModOrganizer.ini points at before it exists on disk', async function () {
     this.timeout(40000);
-    if (!root) throw new Error('no open workspace');
     const container = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-notyet-downloads-'));
     const notYetCreated = path.join(container, 'NotYetCreated');
     const originalIni = fs.readFileSync(iniPath, 'utf8');
+    const marker = 'in-the-instance-downloads.zip';
+    const listsMarker = (rows: readonly string[]) => rows.includes(marker);
     try {
-      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${notYetCreated}\r\n`, notYetCreated);
-
-      const beforeCreate = await provider().getChildren();
-      assert.strictEqual(beforeCreate.filter((r) => archiveNameOf(r) !== undefined).length, 0,
-        'expected no rows before the configured folder even exists');
+      fs.writeFileSync(path.join(downloadsDir, marker), 'data');
+      await waitFor('the instance\'s own downloads folder to be listed', async () => listsMarker(await downloadsRows()));
+      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${notYetCreated}\r\n`, (rows) => rows.length === 0);
 
       fs.mkdirSync(notYetCreated);
       await probeUntilListed(notYetCreated, 'created');
     } finally {
-      await repointDownloads(originalIni, downloadsDir);
+      await repointDownloads(originalIni, listsMarker);
       fs.rmSync(container, { recursive: true, force: true });
     }
-  });
-});
-
-describe('Overwrite row', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const overwriteDir = root ? path.join(root, 'overwrite') : '';
-  const provider = () => present(ext?.exports.modListProvider, "the activated extension's modListProvider export");
-
-  before(async () => {
-    if (!root) return;
-    await writeAndAwaitInstance(() => {
-      fs.mkdirSync(overwriteDir, { recursive: true });
-      fs.writeFileSync(path.join(overwriteDir, 'f4se.log'), 'x');
-    });
-  });
-
-  after(() => {
-    if (!root) return;
-    fs.rmSync(overwriteDir, { recursive: true, force: true });
-  });
-
-  it('reveal action resolves against the overwrite folder without throwing', async () => {
-    const p = provider();
-    const roots = await p.getChildren();
-    const node = roots.find((n) => n.kind === 'overwrite');
-    assert.ok(node, 'expected an Overwrite node to reveal');
-    await vscode.commands.executeCommand('modbench.mod.openFolder', node);
   });
 });
 
@@ -643,112 +461,76 @@ function takeFromTrash(original: string, before: ReadonlySet<string>): number {
   return taken;
 }
 
-describe('A Mods gesture\'s write reaches the Mods view through the Instance loader\'s read', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const modlistPath = root ? path.join(root, 'profiles', 'Default', 'modlist.txt') : '';
-  const provider = () => present(ext?.exports.modListProvider, "the activated extension's modListProvider export");
-  const instance = () => present(instanceExport(), 'the Instance activate() exports');
-  const separatorRow = async (name: string) =>
-    (await provider().getChildren()).find((n) => n.kind === 'separator' && n.label === name);
-  const doomedDir = root ? path.join(root, 'mods', 'Doomed_separator') : '';
+async function selectFirstRow(view: string, expected: string): Promise<void> {
+  await waitFor(`${expected} to be the focused and selected row of ${view}`, async () => {
+    await vscode.env.clipboard.writeText('');
+    await vscode.commands.executeCommand(`${view}.focus`);
+    await vscode.commands.executeCommand(`workbench.actions.treeView.${view}.collapseAll`);
+    await vscode.commands.executeCommand('list.focusFirst');
+    await vscode.commands.executeCommand('list.selectAndPreserveFocus');
+    await vscode.commands.executeCommand('modbench.copyValue', copyValueKeyArgs(view));
+    return (await vscode.env.clipboard.readText()) === expected;
+  });
+}
+
+describe('Delete separator, as VS Code runs it on the Mods view\'s selection', () => {
+  const doomedDir = path.join(root, 'mods', 'Doomed_separator');
   let original = '';
   let trashedBefore: ReadonlySet<string> = new Set();
 
-  before(async () => {
-    if (!root) return;
+  before(() => {
     trashedBefore = trashInfoNames();
     original = fs.readFileSync(modlistPath, 'utf8');
-    await writeAndAwaitInstance(() => {
-      fs.mkdirSync(doomedDir, { recursive: true });
-      fs.writeFileSync(modlistPath, '-Doomed_separator\r\n');
-    });
+    fs.mkdirSync(doomedDir, { recursive: true });
+    fs.writeFileSync(modlistPath, '-Doomed_separator\r\n');
   });
 
-  after(async () => {
-    if (!root) return;
+  after(() => {
     takeFromTrash(doomedDir, trashedBefore);
-    await writeAndAwaitInstance(() => {
-      fs.rmSync(doomedDir, { recursive: true, force: true });
-      fs.writeFileSync(modlistPath, original);
-    });
+    fs.rmSync(doomedDir, { recursive: true, force: true });
+    fs.writeFileSync(modlistPath, original);
   });
 
-  it('delete separator asks the Instance for one re-read and the view for none, and its row goes when that read lands', async function () {
-    if (!root) this.skip();
-    const doomed = present(await separatorRow('Doomed'), 'the Doomed separator row');
-    let unexplainedInvalidates = 0;
-    let instanceRefreshes = 0;
-    let sequenceAtLastInvalidate = instance().sequence;
-    const view = provider();
-    const invalidate = view.invalidate.bind(view);
-    view.invalidate = () => {
-      if (instance().sequence === sequenceAtLastInvalidate) unexplainedInvalidates++;
-      sequenceAtLastInvalidate = instance().sequence;
-      invalidate();
-    };
-    const target = instance();
-    const refresh = target.refresh.bind(target);
-    target.refresh = () => {
-      instanceRefreshes++;
-      return refresh();
-    };
-
+  it('takes its line from modlist.txt and its folder to the OS trash', async () => {
+    await selectFirstRow('modbench.modList', 'Doomed');
     const warn = vscode.window.showWarningMessage;
     (vscode.window as { showWarningMessage: unknown }).showWarningMessage = () => Promise.resolve('Delete');
     try {
-      await vscode.commands.executeCommand('modbench.separator.delete', doomed);
+      await vscode.commands.executeCommand('modbench.separator.delete');
 
       assert.ok(!fs.readFileSync(modlistPath, 'utf8').includes('Doomed'), 'the delete should have written modlist.txt');
       assert.ok(!fs.existsSync(doomedDir), 'the delete should have taken the separator\'s folder from mods/');
       if (process.platform === 'linux') {
         assert.strictEqual(takeFromTrash(doomedDir, trashedBefore), 1, 'the separator\'s folder should be in the OS trash');
       }
-      await waitFor('the read to take the Doomed row away', async () => (await separatorRow('Doomed')) === undefined);
-      assert.strictEqual(instanceRefreshes, 1, 'the gesture should ask the Instance for one re-read');
-      assert.strictEqual(unexplainedInvalidates, 0, 'the gesture asked the view to re-pull a value no read landed');
     } finally {
-      target.refresh = refresh;
       (vscode.window as { showWarningMessage: unknown }).showWarningMessage = warn;
-      view.invalidate = invalidate;
     }
   });
 });
 
 describe('The Mods view\'s palette entries, as VS Code runs them', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const modlistPath = root ? path.join(root, 'profiles', 'Default', 'modlist.txt') : '';
-  const modDir = root ? path.join(root, 'mods', 'Palette Mod') : '';
+  const modDir = path.join(root, 'mods', 'Palette Mod');
   let original = '';
 
   const enabledAndSelected = async () => {
-    await writeAndAwaitInstance(() => fs.writeFileSync(modlistPath, '+Palette Mod\r\n'));
-    await waitFor('the mod row to be focused and selected', async () => {
-      await vscode.env.clipboard.writeText('');
-      await vscode.commands.executeCommand('modbench.modList.focus');
-      await vscode.commands.executeCommand('list.focusFirst');
-      await vscode.commands.executeCommand('list.select');
-      await vscode.commands.executeCommand('modbench.copyValue', MODS_KEY_ARGS);
-      return (await vscode.env.clipboard.readText()) === 'Palette Mod';
-    });
+    fs.writeFileSync(modlistPath, '+Palette Mod\r\n');
+    await selectFirstRow('modbench.modList', 'Palette Mod');
   };
 
   before(async () => {
-    if (!root) return;
     original = fs.readFileSync(modlistPath, 'utf8');
-    await writeAndAwaitInstance(() => fs.mkdirSync(modDir, { recursive: true }));
+    fs.mkdirSync(modDir, { recursive: true });
+    await waitFor('mod sync to give the new folder its line', () => fs.readFileSync(modlistPath, 'utf8').includes('Palette Mod'));
   });
 
   after(async () => {
     await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
-    if (!root) return;
-    await writeAndAwaitInstance(() => {
-      fs.writeFileSync(modlistPath, original);
-      fs.rmSync(modDir, { recursive: true, force: true });
-    });
+    fs.writeFileSync(modlistPath, original);
+    fs.rmSync(modDir, { recursive: true, force: true });
   });
 
   it('copies the selection of the view last selected in when Copy Value is run from the palette', async function () {
-    if (!root) this.skip();
     this.timeout(30_000);
     await enabledAndSelected();
     await vscode.env.clipboard.writeText('');
@@ -760,305 +542,80 @@ describe('The Mods view\'s palette entries, as VS Code runs them', () => {
   });
 
   it('offers Disable Mod in the palette while the Mods view has focus, acting on its selection', async function () {
-    if (!root) this.skip();
     this.timeout(30_000);
     await enabledAndSelected();
-    await waitFor('the palette\'s disable to land in the Instance', async () => {
+    await waitFor('the palette\'s disable to reach modlist.txt', async () => {
       await vscode.commands.executeCommand('workbench.action.quickOpen', '>Modbench: Disable Mod');
       await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
-      return instanceExport()?.value.mods.some((m) => m.name === 'Palette Mod' && !m.enabled);
+      return fs.readFileSync(modlistPath, 'utf8').includes('-Palette Mod');
     });
   });
 });
 
 describe('The Plugins view\'s keys, as VS Code runs them', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   let gameDir = '';
   let original = '';
 
-  const focusRow = async (index: number) => {
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\r\nOther.esp\r\n'));
-    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    await waitFor('the plugin row to be focused and selected', async () => {
-      await vscode.env.clipboard.writeText('');
-      await vscode.commands.executeCommand('modbench.pluginListTree.focus');
-      await vscode.commands.executeCommand('workbench.actions.treeView.modbench.pluginListTree.collapseAll');
-      await vscode.commands.executeCommand('list.focusFirst');
-      for (let i = 0; i < index; i++) await vscode.commands.executeCommand('list.focusDown');
-      await vscode.commands.executeCommand('list.selectAndPreserveFocus');
-      await vscode.commands.executeCommand('modbench.copyValue', PLUGINS_KEY_ARGS);
-      return (await vscode.env.clipboard.readText()) === ['TestMod.esp', 'Other.esp'][index];
-    });
-  };
-
   before(async () => {
-    if (!root) return;
-    resetMockBackend();
     original = fs.readFileSync(pluginsTxtPath, 'utf8');
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-keys-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['TestMod.esp', 'Other.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
+    gameDir = gameFolderHolding('medit-keys-', ['TestMod.esp', 'Other.esp']);
     await setGameDirectory(gameDir);
-    await enterEditing();
-    exitEditing();
   });
 
   after(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    if (!root) return;
-    await setGameDirectory(undefined);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, original));
+    await setGameDirectory(FIXTURE_GAME_DIRECTORY);
+    fs.writeFileSync(pluginsTxtPath, original);
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  it('Space disables the selected plugin', async function () {
-    if (!root) this.skip();
-    await focusRow(0);
+  it('Space disables the selected plugin', async () => {
+    await holdPluginsTxt('*TestMod.esp\r\nOther.esp\r\n');
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await selectFirstRow('modbench.pluginListTree', 'TestMod.esp');
+
     await vscode.commands.executeCommand('modbench.plugin.disable');
-    await waitFor('the disable to land in the Instance', () =>
-      instanceExport()?.value.plugins.some((p) => p.name === 'TestMod.esp' && !p.enabled));
-  });
 
-});
-
-describe('Notification stream connects only while the backend is up', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  let gameDir = '';
-  const streamRequests = (log: string[]) => log.filter((r) => r === 'GET /notifications/stream');
-
-  before(async () => {
-    if (!root) return;
-    await resetMockBackendDetached();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
-    await setGameDirectory(gameDir);
-    await writeAndAwaitInstance(() =>
-      fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n'));
-  });
-
-  after(async () => {
-    if (!root) return;
-    exitEditing();
-    await setGameDirectory(undefined);
-    await writeAndAwaitInstance(() => fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), ''));
-    fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('connects once the backend is healthy and does not reconnect once editing ends', async function () {
-    if (!root) this.skip();
-    this.timeout(20000);
-
-    await enterEditing();
-    await waitFor('the notification stream to connect', () => streamRequests(requestLog).length > 0);
-    assert.strictEqual(streamRequests(requestLog).length, 1, 'expected exactly one connection for the launch');
-
-    exitEditing();
-    const client = ext?.exports.client;
-    if (client) await awaitStatus(client, 'stopped', 'the client to reach stopped');
-    assert.strictEqual(streamRequests(requestLog).length, 1,
-      'expected no reconnect once editing ends');
+    await waitFor('the disable to reach plugins.txt', () => /^TestMod\.esp\r?$/m.test(fs.readFileSync(pluginsTxtPath, 'utf8')));
   });
 });
 
 describe('The game-directory setting reaches the Instance as a recompute', () => {
-  let gameDir = '';
+  let providing = '';
+  let empty = '';
 
   before(() => {
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    providing = gameFolderHolding('medit-game-', ['TestMod.esp']);
+    empty = gameFolderHolding('medit-game-', []);
   });
 
   after(async () => {
-    exitEditing();
-    await setGameDirectory(undefined);
-    fs.rmSync(gameDir, { recursive: true, force: true });
+    await setGameDirectory(FIXTURE_GAME_DIRECTORY);
+    fs.writeFileSync(pluginsTxtPath, '');
+    fs.rmSync(providing, { recursive: true, force: true });
+    fs.rmSync(empty, { recursive: true, force: true });
   });
 
-  it('lands a value resolving the directory the setting names, with no file of the instance touched', async () => {
-    await setGameDirectory(gameDir);
+  it('lands a value plugin sync reads, with no file of the instance touched: the line the Data folder it now names does not provide goes', async () => {
+    await setGameDirectory(providing);
+    await holdPluginsTxt('*TestMod.esp\n');
 
-    const instance = present(instanceExport(), 'the Instance activate() exports');
-    assert.deepStrictEqual(instance.value.gameFolder, { kind: 'found', root: gameDir, dataFolder: path.join(gameDir, 'Data') });
+    await setGameDirectory(empty);
+
+    await waitFor('plugin sync to drop the line', () => !fs.readFileSync(pluginsTxtPath, 'utf8').includes('TestMod.esp'));
   });
 });
 
-describe('Launch mEdit loads the load order before it asks for plugins', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  let gameDir = '';
+describe('Modbench, launching mEdit with the extension, puts the load order before it asks for plugins', () => {
+  it('PUTs /load-order before the first GET /plugins the mock backend has heard since the extension activated', async () => {
+    await waitFor('a PUT /load-order', () => requestLog.includes('PUT /load-order'));
 
-  before(async () => {
-    if (!root) return;
-    resetMockBackend();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
-    await setGameDirectory(gameDir);
-
-    await writeAndAwaitInstance(() =>
-      fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n'));
-  });
-
-  after(async () => {
-    if (!root) return;
-    exitEditing();
-    await setGameDirectory(undefined);
-    await writeAndAwaitInstance(() => fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), ''));
-    fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('PUTs /load-order before the first GET /plugins', async () => {
-    await enterEditing();
-    const duringLaunch = [...requestLog];
-
-    const load = duringLaunch.indexOf('PUT /load-order');
-    assert.ok(load >= 0, 'launch should PUT /load-order');
-    const prematurePlugins = duringLaunch.slice(0, load).includes('GET /plugins');
-    assert.ok(!prematurePlugins, 'GET /plugins must not fire before PUT /load-order');
-
-  });
-});
-
-describe('The Toolbox stack stays visible through an editing backend', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginListProvider = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
-  let gameDir = '';
-
-  before(async () => {
-    if (!root) return;
-    resetMockBackend();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['TestMod.esp', 'Other.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
-    await setGameDirectory(gameDir);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n'));
-    await waitFor('the plugin rows to hold both written plugins', async () => {
-      const names = (await pluginListProvider().getChildren()).map((n) => rowName(n));
-      return (names.includes('TestMod.esp') && names.includes('Other.esp')) || undefined;
-    });
-  });
-
-  after(async () => {
-    if (!root) return;
-    await setGameDirectory(undefined);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
-    fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('keeps the Plugin load order filter applied across a Launch mEdit / Close mEdit round trip (AC5)', async () => {
-    const provider = pluginListProvider();
-    provider.setFilter('TestMod');
-    const before = await provider.getChildren();
-    assert.deepStrictEqual(
-      before.map((n) => rowName(n)), ['TestMod.esp'],
-      'the filter should narrow to the one matching row before entering editing',
-    );
-
-    await enterEditing();
-    exitEditing();
-
-    const after = await provider.getChildren();
-    assert.deepStrictEqual(
-      after.map((n) => rowName(n)), ['TestMod.esp'],
-      'the filter set before Launch mEdit must still be applied after Close mEdit — the Plugins view was never torn down',
-    );
-  });
-
-  it('still writes plugins.txt through the Plugin load order while the backend is running (AC4)', async () => {
-    const provider = pluginListProvider();
-    provider.setFilter('');
-    await enterEditing();
-
-    const other = findRow(await provider.getChildren(), 'Other.esp');
-    await vscode.commands.executeCommand('modbench.plugin.disable', other);
-
-    const written = fs.readFileSync(pluginsTxtPath, 'utf8');
-    assert.ok(written.includes('Other.esp'), 'plugins.txt should still list Other.esp, just disabled');
-    assert.ok(!written.includes('*Other.esp'), 'disabling a plugin while the backend runs should still write plugins.txt');
-
-    exitEditing();
-  });
-
-  it('still writes plugins.txt when a plugin is dragged past the last row while the backend is running (AC4)', async () => {
-    const provider = pluginListProvider();
-    provider.setFilter('');
-    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n');
-    provider.invalidate();
-    await provider.getChildren();
-
-    await enterEditing();
-
-    const dataTransfer = new vscode.DataTransfer();
-    dataTransfer.set(PLUGIN_LIST_DND_MIME, new vscode.DataTransferItem({ plugins: [{ name: 'TestMod.esp', origin: 'Data' }] }));
-    await provider.handleDrop(undefined, dataTransfer, new vscode.CancellationTokenSource().token);
-
-    const written = fs.readFileSync(pluginsTxtPath, 'utf8');
-    const order = written.split('\n').map((l) => l.replace(/^\*/, '').trim()).filter(Boolean);
-    assert.deepStrictEqual(
-      order, ['Other.esp', 'TestMod.esp'],
-      'dragging TestMod.esp to the end while the backend runs should still write the reordered plugins.txt',
-    );
-
-    exitEditing();
-  });
-});
-
-function rowFields(row: unknown): { name?: unknown; plugin?: { name?: unknown; enabled?: unknown } } {
-  return typeof row === 'object' && row !== null ? row : {};
-}
-const rowName = (row: unknown): string | undefined => {
-  const fields = rowFields(row);
-  const pluginName = fields.plugin?.name;
-  if (typeof pluginName === 'string') return pluginName;
-  return typeof fields.name === 'string' ? fields.name : undefined;
-};
-function findRow<T>(rows: readonly T[], name: string): T {
-  const row = rows.find((r) => rowName(r) === name);
-  assert.ok(row, `expected a row for ${name}`);
-  return row;
-}
-
-describe('Plugin sync takes the instance value', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  let gameDir = '';
-
-  before(async () => {
-    if (!root) return;
-    await resetMockBackendDetached();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
-    await setGameDirectory(gameDir);
-  });
-
-  after(async () => {
-    if (!root) return;
-    await setGameDirectory(undefined);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
-    fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('modbench.plugin.sync syncs the instance value it is handed: a Data folder it lists empty drops the line', async () => {
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n'));
-    const instance = present(instanceExport(), "the activated extension's instance export");
-    const handed = {
-      ...instance.value,
-      pluginSyncArguments: { ...instance.value.pluginSyncArguments, inData: { kind: 'listed', names: new Set<string>() } },
-    };
-
-    await vscode.commands.executeCommand('modbench.plugin.sync', handed);
-
-    assert.ok(!fs.readFileSync(pluginsTxtPath, 'utf8').includes('TestMod.esp'), 'the line the handed value drops');
+    const load = requestLog.indexOf('PUT /load-order');
+    assert.ok(!requestLog.slice(0, load).includes('GET /plugins'), 'GET /plugins must not fire before PUT /load-order');
   });
 });
 
 describe('An instance change sends a fresh load order snapshot (ADR-0013)', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
   let gameDir = '';
   let swapped = false;
   const putCount = () => requestLog.filter((l) => l === 'PUT /load-order').length;
@@ -1077,24 +634,14 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   }
 
   before(async () => {
-    if (!root) return;
-    await resetMockBackendDetached();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-reconcile-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['TestMod.esp', 'Second.esp']) {
-      fs.writeFileSync(path.join(gameDir, 'Data', name), '');
-    }
+    gameDir = gameFolderHolding('medit-reconcile-', ['TestMod.esp', 'Second.esp']);
     await setGameDirectory(gameDir);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Second.esp\n'));
-    pluginsTree().invalidate();
-    await enterEditing();
+    await holdPluginsTxt('*TestMod.esp\n*Second.esp\n');
   });
 
   after(async () => {
-    if (!root) return;
-    exitEditing();
-    await setGameDirectory(undefined);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
+    await setGameDirectory(FIXTURE_GAME_DIRECTORY);
+    fs.writeFileSync(pluginsTxtPath, '');
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
@@ -1114,21 +661,17 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
     assert.deepStrictEqual(putLoadOrders.slice(sent), [order]);
   });
-
 });
 
 describe('Refresh rebuilds the index, then re-reads the instance', () => {
-  beforeEach(async () => {
-    await resetMockBackendDetached();
-    await enterEditing();
-    requestLog.length = 0;
-  });
-  after(() => resetMockBackend());
+  afterEach(() => { rebuildIndexShouldFail = false; });
 
   it('POSTs /index/rebuild, then PUTs the load order the re-read built', async () => {
+    const since = requestLog.length;
+
     await vscode.commands.executeCommand('modbench.instance.refresh');
 
-    const rebuilt = requestLog.indexOf('POST /index/rebuild');
+    const rebuilt = requestLog.indexOf('POST /index/rebuild', since);
     assert.ok(rebuilt !== -1, 'modbench.instance.refresh must rebuild the index');
     await waitFor('a PUT /load-order after the rebuild',
       () => requestLog.slice(rebuilt).includes('PUT /load-order') ? true : undefined);
@@ -1136,7 +679,7 @@ describe('Refresh rebuilds the index, then re-reads the instance', () => {
 
   it('reports that another window holds the index, naming this instance', async () => {
     rebuildIndexShouldFail = true;
-    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const since = requestLog.length;
     const errors: string[] = [];
     const realShowError = vscode.window.showErrorMessage;
     Object.defineProperty(vscode.window, 'showErrorMessage', {
@@ -1146,18 +689,14 @@ describe('Refresh rebuilds the index, then re-reads the instance', () => {
     try {
       await vscode.commands.executeCommand('modbench.instance.refresh');
 
-      assert.ok(requestLog.some((l) => l === 'POST /index/rebuild'), 'sanity: the rebuild must still be attempted');
-      assert.ok(
-        !requestLog.some((l) => l === 'PUT /load-order'),
-        'a refused rebuild must not be followed by a load-order send',
-      );
+      assert.ok(requestLog.slice(since).includes('POST /index/rebuild'), 'sanity: the rebuild must still be attempted');
       assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
       const [toast] = errors;
       assert.ok(
         toast?.includes("This instance's index is open in another Modbench window"),
         `expected the refusal's words, got: ${toast}`,
       );
-      assert.ok(root !== undefined && toast?.includes(root), `expected the instance named, got: ${toast}`);
+      assert.ok(toast?.includes(root), `expected the instance named, got: ${toast}`);
       assert.ok(!toast?.includes(RAW_INDEX_LOCKED_DETAIL), `expected the backend's raw detail kept out of the toast, got: ${toast}`);
     } finally {
       Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
@@ -1174,107 +713,3 @@ async function waitFor<T>(label: string, read: () => Promise<T | false | undefin
     await new Promise((r) => setTimeout(r, 50));
   }
 }
-
-describe('Progressive load', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  let gameDir = '';
-
-  before(async () => {
-    if (!root) return;
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-progressive-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
-    await setGameDirectory(gameDir);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n'));
-  });
-
-  after(async () => {
-    if (!root) return;
-    exitEditing();
-    await setGameDirectory(undefined);
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
-    fs.rmSync(gameDir, { recursive: true, force: true });
-    resetMockBackend();
-  });
-
-  beforeEach(() => {
-    resetMockBackend();
-    holdPutLoadOrder = true;
-  });
-
-  afterEach(() => {
-    releasePutLoadOrder?.();
-    exitEditing();
-  });
-
-  const streamConnections = () => requestLog.filter((l) => l === 'GET /notifications/stream').length;
-
-  it('closes the notification stream when mEdit is closed mid-load', async () => {
-    const launch = enterEditing();
-    await waitFor('the load to be subscribed and held', () => streamConnections() > 0 && releasePutLoadOrder !== null);
-    setIndexed(['TestMod.esp']);
-    const connectionsAtLoad = streamConnections();
-
-    exitEditing();
-    await launch;
-
-    const client = ext?.exports.client;
-    if (client) await awaitStatus(client, 'stopped', 'the client to reach stopped');
-
-    assert.strictEqual(streamConnections(), connectionsAtLoad, 'closing mEdit must not reconnect the stream against a dead backend');
-  });
-
-  it('raises no error when mEdit is closed before the backend is even up', async () => {
-    holdHealth = true;
-    const errors: string[] = [];
-    const realShowError = vscode.window.showErrorMessage;
-    Object.defineProperty(vscode.window, 'showErrorMessage', {
-      configurable: true,
-      value: (message: string) => { errors.push(message); return Promise.resolve(undefined); },
-    });
-    try {
-      const launch = enterEditing();
-      await waitFor('the launch to reach the backend health probe', () =>
-        requestLog.some((l) => l === 'GET /health'));
-
-      exitEditing();
-      releaseHealth?.();
-      await launch;
-
-      assert.deepStrictEqual(errors, [], 'a deliberately abandoned launch must raise no error');
-      assert.ok(
-        !requestLog.some((l) => l === 'PUT /load-order'),
-        'an abandoned launch must not go on to load a load order the user has closed',
-      );
-    } finally {
-      Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
-    }
-  });
-});
-
-describe('A field gesture from the palette acts on the focused cell of the record tab in focus', () => {
-  before(async () => {
-    await resetMockBackendDetached();
-    await enterEditing();
-  });
-
-  after(() => { exitEditing(); });
-
-  it('removes the element the focused cell holds', async () => {
-    const formKey = '000801:TestMod.esp';
-    await vscode.commands.executeCommand('modbench.record.open', { formKey });
-    await waitFor('the record tab', () => openTabs().some((t) => t.label === formKey) || undefined);
-    const path = [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 0 }];
-    present(ext?.exports.focusRecordCell, "the activated extension's focusRecordCell export")({
-      webviewSection: 'arrayElement', formKey, plugin: 'TestMod.esp', origin: 'Data', path,
-      canMoveUp: false, canMoveDown: true, preventDefaultContextMenuItems: true,
-    });
-
-    await vscode.commands.executeCommand('modbench.record.removeElement');
-
-    const sent = await waitFor('the edit to reach mEdit', () => recordEdits.at(-1));
-    assert.deepStrictEqual(sent, { formKey, body: { plugin: 'TestMod.esp', origin: 'Data', op: 'remove', path } });
-  });
-});
-

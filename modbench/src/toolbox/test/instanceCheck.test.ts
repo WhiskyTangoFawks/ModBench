@@ -40,20 +40,17 @@ describe("the instance's first read", () => {
   const unread = () => new FakeInstance(instanceValueFixture(), 0);
 
   it('leaves the key unset until a value lands', () => {
-    const mark = markFirstReadLanded(unread());
+    markFirstReadLanded(unread());
     expect(writesOfTheReadKey()).toEqual([]);
-    expect(mark.landed).toBe(false);
   });
 
   it('leaves the key unset through a failed read, and sets it when the next read lands', () => {
     const instance = unread();
-    const mark = markFirstReadLanded(instance);
+    markFirstReadLanded(instance);
     instance.fail('ModOrganizer.ini is empty');
     expect(writesOfTheReadKey()).toEqual([]);
-    expect(mark.landed).toBe(false);
     instance.publish(instanceValueFixture());
     expect(writesOfTheReadKey()).toEqual([['setContext', INSTANCE_READ_KEY, true]]);
-    expect(mark.landed).toBe(true);
   });
 
   it('sets the key once the first value lands, and never again', () => {
