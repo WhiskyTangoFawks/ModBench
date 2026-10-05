@@ -8,12 +8,12 @@ interface InputBoxOptionsDoubleOfJustPromptAndValidateInput {
   validateInput?: (value: string) => Thenable<string | undefined> | string | undefined;
 }
 
-const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuickPick, openExternal } = vi.hoisted(() => ({
+const { registerCommand, executeCommand, showOpenDialog, showInputBox, createQuickPick, openExternal } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
   executeCommand: vi.fn((_command: string, _uri?: { fsPath: string }) => Promise.resolve()),
   showOpenDialog: vi.fn(),
   showInputBox: vi.fn<(options?: InputBoxOptionsDoubleOfJustPromptAndValidateInput) => Promise<string | undefined>>(),
-  showQuickPick: vi.fn<(items: readonly { label: string }[]) => Promise<unknown>>(),
+  createQuickPick: vi.fn(),
   openExternal: vi.fn(),
 }));
 
@@ -21,7 +21,7 @@ vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
   return {
     commands: { registerCommand, executeCommand },
-    window: { showOpenDialog, showInputBox, showQuickPick, withProgress: recordedWithProgress },
+    window: { showOpenDialog, showInputBox, createQuickPick, withProgress: recordedWithProgress },
     env: { openExternal },
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
     Uri: { file: uriFile, from: uriFrom, parse: (s: string) => ({ toString: () => s }) },
@@ -29,6 +29,7 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps } from '../../test/recordedProgress';
+import { quickPickChoosing } from '../../drivingLib/test/quickPickDouble';
 
 const {
   uninstallMods, deleteSeparators, renameMod, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators, markFiles,
@@ -881,7 +882,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
 });
 
 describe('modbench.mod.move: the selection of mods or of separators, to a picked place', () => {
-  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
+  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; shown = undefined; });
 
   const instance = {
     ...instanceThatReads,
@@ -901,12 +902,14 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
   const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
   const groupB = new SeparatorNode({ kind: 'separator', name: 'Group B', enabled: true }, []);
   const losingAtTop = { selection: () => [], direction: () => 'losingAtTop' as const };
-  const pickedLabels = (): string[] => {
-    const [items] = present(showQuickPick.mock.calls[0], 'the one showQuickPick call');
-    return items.map((item) => item.label);
-  };
-  const pickLabelled = (label: string) => showQuickPick.mockImplementationOnce(
-    (items: readonly { label: string }[]) => Promise.resolve(items.find((i) => i.label === label)));
+  type PlaceItem = { label: string; description?: string };
+  let shown: ReturnType<typeof quickPickChoosing<PlaceItem>> | undefined;
+  const scriptPick = (choose: (items: readonly PlaceItem[]) => PlaceItem | undefined) =>
+    createQuickPick.mockImplementationOnce(() => (shown = quickPickChoosing<PlaceItem>(choose)));
+  const shownPick = () => present(shown, 'the shown pick');
+  const pickedLabels = (): string[] => shownPick().items.map((item) => item.label);
+  const pickLabelled = (label: string) => scriptPick((items) => items.find((i) => i.label === label));
+  const escapeAtPick = () => scriptPick(() => undefined);
 
   it('right-clicked on a mod in a mixed selection, moves only the mods to the picked separator', async () => {
     pickLabelled('Group B');
@@ -956,7 +959,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     await invoke('modbench.mod.move', modC, [modC], { place: { kind: 'mod', name: 'Mod A' }, end: 'winning' });
     await invoke('modbench.mod.move', groupB, [groupB], { place: { kind: 'modOrder' }, end: 'winning' });
 
-    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(createQuickPick).not.toHaveBeenCalled();
     expect(moveMods).toHaveBeenCalledWith(access, 'Default', ['Mod C'], { kind: 'mod', name: 'Mod A' }, 'winning');
     expect(moveSeparators).toHaveBeenCalledWith(access, 'Default', ['Group B'], { kind: 'modOrder' }, 'winning');
   });
@@ -967,7 +970,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     registerModMoveCommand(access, instance, losingAtTop, reporter);
     await invoke('modbench.mod.move', groupB, [groupB], { place: { kind: 'mod', name: 'Mod A' }, end: 'losing' });
 
-    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(createQuickPick).not.toHaveBeenCalled();
     expect(moveSeparators).not.toHaveBeenCalled();
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Failed to move separators.',
@@ -976,7 +979,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
   });
 
   it('offers the places in the order the view shows them', async () => {
-    showQuickPick.mockResolvedValueOnce(undefined);
+    escapeAtPick();
 
     registerModMoveCommand(
       access, instance, { selection: () => [], direction: () => 'winningAtTop' }, recordingReporter());
@@ -985,20 +988,51 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     expect(pickedLabels()).toEqual(['Ungrouped', 'Group A', 'Group B']);
   });
 
+  it('opens the mods pick on the place that holds the selected mods', async () => {
+    escapeAtPick();
+
+    registerModMoveCommand(access, instance, losingAtTop, recordingReporter());
+    await invoke('modbench.mod.move', modC);
+
+    const { items, activeItems } = shownPick();
+    expect(activeItems).toEqual([items.find((i) => i.description === 'current')]);
+    expect(activeItems.map((i) => i.label)).toEqual(['Ungrouped']);
+  });
+
+  it('with the selected mods in several places, marks each and opens on none', async () => {
+    escapeAtPick();
+
+    registerModMoveCommand(access, instance, losingAtTop, recordingReporter());
+    await invoke('modbench.mod.move', modA, [modA, modC]);
+
+    const { items, activeItems } = shownPick();
+    expect(items.filter((i) => i.description === 'current').length).toBeGreaterThan(1);
+    expect(activeItems).toEqual([]);
+  });
+
+  it('opens the separators pick on no item', async () => {
+    escapeAtPick();
+
+    registerModMoveCommand(access, instance, losingAtTop, recordingReporter());
+    await invoke('modbench.mod.move', groupB);
+
+    expect(shownPick().activeItems).toEqual([]);
+  });
+
   it('from the palette over a selection mixing mods and separators, moves nothing and says nothing', async () => {
     const reporter = recordingReporter();
 
     registerModMoveCommand(access, instance, { ...losingAtTop, selection: () => [modA, groupA] }, reporter);
     await invoke('modbench.mod.move');
 
-    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(createQuickPick).not.toHaveBeenCalled();
     expect(moveMods).not.toHaveBeenCalled();
     expect(moveSeparators).not.toHaveBeenCalled();
     expect(reporter.reports).toEqual([]);
   });
 
   it('Esc at the pick moves nothing and says nothing', async () => {
-    showQuickPick.mockResolvedValueOnce(undefined);
+    escapeAtPick();
     const reporter = recordingReporter();
 
     registerModMoveCommand(access, instance, losingAtTop, reporter);
@@ -1009,13 +1043,13 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
   });
 
   it('Esc at the separator pick moves nothing and says nothing', async () => {
-    showQuickPick.mockResolvedValueOnce(undefined);
+    escapeAtPick();
     const reporter = recordingReporter();
 
     registerModMoveCommand(access, instance, losingAtTop, reporter);
     await invoke('modbench.mod.move', groupB);
 
-    expect(showQuickPick).toHaveBeenCalledOnce();
+    expect(createQuickPick).toHaveBeenCalledOnce();
     expect(moveSeparators).not.toHaveBeenCalled();
     expect(reporter.reports).toEqual([]);
   });

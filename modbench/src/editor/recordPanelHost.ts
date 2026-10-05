@@ -105,15 +105,15 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
     // only *gaining* focus: losing it is another panel's event, or removePanel's job.
     activeRecordTracker.setFormKey(panel, formKey);
     activeRecordTracker.setActivePanel(panel);
-    focusedCells.setActivePanel(panel);
+    focusedCells.panelFocused();
     panel.onDidChangeViewState(() => {
       if (!panel.active) return;
       activeRecordTracker.setActivePanel(panel);
-      focusedCells.setActivePanel(panel);
+      focusedCells.panelFocused();
     });
     panel.onDidDispose(() => {
-      activeRecordTracker.removePanel(panel);
       focusedCells.removePanel(panel);
+      activeRecordTracker.removePanel(panel);
     });
 
     panel.webview.onDidReceiveMessage((msg: unknown) => {
@@ -165,7 +165,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     }),
     ...registerGridKeyCommands({
       focusedCell: () => focusedCells.current(),
-      tellFocusedPanel: (message) => { void focusedCells.activePanel()?.webview.postMessage(message); },
+      tellFocusedPanel: (message) => { void activeRecordTracker.activePanel()?.webview.postMessage(message); },
     }),
     // Editor owns the record gestures (delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.

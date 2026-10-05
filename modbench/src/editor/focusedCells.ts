@@ -5,45 +5,44 @@ export type FocusedCellContext = object;
  *  the palette acts on. `show` hears the in-focus tab's cell whenever it changes. */
 export class FocusedCells<TPanel> {
   private readonly cells = new Map<TPanel, FocusedCellContext>();
-  private active: TPanel | undefined;
 
-  /** `entered` hears the user take the focus: a cell clicked, or the panel gaining it. */
+  /** `activePanel` is the record tab in focus, which the caller owns. `entered` hears the user
+   *  take the focus: a cell clicked, or the panel gaining it. */
   constructor(
+    private readonly activePanel: () => TPanel | undefined,
     private readonly show: (cell: FocusedCellContext | undefined) => void,
     private readonly entered: () => void,
   ) {}
 
   current(): FocusedCellContext | undefined {
-    return this.active === undefined ? undefined : this.cells.get(this.active);
-  }
-
-  activePanel(): TPanel | undefined {
-    return this.active;
+    const active = this.activePanel();
+    return active === undefined ? undefined : this.cells.get(active);
   }
 
   setCell(panel: TPanel, cell: FocusedCellContext | undefined, userFocus = false): void {
     if (cell === undefined) this.cells.delete(panel);
     else this.cells.set(panel, cell);
-    if (panel === this.active) this.show(cell);
+    if (panel === this.activePanel()) this.show(cell);
     if (userFocus) this.entered();
   }
 
   /** The cell the panel in focus reports; nothing while no panel is. */
   setActiveCell(cell: FocusedCellContext | undefined): void {
-    if (this.active !== undefined) this.setCell(this.active, cell);
+    const active = this.activePanel();
+    if (active !== undefined) this.setCell(active, cell);
   }
 
-  setActivePanel(panel: TPanel): void {
-    this.active = panel;
+  /** The caller has made a panel the one in focus. */
+  panelFocused(): void {
     this.show(this.current());
     this.entered();
   }
 
+  /** Called while the panel is still the one in focus, so its cell is shown away. */
   removePanel(panel: TPanel): void {
+    const wasActive = panel === this.activePanel();
     this.cells.delete(panel);
-    if (panel !== this.active) return;
-    this.active = undefined;
-    this.show(undefined);
+    if (wasActive) this.show(undefined);
   }
 }
 

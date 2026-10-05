@@ -70,7 +70,7 @@ describe('ActiveRecordTracker — Referenced By\'s "active record" input', () =>
     expect(handler).toHaveBeenCalledWith(undefined);
   });
 
-  it('removePanel on the active panel fires undefined — nothing else is active', () => {
+  it('removePanel on the last panel fires undefined — no record tab is left', () => {
     const tracker = new ActiveRecordTracker();
     const a = opaquePanelToken();
     tracker.setFormKey(a, '000001:Fallout4.esm');
@@ -79,6 +79,37 @@ describe('ActiveRecordTracker — Referenced By\'s "active record" input', () =>
     tracker.onDidChangeActiveRecord(handler);
     tracker.removePanel(a);
     expect(handler).toHaveBeenCalledWith(undefined);
+  });
+
+  it('removePanel on the active panel while another stays open keeps the record until another tab is focused', () => {
+    const tracker = new ActiveRecordTracker();
+    const a = opaquePanelToken();
+    const b = opaquePanelToken();
+    tracker.setFormKey(a, '000001:Fallout4.esm');
+    tracker.setFormKey(b, '000002:Fallout4.esm');
+    tracker.setActivePanel(a);
+    const handler = vi.fn();
+    tracker.onDidChangeActiveRecord(handler);
+    tracker.removePanel(a);
+    expect(handler).not.toHaveBeenCalled();
+    expect(tracker.current()).toBe('000001:Fallout4.esm');
+    tracker.setActivePanel(b);
+    expect(handler).toHaveBeenCalledWith('000002:Fallout4.esm');
+  });
+
+  it('removePanel on the last panel left fires undefined even when it was never the active one', () => {
+    const tracker = new ActiveRecordTracker();
+    const a = opaquePanelToken();
+    const b = opaquePanelToken();
+    tracker.setFormKey(a, '000001:Fallout4.esm');
+    tracker.setFormKey(b, '000002:Fallout4.esm');
+    tracker.setActivePanel(a);
+    tracker.removePanel(a);
+    const handler = vi.fn();
+    tracker.onDidChangeActiveRecord(handler);
+    tracker.removePanel(b);
+    expect(handler).toHaveBeenCalledWith(undefined);
+    expect(tracker.current()).toBeUndefined();
   });
 
   it('removePanel on an inactive panel does not fire', () => {

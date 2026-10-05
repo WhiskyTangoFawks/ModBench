@@ -51,7 +51,7 @@ function register(
   panels: { recordPanels: Set<vscode.WebviewPanel>; tracker: ActiveRecordTracker<vscode.WebviewPanel>; meditClient: InMemoryMEditClient }
     = { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient: new InMemoryMEditClient() },
   override: {
-    meditClient?: InMemoryMEditClient; focusedCells?: FocusedCells<vscode.WebviewPanel>;
+    meditClient?: InMemoryMEditClient;
   } = {},
 ): void {
   const { recordPanels, tracker } = panels;
@@ -61,7 +61,7 @@ function register(
     recordPanels,
     activeRecordTracker: tracker,
     editsInFlight: new EditsInFlight(tracker),
-    focusedCells: override.focusedCells ?? new FocusedCells(() => undefined, () => undefined),
+    focusedCells: new FocusedCells(() => tracker.activePanel(), () => undefined, () => undefined),
     meditClient,
     focusedViewSelection,
     viewSelections: new Map(),
@@ -213,10 +213,10 @@ describe('the record grid\'s F2', () => {
       if (!isPanel(fake)) throw new Error('not a panel');
       return fake;
     };
-    const focusedCells = new FocusedCells<vscode.WebviewPanel>(() => undefined, () => undefined);
-    focusedCells.setActivePanel(panel(behind));
-    focusedCells.setActivePanel(panel(inFocus));
-    register(() => [], undefined, { focusedCells });
+    const tracker = new ActiveRecordTracker<vscode.WebviewPanel>();
+    tracker.setActivePanel(panel(behind));
+    tracker.setActivePanel(panel(inFocus));
+    register(() => [], { recordPanels: new Set(), tracker, meditClient: new InMemoryMEditClient() });
 
     await commandHandlers.get('modbench.recordGrid.editHere')?.();
 

@@ -20,3 +20,14 @@ export function fakeQuickPick<T>() {
     escape: () => { hideListeners.forEach((cb) => cb()); },
   };
 }
+
+/** A quick pick that, once shown, picks the item `choose` returns, or Esc for `undefined`. */
+export function quickPickChoosing<T>(choose: (items: readonly T[]) => T | undefined) {
+  const fake = fakeQuickPick<T>();
+  fake.qp.show.mockImplementation(() => {
+    const picked = choose(fake.qp.items);
+    if (picked === undefined) fake.escape();
+    else fake.accept(picked);
+  });
+  return fake.qp;
+}

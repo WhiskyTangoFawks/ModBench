@@ -40,6 +40,7 @@ export function createEditor(deps: EditorDeps): Editor {
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const editsInFlight = new EditsInFlight(activeRecordTracker);
   const focusedCells = new FocusedCells<vscode.WebviewPanel>(
+    () => activeRecordTracker.activePanel(),
     (cell) => { publishFocusedCell(cell, setContext); },
     () => focusedView.enter(GRID_VIEW));
 
