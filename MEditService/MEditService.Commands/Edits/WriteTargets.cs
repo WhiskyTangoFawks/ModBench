@@ -229,8 +229,7 @@ internal sealed class WriteTargets(
                 destination.Repository, destination.Plugin, schemaReflector.GetSchemas(current.GameRelease), spelled,
                 "the copy of a container the destination can see", out var masters) is { } refused) return refused;
 
-        var partial = ContainerChildFields.HasChildFields(identity.RecordType, current.GameRelease) ? PartialFormFlag.Bit : 0;
-        switch (NearestCopyToTheLeft(destination.Plugin, identity.FormKey, _ => true, partial, masters))
+        switch (NearestCopyToTheLeft(destination.Plugin, identity.FormKey, _ => true, PartialFormFlag.Bit, masters))
         {
             case LeftCopy.Unreadable unreadable:
                 return unreadable.Refusal(spelled, "the copy of a container the destination can see is carried in");
