@@ -98,9 +98,14 @@ export interface FileConflictIndex {
   foldersByMod: Map<string, readonly OriginFolder[]>;
 }
 
-// Plugins live at a mod's root, so a nested file sharing a plugin's basename must not match.
+/** Whether a path sits at its origin's root, where plugins live, so a nested file sharing a
+ *  plugin's name never matches one. */
+export function isRootLevel(relativePath: string): boolean {
+  return !relativePath.includes('/');
+}
+
 function rootLevelEntries(index: FileConflictIndex): ConflictEntry[] {
-  return [...index.files].filter((entry) => !entry.relativePath.includes('/'));
+  return [...index.files].filter((entry) => isRootLevel(entry.relativePath));
 }
 
 /** Keyed by lowercased basename; root-level only, so every key is a bare basename and a

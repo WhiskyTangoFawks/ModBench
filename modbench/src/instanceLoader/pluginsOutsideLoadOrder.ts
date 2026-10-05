@@ -1,7 +1,7 @@
 // The plugin files the effective load order does not point at: an overridden plugin in an enabled
 // mod, or any plugin in a disabled mod. The snapshot names them too (ADR-0013).
 
-import { foldPath, type FileConflictIndex } from './fileConflictIndex';
+import { foldPath, isRootLevel, type FileConflictIndex } from './fileConflictIndex';
 import { isPluginFile } from '../instanceAdapter/instanceAdapter';
 
 /** A plugin file the load order does not hold, named as the snapshot names a plugin (ADR-0013). */
@@ -18,10 +18,6 @@ export interface LoadedPlugin {
   origin: string;
 }
 
-function isRootLevelPlugin(relativePath: string): boolean {
-  return !relativePath.includes('/') && isPluginFile(relativePath);
-}
-
 /** One rule covers both cases: an overridden plugin is a pair whose filename is loaded from a
  *  different origin, a never-listed file one whose filename is not loaded at all. */
 export function findPluginsOutsideLoadOrder(
@@ -34,7 +30,7 @@ export function findPluginsOutsideLoadOrder(
   const outside: PluginOutsideLoadOrder[] = [];
   for (const [mod, files] of index.filesByMod) {
     for (const file of files) {
-      if (!isRootLevelPlugin(file.relativePath)) continue;
+      if (!isRootLevel(file.relativePath) || !isPluginFile(file.relativePath)) continue;
       if (loaded.has(addressOf(mod, file.relativePath))) continue;
       outside.push({ name: file.relativePath, path: file.sourcePath, origin: mod });
     }

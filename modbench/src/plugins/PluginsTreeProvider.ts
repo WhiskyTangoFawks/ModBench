@@ -316,13 +316,16 @@ export class PluginsTreeProvider
     this.render();
   }
 
-  /** The row's own file (ADR-0012), or the game folder's copy
-   *  for a game-folder row the Instance value lists no file for. */
   resolvePluginPath(row: PluginNode | ImplicitMasterNode): Promise<string | undefined> {
-    const name = pluginFileOf(row);
-    const address = pluginAddressKey(name, row.origin);
+    return Promise.resolve(this.pluginFile({ name: pluginFileOf(row), origin: row.origin }));
+  }
+
+  /** The plugin's own file (ADR-0012), or the game folder's copy for a game-folder plugin the
+   *  Instance value lists no file for. */
+  pluginFile({ name, origin }: PluginAddress): string | undefined {
+    const address = pluginAddressKey(name, origin);
     const listed = this.instanceValue.plugins.find((p) => pluginAddressKey(p.name, p.origin) === address)?.path;
-    return Promise.resolve(listed ?? (row.origin === DATA_DIRECTORY_ORIGIN ? this.dataFolderFile(name) : undefined));
+    return listed ?? (origin === DATA_DIRECTORY_ORIGIN ? this.dataFolderFile(name) : undefined);
   }
 
   /** Whether the row's line is enabled now: a row the view still holds may predate the value. */

@@ -45,6 +45,7 @@ import {
   registerTrackCommand, registerCompileCommand, registerDecompileCommand, CompileProblems,
 } from '../pluginRowCommands';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { InMemoryMEditClient, type PluginAddress } from '../../client';
 import type { ItemRefusal } from '../../ports/selectionOutcome';
 import { PluginNode } from '../PluginsTreeProvider';
@@ -299,11 +300,14 @@ describe('modbench.mod.track', () => {
 });
 
 
+const valueWithFolders = (folders: { overwriteDir?: string; modDirs?: ReadonlyMap<string, string> }) => instanceValueFixture({
+  paths: { overwriteDir: folders.overwriteDir, downloadsDir: undefined, modDirs: folders.modDirs ?? new Map() },
+});
+
 describe('modbench.plugin.compile', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
-  const PATCH_FILES = originFiles(
-    [{ path: '/instance/mods/ModA/MyPatch.esp', origin: 'ModA' }], 'ModA');
+  const PATCH_FILES = originFiles(valueWithFolders({ modDirs: new Map([['ModA', '/instance/mods/ModA']]) }), 'ModA');
 
   function row(plugin: { name: string; origin: string }, contextValue = 'plugin enabled inTrackedMod tracked editable'): PluginNode {
     const node = new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
@@ -696,9 +700,10 @@ describe('CompileProblems', () => {
 
   it('targets the folder the value gave for the origin, overwrite included', () => {
     const diagnostics = new FakeDiagnosticCollection();
-    const plugin = { name: 'Stray.esp', path: '/instance/overwrite/Stray.esp', origin: 'overwrite', slot: null, enabled: false, winning: true };
+    const value = valueWithFolders({ overwriteDir: '/instance/overwrite' });
 
-    new CompileProblems(diagnostics).publish(plugin, originFiles([plugin], 'overwrite'), diagnosticAt('Source/Stray.psc'));
+    new CompileProblems(diagnostics)
+      .publish({ name: 'Stray.esp', origin: 'overwrite' }, originFiles(value, 'overwrite'), diagnosticAt('Source/Stray.psc'));
 
     expect(publishedPaths(diagnostics)).toEqual(['/instance/overwrite/Source/Stray.psc']);
   });
@@ -706,17 +711,15 @@ describe('CompileProblems', () => {
   it("replaces the plugin's own entries, and leaves every other plugin's, its mod's included", () => {
     const diagnostics = new FakeDiagnosticCollection();
     const problems = new CompileProblems(diagnostics);
-    const plugins = [
-      { name: 'A.esp', path: '/instance/mods/ModA/A.esp', origin: 'ModA', slot: 0, enabled: true, winning: true },
-      { name: 'Also.esp', path: '/instance/mods/ModA/Also.esp', origin: 'ModA', slot: 1, enabled: true, winning: true },
-      { name: 'B.esp', path: '/instance/mods/ModB/B.esp', origin: 'ModB', slot: 2, enabled: true, winning: true },
-    ];
-    const [a, also, b] = plugins;
-    problems.publish(present(a, 'A.esp'), originFiles(plugins, 'ModA'), diagnosticAt('A.esp/Old.json'));
-    problems.publish(present(also, 'Also.esp'), originFiles(plugins, 'ModA'), diagnosticAt('Also.esp/Kept.json'));
-    problems.publish(present(b, 'B.esp'), originFiles(plugins, 'ModB'), diagnosticAt('B.esp/Other.json'));
+    const value = valueWithFolders({ modDirs: new Map([['ModA', '/instance/mods/ModA'], ['ModB', '/instance/mods/ModB']]) });
+    const a = { name: 'A.esp', origin: 'ModA' };
+    const also = { name: 'Also.esp', origin: 'ModA' };
+    const b = { name: 'B.esp', origin: 'ModB' };
+    problems.publish(a, originFiles(value, 'ModA'), diagnosticAt('A.esp/Old.json'));
+    problems.publish(also, originFiles(value, 'ModA'), diagnosticAt('Also.esp/Kept.json'));
+    problems.publish(b, originFiles(value, 'ModB'), diagnosticAt('B.esp/Other.json'));
 
-    problems.publish(present(a, 'A.esp'), originFiles(plugins, 'ModA'), diagnosticAt('A.esp/New.json'));
+    problems.publish(a, originFiles(value, 'ModA'), diagnosticAt('A.esp/New.json'));
 
     expect(publishedPaths(diagnostics)).toEqual([
       '/instance/mods/ModA/Also.esp/Kept.json', '/instance/mods/ModB/B.esp/Other.json', '/instance/mods/ModA/A.esp/New.json',

@@ -2,8 +2,8 @@ import type { NotificationEvent } from '../../client/apiClient';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range,
-  FakeDiagnosticCollection, uriFile, uriFrom,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
+  DiagnosticSeverity, FakeDiagnosticCollection, uriFile, uriFrom,
 } from '../../test/vscodeMock';
 import { filterBoxCommandsMock, filterBoxWindowMock, makeFilterBoxState } from '../../drivingLib/test/nameFilterViewHarness';
 
@@ -13,14 +13,15 @@ const h = vi.hoisted(() => ({
   lenses: [] as SqlLens[],
   views: [] as { description?: string; message?: string }[],
   decorations: [] as { provideFileDecoration(uri: unknown): { badge?: string } | undefined }[],
+  diagnostics: new Map<string, FakeDiagnosticCollection>(),
 }));
 
 vi.mock('vscode', () => {
   const disposable = () => ({ dispose: () => undefined });
   const state = makeFilterBoxState();
   return {
-    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range,
-    Uri: { file: uriFile, from: uriFrom },
+    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
+    DiagnosticSeverity, Uri: { file: uriFile, from: uriFrom },
     Position: class { constructor(public line: number, public character: number) {} },
     CodeLens: class { constructor(public range: unknown, public command: unknown) {} },
     Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
@@ -40,7 +41,11 @@ vi.mock('vscode', () => {
       withProgress: (_options: unknown, task: () => Promise<unknown>) => task(),
     },
     languages: {
-      createDiagnosticCollection: () => new FakeDiagnosticCollection(),
+      createDiagnosticCollection: (name: string) => {
+        const collection = new FakeDiagnosticCollection();
+        h.diagnostics.set(name, collection);
+        return collection;
+      },
       registerCodeLensProvider: (_selector: unknown, provider: SqlLens) => {
         h.lenses.push(provider);
         return disposable();
@@ -63,11 +68,11 @@ const ARMOR_SQL = 'SELECT form_key FROM "armo"';
 
 const rowsChanged: NotificationEvent = { kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys: [], sequence: 1 };
 
-function pluginsView() {
+function pluginsView(value = instanceValueFixture()) {
   const client = new InMemoryMEditClient();
   const recordBrowser = new PluginTreeProvider(client);
   const plugins = createPluginsView({
-    instance: new FakeInstance(instanceValueFixture()), access: accessTo('/instance'), recordBrowser, client,
+    instance: new FakeInstance(value), access: accessTo('/instance'), recordBrowser, client,
     syncPlugins: () => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }), channel: { error: vi.fn(), info: vi.fn() },
     dataFolderFile: () => undefined, log: () => undefined, reporterFor: recordingReporter,
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, notifyConflictsComputed: vi.fn(),
@@ -79,6 +84,7 @@ beforeEach(() => {
   h.lenses.length = 0;
   h.views.length = 0;
   h.decorations.length = 0;
+  h.diagnostics.clear();
 });
 
 describe('the Plugins view follows mEdit\'s pushes and shows the record filter', () => {
@@ -111,6 +117,20 @@ describe('the Plugins view follows mEdit\'s pushes and shows the record filter',
     const [lens] = present(h.lenses[0], 'the registered code lens provider').provideCodeLenses({ getText: () => ARMOR_SQL });
     expect(lens?.command?.command).toBe('modbench.record.clearFilter');
     expect(present(h.views[0], 'the Plugins tree view').description).toBe('records: armor.sql');
+  });
+});
+
+describe('the Plugins view\'s Problems', () => {
+  it('puts a plugin changed outside Modbench on its row\'s own file, at the name it has on disk', () => {
+    const onDisk = '/instance/mods/ModA/test.ESP';
+    const { client } = pluginsView(instanceValueFixture({
+      plugins: [{ name: 'Test.esp', path: onDisk, origin: 'ModA', slot: 0, enabled: true, winning: true }],
+    }));
+
+    client.emit({ ...rowsChanged, kind: 'external-change', changedPlugins: [{ name: 'Test.esp', bytesSha256: 'ab12' }] });
+
+    const collection = present(h.diagnostics.get('modbench-changed-outside'), 'the changed-outside collection');
+    expect([...collection].map(([uri]) => uri.fsPath)).toEqual([onDisk]);
   });
 });
 
