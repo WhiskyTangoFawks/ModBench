@@ -61,7 +61,6 @@ function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
     refreshSourceControlFor: (plugin, origin) => { deps.refreshSourceControlFor(plugin, origin); },
     // Surfaces a refused edit (ADR-0019).
     reporter: deps.reporterFor('recordPanel'),
-    tellPanels: (message) => { for (const panel of deps.recordPanels) void panel.webview.postMessage(message); },
   };
 }
 
