@@ -67,4 +67,29 @@ public sealed class PluginTreeReadTests
         Assert.StartsWith(TheAdaptersOwnScratchPrefix, scratch, StringComparison.Ordinal);
         Assert.False(Directory.Exists(Path.GetFullPath(scratch, Path.GetTempPath())));
     }
+
+    [Fact]
+    public async Task WriteFromTree_WithAMasterOrder_WritesTheMasterListInThatOrder()
+    {
+        using var data = new PluginFixtureBuilder("writetree-masters")
+            .WithPlugin("AlphaBase.esm", mod => mod.Npcs.AddNew("AlphaNpc"))
+            .WithPlugin("BetaBase.esm", mod => mod.Npcs.AddNew("BetaNpc"))
+            .WithPlugin("Patch.esp", (mod, built) =>
+            {
+                foreach (var npc in built.SelectMany(b => b.Npcs))
+                    mod.Npcs.GetOrAddAsOverride(npc);
+            })
+            .Build();
+        var patchPath = Path.Combine(data.DataFolder, "Patch.esp");
+        var files = await Adapter.ReadPristineFilesAsync(
+            new ModPath(patchPath), GameRelease.Fallout4, PluginStrings.In(data.DataFolder));
+        var reversed = new[] { "BetaBase.esm", "AlphaBase.esm" };
+        var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Patch.esp");
+
+        await Adapter.WriteFromTreeAsync(files, recompiledPath, reversed);
+
+        var written = Adapter.ReadContent(
+            new ModPath(ModKey.FromFileName("Patch.esp"), recompiledPath), GameRelease.Fallout4);
+        Assert.Equal(reversed, written.Content.Masters);
+    }
 }

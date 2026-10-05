@@ -79,7 +79,8 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
         var recompiledPath = scratch.PluginPath;
         try
         {
-            await adapter.WriteFromTreeAsync(pristineFilesForThisPlugin, recompiledPath, cancel);
+            var originalMasters = adapter.MastersOf(pluginName, originalPluginPath, gameRelease, strings);
+            await adapter.WriteFromTreeAsync(pristineFilesForThisPlugin, recompiledPath, originalMasters, cancel);
         }
         catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
         {

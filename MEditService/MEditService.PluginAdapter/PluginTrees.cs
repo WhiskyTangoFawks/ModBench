@@ -85,15 +85,15 @@ internal static class PluginTrees
     /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
     /// replacement of the real plugin.</summary>
     internal static async Task WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, TreeDeserializer? deserialize = null,
-        CancellationToken cancel = default)
+        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
+        TreeDeserializer? deserialize = null, CancellationToken cancel = default)
     {
         var scratchDir = Directory.CreateTempSubdirectory("medit-writetree-").FullName;
         try
         {
             var recompiled = await (deserialize ?? DeserializeTree)(
                 await MaterializeTree(files, scratchDir, cancel), cancel);
-            await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath);
+            await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder);
         }
         finally
         {

@@ -67,8 +67,9 @@ public sealed class TrackModTests
             !modPath.ModKey.FileName.String.Equals(lockedName, StringComparison.OrdinalIgnoreCase) && base.CanRead(modPath);
 
         public override Task WriteFromTreeAsync(
-            IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>
-            TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, cancel);
+            IReadOnlyList<TreeFile> files, string destinationPath,
+            IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
+            TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
     }
 
     [Fact]
