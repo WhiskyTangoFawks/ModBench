@@ -7,7 +7,7 @@ import {
   getAtPath, isArrayElementHop, offersArrayAdd, referenceContext, rootFieldOf, stringValueContext, variantFor, wirePath,
   type CellContext, type Column, type PathSegment,
 } from './recordUtils';
-import type { NavRow } from './gridNavigation';
+import type { FocusedCell, NavRow } from './gridNavigation';
 import type { ColumnKey, CompareResult, FieldDiff, FieldMetadata, PathHop } from './types';
 import type { ArrayParentContext } from '../../src/wire/messages';
 
@@ -229,6 +229,16 @@ export function visibleRows(rows: readonly RecordRow[], collapsed: ReadonlySet<s
     if (under) hidden.add(row.key);
     return !under;
   });
+}
+
+/** The cell `at` names as the grid shows it: none while its row or column is collapsed away, or its
+ *  row is gone. */
+export function shownCell(
+  rows: readonly RecordRow[], collapsedRows: ReadonlySet<string>, collapsedColumns: ReadonlySet<ColumnKey>, at: FocusedCell,
+): Partial<ValueCell> & GridCell | undefined {
+  if (at.plugin !== null && collapsedColumns.has(at.plugin)) return undefined;
+  const row = visibleRows(rows, collapsedRows).find(r => r.key === at.rowKey);
+  return at.plugin === null ? row?.label : row?.cells.get(at.plugin);
 }
 
 export function navRows(rows: readonly RecordRow[], collapsed: ReadonlySet<string>): NavRow[] {

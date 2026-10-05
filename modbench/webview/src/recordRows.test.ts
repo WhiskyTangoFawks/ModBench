@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { compareOverride, compareResultFixture, diffNode, fieldMeta } from './test/fixtures';
 import { buildColumns } from './recordUtils';
 import { columnKey } from './columnKey';
-import { navRows, recordRows, visibleRows, FORM_ID_ROW, RECORD_HEADER_ROW, type FieldRow, type RecordRow } from './recordRows';
+import { navRows, recordRows, shownCell, visibleRows, FORM_ID_ROW, RECORD_HEADER_ROW, type FieldRow, type RecordRow } from './recordRows';
 import type { ColumnKey, CompareResult, FieldMetadata } from './types';
 
 const MASTER = columnKey('Fallout4.esm', null);
@@ -212,6 +212,23 @@ describe('a cell\'s context, which its right-click hands a command and the host\
 
   it('the label cell copies its label', () => {
     expect(row?.label.context).toEqual({ webviewSection: 'cell', copyText: 'Level', preventDefaultContextMenuItems: true });
+  });
+});
+
+describe('the focused cell, as the grid shows it', () => {
+  const rows = rowsFor(answer([bounds], [boundsDiff]), [MOD]);
+  const none = new Set<string>();
+
+  it('is the cell its row and column name, the label column included', () => {
+    expect(shownCell(rows, none, new Set(), { rowKey: 'Bounds.X', plugin: MOD })?.context)
+      .toMatchObject({ webviewSection: 'cell editableCell', copyText: '3' });
+    expect(shownCell(rows, none, new Set(), { rowKey: 'Bounds.X', plugin: null })?.context).toMatchObject({ copyText: 'X' });
+  });
+
+  it('is none while its row is collapsed away, its column is collapsed, or its row is gone', () => {
+    expect(shownCell(rows, new Set(['Bounds']), new Set(), { rowKey: 'Bounds.X', plugin: MOD })).toBeUndefined();
+    expect(shownCell(rows, none, new Set([MOD]), { rowKey: 'Bounds.X', plugin: MOD })).toBeUndefined();
+    expect(shownCell(rows, none, new Set(), { rowKey: 'Gone', plugin: MOD })).toBeUndefined();
   });
 });
 

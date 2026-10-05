@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useContext, useRef, useState } from 'react';
+import { EditorMounted } from './cellEditor';
 import { displayValue, modelValue, pastedValue } from './modelValue';
 import { mono, fg } from './gridStyles';
 import type { FieldMetadata } from './types';
@@ -39,6 +40,7 @@ export function ScalarCell({
   const [prevValue, setPrevValue] = useState(value);
   const [active, setActive] = useState(false);
   const settled = useRef(true);
+  const editorMounted = useContext(EditorMounted);
   function open() { settled.current = false; setActive(true); }
   if (prevValue !== value) {
     setPrevValue(value);
@@ -109,6 +111,7 @@ export function ScalarCell({
 
   const editorProps = {
     'data-editor': true,
+    ref: editorMounted,
     'aria-label': ariaLabel,
     autoFocus: true,
     onKeyDown: onEditorKeyDown,

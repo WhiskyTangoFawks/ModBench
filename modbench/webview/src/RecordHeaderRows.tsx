@@ -1,10 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useContext, useRef, useState } from 'react';
+import { EditorMounted } from './cellEditor';
 import { DiskCell } from './DiskCell';
 import { formKeyLabel } from './FormKeyLink';
 import { ExpandArrow } from './ExpandArrow';
 import { baseCell, labelCell, focusedRowStyle, mono, fg } from './gridStyles';
 import type { Column } from './recordUtils';
-import type { FocusedCell } from './DiffRow';
+import type { FocusedCell } from './gridNavigation';
 import type { ColumnKey } from './types';
 import { LABEL_COLUMN } from './columnKey';
 import { RECORD_HEADER_ROW, FORM_ID_ROW, type RecordRow } from './recordRows';
@@ -23,6 +24,7 @@ interface FormIdCellProps {
 function FormIdCell({ formKey, label, editable, onCommit }: Readonly<FormIdCellProps>) {
   const [draft, setDraft] = useState<string | null>(null);
   const settled = useRef(true);
+  const editorMounted = useContext(EditorMounted);
   if (!editable) return <span>{label}</span>;
   function settle(write: boolean) {
     if (settled.current) return;
@@ -44,6 +46,7 @@ function FormIdCell({ formKey, label, editable, onCommit }: Readonly<FormIdCellP
   return (
     <input
       data-editor
+      ref={editorMounted}
       autoFocus
       type="text"
       value={draft}

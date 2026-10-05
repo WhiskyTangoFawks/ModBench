@@ -4,7 +4,7 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
-import { pastedValue, readsAsFlags } from './modelValue';
+import { readsAsFlags } from './modelValue';
 import { ExpandArrow } from './ExpandArrow';
 import { collapsedReading, versionControlInfo1 } from './presentation';
 import {
@@ -13,6 +13,7 @@ import {
 import { defaultOf, isArrayElementHop, type Column } from './recordUtils';
 import type { ColumnKey, ConflictThis, FieldMetadata, FormKeyResolution, PathHop } from './types';
 import type { FieldRow } from './recordRows';
+import type { FocusedCell } from './gridNavigation';
 import { LABEL_COLUMN } from './columnKey';
 import type { ArrayParentContext } from '../../src/wire/messages';
 import type { CellDrag } from './cellDrag';
@@ -83,14 +84,6 @@ function renderCell(
       displayOverride={reading}
     />
   );
-}
-
-// The one focused cell panel-wide (editor.md, The focused cell). `plugin` is the column's compound
-// identity (ADR-0012), so two columns sharing a filename never both read as focused. `null` is the
-// label column.
-export interface FocusedCell {
-  rowKey: string;
-  plugin: ColumnKey | null;
 }
 
 function masterOrOnlyOne(
@@ -180,7 +173,6 @@ export function DiffRow({
         const cellTitle = [cellState && conflictStateName(cellState), cellMeta.readOnlyReason]
           .filter(Boolean).join('\n') || undefined;
         const edit = write && ((value: unknown) => onEdit(key, write, value));
-        const paste = edit && ((text: string) => edit(pastedValue(text, cellMeta, shown)));
         const drag: CellDrag | undefined = diff.values[key] != null
           ? { row: rowKey, arrayRow: isArrayElementRow ? parentRowKey : null, value: diff.values[key] }
           : undefined;
@@ -205,7 +197,6 @@ export function DiffRow({
               isFocused={isFocused}
               onFocusCell={() => onFocusCell(rowKey, key)}
               context={cell.context}
-              paste={paste}
               drag={drag}
               landing={landing}
             >
@@ -219,7 +210,6 @@ export function DiffRow({
         }
         return (
           <DiskCell
-            paste={paste}
             drag={drag}
             landing={landing}
             context={cell.context}

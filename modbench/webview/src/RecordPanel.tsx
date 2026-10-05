@@ -1,21 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PluginHeader } from './PluginHeader';
 import { ColumnEdge } from './ColumnEdge';
-import { DiffRow, type FocusedCell } from './DiffRow';
+import { DiffRow } from './DiffRow';
 import { buildColumns, headerCellContext, recordLabel } from './recordUtils';
 import { mono, fg, headerCell, headerBackground, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
 import type {
   ColumnKey, CompareOverride, CompareResult, PathHop, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
 import { columnKey, LABEL_COLUMN } from './columnKey';
-import { addElement, editField, focusCell, focusedCellContext } from './nativeBridge';
+import { addElement, editField, focusCell } from './nativeBridge';
+import { openEditor } from './DiskCell';
+import { EditorMounted } from './cellEditor';
+import { pastedValue } from './modelValue';
 import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview } from '../../src/wire/messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
 import { RecordHeaderRow, FormIdRow } from './RecordHeaderRows';
-import { navigate } from './gridNavigation';
-import { recordRows, visibleRows, navRows, FORM_ID_PATH, type RecordRow } from './recordRows';
+import { navigate, type FocusedCell } from './gridNavigation';
+import { recordRows, shownCell, visibleRows, navRows, FORM_ID_PATH, type RecordRow } from './recordRows';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
@@ -69,41 +72,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     enteredCell.current = true;
     setFocusedCell({ rowKey, plugin });
   }
-  // Read off the rendered grid after every render, since a re-read or a move changes what the
-  // focused cell's menu would offer without a new focus. Only a user's focus enters the grid.
-  const toldFocusedCell = useRef<string | undefined>(undefined);
-  const editorOpen = useRef(false);
-  const tellFocusedCell = useCallback((entered: boolean) => {
-    const cell = focusedCellContext(document);
-    const context = cell && editorOpen.current ? { ...cell, editorOpen: true } : cell;
-    const told = JSON.stringify(context);
-    if (told === toldFocusedCell.current && !entered) return;
-    toldFocusedCell.current = told;
-    focusCell(context, entered);
-  }, []);
-  useEffect(() => {
-    const entered = enteredCell.current;
-    enteredCell.current = false;
-    tellFocusedCell(entered);
-  });
-  // editor.md, The focused cell, story 7: the grid's keys wait while an editor is open. An editor
-  // holds the focus from opening to closing, and leaving the panel closes it.
-  useEffect(() => {
-    const follow = (gaining: EventTarget | null) => {
-      const open = gaining instanceof Element && gaining.closest('[data-editor]') !== null;
-      if (open === editorOpen.current) return;
-      editorOpen.current = open;
-      tellFocusedCell(false);
-    };
-    const focusIn = (e: FocusEvent) => follow(e.target);
-    const focusOut = (e: FocusEvent) => follow(e.relatedTarget);
-    document.addEventListener('focusin', focusIn);
-    document.addEventListener('focusout', focusOut);
-    return () => {
-      document.removeEventListener('focusin', focusIn);
-      document.removeEventListener('focusout', focusOut);
-    };
-  }, [tellFocusedCell]);
+  // editor.md, The focused cell, story 7: the grid's keys wait while an editor is open.
+  const [editorOpen, setEditorOpen] = useState(false);
+  const editorMounted = useCallback((editor: HTMLElement | null) => setEditorOpen(editor !== null), []);
   // Keyed by column identity — two same-filename columns must collapse independently.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
   const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | typeof LABEL_COLUMN, number>>(new Map());
@@ -177,20 +148,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     post(plugin, { op: 'set', path: hops, value });
   }, [post]);
 
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      let msg;
-      try {
-        msg = parseExtensionToWebview(event.data);
-      } catch {
-        return; // Not one of ours, or a stale/mismatched build.
-      }
-      if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) void refresh(msg.formKey);
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, [refresh]);
-
   const loadFailureMessage = recordPanelLoadFailureMessage(loadFailures, result?.overrides ?? []);
 
   const columns = useMemo(
@@ -203,6 +160,49 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       : [],
     [result, columns, editableColumns, partialFormColumns, formKey],
   );
+
+  const focused = useMemo(
+    () => focusedCell ? shownCell(rows, collapsedRows, collapsedColumns, focusedCell) : undefined,
+    [rows, collapsedRows, collapsedColumns, focusedCell],
+  );
+  // Told after every render, since a re-read or a move changes what the focused cell's menu would
+  // offer without a new focus. Only a user's focus enters the grid.
+  const toldFocusedCell = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const entered = enteredCell.current;
+    enteredCell.current = false;
+    const context = focused && editorOpen ? { ...focused.context, editorOpen: true } : focused?.context ?? null;
+    const told = JSON.stringify(context);
+    if (told === toldFocusedCell.current && !entered) return;
+    toldFocusedCell.current = told;
+    focusCell(context, entered);
+  });
+
+  // The keys VS Code holds reach the focused cell: F2 opens its editor, and Ctrl+V's text is
+  // parsed as its field and written there.
+  const pasteIntoFocused = useCallback((text: string) => {
+    const plugin = focusedCell?.plugin;
+    if (!plugin || !focused?.write || !focused.meta) return;
+    handleCellCommit(plugin, focused.write, pastedValue(text, focused.meta, focused.shown));
+  }, [focusedCell, focused, handleCellCommit]);
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      let msg;
+      try {
+        msg = parseExtensionToWebview(event.data);
+      } catch {
+        return; // Not one of ours, or a stale/mismatched build.
+      }
+      if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) void refresh(msg.formKey);
+      if (msg.type === EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL) pasteIntoFocused(msg.text);
+      if (msg.type === EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR) {
+        const cell = scroller.current?.querySelector<HTMLElement>('[data-focused-cell]');
+        if (cell) openEditor(cell);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [refresh, pasteIntoFocused]);
 
   const containerStyle: React.CSSProperties = {
     position: 'fixed',
@@ -245,7 +245,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   function handleGridKey(e: React.KeyboardEvent<HTMLTableSectionElement>) {
     if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || !focusedCell) return;
-    if (e.target instanceof Element && e.target.closest('[data-editor]')) return;
+    if (editorOpen) return;
     const rowHeight = e.currentTarget.querySelector('tr')?.offsetHeight ?? 0;
     const viewport = (scroller.current?.clientHeight ?? 0) - (headerRow.current?.offsetHeight ?? 0);
     const page = rowHeight > 0 ? Math.max(1, Math.floor(viewport / rowHeight) - 1) : 1;
@@ -328,7 +328,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
             </tr>
           </thead>
           <tbody onKeyDown={handleGridKey}>
-            {visibleRows(rows, collapsedRows).map(renderRow)}
+            <EditorMounted.Provider value={editorMounted}>
+              {visibleRows(rows, collapsedRows).map(renderRow)}
+            </EditorMounted.Provider>
           </tbody>
         </table>
       </div>

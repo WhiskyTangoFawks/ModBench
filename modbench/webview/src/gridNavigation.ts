@@ -1,5 +1,12 @@
-import type { FocusedCell } from './DiffRow';
 import type { ColumnKey } from './types';
+
+// The one focused cell panel-wide (editor.md, The focused cell). `plugin` is the column's compound
+// identity (ADR-0012), so two columns sharing a filename never both read as focused. `null` is the
+// label column.
+export interface FocusedCell {
+  rowKey: string;
+  plugin: ColumnKey | null;
+}
 
 export interface NavRow {
   key: string;
