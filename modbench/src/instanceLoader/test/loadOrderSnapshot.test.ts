@@ -4,12 +4,13 @@ import type { GameFolder, ModFolders, OriginFile, PluginEntry } from '../../inst
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
-  buildLoadOrderRows, loadOrderSnapshotOf, originFiles, originFolder, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
+  buildLoadOrderRows, loadOrderSnapshotOf, originFiles, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
   type LoadOrderPluginLine, type PluginAddress,
 } from '../loadOrderSnapshot';
 
 type LoadOrderPluginRow = LoadOrderPlugin | LoadOrderPluginLine;
 import { present } from '../../ports/present';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 type Provider = { winner: string; winnerMod: string; providers?: string[] };
 
@@ -162,92 +163,51 @@ describe('resolvePluginPaths', () => {
 });
 
 describe('originFiles', () => {
-  const row = (origin: string, path: string | undefined) =>
-    ({ name: 'X.esp', path, origin, slot: null, enabled: false, winning: true });
-  const rows = [row('TS Mod', join('/instance', 'mods', 'TS Mod', 'TrueStorms.esp'))];
+  const MOD_FOLDER = join('/instance', 'mods', 'TS Mod');
+  const value = instanceValueFixture({
+    gameFolder: GAME_FOLDER,
+    paths: { overwriteDir: OVERWRITE, downloadsDir: undefined, modDirs: new Map([['TS Mod', MOD_FOLDER]]) },
+  });
+  const fileOf = (origin: string) => present(originFiles(value, origin), `the ${origin} origin's files`).file('plugin-source/x.json');
 
-  it('names a file inside the folder the origin\'s plugin sits in, and holds only what is beneath it', () => {
-    const files = present(originFiles(rows, 'TS Mod'), 'the TS Mod origin\'s files');
-
-    expect(files.file('plugin-source/x.json')).toBe(join('/instance', 'mods', 'TS Mod', 'plugin-source', 'x.json'));
-    expect(files.holds(join('/instance', 'mods', 'TS Mod', 'plugin-source', 'x.json'))).toBe(true);
-    expect(files.holds(join('/instance', 'mods', 'Other', 'x.json'))).toBe(false);
+  it('names a file inside the mod folder the Instance adapter answered for a mod origin', () => {
+    expect(fileOf('TS Mod')).toBe(join(MOD_FOLDER, 'plugin-source', 'x.json'));
   });
 
-  it('answers nothing for an origin with no plugin file on disk', () => {
-    expect(originFiles(rows, 'Missing')).toBeUndefined();
-  });
-});
-
-describe('originFolder', () => {
-  const row = (origin: string, path: string | undefined) =>
-    ({ name: 'X.esp', path, origin, slot: null, enabled: false, winning: true });
-
-  it('answers a mod origin with the mod folder its plugin sits in', () => {
-    const rows = [row('TS Mod', join('/instance', 'mods', 'TS Mod', 'TrueStorms.esp'))];
-
-    expect(originFolder(rows, 'TS Mod')).toBe(join('/instance', 'mods', 'TS Mod'));
+  it('names a file inside the Overwrite folder for the overwrite origin, a reserved origin never a folder under mods/', () => {
+    expect(fileOf('overwrite')).toBe(join(OVERWRITE, 'plugin-source', 'x.json'));
   });
 
-  it('answers the overwrite origin with the overwrite directory, a reserved origin never a folder under mods/', () => {
-    const rows = [row('overwrite', join('/instance', 'overwrite', 'Stray.esp'))];
-
-    expect(originFolder(rows, 'overwrite')).toBe(join('/instance', 'overwrite'));
+  it('names a file inside the game\u2019s Data folder for the Data origin', () => {
+    expect(fileOf('Data')).toBe(join(DATA_FOLDER, 'plugin-source', 'x.json'));
   });
 
-  it('answers the Data origin with the game’s Data folder', () => {
-    const rows = [row('Data', join('/game', 'Data', 'Fallout4.esm'))];
-
-    expect(originFolder(rows, 'Data')).toBe(join('/game', 'Data'));
-  });
-
-  it('answers undefined for an origin whose only rows are line-only, with no plugin file on disk', () => {
-    expect(originFolder([row('Ghost Mod', undefined)], 'Ghost Mod')).toBeUndefined();
-  });
-
-  it('answers undefined for an origin no row carries', () => {
-    const rows = [row('TS Mod', join('/instance', 'mods', 'TS Mod', 'TrueStorms.esp'))];
-
-    expect(originFolder(rows, 'Other Mod')).toBeUndefined();
-  });
-
-  it('skips a line-only row to reach the same origin’s row that has a plugin file', () => {
-    const rows = [row('TS Mod', undefined), row('TS Mod', join('/instance', 'mods', 'TS Mod', 'B.esp'))];
-
-    expect(originFolder(rows, 'TS Mod')).toBe(join('/instance', 'mods', 'TS Mod'));
+  it('answers nothing for a mod with no folder, and for the Data origin while the game folder is not found', () => {
+    expect(originFiles(value, 'Other Mod')).toBeUndefined();
+    expect(originFiles({ ...value, gameFolder: GAME_FOLDER_NOT_FOUND }, 'Data')).toBeUndefined();
   });
 });
 
 describe('providedPluginsOf, what plugin sync is handed instead of walking mods/ a second time', () => {
-  const row = (
-    name: string, origin: string, path: string | undefined, winning = true,
-  ) => ({ name, path, origin, slot: null, enabled: false, winning });
+  it('keys each provided plugin by its folded name, at its own on-disk name rather than the name of the file a link points at', () => {
+    const files = index({ 'Zeta.esp': { winner: join('/store', 'abc123.esp'), winnerMod: 'TS Mod' } }).files;
 
-  it('keys each provided plugin by its folded name, at the winning plugin\u2019s own on-disk casing', () => {
-    const rows = [row('ZETA.esp', 'TS Mod', join('/instance', 'mods', 'TS Mod', 'Zeta.esp'))];
-
-    expect(providedPluginsOf(rows)).toEqual(new Map([['zeta.esp', 'Zeta.esp']]));
+    expect(providedPluginsOf(files, [])).toEqual(new Map([['zeta.esp', 'Zeta.esp']]));
   });
 
-  it('answers a contested name with the winning plugin alone, not the overridden mod plugin of a name overwrite/ also provides', () => {
-    const rows = [
-      row('A.esp', 'overwrite', join('/instance', 'overwrite', 'A.esp')),
-      row('A.esp', 'TS Mod', join('/instance', 'mods', 'TS Mod', 'A.esp'), false),
-    ];
+  it('answers a name Overwrite provides at Overwrite\u2019s casing, over the mod\u2019s', () => {
+    const files = index({ 'a.esp': { winner: join('/instance', 'mods', 'TS Mod', 'a.esp'), winnerMod: 'TS Mod' } }).files;
 
-    expect(providedPluginsOf(rows)).toEqual(new Map([['a.esp', 'A.esp']]));
+    expect(providedPluginsOf(files, [runtimeOutput('A.esp')])).toEqual(new Map([['a.esp', 'A.esp']]));
   });
 
-  it('leaves out a Data-folder plugin, presence not provision so no append source, and a line with no plugin file at all', () => {
-    const rows = [row('Fallout4.esm', 'Data', join('/game', 'Data', 'Fallout4.esm')), row('Ghost.esp', 'Data', undefined)];
+  it('leaves out a file that is not a plugin, and a plugin below an origin\u2019s root', () => {
+    const files = index({
+      'readme.txt': { winner: join('/instance', 'mods', 'TS Mod', 'readme.txt'), winnerMod: 'TS Mod' },
+      'Optional/B.esp': { winner: join('/instance', 'mods', 'TS Mod', 'Optional', 'B.esp'), winnerMod: 'TS Mod' },
+    }).files;
 
-    expect(providedPluginsOf(rows)).toEqual(new Map());
-  });
-
-  it('leaves out a root-level file that is not a plugin', () => {
-    const rows = [row('readme.txt', 'TS Mod', join('/instance', 'mods', 'TS Mod', 'readme.txt'))];
-
-    expect(providedPluginsOf(rows)).toEqual(new Map());
+    expect(providedPluginsOf(files, [runtimeOutput('notes.txt'), runtimeOutput('Optional/C.esp')])).toEqual(new Map());
   });
 });
 

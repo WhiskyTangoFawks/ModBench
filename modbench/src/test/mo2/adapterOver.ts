@@ -3,9 +3,8 @@ import type {
 } from '../../instanceAdapter/instanceAdapter';
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
-import { buildLoadOrderRows, providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
+import { providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
 import type { InstanceOptions } from '../../instanceLoader/instance';
-import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
 
 /** The adapter's answers a test fixes in place of asking the machine it runs on. */
 export interface AdapterAnswers {
@@ -68,13 +67,10 @@ export async function readDownloadedFileMeta(root: string, name: string): Promis
   return listed.files?.find((file) => file.name === name)?.meta;
 }
 
-/** The winners the Instance's value carries for a tree on disk, through the value's own builders.
- *  A Data-folder plugin is never provision, so the game folder cannot change the answer. */
+/** The winners the Instance's value carries for a tree on disk, through the value's own builders. */
 export async function providedPluginsIn(root: string, profile = 'Default'): Promise<ReadonlyMap<string, string>> {
   const adapter = adapterOver(root);
-  const [entries, lines, runtimeOutput] = await Promise.all([
-    adapter.modOrder(profile), adapter.pluginOrder(profile), adapter.originFiles({ kind: 'runtimeOutput' }),
-  ]);
+  const [entries, runtimeOutput] = await Promise.all([adapter.modOrder(profile), adapter.originFiles({ kind: 'runtimeOutput' })]);
   const index = await buildFileConflictIndex(entries, runtimeOutput.files, adapter, () => {});
-  return providedPluginsOf(buildLoadOrderRows(lines, index, runtimeOutput.files, GAME_FOLDER_NOT_FOUND));
+  return providedPluginsOf(index.files, runtimeOutput.files);
 }

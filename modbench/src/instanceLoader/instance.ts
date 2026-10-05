@@ -413,7 +413,10 @@ export class Instance implements Subscription {
       ? await this.readInstalledInto(entries, modFolders?.all ?? [])
       : undefined;
     const modFolderList = modFolders?.all;
-    const syncSource = { activeProfile: profile, modFolders: modFolderList, plugins, dataFolderPlugins, pluginsLoadedWithNoLine };
+    const syncSource = {
+      activeProfile: profile, modFolders: modFolderList, files: index.files, overwriteFiles: runtimeOutput.files,
+      dataFolderPlugins, pluginsLoadedWithNoLine,
+    };
     return {
       mods: entries,
       modFolders: modFolderList,

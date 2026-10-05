@@ -1,12 +1,14 @@
 // ADR-0013's snapshot. A plugins.txt line no mod provides names the Data folder's plugin.
 
-import { basename, dirname, join, sep } from 'node:path';
-import { foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
+import { foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex, type FileWinners } from './fileConflictIndex';
 import {
-  isPluginFile, OVERWRITE_ORIGIN, type DataFolderPlugins, type GameFolder, type ModFolders, type OriginFile, type PluginEntry,
+  fileInFolder, isPluginFile, OVERWRITE_ORIGIN, type DataFolderPlugins, type GameFolder, type ModFolders, type OriginFile,
+  type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
-import { dataFolderFile } from '../tables/gamePaths';
+import { present } from '../ports/present';
+import { dataFolderFile, dataFolderOf } from '../tables/gamePaths';
+import type { InstanceValue } from './instance';
 
 export { OVERWRITE_ORIGIN };
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
@@ -57,49 +59,34 @@ export interface LoadOrderPluginLine extends Omit<LoadOrderPlugin, 'path'> {
   readonly path: undefined;
 }
 
-/** The folder an origin's plugins sit in, read off the value's own rows, since `overwrite` and
- *  `Data` are not mods (ADR-0012). `undefined` when no row for that origin has a
- *  plugin file on disk. */
-export function originFolder(
-  plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path'>[], origin: string,
-): string | undefined {
-  const plugin = plugins.find((p) => p.path !== undefined && p.origin === origin);
-  return plugin?.path === undefined ? undefined : dirname(plugin.path);
-}
-
 /** The files inside one origin's folder, by the relative path a source tree names them with. */
 export interface OriginFiles {
   file(relativePath: string): string;
-  holds(file: string): boolean;
 }
 
-/** `originFiles` bound to one generation of the value's rows, for a caller that holds no rows of
- *  its own. */
+/** `originFiles` bound to one generation of the value, for a caller that holds no value of its
+ *  own. */
 export type OriginFilesOf = (origin: string) => OriginFiles | undefined;
 
-/** The files of the folder `originFolder` answers, a source tree's relative path joined beneath
- *  it. `undefined` when no row for that origin has a plugin file on disk. */
-export function originFiles(
-  plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path'>[], origin: string,
-): OriginFiles | undefined {
-  const folder = originFolder(plugins, origin);
-  if (folder === undefined) return undefined;
-  return { file: (relativePath) => join(folder, relativePath), holds: (file) => file.startsWith(folder + sep) };
+/** The files of the folder the Instance adapter answered for the origin (ADR-0012). `undefined`
+ *  when it answered none. */
+export function originFiles(value: Pick<InstanceValue, 'paths' | 'gameFolder'>, origin: string): OriginFiles | undefined {
+  const folder = originFolder(value, origin);
+  return folder === undefined ? undefined : { file: (relativePath) => fileInFolder(folder, relativePath) };
 }
 
-/** The plugin files this instance provides, keyed case-folded to the winning plugin's on-disk
- *  name: the Mod override order's answer, overwrite/ included. A Data-folder plugin is presence,
- *  not provision, and is left out. */
-export function providedPluginsOf(
-  plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path' | 'winning'>[],
-): Map<string, string> {
-  const provided = new Map<string, string>();
-  for (const plugin of plugins) {
-    if (plugin.path === undefined || !plugin.winning || plugin.origin === DATA_DIRECTORY_ORIGIN) continue;
-    const real = basename(plugin.path);
-    if (isPluginFile(real)) provided.set(foldPath(real), real);
-  }
-  return provided;
+function originFolder({ paths, gameFolder }: Pick<InstanceValue, 'paths' | 'gameFolder'>, origin: string): string | undefined {
+  if (origin === OVERWRITE_ORIGIN) return paths.overwriteDir;
+  if (origin === DATA_DIRECTORY_ORIGIN) return dataFolderOf(gameFolder);
+  return paths.modDirs.get(origin);
+}
+
+/** The plugin files the mods and overwrite/ provide, keyed case-folded to the winning file's own
+ *  name: the Mod override order's answer. A Data-folder plugin is presence, not provision. */
+export function providedPluginsOf(files: FileWinners, runtimeOutput: readonly OriginFile[]): Map<string, string> {
+  const names = [...files, ...runtimeOutput].map((file) => file.relativePath)
+    .filter((name) => !name.includes('/') && isPluginFile(name));
+  return new Map(names.map((name) => [foldPath(name), name]));
 }
 
 /** ADR-0012. */
@@ -228,8 +215,9 @@ export function loadOrderSnapshotOf(value: {
     const folder = value.modFolders?.holding({ kind: 'mod', name: origin });
     return folder === undefined ? undefined : { kind: 'Mod', mod: origin, folder: folder.path };
   };
-  const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) =>
-    rowAt.get(addressOf(p)) ?? { ...p, path: join(dataFolder, p.name) });
+  const inDataFolder = (p: PluginAddress) =>
+    ({ ...p, path: present(dataFolderFile(value.gameFolder, p.name), 'the Data folder file of a found game folder') });
+  const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) => rowAt.get(addressOf(p)) ?? inDataFolder(p));
   const placed = new Set(loadedWithNoLine.map((p) => foldPath(p.name)));
   const fromLines = rows
     .filter((p): p is LoadOrderPlugin & { slot: number } => p.slot !== null && p.enabled && p.winning)
