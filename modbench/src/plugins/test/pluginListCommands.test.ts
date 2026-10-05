@@ -128,6 +128,7 @@ describe('registerCreatePluginCommand', () => {
     expect(validate('')).toBe('Name is required');
     expect(validate('MyPatch.txt')).toBe('Extension must be .esp, .esm, or .esl');
     expect(validate('MyPatch')).toBe('Extension must be .esp, .esm, or .esl');
+    expect(validate('.esp')).toBe('Extension must be .esp, .esm, or .esl');
     expect(['A.esp', 'B.ESM', 'C.esl'].map(validate)).toEqual([undefined, undefined, undefined]);
   });
 
