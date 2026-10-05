@@ -2,18 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PluginHeader } from './PluginHeader';
 import { ColumnEdge } from './ColumnEdge';
 import { DiffRow, type FocusedCell } from './DiffRow';
-import {
-  buildColumns, columnHasNode,
-  wirePath, variantFor, declaresMember,
-  headerCellContext, combineVscodeContexts, recordLabel,
-} from './recordUtils';
-import type { PathSegment } from './recordUtils';
+import { buildColumns, wirePath, headerCellContext, combineVscodeContexts, recordLabel } from './recordUtils';
 import { mono, fg, headerCell, headerBackground, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
-import { elementsIn } from './presentation';
-import { readsAsFlags } from './modelValue';
-import { idleMembers } from './siblingsInUse';
 import type {
-  ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope,
+  ColumnKey, CompareOverride, CompareResult, PathHop, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
 import { columnKey, LABEL_COLUMN } from './columnKey';
 import { addElement, editField, focusCell, focusedCellContext } from './nativeBridge';
@@ -21,27 +13,13 @@ import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview } from '../../src/wire/me
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
-import { RecordHeaderRow, FormIdRow, RECORD_HEADER_ROW, FORM_ID_ROW, FORM_ID_PATH } from './RecordHeaderRows';
-import { navigate, type NavRow } from './gridNavigation';
+import { RecordHeaderRow, FormIdRow } from './RecordHeaderRows';
+import { navigate } from './gridNavigation';
+import { recordRows, visibleRows, navRows, RECORD_HEADER_ROW, FORM_ID_PATH, type FieldRow, type RecordRow } from './recordRows';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
 };
-
-// Where a row sits in the grid: `present` says which columns carry the object it is a member of, and
-// `editable` which columns can write it.
-interface RowAt {
-  path: PathSegment[];
-  rootField: string;
-  rowKey: string;
-  parent: string | null;
-  present: (column: ColumnKey) => boolean;
-  editable: Set<ColumnKey>;
-  depth: number;
-  isLastElement?: (column: ColumnKey) => boolean;
-  keyMembers?: readonly string[] | null;
-  cellMetas?: Partial<Record<string, FieldMetadata>>;
-}
 
 // One sweep over the response's own overrides, keyed as the backend keys its dictionaries
 // (ADR-0012), so every whole-grid column set is minted the same way.
@@ -57,16 +35,6 @@ function columnKeysWhere(
 }
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
-
-// Two elements sharing a key share a label, and each is a row of its own.
-function withRowKeys(parent: string, children: readonly FieldDiff[]): [FieldDiff, string][] {
-  const turns = new Map<string, number>();
-  return children.map(child => {
-    const turn = (turns.get(child.fieldName) ?? 0) + 1;
-    turns.set(child.fieldName, turn);
-    return [child, turn === 1 ? `${parent}.${child.fieldName}` : `${parent}.${child.fieldName}#${turn}`];
-  });
-}
 
 const messageStyle: React.CSSProperties = {
   flex: '0 0 auto', marginBottom: 8, fontSize: '11px', color: 'var(--vscode-editorWarning-foreground, #cca700)',
@@ -217,16 +185,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     });
   }
 
-  const fieldMetaMap = useMemo((): Partial<Record<string, FieldMetadata>> => {
-    const map: Partial<Record<string, FieldMetadata>> = {};
-    for (const o of result?.overrides ?? []) {
-      for (const fv of o.fields) {
-        if (!map[fv.metadata.name]) map[fv.metadata.name] = fv.metadata;
-      }
-    }
-    return map;
-  }, [result]);
-
   // One leaf, one set (ADR-0005).
   const handleCellCommit = useCallback((plugin: ColumnKey, hops: PathHop[], value: unknown) => {
     post(plugin, { op: 'set', path: hops, value });
@@ -272,7 +230,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     () => result ? buildColumns(result.overrides) : [],
     [result],
   );
-
+  const rows = useMemo(
+    () => result ? recordRows({ result, columns, editableColumns, partialFormColumns }) : [],
+    [result, columns, editableColumns, partialFormColumns],
+  );
 
   const containerStyle: React.CSSProperties = {
     position: 'fixed',
@@ -307,12 +268,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   // `result.conflictAll` is record-wide and deliberately not threaded into the row background —
   // that is each row's own `diff.conflictAll`, computed bottom-up per node.
-  const { overrides, diffs } = result;
+  const { overrides } = result;
 
   const title = recordLabel(overrides, formKey);
 
   const headerExpanded = !collapsedRows.has(RECORD_HEADER_ROW);
-  const navRows: NavRow[] = [{ key: RECORD_HEADER_ROW, parent: null, expandable: true, expanded: headerExpanded }];
   const navColumns = columns.filter(c => !collapsedColumns.has(c.key)).map(c => c.key);
 
   function handleGridKey(e: React.KeyboardEvent<HTMLTableSectionElement>) {
@@ -321,32 +281,23 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     const rowHeight = e.currentTarget.querySelector('tr')?.offsetHeight ?? 0;
     const viewport = (scroller.current?.clientHeight ?? 0) - (headerRow.current?.offsetHeight ?? 0);
     const page = rowHeight > 0 ? Math.max(1, Math.floor(viewport / rowHeight) - 1) : 1;
-    const move = navigate(e.key, navRows, navColumns, focusedCell, page);
+    const move = navigate(e.key, navRows(rows, collapsedRows), navColumns, focusedCell, page);
     if (!move) return;
     e.preventDefault();
     if ('toggle' in move) toggleRow(move.toggle);
     else handleFocusCell(move.focus.rowKey, move.focus.plugin);
   }
 
-  // One recursive builder for every nesting depth — including the recursion a script property's
-  // struct members need. `meta` is undefined only for a malformed diff tree.
-  function buildRows(diff: FieldDiff, meta: FieldMetadata | undefined, at: RowAt): React.ReactNode[] {
-    // A diff node naming a member no override's schema declares has no shape to render against, so
-    // it and its subtree are dropped rather than rendered against a guessed one.
-    if (!meta) return [];
-    const { path, rootField, rowKey, parent, present, editable, depth, isLastElement, keyMembers, cellMetas } = at;
-    const hasChildren = (diff.children?.length ?? 0) > 0;
-    const isExpanded = !collapsedRows.has(rowKey);
-    navRows.push({ key: rowKey, parent, expandable: hasChildren || readsAsFlags(meta), expanded: isExpanded });
-
-    const rows: React.ReactNode[] = [
+  function renderRow(row: FieldRow) {
+    const { key, diff, meta, path, rootField, parent } = row;
+    return (
       <DiffRow
-        key={rowKey}
+        key={key}
         diff={diff}
         meta={meta}
         columns={columns}
         columnStyle={columnStyle}
-        editableColumns={editable}
+        editableColumns={row.editable}
         onEditCell={(plugin: ColumnKey, value: unknown) => {
           const hops = wirePath(rootField, path, plugin);
           if (hops) handleCellCommit(plugin, hops, value);
@@ -354,103 +305,36 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         onAddElement={addElement}
         collapsedColumns={collapsedColumns}
         recordLabel={title}
-        context={{ path, rootField, depth }}
-        rowKey={rowKey}
+        context={{ path, rootField, depth: row.depth }}
+        rowKey={key}
         parentRowKey={parent}
         focusedCell={focusedCell}
         onFocusCell={handleFocusCell}
-        isExpanded={isExpanded}
-        isLastElement={isLastElement}
-        keyMembers={keyMembers}
-        ownerPresent={present}
-        cellMetas={cellMetas}
-        onToggle={() => toggleRow(rowKey)}
-      />,
-    ];
-
-    if (!hasChildren || !isExpanded) return rows;
-
-    // Mutagen aliases a condition's parameter slots onto the same bytes, so the idle twin of a
-    // live slot would render the same four bytes a second time as a different type. Filtering
-    // removes only rows the diff already has.
-    const idle = meta.type === 'struct' ? idleMembers(meta, columns.map(c => diff.values[c.key])) : undefined;
-
-    const children = diff.children ?? [];
-    for (const [child, childRowKey] of withRowKeys(rowKey, children)) {
-      if (idle?.has(child.fieldName)) continue;
-      if (meta.type === 'array' && meta.elementType) {
-        rows.push(...buildRows(child, meta.elementType, {
-          ...at,
-          path: [...path, { kind: 'element', indexes: child.indexes, keyed: !!meta.keyMembers }],
-          rowKey: childRowKey, parent: rowKey, present: column => child.values[column] != null, depth: depth + 1,
-          isLastElement: column => elementsIn(diff, column).at(-1) === child,
-          keyMembers: meta.keyMembers,
-          cellMetas: undefined,
-        }));
-      } else if (meta.type === 'struct') {
-        // A union member's shape is the leaf's the row's own values name; the row takes the first
-        // column's leaf for its structure, and each cell the shape its own column's leaf gives it.
-        const member = meta.fields?.find(f => f.name === child.fieldName);
-        const owner = columns.map(c => diff.values[c.key]).find(v => v != null);
-        const memberMeta = member && variantFor(member, owner, meta);
-        const cellMetas = member?.variants
-          ? Object.fromEntries(columns.map(c => [c.key, variantFor(member, diff.values[c.key], meta)]))
-          : undefined;
-        rows.push(...buildRows(child, memberMeta, {
-          ...at,
-          path: [...path, { kind: 'member', name: child.fieldName }],
-          rowKey: childRowKey, parent: rowKey,
-          present: column => present(column) && columnHasNode(meta, diff.values[column])
-            && (!member || declaresMember(member, diff.values[column], meta)),
-          depth: depth + 1, isLastElement: undefined, keyMembers: undefined, cellMetas,
-        }));
-      }
-    }
-    return rows;
-  }
-
-  // The FormID reads each copy's own FormKey, and edits as the FormKey typed.
-  function formIdRow(meta: FieldMetadata) {
-    navRows.push({ key: FORM_ID_ROW, parent: RECORD_HEADER_ROW, expandable: false, expanded: false });
-    return (
-      <FormIdRow
-        key={FORM_ID_ROW}
-        label={meta.displayLabel ?? meta.name}
-        readOnlyReason={meta.readOnlyReason}
-        columns={columns}
-        collapsedColumns={collapsedColumns}
-        columnStyle={columnStyle}
-        editableColumns={editableColumns}
-        focusedCell={focusedCell}
-        onFocusCell={handleFocusCell}
-        onCommitFormId={(plugin, value) => handleCellCommit(plugin, FORM_ID_PATH, value)}
+        isExpanded={!collapsedRows.has(key)}
+        isLastElement={row.isLastElement}
+        keyMembers={row.keyMembers}
+        ownerPresent={row.present}
+        cellMetas={row.cellMetas}
+        onToggle={() => toggleRow(key)}
       />
     );
   }
 
-  const isHeaderMember = (diff: FieldDiff) => fieldMetaMap[diff.fieldName]?.isRecordHeaderMember === true;
-  const headerDiffs = diffs.filter(isHeaderMember);
-  const headerMemberRows = (diff: FieldDiff): React.ReactNode[] => {
-    const meta = fieldMetaMap[diff.fieldName];
-    return meta?.isRecordFormKey
-      ? [formIdRow(meta)]
-      : buildRows(diff, meta, {
-        path: [], rootField: diff.fieldName, rowKey: `${RECORD_HEADER_ROW}.${diff.fieldName}`, parent: RECORD_HEADER_ROW,
-        present: () => true, editable: editableColumns, depth: 1,
-      });
-  };
-  const headerRows = headerExpanded ? headerDiffs.flatMap(headerMemberRows) : [];
-  // A Partial Form column's own fields are nulled by the classifier: none is absent by default,
-  // since the record's own fields are not there to be members of.
-  const fieldRows = diffs.filter(d => !isHeaderMember(d)).flatMap(diff => {
-    const meta = fieldMetaMap[diff.fieldName];
-    const isEditorId = meta?.isEditorId === true;
-    return buildRows(diff, meta, {
-      path: [], rootField: diff.fieldName, rowKey: diff.fieldName, parent: null,
-      present: column => isEditorId || !partialFormColumns.has(column),
-      editable: isEditorId ? editableColumns : ownFieldEditableColumns, depth: 0,
-    });
-  });
+  // The FormID reads each copy's own FormKey, and edits as the FormKey typed.
+  const renderFormId = (row: Extract<RecordRow, { kind: 'formId' }>) => (
+    <FormIdRow
+      key={row.key}
+      label={row.meta.displayLabel ?? row.meta.name}
+      readOnlyReason={row.meta.readOnlyReason}
+      columns={columns}
+      collapsedColumns={collapsedColumns}
+      columnStyle={columnStyle}
+      editableColumns={editableColumns}
+      focusedCell={focusedCell}
+      onFocusCell={handleFocusCell}
+      onCommitFormId={(plugin, value) => handleCellCommit(plugin, FORM_ID_PATH, value)}
+    />
+  );
 
   return (
     <div style={containerStyle}>
@@ -511,8 +395,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
               focusedCell={focusedCell}
               onFocusCell={handleFocusCell}
             />
-            {headerRows}
-            {fieldRows}
+            {visibleRows(rows, collapsedRows).map(row => row.kind === 'formId' ? renderFormId(row) : renderRow(row))}
           </tbody>
         </table>
       </div>
