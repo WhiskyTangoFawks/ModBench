@@ -4,7 +4,7 @@ import { basename, join, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { Linter } from 'eslint';
-import { rootFiles, SRC } from './scanSource';
+import { importSpecifiers, rootFiles, SRC } from './scanSource';
 import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../eslint-rules/activationDecides.mjs';
 
 
@@ -69,6 +69,12 @@ describe('the composition root builds each box, registers it with VS Code and de
   it('a config block that names the root files without the deciding selectors is not the rule', () => {
     const planted = [{ files: ['src/extension.ts'], rules: { 'no-restricted-syntax': ['error', { selector: 'IfStatement', message: 'other' }] } }];
     expect(restrictedSyntaxOf(planted, ACTIVATION, ACTIVATION_DECIDES_MESSAGE)).toEqual([]);
+  });
+
+  it.each(rootFiles().map((path) => basename(path)))('%s reaches the Editor only through its index and names no webview', (file) => {
+    const text = readFileSync(join(SRC, file), 'utf8');
+    expect(importSpecifiers(text, file).filter((specifier) => specifier.startsWith('./editor/'))).toEqual([]);
+    expect(text).not.toMatch(/webview/i);
   });
 
   it('exports nothing from the activation file but what VS Code and the integration tests take', () => {
