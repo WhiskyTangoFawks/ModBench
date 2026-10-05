@@ -66,14 +66,25 @@ function wired(status: 'running' | 'starting', first: LoadOrderSource) {
 const REFUSED: LoadOrderSource = { ...NO_SNAPSHOT, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } };
 
 describe('a load order the loader refused', () => {
-  it('is told on entering, with nothing sent, before editing is left', async () => {
+  it('is told on entering, with nothing sent, and editing kept', async () => {
     const { flow, told, exitEditing, putPluginNames } = wired('running', REFUSED);
 
     await flow.enter();
 
     expect(told).toEqual([{ kind: 'put', put: { sent: false, refusal: 'a.esp has no mod folder' } }]);
     expect(putPluginNames()).toEqual([]);
-    expect(exitEditing).toHaveBeenCalledOnce();
+    expect(exitEditing).not.toHaveBeenCalled();
+  });
+
+  it('is cleared when a later recompute puts a buildable load order', async () => {
+    const { flow, told, toldCount, land, putPluginNames } = wired('running', REFUSED);
+    await flow.enter();
+
+    land(valueWith('A.esp'));
+    await toldCount(2);
+
+    expect(told[1]).toMatchObject({ kind: 'put', put: { sent: true } });
+    expect(putPluginNames()).toEqual(['A.esp']);
   });
 
   it('is told at a later recompute, with nothing sent and editing kept', async () => {
@@ -109,14 +120,36 @@ describe('entering editing', () => {
     expect(told.map((t) => t.kind)).toEqual(['put']);
   });
 
-  it('exits editing, putting and telling nothing, when the value carries no snapshot', async () => {
+  it('stays in editing, putting nothing, when the value carries no snapshot', async () => {
     const { flow, exitEditing, told, putPluginNames } = wired('running', NO_SNAPSHOT);
 
     await flow.enter();
 
-    expect(exitEditing).toHaveBeenCalledOnce();
+    expect(exitEditing).not.toHaveBeenCalled();
     expect(putPluginNames()).toEqual([]);
-    expect(told).toEqual([]);
+    expect(told).toEqual([{ kind: 'put', put: { sent: false } }]);
+  });
+
+  it('puts the snapshot a later recompute can build after an entry that could not', async () => {
+    const { flow, toldCount, land, putPluginNames } = wired('running', NO_SNAPSHOT);
+    await flow.enter();
+
+    land(valueWith('A.esp'));
+    await toldCount(2);
+
+    expect(putPluginNames()).toEqual(['A.esp']);
+  });
+
+  it('puts on a stream reopen the snapshot entry could not build, once it can', async () => {
+    const { client, flow, toldCount, land, putPluginNames } = wired('running', NO_SNAPSHOT);
+    await flow.enter();
+    land(valueWith('A.esp'));
+    await toldCount(2);
+
+    client.reconnected();
+    await toldCount(3);
+
+    expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
   });
 
   it('exits editing and tells when the backend did not come up', async () => {
