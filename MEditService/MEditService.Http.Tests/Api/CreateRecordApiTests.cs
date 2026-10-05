@@ -12,10 +12,16 @@ public sealed class CreateRecordApiTests : HostedTests
     private const string Plugin = "Held.esp";
     private const string Origin = "HeldMod";
 
+    private string _worldspace = string.Empty;
+
     private async Task<ScatteredFixtureData> Loaded(bool tracked)
     {
         var fx = Owned(new PluginFixtureBuilder("api-create-record")
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("HeldNpc"), origin: Origin)
+            .WithPlugin(Plugin, mod =>
+            {
+                mod.Npcs.AddNew("HeldNpc");
+                _worldspace = mod.Worldspaces.AddNew("HeldWorld").FormKey.ToString();
+            }, origin: Origin)
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         if (!tracked) return fx;
@@ -26,8 +32,8 @@ public sealed class CreateRecordApiTests : HostedTests
         return fx;
     }
 
-    private Task<HttpResponseMessage> Create(string origin, string recordType) =>
-        Client.PostAsJsonAsync($"/plugins/{Plugin}/records", new { origin, recordType });
+    private Task<HttpResponseMessage> Create(string origin, string recordType, string? container = null, object? position = null) =>
+        Client.PostAsJsonAsync($"/plugins/{Plugin}/records", new { origin, recordType, container, position });
 
     [Fact]
     public async Task CreatingARecord_InATrackedPlugin_AnswersTheNewFormKey()
@@ -82,5 +88,35 @@ public sealed class CreateRecordApiTests : HostedTests
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Equal("RecordTypeNotFound", (await response.Body()).GetProperty("refusal").GetString());
+    }
+
+    [Fact]
+    public async Task CreatingARecord_InAWorldspace_IsRefusedAsNotYetSupported()
+    {
+        await Loaded(tracked: true);
+
+        var response = await Create(Origin, "cell", _worldspace, new { x = 1, y = -2 });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("ContainerRecordNotYetSupported", (await response.Body()).GetProperty("refusal").GetString());
+    }
+
+    [Fact]
+    public async Task CreatingARecord_WithAGridPositionAndNoContainer_Is400()
+    {
+        await Loaded(tracked: true);
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await Create(Origin, "cell", position: new { x = 0, y = 0 })).StatusCode);
+    }
+
+    [Fact]
+    public async Task CreatingARecord_InAContainerThePluginLacks_Is404()
+    {
+        await Loaded(tracked: true);
+
+        var response = await Create(Origin, "refr", "000FFF:" + Plugin);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("RecordNotFound", (await response.Body()).GetProperty("refusal").GetString());
     }
 }

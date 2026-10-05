@@ -142,6 +142,7 @@ export interface CompileOutcome {
 }
 
 export type RecordCreateResponse = components['schemas']['RecordCreateResponse'];
+export type GridPosition = components['schemas']['GridPosition'];
 /** A record and the plugin holding it (ADR-0012). */
 export type RecordAddress = components['schemas']['RecordAddress'];
 /** Copy's mode Option (commands.md, Record, `copy`). */
@@ -164,7 +165,9 @@ export interface MEditClient {
   renameSource(plugin: PluginAddress, newName: string): Promise<{ renamed: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(mods: readonly string[], options?: { onProgress?: (status: TrackStatus) => void }): Promise<TrackOutcome | WriteRefused>;
-  createRecord(plugin: PluginAddress, recordType: string): Promise<RecordCreateResponse | WriteRefused>;
+  createRecord(
+    plugin: PluginAddress, recordType: string, into?: { container?: string; position?: GridPosition },
+  ): Promise<RecordCreateResponse | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself failing, with nothing deleted.
   deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused>;

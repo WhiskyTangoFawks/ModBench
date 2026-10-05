@@ -159,6 +159,17 @@ describe('HttpMEditClient — creating a record', () => {
     expect(await request?.json()).toEqual({ origin: 'ModA', recordType: 'npc_' });
   });
 
+  it('sends the container and the grid position it is given', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { applied: true, formKey: '000900:MyPatch.esp', recordType: 'cell' })));
+    const client = makeClient(fetch);
+
+    await client.createRecord({ name: 'MyPatch.esp', origin: 'ModA' }, 'cell', { container: '000800:MyPatch.esp', position: { x: 1, y: -2 } });
+
+    expect(await fetch.mock.calls[0]?.[0].json()).toEqual({
+      origin: 'ModA', recordType: 'cell', container: '000800:MyPatch.esp', position: { x: 1, y: -2 },
+    });
+  });
+
   it('answers a full FormID space as a refusal carrying mEdit\'s remedies, asking once, nothing offering to remove the flag and try again', async () => {
     const detail = 'MyPatch.esp has exhausted its ESL FormKey space. Clear the light flag in the header, or change a record\'s FormID.';
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { detail })));
