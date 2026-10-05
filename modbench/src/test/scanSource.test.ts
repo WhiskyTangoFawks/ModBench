@@ -148,7 +148,8 @@ describe('the scans declare no walker, filter or specifier reader of their own',
     const visit = (node: ts.Node): void => {
       if ((ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) && node.name !== undefined && ts.isIdentifier(node.name)
         && OWN_DECLARATIONS.includes(node.name.text)) found.push(node.name.text);
-      if (ts.isImportSpecifier(node) && node.name.text === 'readdirSync') found.push(node.name.text);
+      if (ts.isImportSpecifier(node) && (node.propertyName ?? node.name).text === 'readdirSync') found.push('readdirSync');
+      if (ts.isPropertyAccessExpression(node) && node.name.text === 'readdirSync') found.push('readdirSync');
       ts.forEachChild(node, visit);
     };
     visit(ts.createSourceFile('scan.ts', sourceText, ts.ScriptTarget.Latest, true));
@@ -157,12 +158,17 @@ describe('the scans declare no walker, filter or specifier reader of their own',
 
   it('flags each name however it is declared', () => {
     expect(declaredShared("import { readdirSync } from 'node:fs';")).toEqual(['readdirSync']);
+    expect(declaredShared("import { readdirSync as list } from 'node:fs';")).toEqual(['readdirSync']);
+    expect(declaredShared("import * as fs from 'node:fs';\nconst names = fs.readdirSync('.');")).toEqual(['readdirSync']);
     expect(declaredShared('const isTestSupport = (p: string) => p.includes("test");')).toEqual(['isTestSupport']);
     expect(declaredShared('function importSpecifiers(text: string) { return [text]; }')).toEqual(['importSpecifiers']);
   });
 
-  it('holds for every file under src/test and src/*/test but the helpers', () => {
-    const scans = tsFiles(SRC).filter((path) => relative(SRC, path).split(sep).includes('test') && !HELPERS.includes(basename(path)));
+  it('holds for every file under src/test and src/*/test but the helpers and the integration suite, which lists a trash folder, not source', () => {
+    const scans = tsFiles(SRC).filter((path) => {
+      const segments = relative(SRC, path).split(sep);
+      return segments.includes('test') && !segments.includes('integration') && !HELPERS.includes(basename(path));
+    });
     expect(scans.length).toBeGreaterThan(100);
     const offenders = Object.fromEntries(scans
       .map((path) => [relative(SRC, path), declaredShared(readFileSync(path, 'utf8'))] as const)
