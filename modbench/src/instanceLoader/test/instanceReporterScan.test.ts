@@ -3,26 +3,9 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import ts from 'typescript';
+import { importSpecifiers } from '../../test/scanSource';
 
 const INSTANCE_PATH = join(__dirname, '..', 'instance.ts');
-
-function importSpecifiers(sourceText: string, fileName: string): string[] {
-  const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
-  const found: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      found.push(node.moduleSpecifier.text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return found;
-}
 
 function reporterImportsIn(path: string): string[] {
   return importSpecifiers(readFileSync(path, 'utf8'), path).filter((spec) => /\breporter$/.test(spec));

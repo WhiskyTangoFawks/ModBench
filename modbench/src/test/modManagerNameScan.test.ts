@@ -4,16 +4,13 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
+import { isTestSupport, MO2_CONSTRUCTION as MO2_CONSTRUCTION_SITE, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
-
-const SRC = join(__dirname, '..');
-const WEBVIEW_SRC = join(__dirname, '..', '..', 'webview', 'src');
-const SRC_ROOTS = [SRC, WEBVIEW_SRC];
 
 const ADAPTER = 'instanceAdapter';
 const ADAPTER_INTERFACE = join(ADAPTER, 'instanceAdapter.ts');
-const MO2_CONSTRUCTION = 'extension.ts';
-const MO2_ENTRY = './instanceAdapter/mo2Instance';
+const MO2_CONSTRUCTION = MO2_CONSTRUCTION_SITE.file;
+const MO2_ENTRY = `./${MO2_CONSTRUCTION_SITE.module.split(sep).join('/')}`;
 
 const NAMES_ANYWHERE_IN_FILE = [/mo2/i, /\bMod Organizer\b/i];
 
@@ -21,9 +18,6 @@ const NAMES_IN_STRING_LITERALS = ['modlist.txt', 'ModOrganizer.ini', 'meta.ini',
 
 const isMo2Implementation = (relPath: string): boolean =>
   relPath.startsWith(ADAPTER + sep) && relPath !== ADAPTER_INTERFACE;
-
-const isTestSupport = (relPath: string): boolean =>
-  relPath.split(sep).some((segment) => segment === 'test' || segment === 'integration') || relPath.includes('.test.');
 
 function stringLiterals(sourceText: string, fileName: string): string[] {
   const scriptKind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
@@ -89,13 +83,13 @@ async function plantedTree(files: Record<string, string>): Promise<string> {
 
 describe('no extension file names MO2 outside its implementation of the Instance adapter', () => {
   it('covers the whole extension source tree and the webview', () => {
-    const files = SRC_ROOTS.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
+    const files = SOURCE_ROOTS.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
     expect(files.length).toBeGreaterThan(100);
     expect(files).toContain(join(WEBVIEW_SRC, 'presentation.ts'));
   });
 
   it('scans clean outside the implementation', () => {
-    expect(findOffenders(SRC_ROOTS)).toEqual({});
+    expect(findOffenders(SOURCE_ROOTS)).toEqual({});
   });
 
   it('scans the implementation\'s files and not its interface\'s as the implementation', () => {

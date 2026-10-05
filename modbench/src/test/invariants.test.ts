@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { present } from '../ports/present';
-
-const SRC = join(__dirname, '..');
+import { productionFiles, SRC } from './scanSource';
+import { tsFiles } from './tsFiles';
 const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'utf8');
 
 describe('every MO2 text-file write command has a corpus test', () => {
@@ -12,7 +12,7 @@ describe('every MO2 text-file write command has a corpus test', () => {
     'pluginsCommands/plugins.ts', 'instanceCommands/profile.ts',
   ];
   const writeVerbs = WRITERS.flatMap((file) => commandVerbs(read(file)));
-  const corpus = walk(SRC).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');
+  const corpus = tsFiles(SRC, { exclude: ['generated'] }).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');
 
   it('finds the write verbs', () => {
     expect(writeVerbs).toContain('setModsEnabled');
@@ -28,7 +28,7 @@ describe('every MO2 text-file write command has a corpus test', () => {
 });
 
 describe('install holds only install', () => {
-  const installFiles = readdirSync(join(SRC, 'install')).filter((f) => f.endsWith('.ts'));
+  const installFiles = productionFiles(join(SRC, 'install')).map((f) => relative(join(SRC, 'install'), f));
 
   it('exports no verb but installing and its installed mark', () => {
     expect(installFiles.flatMap((file) => commandVerbs(read(join('install', file)))).sort())
@@ -100,7 +100,7 @@ function readOnlyContextValues(source: string): string[] {
 }
 
 function sourceFiles(): string[] {
-  return walk(SRC).filter((f) => f.endsWith('.ts') && !f.includes('.test.') && !f.includes('/test/')).map((f) => f.slice(SRC.length + 1));
+  return productionFiles(SRC).map((f) => relative(SRC, f));
 }
 
 function treeViewOptions(source: string): { id: string; options: string }[] {
@@ -117,12 +117,5 @@ function treeViewOptions(source: string): { id: string; options: string }[] {
     out.push({ id: present(m[1], "the createTreeView call's id argument"), options: source.slice(start, end - 1) });
   }
   return out;
-}
-
-function walk(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((d) => {
-    const p = join(dir, d.name);
-    return d.isDirectory() ? (d.name === 'generated' ? [] : walk(p)) : [p];
-  });
 }
 
