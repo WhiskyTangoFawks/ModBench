@@ -15,12 +15,11 @@ public enum Listing { Winning, Overridden, Unlisted }
 
 /// <summary>The scratch folder, mod folders, load order and handlers every Commands test builds. A
 /// fixture derives from it, adds its plugins in load order, and reads the rest from here; the first
-/// read seals the load order.</summary>
+/// read fixes the load order.</summary>
 public abstract class TestInstance : IDisposable
 {
     private readonly ScratchDirectory _root = new("medit-instance-");
     private readonly List<LoadOrderEntry> _entries = [];
-    private readonly List<string> _modsToTrack = [];
     private readonly Lazy<LoadOrderHolder> _holder;
     private readonly Lazy<IServiceProvider> _services;
     private LoadOrderSnapshot? _loadOrder;
@@ -71,9 +70,8 @@ public abstract class TestInstance : IDisposable
 
     public string ModFolderOf(PluginAddress plugin) => FolderOf(plugin.Origin);
 
-    /// <summary>The next plugin in load order. A tracked one is a mod's plugin, tracked once per
-    /// distinct plugin bytes; one that masters another is tracked when the load order seals, since
-    /// tracking reads its masters from it.</summary>
+    /// <summary>The next plugin in load order. A tracked one is a mod's plugin, tracked as it is added;
+    /// one that masters another is tracked over the load order so far, which holds its masters.</summary>
     protected PluginAddress Add(Fallout4Mod mod, string origin, bool tracked = true, Listing listing = Listing.Winning)
     {
         if (_loadOrder is not null) throw new InvalidOperationException("The load order is sealed.");
@@ -96,7 +94,7 @@ public abstract class TestInstance : IDisposable
         else
         {
             mod.WriteToBinary(path);
-            _modsToTrack.Add(origin);
+            Track(origin);
         }
 
         return entry.Key;
@@ -107,22 +105,19 @@ public abstract class TestInstance : IDisposable
     public SourceRepository? RepositoryOf(PluginAddress plugin) =>
         LoadOrder.ProviderOf(plugin) is PluginProvider.FromMod mod ? SourceRepository.Open(mod, GameRelease.Fallout4) : null;
 
-    /// <summary>Fixes the load order and tracks the mods that master another, which only a load order
-    /// can resolve. A fixture whose tests read a tracked tree before any handler runs seals at the end
-    /// of its construction.</summary>
-    protected LoadOrderSnapshot Seal()
+    private void Track(string origin)
     {
-        if (_loadOrder is not null) return _loadOrder;
-        var loadOrder = SnapshotPlugins.Snapshot(GameDirectory, _root, GameRelease.Fallout4, _entries);
-        foreach (var origin in _modsToTrack)
-        {
-            var result = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(loadOrder, origin).GetAwaiter().GetResult();
-            if (result.Refused.Count > 0)
-                throw new InvalidOperationException($"Expected '{origin}' to track: {string.Join("; ", result.Refused.Select(r => r.Message))}");
-        }
-        return _loadOrder = loadOrder;
+        var result = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
+            .TrackModAsync(Snapshot(), origin).GetAwaiter().GetResult();
+        if (result.Refused.Count > 0)
+            throw new InvalidOperationException($"Expected '{origin}' to track: {string.Join("; ", result.Refused.Select(r => r.Message))}");
     }
+
+    private LoadOrderSnapshot Snapshot() => SnapshotPlugins.Snapshot(GameDirectory, _root, GameRelease.Fallout4, _entries);
+
+    /// <summary>Fixes the load order: a fixture whose tests read a tracked tree before any handler runs
+    /// seals at the end of its construction.</summary>
+    protected LoadOrderSnapshot Seal() => _loadOrder ??= Snapshot();
 
     private T Handler<T>() where T : notnull => _services.Value.GetRequiredService<T>();
 

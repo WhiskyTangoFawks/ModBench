@@ -18,36 +18,17 @@ public sealed class DeleteRecordHandler
     internal DeleteRecordHandler(WriteTargets targets, LoadOrderHolder loadOrder, ILogger<DeleteRecordHandler> logger) =>
         (_targets, _loadOrder, _logger) = (targets, loadOrder, logger);
 
-    /// <summary>Per record (commands.md, A selection is one gesture). Throws
-    /// <see cref="NoLoadOrderException"/> when no load order is held (ADR-0013).</summary>
-    public PerRecordResult DeleteRecords(IReadOnlyList<RecordAt> records)
+    /// <summary>A record named twice is deleted once: its second delete would find nothing and be
+    /// refused, for a record that is gone. Throws <see cref="NoLoadOrderException"/> when no load order
+    /// is held (ADR-0013).</summary>
+    public SelectionResult<RecordAt> DeleteRecords(IReadOnlyList<RecordAt> records)
     {
         _loadOrder.Require();
-        try
-        {
-            SourceRepository.EnsureTrackable();
-        }
-        catch (GitUnavailableException ex)
-        {
-            return PerRecordResult.WholeSelectionRefused(RecordEditRefusal.GitUnavailable, ex.Message);
-        }
-
-        var applied = new List<RecordAt>();
-        var refused = new List<RecordRefused>();
-        var seen = new HashSet<RecordAt>(SameRecord.Instance);
-        foreach (var record in records)
-        {
-            // A record named twice is deleted once: its second delete would find nothing and be
-            // reported as refused, for a record that is gone.
-            if (!seen.Add(record)) continue;
-            var result = ItemWrite.RefusingTheWriteFailure(
-                () => Delete(record.Plugin, record.FormKey),
-                $"Could not delete the source file for {record.FormKey} in {record.Plugin.Name} ({record.Plugin.Origin})",
-                _logger);
-            if (result.Applied) applied.Add(record);
-            else refused.Add(new RecordRefused(record, result.Refusal, result.Message));
-        }
-        return PerRecordResult.PerRecord(applied, refused);
+        return ItemWrite.Over(
+            records, SameRecord.Instance,
+            record => Delete(record.Plugin, record.FormKey),
+            record => $"Could not delete the source file for {record.FormKey} in {record.Plugin.Name} ({record.Plugin.Origin})",
+            _logger);
     }
 
     private RecordEditResult Delete(PluginAddress plugin, string formKey)
