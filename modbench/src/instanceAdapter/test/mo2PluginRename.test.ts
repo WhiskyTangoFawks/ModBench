@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, readdir, rename as fsRename, rm, writeFile } from 'node:fs/promises';
-import type { Dirent, PathLike } from 'node:fs';
+import { Dirent, type PathLike } from 'node:fs';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { present } from '../../ports/present';
@@ -26,6 +26,8 @@ const MOD = 'mods/Tracked Patch Mod';
 const ORIGIN: FileOrigin = { kind: 'mod', name: 'Tracked Patch Mod' };
 const DEFAULT_PLUGINS = 'profiles/Default/plugins.txt';
 const SECONDARY_PLUGINS = 'profiles/Secondary/plugins.txt';
+
+const UV_DIRENT_FILE = 1;
 
 const NAMED_FOR_IT: ReadonlyArray<readonly [before: string, after: string]> = [
   ['Tracked Patch Mod.esp', 'Renamed Patch.esp'],
@@ -184,10 +186,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       const listing = present(real.readdir, 'the real readdir');
       const withTwin = async (path: PathLike): Promise<Dirent[]> => {
         const entries: Dirent[] = await listing(path, { withFileTypes: true });
-        const ini = entries.find((entry) => entry.name === 'Tracked Patch Mod.ini');
-        return String(path) === at(MOD) && ini !== undefined
-          ? [...entries, Object.create(ini, { name: { value: 'tracked patch mod.ini' } })]
-          : entries;
+        return String(path) === at(MOD) ? [...entries, new Dirent('tracked patch mod.ini', UV_DIRENT_FILE, at(MOD))] : entries;
       };
       await refused(() => {
         vi.mocked(readdir).mockImplementation(withTwin);
