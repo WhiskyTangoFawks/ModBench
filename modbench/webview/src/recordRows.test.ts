@@ -119,8 +119,8 @@ describe('recordRows', () => {
     ));
     const [id, struct] = rows;
 
-    expect([MASTER, MOD].map(c => id?.cells.get(c)?.write !== undefined)).toEqual([true, true]);
-    expect([MASTER, MOD].map(c => struct?.cells.get(c)?.write !== undefined)).toEqual([true, false]);
+    expect([MASTER, MOD].map(c => id?.cells.get(c)?.editPath !== undefined)).toEqual([true, true]);
+    expect([MASTER, MOD].map(c => struct?.cells.get(c)?.editPath !== undefined)).toEqual([true, false]);
     expect([MASTER, MOD].map(c => id?.cells.get(c)?.holds)).toEqual([true, true]);
     expect([MASTER, MOD].map(c => struct?.cells.get(c)?.holds)).toEqual([true, false]);
   });
@@ -208,6 +208,12 @@ describe('a cell\'s context, which its right-click hands a command and the host\
 
   it('a cell in a column that cannot be edited offers copy value alone', () => {
     expect(row?.cells.get(MASTER)?.context).toEqual({ webviewSection: 'cell', copyText: '5', preventDefaultContextMenuItems: true });
+  });
+
+  it('a cell that reads empty copies the empty text', () => {
+    const name = fieldMeta({ name: 'Name', type: 'string' });
+    const [empty] = fieldRowsOf(rowsFor(answer([name], [diffNode({ fieldName: 'Name', values: { [MASTER]: '' } })])));
+    expect(empty?.cells.get(MASTER)?.context.copyText).toBe('');
   });
 
   it('the label cell copies its label', () => {

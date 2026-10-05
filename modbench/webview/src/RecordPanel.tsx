@@ -18,7 +18,7 @@ import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
 import { RecordHeaderRow, FormIdRow } from './RecordHeaderRows';
 import { navigate, type FocusedCell } from './gridNavigation';
-import { recordRows, shownCell, visibleRows, navRows, FORM_ID_PATH, type RecordRow } from './recordRows';
+import { recordRows, shownCell, visibleRows, navRows, FORM_ID_PATH, type GridCell, type RecordRow, type ValueCell } from './recordRows';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
@@ -161,7 +161,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result, columns, editableColumns, partialFormColumns, formKey],
   );
 
-  const focused = useMemo(
+  const focused = useMemo<GridCell | ValueCell | undefined>(
     () => focusedCell ? shownCell(rows, collapsedRows, collapsedColumns, focusedCell) : undefined,
     [rows, collapsedRows, collapsedColumns, focusedCell],
   );
@@ -178,12 +178,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     focusCell(context, entered);
   });
 
-  // The keys VS Code holds reach the focused cell: F2 opens its editor, and Ctrl+V's text is
-  // parsed as its field and written there.
   const pasteIntoFocused = useCallback((text: string) => {
     const plugin = focusedCell?.plugin;
-    if (!plugin || !focused?.write || !focused.meta) return;
-    handleCellCommit(plugin, focused.write, pastedValue(text, focused.meta, focused.shown));
+    if (!plugin || !focused || !('editPath' in focused) || !focused.editPath) return;
+    handleCellCommit(plugin, focused.editPath, pastedValue(text, focused.meta, focused.shown));
   }, [focusedCell, focused, handleCellCommit]);
   useEffect(() => {
     const handler = (event: MessageEvent) => {

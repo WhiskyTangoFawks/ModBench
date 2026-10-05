@@ -128,7 +128,7 @@ export function FormIdRow({
       <DiskCell
         style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: INDENT }} isFocused={isFocused(focusedCell, FORM_ID_ROW, null)}
         onFocusCell={() => onFocusCell(FORM_ID_ROW, null)} context={row.label.context}
-      >{row.meta.displayLabel ?? row.meta.name}</DiskCell>
+      >{row.name}</DiskCell>
       {columns.map(({ key, override }) => {
         const cell = row.cells.get(key);
         return collapsedColumns.has(key) || !cell

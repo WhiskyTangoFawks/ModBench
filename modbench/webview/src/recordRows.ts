@@ -21,15 +21,11 @@ export interface GridCell {
 }
 
 export interface ValueCell extends GridCell {
-  // The shape this column's value has.
   meta: FieldMetadata;
-  // Whether this column has something on this row; `shown` is undefined where it has not.
   holds: boolean;
   shown: unknown;
-  // Where an edit of this cell writes; absent where the cell cannot be edited.
-  write?: PathHop[];
-  // The array a drop on this cell adds to.
-  addTo?: ArrayParentContext;
+  editPath?: PathHop[];
+  dropAddsTo?: ArrayParentContext;
 }
 
 interface RowBase {
@@ -37,12 +33,9 @@ interface RowBase {
   parent: string | null;
   depth: number;
   expandable: boolean;
+  name: string;
   label: GridCell;
   cells: ReadonlyMap<ColumnKey, GridCell>;
-}
-
-export interface RecordHeaderRow extends RowBase {
-  kind: 'recordHeader';
 }
 
 export interface FieldRow extends RowBase {
@@ -51,6 +44,7 @@ export interface FieldRow extends RowBase {
   meta: FieldMetadata;
   path: PathSegment[];
   rootField: string;
+  elementOf: string | null;
   isLastElement?: (column: ColumnKey) => boolean;
   keyMembers?: readonly string[] | null;
   cells: ReadonlyMap<ColumnKey, ValueCell>;
@@ -61,7 +55,7 @@ export interface FormIdRow extends RowBase {
   meta: FieldMetadata;
 }
 
-export type RecordRow = RecordHeaderRow | FieldRow | FormIdRow;
+export type RecordRow = (RowBase & { kind: 'recordHeader' }) | FieldRow | FormIdRow;
 
 interface RowsInput {
   result: CompareResult;
@@ -87,8 +81,9 @@ export function fieldRow(
   diff: FieldDiff, meta: FieldMetadata, at: RowPlacement, columns: readonly Column[], recordLabel: string,
 ): FieldRow {
   const { present, editable, cellMetas, ...place } = at;
-  const label = meta.displayLabel ?? diff.fieldName;
+  const name = meta.displayLabel ?? diff.fieldName;
   const last = at.path.at(-1);
+  const elementOf = isArrayElementHop(last) ? at.parent : null;
   // A row no column carries a value for holds nothing but its children, so every column holds it.
   const structural = Object.values(diff.values).every(v => v == null);
   const cells = new Map(columns.map(({ key, override: o }): [ColumnKey, ValueCell] => {
@@ -98,30 +93,30 @@ export function fieldRow(
     const shown = holds ? value ?? defaultOf(cellMeta) : undefined;
     const resolution = diff.resolutions?.[key];
     const hops = wirePath(at.rootField, at.path, key);
-    const write = hops && editable.has(key) && cellMeta.readOnlyReason == null ? hops : undefined;
-    const addTo = write && offersArrayAdd(meta) ? arrayParentContext(o.formKey, o.plugin, o.origin, write) : undefined;
-    const element = write && isArrayElementHop(last)
+    const editPath = hops && editable.has(key) && cellMeta.readOnlyReason == null ? hops : undefined;
+    const dropAddsTo = editPath && offersArrayAdd(meta) ? arrayParentContext(o.formKey, o.plugin, o.origin, editPath) : undefined;
+    const element = editPath && isArrayElementHop(last)
       ? arrayElementContext(
-        o.formKey, o.plugin, o.origin, write, arrayLength(getAtPath(rootFieldOf(o, at.rootField)?.value, write.slice(1, -1))),
+        o.formKey, o.plugin, o.origin, editPath, arrayLength(getAtPath(rootFieldOf(o, at.rootField)?.value, editPath.slice(1, -1))),
         last?.kind === 'element' && last.keyed)
       : undefined;
     const context = cellContext(
       copiedText(shown, cellMeta, resolution),
-      addTo,
+      dropAddsTo,
       element,
-      write && editableCellContext(o.formKey, o.plugin, o.origin, write, value != null),
+      editPath && editableCellContext(o.formKey, o.plugin, o.origin, editPath, value != null),
       hops && meta.type === 'string'
-        ? stringValueContext(o.formKey, o.plugin, o.origin, recordLabel, label, modelValue(value, meta), !write, hops)
+        ? stringValueContext(o.formKey, o.plugin, o.origin, recordLabel, name, modelValue(value, meta), !editPath, hops)
         : undefined,
       typeof shown === 'string' && cellMeta.type === 'formKey' && resolution && resolution.state !== 'Unresolved'
         ? referenceContext(shown)
         : undefined,
     );
-    return [key, { context, meta: cellMeta, holds, shown, write, addTo }];
+    return [key, { context, meta: cellMeta, holds, shown, editPath, dropAddsTo }];
   }));
   return {
     kind: 'field', diff, meta, ...place, expandable: (diff.children?.length ?? 0) > 0 || readsAsFlags(meta),
-    label: { context: cellContext(label) }, cells,
+    name, elementOf, label: { context: cellContext(name) }, cells,
   };
 }
 
@@ -192,7 +187,7 @@ export function recordRows({ result, columns, editableColumns, partialFormColumn
     new Map(columns.map(column => [column.key, { context: cellContext(text(column)) }]));
   const recordHeader: RecordRow = {
     kind: 'recordHeader', key: RECORD_HEADER_ROW, parent: null, depth: 0, expandable: true,
-    label: { context: cellContext(RECORD_HEADER_ROW) }, cells: cellsCopying(() => undefined),
+    name: RECORD_HEADER_ROW, label: { context: cellContext(RECORD_HEADER_ROW) }, cells: cellsCopying(() => undefined),
   };
   const isHeaderMember = (diff: FieldDiff) => metaByName[diff.fieldName]?.isRecordHeaderMember === true;
   const headerRows = result.diffs.filter(isHeaderMember).flatMap((diff): RecordRow[] => {
@@ -200,7 +195,7 @@ export function recordRows({ result, columns, editableColumns, partialFormColumn
     return meta?.isRecordFormKey
       ? [{
         kind: 'formId', key: FORM_ID_ROW, parent: RECORD_HEADER_ROW, depth: 1, expandable: false, meta,
-        label: { context: cellContext(meta.displayLabel ?? meta.name) },
+        name: meta.displayLabel ?? meta.name, label: { context: cellContext(meta.displayLabel ?? meta.name) },
         cells: cellsCopying(({ override }) => formKeyLabel(override.formKey, override)),
       }]
       : rowsOf(diff, meta, {
@@ -235,7 +230,7 @@ export function visibleRows(rows: readonly RecordRow[], collapsed: ReadonlySet<s
  *  row is gone. */
 export function shownCell(
   rows: readonly RecordRow[], collapsedRows: ReadonlySet<string>, collapsedColumns: ReadonlySet<ColumnKey>, at: FocusedCell,
-): Partial<ValueCell> & GridCell | undefined {
+): GridCell | ValueCell | undefined {
   if (at.plugin !== null && collapsedColumns.has(at.plugin)) return undefined;
   const row = visibleRows(rows, collapsedRows).find(r => r.key === at.rowKey);
   return at.plugin === null ? row?.label : row?.cells.get(at.plugin);

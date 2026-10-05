@@ -10,7 +10,7 @@ import { collapsedReading, versionControlInfo1 } from './presentation';
 import {
   baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
 } from './gridStyles';
-import { defaultOf, isArrayElementHop, type Column } from './recordUtils';
+import { defaultOf, type Column } from './recordUtils';
 import type { ColumnKey, ConflictThis, FieldMetadata, FormKeyResolution, PathHop } from './types';
 import type { FieldRow } from './recordRows';
 import type { FocusedCell } from './gridNavigation';
@@ -118,12 +118,10 @@ interface DiffRowProps {
 export function DiffRow({
   row, columns, columnStyle, collapsedColumns, isExpanded, onToggle, focusedCell, onFocusCell, onEdit, onAddElement,
 }: Readonly<DiffRowProps>) {
-  const { diff, meta, key: rowKey, parent: parentRowKey, isLastElement, keyMembers } = row;
+  const { diff, meta, key: rowKey, isLastElement, keyMembers } = row;
   // The children the diff node itself carries — the row and the panel can never disagree about
   // whether this node has any.
   const hasChildren = (diff.children?.length ?? 0) > 0;
-  const label = meta.displayLabel ?? diff.fieldName;
-  const isArrayElementRow = isArrayElementHop(row.path.at(-1));
   const isRowFocused = focusedCell?.rowKey === rowKey;
   // This row paints its own node's conflict state, not a record-wide value. An expanded row with
   // children defers to its children's tints — painting both would duplicate the signal — and
@@ -150,7 +148,7 @@ export function DiffRow({
         )}
         {/* The schema's own label when the field's name is a wire name rather than a readable
             one (a union's MutagenObjectType is "Kind"). */}
-        {label}
+        {row.name}
       </DiskCell>
       {columns.map(col => {
         const { key, override } = col;
@@ -166,15 +164,15 @@ export function DiffRow({
         if (collapsedColumns.has(key) || !cell) {
           return <td key={key} style={cellStyle} />;
         }
-        const { meta: cellMeta, holds, shown, write, addTo } = cell;
+        const { meta: cellMeta, holds, shown, editPath, dropAddsTo } = cell;
         // The wire carries one per column at every depth, so this row's error is its own node's.
         const checkError = diff.checkErrors?.[key];
         const isFocused = isCellFocused(focusedCell, rowKey, key);
         const cellTitle = [cellState && conflictStateName(cellState), cellMeta.readOnlyReason]
           .filter(Boolean).join('\n') || undefined;
-        const edit = write && ((value: unknown) => onEdit(key, write, value));
+        const edit = editPath && ((value: unknown) => onEdit(key, editPath, value));
         const drag: CellDrag | undefined = diff.values[key] != null
-          ? { row: rowKey, arrayRow: isArrayElementRow ? parentRowKey : null, value: diff.values[key] }
+          ? { row: rowKey, arrayRow: row.elementOf, value: diff.values[key] }
           : undefined;
         const landing = (dragged: CellDrag): (() => void) | undefined => {
           if (dragged.row === rowKey) {
@@ -182,8 +180,8 @@ export function DiffRow({
               ? () => edit(dragged.value)
               : undefined;
           }
-          return addTo && dragged.arrayRow === rowKey
-            ? () => onAddElement(addTo, dragged.value)
+          return dropAddsTo && dragged.arrayRow === rowKey
+            ? () => onAddElement(dropAddsTo, dragged.value)
             : undefined;
         };
         const resolution = diff.resolutions?.[key];
