@@ -10,7 +10,7 @@ interface Registration { provider: Provider; options?: { isReadonly?: boolean } 
 
 const providers = new Map<string, Registration>();
 const closeListeners: Array<(doc: { uri: FakeUri }) => void> = [];
-const showTextDocument = vi.fn<(doc: unknown, opts?: unknown) => Promise<unknown>>();
+const showTextDocument = vi.fn<(doc: { uri: FakeUri }, opts?: unknown) => Promise<unknown>>();
 
 vi.mock('vscode', () => ({
   workspace: {
@@ -24,7 +24,7 @@ vi.mock('vscode', () => ({
     },
     openTextDocument: (uri: FakeUri) => Promise.resolve({ uri }),
   },
-  window: { showTextDocument: (doc: unknown, opts?: unknown) => showTextDocument(doc, opts) },
+  window: { showTextDocument: (doc: { uri: FakeUri }, opts?: unknown) => showTextDocument(doc, opts) },
   Uri: {
     from: (parts: { scheme: string; path: string; query: string }): FakeUri => ({
       ...parts, toString: () => `${parts.scheme}://${parts.path}?${parts.query}`,
@@ -55,8 +55,11 @@ function makeDeps(overrides: Partial<ExtendedFieldEditorDeps> = {}): ExtendedFie
   };
 }
 
-const shownUri = (call = -1): FakeUri =>
-  (showTextDocument.mock.calls.at(call)?.[0] as { uri: FakeUri }).uri;
+const shownUri = (call = -1): FakeUri => {
+  const shown = showTextDocument.mock.calls.at(call);
+  if (!shown) throw new Error('nothing was shown');
+  return shown[0].uri;
+};
 const text = (reg: Registration, uri: FakeUri): string => new TextDecoder().decode(reg.provider.readFile(uri));
 const registration = (scheme: string): Registration => {
   const reg = providers.get(scheme);

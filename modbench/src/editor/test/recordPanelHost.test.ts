@@ -74,6 +74,7 @@ function register(
 
 beforeEach(() => {
   commandHandlers.clear();
+  registerFileSystemProvider.mockClear();
   executeCommand.mockReset();
   pickRecord.mockReset();
 });
