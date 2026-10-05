@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import { EditsInFlight } from './followRecord';
-import { FocusedCells, GRID_VIEW, publishFocusedCell, gridCopyValueText, type FocusedCellContext } from './focusedCells';
+import { FocusedCells, GRID_VIEW, publishFocusedCell, gridCopyValueText } from './focusedCells';
 import { announceConflictsComputed } from './notificationWiring';
 import { registerEditorCommands, type EditorCommandDeps } from './recordPanelHost';
 import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './ReferencedByTreeProvider';
@@ -22,7 +22,6 @@ export interface Editor extends vscode.Disposable {
   announceConflictsComputed(): void;
   nameFilters: ReadonlyMap<string, Pick<NameFilter, 'open' | 'clear'>>;
   copyValue: readonly CopyValueAdapter[];
-  focusRecordCell: (cell: FocusedCellContext) => void;
 }
 
 const setContext = (key: string, value: unknown): void => {
@@ -66,7 +65,6 @@ export function createEditor(deps: EditorDeps): Editor {
       { text: gridCopyValueText(() => focusedCells.current()), reporterTag: 'recordGrid.copy' },
       { text: (clicked, allSelected) => referencedByCopyValueText(referencedByView, clicked, allSelected), reporterTag: 'referencedByTree.copy' },
     ],
-    focusRecordCell: (cell) => { focusedCells.setActiveCell(cell); },
     dispose: () => { owned.splice(0).reverse().forEach((disposable) => { disposable.dispose(); }); },
   };
 }
