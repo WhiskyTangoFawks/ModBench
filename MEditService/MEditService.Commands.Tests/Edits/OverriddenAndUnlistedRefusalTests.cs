@@ -109,7 +109,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
         var result = mod.DeleteHandler.DeleteRecords(
             [new RecordAt(mod.OverriddenPlugin, mod.OverriddenNpc.ToString())]);
 
-        Assert.Empty(result.Applied);
+        Assert.Empty(result.Landed);
         var refusal = Assert.Single(result.Refused);
         Assert.Equal(RecordEditRefusal.PluginNotActive, refusal.Refusal);
         Assert.NotNull(mod.Document(mod.OverriddenPlugin, mod.OverriddenNpc.ToString()));
@@ -209,7 +209,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
         var result = mod.DeleteHandler.DeleteRecords(
             [new RecordAt(mod.UnlistedPlugin, mod.UnlistedNpc.ToString())]);
 
-        Assert.Empty(result.Applied);
+        Assert.Empty(result.Landed);
         var refusal = Assert.Single(result.Refused);
         Assert.Equal(RecordEditRefusal.PluginNotActive, refusal.Refusal);
         Assert.NotNull(mod.Document(mod.UnlistedPlugin, mod.UnlistedNpc.ToString()));

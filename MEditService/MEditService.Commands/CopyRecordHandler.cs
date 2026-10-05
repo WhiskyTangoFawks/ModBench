@@ -22,31 +22,17 @@ public sealed class CopyRecordHandler
     /// <summary>Each record lands in each destination or is refused on its own; <paramref name="replace"/>
     /// lets an override copy over the one a destination holds. Throws <see cref="NoLoadOrderException"/>
     /// with no load order held.</summary>
-    public PerCopyResult Copy(
+    public SelectionResult<CopyItem> Copy(
         IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace)
     {
         _loadOrder.Require();
-
-        var applied = new List<CopyLanded>();
-        var refused = new List<CopyRefused>();
-        // A record or destination named twice is copied once: a second override would be refused as
-        // already held, and a second new record would be a duplicate nobody asked for.
-        var distinctDestinations = destinations.Distinct(PluginAddress.Comparer).ToList();
-        foreach (var record in records.Distinct(SameRecord.Instance))
-        {
-            foreach (var destination in distinctDestinations)
-            {
-                var item = new CopyItem(record, destination);
-                var result = ItemWrite.RefusingTheWriteFailure(
-                    () => mode == CopyMode.Override
-                        ? _override.Copy(record.Plugin, record.FormKey, destination, replace)
-                        : _new.Copy(record.Plugin, record.FormKey, destination),
-                    $"Could not write the copy of {record.FormKey} into {destination.Name} ({destination.Origin})",
-                    _logger);
-                if (result.Applied) applied.Add(new CopyLanded(item, result.NewFormKey));
-                else refused.Add(new CopyRefused(item, result.Refusal, result.Message));
-            }
-        }
-        return new PerCopyResult(applied, refused);
+        return ItemWrite.Over(
+            records.SelectMany(record => destinations.Select(destination => new CopyItem(record, destination))),
+            SameCopy.Instance,
+            item => mode == CopyMode.Override
+                ? _override.Copy(item.Record.Plugin, item.Record.FormKey, item.Destination, replace)
+                : _new.Copy(item.Record.Plugin, item.Record.FormKey, item.Destination),
+            item => $"Could not write the copy of {item.Record.FormKey} into {item.Destination.Name} ({item.Destination.Origin})",
+            _logger);
     }
 }

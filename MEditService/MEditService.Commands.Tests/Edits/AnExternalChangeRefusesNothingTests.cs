@@ -41,7 +41,7 @@ public sealed class AnExternalChangeRefusesNothingTests : IDisposable
         var result = _mod.DeleteHandler.DeleteRecords([npc]);
 
         Assert.Empty(result.Refused);
-        Assert.Equal([npc], result.Applied);
+        Assert.Equal([npc], result.Landed.Select(landed => landed.Item));
     }
 
     [Fact]

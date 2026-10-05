@@ -50,6 +50,44 @@ public sealed class GitMissingApiTests : HostedTests
     }
 
     [Fact]
+    public async Task CopyingASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndChangesNoFile()
+    {
+        using var fx = new PluginFixtureBuilder("trace-copy-without-git")
+            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
+            .WithPlugin("Second.esp", mod => mod.Npcs.AddNew("SecondNpc"), origin: "SecondMod")
+            .BuildScattered();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Track("SecondMod")).EnsureSuccessStatusCode();
+        var npc = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
+            .GetProperty("items").EnumerateArray().Single().GetProperty("formKey").GetString().Require();
+        var modFolders = fx.Plugins.Select(p => Path.GetDirectoryName(p.Path).Require()).ToList();
+        var before = modFolders.Select(FilesOutsideGit).ToList();
+
+        HttpResponseMessage response;
+        var path = Environment.GetEnvironmentVariable("PATH");
+        Environment.SetEnvironmentVariable("PATH", string.Empty);
+        try
+        {
+            response = await Client.PostAsJsonAsync("/records/copy", new
+            {
+                records = new[] { new { formKey = npc, plugin = Plugin, origin = Origin } },
+                mode = "New",
+                destinations = new[] { new { name = "Second.esp", origin = "SecondMod" } },
+            });
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", path);
+        }
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
+        Assert.Equal(before, modFolders.Select(FilesOutsideGit));
+    }
+
+    [Fact]
     public async Task TrackingASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndWritesNothing()
     {
         using var fx = new PluginFixtureBuilder("trace-track-without-git")

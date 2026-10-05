@@ -25,9 +25,9 @@ public sealed class DeleteRecordHandlerTests
 
         var result = mod.DeleteHandler.DeleteRecords([npc, header, otherNpc]);
 
-        Assert.Equal([npc, otherNpc], result.Applied);
+        Assert.Equal([npc, otherNpc], result.Landed.Select(landed => landed.Item));
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(header, refused.Record);
+        Assert.Equal(header, refused.Item);
         Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
         Assert.False(string.IsNullOrWhiteSpace(refused.Message));
         Assert.False(result.AllApplied);
@@ -49,7 +49,7 @@ public sealed class DeleteRecordHandlerTests
 
         var result = mod.DeleteHandler.DeleteRecords([npc, otherNpc, npc, npcSpelledOtherwise]);
 
-        Assert.Equal([npc, otherNpc], result.Applied);
+        Assert.Equal([npc, otherNpc], result.Landed.Select(landed => landed.Item));
         Assert.Empty(result.Refused);
     }
 
@@ -64,9 +64,9 @@ public sealed class DeleteRecordHandlerTests
 
         var result = mod.DeleteHandler.DeleteRecords([otherNpc, npc, keyword]);
 
-        Assert.Equal([otherNpc, keyword], result.Applied);
+        Assert.Equal([otherNpc, keyword], result.Landed.Select(landed => landed.Item));
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(npc, refused.Record);
+        Assert.Equal(npc, refused.Item);
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
         Assert.Contains(mod.Npc.ToString(), refused.Message, StringComparison.Ordinal);
         Assert.Throws<AmbiguousSourceUnitException>(() => TrackedTree.Document(mod.ModFolder, mod.Plugin, mod.Npc.ToString()));
@@ -81,11 +81,11 @@ public sealed class DeleteRecordHandlerTests
 
         var result = DeleteWhileLocked(mod, DirectoryOf(mod, "\"LockedCell\""), [npcAt, worldAt, otherNpcAt]);
 
-        Assert.Equal([npcAt, otherNpcAt], result.Applied);
+        Assert.Equal([npcAt, otherNpcAt], result.Landed.Select(landed => landed.Item));
         Assert.Empty(DocumentsCarrying(mod, "\"FirstNpc\""));
         Assert.Empty(DocumentsCarrying(mod, "\"SecondNpc\""));
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(worldAt, refused.Record);
+        Assert.Equal(worldAt, refused.Item);
         Assert.Equal(RecordEditRefusal.SourceWriteFailed, refused.Refusal);
         Assert.Contains(worldAt.FormKey, refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, TreeTampering.FilesUnder(worldDirectory));
@@ -100,7 +100,7 @@ public sealed class DeleteRecordHandlerTests
 
         var result = DeleteWhileLocked(mod, DirectoryOf(mod, "\"LockedCell\""), [worldAt]);
 
-        Assert.Equal(worldAt, Assert.Single(result.Refused).Record);
+        Assert.Equal(worldAt, Assert.Single(result.Refused).Item);
         Assert.Equal(writtenAt, TreeTampering.LastWrittenAt(mod.ModFolder, mod.Plugin, standing));
     }
 
@@ -143,7 +143,7 @@ public sealed class DeleteRecordHandlerTests
         return mod;
     }
 
-    private static PerRecordResult DeleteWhileLocked(SourceModFixture mod, string directory, IReadOnlyList<RecordAt> records)
+    private static SelectionResult<RecordAt> DeleteWhileLocked(SourceModFixture mod, string directory, IReadOnlyList<RecordAt> records)
     {
         FileModes.Set(directory, "500");
         try

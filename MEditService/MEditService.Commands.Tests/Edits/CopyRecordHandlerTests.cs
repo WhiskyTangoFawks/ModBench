@@ -20,7 +20,7 @@ public sealed class CopyRecordHandlerTests
 
         Assert.Equal(
             [new CopyItem(npc, mod.DestinationPlugin), new CopyItem(faction, mod.DestinationPlugin)],
-            result.Applied.Select(landed => landed.Item));
+            result.Landed.Select(landed => landed.Item));
         Assert.Equal(
             [new CopyItem(npc, mod.SourcePlugin), new CopyItem(faction, mod.SourcePlugin)],
             result.Refused.Select(refused => refused.Item));
@@ -39,7 +39,7 @@ public sealed class CopyRecordHandlerTests
 
         var result = mod.CopyHandler.Copy([npc, faction], CopyMode.Override, [mod.DestinationPlugin], replace);
 
-        Assert.Equal([new CopyItem(faction, mod.DestinationPlugin)], result.Applied.Select(landed => landed.Item));
+        Assert.Equal([new CopyItem(faction, mod.DestinationPlugin)], result.Landed.Select(landed => landed.Item));
         var refused = Assert.Single(result.Refused);
         Assert.Equal(new CopyItem(npc, mod.DestinationPlugin), refused.Item);
         Assert.Equal(RecordEditRefusal.FormKeyCollision, refused.Refusal);
@@ -57,7 +57,7 @@ public sealed class CopyRecordHandlerTests
 
         var result = mod.CopyHandler.Copy([npc], CopyMode.Override, [mod.SourcePlugin], replace);
 
-        Assert.Equal([new CopyItem(npc, mod.SourcePlugin)], result.Applied.Select(landed => landed.Item));
+        Assert.Equal([new CopyItem(npc, mod.SourcePlugin)], result.Landed.Select(landed => landed.Item));
         Assert.Empty(result.Refused);
         Assert.Equal(before, TrackedTree.Records(mod.SourceModFolder, mod.SourcePlugin));
     }
@@ -78,7 +78,7 @@ public sealed class CopyRecordHandlerTests
 
         var result = mod.CopyHandler.Copy([npc, npc], CopyMode.New, [mod.DestinationPlugin, sameDestination], replace: false);
 
-        Assert.Single(result.Applied);
+        Assert.Single(result.Landed);
         Assert.Empty(result.Refused);
     }
 }

@@ -69,7 +69,7 @@ public record RecordAddress(string FormKey, string Plugin, string Origin);
 
 /// <summary>A record of the selection that wrote nothing: the typed refusal, and the message naming
 /// the way out.</summary>
-public record RecordAddressRefusal(RecordAddress Record, RecordEditRefusal Refusal, string Message);
+public record RecordAddressRefusal(RecordAddress Item, RecordEditRefusal Refusal, string Message);
 
 public record RecordDeleteRequest(IReadOnlyList<RecordAddress> Records);
 
@@ -85,7 +85,9 @@ public record RecordCopyRequest(
 /// <summary><see cref="NewFormKey"/> is the duplicate's, and null for an override.</summary>
 public record RecordCopyLanded(RecordAddress Record, PluginAddress Destination, string? NewFormKey);
 
-public record RecordCopyRefusal(RecordAddress Record, PluginAddress Destination, RecordEditRefusal Refusal, string Message);
+public record RecordCopyItem(RecordAddress Record, PluginAddress Destination);
+
+public record RecordCopyRefusal(RecordCopyItem Item, RecordEditRefusal Refusal, string Message);
 
 /// <summary>Applied or refusal, per record and destination (ADR-0019).</summary>
 public record RecordCopyResponse(IReadOnlyList<RecordCopyLanded> Applied, IReadOnlyList<RecordCopyRefusal> Refused);

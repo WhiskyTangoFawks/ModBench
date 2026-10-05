@@ -218,10 +218,10 @@ public sealed class EditRecordTraceTests : HostedTests
                 SearchOption.AllDirectories)
             .Where(file => File.ReadAllText(file).Contains(formKey, StringComparison.Ordinal))];
 
-    private static (string FormKey, string Destination, string Refusal) RefusedFrom(JsonElement item) =>
-        (item.GetProperty("record").GetProperty("formKey").GetString().Require(),
-            item.GetProperty("destination").GetProperty("name").GetString().Require(),
-            item.GetProperty("refusal").GetString().Require());
+    private static (string FormKey, string Destination, string Refusal) RefusedFrom(JsonElement refusal) =>
+        (refusal.GetProperty("item").GetProperty("record").GetProperty("formKey").GetString().Require(),
+            refusal.GetProperty("item").GetProperty("destination").GetProperty("name").GetString().Require(),
+            refusal.GetProperty("refusal").GetString().Require());
 
     [Fact]
     public async Task CopyingAsOverride_IntoADestinationThatHoldsTheRecord_ReplacesIt_WithTheReplaceOption()

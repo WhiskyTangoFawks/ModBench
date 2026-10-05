@@ -38,6 +38,10 @@ export interface HttpMEditClientDeps {
   reconnectDelayMs?: number;
 }
 
+function selectionOutcome<L, R>(answer: { applied: L[]; refused: { item: R; message: string }[] }): SelectionOutcome<L | R> {
+  return { landed: answer.applied, refused: answer.refused.map((r) => ({ item: r.item, reason: r.message })) };
+}
+
 function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
   return {
     executablePath: bundledBackendPath(process.platform, __dirname),
@@ -337,11 +341,7 @@ export class HttpMEditClient implements MEditClient {
       failMsg: `Could not delete ${counted}`,
       post: () => this.apiClient.POST('/records/delete', { body: { records: [...records] } }),
     });
-    if (isRefused(answer)) return answer;
-    return {
-      landed: answer.applied,
-      refused: answer.refused.map((r) => ({ item: r.record, reason: r.message })),
-    };
+    return isRefused(answer) ? answer : selectionOutcome(answer);
   }
 
   async copyRecords(
@@ -355,11 +355,7 @@ export class HttpMEditClient implements MEditClient {
         body: { records: [...records], mode, destinations: [...destinations], replace },
       }),
     });
-    if (isRefused(answer)) return answer;
-    return {
-      landed: answer.applied.map(({ record, destination, newFormKey }) => ({ record, destination, newFormKey })),
-      refused: answer.refused.map((r) => ({ item: { record: r.record, destination: r.destination }, reason: r.message })),
-    };
+    return isRefused(answer) ? answer : selectionOutcome(answer);
   }
 
   async decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {

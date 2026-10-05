@@ -181,11 +181,11 @@ public static class RecordEndpoints
         }
         return OverRecords(records, "deleting", logger, validateOptions: () => null, answer: addressed =>
         {
-            var result = edits.DeleteRecords(addressed);
-            if (result.SelectionRefusal is { } selectionRefusal) return WriteEndpointMapping.Refusal(selectionRefusal);
-            return Results.Ok(new RecordDeleteResponse(
-                [.. result.Applied.Select(Addressed)],
-                [.. result.Refused.Select(r => new RecordAddressRefusal(Addressed(r.Record), r.Refusal, r.Message))]));
+            return Answered(
+                edits.DeleteRecords(addressed),
+                landed => Addressed(landed.Item),
+                refused => new RecordAddressRefusal(Addressed(refused.Item), refused.Refusal, refused.Message),
+                (applied, refused) => new RecordDeleteResponse(applied, refused));
         });
     }
 
@@ -210,11 +210,12 @@ public static class RecordEndpoints
             return null;
         }, answer: addressed =>
         {
-            var result = edits.Copy(addressed, request.Mode, destinations, request.Replace);
-            return Results.Ok(new RecordCopyResponse(
-                [.. result.Applied.Select(l => new RecordCopyLanded(Addressed(l.Item.Record), l.Item.Destination, l.NewFormKey))],
-                [.. result.Refused.Select(r => new RecordCopyRefusal(
-                    Addressed(r.Item.Record), r.Item.Destination, r.Refusal, r.Message))]));
+            return Answered(
+                edits.Copy(addressed, request.Mode, destinations, request.Replace),
+                landed => new RecordCopyLanded(Addressed(landed.Item.Record), landed.Item.Destination, landed.NewFormKey),
+                refused => new RecordCopyRefusal(
+                    new RecordCopyItem(Addressed(refused.Item.Record), refused.Item.Destination), refused.Refusal, refused.Message),
+                (applied, refused) => new RecordCopyResponse(applied, refused));
         });
     }
 
@@ -241,6 +242,15 @@ public static class RecordEndpoints
             return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
+
+    private static IResult Answered<TItem, TLanded, TRefused>(
+        SelectionResult<TItem> result,
+        Func<ItemLanded<TItem>, TLanded> landed,
+        Func<ItemRefused<TItem>, TRefused> refused,
+        Func<IReadOnlyList<TLanded>, IReadOnlyList<TRefused>, object> response) =>
+        result.SelectionRefusal is { } selectionRefusal
+            ? WriteEndpointMapping.Refusal(selectionRefusal)
+            : Results.Ok(response([.. result.Landed.Select(landed)], [.. result.Refused.Select(refused)]));
 
     private static RecordAddress Addressed(RecordAt record) =>
         new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);

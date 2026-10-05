@@ -841,9 +841,13 @@ export interface components {
             origin: string;
         };
         RecordAddressRefusal: {
-            record: components["schemas"]["RecordAddress"];
+            item: components["schemas"]["RecordAddress"];
             refusal: components["schemas"]["RecordEditRefusal"];
             message: string;
+        };
+        RecordCopyItem: {
+            record: components["schemas"]["RecordAddress"];
+            destination: components["schemas"]["PluginAddress"];
         };
         RecordCopyLanded: {
             record: components["schemas"]["RecordAddress"];
@@ -851,8 +855,7 @@ export interface components {
             newFormKey?: string | null;
         };
         RecordCopyRefusal: {
-            record: components["schemas"]["RecordAddress"];
-            destination: components["schemas"]["PluginAddress"];
+            item: components["schemas"]["RecordCopyItem"];
             refusal: components["schemas"]["RecordEditRefusal"];
             message: string;
         };

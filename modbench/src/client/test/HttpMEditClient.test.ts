@@ -180,7 +180,7 @@ describe('HttpMEditClient — deleting records answers per record', () => {
   it('sends the whole selection as one call and reads what was applied as landed, each refusal with its message', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
       applied: [kept, gone],
-      refused: [{ record: untracked, refusal: 'PluginNotTracked', message: 'Other.esp is not tracked.' }],
+      refused: [{ item: untracked, refusal: 'PluginNotTracked', message: 'Other.esp is not tracked.' }],
     })));
     const client = makeClient(fetch);
 
@@ -275,7 +275,7 @@ describe('HttpMEditClient — copying records answers per record and destination
   it('sends the records, the mode, the destinations and the replace Option as one call, and reads each item', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
       applied: [{ record: npc, destination: patch, newFormKey: null }],
-      refused: [{ record: npc, destination: other, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }],
+      refused: [{ item: { record: npc, destination: other }, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }],
     })));
     const client = makeClient(fetch);
 
