@@ -7,7 +7,7 @@ import { NotificationListenerRegistry } from '../notificationStream';
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getLightPluginsSupported'
   | 'getRecords' | 'searchRecords'
-  | 'getRecordOwner' | 'getRecordHolders' | 'getComparison' | 'getReferences'
+  | 'getRecordOwner' | 'getRecordHolders' | 'getComparison' | 'getReferences' | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
@@ -249,6 +249,9 @@ export class InMemoryMEditClient implements MEditClient {
   }
   getReferences(...args: Parameters<MEditClient['getReferences']>): ReturnType<MEditClient['getReferences']> {
     return this.query('getReferences', args);
+  }
+  getEditChanges(...args: Parameters<MEditClient['getEditChanges']>): ReturnType<MEditClient['getEditChanges']> {
+    return this.query('getEditChanges', args);
   }
   getWorldspaces(...args: Parameters<MEditClient['getWorldspaces']>): ReturnType<MEditClient['getWorldspaces']> {
     return this.query('getWorldspaces', args);

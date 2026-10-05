@@ -100,6 +100,12 @@ export type RecordEditOutcome =
   | { applied: true; newFormKey?: string }
   | { applied: false; refusal: string; message: string };
 
+/** An edit answered as the changes it makes to plugin source, or the refusal the edit gives:
+ *  each move first, then each document's new text at its path once moved. */
+export type RecordEditChangesOutcome =
+  | ({ applied: true; newFormKey?: string } & Pick<components['schemas']['RecordEditChangesResponse'], 'moves' | 'documents'>)
+  | { applied: false; refusal: string; message: string };
+
 /** `rebuildIndex`'s own outcome (ADR-0010). */
 export type RebuildIndexOutcome =
   | { rebuilt: true }
@@ -206,6 +212,10 @@ export interface MEditClient {
    *  record held by no active plugin. */
   getComparison(formKey: string): Promise<CompareResult | null>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
+  /** `text` is the current text of the document carrying the record; mEdit writes nothing. */
+  getEditChanges(
+    formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope, text: string,
+  ): Promise<RecordEditChangesOutcome>;
   getWorldspaces(plugin: PluginAddress): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: PluginAddress, worldspaceFormKey: string): Promise<WorldspaceBlocks>;
   getCellChildRecords(plugin: PluginAddress, cellFormKey: string): Promise<CellChildRecords>;
