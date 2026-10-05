@@ -71,8 +71,6 @@ const access = accessTo('/instance');
 
 const folderOf = (entry: Pick<ModlistEntry, 'kind' | 'name'>) => ({ ...entry, path: `/instance/mods/${entry.name}` });
 
-/** What the adapter answers for names: the entries mod order lists and the folders that hold one,
- *  matched exactly, the manager's own matching being the adapter's to prove. */
 function accessHolding(listed: readonly ModlistEntry[], folders: readonly Pick<ModlistEntry, 'kind' | 'name'>[] = listed): ModlistAccess {
   const named = (kind: ModlistEntry['kind'], name: string) => (e: Pick<ModlistEntry, 'kind' | 'name'>) => e.kind === kind && e.name === name;
   return {
