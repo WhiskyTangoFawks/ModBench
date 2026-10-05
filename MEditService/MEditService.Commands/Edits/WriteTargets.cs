@@ -141,8 +141,8 @@ internal sealed class WriteTargets(
         if (loadOrder.Current.ProviderOf(plugin) is not { } provider)
         {
             return RecordEditResult.Refused(
-                RecordEditRefusal.PluginNotLoaded,
-                $"{plugin.Name} from '{plugin.Origin}' is not in the load order, so there is nothing to edit.");
+                RecordEditRefusal.PluginNotInLoadOrder,
+                $"{plugin.Name} from '{plugin.Origin}' is not in the load order, so nothing can be written to it.");
         }
 
         if (provider is not PluginProvider.FromMod mod) return RefuseUntracked(plugin, provider);

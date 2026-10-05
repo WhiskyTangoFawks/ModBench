@@ -19,7 +19,7 @@ public enum RecordEditRefusal
     PluginNotActive,
 
     /// <summary>The load order names no such plugin.</summary>
-    PluginNotLoaded,
+    PluginNotInLoadOrder,
 
     RecordNotFound,
 

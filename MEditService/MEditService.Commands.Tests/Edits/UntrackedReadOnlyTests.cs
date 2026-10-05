@@ -74,14 +74,14 @@ public sealed class UntrackedReadOnlyTests
     [Theory]
     [InlineData("overwrite")]
     [InlineData("GhostMod")]
-    public void EditingAPluginTheLoadOrderDoesNotName_IsRefusedAsNotLoaded(string origin)
+    public void EditingAPluginTheLoadOrderDoesNotName_IsRefusedAsNotInTheLoadOrder(string origin)
     {
         using var mod = SourceModFixture.VanillaMaster(out var npc);
 
         var result = mod.EditHandler.Set(new PluginAddress("Ghost.esp", origin), npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotLoaded, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotInLoadOrder, result.Refusal);
     }
 
     [Fact]
