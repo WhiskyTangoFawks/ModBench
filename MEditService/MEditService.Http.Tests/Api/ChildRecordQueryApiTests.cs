@@ -89,6 +89,18 @@ public sealed class ChildRecordQueryApiTests : HostedTests
     }
 
     [Fact]
+    public async Task AQueryNamingADestinationWithNoOrigin_Is400()
+    {
+        var response = await Client.PostAsJsonAsync("/records/children-in-destinations", new
+        {
+            records = new[] { Record("000800:Source.esp") },
+            destinations = new[] { Destination(WithTopic, "") },
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task AQueryWithARecordMissingItsOrigin_Is400()
     {
         var response = await Client.PostAsJsonAsync("/records/with-children", new { records = new[] { Record("000800:Source.esp", origin: "") } });

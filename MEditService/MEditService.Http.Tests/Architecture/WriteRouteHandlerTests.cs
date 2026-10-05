@@ -1,5 +1,6 @@
 using System.Reflection;
 using MEditService.Commands;
+using MEditService.Queries;
 using MEditService.Http.Tests.TestSupport;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,10 +23,9 @@ public sealed class WriteRouteHandlerTests
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";
+    private const string QueriesNamespace = "MEditService.Queries";
 
     private static readonly string[] PrefixesWhoseMutatingRoutesAreWriteRoutes = ["/records", "/plugins"];
-
-    private static readonly string[] QueriesPostedForTheirBody = ["POST /records/with-children", "POST /records/children-in-destinations"];
 
     public static IEnumerable<object[]> EveryRoute =>
         Routes.Select(route => new object[] { route.Method, route.Pattern, route.Handler });
@@ -53,17 +53,41 @@ public sealed class WriteRouteHandlerTests
     public void EveryWriteRoute_IsOneThisSuiteNames()
     {
         var writes = MappedByTheHost()
-            .Where(route => route.Handlers.Count > 0
-                || (route.Method != "GET"
-                    && Array.Exists(PrefixesWhoseMutatingRoutesAreWriteRoutes, prefix =>
-                        route.Pattern.StartsWith(prefix, StringComparison.Ordinal))))
+            .Where(route => IsWrite(route.Method, route.Pattern, route.Parameters))
             .Select(route => $"{route.Method} {route.Pattern}")
-            .Except(QueriesPostedForTheirBody)
             .Order(StringComparer.Ordinal);
 
         Assert.Equal(
             Routes.Select(route => $"{route.Method} {route.Pattern}").Order(StringComparer.Ordinal),
             writes);
+    }
+
+    // Queries owns reads and Commands owns writes: a route is a read when its handler takes a
+    // Queries service and no Commands handler, whatever its HTTP method.
+    private static bool IsWrite(string method, string pattern, IReadOnlyList<Type> parameters) =>
+        parameters.Any(IsHandler)
+        || (method != "GET"
+            && !parameters.Any(IsQueriesService)
+            && Array.Exists(PrefixesWhoseMutatingRoutesAreWriteRoutes, prefix =>
+                pattern.StartsWith(prefix, StringComparison.Ordinal)));
+
+    private static bool IsQueriesService(Type type) => type.Namespace == QueriesNamespace;
+
+    [Theory]
+    [InlineData("POST", "/records/anything", false, true, false)]
+    [InlineData("POST", "/records/anything", true, false, true)]
+    [InlineData("POST", "/records/anything", true, true, true)]
+    [InlineData("POST", "/records/anything", false, false, true)]
+    [InlineData("GET", "/records/anything", false, true, false)]
+    [InlineData("GET", "/records/anything", true, false, true)]
+    public void ARouteIsAWrite_WhenItsHandlerTakesACommandsHandler_OrIsAMutatingRouteThatTakesNoQueriesService(
+        string method, string pattern, bool takesAHandler, bool takesAQueriesService, bool write)
+    {
+        List<Type> parameters = [];
+        if (takesAHandler) parameters.Add(typeof(CopyRecordHandler));
+        if (takesAQueriesService) parameters.Add(typeof(ChildRecordQueryService));
+
+        Assert.Equal(write, IsWrite(method, pattern, parameters));
     }
 
     [Fact]
@@ -80,7 +104,10 @@ public sealed class WriteRouteHandlerTests
         type.Namespace == CommandsNamespace && type.Name.EndsWith("Handler", StringComparison.Ordinal);
 
     private readonly record struct MappedRoute(
-        string Method, string Pattern, string? Name, IReadOnlyList<Type> Handlers);
+        string Method, string Pattern, string? Name, IReadOnlyList<Type> Parameters)
+    {
+        internal IReadOnlyList<Type> Handlers => [.. Parameters.Where(IsHandler)];
+    }
 
     private static List<MappedRoute> MappedByTheHost()
     {
@@ -95,7 +122,6 @@ public sealed class WriteRouteHandlerTests
                     "/" + (endpoint.RoutePattern.RawText ?? "").TrimStart('/'),
                     endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName,
                     [.. (endpoint.Metadata.GetMetadata<MethodInfo>()?.GetParameters() ?? [])
-                        .Select(parameter => parameter.ParameterType)
-                        .Where(IsHandler)])))];
+                        .Select(parameter => parameter.ParameterType)])))];
     }
 }

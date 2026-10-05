@@ -44,5 +44,5 @@ public sealed class CopyRecordHandler
     private static RecordEditResult RefuseDeepCopy() =>
         RecordEditResult.Refused(
             RecordEditRefusal.ContainerRecordNotYetSupported,
-            "A deep copy as override is not supported yet: it copies a container record with its child records.");
+            "A deep copy as override is not supported yet.");
 }

@@ -136,8 +136,7 @@ public static class RecordEndpoints
         app.MapPost("/records/with-children", (RecordsWithChildrenRequest request, ChildRecordQueryService svc) =>
             OverRecords(request.Records ?? [], "asking for child records", logger, validateOptions: () => null, answer: addressed =>
                 Task.FromResult(Results.Ok(
-                    svc.WithChildRecords([.. addressed.Select(r => new RecordIn(r.Plugin, r.FormKey))])
-                        .Select(r => Addressed(new RecordAt(r.Plugin, r.FormKey)))))))
+                    svc.WithChildRecords(addressed).Select(Addressed)))))
         .WithName("GetRecordsWithChildren")
         .WithSummary("Which of the records have child records in their own plugin.")
         .WithTags("Records")
@@ -153,8 +152,8 @@ public static class RecordEndpoints
                         ? Results.Problem("Every destination needs a name and an origin.", statusCode: 400)
                         : null,
                 answer: addressed => Task.FromResult(Results.Ok(
-                    svc.HoldersOfChildRecords([.. addressed.Select(r => new RecordIn(r.Plugin, r.FormKey))], destinations)
-                        .Select(h => new RecordChildHolders(Addressed(new RecordAt(h.Record.Plugin, h.Record.FormKey)), h.Destinations)))));
+                    svc.DestinationsHoldingChildRecords(addressed, destinations)
+                        .Select(h => new RecordChildHolders(Addressed(h.Record), h.Destinations)))));
         })
         .WithName("GetChildrenInDestinations")
         .WithSummary("For each record, the destination plugins that hold any of its child records, at any depth.")
@@ -242,7 +241,7 @@ public static class RecordEndpoints
             if (destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin)))
                 return Results.Problem("Every destination needs a name and an origin.", statusCode: 400);
             if (request.Replace && request.Mode == CopyMode.New)
-                return Results.Problem("The replace Option applies to a copy as override only.", statusCode: 400);
+                return Results.Problem("The replace Option does not apply to a copy as new.", statusCode: 400);
             return null;
         }, answer: addressed =>
         {

@@ -1,34 +1,37 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 
 namespace MEditService.Queries;
 
-/// <summary>A record and the plugin holding it (ADR-0012).</summary>
-public readonly record struct RecordIn(PluginAddress Plugin, string FormKey);
-
 /// <summary>The destinations that hold any of one record's child records.</summary>
-public sealed record ChildRecordHolders(RecordIn Record, IReadOnlyList<PluginAddress> Destinations);
+public sealed record HoldingDestinations(RecordAt Record, IReadOnlyList<PluginAddress> Destinations);
 
 /// <summary>What a copy asks before it runs: which records have child records, and which destinations
 /// already hold any of them (plugins.md, Copy).</summary>
 public sealed class ChildRecordQueryService(IQueryIndex index)
 {
-    public IReadOnlyList<RecordIn> WithChildRecords(IReadOnlyList<RecordIn> records)
+    public IReadOnlyList<RecordAt> WithChildRecords(IReadOnlyList<RecordAt> records)
     {
         var reads = index.RequireReads();
         return [.. records.Where(record => reads.HasChildRecords(record.Plugin, record.FormKey))];
     }
 
-    public IReadOnlyList<ChildRecordHolders> HoldersOfChildRecords(
-        IReadOnlyList<RecordIn> records, IReadOnlyList<PluginAddress> destinations)
+    /// <summary>Throws <see cref="NoLoadOrderException"/> until every plugin is indexed: a destination
+    /// not yet reached holds no rows and would read as holding nothing.</summary>
+    public IReadOnlyList<HoldingDestinations> DestinationsHoldingChildRecords(
+        IReadOnlyList<RecordAt> records, IReadOnlyList<PluginAddress> destinations)
     {
         var reads = index.RequireReads();
+        if (index.Status.State != LoadOrderState.Ready)
+            throw new NoLoadOrderException("The load order is still being indexed.");
+
         return
         [
             .. records.Select(record =>
             {
                 var holders = reads.PluginsHoldingChildRecords(record.Plugin, record.FormKey);
-                return new ChildRecordHolders(record, [.. destinations.Where(holders.Contains)]);
+                return new HoldingDestinations(record, [.. destinations.Where(holders.Contains)]);
             }),
         ];
     }
