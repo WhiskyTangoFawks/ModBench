@@ -38,7 +38,7 @@ export function registerRecordCreateCommand(
 
     const forget = await deps.createdRecords.selectWhenListed({ plugin, recordType });
     await deps.write(async () => {
-      const result = await deps.client.createRecord(plugin.name, plugin.origin, recordType);
+      const result = await deps.client.createRecord(plugin, recordType);
       if (isRefused(result)) {
         forget();
         deps.reporter.report('error', result.message);

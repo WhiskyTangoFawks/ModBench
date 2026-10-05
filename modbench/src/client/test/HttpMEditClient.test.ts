@@ -152,7 +152,7 @@ describe('HttpMEditClient — creating a record', () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' })));
     const client = makeClient(fetch);
 
-    const result = await client.createRecord('MyPatch.esp', 'ModA', 'npc_');
+    const result = await client.createRecord({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_');
 
     expect(result).toEqual({ applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' });
     const request = fetch.mock.calls[0]?.[0];
@@ -165,7 +165,7 @@ describe('HttpMEditClient — creating a record', () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { detail })));
     const client = makeClient(fetch);
 
-    const result = await client.createRecord('MyPatch.esp', 'ModA', 'npc_');
+    const result = await client.createRecord({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_');
 
     expect(result).toEqual({ refused: true, message: `Could not create a new npc_ record in "MyPatch.esp" — ${detail}` });
     expect(fetch).toHaveBeenCalledOnce();
@@ -221,7 +221,7 @@ describe('HttpMEditClient — deleting records answers per record', () => {
 
     const answers = [
       await client.deleteRecords([kept]),
-      await thrown.createRecord('MyPatch.esp', 'ModA', 'npc_'),
+      await thrown.createRecord({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_'),
       await thrown.copyRecords([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false),
     ];
 
@@ -310,6 +310,14 @@ describe('HttpMEditClient — copying records answers per record and destination
     expect(await client.getRecordHolders(npc.formKey)).toEqual([
       { name: 'Patch.esp', origin: 'PatchMod' }, { name: 'Patch.esp', origin: 'OtherMod' },
     ]);
+  });
+});
+
+describe('HttpMEditClient — getRecordOwner', () => {
+  it('answers the plugin holding the record as a plugin address', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { plugin: 'Patch.esp', origin: 'PatchMod' })));
+
+    expect(await makeClient(fetch).getRecordOwner('000800:Patch.esp')).toEqual({ name: 'Patch.esp', origin: 'PatchMod' });
   });
 });
 
@@ -444,7 +452,7 @@ describe('HttpMEditClient — an applied edit', () => {
     const client = makeClient(fetch);
 
     const outcome = await client.editRecord(
-      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA',
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' },
       { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' },
     );
 
@@ -458,7 +466,7 @@ describe('HttpMEditClient — an applied edit', () => {
     const client = makeClient(fetch);
 
     const outcome = await client.editRecord(
-      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA', { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
     );
 
     expect(outcome).toEqual({ applied: true });
@@ -474,7 +482,7 @@ describe('HttpMEditClient — the not-OK response text', () => {
     const client = makeClient(fetch);
 
     const outcome = await client.editRecord(
-      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA', { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
     );
 
     expect(outcome).toEqual({
@@ -489,7 +497,7 @@ describe('HttpMEditClient — the not-OK response text', () => {
     const client = makeClient(fetch);
 
     const outcome = await client.editRecord(
-      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA', { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
     );
 
     expect(outcome).toEqual({
@@ -502,7 +510,7 @@ describe('HttpMEditClient — the not-OK response text', () => {
     const client = makeClient(fetch);
 
     const outcome = await client.editRecord(
-      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA', { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
     );
 
     expect(outcome).toEqual({ applied: false, refusal: 'Unknown', message: 'No load order has been received.' });
@@ -600,8 +608,8 @@ describe('HttpMEditClient — a group\'s records', () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { items: [], total: 0 })));
     const client = makeClient(fetch);
 
-    await client.getRecords('MyPatch.esp', 'npc_', 0, 10, 'ModA');
-    await client.getRecords('MyPatch.esp', 'npc_', 0, 10, 'ModA', { unfiltered: true });
+    await client.getRecords({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_', 0, 10);
+    await client.getRecords({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_', 0, 10, { unfiltered: true });
 
     const queries = fetch.mock.calls.map((call) => new URL(call[0].url).searchParams.get('unfiltered'));
     expect(queries).toEqual([null, 'true']);
@@ -828,7 +836,7 @@ describe('HttpMEditClient — read timeout, checked through getRecordTypes, stan
     });
     const client = makeClient(fetch, { timeoutMs: 20 });
 
-    await expect(client.getRecordTypes('MyPatch.esp', 'ModA')).rejects.toThrow(/timed out after 20ms/);
+    await expect(client.getRecordTypes({ name: 'MyPatch.esp', origin: 'ModA' })).rejects.toThrow(/timed out after 20ms/);
     expect(sawSignal?.aborted).toBe(true);
   });
 
@@ -836,7 +844,7 @@ describe('HttpMEditClient — read timeout, checked through getRecordTypes, stan
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, [])));
     const client = makeClient(fetch, { timeoutMs: 20 });
 
-    await expect(client.getRecordTypes('MyPatch.esp', 'ModA')).resolves.toEqual([]);
+    await expect(client.getRecordTypes({ name: 'MyPatch.esp', origin: 'ModA' })).resolves.toEqual([]);
   });
 });
 
@@ -878,7 +886,7 @@ describe('HttpMEditClient — onNotification', () => {
 
     await client.start();
 
-    await vi.waitFor(() => expect(heard).toEqual([{ plugin: 'A.esp', origin: 'ModA' }]));
+    await vi.waitFor(() => expect(heard).toEqual([{ plugin: { name: 'A.esp', origin: 'ModA' } }]));
     await client.stop();
   });
 });

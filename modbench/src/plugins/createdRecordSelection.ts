@@ -25,7 +25,7 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
   let forgetLatest: (() => void) | undefined;
 
   const listing = async ({ plugin, recordType }: RecordGroup): Promise<string[]> =>
-    (await deps.client.getRecords(plugin.name, recordType, 0, UNLIMITED_RECORDS, plugin.origin, { unfiltered: true }))
+    (await deps.client.getRecords(plugin, recordType, 0, UNLIMITED_RECORDS, { unfiltered: true }))
       .items.map((r) => r.formKey);
 
   const reportUnselected = (group: RecordGroup, error: unknown): void => {
@@ -65,7 +65,7 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
         await selectAndOpen(group, created);
       };
       const unsubscribe = deps.client.onNotification('rows-changed', (event) => {
-        if (pluginAddressKey(event.plugin, event.origin) === address) void settle();
+        if (pluginAddressKey(event.plugin.name, event.plugin.origin) === address) void settle();
       });
       const forget = () => {
         unsubscribe();

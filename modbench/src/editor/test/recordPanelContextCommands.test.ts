@@ -54,7 +54,7 @@ function editRecordCalls(client: InMemoryMEditClient) {
 }
 
 function envelopeValueNarrowedFromUnknownCallArgs(args: unknown[]): string {
-  const envelope = args[3];
+  const envelope = args[2];
   const value: unknown = typeof envelope === 'object' && envelope !== null ? Reflect.get(envelope, 'value') : undefined;
   if (typeof value !== 'string') throw new Error('expected an editRecord envelope carrying a string value');
   return value;
@@ -91,7 +91,7 @@ describe('right-click array ops write one envelope from the host', () => {
 
     expect(editRecordCalls(meditClient)).toHaveLength(1);
     expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
-      IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
+      IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       { op: 'add', path: [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }] },
     ]);
   });
@@ -103,7 +103,7 @@ describe('right-click array ops write one envelope from the host', () => {
     await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
       parentContext([{ kind: 'member', name: 'Values' }]), 6);
 
-    expect(present(editRecordCalls(meditClient)[0], 'the sole editRecord call').args[3])
+    expect(present(editRecordCalls(meditClient)[0], 'the sole editRecord call').args[2])
       .toEqual({ op: 'add', path: [{ kind: 'member', name: 'Values' }], value: 6 });
   });
 
@@ -116,7 +116,7 @@ describe('right-click array ops write one envelope from the host', () => {
     ));
 
     expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
-      IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
+      IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       { op: 'remove', path: [{ kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 }] },
     ]);
   });
@@ -133,7 +133,7 @@ describe('right-click array ops write one envelope from the host', () => {
     ));
 
     expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
-      IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
+      IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       {
         op: 'move',
         path: [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }, { kind: 'index', index: 2 }],
@@ -149,7 +149,7 @@ describe('right-click array ops write one envelope from the host', () => {
     await present(handlers.get('modbench.record.moveElementUp'), "the handler registered for 'modbench.record.moveElementUp'")(elementContext([{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }]));
 
     expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
-      IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
+      IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       { op: 'move', path: [{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }], value: -1 },
     ]);
   });
@@ -252,7 +252,7 @@ describe('the extended editor opens and saves from the host, from the context it
     await commitField(deps, stringContext({ path }), 'edited in the tab');
 
     expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
-      IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
+      IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       { op: 'set', path, value: 'edited in the tab' },
     ]);
     expect(refreshSourceControlFor).toHaveBeenCalledWith(IDENTITY.plugin, IDENTITY.origin);
@@ -277,7 +277,7 @@ describe('a field gesture from the palette, which hands it no cell', () => {
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(editRecordCalls(meditClient).map(c => c.args[3])).toEqual([{ op: 'remove', path }]);
+    expect(editRecordCalls(meditClient).map(c => c.args[2])).toEqual([{ op: 'remove', path }]);
   });
 
   it('does nothing with no focused cell', async () => {
@@ -298,7 +298,7 @@ describe('a field gesture from the palette, which hands it no cell', () => {
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(editRecordCalls(meditClient).map(c => c.args[3])).toEqual([{ op: 'remove', path }]);
+    expect(editRecordCalls(meditClient).map(c => c.args[2])).toEqual([{ op: 'remove', path }]);
   });
 });
 
@@ -313,7 +313,7 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
 
     await editField()(IDENTITY, envelope);
 
-    expect(editRecordCalls(meditClient).map(c => c.args)).toEqual([[IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin, envelope]]);
+    expect(editRecordCalls(meditClient).map(c => c.args)).toEqual([[IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin }, envelope]]);
     expect(refreshSourceControlFor).toHaveBeenCalledWith(IDENTITY.plugin, IDENTITY.origin);
   });
 
@@ -368,7 +368,7 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
 
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'a long description' }));
     expect(editRecordCalls(meditClient).map(c => c.args)).toEqual([[
-      IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
+      IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       { op: 'set', path: [{ kind: 'member', name: 'Description' }], value: 'a new description' },
     ]]);
   });

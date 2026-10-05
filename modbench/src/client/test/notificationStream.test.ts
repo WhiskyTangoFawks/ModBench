@@ -53,7 +53,7 @@ describe('SseNotificationSubscriber', () => {
     subscriber.start();
     await vi.waitFor(() => expect(received).toHaveLength(1));
 
-    expect(received[0]).toEqual({ plugin: event.plugin, origin: event.origin, keys: event.keys });
+    expect(received[0]).toEqual({ plugin: { name: event.plugin, origin: event.origin }, keys: event.keys });
     subscriber.stop();
   });
 
@@ -72,7 +72,7 @@ describe('SseNotificationSubscriber', () => {
     await vi.waitFor(() => expect(received).toHaveLength(1));
 
     expect(openStream).toHaveBeenCalledTimes(2);
-    expect(received[0]).toEqual({ plugin: secondEvent.plugin, origin: secondEvent.origin, keys: secondEvent.keys });
+    expect(received[0]).toEqual({ plugin: { name: secondEvent.plugin, origin: secondEvent.origin }, keys: secondEvent.keys });
     subscriber.stop();
   });
 
@@ -91,7 +91,7 @@ describe('SseNotificationSubscriber', () => {
     await vi.waitFor(() => expect(received).toHaveLength(1));
 
     expect(openStream).toHaveBeenCalledTimes(2);
-    expect(received[0]).toEqual({ plugin: goodEvent.plugin, origin: goodEvent.origin, keys: goodEvent.keys });
+    expect(received[0]).toEqual({ plugin: { name: goodEvent.plugin, origin: goodEvent.origin }, keys: goodEvent.keys });
     subscriber.stop();
   });
 
@@ -251,8 +251,8 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     ['track-progress', rowsChanged([], { kind: 'track-progress', trackProgress }), trackProgress],
     ['external-change', rowsChanged([], { kind: 'external-change', changedPlugins }), { origin: 'ModA', changedPlugins }],
     ['untracked-plugins', rowsChanged(['A.esp', 'B.esp'], { kind: 'untracked-plugins' }), { origin: 'ModA', plugins: ['A.esp', 'B.esp'] }],
-    ['rows-changed', rowsChanged(['000001:Test.esp']), { plugin: 'Test.esp', origin: 'ModA', keys: ['000001:Test.esp'] }],
-    ['plugin-changed', rowsChanged([], { kind: 'plugin-changed' }), { plugin: 'Test.esp', origin: 'ModA' }],
+    ['rows-changed', rowsChanged(['000001:Test.esp']), { plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000001:Test.esp'] }],
+    ['plugin-changed', rowsChanged([], { kind: 'plugin-changed' }), { plugin: { name: 'Test.esp', origin: 'ModA' } }],
   ];
 
   it.each(cases)('hands a %s listener its kind\'s payload', (kind, event, payload) => {

@@ -29,7 +29,7 @@ function harness(shown: (formKey: string) => boolean = () => true) {
   const getRecords: MEditClient['getRecords'] = (...args) => {
     reads.push(args);
     if (group.failure) return Promise.reject(group.failure);
-    return Promise.resolve(page(args[5]?.unfiltered === true ? group.records : group.records.filter(shown)));
+    return Promise.resolve(page(args[4]?.unfiltered === true ? group.records : group.records.filter(shown)));
   };
   const reporter = recordingReporter();
   const revealed: string[] = [];
@@ -71,7 +71,7 @@ describe('createdRecordSelection', () => {
 
     await selection.selectWhenListed(NPCS);
 
-    expect(reads).toEqual([['MyPatch.esp', 'npc_', 0, UNLIMITED_RECORDS, 'ModA', { unfiltered: true }]]);
+    expect(reads).toEqual([[{ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_', 0, UNLIMITED_RECORDS, { unfiltered: true }]]);
   });
 
   it('waits past a change to a plugin of the same name from another origin', async () => {

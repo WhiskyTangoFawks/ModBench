@@ -45,7 +45,8 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
   client.setQueryAnswer('getCreatableRecordTypes', CREATABLE);
   const steps: string[] = [];
   client.setCommandHandler('createRecord', (...args) => {
-    steps.push(`create ${args.join(' ')}`);
+    const [plugin, recordType] = args;
+    steps.push(`create ${plugin.name} ${plugin.origin} ${recordType}`);
     return Promise.resolve(NEW_NPC);
   });
   const reporter = recordingReporter();

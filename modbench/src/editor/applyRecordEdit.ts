@@ -26,7 +26,7 @@ export async function applyRecordEdit(
 ): Promise<string | undefined> {
   const field = spellField(envelope.path);
   try {
-    const outcome = await deps.meditClient.editRecord(formKey, plugin, origin, envelope);
+    const outcome = await deps.meditClient.editRecord(formKey, { name: plugin, origin }, envelope);
     if (outcome.applied) {
       deps.refreshSourceControlFor(plugin, origin);
       return outcome.newFormKey;

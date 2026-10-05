@@ -6,7 +6,8 @@ import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
 import { productionFiles, SRC } from './scanSource';
 
-const SEAM_BOXES = ['wire', 'client'];
+const WIRE_BOX = 'wire';
+const CLIENT_BOX = 'client';
 const PLUGIN_NAME = /^(.*?)(plugin|pluginName|fileName)$/i;
 
 interface Member { name: string; isString: boolean }
@@ -24,19 +25,22 @@ function siblings(node: ts.Node): Member[] {
   return node.members.flatMap((m) => (ts.isPropertySignature(m) ? member(m.name, m.type) : []));
 }
 
-function pluginNamesWithoutOrigin(members: Member[]): string[] {
+function stringPlugins(members: Member[], originBesideIsEnough: boolean): string[] {
   return members.filter((m) => m.isString).flatMap(({ name }) => {
     const match = PLUGIN_NAME.exec(name);
     if (!match) return [];
+    if (!originBesideIsEnough) return [name];
     const origin = `${match[1]}origin`.toLowerCase();
     return members.some((m) => m.name.toLowerCase() === origin) ? [] : [name];
   });
 }
 
 function seamFiles(src: string = SRC): string[] {
-  return SEAM_BOXES.flatMap((box) => productionFiles(join(src, box)))
+  return [WIRE_BOX, CLIENT_BOX].flatMap((box) => productionFiles(join(src, box)))
     .filter((path) => !relative(src, path).split(sep).includes('generated'));
 }
+
+const originBesideIsEnough = (src: string, path: string): boolean => relative(src, path).split(sep)[0] === WIRE_BOX;
 
 function findOffenders(src: string = SRC): Record<string, string[]> {
   const offenders: Record<string, string[]> = {};
@@ -44,7 +48,7 @@ function findOffenders(src: string = SRC): Record<string, string[]> {
     const source = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
     const found: string[] = [];
     const visit = (node: ts.Node): void => {
-      found.push(...pluginNamesWithoutOrigin(siblings(node)));
+      found.push(...stringPlugins(siblings(node), originBesideIsEnough(src, path)));
       ts.forEachChild(node, visit);
     };
     visit(source);
@@ -62,16 +66,16 @@ async function plantedSeams(files: Record<string, string>): Promise<string> {
   return dir;
 }
 
-describe('a plugin name crosses a Modbench seam with its origin beside it (ADR-0012)', () => {
+describe('a plugin crosses a Modbench seam as an address (ADR-0012)', () => {
   it('scans the webview protocol and the mEdit client port', () => {
     expect(seamFiles()).toEqual(expect.arrayContaining([join(SRC, 'wire', 'messages.ts'), join(SRC, 'client', 'MEditClient.ts')]));
   });
 
-  it('the seams as they stand carry an origin beside every plugin name', () => {
+  it('the webview protocol carries an origin beside every plugin name, and the client port a plugin address', () => {
     expect(findOffenders()).toEqual({});
   });
 
-  it('flags a string plugin or filename with no origin of its own prefix in the same member or parameter list', async () => {
+  it('flags in the webview protocol a string plugin or filename with no origin of its own prefix beside it, and in the client any string plugin or filename', async () => {
     const dir = await plantedSeams({
       [join('wire', 'newMessage.ts')]: [
         'export interface Bare { plugin: string; formKey: string }',
@@ -85,6 +89,7 @@ describe('a plugin name crosses a Modbench seam with its origin beside it (ADR-0
       [join('client', 'port.ts')]: [
         'export interface Port {',
         '  read(fileName: string, origin: string): void;',
+        '  readAddress(plugin: PluginAddress, text: string): void;',
         '  write(fileName: string, text: string): void;',
         '  listen(listener: (plugin: string) => void): void;',
         '}',
@@ -97,7 +102,7 @@ describe('a plugin name crosses a Modbench seam with its origin beside it (ADR-0
     try {
       expect(findOffenders(dir)).toEqual({
         [join('wire', 'newMessage.ts')]: ['plugin', 'destinationPlugin', 'pluginName', 'plugin'],
-        [join('client', 'port.ts')]: ['fileName', 'plugin', 'plugin'],
+        [join('client', 'port.ts')]: ['fileName', 'fileName', 'plugin', 'plugin'],
       });
     } finally {
       await rm(dir, { recursive: true, force: true });
