@@ -9,7 +9,7 @@ import {
 } from '../wire/conflictTable';
 import { originLabel } from '../instanceLoader/fileConflictIndex';
 import { conflictPaths, conflictTable } from './conflictTable';
-import { modsGestureEntry, singularArgument } from './gestureEntry';
+import { gestureEntry, singularArgument } from '../drivingLib/gestureEntry';
 import type { ModlistNode } from './ModListProvider';
 import type { Reporter } from '../ports/reporter';
 import { reportFailure } from '../drivingLib/reportFailure';
@@ -106,7 +106,7 @@ export function registerConflictTable(
       { webviewOptions: { retainContextWhenHidden: true } }),
     vscode.commands.registerCommand('modbench.mod.openConflicts', async (clicked?: unknown, selected?: readonly ModlistNode[]) => {
       const mod = modOfConflictColumn(clicked)
-        ?? singularArgument(modsGestureEntry(clicked, selected, viewSelection), 'mod')?.mod.name;
+        ?? singularArgument(gestureEntry(clicked, selected, viewSelection), 'mod')?.mod.name;
       if (mod === undefined) return;
       await reportFailure(reporter, `Failed to open the conflicts of "${mod}".`, async () => {
         await vscode.commands.executeCommand('vscode.openWith', conflictTableUri(mod), CONFLICT_TABLE_VIEW_TYPE, { preview: true });

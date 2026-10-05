@@ -4,10 +4,10 @@ import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import type { ModlistNode } from './ModListProvider';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
+import { isModsKeyArgs, isRowOf, runModsWriting, openFolderArgument } from './gestureEntry';
 import {
-  isModsKeyArgs, isRowOf, modsGestureEntry, runModsWriting, openFolderArgument, pluralArgument, registerModsGesture, selectionArgument,
-  singularArgument, type GestureEntry, type RowOf,
-} from './gestureEntry';
+  gestureEntry, pluralArgument, registerGesture, selectionArgument, singularArgument, type GestureEntry, type RowOf,
+} from '../drivingLib/gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -43,7 +43,7 @@ export function registerModEnableCommands(
   access: ModlistAccess, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
-  const run = (enabled: boolean) => (entry: GestureEntry) => {
+  const run = (enabled: boolean) => (entry: GestureEntry<ModlistNode>) => {
     const modNames = pluralArgument(entry, 'mod').map((n) => n.mod.name);
     if (modNames.length === 0) return;
     const verb = enabled ? 'enable' : 'disable';
@@ -60,8 +60,8 @@ export function registerModEnableCommands(
     });
   };
   return [
-    registerModsGesture('modbench.mod.enable', viewSelection, run(true)),
-    registerModsGesture('modbench.mod.disable', viewSelection, run(false)),
+    registerGesture('modbench.mod.enable', viewSelection, run(true)),
+    registerGesture('modbench.mod.disable', viewSelection, run(false)),
   ];
 }
 
@@ -70,7 +70,7 @@ export function registerModEnableCommands(
 export function registerFileExclusionCommands(
   access: ModlistAccess, instance: Pick<Instance, 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
-  const run = (mark: OriginFileMark) => (entry: GestureEntry) => {
+  const run = (mark: OriginFileMark) => (entry: GestureEntry<ModlistNode>) => {
     const rows = pluralArgument(entry, 'file');
     if (rows.length === 0) return;
     const { verb } = FILE_MARKS[mark];
@@ -81,8 +81,8 @@ export function registerFileExclusionCommands(
     });
   };
   return [
-    registerModsGesture('modbench.mod.excludeFile', viewSelection, run('Excluded')),
-    registerModsGesture('modbench.mod.includeFile', viewSelection, run('Included')),
+    registerGesture('modbench.mod.excludeFile', viewSelection, run('Excluded')),
+    registerGesture('modbench.mod.includeFile', viewSelection, run('Included')),
   ];
 }
 
@@ -107,7 +107,7 @@ export function registerModMoveCommand(
     reporter.selectionOutcome(
       `Could not move ${result.outcome.refused.length} of ${names.length} ${noun}.`, result.outcome, (name) => name);
   };
-  return registerModsGesture('modbench.mod.move', view.selection, async (entry, option) => {
+  return registerGesture('modbench.mod.move', view.selection, async (entry, option) => {
     const rows = pluralArgument(entry, 'mod', 'separator');
     const modNames = rows.flatMap((row) => (row.kind === 'mod' ? [row.mod.name] : []));
     const separatorNames = rows.flatMap((row) => (row.kind === 'separator' ? [row.separator.name] : []));
@@ -161,7 +161,7 @@ export function registerModContextCommands(
   { access, instance, viewSelection, reporter, ask, trash, log }: ModContextDeps,
 ): vscode.Disposable[] {
   return [
-      registerModsGesture('modbench.mod.rename', viewSelection, async (entry) => {
+      registerGesture('modbench.mod.rename', viewSelection, async (entry) => {
         const node = singularArgument(entry, 'mod');
         if (!node) return;
         const oldName = node.mod.name;
@@ -180,7 +180,7 @@ export function registerModContextCommands(
           }
         });
       }),
-      registerModsGesture('modbench.mod.uninstall', viewSelection, async (entry) => {
+      registerGesture('modbench.mod.uninstall', viewSelection, async (entry) => {
         // The download to mark comes off the row the tree already holds, so the command walks
         // nothing to find it.
         const mods = pluralArgument(entry, 'mod').map((n) => ({ name: n.mod.name, archiveFilename: n.mod.archiveFilename }));
@@ -238,7 +238,7 @@ export function registerSeparatorCommands(
   viewSelection: () => readonly ModlistNode[],
 ): vscode.Disposable[] {
   return [
-      registerModsGesture('modbench.separator.rename', viewSelection, async (entry) => {
+      registerGesture('modbench.separator.rename', viewSelection, async (entry) => {
         const node = singularArgument(entry, 'separator');
         if (!node) return;
         const oldName = node.separator.name;
@@ -248,7 +248,7 @@ export function registerSeparatorCommands(
           applyOrThrow(await renameSeparator(access, instance.value.activeProfile, oldName, newName));
         }));
       }),
-      registerModsGesture('modbench.separator.add', viewSelection, async (entry) => {
+      registerGesture('modbench.separator.add', viewSelection, async (entry) => {
         const node = singularArgument(entry, 'mod', 'separator');
         if (!node) return;
         const name = await vscode.window.showInputBox({
@@ -261,7 +261,7 @@ export function registerSeparatorCommands(
             access, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name }));
         }));
       }),
-      registerModsGesture('modbench.separator.delete', viewSelection, async (entry) => {
+      registerGesture('modbench.separator.delete', viewSelection, async (entry) => {
         const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
         if (names.length === 0) return;
         if (!(await confirmSeparatorDelete(names, ask))) return;
@@ -313,7 +313,7 @@ export function registerCreateEmptyModCommand(
 export function registerOpenFolderCommand(
   instance: Pick<Instance, 'value'>, reporter: Reporter, viewSelection: () => readonly ModlistNode[],
 ): vscode.Disposable {
-  return registerModsGesture('modbench.mod.openFolder', viewSelection, async (entry) => {
+  return registerGesture('modbench.mod.openFolder', viewSelection, async (entry) => {
     const anchor = openFolderArgument(entry);
     if (anchor === undefined) return;
     const target = folderOf(instance, anchor);
@@ -357,7 +357,7 @@ const COPY_KINDS = ['mod', 'separator', 'folder', 'file'] as const;
 
 const isCopyRow = isRowOf(COPY_KINDS);
 
-function copyValueOf(row: RowOf<typeof COPY_KINDS[number]>): string {
+function copyValueOf(row: RowOf<ModlistNode, typeof COPY_KINDS[number]>): string {
   switch (row.kind) {
     case 'mod': return row.mod.name;
     case 'separator': return row.separator.name;
@@ -366,7 +366,7 @@ function copyValueOf(row: RowOf<typeof COPY_KINDS[number]>): string {
   }
 }
 
-const copyValueLines = (entry: GestureEntry): string => selectionArgument(entry, ...COPY_KINDS).map(copyValueOf).join('\n');
+const copyValueLines = (entry: GestureEntry<ModlistNode>): string => selectionArgument(entry, ...COPY_KINDS).map(copyValueOf).join('\n');
 
 /** Mods' own text for the catalog's one copy value id. `undefined` unless `clicked` is a row copy
  *  value takes or the Mods key's args, so the palette and another view's key defer. */
@@ -377,6 +377,6 @@ export function modsCopyValueText(
     if (isModsKeyArgs(clicked)) return copyValueLines({ selection: viewSelection() });
     if (!isCopyRow(clicked)) return undefined;
     const selected = allSelected?.length ? allSelected.filter(isCopyRow) : undefined;
-    return copyValueLines(modsGestureEntry(clicked, selected, viewSelection));
+    return copyValueLines(gestureEntry(clicked, selected, viewSelection));
   };
 }
