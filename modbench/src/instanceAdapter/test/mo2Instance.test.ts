@@ -86,7 +86,7 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('names MO2 and the file it keeps mod order in', () => {
-      expect(adapter.names).toEqual({ manager: 'MO2', modOrderFile: 'modlist.txt' });
+      expect(adapter.names).toEqual({ manager: 'MO2', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' });
     });
 
     it('answers no release for a game the tables hold none for, not one guessed from the name, which has the backend answer about another game', async () => {

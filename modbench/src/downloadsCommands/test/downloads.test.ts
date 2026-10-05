@@ -169,7 +169,7 @@ describe('deleteDownloads', () => {
 
     const outcome = await deleteDownloads(access, [file], trash);
 
-    expect(outcome).toEqual({ landed: [{ name: 'foo.7z', metaLeftBehind: 'EPERM' }], refused: [] });
+    expect(outcome).toEqual({ landed: [{ name: 'foo.7z', metadataLeftBehind: 'EPERM' }], refused: [] });
     expect(trashed).toEqual([file.path, metaPath('foo.7z')]);
   });
 

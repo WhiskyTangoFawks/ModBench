@@ -991,11 +991,11 @@ describe('Instance — downloads, profile and game directory', () => {
   });
 
   it('names the mod manager and its mod-order file as the adapter does rather than as the value spells them, before the first read too', () => {
-    const adapter = { ...adapterOver('/an/instance', { gameFolder: resolvesNotFound }), names: { manager: 'Another Manager', modOrderFile: 'order.txt' } };
+    const adapter = { ...adapterOver('/an/instance', { gameFolder: resolvesNotFound }), names: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' } };
     const instance = new Instance({ window: STEADY_WINDOW, adapter, log: () => {}, logReadFailure: () => {} });
     instances.push(instance);
 
-    expect(instance.value.managerNames).toEqual({ manager: 'Another Manager', modOrderFile: 'order.txt' });
+    expect(instance.value.managerNames).toEqual({ manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' });
   });
 
   it('names no folder before the first read lands, the adapter alone knowing where the instance keeps its folders', () => {

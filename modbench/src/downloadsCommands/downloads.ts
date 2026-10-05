@@ -13,9 +13,9 @@ export interface DownloadsAccess {
 
 /** `wrote` is false when the gesture already held (commands.md, Doing nothing is not an error),
  *  so no watcher fires.
- *  `metaLeftBehind` is delete's own: the file trashed but its `.meta` didn't. */
+ *  `metadataLeftBehind` is delete's own: the file trashed but its metadata didn't. */
 export type DownloadsCommandResult =
-  | { applied: true; wrote: boolean; metaLeftBehind?: string }
+  | { applied: true; wrote: boolean; metadataLeftBehind?: string }
   | { applied: false; refusal: string };
 
 // The one selection loop every plural verb shares. `toItem` builds the item a caller sees, so
@@ -23,13 +23,13 @@ export type DownloadsCommandResult =
 async function selectionOutcomeOf<I, T>(
   items: readonly I[],
   run: (item: I) => Promise<DownloadsCommandResult>,
-  toItem: (item: I, metaLeftBehind?: string) => T,
+  toItem: (item: I, metadataLeftBehind?: string) => T,
 ): Promise<SelectionOutcome<T>> {
   const landed: T[] = [];
   const refused: ItemRefusal<T>[] = [];
   for (const item of items) {
     const outcome = await run(item);
-    if (outcome.applied) landed.push(toItem(item, outcome.metaLeftBehind));
+    if (outcome.applied) landed.push(toItem(item, outcome.metadataLeftBehind));
     else refused.push({ item: toItem(item), reason: outcome.refusal });
   }
   return { landed, refused };
@@ -68,15 +68,15 @@ export function includeDownloads(access: DownloadsAccess, names: readonly string
 /** A downloaded file to delete: its name, and the path it is trashed from. */
 export type DownloadToDelete = Pick<DownloadedFile, 'name' | 'path'>;
 
-/** A landed delete: `metaLeftBehind` is set only when the file's own trash landed but its
- *  `.meta`'s then failed — the delete still applied, so a caller logs this, not a refusal. */
+/** A landed delete: `metadataLeftBehind` is set only when the file's own trash landed but its
+ *  metadata's then failed — the delete still applied, so a caller logs this, not a refusal. */
 export interface DeletedDownload {
   name: string;
-  metaLeftBehind?: string;
+  metadataLeftBehind?: string;
 }
 
-const toDeletedDownload = ({ name }: DownloadToDelete, metaLeftBehind?: string): DeletedDownload =>
-  metaLeftBehind === undefined ? { name } : { name, metaLeftBehind };
+const toDeletedDownload = ({ name }: DownloadToDelete, metadataLeftBehind?: string): DeletedDownload =>
+  metadataLeftBehind === undefined ? { name } : { name, metadataLeftBehind };
 
 /** Never touches the mod installed from any of them. */
 export function deleteDownloads(
@@ -86,7 +86,7 @@ export function deleteDownloads(
 }
 
 // The file is trashed first, so a failure there refuses with the sidecar untouched. Past that
-// point a `.meta` trash failure comes back as `metaLeftBehind` (downloads.md, Reporting story 2).
+// point a metadata trash failure comes back as `metadataLeftBehind` (downloads.md, Reporting story 2).
 async function deleteDownload(
   access: DownloadsAccess, file: DownloadToDelete, trash: MoveToTrash,
 ): Promise<DownloadsCommandResult> {
@@ -98,7 +98,7 @@ async function deleteDownload(
   try {
     await access.adapter.trashDownloadedFileMeta(file.name, trash);
   } catch (err) {
-    return { applied: true, wrote: true, metaLeftBehind: errorMessage(err) };
+    return { applied: true, wrote: true, metadataLeftBehind: errorMessage(err) };
   }
   return { applied: true, wrote: true };
 }
