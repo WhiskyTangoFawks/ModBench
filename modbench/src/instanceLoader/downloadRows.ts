@@ -32,7 +32,7 @@ export interface DownloadFile extends DownloadRow {
 
 // Archive filenames come from two places and are compared, never displayed, so they are folded: a
 // Windows filename is case-insensitive.
-const archiveKey = (filename: string): string => filename.toLowerCase();
+export const archiveKey = (filename: string): string => filename.toLowerCase();
 
 /** Which mods each download was installed into, keyed by the download's folded filename: the
  *  reverse of every mod's installation file, many to many. A mod naming no file claims nothing,
