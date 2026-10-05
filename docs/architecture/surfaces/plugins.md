@@ -120,12 +120,12 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · create record… · track (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy value |
+| Plugin menu | reveal · enable or disable · rename… (tracked) · create record… · track (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open to the side · create record… (on a container record) · copy… · copy value · delete |
 | Check box | enable or disable |
-| Keys | Space: enable or disable. Enter: open, as a click does. Delete: delete records. Ctrl+C: copy value. |
+| Keys | Space: enable or disable. Enter: open, as a click does. F2: rename a tracked plugin. Delete: delete records. Ctrl+C: copy value. |
 
 As a user, I want:
 
@@ -181,6 +181,16 @@ As a user, I want:
 3. From the palette with no plugin, a pick of the tracked plugins. Source: No dead entries
 4. A light plugin whose records fall outside the light range refused, naming the records and the remedies: clear the light flag, rename the plugin off `.esl`, or change the records' FormIDs.
 5. An interrupted compile to leave the old binary or the new one, and neither to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Compiling again fixes it. This is an exception to A failed gesture writes nothing.
+
+### Rename plugin
+
+As a user, I want:
+
+1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. It refuses what Create plugin, stories 1 and 3 refuse, compared without case. The extension may change. Source: Windows and Linux alike
+2. The plugin to keep its place in plugin order and its enabled state in every profile. Its plugin source and what Modbench last wrote follow it. Source: Never silently wrong
+3. The files in its mod named for it to follow it: its strings, its archives and its `.ini`. Source: Never silently wrong
+4. One confirmation when a plugin in the instance lists it as a master, naming each one and saying it keeps the old name and will show Master issues. Nothing asked otherwise. This is an exception to Confirm what destroys: the rename breaks those plugins' master.
+5. The plugin source renamed first, as working-tree changes I can review. Then the file, the files named for it and its lines, in one write. A rename that failed on that write to say so, naming the plugin. Git shows the source rename, and reverting it is the recovery. The file reads as an untracked plugin in a tracked mod until then. This is an exception to A failed gesture writes nothing.
 
 ### Create record
 
