@@ -80,6 +80,11 @@ public interface IPluginAdapter
     string? DivergenceBetween(
         ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings);
 
+    /// <summary>How the file at <paramref name="recompiledPath"/> differs at the byte level from the one
+    /// at <paramref name="originalPath"/>. Throws when either cannot be read.</summary>
+    Task<PluginByteComparison> CompareBytesAsync(
+        string originalPath, string recompiledPath, CancellationToken cancel = default);
+
     /// <summary>A new plugin in <paramref name="folder"/>: a header whose flags the extension alone
     /// sets, no records and no masters. Written whole or not at all, into no folder it made and over
     /// no file.</summary>
@@ -94,3 +99,8 @@ public enum EmptyPluginWrite
     FolderGone,
     FileExists,
 }
+
+/// <summary>Whether two plugin files hold the same bytes. If not, <c>Loss</c> is the first record whose
+/// rewrite dropped subrecords and <c>LossCause</c> the original's diagnosis of it, if any.</summary>
+public sealed record PluginByteComparison(
+    bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, PluginDiagnosis? LossCause = null);
