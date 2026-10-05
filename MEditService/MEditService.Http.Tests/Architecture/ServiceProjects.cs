@@ -6,6 +6,14 @@ namespace MEditService.Http.Tests.Architecture;
 /// MEditService.sln holding the csproj of the same name.</summary>
 internal static class ServiceProjects
 {
+    internal static string SolutionDirectory()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "MEditService.sln")))
+            dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("MEditService.sln not found above the test output directory.");
+    }
+
     internal static IReadOnlyList<string> All(string solutionDirectory) =>
         [.. Directory.EnumerateDirectories(solutionDirectory)
             .Select(Path.GetFileName)

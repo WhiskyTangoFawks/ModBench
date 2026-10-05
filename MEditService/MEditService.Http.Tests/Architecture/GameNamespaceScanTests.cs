@@ -11,7 +11,7 @@ public sealed class GameNamespaceScanTests
     private static readonly string[] GameNamespaces = [.. GameNames.Select(game => $"Mutagen.Bethesda.{game}")];
 
     private static readonly IReadOnlyList<string> ScannedRoots =
-        ServiceProjects.Production(ArchitectureTests.SolutionDirectory());
+        ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
     private static readonly string[] ExemptFolders =
     [
@@ -31,7 +31,7 @@ public sealed class GameNamespaceScanTests
         Assert.Contains("Fallout4Mod", GameTypeNames);
         Assert.Contains("IFallout4ModGetter", GameTypeNames);
 
-        var sites = Sites(ArchitectureTests.SolutionDirectory(), ScannedRoots, ExemptFolders);
+        var sites = Sites(ServiceProjects.SolutionDirectory(), ScannedRoots, ExemptFolders);
 
         Assert.True(
             sites.Count == 0,

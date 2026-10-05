@@ -8,13 +8,13 @@ public sealed class ReadSideImportScanTests
     private const string ReadSideImport = "using MEditService.Queries;";
 
     private static readonly IReadOnlyList<string> ScannedRoots =
-        [.. ServiceProjects.Production(ArchitectureTests.SolutionDirectory())
+        [.. ServiceProjects.Production(ServiceProjects.SolutionDirectory())
             .Where(project => project is not ("MEditService.Http" or "MEditService.Queries"))];
 
     [Fact]
     public void NoKernelOrWriteSideFile_ImportsTheReadSide()
     {
-        var importers = Importers(ArchitectureTests.SolutionDirectory(), ScannedRoots);
+        var importers = Importers(ServiceProjects.SolutionDirectory(), ScannedRoots);
 
         Assert.True(
             importers.Count == 0,

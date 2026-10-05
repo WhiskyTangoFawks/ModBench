@@ -20,7 +20,7 @@ public sealed class SharedConcernScanTests
     [Fact]
     public void TheWriteSide_CarriesNoCopyOfASharedConcernsMechanism()
     {
-        var counts = Counts(ArchitectureTests.SolutionDirectory(), ScannedRoots);
+        var counts = Counts(ServiceProjects.SolutionDirectory(), ScannedRoots);
 
         Assert.True(
             counts.Count == 0,
@@ -33,7 +33,7 @@ public sealed class SharedConcernScanTests
     public void EveryNeedle_MatchesTheSharedModuleItself()
     {
         var module = File.ReadAllText(Path.Combine(
-            ArchitectureTests.SolutionDirectory(), "MEditService.Commands", "Edits", SharedModuleFileName));
+            ServiceProjects.SolutionDirectory(), "MEditService.Commands", "Edits", SharedModuleFileName));
 
         Assert.Empty(ConcernMechanismNeedles.Where(c => Regex.Count(module, c.Needle) == 0).Select(c => $"{c.Concern}: {c.Needle}"));
     }
@@ -41,7 +41,7 @@ public sealed class SharedConcernScanTests
     [Fact]
     public void NoTestFile_NamesTheSharedModule()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var hits = Directory.EnumerateDirectories(root, "MEditService.*Tests*")
             .SelectMany(SourceTree.CSharpFiles)

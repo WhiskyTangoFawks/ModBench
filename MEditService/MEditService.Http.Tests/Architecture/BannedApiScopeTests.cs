@@ -105,7 +105,7 @@ public sealed class BannedApiScopeTests
     }
 
     private static bool HoldsAGameAssembly(string project) =>
-        XDocument.Load(ServiceProjects.Csproj(ArchitectureTests.SolutionDirectory(), project))
+        XDocument.Load(ServiceProjects.Csproj(ServiceProjects.SolutionDirectory(), project))
             .Descendants("PackageReference")
             .Select(e => (string?)e.Attribute("Include") ?? "")
             .Any(IsAPerGameMutagenPackage);
@@ -118,7 +118,7 @@ public sealed class BannedApiScopeTests
     [Fact]
     public void TheGameAssemblies_AreTheCodecsAndTheAdapters_AndNeitherCarriesTheMutagenBanFile()
     {
-        var projects = ServiceProjects.Production(ArchitectureTests.SolutionDirectory());
+        var projects = ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
         Assert.True(projects.Count > 5, $"The project scan found only {projects.Count} production projects.");
 
@@ -144,7 +144,7 @@ public sealed class BannedApiScopeTests
 
     private static ConfiguredSeverity ConfiguredSeverities()
     {
-        var solutionDirectory = ArchitectureTests.SolutionDirectory();
+        var solutionDirectory = ServiceProjects.SolutionDirectory();
         var globalConfigPath = Path.Combine(solutionDirectory, "BannedSymbols.globalconfig");
 
         return new ConfiguredSeverity(
@@ -155,10 +155,10 @@ public sealed class BannedApiScopeTests
     }
 
     private static string EditorConfigPath() =>
-        Path.Combine(ArchitectureTests.SolutionDirectory(), ".editorconfig");
+        Path.Combine(ServiceProjects.SolutionDirectory(), ".editorconfig");
 
     private static XDocument LoadBuildProps() =>
-        XDocument.Load(Path.Combine(ArchitectureTests.SolutionDirectory(), "Directory.Build.props"));
+        XDocument.Load(Path.Combine(ServiceProjects.SolutionDirectory(), "Directory.Build.props"));
 
     private static List<(string Section, string Severity)> SeverityDeclarations(IEnumerable<string> lines)
     {

@@ -77,7 +77,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void DiskDerivedState_NeverReadsLastWriteTime_BecauseDotNetHasNoChangeTimeSoItIsModificationTimeAlone()
     {
-        var offenders = Offenders(SolutionDirectory(), Projects, "LastWriteTime", allowedFiles: []);
+        var offenders = Offenders(ServiceProjects.SolutionDirectory(), Projects, "LastWriteTime", allowedFiles: []);
         Assert.True(offenders.Count == 0,
             "Modification time read without change time in:\n" + string.Join("\n", offenders));
     }
@@ -85,7 +85,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void DiskDerivedState_TheScanWalksMoreThanOneHundredFiles()
     {
-        var root = SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
         var walked = Projects.SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p))).Count();
         Assert.True(walked > 100, $"The mtime scan walked only {walked} files under {string.Join(", ", Projects)}.");
     }
@@ -112,7 +112,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void LoadOrder_IsWrittenOnlyByPutLoadOrder_AndReconciledOnlyByTheIndex()
     {
-        var root = SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
         string[] reconcilers = [];
         string[] writers = ["PutLoadOrderHandler.cs"];
 
@@ -139,7 +139,7 @@ public sealed class ArchitectureTests
     public void TheLoadOrderValue_NamesNoPluginAdapterType()
     {
         var offenders = Offenders(
-            SolutionDirectory(), [LoadOrderFolder], "MEditService.PluginAdapter", allowedFiles: []);
+            ServiceProjects.SolutionDirectory(), [LoadOrderFolder], "MEditService.PluginAdapter", allowedFiles: []);
 
         Assert.True(offenders.Count == 0,
             "The load order folder reaches into the Plugin adapter in:\n" + string.Join("\n", offenders));
@@ -148,8 +148,8 @@ public sealed class ArchitectureTests
     [Fact]
     public void TheLoadOrderValue_ReadsNoFileOrDirectory()
     {
-        var offenders = Offenders(SolutionDirectory(), [LoadOrderFolder], "File.", allowedFiles: [])
-            .Concat(Offenders(SolutionDirectory(), [LoadOrderFolder], "Directory.", allowedFiles: []))
+        var offenders = Offenders(ServiceProjects.SolutionDirectory(), [LoadOrderFolder], "File.", allowedFiles: [])
+            .Concat(Offenders(ServiceProjects.SolutionDirectory(), [LoadOrderFolder], "Directory.", allowedFiles: []))
             .Distinct()
             .ToList();
 
@@ -160,7 +160,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void TheLoadOrderValueScan_WalksTheLoadOrderFolder()
     {
-        var walked = SourceTree.CSharpFiles(Path.Combine(SolutionDirectory(), LoadOrderFolder))
+        var walked = SourceTree.CSharpFiles(Path.Combine(ServiceProjects.SolutionDirectory(), LoadOrderFolder))
             .Select(Path.GetFileName)
             .ToList();
 
@@ -214,7 +214,7 @@ public sealed class ArchitectureTests
     public void TheIndexInterface_HoldsOnlyMembersTheQueryServicesCall()
     {
         var queries = SourceTree
-            .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Queries"))
+            .CSharpFiles(Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.Queries"))
             .Select(File.ReadAllText)
             .ToList();
         var propertiesAndNonAccessorMethods = typeof(IQueryIndex).GetProperties().Select(m => m.Name)
@@ -268,7 +268,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void TheActivePluginRule_IsSpelledNowhereInProduction()
     {
-        var root = SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
         var spellings = Projects
             .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))
             .Where(file => ParticipationRule.IsMatch(File.ReadAllText(file)))
@@ -299,10 +299,10 @@ public sealed class ArchitectureTests
     [Fact]
     public void APluginBinary_IsOpenedAndWrittenOnlyByThePluginAdapter()
     {
-        var offenders = Offenders(SolutionDirectory(), Projects, "WriteToBinary(", PluginBinaryWriters)
-            .Concat(Offenders(SolutionDirectory(), Projects, "BeginWrite", PluginBinaryWriters))
-            .Concat(Offenders(SolutionDirectory(), Projects, "ModFactory.", ModFactoryCallers))
-            .Concat(Offenders(SolutionDirectory(), Projects, "CreateFromBinary", ModFactoryCallers))
+        var offenders = Offenders(ServiceProjects.SolutionDirectory(), Projects, "WriteToBinary(", PluginBinaryWriters)
+            .Concat(Offenders(ServiceProjects.SolutionDirectory(), Projects, "BeginWrite", PluginBinaryWriters))
+            .Concat(Offenders(ServiceProjects.SolutionDirectory(), Projects, "ModFactory.", ModFactoryCallers))
+            .Concat(Offenders(ServiceProjects.SolutionDirectory(), Projects, "CreateFromBinary", ModFactoryCallers))
             .ToList();
         Assert.True(offenders.Count == 0,
             "A plugin binary is opened or written outside the Plugin adapter in:\n" + string.Join("\n", offenders));
@@ -311,7 +311,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void ExistingPluginBinary_TheScanWalksMoreThanOneHundredFiles()
     {
-        var root = SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
         var walked = Projects.SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p))).Count();
         Assert.True(walked > 100, $"The plugin-binary-write scan walked only {walked} files under {string.Join(", ", Projects)}.");
     }
@@ -353,7 +353,7 @@ public sealed class ArchitectureTests
 
         string[] filesDeclaringAndImplementingTheVerbs = [.. PluginBinaryWriters, "IPluginAdapter.cs"];
         var writesIncludingCreateAndWrite = Offenders(
-            SolutionDirectory(), Projects, ["PluginAdapter", "WriteAsync("],
+            ServiceProjects.SolutionDirectory(), Projects, ["PluginAdapter", "WriteAsync("],
             filesDeclaringAndImplementingTheVerbs);
 
         var offenders = Unallowed(writesIncludingCreateAndWrite, writers).ToList();
@@ -372,7 +372,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void TestDataPlugins_AreExactlyTheAllowlist_BecauseTheRepoIsPublic()
     {
-        var testData = Path.Combine(SolutionDirectory(), "MEditService.TestSupport", "TestData");
+        var testData = Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.TestSupport", "TestData");
         var allowed = SourceTree.ReadAllowlist(Path.Combine(testData, "allowed-plugins.txt"))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var present = Directory.EnumerateFiles(testData, "*.es?")
@@ -382,7 +382,7 @@ public sealed class ArchitectureTests
     }
 
     private static readonly IReadOnlyList<string> Projects =
-        ServiceProjects.Production(ArchitectureTests.SolutionDirectory());
+        ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
     internal static List<string> Offenders(string root, IReadOnlyList<string> projects, string needle, string[] allowedFiles) =>
         Offenders(root, projects, [needle], allowedFiles);
@@ -455,12 +455,4 @@ public sealed class ArchitectureTests
     }
 
     private static ParameterInfo[] ParametersOf(Delegate method) => method.Method.GetParameters();
-
-    internal static string SolutionDirectory()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "MEditService.sln")))
-            dir = dir.Parent;
-        return dir?.FullName ?? throw new InvalidOperationException("MEditService.sln not found above the test output directory.");
-    }
 }

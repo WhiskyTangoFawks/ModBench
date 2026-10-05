@@ -25,7 +25,7 @@ public sealed class SourceCodecReadScanTests
     [Fact]
     public void TheSourceFolder_TouchesNoCodecMemberButBlankDocument()
     {
-        var counts = Counts(ArchitectureTests.SolutionDirectory(), ScannedRoots);
+        var counts = Counts(ServiceProjects.SolutionDirectory(), ScannedRoots);
 
         Assert.True(
             counts.Count == 0,
@@ -41,7 +41,7 @@ public sealed class SourceCodecReadScanTests
     [Fact]
     public void TheScan_WalksMoreThanFifteenProductionFiles()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var walked = ScannedFiles(root, ScannedRoots).Count();
 

@@ -29,7 +29,7 @@ public sealed class HandWrittenApplierScanTests
         Assert.Contains("TranslatedString", MutagenTypeNames);
         Assert.Contains("FormLink", MutagenTypeNames);
 
-        var sites = Sites(ArchitectureTests.SolutionDirectory(), ScannedRoots);
+        var sites = Sites(ServiceProjects.SolutionDirectory(), ScannedRoots);
 
         Assert.True(
             sites.Count == 0,

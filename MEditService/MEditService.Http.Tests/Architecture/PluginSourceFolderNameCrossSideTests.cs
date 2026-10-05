@@ -12,7 +12,7 @@ public sealed class PluginSourceFolderNameCrossSideTests
     [Fact]
     public void TheBackendAndFrontendNames_Agree()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
         var backendFile = Path.Combine(root, "MEditService.SourceAdapter", "SourceRepositoryLayout.cs");
         var frontendFile = Path.Combine(root, "..", "modbench", "src", "instanceAdapter", "layout.ts");
 

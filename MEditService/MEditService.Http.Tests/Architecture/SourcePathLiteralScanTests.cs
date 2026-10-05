@@ -10,7 +10,7 @@ public sealed class SourcePathLiteralScanTests
          "\".git\"", "\"HEAD\"", "\"packed-refs\"", "\"refs\""];
 
     private static readonly IReadOnlyList<string> ScannedRoots =
-        ServiceProjects.Production(ArchitectureTests.SolutionDirectory());
+        ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
     private const string RepositoryFilePrefix = "SourceRepository";
     private const string RepositoryFolder = "MEditService.SourceAdapter";
@@ -20,7 +20,7 @@ public sealed class SourcePathLiteralScanTests
     [Fact]
     public void TheStackOutsideTheRepository_SpellsALayoutLiteral_OnlyAsOftenAsTheAllowlistSays()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         AssertCountsMatchAllowlist(
             Counts(root, ScannedRoots),

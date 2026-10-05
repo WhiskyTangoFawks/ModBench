@@ -9,7 +9,7 @@ public sealed class TestProjectReferenceScanTests
     [Fact]
     public void EveryTestSideProject_ReferencesItsBoxWhatTheBoxReferencesAndTestSupport()
     {
-        var solution = ArchitectureTests.SolutionDirectory();
+        var solution = ServiceProjects.SolutionDirectory();
         var violations = new List<string>();
 
         foreach (var project in ServiceProjects.TestSide(solution))
@@ -47,7 +47,7 @@ public sealed class TestProjectReferenceScanTests
     [Fact]
     public void TheScan_WalksTheProductionAndTestSideProjects()
     {
-        var solution = ArchitectureTests.SolutionDirectory();
+        var solution = ServiceProjects.SolutionDirectory();
 
         Assert.True(ServiceProjects.Production(solution).Count > 5, "The scan found too few production projects beside MEditService.sln.");
         Assert.True(ServiceProjects.TestSide(solution).Count > 5, "The scan found too few test-side projects beside MEditService.sln.");
