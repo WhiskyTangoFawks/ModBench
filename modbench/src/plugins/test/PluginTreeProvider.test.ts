@@ -15,7 +15,8 @@ import {
 } from '../PluginTreeProvider';
 import { headerFormKeyFor } from '../formKeyIdentity';
 import { ErrorNode } from '../../drivingLib/errorNode';
-import type { PluginConditions, PluginTreeNode } from '../PluginTreeProvider';
+import type { PluginTreeNode } from '../PluginTreeProvider';
+import type { PluginConditions } from '../pluginFacts';
 import { recordResourceUri } from '../recordResourceUri';
 import { expectInstanceOf, expectInstanceOfOrUndefined, expectInstancesOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
