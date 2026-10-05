@@ -100,8 +100,7 @@ public enum EmptyPluginWrite
     FileExists,
 }
 
-/// <summary>Whether two plugin files hold the same bytes. When they do not, <c>Loss</c> is the first
-/// record whose rewrite dropped subrecords and <c>LossCause</c> the original's own diagnosis of that
-/// record, when it has one.</summary>
+/// <summary>Whether two plugin files hold the same bytes. If not, <c>Loss</c> is the first record whose
+/// rewrite dropped subrecords and <c>LossCause</c> the original's diagnosis of it, if any.</summary>
 public sealed record PluginByteComparison(
     bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, PluginDiagnosis? LossCause = null);
