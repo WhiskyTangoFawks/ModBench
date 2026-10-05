@@ -13,9 +13,6 @@ public sealed class PluginRecordLookupCellsTests
 
     private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
 
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
-        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
-
     [Fact]
     public void CellsIn_AWorldspace_ListsItsPersistentCellAndEveryNumberedCellAcrossBlocks_AndNoOtherCell()
     {
@@ -49,7 +46,7 @@ public sealed class PluginRecordLookupCellsTests
             })
             .Build();
 
-        using var lookup = Adapter.OpenRecordLookup(new ModPath(ModKey.FromFileName(PluginName), Path.Combine(data.DataFolder, PluginName)), GameRelease.Fallout4, Schemas);
+        using var lookup = Adapter.OpenRecordLookup(new ModPath(ModKey.FromFileName(PluginName), Path.Combine(data.DataFolder, PluginName)), GameRelease.Fallout4, new Dictionary<string, RecordTableSchema>());
 
         Assert.Equal(
             expected.Select(key => key.ToString()).Order(StringComparer.Ordinal),
