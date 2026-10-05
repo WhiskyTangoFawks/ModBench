@@ -10,10 +10,15 @@ public sealed class TrackedCutDownFixture : IDisposable
 {
     public ScratchDirectory ModFolder { get; } = new("medit-track-roundtrip-");
 
-    public TrackedCutDownFixture() => CutDownPluginFixture.TrackedInto(ModFolder);
+    private readonly IReadOnlyList<SourceDocument> documents;
 
-    public IReadOnlyList<SourceDocument> Documents() =>
-        TreeDocuments.Of(SourceRepository.Open(TestMod.In(ModFolder), GameRelease.Fallout4).Require(), CutDownPluginFixture.Plugin);
+    public TrackedCutDownFixture()
+    {
+        CutDownPluginFixture.TrackedInto(ModFolder);
+        documents = TreeDocuments.Of(SourceRepository.Open(TestMod.In(ModFolder), GameRelease.Fallout4).Require(), CutDownPluginFixture.Plugin);
+    }
+
+    public IReadOnlyList<SourceDocument> Documents() => documents;
 
     public Dictionary<string, byte[]> ReadSourceTree() => CutDownPluginFixture.ReadSourceTree(ModFolder);
 
