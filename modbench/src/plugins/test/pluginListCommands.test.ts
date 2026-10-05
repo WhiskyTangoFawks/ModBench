@@ -73,7 +73,7 @@ function makeMo2() {
   };
 }
 
-const WROTE = { name: 'MyPatch.esp', origin: 'Winning Mod', path: '/instance/mods/Winning Mod/MyPatch.esp' };
+const WROTE = { name: 'MyPatch.esp', origin: 'Winning Mod' };
 
 describe('registerCreatePluginCommand', () => {
   function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined, lightPluginsSupported = true) {
@@ -285,7 +285,7 @@ describe('registerCreatePluginCommand', () => {
 
   it('refreshes nothing once the plugin lands, and the rows show it when the next instance value arrives', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', origin: 'overwrite', path: '/instance/overwrite/MyPatch.esp' });
+    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', origin: 'overwrite' });
     showInputBox.mockResolvedValue('MyPatch.esp');
     showQuickPick.mockResolvedValue({ label: 'Overwrite', origin: 'overwrite' });
     const mo2 = makeMo2();

@@ -54,7 +54,7 @@ public sealed class CreatePluginApiTests : HostedTests
 
         Assert.Equal("Minted.esp", created.GetProperty("name").GetString());
         Assert.Equal("MintedMod", created.GetProperty("origin").GetString());
-        Assert.Equal(Path.Combine(modFolder, "Minted.esp"), created.GetProperty("path").GetString());
+        Assert.True(File.Exists(Path.Combine(modFolder, "Minted.esp")));
         Assert.False((await CreateARecordIn("Minted.esp", "MintedMod")).IsSuccessStatusCode);
     }
 
@@ -69,7 +69,7 @@ public sealed class CreatePluginApiTests : HostedTests
 
         Assert.Equal(before, (await Client.Plugins()).Select(p => p.GetProperty("name").GetString()));
         var named = fx.Plugins.Append(new LoadOrderEntry(
-            "Listed.esp", created.GetProperty("path").GetString().Require(), "ListedMod",
+            "Listed.esp", Path.Combine(modFolder, "Listed.esp"), "ListedMod",
             fx.Plugins.Count, Enabled: false, Winning: true));
         (await Client.PutLoadOrder(fx, named)).EnsureSuccessStatusCode();
         Assert.Contains(await Client.Plugins(), p => p.GetProperty("name").GetString() == "Listed.esp");

@@ -77,6 +77,7 @@ internal static class WriteEndpointMapping
         {
             PluginCreateRefusal.FolderGone => 404,
             PluginCreateRefusal.FileExists => 409,
+            PluginCreateRefusal.NotAPluginFile => 400,
             // The request is sound; the file system refused the write.
             PluginCreateRefusal.WriteFailed => 422,
             // Well-formed, and still not a plugin this game can load.
@@ -146,9 +147,6 @@ internal static class WriteEndpointMapping
     /// <summary>The load order went away underneath the request — a "not right now", never a bad
     /// request.</summary>
     internal static IResult NoLoadOrder(NoLoadOrderException ex) => Results.Problem(ex.Message, statusCode: 503);
-
-    /// <summary>An argument the adapter itself refuses — malformed syntax is a 400.</summary>
-    internal static IResult InvalidArgument(ArgumentException ex) => Results.Problem(ex.Message, statusCode: 400);
 
     /// <summary>No Index gate here (ADR-0015): the Index serializes its own projections
     /// afterwards, so a source write never queues behind one and never answers "busy".</summary>
