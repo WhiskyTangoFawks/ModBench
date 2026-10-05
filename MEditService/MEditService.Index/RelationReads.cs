@@ -603,10 +603,7 @@ internal sealed class RelationReads(
         return (where, values);
     }
 
-    // Private: table-name dispatch is rejected from the seam; GetDocument and GetOverrideStack
-    // resolve a FormKey's type themselves rather than being told it.
-    // Inactive plugins are indexed too (ADR-0012): a copy given as text is a column whichever plugin
-    // holds its record.
+    // Inactive plugins are indexed too (ADR-0012): any plugin's row gives the type.
     private static string? FindRecordTypeInAnyPlugin(DuckDBConnection connection, string formKey)
     {
         using var cmd = connection.CreateCommand();
@@ -615,6 +612,8 @@ internal sealed class RelationReads(
         return cmd.ExecuteScalar() as string;
     }
 
+    // Private: table-name dispatch is rejected from the seam; GetDocument and GetOverrideStack
+    // resolve a FormKey's type themselves rather than being told it.
     private static string? FindRecordType(DuckDBConnection connection, string formKey)
     {
         using var cmd = connection.CreateCommand();
