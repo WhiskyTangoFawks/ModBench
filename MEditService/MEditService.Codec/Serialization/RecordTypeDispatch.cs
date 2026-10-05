@@ -73,6 +73,10 @@ public sealed class RecordTypeDispatch
     /// directory rather than a slot.</summary>
     public bool IsCell(string recordType) => ConcreteFor(recordType)?.Name == "Cell";
 
+    /// <summary>Whether this is the game's worldspace — the one record type whose cells sit under its
+    /// blocks, in documents of their own.</summary>
+    public bool IsWorldspace(string recordType) => ConcreteFor(recordType)?.Name == WorldspaceTypeName;
+
     /// <summary>The group-property name ("Npcs") the generator writes verbatim as a flat record's
     /// directory. Null for a type with no top-level group, a directory-per-record one, or one that
     /// does not resolve — ask the repository.</summary>

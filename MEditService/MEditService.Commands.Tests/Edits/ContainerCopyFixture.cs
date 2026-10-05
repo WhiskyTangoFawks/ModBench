@@ -50,9 +50,6 @@ public sealed class ContainerCopyFixture : TestInstance, ITrackedPlugins
     public const string DialogBranchEditorId = "SourceBranch";
     public FormKey DialogBranch { get; }
 
-    // Interior — the non-spatial case: a real block/sub-block pair, but one whose
-    // number carries no gameplay meaning (PlacementWalker.Walk's own interior branch, verified: block/
-    // sub/grid are always null for an interior cell_location row).
     public const string InteriorCellEditorId = "SourceInteriorCell";
     public const float InteriorCellWaterHeight = 100f;
     public FormKey InteriorCell { get; }

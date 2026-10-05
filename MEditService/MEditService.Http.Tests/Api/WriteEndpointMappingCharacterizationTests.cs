@@ -109,6 +109,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     [Theory]
     [InlineData("Override")]
     [InlineData("New")]
+    [InlineData("DeepOverride")]
     public async Task CopyRecord_WhenTheDestinationCannotBeWritten_AnswersTheItemRefused_NotAnUnhandled500(string mode)
     {
         using var fx = BuildSourceAndDestination();
@@ -157,27 +158,6 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         var response = await _client.Copy(formKey, (Plugin, Origin), "New", (DestPlugin, DestOrigin), replace: true);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(destination, TreeSnapshot.Of(ModFolderOf(fx, DestOrigin)));
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task CopyRecord_AsDeepOverride_IsRefusedAsNotYetSupported_AndCopiesNothing(bool replace)
-    {
-        using var fx = BuildSourceAndDestination();
-        await Load(fx);
-        await Track(DestOrigin);
-        var formKey = await FirstNpcFormKey(Plugin, Origin);
-        var destination = TreeSnapshot.Of(ModFolderOf(fx, DestOrigin));
-
-        var response = await _client.Copy(formKey, (Plugin, Origin), "DeepOverride", (DestPlugin, DestOrigin), replace);
-
-        response.EnsureSuccessStatusCode();
-        var answer = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Empty(answer.GetProperty("applied").EnumerateArray());
-        var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
-        Assert.Equal("ContainerRecordNotYetSupported", refused.GetProperty("refusal").GetString());
         Assert.Equal(destination, TreeSnapshot.Of(ModFolderOf(fx, DestOrigin)));
     }
 }
