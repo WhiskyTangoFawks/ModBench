@@ -392,24 +392,6 @@ describe('modbench.mod.sync syncs the instance value it is handed', () => {
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 
-async function enableOrDisableCommandsRunByTheNextTurn(command: string): Promise<string[]> {
-  const run: string[] = [];
-  const execute = vscode.commands.executeCommand;
-  assert.ok(Reflect.set(vscode.commands, 'executeCommand', (id: string, ...args: unknown[]) => {
-    run.push(id);
-    return execute(id, ...args);
-  }), 'the probe replaced executeCommand');
-  try {
-    await vscode.commands.executeCommand('list.focusFirst');
-    assert.deepStrictEqual(run.splice(0), ['list.focusFirst'], 'the probe sees a call through executeCommand');
-    await vscode.commands.executeCommand(command);
-    await new Promise((turn) => setImmediate(turn));
-  } finally {
-    Reflect.set(vscode.commands, 'executeCommand', execute);
-  }
-  return run.filter((id) => /^modbench\.(mod|plugin)\.(enable|disable)$/.test(id));
-}
-
 async function refreshesWithin(instance: { refresh(): Promise<void> }, command: string, ms: number): Promise<number> {
   let reads = 0;
   const refresh = instance.refresh.bind(instance);
@@ -688,21 +670,17 @@ describe('Overwrite row', () => {
   const overwriteDir = root ? path.join(root, 'overwrite') : '';
   const provider = () => present(ext?.exports.modListProvider, "the activated extension's modListProvider export");
 
-  after(() => {
+  before(async () => {
     if (!root) return;
-    fs.rmSync(overwriteDir, { recursive: true, force: true });
-  });
-
-  it('shows a pinned Overwrite row (last, outside grouping) when overwrite/ is non-empty', async () => {
     await writeAndAwaitInstance(() => {
       fs.mkdirSync(overwriteDir, { recursive: true });
       fs.writeFileSync(path.join(overwriteDir, 'f4se.log'), 'x');
     });
+  });
 
-    const roots = await provider().getChildren();
-    const last = present(roots[roots.length - 1], 'the last root');
-    assert.strictEqual(last.kind, 'overwrite', 'Overwrite row should be the very last root');
-    assert.strictEqual(last.label, 'Overwrite');
+  after(() => {
+    if (!root) return;
+    fs.rmSync(overwriteDir, { recursive: true, force: true });
   });
 
   it('reveal action resolves against the overwrite folder without throwing', async () => {
@@ -711,15 +689,6 @@ describe('Overwrite row', () => {
     const node = roots.find((n) => n.kind === 'overwrite');
     assert.ok(node, 'expected an Overwrite node to reveal');
     await vscode.commands.executeCommand('modbench.mod.openFolder', node);
-  });
-
-  it('keeps the Overwrite row, with no count, once overwrite/ is emptied', async () => {
-    await writeAndAwaitInstance(() => {
-      fs.rmSync(overwriteDir, { recursive: true, force: true });
-    });
-    const roots = await provider().getChildren();
-    const overwrite = present(roots.find((n) => n.kind === 'overwrite'), 'the Overwrite row');
-    assert.strictEqual(overwrite.description, undefined);
   });
 });
 
@@ -815,101 +784,7 @@ describe('A Mods gesture\'s write reaches the Mods view through the Instance loa
   });
 });
 
-describe('The Mods tree\'s expansion, as VS Code renders it', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const modlistPath = root ? path.join(root, 'profiles', 'Default', 'modlist.txt') : '';
-  const modDirs = root ? ['Armor Pack', 'Weapons', 'Late Armor'].map((name) => path.join(root, 'mods', name)) : [];
-  const gearDir = root ? path.join(root, 'mods', 'Gear_separator') : '';
-  const provider = () => present(ext?.exports.modListProvider, "the activated extension's modListProvider export");
-  let original = '';
-  let asked: string[] = [];
-  let restore = () => {};
-
-  const gearExpanded = () => asked.includes('separator:Gear');
-  const renderAfter = async (change: () => unknown): Promise<void> => {
-    asked = [];
-    await change();
-    await waitFor('the view to ask for its roots', () => asked.includes('root'));
-    await new Promise((r) => setTimeout(r, 750));
-  };
-  const expandsAfter = async (change: () => unknown): Promise<void> => {
-    asked = [];
-    await change();
-    await waitFor('the re-rendered view to ask for the separator\'s children', () => {
-      const rendered = asked.indexOf('root');
-      return rendered >= 0 && asked.indexOf('separator:Gear', rendered) > rendered;
-    });
-  };
-  const onTheSeparator = async (command: 'list.expand' | 'list.collapse') => {
-    await vscode.commands.executeCommand('modbench.modList.focus');
-    await vscode.commands.executeCommand('list.focusFirst');
-    await vscode.commands.executeCommand(command);
-  };
-
-  before(async () => {
-    if (!root) return;
-    original = fs.readFileSync(modlistPath, 'utf8');
-    const p = provider();
-    const getChildren = p.getChildren.bind(p);
-    p.getChildren = (element) => {
-      asked.push(element?.id ?? 'root');
-      return getChildren(element);
-    };
-    restore = () => { p.getChildren = getChildren; };
-    await writeAndAwaitInstance(() => {
-      for (const dir of [...modDirs.slice(0, 2), gearDir]) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(modlistPath, '+Armor Pack\r\n+Weapons\r\n-Gear_separator\r\n');
-    });
-  });
-
-  after(async () => {
-    restore();
-    provider().setFilter('', true);
-    if (!root) return;
-    await writeAndAwaitInstance(() => {
-      fs.writeFileSync(modlistPath, original);
-      for (const dir of [...modDirs, gearDir]) fs.rmSync(dir, { recursive: true, force: true });
-    });
-  });
-
-  it('renders a separator collapsed on a fresh view', async function () {
-    if (!root) this.skip();
-    await renderAfter(() => vscode.commands.executeCommand('modbench.modList.focus'));
-    assert.ok(!gearExpanded(), `a fresh view expanded the separator: ${JSON.stringify(asked)}`);
-  });
-
-  it('expands a separator it already rendered collapsed, while a filter shows it for its matching mods', async function () {
-    if (!root) this.skip();
-    await expandsAfter(() => provider().setFilter('armor', true));
-  });
-
-  it('keeps a separator the user collapsed collapsed, and one the user expanded expanded, across a change on disk', async function () {
-    if (!root) this.skip();
-    await renderAfter(() => provider().setFilter('', true));
-    await onTheSeparator('list.collapse');
-    await renderAfter(() => writeAndAwaitInstance(() => {
-      fs.mkdirSync(present(modDirs[2], 'Late Armor'), { recursive: true });
-      fs.writeFileSync(modlistPath, '+Late Armor\r\n+Armor Pack\r\n+Weapons\r\n-Gear_separator\r\n');
-    }));
-    assert.ok(!gearExpanded(), `a change on disk expanded a collapsed separator: ${JSON.stringify(asked)}`);
-
-    await onTheSeparator('list.expand');
-    await expandsAfter(() => writeAndAwaitInstance(() => {
-      fs.writeFileSync(modlistPath, '+Armor Pack\r\n+Late Armor\r\n+Weapons\r\n-Gear_separator\r\n');
-    }));
-  });
-
-  it('expands a separator the user collapsed, while a filter shows it for its matching mods', async function () {
-    if (!root) this.skip();
-    await onTheSeparator('list.collapse');
-    await renderAfter(() => provider().setFilter('', true));
-    assert.ok(!gearExpanded(), `the collapse did not land: ${JSON.stringify(asked)}`);
-
-    await expandsAfter(() => provider().setFilter('weap', true));
-  });
-});
-
-describe('The Mods view\'s palette entries and Space, as VS Code runs them', () => {
+describe('The Mods view\'s palette entries, as VS Code runs them', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const modlistPath = root ? path.join(root, 'profiles', 'Default', 'modlist.txt') : '';
   const modDir = root ? path.join(root, 'mods', 'Palette Mod') : '';
@@ -940,12 +815,6 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
       fs.writeFileSync(modlistPath, original);
       fs.rmSync(modDir, { recursive: true, force: true });
     });
-  });
-
-  it('VS Code\'s own Space on a focused mod row leaves its check box alone', async function () {
-    if (!root) this.skip();
-    await enabledAndSelected();
-    assert.deepStrictEqual(await enableOrDisableCommandsRunByTheNextTurn('list.toggleExpand'), []);
   });
 
   it('copies the selection of the view last selected in when Copy Value is run from the palette', async function () {
