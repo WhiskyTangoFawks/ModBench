@@ -53,6 +53,8 @@ public class ContainerChildQueryServiceTests
         public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;
         public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
         public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
+        public bool HasChildRecords(PluginAddress plugin, string formKey) => false;
+        public IReadOnlySet<PluginAddress> PluginsHoldingChildRecords(PluginAddress plugin, string formKey) => new HashSet<PluginAddress>();
     }
 
     [Fact]

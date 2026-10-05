@@ -87,5 +87,12 @@ public record RecordCopyItem(RecordAddress Record, PluginAddress Destination);
 
 public record RecordCopyRefusal(RecordCopyItem Item, RecordEditRefusal Refusal, string Message);
 
+public record RecordsWithChildrenRequest(IReadOnlyList<RecordAddress> Records);
+
+public record ChildrenInDestinationsRequest(IReadOnlyList<RecordAddress> Records, IReadOnlyList<PluginAddress> Destinations);
+
+/// <summary>The destinations that hold any of the record's child records, at any depth.</summary>
+public record RecordChildHolders(RecordAddress Record, IReadOnlyList<PluginAddress> Destinations);
+
 /// <summary>Applied or refusal, per record and destination (ADR-0019).</summary>
 public record RecordCopyResponse(IReadOnlyList<RecordCopyLanded> Applied, IReadOnlyList<RecordCopyRefusal> Refused);
