@@ -34,7 +34,7 @@ function openOn(formKey: string, title = 'MovedNpc') {
   const tracker = fakeActiveRecordTracker();
   tracker.setFormKey(panel, formKey);
   const edits = new EditsInFlight(tracker);
-  subscribeRecordPanelsToNotifications(client, new Set([panel]), tracker, edits);
+  subscribeRecordPanelsToNotifications(client, new Set([panel]), edits);
   return { client, panel, tracker, edits };
 }
 
@@ -99,7 +99,7 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
     tracker.setFormKey(moved, '000800:Mod.esp');
     tracker.setFormKey(elsewhere, '000801:Mod.esp');
     const edits = new EditsInFlight(tracker);
-    subscribeRecordPanelsToNotifications(client, new Set([moved, elsewhere]), tracker, edits);
+    subscribeRecordPanelsToNotifications(client, new Set([moved, elsewhere]), edits);
     const panels = [moved, elsewhere];
     await edits.gateShowing(panels, EDITED_MOD_ESP_FROM_MODA)(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
     const { write, answer } = writeAnsweredWhenTheTestChooses();
@@ -124,7 +124,7 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
     tracker.setFormKey(editing, '000800:Mod.esp');
     tracker.setFormKey(other, '000800:Mod.esp');
     const edits = new EditsInFlight(tracker);
-    subscribeRecordPanelsToNotifications(client, new Set([editing, other]), tracker, edits);
+    subscribeRecordPanelsToNotifications(client, new Set([editing, other]), edits);
     const { write, answer } = writeAnsweredWhenTheTestChooses();
 
     const edit = edits.gate(editing)(EDITED_MOD_ESP_FROM_MODA, write);
@@ -147,7 +147,7 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
 
     expect(loadsOf(panel)).toEqual([
       { type: 'loadRecord', formKey: '000900:Mod.esp' },
-      { type: 'conflictsComputed' },
+      { type: 'loadRecord', formKey: '000900:Mod.esp' },
     ]);
   });
 
@@ -161,7 +161,20 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
     answer(undefined);
     await editing;
 
-    expect(loadsOf(panel)).toEqual([{ type: 'conflictsComputed' }]);
+    expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000800:Mod.esp' }]);
+  });
+
+  it('reads once after the answer when both a report and a refresh were held by it', async () => {
+    const { client, panel, edits } = openOn('000800:Mod.esp');
+    const { write, answer } = writeAnsweredWhenTheTestChooses();
+
+    const editing = edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, write);
+    client.emit(rowsChanged(['000800:Mod.esp']));
+    announceConflictsComputed(new Set([panel]), edits);
+    answer(undefined);
+    await editing;
+
+    expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000800:Mod.esp' }]);
   });
 
   describe('a write addressed to the old FormKey, where an edit of the FormID moves the record in the one plugin it was made in', () => {
@@ -198,6 +211,7 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
       const openedBefore = edits.gate(panel);
       await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
       client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+      edits.answered(panel, '000900:Mod.esp');
 
       expect(await sentTo(edits, panel, EDITED_MOD_ESP_FROM_MODA, openedBefore)).toEqual(['000900:Mod.esp']);
       expect(await sentTo(edits, panel, EDITED_MOD_ESP_FROM_MODA)).toEqual(['000800:Mod.esp']);
@@ -210,7 +224,8 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
 
     edits.forget(panel);
 
-    expect(edits.holdsRefresh(panel)).toBe(false);
+    edits.refresh(panel);
+    expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]);
     const targets: string[] = [];
     await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, formKey => { targets.push(formKey); return Promise.resolve(undefined); });
     expect(targets).toEqual(['000800:Mod.esp']);
@@ -228,7 +243,7 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
 
       expect(loadsOf(panel)).toEqual([
         { type: 'loadRecord', formKey: '000900:Mod.esp' },
-        { type: 'conflictsComputed' },
+        { type: 'loadRecord', formKey: '000900:Mod.esp' },
       ]);
     });
 
@@ -266,6 +281,7 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
     await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
     await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000A00:Mod.esp'));
     client.emit(rowsChanged(['000900:Mod.esp', '000A00:Mod.esp']));
+    edits.answered(panel, '000A00:Mod.esp');
 
     const targets: string[] = [];
     await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, formKey => { targets.push(formKey); return Promise.resolve(undefined); });

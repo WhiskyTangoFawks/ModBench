@@ -2,8 +2,6 @@ import type { components } from './generated/api';
 
 export const EXTENSION_TO_WEBVIEW = {
   LOAD_RECORD: 'loadRecord',
-  // The winner sweep has landed (editor.md, States, story 3). Load-order-wide: no self-filter, every panel reacts.
-  CONFLICTS_COMPUTED: 'conflictsComputed',
   // A reply to the one panel that asked (`requestId`), never a broadcast: the QuickPick existed
   // only for that request. `formKey: null` is a dismissal, leaving the field unchanged.
   FORM_KEY_PICKED: 'formKeyPicked',
@@ -177,7 +175,6 @@ export type RecordLoadAnswer =
 
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
   | ({ type: typeof EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED; requestId: string } & RecordLoadAnswer)
   | { type: typeof EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR }
@@ -329,7 +326,6 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
   };
   switch (w.type) {
     case EXTENSION_TO_WEBVIEW.LOAD_RECORD: return parseLoadRecord(w);
-    case EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED: return { type: w.type };
     case EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED: return parseFormKeyPicked(w);
     case EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED: return { type: w.type, ...parseRecordLoadAnswer(w) };
     default: return parseFocusedCellMessage(w);
