@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.PluginAdapter;
 using MEditService.TestSupport;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
 namespace MEditService.Commands.Tests.TestSupport;
@@ -11,7 +12,8 @@ internal sealed class ForgedTreeWriteAdapter(string pluginFileName, TreeDeserial
     : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {
     public override async Task WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default)
+        IReadOnlyList<TreeFile> files, string destinationPath,
+        IReadOnlyList<string> masterOrder, CancellationToken cancel = default)
     {
         using var scratchDir = new ScratchDirectory("medit-forged-writetree-");
         foreach (var file in files)
@@ -30,6 +32,7 @@ internal sealed class ForgedTreeWriteAdapter(string pluginFileName, TreeDeserial
             .WithNoDataFolder()
             .NoNextFormIDProcessing()
             .WithRecordCount(RecordCountOption.NoCheck)
+            .WithMastersListOrdering(masterOrder.Select(name => ModKey.FromFileName(name)))
             .WriteAsync();
     }
 }

@@ -113,8 +113,9 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         PluginTrees.ReadTreeAsync(files, codec, gameRelease, scratchRoot, cancel);
 
     public Task WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>
-        PluginTrees.WriteFromTreeAsync(files, destinationPath, deserialize: null, cancel);
+        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
+        CancellationToken cancel = default) =>
+        PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, deserialize: null, cancel);
 
     public Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceAsync(
         ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
