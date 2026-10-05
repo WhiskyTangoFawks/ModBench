@@ -49,7 +49,9 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
 
     const result = await rename('Renamed Patch.esp', { ...PLUGIN, name: 'Missing.esp' });
 
-    expect(result).toMatchObject({ applied: false, sourceRenamed: true, refusal: expect.stringContaining('Missing.esp') });
+    expect(result.applied).toBe(false);
+    expect(result).toMatchObject({ sourceRenamed: true });
+    expect('refusal' in result && result.refusal).toContain('Missing.esp');
     expect(await snapshotTree(root)).toEqual(before);
   });
 

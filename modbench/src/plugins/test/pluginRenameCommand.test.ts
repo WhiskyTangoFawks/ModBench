@@ -63,13 +63,13 @@ function setup(selection: readonly PluginsTreeNode[] = []) {
   registerRenamePluginCommand({ client, access, instance, reporter }, () => selection);
   const run = present(handlers.get('modbench.plugin.rename'), 'the rename plugin command');
   const validate = async (value: string): Promise<string | undefined> => {
-    showInputBox.mockImplementationOnce((options: { validateInput: (v: string) => unknown }) => {
+    let validated: string | undefined;
+    showInputBox.mockImplementationOnce((options: { validateInput: (v: string) => string | undefined }) => {
       validated = options.validateInput(value);
       return Promise.resolve(undefined);
     });
-    let validated: unknown;
     await run(new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin));
-    return validated as string | undefined;
+    return validated;
   };
   return { client, renameFiles, reporter, run, validate };
 }
