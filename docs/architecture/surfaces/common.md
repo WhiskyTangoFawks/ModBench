@@ -42,10 +42,10 @@ As a user, I want:
 
 ## A gesture that writes
 
-By commands.md, A gesture ends when the disk shows it. As a user, I want:
+By commands.md, A gesture ends when the read model shows it. As a user, I want:
 
 1. The view's progress bar from my click until the read that follows the gesture's write lands, and nothing in the view to change until then. Source: ADR-0015
-2. Every value I see to be the disk's. A view shows what each read holds, whoever wrote it, and never a value it remembers from my gesture. Source: ADR-0003
+2. Every value I see to be the read model's. A view shows what each read holds, whoever wrote it, and never a value it remembers from my gesture. Source: ADR-0003
 3. A gesture whose read fails to end with it: the rows I had stay and the message line says so (States, story 6). Source: ADR-0019
 
 ## The status bar
