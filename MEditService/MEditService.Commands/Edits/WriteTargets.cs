@@ -138,8 +138,15 @@ internal sealed class WriteTargets(
     {
         repository = null;
 
-        if (loadOrder.Current.ModFolderOf(plugin) is not { } folder) return RefuseUntracked(plugin);
-        if (SourceRepository.Open(folder, loadOrder.Current.GameRelease) is not { } opened) return RefuseUntracked(plugin);
+        if (loadOrder.Current.ProviderOf(plugin) is not { } provider)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.PluginNotInLoadOrder,
+                $"{plugin.Name} from '{plugin.Origin}' is not in the load order, so nothing can be written to it.");
+        }
+
+        if (provider is not PluginProvider.FromMod mod) return RefuseUntracked(plugin, provider);
+        if (SourceRepository.Open(mod, loadOrder.Current.GameRelease) is not { } opened) return RefuseUntracked(plugin, provider);
 
         repository = opened;
         return RefuseIfNotLoaded(plugin);
@@ -156,9 +163,9 @@ internal sealed class WriteTargets(
 
     // Two refusals, because there are two different ways out and a message that named neither
     // would be silent dead UI.
-    private RecordEditResult RefuseUntracked(PluginAddress plugin) =>
-        loadOrder.Current.ModFolderOf(plugin) is null
-            ? RecordEditResult.Refused(RecordEditRefusal.PluginHasNoModFolder, NoModFolderMessage(plugin))
+    private static RecordEditResult RefuseUntracked(PluginAddress plugin, PluginProvider provider) =>
+        provider is not PluginProvider.FromMod
+            ? RecordEditResult.Refused(RecordEditRefusal.PluginHasNoModFolder, NoModFolderMessage(plugin, provider))
             : RecordEditResult.Refused(
                 RecordEditRefusal.PluginNotTracked,
                 $"{plugin.Name} is not tracked, so it is read-only. " +
@@ -166,8 +173,8 @@ internal sealed class WriteTargets(
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
     // Neither origin's way out is the other's.
-    private static string NoModFolderMessage(PluginAddress plugin) =>
-        PluginOrigin.IsOverwrite(plugin.Origin)
+    private static string NoModFolderMessage(PluginAddress plugin, PluginProvider provider) =>
+        provider == PluginProvider.NoMod
             ? $"{plugin.Name} is loaded from Overwrite, an origin and not a mod, so it has no mod " +
               "folder to hold its source. Move it into a mod, then edit it there."
             : $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be tracked. " +

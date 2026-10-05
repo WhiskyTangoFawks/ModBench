@@ -12,6 +12,7 @@ namespace MEditService.SourceAdapter;
 public sealed class SourceRepository
 {
     private readonly string _modFolder;
+    private readonly string? _modName;
     private readonly GameRelease _release;
     private readonly SourceRepositoryGit _git;
 
@@ -25,9 +26,9 @@ public sealed class SourceRepository
 
     // Private so a repository comes from one of the two named doors, each stating what it observed:
     // Open, which found a tracked folder, or Over, which established that or did not need it.
-    private SourceRepository(string modFolder, GameRelease release)
+    private SourceRepository(string modFolder, GameRelease release, string? modName = null)
     {
-        (_modFolder, _release) = (modFolder, release);
+        (_modFolder, _release, _modName) = (modFolder, release, modName);
         _git = new SourceRepositoryGit(modFolder);
         Locator = new SourceRepositoryLocator(modFolder, release);
         Layout = new SourceRepositoryLayout(modFolder, release, Locator);
@@ -40,10 +41,19 @@ public sealed class SourceRepository
     public static SourceRepository? Open(string modFolder, GameRelease release) =>
         IsTracked(modFolder) ? new SourceRepository(modFolder, release) : null;
 
+    /// <summary>As <see cref="Open(string, GameRelease)"/>, for a mod's plugins alone.</summary>
+    public static SourceRepository? Open(PluginProvider.FromMod mod, GameRelease release) =>
+        IsTracked(mod.Folder) ? Over(mod, release) : null;
+
     /// <summary>The repository over a folder whose tracked state the caller has already established,
     /// or does not need: the document verbs answer either way, and a git verb over an untracked folder
     /// answers empty rather than throwing.</summary>
     public static SourceRepository Over(string root, GameRelease release) => new(root, release);
+
+    /// <summary>The repository over a mod's folder, which refuses the last-written record of a plugin
+    /// another mod provides (ADR-0012): a repository knows only its folder.</summary>
+    public static SourceRepository Over(PluginProvider.FromMod mod, GameRelease release) =>
+        new(mod.Folder, release, mod.Name);
 
     /// <summary>True exactly when <paramref name="modFolder"/> holds a repository whose <c>main</c>
     /// exists.</summary>
@@ -55,8 +65,8 @@ public sealed class SourceRepository
 
     /// <summary>The mod folder only when it is tracked — the single condition under which a plugin
     /// has source text at all.</summary>
-    public static string? TrackedModFolderOf(LoadOrderSnapshot loadOrder, PluginAddress plugin) =>
-        loadOrder.ModFolderOf(plugin) is { } modFolder && IsTracked(modFolder) ? modFolder : null;
+    public static PluginProvider.FromMod? TrackedModOf(LoadOrderSnapshot loadOrder, PluginAddress plugin) =>
+        loadOrder.ProviderOf(plugin) is PluginProvider.FromMod mod && IsTracked(mod.Folder) ? mod : null;
 
     /// <summary>Whether this folder holds source for the plugin at all: tracked, and a tree written for
     /// this one. A tracked mod folder holds a tree per plugin, and may hold none for a given
@@ -217,19 +227,37 @@ public sealed class SourceRepository
     /// <summary>The plugin's source in the working tree becomes <paramref name="files"/>, and the
     /// last-compile ref names only the binary they were read from. A failure leaves both as they
     /// were.</summary>
-    public void ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> files, string binarySha256) =>
+    public void ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> files, string binarySha256)
+    {
+        RefuseUnlessProvidedByThisMod(plugin);
         Writes.ReplaceSourceFrom(plugin.Name, files, binarySha256);
+    }
 
     /// <summary>Runs <paramref name="write"/>, which puts the plugin's binary on disk, recording
     /// <paramref name="binarySha256"/> as the one last written. An interrupted write leaves a record
     /// naming the old and the new binary (ADR-0003).</summary>
-    public void WriteBinary(PluginAddress plugin, string binarySha256, Action write) =>
+    public void WriteBinary(PluginAddress plugin, string binarySha256, Action write)
+    {
+        RefuseUnlessProvidedByThisMod(plugin);
         _git.WriteBinary(plugin.Name, binarySha256, write);
+    }
 
     /// <summary>Every binary hash Modbench last wrote for the plugin: one, or several while a write
     /// was interrupted. Empty when none is recorded.</summary>
-    public IReadOnlyList<string> LastWrittenBinarySha256s(PluginAddress plugin) =>
-        _git.LastWrittenBinarySha256s(plugin.Name);
+    public IReadOnlyList<string> LastWrittenBinarySha256s(PluginAddress plugin)
+    {
+        RefuseUnlessProvidedByThisMod(plugin);
+        return _git.LastWrittenBinarySha256s(plugin.Name);
+    }
+
+    private void RefuseUnlessProvidedByThisMod(PluginAddress plugin)
+    {
+        if (_modName is not null && !string.Equals(plugin.Origin, _modName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"{plugin.Name} is provided by '{plugin.Origin}', and this repository holds '{_modName}'.", nameof(plugin));
+        }
+    }
 
     private IEnumerable<SourceDocument> ReadAllCommitted(PluginAddress plugin) =>
         _git.BlobsAtRef(plugin.Name, "HEAD")

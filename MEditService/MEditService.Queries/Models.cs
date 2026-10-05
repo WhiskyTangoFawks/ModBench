@@ -73,7 +73,7 @@ public record CompareOverride(
     string RecordType = "",
     bool IsPartialForm = false,
     string? ParseDiagnosis = null,
-    // Overwrite (ADR-0012), computed here (PluginOrigin.IsOverwrite) so the webview
+    // Overwrite (ADR-0012), computed here from what provides the plugin so the webview
     // never interprets Origin itself.
     bool IsInOverwrite = false)
     : RecordDetail(

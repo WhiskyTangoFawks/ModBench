@@ -15,27 +15,23 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
 
     public void Check(LoadOrderSnapshot snapshot)
     {
-        // The origin is the mod manager's name for the mod, which only a plugin of it carries.
         var mods = snapshot.Plugins
-            .SelectMany(plugin => LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path) is { } modFolder
-                ? [(Plugin: plugin, ModFolder: modFolder)]
-                : Array.Empty<(RegisteredPlugin Plugin, string ModFolder)>())
-            .GroupBy(p => p.ModFolder, p => p.Plugin, StringComparer.Ordinal);
+            .Where(plugin => plugin.Provider is PluginProvider.FromMod)
+            .GroupBy(plugin => (PluginProvider.FromMod)plugin.Provider);
 
         lock (_checking)
         {
             var tracked = new HashSet<string>(StringComparer.Ordinal);
             foreach (var mod in mods)
             {
-                var origin = mod.First().Origin;
                 if (SourceRepository.Open(mod.Key, snapshot.GameRelease) is { } repository)
                 {
-                    tracked.Add(mod.Key);
-                    Tell(origin, repository, [.. mod]);
+                    tracked.Add(mod.Key.Folder);
+                    Tell(mod.Key.Name, repository, [.. mod]);
                 }
-                else if (_trackedAtLastCheck.Contains(mod.Key))
+                else if (_trackedAtLastCheck.Contains(mod.Key.Folder))
                 {
-                    notifications.Publish(new ExternalChangeNotification(origin, []));
+                    notifications.Publish(new ExternalChangeNotification(mod.Key.Name, []));
                 }
             }
             _trackedAtLastCheck = tracked;

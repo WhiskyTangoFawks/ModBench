@@ -107,7 +107,7 @@ public sealed class RecordQueryService(
                 Origin: o.Origin,
                 LoadIndex: LoadIndex.Of(new PluginAddress(o.Plugin, o.Origin), o.LoadOrderIndex, snapshot, reads.OpenedPlugins),
                 RecordType: o.RecordType, IsPartialForm: o.IsPartialForm, ParseDiagnosis: o.ParseDiagnosis,
-                IsInOverwrite: PluginOrigin.IsOverwrite(o.Origin)));
+                IsInOverwrite: snapshot.ProviderOf(new PluginAddress(o.Plugin, o.Origin)) == PluginProvider.NoMod));
 
         return new CompareResult(
             annotated, classification.Diffs, conflictAll, RequireSchemas().DisplayNameFor(stack.RecordType));

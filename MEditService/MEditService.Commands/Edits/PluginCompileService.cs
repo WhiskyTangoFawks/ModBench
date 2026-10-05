@@ -29,11 +29,11 @@ public sealed class PluginCompileService(
             return CompileResult.Refused("No load order has been received.");
         if (loadOrder.Plugin(plugin) is not { } registered)
             return CompileResult.Refused($"{plugin.Name} is not in the load order.");
-        if (SourceRepository.TrackedModFolderOf(loadOrder, plugin) is not { } modFolder)
+        if (SourceRepository.TrackedModOf(loadOrder, plugin) is not { } mod)
             return CompileResult.Refused($"{plugin.Name} is not tracked, so there is no source to compile.");
 
         // One repository for the whole pass, so the tree it answers from is read once.
-        var repository = SourceRepository.Over(modFolder, loadOrder.GameRelease);
+        var repository = SourceRepository.Over(mod, loadOrder.GameRelease);
         var sourceFiles = repository.FilesOf(plugin);
 
         // A document the read could not open is content this compile does not have, and compiling the
