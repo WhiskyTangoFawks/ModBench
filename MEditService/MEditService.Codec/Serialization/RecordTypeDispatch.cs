@@ -138,7 +138,7 @@ public sealed class RecordTypeDispatch
 
     /// <summary>The member a level of the interior tree numbers itself with, one coordinate rather
     /// than the exterior pair. Static for the same reason as <see cref="SubBlockChildMember"/>.</summary>
-    internal static string BlockNumberMember => "BlockNumber";
+    public static string BlockNumberMember => "BlockNumber";
 
     /// <summary>The member a level's document labels itself with. Static for the same reason as
     /// <see cref="SubBlockChildMember"/>.</summary>
