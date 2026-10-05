@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
@@ -304,6 +305,10 @@ public static class RecordEndpoints
         {
             logger.LogError(ex, "No load order for comparing {Count} records", copies.Count);
             return WriteEndpointMapping.NoLoadOrder(ex);
+        }
+        catch (JsonException ex)
+        {
+            return Results.Problem($"A document text is not valid JSON: {ex.Message}", statusCode: 400);
         }
     }
 
