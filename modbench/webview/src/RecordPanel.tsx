@@ -16,14 +16,13 @@ import type {
   ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
 import { columnKey, LABEL_COLUMN } from './columnKey';
-import { addElement, editField, focusCell, focusedCellContext, logWarning } from './nativeBridge';
+import { addElement, editField, focusCell, focusedCellContext } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview } from '../../src/wire/messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
 import { RecordHeaderRow, FormIdRow, RECORD_HEADER_ROW, FORM_ID_ROW, FORM_ID_PATH } from './RecordHeaderRows';
 import { navigate, type NavRow } from './gridNavigation';
-import { useCellWrites } from './unconfirmedWrites';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
@@ -175,7 +174,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   // An answer lands only if no later read was asked for since: reads answer out of order.
   const latestRead = useRef(0);
-  const { writeAt, written, refused, landed, clear: forgetWrites } = useCellWrites(logWarning);
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
     const read = ++latestRead.current;
@@ -194,12 +192,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       // still shows the banner rather than reading as settled.
       setConflictsComputed(loaded.conflictsComputed);
       setLoadFailures(loaded.loadFailures);
-      const unreadable = new Set(loaded.loadFailures.map(f => columnKey(f.name, f.origin)));
-      landed(read, loaded.result, fk, column => !unreadable.has(column));
     } catch (e) {
       if (read === latestRead.current) setError(e instanceof Error ? e.message : String(e));
     }
-  }, [client, landed]);
+  }, [client]);
 
   // When the handler drives a new-formKey navigation it calls refresh directly,
   // so the [formKey] effect must skip to avoid a double request.
@@ -233,9 +229,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   // One leaf, one set (ADR-0005).
   const handleCellCommit = useCallback((plugin: ColumnKey, hops: PathHop[], value: unknown) => {
-    written(plugin, { op: 'set', path: hops, value }, Infinity);
     post(plugin, { op: 'set', path: hops, value });
-  }, [post, written]);
+  }, [post]);
 
   // Every message here is a broadcast: the extension host has no live reference into this panel's
   // React state, so it says what happened and each open panel decides whether it applies.
@@ -255,7 +250,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           setGone(false);
           setError(null);
           setFocusedCell(null);
-          forgetWrites();
         }
         setFormKey(msg.formKey);
         // Unconditional, not left to the [formKey] effect: a LOAD_RECORD naming the record already
@@ -266,17 +260,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // editor.md, States, story 3. Load-order-wide, not record-specific, so no self-filter:
         // every open panel reacts.
         void refresh(prevFormKeyRef.current);
-      } else if (msg.type === EXTENSION_TO_WEBVIEW.EDIT_WRITTEN || msg.type === EXTENSION_TO_WEBVIEW.EDIT_REFUSED) {
-        const { formKey: edited, plugin, origin, envelope } = msg;
-        if (edited !== prevFormKeyRef.current) return;
-        const column = columnKey(plugin, origin);
-        if (msg.type === EXTENSION_TO_WEBVIEW.EDIT_WRITTEN) written(column, envelope, latestRead.current);
-        else refused(column, envelope);
       }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [refresh, written, refused, forgetWrites]);
+  }, [refresh]);
 
   const loadFailureMessage = recordPanelLoadFailureMessage(loadFailures, result?.overrides ?? []);
 
@@ -363,7 +351,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           const hops = wirePath(rootField, path, plugin);
           if (hops) handleCellCommit(plugin, hops, value);
         }}
-        writeAt={writeAt}
         onAddElement={addElement}
         collapsedColumns={collapsedColumns}
         recordLabel={title}
@@ -437,7 +424,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         focusedCell={focusedCell}
         onFocusCell={handleFocusCell}
         onCommitFormId={(plugin, value) => handleCellCommit(plugin, FORM_ID_PATH, value)}
-        writeAt={writeAt}
       />
     );
   }

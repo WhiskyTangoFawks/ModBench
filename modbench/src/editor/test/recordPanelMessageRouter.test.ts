@@ -60,15 +60,6 @@ describe('routeRecordPanelMessage, the dispatch point for what the webview posts
     expect(executeCommand).not.toHaveBeenCalled();
   });
 
-  it('LOG forwards the message at its own level', async () => {
-    const channel = fakeChannel();
-    await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.LOG, level: 'warn', message: 'something' }, makeDeps({ channel }));
-
-    expect(channel.warn).toHaveBeenCalledWith('something');
-    expect(channel.debug).not.toHaveBeenCalled();
-  });
-
   it('an unrecognized or non-object message is a no-op', async () => {
     await routeRecordPanelMessage({ type: 'somethingElse' }, makeDeps());
     await expect(routeRecordPanelMessage('not an object', makeDeps())).resolves.toBeUndefined();

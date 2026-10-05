@@ -5,8 +5,6 @@ import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
 import { copiedText, modelValue, pastedValue, readsAsFlags } from './modelValue';
-import { WrittenValue } from './WrittenValue';
-import type { WriteAt } from './unconfirmedWrites';
 import { ExpandArrow } from './ExpandArrow';
 import { collapsedReading, versionControlInfo1 } from './presentation';
 import {
@@ -153,7 +151,6 @@ interface DiffRowProps {
   editableColumns: Set<ColumnKey>;
   // Takes the leaf value alone — the row builder owns the path the envelope carries.
   onEditCell?: (plugin: ColumnKey, value: unknown) => void;
-  writeAt: WriteAt;
   onAddElement?: (context: ArrayParentContext, value: unknown) => void;
   // Per column, whether this row is the last element its array holds there. Absent for a row that
   // is no array's element.
@@ -172,7 +169,7 @@ export function DiffRow({
   diff, meta, columns, columnStyle,
   collapsedColumns,
   recordLabel, context, isExpanded, onToggle,
-  rowKey, parentRowKey, focusedCell, onFocusCell, editableColumns, onEditCell, writeAt,
+  rowKey, parentRowKey, focusedCell, onFocusCell, editableColumns, onEditCell,
   onAddElement, isLastElement, keyMembers, ownerPresent, cellMetas,
 }: Readonly<DiffRowProps>) {
   // The children the diff node itself carries — the row and the panel can never disagree about
@@ -323,13 +320,11 @@ export function DiffRow({
               landing={landing}
               contexts={contexts}
             >
-              <WrittenValue write={hops && writeAt(key, hops)} disk={shown}>
-                {() => reading && hasElement && (
-                  <span style={{ opacity: reading.isPlaceholder ? 0.5 : undefined, display: 'inline-flex', alignItems: 'center' }}>
-                    {reading.text}<CheckErrorIcon checkError={checkError} />
-                  </span>
-                )}
-              </WrittenValue>
+              {reading && hasElement && (
+                <span style={{ opacity: reading.isPlaceholder ? 0.5 : undefined, display: 'inline-flex', alignItems: 'center' }}>
+                  {reading.text}<CheckErrorIcon checkError={checkError} />
+                </span>
+              )}
             </DiskCell>
           );
         }
@@ -349,15 +344,12 @@ export function DiffRow({
             {/* "[3]"/"{…}" say a container is present and merely unexpanded, and a leaf reads its
                 default, so nothing at all stands in for a column that has no such thing. */}
             {hasElement && (
-              <WrittenValue write={hops && writeAt(key, hops)} disk={shown}>
-                {value => renderCell(value ?? defaultOf(cellMeta), cellMeta, {
-                  // A reference the disk does not hold yet has no resolution.
-                  checkError, resolution: value === shown ? resolution : undefined,
-                  onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
-                  rowCollapsed: isFlagsRow && !rowExpanded,
-                  reading: cellMeta.isVersionControlInfo1 ? versionControlInfo1(value, override) : undefined,
-                })}
-              </WrittenValue>
+              renderCell(shown ?? defaultOf(cellMeta), cellMeta, {
+                checkError, resolution,
+                onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
+                rowCollapsed: isFlagsRow && !rowExpanded,
+                reading: cellMeta.isVersionControlInfo1 ? versionControlInfo1(shown, override) : undefined,
+              })
             )}
           </DiskCell>
         );
