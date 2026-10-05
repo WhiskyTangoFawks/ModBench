@@ -25,7 +25,7 @@ public sealed class SourceCodecReadScanTests
     [Fact]
     public void TheSourceFolder_TouchesNoCodecMemberButBlankDocument()
     {
-        var counts = Counts(ArchitectureTests.SolutionDirectory(), ScannedRoots);
+        var counts = Counts(ServiceProjects.SolutionDirectory(), ScannedRoots);
 
         Assert.True(
             counts.Count == 0,
@@ -41,7 +41,7 @@ public sealed class SourceCodecReadScanTests
     [Fact]
     public void TheScan_WalksMoreThanFifteenProductionFiles()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var walked = ScannedFiles(root, ScannedRoots).Count();
 
@@ -82,13 +82,13 @@ public sealed class SourceCodecReadScanTests
         }
     }
 
-    private static List<string> Counts(string root, string[] scannedRoots) =>
+    private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots) =>
         [.. ScannedFiles(root, scannedRoots)
             .SelectMany(file => Occurrences(File.ReadAllText(file))
                 .Select(o => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {o.Name}: {o.Count}"))
             .Order(StringComparer.Ordinal)];
 
-    private static IEnumerable<string> ScannedFiles(string root, string[] scannedRoots) =>
+    private static IEnumerable<string> ScannedFiles(string root, IReadOnlyList<string> scannedRoots) =>
         scannedRoots.SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar))));
 
     private static IEnumerable<(string Name, int Count)> Occurrences(string text) =>

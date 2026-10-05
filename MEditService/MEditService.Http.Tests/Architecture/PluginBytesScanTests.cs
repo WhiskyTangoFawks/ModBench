@@ -5,10 +5,8 @@ namespace MEditService.Http.Tests.Architecture;
 
 public sealed class PluginBytesScanTests
 {
-    private static readonly string[] ProductionRoots =
-        ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
-         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceAdapter"];
+    private static readonly IReadOnlyList<string> ProductionRoots =
+        ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
     private const string AdapterRoot = "MEditService.PluginAdapter";
 
@@ -23,7 +21,7 @@ public sealed class PluginBytesScanTests
     [Fact]
     public void NothingOutsideThePluginAdapter_OpensAPlugin()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var walked = Files(root, ProductionRoots, [AdapterRoot]);
         var named = Sites(root, walked, PluginOpens);
@@ -40,7 +38,7 @@ public sealed class PluginBytesScanTests
     [Fact]
     public void NothingOutsideThePluginAdapter_NamesTheTreeDoorsImplementation()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var walked = Files(root, ProductionRoots, [AdapterRoot]);
         var named = Sites(root, walked, TreeDoorInternals);
@@ -57,7 +55,7 @@ public sealed class PluginBytesScanTests
     [Fact]
     public void NothingButTheCompositionRoot_NamesTheAdaptersImplementation()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var walked = Files(root, ProductionRoots, [AdapterRoot]).Where(file => !IsCompositionRoot(root, file)).ToList();
         var named = Sites(root, walked, ["MutagenPluginAdapter"]);
@@ -85,7 +83,7 @@ public sealed class PluginBytesScanTests
     [Fact]
     public void ThePluginAdapter_NamesNoSourceRepository()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var walked = Files(root, [AdapterRoot], []);
         var named = Sites(root, walked, RepositoryNames);
@@ -98,7 +96,7 @@ public sealed class PluginBytesScanTests
             + string.Join("\n", named));
     }
 
-    private static List<string> Files(string root, string[] scannedRoots, string[] excludedRoots)
+    private static List<string> Files(string root, IReadOnlyList<string> scannedRoots, string[] excludedRoots)
     {
         var excluded = excludedRoots
             .Select(r => Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar)) + Path.DirectorySeparatorChar)

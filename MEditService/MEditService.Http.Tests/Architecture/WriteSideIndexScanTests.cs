@@ -17,12 +17,8 @@ public sealed class WriteSideIndexScanTests
         "FormKeyResolutionCache", "PlacementWalker",
     ];
 
-    private static readonly string[] WholeProductionProjectsExceptTheCompositionRoot =
-    [
-        "MEditService.Codec", "MEditService.Commands", "MEditService.Index", "MEditService.LoadOrder",
-        "MEditService.PluginAdapter", "MEditService.Ports", "MEditService.Queries",
-        "MEditService.SourceAdapter",
-    ];
+    private static readonly IReadOnlyList<string> WholeProductionProjectsExceptTheCompositionRoot =
+        [.. ServiceProjects.Production(ServiceProjects.SolutionDirectory()).Where(project => project != "MEditService.Http")];
 
     private static readonly string[] IndexItselfAndTheReadSideWhichNameTheseTypesByDefinition =
         ["MEditService.Index", "MEditService.Queries"];
@@ -30,7 +26,7 @@ public sealed class WriteSideIndexScanTests
     [Fact]
     public void TheWriteSide_NamesNoIndexType_BecauseItWritesSourceTextAndReadsNothingBack()
     {
-        var counts = Counts(ArchitectureTests.SolutionDirectory(), WholeProductionProjectsExceptTheCompositionRoot, IndexItselfAndTheReadSideWhichNameTheseTypesByDefinition, Symbols);
+        var counts = Counts(ServiceProjects.SolutionDirectory(), WholeProductionProjectsExceptTheCompositionRoot, IndexItselfAndTheReadSideWhichNameTheseTypesByDefinition, Symbols);
 
         Assert.True(
             counts.Count == 0,
@@ -42,7 +38,7 @@ public sealed class WriteSideIndexScanTests
     [Fact]
     public void TheScan_WalksMoreThanFiftyProductionFiles()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var walked = ScannedFiles(root, WholeProductionProjectsExceptTheCompositionRoot, IndexItselfAndTheReadSideWhichNameTheseTypesByDefinition).Count;
 
@@ -52,7 +48,7 @@ public sealed class WriteSideIndexScanTests
     [Fact]
     public void TheWriteSideSuites_BuildNoIndex()
     {
-        var counts = Counts(ArchitectureTests.SolutionDirectory(), ["MEditService.Commands.Tests/Edits"], [], ["new Indexer"]);
+        var counts = Counts(ServiceProjects.SolutionDirectory(), ["MEditService.Commands.Tests/Edits"], [], ["new Indexer"]);
 
         Assert.True(
             counts.Count == 0,
@@ -137,7 +133,7 @@ public sealed class WriteSideIndexScanTests
     [Fact]
     public void NoEndpoint_NamesAnIndexType()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
         var forbidden = IndexTypesAnEndpointCannotNameByTheirOwnWord();
 
         var walked = ScannedFiles(root, [EndpointRoot], []).Count;
@@ -158,7 +154,7 @@ public sealed class WriteSideIndexScanTests
     [Fact]
     public void NoEndpoint_NamesTheSourceRepository()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var walked = ScannedFiles(root, [EndpointRoot], []).Count;
         var named = Counts(root, [EndpointRoot], [], UndrawnCallees);
@@ -172,13 +168,13 @@ public sealed class WriteSideIndexScanTests
     }
 
     private static List<string> Counts(
-        string root, string[] scannedRoots, string[] excludedRoots, string[] symbols) =>
+        string root, IReadOnlyList<string> scannedRoots, string[] excludedRoots, string[] symbols) =>
         [.. ScannedFiles(root, scannedRoots, excludedRoots)
             .SelectMany(file => References(File.ReadAllText(file), symbols)
                 .Select(r => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {r.Symbol}: {r.Count}"))
             .Order(StringComparer.Ordinal)];
 
-    private static List<string> ScannedFiles(string root, string[] scannedRoots, string[] excludedRoots)
+    private static List<string> ScannedFiles(string root, IReadOnlyList<string> scannedRoots, string[] excludedRoots)
     {
         var excluded = excludedRoots
             .Select(r => Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar)) + Path.DirectorySeparatorChar)

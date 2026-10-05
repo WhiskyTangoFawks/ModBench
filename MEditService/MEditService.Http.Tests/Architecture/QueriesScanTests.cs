@@ -21,7 +21,7 @@ public sealed class QueriesScanTests
     [Fact]
     public void Queries_NameNoFileSystem_BecauseAQueryHidesTheIndexAndAnswersFromARow()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         var walked = ScannedFiles(root, QueriesRoot);
         var named = Sites(root, walked, FileSystemNeedlesWhoseStaticsAreAnchoredAgainstAMemberAccessOfTheSameName);

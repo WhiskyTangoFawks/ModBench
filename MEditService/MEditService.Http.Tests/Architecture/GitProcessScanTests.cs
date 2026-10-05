@@ -12,7 +12,7 @@ public sealed class GitProcessScanTests
     [Fact]
     public void NothingButGitCli_StartsAProcess()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
         var walked = ProductionFiles(root);
 
         Assert.True(walked.Count > 100, $"The process-start scan walked only {walked.Count} files.");

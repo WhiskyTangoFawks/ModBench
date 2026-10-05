@@ -9,10 +9,8 @@ public sealed class SourcePathLiteralScanTests
         ["\"plugin-source\"", "\"RecordData.json\"", "\"GroupRecordData.json\"", "\".json\"",
          "\".git\"", "\"HEAD\"", "\"packed-refs\"", "\"refs\""];
 
-    private static readonly string[] ScannedRoots =
-        ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
-         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceAdapter"];
+    private static readonly IReadOnlyList<string> ScannedRoots =
+        ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
     private const string RepositoryFilePrefix = "SourceRepository";
     private const string RepositoryFolder = "MEditService.SourceAdapter";
@@ -22,7 +20,7 @@ public sealed class SourcePathLiteralScanTests
     [Fact]
     public void TheStackOutsideTheRepository_SpellsALayoutLiteral_OnlyAsOftenAsTheAllowlistSays()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var root = ServiceProjects.SolutionDirectory();
 
         AssertCountsMatchAllowlist(
             Counts(root, ScannedRoots),
@@ -88,7 +86,7 @@ public sealed class SourcePathLiteralScanTests
             + string.Join("\n", unmatched));
     }
 
-    private static List<string> Counts(string root, string[] scannedRoots) =>
+    private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots) =>
         [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)))
             .Where(file => !IsRepositoryFile(root, file))
