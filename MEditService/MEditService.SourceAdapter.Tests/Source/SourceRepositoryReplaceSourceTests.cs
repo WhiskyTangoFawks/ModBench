@@ -98,7 +98,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     private SourceRepository Repository =>
         SourceRepository.Open(_modFolder, GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
 
-    private string Root => SourceRepository.RootIn(_modFolder, Plugin);
+    private string Root => PluginSourceRoot.In(_modFolder, Plugin);
 
     private static TreeFile File(string underRoot, string text) =>
         new($"plugin-source/{Plugin}/{underRoot}", System.Text.Encoding.UTF8.GetBytes(text));
@@ -138,7 +138,7 @@ public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
             Environment.SetEnvironmentVariable("PATH", path);
         }
 
-        var root = SourceRepository.RootIn(_modFolder, "A.esp");
+        var root = PluginSourceRoot.In(_modFolder, "A.esp");
         Assert.Equal(
             [Path.Combine(root, "npc_", "A.esp", "000001.json")],
             Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories));

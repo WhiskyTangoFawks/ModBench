@@ -41,21 +41,21 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
         }
 
         _questPath = Path.Combine(
-            SourceRepository.RootFor(PluginName), "Quests",
+            PluginSourceRoot.For(PluginName), "Quests",
             $"{_quest.EditorID} - {_quest.FormKey.ID:X6}_{_quest.FormKey.ModKey.FileName}.json");
 
         PluginBaselines.Track(
             _modFolder,
             SourcePreset.Edits,
             [
-                new TreeFile(Path.Combine(SourceRepository.RootFor(PluginName), "RecordData.json"), HeaderDocument.Write(_mod)),
+                new TreeFile(Path.Combine(PluginSourceRoot.For(PluginName), "RecordData.json"), HeaderDocument.Write(_mod)),
                 new TreeFile(_questPath, _codec.SerializeToBytes(_quest, Release)),
             ]);
     }
 
     public void Dispose() => _modFolder.Dispose();
 
-    private string SourceRoot => Path.Combine(_modFolder, SourceRepository.RootFor(PluginName));
+    private string SourceRoot => Path.Combine(_modFolder, PluginSourceRoot.For(PluginName));
 
     private string QuestFile => Path.Combine(_modFolder, _questPath);
 

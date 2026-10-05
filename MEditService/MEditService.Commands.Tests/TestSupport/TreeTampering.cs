@@ -1,6 +1,5 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -81,7 +80,7 @@ internal static class TreeTampering
 
     /// <summary>The plugin header's document, relative to its mod folder.</summary>
     internal static string HeaderDocumentOf(string pluginFileName) =>
-        Path.Combine(SourceRepository.RootFor(pluginFileName), "RecordData.json");
+        Path.Combine(PluginSourceRoot.For(pluginFileName), "RecordData.json");
 
     /// <summary>The block and sub-block folders the exterior cell's document sits in, as the whole-mod
     /// serializer names them.</summary>
@@ -98,7 +97,7 @@ internal static class TreeTampering
     internal static void NameInAnUnplaceableChild(string modFolder, PluginAddress plugin, string formKey)
     {
         var folder = Path.Combine(
-            modFolder, SourceRepository.RootFor(plugin.Name),
+            modFolder, PluginSourceRoot.For(plugin.Name),
             RecordTypeDispatch.For(GameRelease.Fallout4).FolderNameFor("globalfloat").Require());
         Directory.CreateDirectory(folder);
         File.WriteAllText(

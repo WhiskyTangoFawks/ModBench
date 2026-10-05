@@ -57,7 +57,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     [Fact]
     public void AStagedMoveOfAFileNoRecordIsFiledIn_OutOfAFolderNamedLikeTheTree_ChangesNoRecord_GuardingAgainstARenamesBareOldPathTokenReturningWhichNoRenamesTurnsOff()
     {
-        var rootSegment = SourceRepository.RootFor(PluginName).Split(Path.DirectorySeparatorChar)[0];
+        var rootSegment = PluginSourceRoot.For(PluginName).Split(Path.DirectorySeparatorChar)[0];
         const int widthOfThePorcelainStatusCodeAnEntryParseDrops = 3;
         var lookalikeFolderName = new string('x', widthOfThePorcelainStatusCodeAnEntryParseDrops) + rootSegment;
         var oldFolder = Directory.CreateDirectory(Path.Combine(_modFolder, lookalikeFolderName, PluginName)).FullName;
@@ -225,7 +225,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         topCell.Temporary.Add(sibling);
         var worldspace = new Worldspace(mod) { EditorID = "World", TopCell = topCell };
         var worldspacePath = Path.Combine(
-            SourceRepository.RootFor(PluginName), "Worldspaces",
+            PluginSourceRoot.For(PluginName), "Worldspaces",
             $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}", "RecordData.json");
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var repository = Tracked(new TreeFile(worldspacePath, codec.SerializeToBytes(worldspace, Release)));

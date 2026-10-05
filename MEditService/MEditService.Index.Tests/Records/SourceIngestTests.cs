@@ -4,7 +4,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -58,7 +57,7 @@ public sealed class SourceIngestTests : IDisposable
     private string NpcSourceFile(OpenedIndex index) =>
         _entry.SourceFileOf(index.RequireReads().DocumentOf(_npc, Plugin));
 
-    private string RootDocument => Path.Combine(ModFolder, SourceRepository.RootFor(PluginName), "RecordData.json");
+    private string RootDocument => Path.Combine(ModFolder, PluginSourceRoot.For(PluginName), "RecordData.json");
 
     [Fact]
     public void AnExternalEditToASourceFile_IsAtEffectiveAfterReload_WithNoPointRead()

@@ -31,7 +31,7 @@ public sealed class SourceTransactionTests : IDisposable
         (document, newFormKey) => document.Body.Replace(document.FormKey, newFormKey, StringComparison.Ordinal),
         (_, _, _) => null);
 
-    private void Rekey(SourceRepository.SourceTransaction transaction, string recordType, string editorId, string from, string to) =>
+    private void Rekey(SourceTransaction transaction, string recordType, string editorId, string from, string to) =>
         transaction.Rekey(Repo, Plugin, new RecordIdentity(Fk(from), recordType, editorId), Fk(to), Schemas, RewritesTheKey);
 
     private static string Body(string formKey, string editorId) =>
@@ -61,7 +61,7 @@ public sealed class SourceTransactionTests : IDisposable
         Seed(Fk("000800"), "npc_", "OldName");
         var before = TreeSnapshot.Of(_root);
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
 
         Assert.Throws<NotSupportedException>(() => transaction.Put(
             Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "NewName", Body(Fk("000800"), "NewName"))));
@@ -79,7 +79,7 @@ public sealed class SourceTransactionTests : IDisposable
             ContainerDirectory(Fk("000900"), "wrld", "Home"), emptyDirectoryThatTravelsWithTheMoveAndNoGitBasedOracleWouldSee));
         var before = TreeSnapshot.Of(_root);
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         transaction.Put(
             Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "ExistingNpc", Body(Fk("000800"), "Rewritten")));
         transaction.Put(
@@ -97,7 +97,7 @@ public sealed class SourceTransactionTests : IDisposable
     {
         var before = TreeSnapshot.Of(_root);
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "FreshNpc", Body(Fk("000800"), "FreshNpc")));
 
         Assert.True(Directory.Exists(Path.Combine(_root, "plugin-source", PluginName, "Npcs")));
@@ -111,7 +111,7 @@ public sealed class SourceTransactionTests : IDisposable
         Seed(Fk("000900"), "wrld", "Home");
         var before = TreeSnapshot.Of(_root);
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         const string body = "{\n  \"FormKey\": \"000910:Fixture.esp\",\n  \"EditorID\": \"Out\",\n  \"Grid\": {\n    \"Point\": \"9, -9\"\n  }\n}";
         transaction.PutInWorldspace(Repo, Plugin, new SourceDocument(Fk("000910"), "cell", "Out", body), Fk("000900"));
 
@@ -123,7 +123,7 @@ public sealed class SourceTransactionTests : IDisposable
     [Fact]
     public void Rollback_LeavesAMintedDirectoryAThirdPartyHasSinceFilled()
     {
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "FreshNpc", Body(Fk("000800"), "FreshNpc")));
 
         var pluginRoot = Path.Combine(_root, "plugin-source", PluginName);
@@ -141,7 +141,7 @@ public sealed class SourceTransactionTests : IDisposable
         Seed(Fk("000901"), "wrld", "Shared");
         var before = TreeSnapshot.Of(_root);
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         Rekey(transaction, "wrld", "Shared", "000900", "000902");
         Rekey(transaction, "wrld", "Shared", "000901", "000900");
 
@@ -156,7 +156,7 @@ public sealed class SourceTransactionTests : IDisposable
         Seed(Fk("000800"), "npc_", "Contested");
         Seed(Fk("000801"), "npc_", "Quiet");
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Contested", Body(Fk("000800"), "Ours")));
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000801"), "npc_", "Quiet", Body(Fk("000801"), "OursToo")));
 
@@ -178,7 +178,7 @@ public sealed class SourceTransactionTests : IDisposable
     {
         Seed(Fk("000800"), "npc_", "Doomed");
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Doomed", Body(Fk("000800"), "Ours")));
         var file = FlatFile(Fk("000800"), "npc_", "Doomed");
         File.Delete(file);
@@ -191,7 +191,7 @@ public sealed class SourceTransactionTests : IDisposable
     [Fact]
     public void Rollback_NamesACreatedFileAThirdPartyRemoved_RatherThanClaimingItUndidIt()
     {
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Fresh", Body(Fk("000800"), "Ours")));
         File.Delete(FlatFile(Fk("000800"), "npc_", "Fresh"));
 
@@ -206,7 +206,7 @@ public sealed class SourceTransactionTests : IDisposable
         var file = FlatFile(Fk("000800"), "npc_", "Untouched");
         BlockTheWriteThenRenameWithADirectoryAtTheDestinationsTmpName(file);
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         Assert.ThrowsAny<Exception>(() => transaction.Put(
             Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Untouched", Body(Fk("000800"), "Rewritten"))));
 
@@ -220,7 +220,7 @@ public sealed class SourceTransactionTests : IDisposable
         Seed(Fk("000800"), "npc_", "First");
         Seed(Fk("000801"), "npc_", "Second");
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "First", Body(Fk("000800"), "Ours")));
         Rekey(transaction, "npc_", "Second", "000801", "000802");
 
@@ -241,7 +241,7 @@ public sealed class SourceTransactionTests : IDisposable
             Path.Combine(ContainerDirectory(Fk("000900"), "wrld", "Home"), "RecordData.json"));
         var before = TreeSnapshot.Of(_root);
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         Assert.ThrowsAny<Exception>(() => Rekey(transaction, "wrld", "Home", "000900", "000901"));
 
         Assert.Empty(transaction.Undo(Repo));
@@ -253,7 +253,7 @@ public sealed class SourceTransactionTests : IDisposable
     {
         SeedTree();
 
-        Assert.Equal(ActsInTheSequence, RunSequence(new SourceRepository.SourceTransaction(), failAt: int.MaxValue));
+        Assert.Equal(ActsInTheSequence, RunSequence(new SourceTransaction(), failAt: int.MaxValue));
     }
 
     [Theory]
@@ -263,7 +263,7 @@ public sealed class SourceTransactionTests : IDisposable
         SeedTree();
         var before = TreeSnapshot.Of(_root);
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         Assert.ThrowsAny<Exception>(() => RunSequence(transaction, failAt));
         Assert.Empty(transaction.Undo(Repo));
         Assert.Equal(before, TreeSnapshot.Of(_root));
@@ -279,7 +279,7 @@ public sealed class SourceTransactionTests : IDisposable
         Seed(Fk("000902"), "wrld", "Other");
     }
 
-    private int RunSequence(SourceRepository.SourceTransaction transaction, int failAt)
+    private int RunSequence(SourceTransaction transaction, int failAt)
     {
         var act = 0;
         void At(int position, Action perform)

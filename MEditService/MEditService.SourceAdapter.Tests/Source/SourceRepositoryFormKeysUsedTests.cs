@@ -36,7 +36,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
     [Fact]
     public void AnUncommittedHeaderDocument_IsHeld_ThoughNoRefButTheWorkingTreeCarriesIt()
     {
-        var headerPath = Path.Combine(SourceRepository.RootFor(PluginName), "RecordData.json");
+        var headerPath = Path.Combine(PluginSourceRoot.For(PluginName), "RecordData.json");
         var repository = Tracked(new TreeFile(headerPath, "{\"MasterReferences\": []}"u8.ToArray()));
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));
 
@@ -54,7 +54,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
     public void AnUncommittedDocumentNamedForNoKeyItDeclares_IsHeld(string relativePath)
     {
         var repository = Tracked();
-        var file = Path.Combine(_modFolder, SourceRepository.RootFor(PluginName), relativePath);
+        var file = Path.Combine(_modFolder, PluginSourceRoot.For(PluginName), relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
         File.WriteAllText(file, $"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": \"Hidden\"}}");
 
@@ -70,7 +70,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
         topCell.Temporary.Add(child);
         var worldspace = new Worldspace(mod) { EditorID = "World", TopCell = topCell };
         var worldspacePath = Path.Combine(
-            SourceRepository.RootFor(PluginName), "Worldspaces",
+            PluginSourceRoot.For(PluginName), "Worldspaces",
             $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}", "RecordData.json");
 
         var repository = Tracked(

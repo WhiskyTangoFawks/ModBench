@@ -9,7 +9,7 @@ namespace MEditService.SourceAdapter;
 /// <summary>Documents by identity over one tracked mod folder (ADR-0014), and ADR-0007's
 /// git verbs beneath them. Every verb tolerates the folder having vanished since last observed —
 /// MO2's Replace install shell-deletes mod folders.</summary>
-public sealed partial class SourceRepository
+public sealed class SourceRepository
 {
     private readonly string _modFolder;
     private readonly GameRelease _release;
@@ -67,14 +67,6 @@ public sealed partial class SourceRepository
     /// <summary>Whether this repository holds a source tree for the plugin.</summary>
     public bool HoldsTreeFor(PluginAddress plugin) => HoldsTreeFor(_modFolder, plugin.Name);
 
-    /// <summary><c>plugin-source/&lt;pluginFileName&gt;</c>, relative to the mod folder.</summary>
-    public static string RootFor(string pluginFileName) => SourceRepositoryLayout.RootFor(pluginFileName);
-
-    /// <summary>The folder holding <paramref name="pluginFileName"/>'s documents. It need not exist:
-    /// an untracked mod has none until Track writes one.</summary>
-    public static string RootIn(string modFolder, string pluginFileName) =>
-        SourceRepositoryLayout.RootIn(modFolder, pluginFileName);
-
     /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and a
     /// re-baseline commit.</summary>
     public static IReadOnlyList<TreeFile> PristineFilesOf(string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
@@ -121,15 +113,6 @@ public sealed partial class SourceRepository
             ? throw new UnreadableSourceDocumentException($"{plugin.Name}'s document for {formKey} is no record document: {why}")
             : null;
     }
-
-    /// <summary>The unit holding <paramref name="identity"/>, as the document it is and the facts about
-    /// it. Null when no document in the tree holds it, which is a refusal to the caller.</summary>
-    public HoldingUnit? UnitHolding(PluginAddress plugin, RecordIdentity identity) =>
-        Locator.Locate(plugin, identity) is { } unit
-            ? new HoldingUnit(
-                unit.RelativePath, unit.IsEmbedded, unit.OwnerFormKey, unit.OwnerRecordType,
-                unit.IsDirectoryPerRecord)
-            : null;
 
     /// <summary>The document carrying <paramref name="identity"/>: its own, else its container's. Null
     /// when no document holds it. Throws <see cref="UnreadableSourceDocumentException"/> when the
@@ -254,13 +237,6 @@ public sealed partial class SourceRepository
             .Select(blob => Locator.DocumentAt(blob.RelativePath, blob.Text, plugin.Name))
             .OfType<SourceDocument>();
 }
-
-/// <summary>The unit holding a record: the document it is, relative to the mod folder, whose record
-/// that document is, and whether it is a directory of its own. One read, so the facts and the path
-/// cannot disagree.</summary>
-public sealed record HoldingUnit(
-    string RelativePath, bool IsEmbedded, string OwnerFormKey, string? OwnerRecordType,
-    bool IsDirectoryPerRecord);
 
 /// <summary>Why a record is or is not out of the tree — three states a caller must tell apart, since
 /// "no document holds it" and "the owner's own text lacks it" send the author to different

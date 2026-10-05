@@ -1,3 +1,4 @@
+using MEditService.TestSupport;
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
@@ -50,7 +51,7 @@ public static class CutDownPluginFixture
         var scratch = Directory.CreateTempSubdirectory("medit-compile-derived-").FullName;
         try
         {
-            var root = Path.Combine(scratch, SourceRepository.RootFor(PluginFileName));
+            var root = Path.Combine(scratch, PluginSourceRoot.For(PluginFileName));
             Directory.CreateDirectory(root);
             RecordTextCodecGeneratorSeed
                 .SerializeWholeMod((IFallout4ModGetter)mod, root, InlineWorkDropoff.Instance, CancellationToken.None)

@@ -30,7 +30,7 @@ public sealed class SourceRepositoryMintingTests : IDisposable
 
         repository.Put(Plugin, new SourceDocument("000800:Minting.esp", "npc_", "Fits", "{\"FormKey\": \"000800:Minting.esp\"}"));
 
-        Assert.True(Directory.Exists(Path.Combine(SourceRepository.RootIn(_modFolder, Plugin.Name), "Npcs")));
+        Assert.True(Directory.Exists(Path.Combine(PluginSourceRoot.In(_modFolder, Plugin.Name), "Npcs")));
     }
 
     [Fact]
@@ -43,6 +43,6 @@ public sealed class SourceRepositoryMintingTests : IDisposable
         Assert.ThrowsAny<IOException>(() => repository.Put(
             Plugin, new SourceDocument(formKey, "npc_", "Overlong", $"{{\"FormKey\": \"{formKey}\"}}")));
 
-        Assert.False(Directory.Exists(SourceRepository.RootIn(_modFolder, Plugin.Name)));
+        Assert.False(Directory.Exists(PluginSourceRoot.In(_modFolder, Plugin.Name)));
     }
 }

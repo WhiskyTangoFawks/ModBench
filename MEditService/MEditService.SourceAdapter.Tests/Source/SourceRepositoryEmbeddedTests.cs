@@ -76,7 +76,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         new(QuestPath, Serialize(_quest)),
     ];
 
-    private static string Root => SourceRepository.RootFor(PluginName);
+    private static string Root => PluginSourceRoot.For(PluginName);
 
     private string InteriorCellPath =>
         Path.Combine(Root, "Cells", "0", "0", Leaf(_interiorCell), "RecordData.json");
@@ -310,7 +310,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     public void Rekey_AnEmbeddedChild_RewritesOnlyTheOwnersDocument_AndRollbackPutsItBack()
     {
         var before = TreeSnapshot.Of(_modFolder);
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
 
         transaction.Rekey(Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, Rekeying);
 
@@ -329,7 +329,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     public void Rekey_AContainer_MovesItsChildRecordsFilesUnderTheNewKey_AndRollbackMovesThemBack()
     {
         var before = TreeSnapshot.Of(_modFolder);
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
 
         transaction.Rekey(Repository, Plugin, Identity(_worldspace, "wrld"), FreeFormKey, Schemas, Rekeying);
 
@@ -344,7 +344,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     public void Rekey_ARecordWithAFileOfItsOwn_ReplacesThatFileUnderTheNewKey_AndRollbackPutsItBack()
     {
         var before = TreeSnapshot.Of(_modFolder);
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
 
         transaction.Rekey(Repository, Plugin, Identity(_quest, "qust"), FreeFormKey, Schemas, Rekeying);
 
@@ -362,7 +362,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     {
         var before = TreeSnapshot.Of(_modFolder);
 
-        Assert.Throws<InvalidOperationException>(() => new SourceRepository.SourceTransaction().Rekey(
+        Assert.Throws<InvalidOperationException>(() => new SourceTransaction().Rekey(
             Repository, Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent"), FreeFormKey, Schemas, Rekeying));
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
@@ -373,7 +373,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var before = TreeSnapshot.Of(_modFolder);
         var ownerLacksIt = Rekeying with { ChildOfOwner = (_, _, _) => null };
 
-        var refused = Assert.Throws<InvalidOperationException>(() => new SourceRepository.SourceTransaction().Rekey(
+        var refused = Assert.Throws<InvalidOperationException>(() => new SourceTransaction().Rekey(
             Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, ownerLacksIt));
 
         Assert.Contains("its own text does not carry it", refused.Message, StringComparison.Ordinal);

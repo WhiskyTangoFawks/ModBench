@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>A gesture writing several documents through one <see cref="SourceRepository.SourceTransaction"/>:
+/// <summary>A gesture writing several documents through one <see cref="SourceTransaction"/>:
 /// all land, or the tree is put back and the failure names what it left standing.</summary>
 internal static class SourceCommit
 {
@@ -11,7 +11,7 @@ internal static class SourceCommit
     /// the gesture needs it is a refusal (ADR-0014), a filesystem fault a write failure, anything
     /// else a bug.</summary>
     internal static RecordEditResult? Write(
-        SourceRepository.SourceTransaction transaction, SourceRepository repository, ILogger logger, string failed,
+        SourceTransaction transaction, SourceRepository repository, ILogger logger, string failed,
         Func<RecordEditResult?> write)
     {
         try
@@ -38,7 +38,7 @@ internal static class SourceCommit
     // Only the tree is put back; the next snapshot lands the restored files. Paths are relative to
     // the mod folder, the form the Source Control panel lists.
     private static string RollBack(
-        SourceRepository.SourceTransaction transaction, SourceRepository repository, ILogger logger, string failed, Exception cause)
+        SourceTransaction transaction, SourceRepository repository, ILogger logger, string failed, Exception cause)
     {
         var (unrestored, relativeError) = transaction.Rollback(cause, repository);
         if (unrestored.Count > 0)

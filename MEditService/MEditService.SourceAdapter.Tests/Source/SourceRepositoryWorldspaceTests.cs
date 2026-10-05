@@ -77,7 +77,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         InTheTree(Worldspace, "wrld");
         var before = TreeSnapshot.Of(_modFolder);
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         transaction.PutInWorldspace(Repository, Plugin, ACellAt("9, -9"), Worldspace);
 
         Assert.NotEqual(before, TreeSnapshot.Of(_modFolder));

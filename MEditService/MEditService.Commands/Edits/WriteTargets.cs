@@ -376,7 +376,7 @@ internal sealed class WriteTargets(
     }
 
     // Refused before any write. Not folded into ResolveEditTarget because Edit reaches the
-    // header deliberately. Without it, HoldingUnit.IsDirectoryPerRecord (filename-only) answers true
+    // header deliberately. Without it, the adapter's filename-only container test answers true
     // for the header and DeleteRecord deletes the plugin's whole source root.
     internal static RecordEditResult? RefuseIfHeader(string recordType) =>
         recordType == PluginHeader.RecordType

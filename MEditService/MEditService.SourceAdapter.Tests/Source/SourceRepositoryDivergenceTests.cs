@@ -24,7 +24,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         PluginBaselines.Track(
             _modFolder,
             SourcePreset.Edits,
-            [new TreeFile(Path.Combine(SourceRepository.RootFor(PluginName), "RecordData.json"), "{\"MasterReferences\": []}"u8.ToArray())]);
+            [new TreeFile(Path.Combine(PluginSourceRoot.For(PluginName), "RecordData.json"), "{\"MasterReferences\": []}"u8.ToArray())]);
         Repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody));
     }
 
@@ -34,7 +34,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         SourceRepository.Open(_modFolder, GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
-    private static string HeaderPath => Path.Combine(SourceRepository.RootFor(PluginName), "RecordData.json");
+    private static string HeaderPath => Path.Combine(PluginSourceRoot.For(PluginName), "RecordData.json");
 
     private static string ExtraPath => SourceRepository.PristineFilesOf(PluginName, [Extra]).Single().RelativePath;
 
@@ -43,7 +43,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
             ?? throw new InvalidOperationException($"Expected the tree to hold {NpcFormKey}.");
 
     private static string DoorPathOf(string modFolderPath) =>
-        Path.GetRelativePath(SourceRepository.RootFor(PluginName), modFolderPath);
+        Path.GetRelativePath(PluginSourceRoot.For(PluginName), modFolderPath);
 
     private List<TreeFile> Serialized(Func<TreeFile, TreeFile?>? change = null) =>
     [

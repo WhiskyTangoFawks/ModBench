@@ -71,7 +71,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private static string Root => SourceRepository.RootFor(PluginName);
+    private static string Root => PluginSourceRoot.For(PluginName);
 
     private static string Leaf(IMajorRecordGetter record) =>
         $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";

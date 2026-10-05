@@ -1,5 +1,4 @@
 using MEditService.Index.Tests.TestSupport;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -161,7 +160,7 @@ public sealed class ValidateByStampsTests : IDisposable
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
         Validate();
-        var treeThatLeavesAndReturns = SourceRepository.RootIn(_mod.ModFolderOf(), _mod.Name);
+        var treeThatLeavesAndReturns = PluginSourceRoot.In(_mod.ModFolderOf(), _mod.Name);
         Directory.Move(treeThatLeavesAndReturns, treeThatLeavesAndReturns + ".away");
         ValidateUntilEditorId("FixtureNpc");
         Directory.Move(treeThatLeavesAndReturns + ".away", treeThatLeavesAndReturns);

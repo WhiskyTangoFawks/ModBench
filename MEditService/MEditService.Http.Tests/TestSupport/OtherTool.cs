@@ -1,4 +1,3 @@
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -109,6 +108,6 @@ internal static class OtherTool
 
     internal static string SourceDocumentCarrying(string modFolder, string plugin, string text) =>
         Directory
-            .EnumerateFiles(SourceRepository.RootIn(modFolder, plugin), "*.json", SearchOption.AllDirectories)
+            .EnumerateFiles(PluginSourceRoot.In(modFolder, plugin), "*.json", SearchOption.AllDirectories)
             .Single(file => File.ReadAllText(file).Contains(text, StringComparison.Ordinal));
 }

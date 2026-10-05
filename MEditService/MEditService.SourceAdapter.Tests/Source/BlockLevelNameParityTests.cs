@@ -1,3 +1,4 @@
+using MEditService.TestSupport;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
@@ -62,7 +63,7 @@ public sealed class BlockLevelNameParityTests
             WorldspaceFormKey);
 
         return Directory
-            .EnumerateDirectories(Path.Combine(SourceRepository.RootIn(modFolder, Plugin), "Worldspaces"))
+            .EnumerateDirectories(Path.Combine(PluginSourceRoot.In(modFolder, Plugin), "Worldspaces"))
             .Single();
     }
 

@@ -42,7 +42,7 @@ public sealed class SourceRepositoryRelativePathOfTests : IDisposable
     public void Remove_TheHeader_TakesItsDocumentAlone_ThoughItSharesItsFileNameWithAContainersDocument()
     {
         var repository = Tracked();
-        var neighbour = Path.Combine(SourceRepository.RootIn(_modFolder, PluginName), "Npcs", "Neighbour - 000800_Fixture.esp.json");
+        var neighbour = Path.Combine(PluginSourceRoot.In(_modFolder, PluginName), "Npcs", "Neighbour - 000800_Fixture.esp.json");
         Directory.CreateDirectory(Path.GetDirectoryName(neighbour).Require());
         File.WriteAllText(neighbour, "{\"FormKey\": \"000800:Fixture.esp\", \"EditorID\": \"Neighbour\"}");
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));

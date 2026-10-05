@@ -127,7 +127,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     public void FormKeysUsed_SkipsGroupMetadataAndAStrayFileDeclaringNoFormKey_ForADocumentIsWhatDeclaresAFormKeyNotWhereItSits()
     {
         var repository = Tracked();
-        var npcsFolder = Path.Combine(SourceRepository.RootIn(_modFolder, PluginName), "Npcs");
+        var npcsFolder = Path.Combine(PluginSourceRoot.In(_modFolder, PluginName), "Npcs");
         File.WriteAllText(Path.Combine(npcsFolder, "GroupRecordData.json"), "{\n  \"Type\": \"npc_\"\n}");
         File.WriteAllText(Path.Combine(npcsFolder, "notes.json"), "{\n  \"Note\": \"scratch\"\n}");
 

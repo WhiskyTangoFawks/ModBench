@@ -56,7 +56,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         string Leaf(IMajorRecordGetter record) =>
             $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
 
-        var root = SourceRepository.RootFor(pluginName);
+        var root = PluginSourceRoot.For(pluginName);
         return (
         [
             new TreeFile(
@@ -76,7 +76,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var secondPlugin = new PluginAddress("Second.esp", "SecondMod");
         var (beforeFirst, beforeSecond) = (TreeSnapshot.Of(_firstFolder), TreeSnapshot.Of(_secondFolder));
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         transaction.Put(
             first, firstPlugin,
             new SourceDocument("000800:First.esp", "npc_", "Original", BodyOf("First.esp", "Rewritten")));
@@ -98,7 +98,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var firstPlugin = new PluginAddress("First.esp", "FirstMod");
         var secondPlugin = new PluginAddress("Second.esp", "SecondMod");
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         transaction.Put(
             first, firstPlugin, new SourceDocument("000800:First.esp", "npc_", "Original", BodyOf("First.esp", "Rewritten")));
         transaction.Put(
@@ -119,7 +119,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var plugin = new PluginAddress("First.esp", "FirstMod");
         var before = TreeSnapshot.Of(_firstFolder);
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         var refusal = Assert.Throws<NotSupportedException>(() => transaction.Put(
             repository, plugin,
             new SourceDocument("000900:First.esp", "cell", "FreshCell", "{\n  \"FormKey\": \"000900:First.esp\"\n}")));
@@ -136,7 +136,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var plugin = new PluginAddress("First.esp", "FirstMod");
         var before = TreeSnapshot.Of(_firstFolder);
 
-        var transaction = new SourceRepository.SourceTransaction();
+        var transaction = new SourceTransaction();
         var siblingInTheGroupFolderTrackAlreadyMade =
             new SourceDocument("000900:First.esp", "npc_", "Sibling", "{\n  \"FormKey\": \"000900:First.esp\"\n}");
         transaction.Put(repository, plugin, siblingInTheGroupFolderTrackAlreadyMade);

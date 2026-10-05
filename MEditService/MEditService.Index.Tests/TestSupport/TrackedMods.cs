@@ -56,9 +56,9 @@ internal static class TrackedMods
     internal static string SourceFileOf(this LoadOrderEntry entry, RecordIdentity identity, GameRelease release = GameRelease.Fallout4)
     {
         var modFolder = entry.ModFolderOf();
-        var unit = RepositoryOf(entry, release).UnitHolding(entry.KeyOf(), identity)
+        var relativePath = RepositoryOf(entry, release).RelativePathOf(entry.KeyOf(), identity)
             ?? throw new InvalidOperationException($"No document in {entry.Name}'s tree under '{modFolder}' holds {identity.FormKey}.");
-        return Path.Combine(modFolder, unit.RelativePath);
+        return Path.Combine(modFolder, relativePath);
     }
 
     internal static string SourceFileOf(this LoadOrderEntry entry, RecordDocument document) =>

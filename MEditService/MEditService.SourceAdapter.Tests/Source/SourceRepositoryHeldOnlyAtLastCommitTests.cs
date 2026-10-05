@@ -65,7 +65,7 @@ public sealed class SourceRepositoryHeldOnlyAtLastCommitTests : IDisposable
     {
         var folder = RecordTypeDispatch.For(GameRelease.Fallout4).FolderNameFor("globalfloat")
             ?? throw new InvalidOperationException("Expected 'globalfloat' to resolve to a group folder.");
-        var relativePath = Path.Combine(SourceRepository.RootFor(PluginName), folder, "Carrier - 00A000_Held.esp.json");
+        var relativePath = Path.Combine(PluginSourceRoot.For(PluginName), folder, "Carrier - 00A000_Held.esp.json");
         const string withTheChild =
             "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Held.esp\",\n  \"Temporary\": [ { \"FormKey\": \"00A001:Held.esp\" } ]\n}";
         PluginBaselines.Track(_modFolder, SourcePreset.Edits, [new TreeFile(relativePath, System.Text.Encoding.UTF8.GetBytes(withTheChild))]);
