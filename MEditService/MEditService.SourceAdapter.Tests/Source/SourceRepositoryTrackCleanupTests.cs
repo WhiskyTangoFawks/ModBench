@@ -41,7 +41,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     }
 
     [Fact]
-    public void Track_WhenEveryPluginIsRefused_LeavesARepositoryItDidNotMakeAsItWas()
+    public void Track_WhenEveryPluginIsRefused_LeavesTheHalfMadeRepositoryAsItWas()
     {
         var theirs = Directory.CreateDirectory(Path.Combine(_modFolder, ".git")).FullName;
         File.WriteAllText(Path.Combine(theirs, "config"), "[medit]\n\ttrack = true\n[remote \"origin\"]\n");
@@ -53,7 +53,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     }
 
     [Fact]
-    public void Track_WhenTheCommitFails_LeavesARepositoryItDidNotMakeAsItWas()
+    public void Track_WhenTheCommitFails_LeavesTheHalfMadeRepositoryAsItWas()
     {
         var theirs = Directory.CreateDirectory(Path.Combine(_modFolder, ".git")).FullName;
         File.WriteAllText(Path.Combine(theirs, "config"), "[medit]\n\ttrack = true\n");
