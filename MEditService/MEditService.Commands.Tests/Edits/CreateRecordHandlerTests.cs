@@ -1,7 +1,7 @@
-using MEditService.Codec.Serialization;
 using System.Globalization;
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceAdapter;
