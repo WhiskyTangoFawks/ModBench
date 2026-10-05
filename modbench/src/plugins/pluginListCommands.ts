@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
+import { isPluginFile } from '../instanceAdapter/instanceAdapter';
 import type { Instance } from '../instanceLoader/instance';
 import {
   ImplicitMasterNode, PluginNode, PluginsTreeProvider, type PluginListNode, type PluginsTreeNode,
@@ -90,7 +91,7 @@ async function promptPluginName(
     prompt: 'Enter new plugin name (e.g. MyPatch.esp)',
     validateInput: v => {
       if (!v) return 'Name is required';
-      if (!/\.(esp|esm|esl)$/i.test(v)) return 'Extension must be .esp, .esm, or .esl';
+      if (!isPluginFile(v)) return 'Extension must be .esp, .esm, or .esl';
       if (!lightPluginsSupported && /\.esl$/i.test(v)) return 'This game has no light plugins';
       return undefined;
     },
