@@ -273,10 +273,10 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
                 identity.FormKey, identity.RecordType, isEmbedded: false);
         }
 
-        // A Cell's block bucket is the one level chosen rather than derived, so it is settled — and
-        // minted — before the placement it becomes part of.
+        // An interior cell's levels are minted before the placement they become part of.
         var blockPath = dispatch.IsCell(identity.RecordType)
-            ? InteriorCellBlockPathIn(Path.Combine(_modFolder, RootFor(plugin.Name), groupFolder))
+            ? InteriorCellBlockPathIn(
+                Path.Combine(_modFolder, RootFor(plugin.Name), groupFolder), FormKey.Factory(identity.FormKey).ID)
             : null;
 
         var where = PlacementFor(
@@ -347,9 +347,8 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
             directory, () => WriteTextAtomic(Path.Combine(directory, GroupRecordDataFileName), document));
     }
 
-    // Interior placement carries no gameplay meaning — every interior cell's block and sub-block are
-    // null — so the bucket already standing is reused and a fresh one minted only the first time.
-    private List<string> InteriorCellBlockPathIn(string groupDirectory)
+    // Block = ID mod 10 and sub-block = ID / 10 mod 10: the formula of Mutagen's AddInteriorCell.
+    private List<string> InteriorCellBlockPathIn(string groupDirectory, uint formId)
     {
         var levels = RecordTypeDispatch.For(_release).InteriorCellBlockLevels;
         var labels = RecordTypeDispatch.InteriorCellBlockGroupTypes;
@@ -365,11 +364,12 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         // document stands in.
         InMintedDirectory(groupDirectory, () => WriteIfMissing(groupDirectory, EmptyLevelDocument));
 
+        int[] numbers = [(int)(formId % 10), (int)(formId / 10 % 10)];
         var path = new List<string>();
         var parent = groupDirectory;
         for (var level = 0; level < levels.Count; level++)
         {
-            parent = FindOrMintBlockDirectory(parent, levels[level], labels[level]);
+            parent = FindOrMintBlockDirectory(parent, levels[level], labels[level], numbers[level]);
             path.Add(Path.GetFileName(parent));
         }
         return path;
@@ -383,25 +383,22 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         if (!File.Exists(path)) WriteTextAtomic(path, document);
     }
 
-    // A minted bucket is numbered zero, which the codec's blank document leaves out as the level's
-    // own default, so the directory's name and its document agree.
-    private string FindOrMintBlockDirectory(string parentDirectory, Type level, string groupType)
+    private string FindOrMintBlockDirectory(string parentDirectory, Type level, string groupType, int number)
     {
-        if (Directory.Exists(parentDirectory)
-            && Directory.EnumerateDirectories(parentDirectory).FirstOrDefault() is { } standing)
-        {
-            return standing;
-        }
+        var directory = Path.Combine(parentDirectory, number.ToString(CultureInfo.InvariantCulture));
+        if (Directory.Exists(directory)) return directory;
 
-        var directory = Path.Combine(parentDirectory, FirstBlockName);
         var document = RecordTextCodec.BlankDocument(
-            level, _release, new JsonObject { [RecordTypeDispatch.GroupTypeMember] = groupType });
+            level, _release,
+            new JsonObject
+            {
+                [RecordTypeDispatch.GroupTypeMember] = groupType,
+                [RecordTypeDispatch.BlockNumberMember] = number,
+            });
         InMintedDirectory(
             directory, () => WriteTextAtomic(Path.Combine(directory, GroupRecordDataFileName), document));
         return directory;
     }
-
-    private const string FirstBlockName = "0";
 
     // Takes back the levels LevelsMintedBy named, deepest first, so a parent is already empty by
     // the time it is reached. A level something else filled stops the walk.

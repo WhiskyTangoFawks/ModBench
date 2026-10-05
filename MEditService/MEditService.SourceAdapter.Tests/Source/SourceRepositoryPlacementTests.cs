@@ -64,29 +64,47 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     }
 
     [Fact]
-    public void AnInteriorCell_LandsUnderAFreshlyMintedBlockPair()
+    public void AnInteriorCell_LandsInTheBlockAndSubBlockItsFormIdGives_MintingBothWithTheirNumbers()
     {
         Assert.Equal(
             [
-                SpelledOutPathUnder("Cells", "0", "0", "GroupRecordData.json"),
-                SpelledOutPathUnder("Cells", "0", "0", "SomeCell - 000800_Vendor.esp", "RecordData.json"),
-                SpelledOutPathUnder("Cells", "0", "GroupRecordData.json"),
+                SpelledOutPathUnder("Cells", "8", "4", "GroupRecordData.json"),
+                SpelledOutPathUnder("Cells", "8", "4", "SomeCell - 000800_Vendor.esp", "RecordData.json"),
+                SpelledOutPathUnder("Cells", "8", "GroupRecordData.json"),
                 SpelledOutPathUnder("Cells", "GroupRecordData.json"),
             ],
             TreeAfterPutting("cell", "SomeCell"));
+
+        Assert.Contains("\"BlockNumber\": 8", Text(SpelledOutPathUnder("Cells", "8", "GroupRecordData.json")));
+        Assert.Contains("\"BlockNumber\": 4", Text(SpelledOutPathUnder("Cells", "8", "4", "GroupRecordData.json")));
     }
 
     [Fact]
-    public void AnInteriorCell_LandsInTheBlockBucketThePluginAlreadyHas_ForInteriorBlockNumbersCarryNoGameplayMeaning()
+    public void AnInteriorCell_LandsInTheLevelsItsFormIdGives_NotInOnesTheTreeAlreadyHolds()
     {
         TreeAfterPutting("cell", "SomeCell");
-        Directory.Move(
-            Path.Combine(_modFolder, SpelledOutPathUnder("Cells", "0")),
-            Path.Combine(_modFolder, SpelledOutPathUnder("Cells", "7")));
+
+        var tree = TreeAfterPutting("cell", "SameBlockCell", formKey: "000864:Vendor.esp");
+        Assert.Contains(
+            SpelledOutPathUnder("Cells", "8", "4", "SameBlockCell - 000864_Vendor.esp", "RecordData.json"), tree);
+
+        tree = TreeAfterPutting("cell", "OtherCell", formKey: "000808:Vendor.esp");
+        Assert.Contains(
+            SpelledOutPathUnder("Cells", "6", "5", "OtherCell - 000808_Vendor.esp", "RecordData.json"), tree);
+    }
+
+    [Fact]
+    public void AnInteriorCellInABlockTheTreeHolds_MintsOnlyItsMissingSubBlock()
+    {
+        TreeAfterPutting("cell", "SomeCell");
+        var standing = Text(SpelledOutPathUnder("Cells", "8", "GroupRecordData.json"));
+
+        var tree = TreeAfterPutting("cell", "OtherCell", formKey: "00080A:Vendor.esp");
 
         Assert.Contains(
-            SpelledOutPathUnder("Cells", "7", "0", "OtherCell - 000801_Vendor.esp", "RecordData.json"),
-            TreeAfterPutting("cell", "OtherCell", formKey: "000801:Vendor.esp"));
+            SpelledOutPathUnder("Cells", "8", "5", "OtherCell - 00080A_Vendor.esp", "RecordData.json"), tree);
+        Assert.Contains("\"BlockNumber\": 5", Text(SpelledOutPathUnder("Cells", "8", "5", "GroupRecordData.json")));
+        Assert.Equal(standing, Text(SpelledOutPathUnder("Cells", "8", "GroupRecordData.json")));
     }
 
     [Fact]
