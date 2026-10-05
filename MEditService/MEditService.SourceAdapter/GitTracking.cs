@@ -26,8 +26,8 @@ internal static class GitTracking
         if (SourceRepositoryGit.IsTracked(modFolder) || SourceRepositoryGit.HoldsAnotherRepository(modFolder))
             throw new InvalidOperationException($"'{modFolder}' already holds a repository.");
 
-        List<string> created = [];
-        var (written, refused) = WriteEachPlugin(modFolder, baselines, created);
+        WriteLog log = new();
+        var (written, refused) = WriteEachPlugin(modFolder, baselines, log);
         if (written.Count == 0) return refused;
 
         var git = new SourceRepositoryGit(modFolder);
@@ -50,30 +50,34 @@ internal static class GitTracking
             if (!repositoryExisted && git.Exists) git.Delete();
             if (gitignoreBefore is null) File.Delete(gitignorePath);
             else File.WriteAllBytes(gitignorePath, gitignoreBefore);
-            PristineFileWriter.Undo(created);
+            log.UndoSince(0);
             throw;
         }
         return refused;
     }
 
     private static (List<BaselineTrailers> Written, List<(string Plugin, string Reason)> Refused) WriteEachPlugin(
-        string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines, List<string> created)
+        string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines, WriteLog log)
     {
         List<BaselineTrailers> written = [];
         List<(string Plugin, string Reason)> refused = [];
         foreach (var (files, trailers) in baselines)
         {
-            List<string> own = [];
+            var mark = log.Mark;
             try
             {
-                PristineFileWriter.WriteAll(files, workTree, own);
+                PristineFileWriter.WriteAll(files, workTree, log);
                 written.Add(trailers);
-                created.AddRange(own);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
-                PristineFileWriter.Undo(own);
+                log.UndoSince(mark);
                 refused.Add((trailers.Plugin, ex.Message));
+            }
+            catch
+            {
+                log.UndoSince(0);
+                throw;
             }
         }
         return (written, refused);
@@ -122,15 +126,38 @@ internal static class GitTracking
     };
 }
 
+/// <summary>What a write made or replaced, in order, so a rollback restores exactly that and nothing a
+/// third party wrote (ADR-0003).</summary>
+internal sealed class WriteLog
+{
+    private readonly List<(string Path, byte[]? Original)> _entries = [];
+
+    internal int Mark => _entries.Count;
+
+    internal void Created(string path) => _entries.Add((path, null));
+
+    internal void Replaced(string path, byte[] original) => _entries.Add((path, original));
+
+    internal void UndoSince(int mark)
+    {
+        for (var i = _entries.Count - 1; i >= mark; i--)
+        {
+            var (path, original) = _entries[i];
+            if (original is not null) File.WriteAllBytes(path, original);
+            else if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+            else if (File.Exists(path)) File.Delete(path);
+        }
+        _entries.RemoveRange(mark, _entries.Count - mark);
+    }
+}
+
 /// <summary>The one way a list of <see cref="TreeFile"/>s becomes real files under a base
 /// directory, shared so the call sites cannot drift.</summary>
 internal static class PristineFileWriter
 {
-    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory) => WriteAll(files, baseDirectory, []);
+    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory) => WriteAll(files, baseDirectory, new WriteLog());
 
-    /// <summary>Every file and directory this call creates lands in <paramref name="created"/>, in the
-    /// order it was made, so <see cref="Undo"/> can take back exactly that.</summary>
-    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory, List<string> created)
+    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory, WriteLog log)
     {
         foreach (var file in files)
         {
@@ -139,19 +166,11 @@ internal static class PristineFileWriter
             var missing = new Stack<string>();
             for (var ancestor = directory; !Directory.Exists(ancestor); ancestor = PathShape.DirectoryOf(ancestor))
                 missing.Push(ancestor);
-            created.AddRange(missing);
+            foreach (var created in missing) log.Created(created);
             Directory.CreateDirectory(directory);
-            if (!File.Exists(fullPath)) created.Add(fullPath);
+            if (File.Exists(fullPath)) log.Replaced(fullPath, File.ReadAllBytes(fullPath));
+            else log.Created(fullPath);
             File.WriteAllBytes(fullPath, file.Content);
-        }
-    }
-
-    internal static void Undo(IEnumerable<string> created)
-    {
-        foreach (var path in created.Reverse())
-        {
-            if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
-            else if (File.Exists(path)) File.Delete(path);
         }
     }
 }
