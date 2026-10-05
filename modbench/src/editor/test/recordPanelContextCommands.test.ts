@@ -15,12 +15,12 @@ vi.mock('vscode', () => ({
   window: { showInputBox: (options: { value?: string }) => showInputBox(options) },
 }));
 
-import type { ExtendedFieldEditorDeps, OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
+import type { OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
 
 const openExtendedFieldEditor =
-  vi.fn<(params: OpenExtendedFieldEditorParams, deps: ExtendedFieldEditorDeps) => Promise<void>>();
+  vi.fn<(params: OpenExtendedFieldEditorParams) => Promise<void>>();
 
-import { registerRecordPanelContextCommands, type RecordPanelContextCommandDeps } from '../recordPanelContextCommands';
+import { commitField, registerRecordPanelContextCommands, type RecordPanelContextCommandDeps } from '../recordPanelContextCommands';
 import { EXTENSION_TO_WEBVIEW, type ArrayElementContext, type ArrayParentContext, type ExtensionToWebview, type StringValueContext } from '../../wire/messages';
 import { InMemoryMEditClient } from '../../client';
 import { present } from '../../ports/present';
@@ -218,9 +218,7 @@ describe('right-click edits go through the gate of the panels showing the record
     const { deps, meditClient } = makeDeps({ editGateOf: movedGate(gated) });
     registerRecordPanelContextCommands(deps);
 
-    await present(handlers.get('modbench.record.openFieldValue'), 'the openFieldValue handler')(stringContext());
-    const [, editorDeps] = present(openExtendedFieldEditor.mock.calls.at(-1), 'the openExtendedFieldEditor call');
-    await editorDeps.onCommit('saved');
+    await commitField(deps, stringContext(), 'saved');
 
     expect(gated).toEqual([IDENTITY.formKey]);
     expect(editRecordCalls(meditClient).map(c => c.args[0])).toEqual(['000900:Fallout4.esm']);
@@ -228,9 +226,8 @@ describe('right-click edits go through the gate of the panels showing the record
 });
 
 describe('the extended editor opens and saves from the host, from the context it is handed rather than asking the panel for anything', () => {
-  function openedWith(): { params: OpenExtendedFieldEditorParams; deps: ExtendedFieldEditorDeps } {
-    const [params, editorDeps] = present(openExtendedFieldEditor.mock.calls.at(-1), "the last openExtendedFieldEditor call");
-    return { params, deps: editorDeps };
+  function openedWith(): OpenExtendedFieldEditorParams {
+    return present(openExtendedFieldEditor.mock.calls.at(-1), "the last openExtendedFieldEditor call")[0];
   }
 
   it('opens the tab with the record label and the row\'s own label from the context', async () => {
@@ -241,8 +238,8 @@ describe('the extended editor opens and saves from the host, from the context it
       recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Id', readOnly: true,
     }));
 
-    expect(openedWith().params).toEqual({
-      value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Id',
+    expect(openedWith()).toMatchObject({
+      recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Id', formKey: IDENTITY.formKey,
       plugin: IDENTITY.plugin, origin: IDENTITY.origin, readOnly: true,
     });
   });
@@ -254,8 +251,7 @@ describe('the extended editor opens and saves from the host, from the context it
       { kind: 'member', name: 'Container' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' },
     ] as StringValueContext['path'];
 
-    await present(handlers.get('modbench.record.openFieldValue'), "the handler registered for 'modbench.record.openFieldValue'")(stringContext({ path }));
-    await openedWith().deps.onCommit('edited in the tab');
+    await commitField(deps, stringContext({ path }), 'edited in the tab');
 
     expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
@@ -268,9 +264,8 @@ describe('the extended editor opens and saves from the host, from the context it
     const { deps, meditClient } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
-    await present(handlers.get('modbench.record.openFieldValue'), "the handler registered for 'modbench.record.openFieldValue'")(stringContext());
-    await openedWith().deps.onCommit('first save');
-    await openedWith().deps.onCommit('second save');
+    await commitField(deps, stringContext(), 'first save');
+    await commitField(deps, stringContext(), 'second save');
 
     expect(editRecordCalls(meditClient).map(c => envelopeValueNarrowedFromUnknownCallArgs(c.args))).toEqual(['first save', 'second save']);
   });

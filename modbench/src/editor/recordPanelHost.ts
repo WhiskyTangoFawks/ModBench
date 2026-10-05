@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
-import type { EditsInFlight } from './followRecord';
+import type { EditAddress, EditsInFlight } from './followRecord';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { pickRecord } from './recordPicker';
@@ -10,7 +10,7 @@ import type { FocusedCells } from './focusedCells';
 import type { RecordWriteDeps } from './applyRecordEdit';
 import { ExtendedFieldDocuments } from './extendedFieldEditor';
 import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecorationProvider';
-import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
+import { commitField, registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerGridKeyCommands } from './gridKeyCommands';
 import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands,
@@ -140,7 +140,11 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   // of that state.
   const recordDecorationProvider = new RecordDecorationProvider(recordBadgeSource);
   const writeDeps = recordPanelWriteDeps(deps);
-  const extendedFields = new ExtendedFieldDocuments();
+  const commitDeps = { ...writeDeps, editGateOf: (address: EditAddress) => editsInFlight.gateShowing(recordPanels, address) };
+  const extendedFields = new ExtendedFieldDocuments({
+    client: meditClient, reporter: deps.reporterFor('extendedField'),
+    commit: (field, value) => commitField(commitDeps, field, value),
+  });
   // Lives for the activation, like the decoration provider above — disposed alongside it.
   const loadOrderStatusTracker = trackLoadOrderStatus(
     meditClient, () => announceConflictsComputed(recordPanels, editsInFlight));
@@ -164,8 +168,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended-field documents.
     ...registerRecordPanelContextCommands({
-      ...writeDeps, extendedFields,
-      editGateOf: address => editsInFlight.gateShowing(recordPanels, address),
+      ...commitDeps, extendedFields,
       focusedCell: () => focusedCells.current(),
     }),
     ...registerGridKeyCommands({

@@ -13,6 +13,7 @@ vi.mock('vscode', async () => ({
   TreeItemCollapsibleState: (await import('../../test/vscodeMock')).TreeItemCollapsibleState,
   EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { return undefined; } dispose() { return undefined; } },
   Uri: { from: (parts: { path: string }) => parts.path, joinPath: vi.fn() },
+  Disposable: class { constructor(public dispose: () => void) {} },
   ViewColumn: { Active: -1, One: 1, Beside: -2 },
   commands: {
     registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => {

@@ -2,15 +2,18 @@ import * as vscode from 'vscode';
 import { hasSection, isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type ArrayParentContext, type ReferenceContext, type StringValueContext } from '../wire/messages';
 import type { RecordEditEnvelope } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
-import type { ExtendedFieldDocuments } from './extendedFieldEditor';
+import type { ExtendedFieldDocuments, FieldAddress } from './extendedFieldEditor';
 import type { EditAddress, EditGate } from './followRecord';
 import type { FocusedCellContext } from './focusedCells';
 
-export interface RecordPanelContextCommandDeps extends RecordWriteDeps {
-  // The one set of extended-field documents every panel's tabs open into.
-  extendedFields: Pick<ExtendedFieldDocuments, 'open'>;
+export interface FieldCommitDeps extends RecordWriteDeps {
   // An edit's gate is that of the panels showing the record it is addressed to.
   editGateOf: (address: EditAddress) => EditGate;
+}
+
+export interface RecordPanelContextCommandDeps extends FieldCommitDeps {
+  // The one set of extended-field documents every panel's tabs open into.
+  extendedFields: Pick<ExtendedFieldDocuments, 'open'>;
   // The palette hands a field gesture no cell: it acts on the record tab in focus's focused cell.
   focusedCell: () => FocusedCellContext | undefined;
 }
@@ -84,19 +87,9 @@ async function promptedSet(address: object): Promise<RecordEditEnvelope | undefi
 
 // The tab's save posts the `set` an inline edit does, at the row's own path, once per save
 // (editor.md, Menus and keys, story 2).
-function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringValueContext): Promise<void> {
-  const gate = deps.editGateOf(ctx);
-  return deps.extendedFields.open(
-    {
-      value: ctx.value, recordLabel: ctx.recordLabel, fieldName: ctx.fieldName,
-      plugin: ctx.plugin, origin: ctx.origin, readOnly: ctx.readOnly,
-    },
-    {
-      reporter: deps.reporter,
-      onCommit: value => gate(ctx, formKey =>
-        applyRecordEdit(deps, formKey, ctx.plugin, ctx.origin, { op: 'set', path: ctx.path, value })),
-    },
-  );
+export function commitField(deps: FieldCommitDeps, field: FieldAddress, value: string): Promise<void> {
+  return deps.editGateOf(field)(field, formKey =>
+    applyRecordEdit(deps, formKey, field.plugin, field.origin, { op: 'set', path: field.path, value }));
 }
 
 const CONTEXT_COMMANDS: ContextCommand[] = [
@@ -108,7 +101,7 @@ const CONTEXT_COMMANDS: ContextCommand[] = [
   },
   {
     command: 'modbench.record.openFieldValue',
-    run: async (deps, ctx) => { if (isStringValueContext(ctx)) await openStringValueEditor(deps, ctx); },
+    run: async (deps, ctx) => { if (isStringValueContext(ctx)) await deps.extendedFields.open(ctx); },
   },
   { command: 'modbench.record.editField', run: editField },
   editCommand('modbench.record.addElement', isArrayParentContext, (ctx, value) => ({ op: 'add', path: ctx.path, value })),
