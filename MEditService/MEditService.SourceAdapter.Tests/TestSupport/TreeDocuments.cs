@@ -2,19 +2,19 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.TestSupport;
+namespace MEditService.SourceAdapter.Tests.TestSupport;
 
 /// <summary>Every document a plugin's tree holds, asked of the repository: the header's and each
 /// record's own, an embedded child belonging to the document that carries it.</summary>
-public static class TreeDocuments
+internal static class TreeDocuments
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    public static IReadOnlyList<SourceDocument> Of(SourceRepository repository, PluginAddress plugin)
+    internal static IReadOnlyList<SourceDocument> Of(SourceRepository repository, PluginAddress plugin)
     {
         using var documents = repository.OpenDocuments(plugin, Schemas);
         var roots = new List<PluginDocument>();
