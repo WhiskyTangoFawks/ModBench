@@ -223,7 +223,7 @@ describe('HttpMEditClient — deleting records answers per record', () => {
       await thrown.copyRecords([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false),
     ];
 
-    expect(answers.map((a) => (a as { unanswered?: boolean }).unanswered)).toEqual([true, true, true]);
+    for (const answer of answers) expect(answer).toMatchObject({ refused: true, unanswered: true });
     expect(answers[0]).toEqual({ refused: true, unanswered: true, message: 'Could not delete 1 record — no answer' });
   });
 
