@@ -102,13 +102,13 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod. Collapse All last. |
-| Mod menu | open folder · open conflicts (the mod has a file order conflict) · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · add separator · create empty mod · install… · track (the mod has no repository and holds a plugin) · copy value · uninstall |
+| Mod menu | open folder · open conflicts (the mod has a file order conflict) · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add separator · create empty mod · install… · track (the mod has no repository and holds a plugin) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · copy value · delete |
 | Overwrite menu | open folder |
 | File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · copy value |
 | Folder menu | open folder · copy value |
 | Check box | enable or disable |
-| Keys | Space: enable or disable. Delete: uninstall, or delete a separator. F2: rename a separator. Ctrl+C: copy value. |
+| Keys | Space: enable or disable. Delete: uninstall, or delete a separator. F2: rename a mod or a separator. Ctrl+C: copy value. |
 
 As a user, I want:
 
@@ -153,6 +153,15 @@ As a user, I want:
 ### Rename separator
 
 As a user, I want a prompt filled with the current name. Esc, an empty name or the same name renames nothing. A name another separator has is refused in the prompt, as for add. Source: MO2
+
+### Rename mod
+
+As a user, I want:
+
+1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. Source: MO2
+2. A name another mod has, compared without case, refused in the prompt, so Windows and Linux agree. A name with a path separator refused. Source: MO2 compares without case; Refuse, do not repair
+3. The mod to keep its place in mod order, its enabled state and its separator in every profile. Its folder keeps its repository, its plugin source and its `meta.ini`, and its plugins keep their `plugins.txt` lines. Source: MO2
+4. The folder renamed first. A rename that renamed the folder and then failed on a profile's `modlist.txt` to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active. This is an exception to A failed gesture writes nothing.
 
 ### Delete separator
 
