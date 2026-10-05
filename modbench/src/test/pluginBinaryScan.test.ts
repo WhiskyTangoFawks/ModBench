@@ -131,7 +131,7 @@ function boundExport(element: ts.BindingElement): string | undefined {
   return ts.isIdentifier(element.name) ? element.name.text : undefined;
 }
 
-const MAY_READ_FILES = /['"`](?:node:)?fs(?:\/promises)?['"`]|readFile/;
+const MAY_READ_FILES = new RegExp(`['"\`](?:${[...FS_MODULES].join('|')})['"\`]|${[...DECODING_READS].join('|')}`);
 
 function scan(sourceText: string, fileName: string): Offences {
   if (!MAY_READ_FILES.test(sourceText)) return { byteReads: [], undecodedReads: [] };

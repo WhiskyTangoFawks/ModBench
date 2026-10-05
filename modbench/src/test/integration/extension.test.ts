@@ -577,7 +577,7 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
       await selectFirstRow('modbench.pluginListTree', 'TestMod.esp');
       await vscode.commands.executeCommand('modbench.plugin.disable');
       return /^TestMod\.esp\r?$/m.test(fs.readFileSync(pluginsTxtPath, 'utf8'));
-    }, 30_000);
+    });
   });
 });
 
