@@ -8,9 +8,9 @@ public sealed class PluginByteComparisonTests : IDisposable
 {
     private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
 
-    private readonly string _folder = Directory.CreateTempSubdirectory("plugin-byte-comparison").FullName;
+    private readonly ScratchDirectory _folder = new("plugin-byte-comparison");
 
-    public void Dispose() => Directory.Delete(_folder, recursive: true);
+    public void Dispose() => _folder.Dispose();
 
     [Fact]
     public async Task TwoFilesWithTheSameBytes_AreIdentical()
@@ -66,7 +66,7 @@ public sealed class PluginByteComparisonTests : IDisposable
 
     private string Write(string name, byte[] bytes)
     {
-        var path = Path.Combine(_folder, name);
+        var path = Path.Combine(_folder.Path, name);
         File.WriteAllBytes(path, bytes);
         return path;
     }
