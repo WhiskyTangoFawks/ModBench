@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 
@@ -25,6 +26,23 @@ public sealed class PluginFileHashesTests : IDisposable
         var held = new FileStream(PluginPath, FileMode.Open, FileAccess.Read, FileShare.None);
         Assert.Null(PluginBinaryHash.OfFile(PluginPath));
         return held;
+    }
+
+    [Fact]
+    public void TheClaimOfAFile_CarriesTheHashOfTheBytesItScanned()
+    {
+        var claim = PluginBinaryHash.ClaimOfFile(PluginPath);
+
+        Assert.Equal(PluginBinaryHash.OfFile(PluginPath), claim?.Hash);
+        Assert.Empty(claim?.Diagnoses ?? [new PluginDiagnosis(null, "unscanned", null, "")]);
+    }
+
+    [Fact]
+    public void TheClaimOfAFileHeldAgainstReaders_IsNull()
+    {
+        using var held = HeldAgainstReaders();
+
+        Assert.Null(PluginBinaryHash.ClaimOfFile(PluginPath));
     }
 
     [Fact]
