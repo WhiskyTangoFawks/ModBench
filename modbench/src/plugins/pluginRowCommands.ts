@@ -10,9 +10,8 @@ import { modOfOrigin } from './modOfOrigin';
 import { pluginAddressKey } from './pluginAddress';
 import { trackProgressMessage } from './trackProgress';
 import { PluginNode, type PluginsTreeNode } from './PluginsTreeProvider';
-import {
-  compilableSelected, pluginsGestureEntry, selectionArgument, PLUGINS_KEY_ARGS, type GestureEntry,
-} from './gestureEntry';
+import { compilableSelected, PLUGINS_KEY_ARGS } from './gestureEntry';
+import { gestureEntry, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -161,7 +160,7 @@ export function registerDecompileCommand(
       const header = columnHeaderOf(clicked);
       const plugins = header
         ? [header]
-        : selectionArgument(pluginsGestureEntry(clicked, selected, viewSelection), 'plugin')
+        : selectionArgument(gestureEntry(clicked, selected, viewSelection), 'plugin')
           .map((node) => ({ name: node.plugin.name, origin: node.origin }));
       if (plugins.length === 0 || !(await confirmDecompile(deps.ask, plugins))) return;
       await runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
@@ -227,7 +226,7 @@ async function argumentOf(
 ): Promise<PluginAddress[] | undefined> {
   const header = columnHeaderOf(clicked);
   if (header) return [header];
-  const entry = pluginsGestureEntry(clicked, selected, viewSelection);
+  const entry = gestureEntry(clicked, selected, viewSelection);
   if (entry.clicked === undefined) return pickCompilable(deps, entry);
   return selectionArgument(entry, 'plugin').map((node) => ({ name: node.plugin.name, origin: node.origin }));
 }
@@ -235,7 +234,7 @@ async function argumentOf(
 // plugins.md, Compile, story 3: from the palette, a pick of the tracked, editable plugins. An
 // extension cannot tell whether the Plugins view has focus, so it always asks, a selected
 // compilable plugin first.
-async function pickCompilable(deps: CompileDeps, entry: GestureEntry): Promise<PluginAddress[] | undefined> {
+async function pickCompilable(deps: CompileDeps, entry: GestureEntry<PluginsTreeNode>): Promise<PluginAddress[] | undefined> {
   const selected = compilableSelected(entry.selection);
   const selectedKey = selected && pluginAddressKey(selected.plugin.name, selected.origin);
   const isSelected = (p: PluginAddress) => pluginAddressKey(p.name, p.origin) === selectedKey;
