@@ -153,18 +153,69 @@ internal sealed class SourceRepositoryWrites(
                 _modFolder);
             git.ParkDecompiled(pluginFileName, binarySha256);
         }
-        catch (Exception cause) when (cause is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (Exception cause) when (IsAFailedWrite(cause))
         {
-            var unrestored = new List<string>();
-            TryPutBack(root, () => { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }, unrestored);
-            unrestored.AddRange(PutBack(before));
+            var unrestored = TakeAwayAndPutBack(root, before);
             if (unrestored.Count == 0) throw;
-            throw new IOException(
-                $"{cause.Message} Its source is back as it was except: {string.Join(" ", unrestored)}", cause);
+            throw NotAllPutBack(cause, unrestored);
         }
         finally
         {
             locator.Forget();
+        }
+    }
+
+    internal void RenameSource(string from, string to)
+    {
+        var (fromRoot, toRoot) = (SourceRepositoryLayout.RootIn(_modFolder, from), SourceRepositoryLayout.RootIn(_modFolder, to));
+        var before = PreImageOf(fromRoot);
+        var renamed = before.Files
+            .Select(file => PluginSourceRename.Renamed(Path.GetRelativePath(_modFolder, file.Path), file.Bytes, from, to))
+            .ToList();
+
+        var putBackLastWritten = git.LastWrittenPutBack(from, to);
+        try
+        {
+            PristineFileWriter.WriteAll(renamed, _modFolder);
+            git.MoveLastWritten(from, to);
+            Directory.Delete(fromRoot, recursive: true);
+        }
+        catch (Exception cause) when (IsAFailedWrite(cause))
+        {
+            var unrestored = TakeAwayAndPutBack(toRoot, before);
+            TryPutBackLastWritten(putBackLastWritten, from, unrestored);
+            if (unrestored.Count == 0) throw;
+            throw NotAllPutBack(cause, unrestored);
+        }
+        finally
+        {
+            locator.Forget();
+        }
+    }
+
+    private static bool IsAFailedWrite(Exception cause) =>
+        cause is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception;
+
+    private List<string> TakeAwayAndPutBack(string written, PreImage before)
+    {
+        var unrestored = new List<string>();
+        TryPutBack(written, () => { if (Directory.Exists(written)) Directory.Delete(written, recursive: true); }, unrestored);
+        unrestored.AddRange(PutBack(before));
+        return unrestored;
+    }
+
+    private static IOException NotAllPutBack(Exception cause, List<string> unrestored) =>
+        new($"{cause.Message} Its source is back as it was except: {string.Join(" ", unrestored)}", cause);
+
+    private static void TryPutBackLastWritten(Action putBack, string plugin, List<string> unrestored)
+    {
+        try
+        {
+            putBack();
+        }
+        catch (GitCommandFailedException ex)
+        {
+            unrestored.Add($"what Modbench last wrote for {plugin} could not be put back: {ex.Message}");
         }
     }
 

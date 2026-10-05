@@ -12,6 +12,7 @@ public sealed class CommandHandlerConventionTests
         typeof(CreateRecordHandler),
         typeof(CreatePluginHandler),
         typeof(PutLoadOrderHandler),
+        typeof(RenameSourceHandler),
     ];
 
     private static readonly Type[] SelectionHandlers =
@@ -33,6 +34,8 @@ public sealed class CommandHandlerConventionTests
         typeof(PluginCreateResult),
         typeof(PutLoadOrderRefusal),
         typeof(PutLoadOrderResult),
+        typeof(RenameSourceRefusal),
+        typeof(RenameSourceResult),
         typeof(TrackRefusal),
         typeof(TrackedMod),
     ];
