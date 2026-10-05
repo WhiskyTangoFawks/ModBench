@@ -133,7 +133,7 @@ public sealed class PluginFixtureData(string prefix) : IDisposable
 
     public string DataFolder => Path.Combine(InstanceRoot, "Data");
 
-    public IReadOnlyList<LoadOrderEntry> Plugins { get; internal set; } = [];
+    public IReadOnlyList<LoadOrderEntry> Plugins { get; set; } = [];
 
     public void Dispose() => _scratch.Dispose();
 }
@@ -158,7 +158,7 @@ public sealed class ScatteredFixtureData(string prefix) : IDisposable
 
     public string GameDirectory => Path.Combine(Root, "GameDir");
 
-    public IReadOnlyList<LoadOrderEntry> Plugins { get; internal set; } = [];
+    public IReadOnlyList<LoadOrderEntry> Plugins { get; set; } = [];
 
     public void Dispose() => _scratch.Dispose();
 }
