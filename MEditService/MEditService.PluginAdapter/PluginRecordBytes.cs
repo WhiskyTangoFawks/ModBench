@@ -1,21 +1,22 @@
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Binary.Headers;
 using Mutagen.Bethesda.Plugins.Meta;
 
-namespace MEditService.Codec.Serialization;
+namespace MEditService.PluginAdapter;
 
 /// <summary>A plugin file's own bytes for a record: what subrecords it holds, which the overlay does not
 /// say. Located on first use, as only a record the overlay cannot serialize asks.</summary>
-internal sealed class PluginRecordBytes(ModPath path, GameRelease release)
+public sealed class PluginRecordBytes(ModPath path, GameRelease release) : IRecordFieldProbe
 {
     private static readonly RecordType EditorId = new("EDID");
 
     private readonly Lazy<RecordLocatorResults> _locations = new(() => RecordLocator.GetLocations(path, release, loadOrder: null));
 
     /// <summary>Whether the record holds no subrecord but its EditorID, which its header carries.</summary>
-    internal bool HoldsNoFields(FormKey formKey)
+    public bool HoldsNoFields(FormKey formKey)
     {
         if (!_locations.Value.TryGetSection(formKey, out var section)) return false;
         var bytes = new byte[section.Max - section.Min + 1];

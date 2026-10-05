@@ -12,7 +12,7 @@ internal static class DeletedRecord
     /// <summary>The record's document, or its header's where it is deleted, its file gives it no field and
     /// the overlay cannot serialize it. Any other failure is the caller's to diagnose.</summary>
     internal static byte[] Serialize(
-        RecordTextCodec codec, IMajorRecordGetter record, RecordTableSchema schema, GameRelease release, PluginRecordBytes file)
+        RecordTextCodec codec, IMajorRecordGetter record, RecordTableSchema schema, GameRelease release, IRecordFieldProbe file)
     {
         try
         {
