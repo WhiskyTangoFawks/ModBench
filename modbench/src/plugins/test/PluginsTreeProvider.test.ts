@@ -3,7 +3,8 @@ import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { reorderOver, type PluginsDrop } from '../../pluginsCommands/plugins';
-import type { LoadOrderPlugin, LoadOrderPluginLine, PluginAddress } from '../../instanceLoader/loadOrderSnapshot';
+import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
+import type { PluginAddress } from '../../wire/pluginAddress';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import {
   InMemoryMEditClient, type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,

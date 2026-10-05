@@ -2,6 +2,7 @@
 // call, and no path joined here.
 
 import type { InstanceValue } from '../instanceLoader/instance';
+import { samePluginAddress } from '../wire/pluginAddress';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
 export interface PluginPlace {
@@ -15,9 +16,8 @@ const enabledModNames = (value: Pick<InstanceValue, 'mods'>): string[] =>
 /** The enabled mods first, then Overwrite, each left out when it already holds a plugin named
  *  `name`. The same name elsewhere in the load order is not checked. */
 export function pluginPlaces(value: Pick<InstanceValue, 'mods' | 'plugins'>, name: string): PluginPlace[] {
-  const folded = name.toLowerCase();
   const holds = (origin: string): boolean =>
-    value.plugins.some((p) => p.path !== undefined && p.origin === origin && p.name.toLowerCase() === folded);
+    value.plugins.some((p) => p.path !== undefined && samePluginAddress(p, { name, origin }));
   return [
     ...enabledModNames(value).map((mod) => ({ label: mod, origin: mod })),
     { label: 'Overwrite', origin: OVERWRITE_ORIGIN },

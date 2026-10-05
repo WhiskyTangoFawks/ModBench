@@ -2,7 +2,7 @@ import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagn
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import type { PluginOrderFacts } from '../pluginsCommands/pluginOrder';
 import { modOfOrigin } from './modOfOrigin';
-import { ByPluginAddress } from './pluginAddress';
+import { ByPluginAddress } from '../wire/pluginAddress';
 
 /** A warning on one plugin's file, as the Problems panel shows it. */
 export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
@@ -148,12 +148,12 @@ export class PluginFacts {
     const reads = new ByPluginAddress<PluginRead>();
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
-      reads.set(p.name, p.origin, {
+      reads.set(p, {
         readOnly: p.isImmutable, tracked: p.isTracked, parseFailure: p.hasParseFailure,
-        masterIssues: p.masterIssues ?? this.reads.get(p.name, p.origin)?.masterIssues,
+        masterIssues: p.masterIssues ?? this.reads.get(p)?.masterIssues,
         order: { masters: p.masters, blueprint: p.isBlueprint },
       });
-      matches.set(p.name, p.origin, p.hasMatchingRecords);
+      matches.set(p, p.hasMatchingRecords);
     }
     this.reads = reads;
     this.matches = matches;
@@ -165,7 +165,7 @@ export class PluginFacts {
   diagnosed(reports: readonly PluginDiagnosisReport[]): void {
     this.diagnosisReports = [...reports];
     this.diagnosisTexts = new ByPluginAddress<string[]>();
-    for (const r of reports) this.diagnosisTexts.append(r.plugin, r.origin, r.text);
+    for (const r of reports) this.diagnosisTexts.append({ name: r.plugin, origin: r.origin }, r.text);
   }
 
   /** Each settle of a tracked mod names every plugin of it that changed outside Modbench, so it
@@ -173,7 +173,7 @@ export class PluginFacts {
   externalChange(event: NotificationPayloads['external-change']): void {
     this.changedByMod.set(event.origin, event.changedPlugins.map(({ name }) => ({ name, origin: event.origin })));
     this.changed = new ByPluginAddress<true>();
-    for (const { name, origin } of [...this.changedByMod.values()].flat()) this.changed.set(name, origin, true);
+    for (const address of [...this.changedByMod.values()].flat()) this.changed.set(address, true);
   }
 
   /** The read could not say which plugins match: show every row rather than freeze behind a
@@ -182,17 +182,16 @@ export class PluginFacts {
     this.matches = undefined;
   }
 
-  isHeld({ name, origin }: PluginAddress): boolean {
-    return this.held.has(name, origin);
+  isHeld(address: PluginAddress): boolean {
+    return this.held.has(address);
   }
 
   /** What expanding the plugin's row shows, in precedence order (plugins.md, States, stories 2-4
    *  and 6). */
   expansion(address: PluginAddress): Expansion {
-    const { name, origin } = address;
     if (this.expansionOverride?.scope === 'everyRow') return { kind: 'error', message: this.expansionOverride.message };
     if (this.isHeld(address)) return { kind: 'records' };
-    const failure = this.reachableFailures.get(name, origin);
+    const failure = this.reachableFailures.get(address);
     if (failure !== undefined) return { kind: 'error', message: failure };
     if (this.expansionOverride !== undefined) return { kind: 'error', message: this.expansionOverride.message };
     return { kind: 'indexing' };
@@ -210,8 +209,8 @@ export class PluginFacts {
 
   /** Whether a record filter in force leaves the plugin with nothing; false while mEdit has not
    *  answered. `hasMatchingRecords` only ever answers false while a filter is active. */
-  hiddenByRecordFilter({ name, origin }: PluginAddress): boolean {
-    return this.matches?.get(name, origin) === false;
+  hiddenByRecordFilter(address: PluginAddress): boolean {
+    return this.matches?.get(address) === false;
   }
 
   recordFilterMatchesNothing(): boolean {
@@ -224,14 +223,14 @@ export class PluginFacts {
   }
 
   /** Every status the plugin carries, in the spec's order: the first sets the icon. */
-  statuses({ name, origin }: PluginAddress): PluginStatus[] {
-    const read = this.reads.get(name, origin);
+  statuses(address: PluginAddress): PluginStatus[] {
+    const read = this.reads.get(address);
     return [
-      failedToRead(this.loadFailures.get(name, origin)),
+      failedToRead(this.loadFailures.get(address)),
       masterIssues(read?.masterIssues ?? []),
       unreadableRecords(read?.parseFailure === true),
-      changedOutside(this.changed.has(name, origin)),
-      malformed(this.diagnosisTexts.get(name, origin) ?? []),
+      changedOutside(this.changed.has(address)),
+      malformed(this.diagnosisTexts.get(address) ?? []),
     ].filter((s): s is PluginStatus => s !== undefined);
   }
 
@@ -253,26 +252,26 @@ export class PluginFacts {
    *  each status. */
   tooltipLines(address: PluginAddress): string[] {
     const lines = [address.name, address.origin];
-    if (this.reads.get(address.name, address.origin)?.readOnly === true) lines.push('read-only');
+    if (this.reads.get(address)?.readOnly === true) lines.push('read-only');
     return [...lines, ...this.statuses(address).map((s) => s.tooltipLine)];
   }
 
   /** Nothing until mEdit answers: an unknown is neither tracked nor untracked, nor editable. */
-  contextFlags({ name, origin }: PluginAddress): string[] {
-    const read = this.reads.get(name, origin);
+  contextFlags(address: PluginAddress): string[] {
+    const read = this.reads.get(address);
     const flags: string[] = [];
     if (read !== undefined) flags.push(read.tracked ? 'tracked' : 'untracked');
     if (read?.readOnly === false) flags.push('editable');
     return flags;
   }
 
-  conditions({ name, origin }: PluginAddress): PluginConditions {
-    const read = this.reads.get(name, origin);
+  conditions(address: PluginAddress): PluginConditions {
+    const read = this.reads.get(address);
     return { tracked: read?.tracked === true, editable: read?.readOnly === false };
   }
 
-  orderFacts({ name, origin }: PluginAddress): PluginOrderFacts | undefined {
-    return this.reads.get(name, origin)?.order;
+  orderFacts(address: PluginAddress): PluginOrderFacts | undefined {
+    return this.reads.get(address)?.order;
   }
 
   /** What the Problems panel shows, read from the same answers as the rows' statuses. */
@@ -287,11 +286,11 @@ export class PluginFacts {
 
 function heldSet(plugins: readonly PluginAddress[]): ByPluginAddress<true> {
   const held = new ByPluginAddress<true>();
-  for (const { name, origin } of plugins) held.set(name, origin, true);
+  for (const plugin of plugins) held.set(plugin, true);
   return held;
 }
 
 function indexLoadFailures(failures: readonly PluginLoadFailure[], byAddress = new ByPluginAddress<string>()): ByPluginAddress<string> {
-  for (const f of failures) byAddress.set(f.name, f.origin, f.reason);
+  for (const f of failures) byAddress.set(f, f.reason);
   return byAddress;
 }

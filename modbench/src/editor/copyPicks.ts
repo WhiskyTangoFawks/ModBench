@@ -1,4 +1,5 @@
 import type * as vscode from 'vscode';
+import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
 import type { CopyItem, CopyMode, PluginAddress, PluginMetadata, RecordAddress } from '../client';
 
 export interface CopyModeItem extends vscode.QuickPickItem {
@@ -15,18 +16,12 @@ export interface CopyDestinationItem extends vscode.QuickPickItem {
   readonly plugin: PluginAddress;
 }
 
-// A plugin's name and origin compare without case, as mEdit compares them.
-const samePlugin = (a: PluginAddress, b: { name: string; origin: string }): boolean =>
-  a.name.toLowerCase() === b.name.toLowerCase() && a.origin.toLowerCase() === b.origin.toLowerCase();
-
-const ownPlugin = (record: RecordAddress): PluginAddress => ({ name: record.plugin, origin: record.origin });
-
 /** The plugins I can edit, each with its load position (plugins.md, Pickers, Copy). An override
  *  is not offered the one plugin every record already lives in: it is that copy. */
 export function copyDestinationItems(
   plugins: readonly PluginMetadata[], mode: CopyMode, records: readonly RecordAddress[],
 ): CopyDestinationItem[] {
-  const livesInEveryRecord = (p: PluginMetadata) => records.every((r) => samePlugin(ownPlugin(r), p));
+  const livesInEveryRecord = (p: PluginMetadata) => records.every((r) => samePluginAddress(pluginAddressOf(r), p));
   return plugins
     .filter((p) => p.isTracked && !p.isImmutable)
     .filter((p) => mode !== 'Override' || !livesInEveryRecord(p))
@@ -38,7 +33,7 @@ export function copyDestinationItems(
 }
 
 // An override into the record's own plugin: that plugin already is the copy.
-const intoItsOwnPlugin = ({ record, destination }: CopyItem): boolean => samePlugin(ownPlugin(record), destination);
+const intoItsOwnPlugin = ({ record, destination }: CopyItem): boolean => samePluginAddress(pluginAddressOf(record), destination);
 
 /** The landed items that wrote a copy: mEdit writes nothing for an override into the record's own
  *  plugin, and nothing is said of it (commands.md, Doing nothing is not an error). */
@@ -53,7 +48,7 @@ export function heldCopies(
   holders: ReadonlyMap<string, readonly PluginAddress[]>,
 ): CopyItem[] {
   return records.flatMap((record) => destinations
-    .filter((destination) => (holders.get(record.formKey) ?? []).some((holder) => samePlugin(holder, destination)))
+    .filter((destination) => (holders.get(record.formKey) ?? []).some((holder) => samePluginAddress(holder, destination)))
     .map((destination) => ({ record, destination })))
     .filter((item) => !intoItsOwnPlugin(item));
 }

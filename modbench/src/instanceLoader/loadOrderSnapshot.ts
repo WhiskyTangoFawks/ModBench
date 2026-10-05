@@ -10,6 +10,7 @@ import {
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, dataFolderOf } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
+import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
 export { OVERWRITE_ORIGIN };
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
@@ -95,9 +96,6 @@ export function providedPluginsOf(files: FileWinners): Map<string, string> {
   const names = [...files].map((file) => file.relativePath).filter((name) => isRootLevel(name) && isPluginFile(name));
   return new Map(names.map((name) => [foldPath(name), name]));
 }
-
-/** ADR-0012. */
-export type PluginAddress = Pick<LoadOrderPlugin, 'name' | 'origin'>;
 
 /** The plugins the game loads with no line (ADR-0013), in load order: its masters,
  *  then its Creation Club plugins, each from the mod providing it, else the game folder. */
@@ -214,8 +212,7 @@ export function loadOrderSnapshotOf(value: {
   const { dataFolder } = value.gameFolder;
   // The filter states a found game folder's own guarantee, never an unchecked cast.
   const rows = value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined);
-  const addressOf = (p: PluginAddress) => `${foldPath(p.origin)}\u0000${foldPath(p.name)}`;
-  const rowAt = new Map(rows.map((p) => [addressOf(p), p] as const));
+  const rowAt = new Map(rows.map((p) => [pluginAddressKey(p), p] as const));
   const whatProvides = (origin: string) => byOrigin<SnapshotProvider | undefined>(origin, {
     overwrite: { kind: 'None' },
     data: { kind: 'Game' },
@@ -225,7 +222,7 @@ export function loadOrderSnapshotOf(value: {
     },
   });
   const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) =>
-    rowAt.get(addressOf(p)) ?? { ...p, path: fileInFolder(dataFolder, p.name) });
+    rowAt.get(pluginAddressKey(p)) ?? { ...p, path: fileInFolder(dataFolder, p.name) });
   const placed = new Set(loadedWithNoLine.map((p) => foldPath(p.name)));
   const fromLines = rows
     .filter((p): p is LoadOrderPlugin & { slot: number } => p.slot !== null && p.enabled && p.winning)
@@ -244,7 +241,7 @@ export function loadOrderSnapshotOf(value: {
       unprovided.set(origin, [...unprovided.get(origin) ?? [], name]);
       continue;
     }
-    const key = addressOf({ name, origin });
+    const key = pluginAddressKey({ name, origin });
     if (!sent.has(key)) sent.set(key, { name, path, origin, provider });
   }
   if (unprovided.size > 0) return { refusal: refusalOf(unprovided) };

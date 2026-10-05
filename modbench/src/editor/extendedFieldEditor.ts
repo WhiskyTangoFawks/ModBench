@@ -3,6 +3,7 @@ import type { CompareResult, MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { PathHop } from '../wire/messages';
+import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
 
 /** Where a cell's text lives: the record, the plugin copy of it, and the field's path (ADR-0012). */
 export interface FieldAddress {
@@ -153,7 +154,7 @@ export class ExtendedFieldDocuments implements vscode.Disposable {
         for (const files of both) files.changedWhere(field => event.keys.includes(field.formKey));
       }),
       deps.client.onNotification('plugin-changed', event => {
-        for (const files of both) files.changedWhere(field => field.plugin === event.plugin.name && field.origin === event.plugin.origin);
+        for (const files of both) files.changedWhere(field => samePluginAddress(pluginAddressOf(field), event.plugin));
       }),
     ];
     this.registrations = [
