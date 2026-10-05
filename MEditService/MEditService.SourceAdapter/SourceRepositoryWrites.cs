@@ -143,8 +143,14 @@ internal sealed class SourceRepositoryWrites(
         var before = Directory.Exists(root) ? PreImageOf(root) : new PreImage([], []);
         try
         {
-            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
-            PristineFileWriter.WriteAll(files, _modFolder);
+            var incoming = files.ToDictionary(file => Path.GetFullPath(Path.Combine(_modFolder, file.RelativePath)));
+            var held = before.Files.ToDictionary(file => Path.GetFullPath(file.Path), file => file.Bytes);
+            foreach (var path in held.Keys.Where(path => !incoming.ContainsKey(path))) File.Delete(path);
+            DeleteEmptyDirectories(root);
+            PristineFileWriter.WriteAll(
+                incoming.Where(file => !held.TryGetValue(file.Key, out var bytes) || !bytes.AsSpan().SequenceEqual(file.Value.Content))
+                    .Select(file => file.Value),
+                _modFolder);
             git.ParkDecompiled(pluginFileName, binarySha256);
         }
         catch (Exception cause) when (cause is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
@@ -160,6 +166,13 @@ internal sealed class SourceRepositoryWrites(
         {
             locator.Forget();
         }
+    }
+
+    private static void DeleteEmptyDirectories(string directory)
+    {
+        if (!Directory.Exists(directory)) return;
+        foreach (var child in Directory.GetDirectories(directory)) DeleteEmptyDirectories(child);
+        if (!Directory.EnumerateFileSystemEntries(directory).Any()) Directory.Delete(directory);
     }
 
     // A failed recursive delete goes on past the entry it could not take, so it stops partway. The
