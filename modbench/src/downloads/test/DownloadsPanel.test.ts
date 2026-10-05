@@ -14,6 +14,7 @@ const {
 
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, type FakeUri } from '../../test/vscodeMock';
 import { present } from '../../ports/present';
+import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
 import { progressSteps, recordedWithProgress } from '../../test/recordedProgress';
 
 vi.mock('vscode', () => ({
@@ -146,27 +147,6 @@ function invoke(commandId: string, ...args: unknown[]): unknown {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
   if (!call) throw new Error(`command not registered: ${commandId}`);
   return call[1](...args);
-}
-
-function makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<T>() {
-  const acceptListeners: Array<() => void> = [];
-  const hideListeners: Array<() => void> = [];
-  const qp = {
-    items: [] as T[],
-    placeholder: undefined as string | undefined,
-    activeItems: [] as T[],
-    selectedItems: [] as T[],
-    show: vi.fn(),
-    hide: vi.fn(() => { hideListeners.forEach((cb) => cb()); }),
-    dispose: vi.fn(),
-    onDidAccept: (cb: () => void) => { acceptListeners.push(cb); return { dispose: () => {} }; },
-    onDidHide: (cb: () => void) => { hideListeners.push(cb); return { dispose: () => {} }; },
-  };
-  return {
-    qp,
-    accept: (picked: T) => { qp.selectedItems = [picked]; acceptListeners.forEach((cb) => cb()); },
-    escape: () => { hideListeners.forEach((cb) => cb()); },
-  };
 }
 
 const onDisk = (path: string): Promise<boolean> => access(path).then(() => true, () => false);
@@ -398,7 +378,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
       mod({ name: 'No Match', nexusId: '111', version: '1.0' }),
       mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
     ]);
-    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
+    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
@@ -420,7 +400,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const instance = fakeInstance([
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
     ]);
-    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
+    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
@@ -440,7 +420,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
       mod({ name: 'By Name', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
       mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
     ]);
-    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
+    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
@@ -459,7 +439,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Some Mod', nexusId: '111', version: '1.0' })]);
-    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
+    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
@@ -478,7 +458,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    const { qp, accept } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
+    const { qp, accept } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
     const nameNewMod = vi.fn();
@@ -501,7 +481,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    const { qp, accept } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
+    const { qp, accept } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
@@ -522,7 +502,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
+    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
@@ -576,7 +556,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const instance = fakeInstance([
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'FOO.7Z' }),
     ]);
-    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
+    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
@@ -860,7 +840,7 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
   it('Esc at the upgrade pick opens no bar', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
-    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
+    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
     const installed = fakeInstance([mod({ name: 'Foo Mod', nexusId: '111', version: '1.0' })]);
 
@@ -1144,7 +1124,7 @@ describe('registerDownloadsSortCommand', () => {
 
   it('applies the picked option to DownloadsProvider.setSort', async () => {
     const provider = fakeDownloadsProvider();
-    const { qp, accept } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeSortItem>();
+    const { qp, accept } = fakeQuickPick<FakeSortItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerDownloadsSortCommand(provider);
@@ -1159,7 +1139,7 @@ describe('registerDownloadsSortCommand', () => {
 
   it('does nothing when Esc is pressed', async () => {
     const provider = fakeDownloadsProvider();
-    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeSortItem>();
+    const { qp, escape } = fakeQuickPick<FakeSortItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerDownloadsSortCommand(provider);
@@ -1173,7 +1153,7 @@ describe('registerDownloadsSortCommand', () => {
 
   it('pre-selects the item matching the provider\'s current sort', async () => {
     const provider = fakeDownloadsProvider({ column: 'size', descending: false });
-    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeSortItem>();
+    const { qp, escape } = fakeQuickPick<FakeSortItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerDownloadsSortCommand(provider);
@@ -1186,7 +1166,7 @@ describe('registerDownloadsSortCommand', () => {
 
   it('pre-selects Filetime (Newest First) at the default sort', async () => {
     const provider = fakeDownloadsProvider();
-    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeSortItem>();
+    const { qp, escape } = fakeQuickPick<FakeSortItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerDownloadsSortCommand(provider);

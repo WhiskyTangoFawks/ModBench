@@ -8,6 +8,7 @@ import {
 } from '../install/install';
 import type { DownloadNode, DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS, selectedFiles, singleSelectedFile } from './keyContext';
+import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 
 const runDownloadsWriting = <T>(instance: Pick<Instance, 'refresh'>, command: () => Promise<T>): Promise<T> =>
@@ -52,24 +53,9 @@ async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandi
   const items = upgradePickItems(candidates);
   const hasTier = candidates.some((c) => c.tier !== undefined);
   const active = hasTier ? items[0] : items.at(-1);
-  return new Promise((resolve) => {
-    const quickPick = vscode.window.createQuickPick<UpgradePickItem>();
-    quickPick.items = items;
-    quickPick.placeholder = `"${name}" upgrades an installed mod — choose which one, or install it as a new mod`;
-    quickPick.activeItems = active ? [active] : [];
-    let accepted = false;
-    quickPick.onDidAccept(() => {
-      accepted = true;
-      const [picked] = quickPick.selectedItems;
-      quickPick.hide();
-      resolve(picked?.choice);
-    });
-    quickPick.onDidHide(() => {
-      if (!accepted) resolve(undefined);
-      quickPick.dispose();
-    });
-    quickPick.show();
-  });
+  const picked = await pickWithMarked(
+    items, active, `"${name}" upgrades an installed mod — choose which one, or install it as a new mod`);
+  return picked?.choice;
 }
 
 /** The composition root's answers, which is what lets this view call install itself: the name
@@ -258,29 +244,9 @@ const SORT_OPTIONS: readonly { label: string; column: DownloadSortColumn; descen
 
 type SortOption = { label: string; column: DownloadSortColumn; descending: boolean };
 
-// createQuickPick, not showQuickPick: only the former lets the pick mark the current sort as its
-// active item (downloads.md, Order and view state, story 2), the same pattern the upgrade pick
-// above uses for its own pre-selection.
-async function pickSort(current: { column: DownloadSortColumn; descending: boolean }): Promise<SortOption | undefined> {
+function pickSort(current: { column: DownloadSortColumn; descending: boolean }): Promise<SortOption | undefined> {
   const active = SORT_OPTIONS.find((o) => o.column === current.column && o.descending === current.descending);
-  return new Promise((resolve) => {
-    const quickPick = vscode.window.createQuickPick<SortOption>();
-    quickPick.items = SORT_OPTIONS;
-    quickPick.placeholder = 'Sort downloads by';
-    quickPick.activeItems = active ? [active] : [];
-    let accepted = false;
-    quickPick.onDidAccept(() => {
-      accepted = true;
-      const [picked] = quickPick.selectedItems;
-      quickPick.hide();
-      resolve(picked);
-    });
-    quickPick.onDidHide(() => {
-      if (!accepted) resolve(undefined);
-      quickPick.dispose();
-    });
-    quickPick.show();
-  });
+  return pickWithMarked(SORT_OPTIONS, active, 'Sort downloads by');
 }
 
 /** A quick pick rather than column headers, which a tree does not have. Escape is a silent

@@ -21,7 +21,11 @@ public sealed class CreatePluginHandler
     public async Task<PluginCreateResult> CreatePlugin(PluginAddress plugin, string folder)
     {
         var release = _holder.Require().GameRelease;
-        var modKey = ModKey.FromFileName(plugin.Name);
+        if (!ModKey.TryFromFileName(plugin.Name, out var modKey))
+        {
+            return new PluginCreateResult(PluginCreateRefusal.NotAPluginFile,
+                $"{plugin.Name} is not a plugin file: its extension must be .esp, .esm or .esl.");
+        }
 
         if (modKey.Type == ModType.Light && !LightPluginSupport.Of(release))
         {
