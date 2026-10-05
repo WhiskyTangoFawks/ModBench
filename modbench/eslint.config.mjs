@@ -98,8 +98,7 @@ export default defineConfig(
 
 
     // modbench/CLAUDE.md: a view takes every path from the instance value and never builds one.
-    // The driving band: README's views, Toolbox, Mods, Plugins, Downloads and Editor, and the driving
-    // lib they share. The Instance loader builds none either: the Instance adapter hides layout
+    // The driving band, and the Instance loader, since the Instance adapter hides layout
     // (target-architecture.d2).
     {
         files: PATHLESS_BOXES.map((box) => `src/${box}/**/*.ts`),
