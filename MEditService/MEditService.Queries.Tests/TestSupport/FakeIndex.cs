@@ -27,6 +27,16 @@ internal sealed class FakeReads(
     public RecordDocument? GetDocument(string formKey, PluginAddress plugin) =>
         rows.FirstOrDefault(r => r.Document.FormKey == formKey && r.Plugin.Equals(plugin))?.Document;
 
+    // Reading a document's text into fields is the real Index's own behaviour (RecordReadsTests);
+    // the fake answers a copy whose fields are every column a test names for its type.
+    public IReadOnlyList<string> TextFieldNames { get; set; } = [];
+
+    public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text)
+    {
+        if (Resolve(formKey) is not { } entry) return null;
+        return RealDocuments.FromText(text, formKey, plugin, loadOrderIndex, entry.RecordType, TextFieldNames);
+    }
+
     public IReadOnlyList<RecordDocument> GetDocuments(PluginAddress plugin) =>
         [.. rows.Where(r => r.Plugin.Equals(plugin)).Select(r => r.Document)];
 

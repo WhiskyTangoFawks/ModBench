@@ -109,6 +109,10 @@ public record CompareResult(
     ConflictAll ConflictAll,
     string RecordTypeName);
 
+/// <summary>One column of a comparison of several records: the copy <paramref name="Plugin"/> holds,
+/// or the one <paramref name="DocumentText"/> spells in its place (ADR-0012).</summary>
+public record RecordCopy(string FormKey, PluginAddress Plugin, string? DocumentText = null);
+
 // ADR-0012.
 public record ReferenceResult(
     string FormKey, string Plugin, string Origin, string FieldPath, string RecordType, string RecordTypeName, string? EditorId);

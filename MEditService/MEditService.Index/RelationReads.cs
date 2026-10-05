@@ -33,6 +33,18 @@ internal sealed class RelationReads(
         return tableName == null ? null : ReadDocument(connection, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
     }
 
+    public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text)
+    {
+        using var connection = store.OpenReadConnection();
+        var tableName = FindRecordType(connection, formKey);
+        if (tableName == null) return null;
+        using var parsed = JsonDocument.Parse(text);
+        var editorId = DocumentNodes.At(parsed.RootElement, "EditorID")?.GetString();
+        return DocumentFromBody(
+            connection, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, text,
+            store.Schemas[tableName], LinkResolution.ForLinksOf(connection, formKey, Resolve), parseDiagnosis: null);
+    }
+
     // One query rather than two point queries per record. Rows are materialized before
     // reconstitution: resolving a FormKey opens its own command on this connection, which would
     // interleave two readers.

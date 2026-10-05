@@ -27,16 +27,7 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
                 ?? throw new InvalidOperationException(
                     $"No winner in {conflictingRecords.Count} overrides for FormKey '{conflictingRecords[0].FormKey}'");
 
-        var ctx = new DiffContext(
-            MasterColumn: Column(conflictingRecords[0]),
-            RecordWinnerColumn: Column(winner),
-            ColumnOrder: [.. conflictingRecords.Select(r => (Column(r), r.LoadOrderIndex))],
-            PartialFormColumns: conflictingRecords.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal),
-            FormKey: conflictingRecords[0].FormKey,
-            Logger: _logger,
-            ResolveFormKey: resolveFormKey,
-            LoadOrderFormIds: loadOrderFormIds,
-            Release: release);
+        var ctx = ContextOf(conflictingRecords, winner, release, resolveFormKey, loadOrderFormIds, coloured: true);
         var diffs = RecordChildren(conflictingRecords, ctx);
 
         if (conflictingRecords.Count == 1)
@@ -59,6 +50,30 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
         return new ClassifyResult(conflictAll, pluginConflictThis, diffs);
     }
 
+    // The rows of copies that are no conflict of one another: the alignment Classify builds, with no
+    // state on any cell or row.
+    public IReadOnlyList<FieldDiff> Align(
+        IReadOnlyList<RecordDetail> copies,
+        GameRelease release,
+        Func<string, RecordLookupEntry?> resolveFormKey,
+        Func<string, uint?> loadOrderFormIds) =>
+        RecordChildren(copies, ContextOf(copies, copies[0], release, resolveFormKey, loadOrderFormIds, coloured: false));
+
+    private DiffContext ContextOf(
+        IReadOnlyList<RecordDetail> records, RecordDetail winner, GameRelease release,
+        Func<string, RecordLookupEntry?> resolveFormKey, Func<string, uint?> loadOrderFormIds, bool coloured) =>
+        new(
+            MasterColumn: Column(records[0]),
+            RecordWinnerColumn: Column(winner),
+            ColumnOrder: [.. records.Select(r => (Column(r), r.LoadOrderIndex))],
+            PartialFormColumns: records.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal),
+            FormKey: records[0].FormKey,
+            Logger: _logger,
+            ResolveFormKey: resolveFormKey,
+            LoadOrderFormIds: loadOrderFormIds,
+            Release: release,
+            Coloured: coloured);
+
     private static string Column(RecordDetail record) => ColumnKey.Of(record.Plugin, record.Origin);
 
     private const int MaxArrayChildCount = 500;
@@ -74,7 +89,8 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
         ILogger Logger,
         Func<string, RecordLookupEntry?> ResolveFormKey,
         Func<string, uint?> LoadOrderFormIds,
-        GameRelease Release);
+        GameRelease Release,
+        bool Coloured);
 
     // One node of the diff tree, at whatever depth the walk reached it. absentMeansDefault is false
     // for an array element, which the codec never omits for equalling its default.
@@ -90,7 +106,7 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
         var winnerColumn = carrying.Count > 0 ? carrying.MaxBy(c => c.LoadOrderIndex).Column : ctx.RecordWinnerColumn;
         var shape = shapes[winnerColumn];
 
-        var cellStates = ignoredInConflicts
+        var cellStates = ignoredInConflicts || !ctx.Coloured
             ? []
             : ConflictRules.ComputeCellStates(
                 values, ctx.MasterColumn, ctx.ColumnOrder,
@@ -117,18 +133,19 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
     {
         var recordClass = records.ToDictionary(
             Column, r => FormReferences.ExtractString(MemberValue(r, LoquiUnions.UnionTypeDiscriminator)));
-        var memberMeta = records[0].Fields.ToDictionary(f => f.Metadata.Name, f => f.Metadata);
+        var membersOf = records.ToDictionary(Column, r => r.Fields.ToDictionary(f => f.Metadata.Name, f => f.Metadata));
         var diffs = new List<FieldDiff>();
-        foreach (var member in memberMeta.Values)
+        foreach (var member in records.SelectMany(r => r.Fields).Select(f => f.Metadata).DistinctBy(m => m.Name))
         {
             // A Partial Form override's own fields are excluded as if null (ADR-0018), so they fall
-            // through to the previous non-partial override. Its record header and its EditorID,
+            // through to the previous non-partial override; copies compared with no conflict show them. Its record header and its EditorID,
             // which it keeps, take part as xEdit's do.
             var header = member.IsRecordHeaderMember;
             var ownField = !header && !member.IsEditorId;
-            var values = records.ToDictionary(Column, r => r.IsPartialForm && ownField ? null : MemberValue(r, member.Name));
+            var values = records.ToDictionary(Column, r => ctx.Coloured && r.IsPartialForm && ownField ? null : MemberValue(r, member.Name));
             if (!header && values.Values.All(v => v == null)) continue;
-            var shapes = recordClass.ToDictionary(kv => kv.Key, kv => DocumentNodes.Variant(member, kv.Value));
+            var shapes = recordClass.ToDictionary(
+                kv => kv.Key, kv => DocumentNodes.Variant(membersOf[kv.Key].GetValueOrDefault(member.Name, member), kv.Value));
             diffs.Add(DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx, member.IgnoredInConflicts));
         }
         return diffs;
