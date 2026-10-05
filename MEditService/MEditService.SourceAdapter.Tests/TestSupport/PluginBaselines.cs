@@ -9,6 +9,10 @@ internal static class PluginBaselines
     internal static void Track(string modFolder, SourcePreset preset, IEnumerable<TreeFile> files) =>
         SourceRepository.Track(modFolder, preset, Of(files));
 
+    /// <summary>A repository holding one plugin with no record, for a test that brings its own.</summary>
+    internal static void TrackWithNoRecords(string modFolder) =>
+        Track(modFolder, SourcePreset.Edits, [new TreeFile("plugin-source/Seed.esp/seed.txt", [])]);
+
     internal static IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> Of(IEnumerable<TreeFile> files) =>
     [
         .. files.GroupBy(file => PluginRootOf(file.RelativePath), StringComparer.Ordinal)

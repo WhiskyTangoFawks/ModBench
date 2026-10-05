@@ -76,7 +76,7 @@ public sealed class TrackService(
 
     private sealed record Verification(VerifiedPlugin? Verified, TrackRefused? Refused);
 
-    // One repository per mod folder: the plugins that passed their gate, committed one at a time.
+    // One repository per mod folder: the plugins that passed their gate, in one commit.
     private void Commit(
         string modFolder, SourcePreset preset, IReadOnlyList<VerifiedPlugin> plugins,
         List<PluginAddress> landed, List<TrackRefused> refused)
@@ -95,21 +95,18 @@ public sealed class TrackService(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            // Creating the repository failed, or catching its index up with main did; a baseline already
-            // on main landed all the same (plugins.md, Track, story 5).
+            // The track's one commit failed and Track took back what it made: no plugin landed (plugins.md, Track, story 5).
             logger.LogError(ex, "Could not finish tracking into {ModFolder}", modFolder);
-            failed = [.. plugins
-                .Where(v => !SourceRepository.HoldsTreeFor(modFolder, v.Plugin.Name))
-                .Select(v => (v.Plugin.Name, ex.Message))];
+            failed = [.. plugins.Select(v => (v.Plugin.Name, ex.Message))];
         }
 
         foreach (var plugin in plugins.Select(v => v.Plugin))
         {
             if (failed.FirstOrDefault(f => string.Equals(f.Plugin, plugin.Name, StringComparison.OrdinalIgnoreCase)) is { Reason: { } reason })
             {
-                logger.LogWarning("Refused to track {Plugin} ({Origin}): its baseline commit failed — {Reason}", plugin.Name, plugin.Origin, reason);
+                logger.LogWarning("Refused to track {Plugin} ({Origin}): its source could not be tracked — {Reason}", plugin.Name, plugin.Origin, reason);
                 refused.Add(new TrackRefused(
-                    plugin, TrackRefusal.CommitFailed, $"{plugin.Name}'s baseline could not be committed: {reason}"));
+                    plugin, TrackRefusal.CommitFailed, $"{plugin.Name}'s source could not be tracked: {reason}"));
             }
             else
             {

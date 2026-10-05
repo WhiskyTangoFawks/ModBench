@@ -40,7 +40,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
     private SourceRepository Opened()
     {
-        Track();
+        PluginBaselines.TrackWithNoRecords(_modFolder);
         var repository = RequireOpened();
         repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody));
         return repository;
@@ -99,7 +99,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     [Fact]
     public void Open_OnATrackedFolder_IsARepository()
     {
-        Track();
+        PluginBaselines.TrackWithNoRecords(_modFolder);
 
         Assert.NotNull(SourceRepository.Open(_modFolder, GameRelease.Fallout4));
     }
@@ -224,7 +224,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     public void Put_WithANewEditorIdOnACell_MovesItsDirectoryAndKeepsItsBlockFolders()
     {
         const string cellKey = "000A00:Fixture.esp";
-        Track();
+        PluginBaselines.TrackWithNoRecords(_modFolder);
         var repository = RequireOpened();
         static string CellBody(string editorId) => $"{{\n  \"FormKey\": \"{cellKey}\",\n  \"EditorID\": \"{editorId}\"\n}}";
         repository.Put(Plugin, new SourceDocument(cellKey, "cell", "OldCell", CellBody("OldCell")));
