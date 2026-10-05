@@ -4,7 +4,7 @@
 import { errorMessage } from '../ports/errorMessage';
 import {
   deleteSeparatorInText, insertModAtWinningEnd, insertSeparatorAtIndexInText, moveModsInText, moveSeparatorsInText,
-  parseModlist, removeModFromText, renameSeparatorInText, separatorModName, setEnabledInText,
+  parseModlist, removeModFromText, renameModLineInText, renameSeparatorInText, separatorModName, setEnabledInText,
 } from './codecs/modlistText';
 import { ensureDir, get, remove, rename, withLock, write } from './files';
 import {
@@ -46,6 +46,7 @@ function alreadyDone(order: readonly ModlistEntry[], change: ModOrderChange): bo
   switch (change.kind) {
     case 'addAtWinningEnd': return isListed(order, change.entry);
     case 'dropMod': return listedAs(order, { kind: 'mod', name: change.mod }) === undefined;
+    case 'renameMod': return listedAs(order, { kind: 'mod', name: change.from }) === undefined;
     case 'dropSeparator': return listedAs(order, { kind: 'separator', name: change.separator }) === undefined;
     case 'enable':
     case 'moveMods':
@@ -83,6 +84,14 @@ function resolveModOrderChange(order: readonly ModlistEntry[], change: ModOrderC
       }
       return { ...change, from, to };
     }
+    case 'renameMod': {
+      const from = mod(change.from);
+      const other = listedAs(order, { kind: 'mod', name: change.to });
+      if (other !== undefined && entryKey(other) !== entryKey({ kind: 'mod', name: from })) {
+        throw new Error(`Mod already in modlist: ${change.to}`);
+      }
+      return { ...change, from };
+    }
     case 'dropMod': return { ...change, mod: mod(change.mod) };
     case 'dropSeparator': return { ...change, separator: separator(change.separator) };
   }
@@ -99,6 +108,7 @@ function spliceModOrderChange(text: string, change: ModOrderChange): string {
     }
     case 'addSeparator': return insertSeparatorAtIndexInText(text, change.separator, change.afterIndex);
     case 'renameSeparator': return renameSeparatorInText(text, change.from, change.to);
+    case 'renameMod': return renameModLineInText(text, change.from, change.to);
     case 'dropMod': return removeModFromText(text, change.mod);
     case 'dropSeparator': return deleteSeparatorInText(text, change.separator);
   }

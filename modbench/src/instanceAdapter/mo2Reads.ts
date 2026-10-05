@@ -23,7 +23,7 @@ import { originFilesIn } from './mo2Files';
 import { isPluginFile } from './pluginFile';
 
 export type Mo2Reads = Omit<InstanceAdapter,
-  | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
+  | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
   | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile' | 'extractedEntries'
   | 'extractNewMod' | 'extractUpgrade' | 'subscribe' | 'names'>;
 

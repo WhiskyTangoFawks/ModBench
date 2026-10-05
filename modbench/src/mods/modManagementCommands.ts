@@ -19,6 +19,7 @@ import {
   markFiles,
   moveMods,
   moveSeparators,
+  renameMod,
   renameSeparator,
   setModsEnabled,
   uninstallMods,
@@ -159,6 +160,25 @@ export function registerModContextCommands(
   { access, instance, viewSelection, reporter, ask, trash, log }: ModContextDeps,
 ): vscode.Disposable[] {
   return [
+      registerModsGesture('modbench.mod.rename', viewSelection, async (entry) => {
+        const node = singularArgument(entry, 'mod');
+        if (!node) return;
+        const oldName = node.mod.name;
+        const newName = await promptRename('Rename mod', oldName, () => undefined);
+        if (newName === undefined) return;
+        await runModsWriting(instance, async () => {
+          const { activeProfile, profiles, managerNames } = instance.value;
+          const result = await renameMod(access, activeProfile, profiles, oldName, newName);
+          if (!result.applied) {
+            reporter.report('error', 'Failed to rename mod.', result.refusal);
+            return;
+          }
+          for (const { profile, refusal } of result.lineRefusals) {
+            reporter.report('warning',
+              `"${oldName}" was renamed, but its ${managerNames.modOrderFile} line in profile "${profile}" could not be renamed.`, refusal);
+          }
+        });
+      }),
       registerModsGesture('modbench.mod.uninstall', viewSelection, async (entry) => {
         // The download to mark comes off the row the tree already holds, so the command walks
         // nothing to find it.
