@@ -2,21 +2,13 @@ import { toLoadOrderStatus, type NotificationEvent } from './apiClient';
 import { isNotificationKind, type NotificationKind, type NotificationPayloads } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
 
-// Subscribing and dispatching for the one stream kind this file opens (SSE); `whenConnected`'s
+// Dispatching for the one stream kind this file opens (SSE); `whenConnected`'s
 // default answer below is settled, which `SseNotificationSubscriber` overrides with its own.
 export class NotificationListenerRegistry {
-  private readonly listeners = new Map<NotificationKind, Set<(event: NotificationEvent) => void>>();
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
     'load-order-status': new Set(), 'track-progress': new Set(), 'external-change': new Set(),
     'untracked-plugins': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
   };
-
-  subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void {
-    const set = this.listeners.get(kind) ?? new Set();
-    set.add(listener);
-    this.listeners.set(kind, set);
-    return () => { set.delete(listener); };
-  }
 
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
     const set: Set<(payload: NotificationPayloads[K]) => void> = this.typedListeners[kind];
@@ -32,7 +24,6 @@ export class NotificationListenerRegistry {
     // `event.kind` is `string` on the wire type; an event this build doesn't route stays
     // undelivered.
     if (!isNotificationKind(event.kind)) return;
-    for (const listener of this.listeners.get(event.kind) ?? []) listener(event);
     this.dispatchTyped(event.kind, event);
   }
 

@@ -1,7 +1,7 @@
 import type { components } from '../wire/generated/api';
 import {
   type CompiledPlugin, type CompileDiagnostic,
-  type NotificationEvent, type ChangedPlugin,
+  type ChangedPlugin,
   type TrackStatus, type PluginMetadata, type PluginDiagnosisReport, type WorkingTreeState,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
@@ -49,7 +49,7 @@ const NOTIFICATION_KINDS = [
   'untracked-plugins',
 ] as const;
 
-/** The wire's kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
+/** The wire's kinds, narrowed from the schema's honest `string` for a typed `onNotification` call
  *  — not a mirror of `NotificationEvent`, which keeps every field as the schema reports it. */
 export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 
@@ -217,8 +217,7 @@ export interface MEditClient {
   clearFilter(): Promise<string | null>;
   getActiveFilter(): Promise<RecordFilter | null>;
 
-  subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void;
-  /** `subscribe`, with the listener handed its kind's payload. A frame missing its kind's payload
+  /** A listener handed its kind's payload. A frame missing its kind's payload
    *  reaches no listener. */
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void;
 
@@ -240,7 +239,7 @@ export interface MEditClient {
 }
 
 export type {
-  NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
+  TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic,
   LoadOrderStatus, LoadOrderRefusal, PluginLoadFailure, CompareResult,

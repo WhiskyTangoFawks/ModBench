@@ -1,3 +1,4 @@
+import type { NotificationEvent } from '../../client/apiClient';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const registerCustomEditorProvider = vi.fn<(...args: unknown[]) => { dispose(): void }>(() => ({ dispose: () => undefined }));
@@ -37,7 +38,7 @@ import { registerEditorCommands } from '../recordPanelHost';
 import { ActiveRecordTracker } from '../ActiveRecordTracker';
 import { EditsInFlight } from '../followRecord';
 import { FocusedCells } from '../focusedCells';
-import { InMemoryMEditClient, type NotificationEvent } from '../../client';
+import { InMemoryMEditClient } from '../../client';
 
 const reporter = { report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() };
 

@@ -134,43 +134,29 @@ describe('InMemoryMEditClient — status', () => {
   });
 });
 
-describe('InMemoryMEditClient — subscribe/emit', () => {
+describe('InMemoryMEditClient — emit', () => {
   it('dispatches an emitted event only to listeners of its own kind', () => {
     const client = new InMemoryMEditClient();
     const rowsListener = vi.fn();
     const pluginListener = vi.fn();
-    client.subscribe('rows-changed', rowsListener);
-    client.subscribe('plugin-changed', pluginListener);
-    const event = notificationEventFixture({ kind: 'rows-changed' });
-    client.emit(event);
-    expect(rowsListener).toHaveBeenCalledWith(event);
+    client.onNotification('rows-changed', rowsListener);
+    client.onNotification('plugin-changed', pluginListener);
+    client.emit(notificationEventFixture({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: ['k'] }));
+    expect(rowsListener).toHaveBeenCalledWith({ plugin: 'A.esp', origin: 'ModA', keys: ['k'] });
     expect(pluginListener).not.toHaveBeenCalled();
   });
 
   it('unsubscribe stops further dispatch', () => {
     const client = new InMemoryMEditClient();
     const listener = vi.fn();
-    const unsubscribe = client.subscribe('track-progress', listener);
+    const unsubscribe = client.onNotification('rows-changed', listener);
     unsubscribe();
-    client.emit(notificationEventFixture({ kind: 'track-progress' }));
+    client.emit(notificationEventFixture({ kind: 'rows-changed' }));
     expect(listener).not.toHaveBeenCalled();
   });
 });
 
 describe('InMemoryMEditClient — onNotification', () => {
-  it('feeds a typed listener its kind\'s payload from the same emit as the flat one', () => {
-    const client = new InMemoryMEditClient();
-    const flat = vi.fn();
-    const typed = vi.fn();
-    client.subscribe('rows-changed', flat);
-    client.onNotification('rows-changed', typed);
-
-    client.emit(notificationEventFixture({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: ['k'] }));
-
-    expect(flat).toHaveBeenCalledTimes(1);
-    expect(typed).toHaveBeenCalledWith({ plugin: 'A.esp', origin: 'ModA', keys: ['k'] });
-  });
-
   it('skips a track-progress emit missing its payload, and unsubscribe stops delivery', () => {
     const client = new InMemoryMEditClient();
     const listener = vi.fn();

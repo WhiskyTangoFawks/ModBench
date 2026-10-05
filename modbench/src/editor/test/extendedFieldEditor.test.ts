@@ -1,3 +1,4 @@
+import type { NotificationEvent } from '../../client/apiClient';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 interface FakeUri { scheme: string; path: string; query: string; toString(): string }
@@ -49,7 +50,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { ExtendedFieldDocuments, EDITABLE_FIELD_SCHEME, READONLY_FIELD_SCHEME, type OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
-import { InMemoryMEditClient, type CompareResult, type NotificationEvent } from '../../client';
+import { InMemoryMEditClient, type CompareResult } from '../../client';
 import type { Reporter } from '../../ports/reporter';
 
 type Diff = CompareResult['diffs'][number];

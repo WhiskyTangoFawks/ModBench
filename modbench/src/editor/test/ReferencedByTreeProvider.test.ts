@@ -1,3 +1,4 @@
+import type { NotificationEvent } from '../../client/apiClient';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon } from '../../test/vscodeMock';
 
@@ -16,7 +17,7 @@ import {
 import { InMemoryMEditClient } from '../../client';
 import { recordArgument } from '../recordLifecycleCommands';
 import { expectInstancesOf } from '../../test/expectInstanceOf';
-import type { NotificationEvent, ReferenceResult } from '../../client';
+import type { ReferenceResult } from '../../client';
 import { present } from '../../ports/present';
 
 function reference(overrides: Partial<ReferenceResult> & { formKey: string }): ReferenceResult {
