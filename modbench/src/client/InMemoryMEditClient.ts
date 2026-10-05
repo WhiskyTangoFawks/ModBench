@@ -1,4 +1,5 @@
-import { isNotificationKind, type MEditClient, type NotificationKind, type NotificationEvent, type BackendStatus } from './MEditClient';
+import type { MEditClient, NotificationKind, NotificationPayloads, NotificationEvent, BackendStatus } from './MEditClient';
+import { NotificationListenerRegistry } from './notificationStream';
 
 // Every query and command a test can script; `putLoadOrder` counts as a command here — the
 // distinction is architectural, not behavioural.
@@ -56,7 +57,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly commandResults: { [K in CommandMethod]?: ScriptedResults[K] } = {};
   private readonly commandFailures = new Map<CommandMethod, Error>();
   private readonly commandHandlers: { [K in CommandMethod]?: Handlers[K] } = {};
-  private readonly listeners = new Map<NotificationKind, Set<(event: NotificationEvent) => void>>();
+  private readonly notifications = new NotificationListenerRegistry();
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private readonly reconnectListeners = new Set<() => void>();
   private _status: BackendStatus = 'starting';
@@ -144,17 +145,15 @@ export class InMemoryMEditClient implements MEditClient {
 
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void {
     this.record('subscribe', [kind]);
-    const set = this.listeners.get(kind) ?? new Set();
-    set.add(listener);
-    this.listeners.set(kind, set);
-    return () => { set.delete(listener); };
+    return this.notifications.subscribe(kind, listener);
+  }
+
+  onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
+    return this.notifications.onNotification(kind, listener);
   }
 
   emit(event: NotificationEvent): void {
-    // `event.kind` is the schema's honest `string`; an event this fake's caller emits under a
-    // kind `subscribe` never narrows stays undelivered rather than guessed at.
-    if (!isNotificationKind(event.kind)) return;
-    for (const listener of this.listeners.get(event.kind) ?? []) listener(event);
+    this.notifications.dispatch(event);
   }
 
   private record(method: string, args: unknown[]): void {

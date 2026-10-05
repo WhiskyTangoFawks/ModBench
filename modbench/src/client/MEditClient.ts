@@ -1,7 +1,7 @@
 import type { components } from '../wire/generated/api';
 import {
   type CompiledPlugin, type CompileDiagnostic,
-  type NotificationEvent,
+  type NotificationEvent, type ChangedPlugin,
   type TrackStatus, type PluginMetadata, type PluginDiagnosisReport, type WorkingTreeState,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
@@ -52,6 +52,17 @@ const NOTIFICATION_KINDS = [
 /** The wire's kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
  *  — not a mirror of `NotificationEvent`, which keeps every field as the schema reports it. */
 export type NotificationKind = typeof NOTIFICATION_KINDS[number];
+
+/** Each kind's payload as `onNotification` hands it over: a transform of the flat wire
+ *  `NotificationEvent`, carrying only the fields its kind uses. */
+export interface NotificationPayloads {
+  'load-order-status': LoadOrderStatus;
+  'track-progress': TrackStatus;
+  'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
+  'untracked-plugins': { origin: string; plugins: string[] };
+  'rows-changed': { plugin: string; origin: string; keys: string[] };
+  'plugin-changed': { plugin: string; origin: string };
+}
 
 /** Whether the wire defines `kind` — the one place `NotificationEvent.kind` (the schema's honest
  *  `string`) is narrowed to `NotificationKind` for dispatch. */
@@ -207,6 +218,9 @@ export interface MEditClient {
   getActiveFilter(): Promise<RecordFilter | null>;
 
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void;
+  /** `subscribe`, with the listener handed its kind's payload. A frame missing its kind's payload
+   *  reaches no listener. */
+  onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void;
 
   // ADR-0013's snapshot.
   putLoadOrder(
