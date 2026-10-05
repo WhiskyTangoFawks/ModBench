@@ -152,8 +152,8 @@ public sealed class PluginAdapterTests
             Assert.NotEqual(reversed, natural.ModHeader.MasterReferences.Select(m => m.Master.FileName.ToString()));
         }
 
-        using (var patch = Fallout4Mod.CreateFromBinary(
-            new ModPath(ModKey.FromFileName("Patch.esp"), patchPath), Fallout4Release.Fallout4))
+        var patch = Fallout4Mod.CreateFromBinary(
+            new ModPath(ModKey.FromFileName("Patch.esp"), patchPath), Fallout4Release.Fallout4);
         using (var prep = await PluginWriter.PrepareFromModAsync(patch, patchPath, reversed))
         {
             prep.Commit();
