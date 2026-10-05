@@ -134,10 +134,10 @@ internal sealed class WriteTargets(
         RecordEditResult.Refused(RecordEditRefusal.RecordParseFailed, $"{formKey} cannot be copied: {why} Nothing was written.");
 
     /// <summary>The masters <paramref name="plugin"/>'s source tree requires, or the refusal of a tree that
-    /// cannot be read. <paramref name="what"/> names what the caller reads from one of them.</summary>
+    /// cannot be read.</summary>
     internal static RecordEditResult? MastersOf(
         SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        string spelled, string what, out IReadOnlySet<string> masters)
+        string spelled, string readFromAMaster, out IReadOnlySet<string> masters)
     {
         masters = new HashSet<string>();
         try
@@ -149,7 +149,7 @@ internal sealed class WriteTargets(
         {
             return RecordEditResult.RefusedAt(
                 RecordEditRefusal.RecordParseFailed, spelled,
-                $"'{spelled}': {what} comes only from a master of {plugin.Name}, " +
+                $"'{spelled}': {readFromAMaster} comes only from a master of {plugin.Name}, " +
                 $"which its source tree names, and that tree cannot be read: {ex.Message.TrimEnd('.')}. Nothing was written.");
         }
     }

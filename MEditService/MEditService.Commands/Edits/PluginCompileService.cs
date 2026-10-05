@@ -120,7 +120,7 @@ public sealed class PluginCompileService(
             logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
                 plugin.Name, plugin.Origin, tree.FormKeys.Count);
         }
-        return CompileResult.Success(_links.Report(new CompiledPlugin(plugin, registered, loadOrder, repository), content.Records, content.Links), content.Masters);
+        return CompileResult.Success(_links.Report(new LinkCheckScope(plugin, registered, loadOrder, repository), content.Records, content.Links), content.Masters);
     }
 
     private sealed record Content(

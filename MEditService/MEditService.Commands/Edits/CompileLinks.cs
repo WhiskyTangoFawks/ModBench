@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-internal sealed record CompiledPlugin(
+internal sealed record LinkCheckScope(
     PluginAddress Address, RegisteredPlugin Registered, LoadOrderSnapshot LoadOrder, SourceRepository Repository);
 
 internal sealed record SourceRecord(
@@ -22,7 +22,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, SchemaReflector schem
     // The binary is written and the snapshot parked, so the report is the only thing left to go
     // wrong: it becomes a diagnostic saying so, never a refusal of a compile that happened.
     internal List<CompileDiagnostic> Report(
-        CompiledPlugin compiled, IReadOnlyList<SourceRecord> records, IReadOnlyCollection<string> links)
+        LinkCheckScope compiled, IReadOnlyList<SourceRecord> records, IReadOnlyCollection<string> links)
     {
         var (plugin, _, _, repository) = compiled;
         try
@@ -40,7 +40,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, SchemaReflector schem
     // A dangling link is a diagnostic, not a refusal (ADR-0007), answered after the write by the
     // files the game loads, the one just written among them.
     private List<CompileDiagnostic> LinkDiagnostics(
-        CompiledPlugin compiled, IReadOnlyList<SourceRecord> records, IReadOnlyCollection<string> links)
+        LinkCheckScope compiled, IReadOnlyList<SourceRecord> records, IReadOnlyCollection<string> links)
     {
         var (plugin, registered, loadOrder, repository) = compiled;
         var answers = adapter.LinkTargets(
