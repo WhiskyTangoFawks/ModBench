@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
-import { COPY_MODE_ITEMS, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
+import { copyModeItems, copiesWritten, copyDestinationItems, heldCopies, isOverride, recordsAskedToReplace, runsUnderPluginsBar, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { AskQuestion } from '../ports/dialog';
@@ -119,10 +119,21 @@ export function registerDeleteHereCommands(
     }));
 }
 
-type RecordCopyClient = Pick<MEditClient, 'copyRecords' | 'getPlugins' | 'getRecordHolders'>;
+type RecordCopyClient = Pick<MEditClient, 'copyRecords' | 'getPlugins' | 'getRecordHolders' | 'getRecordsWithChildren'>;
 
-async function pickCopyMode(): Promise<CopyMode | undefined> {
-  const picked = await vscode.window.showQuickPick(COPY_MODE_ITEMS, { placeHolder: 'Copy as' });
+async function recordsWithChildren(
+  client: RecordCopyClient, records: readonly RecordAddress[], reporter: Reporter,
+): Promise<RecordAddress[] | undefined> {
+  try {
+    return await client.getRecordsWithChildren(records);
+  } catch (error) {
+    reporter.report('error', 'Could not look up which records have child records.', errorMessage(error));
+    return undefined;
+  }
+}
+
+async function pickCopyMode(offerDeep: boolean): Promise<CopyMode | undefined> {
+  const picked = await vscode.window.showQuickPick(copyModeItems(offerDeep), { placeHolder: 'Copy as' });
   return picked?.mode;
 }
 
@@ -218,13 +229,16 @@ export function registerRecordCopyCommands(
         { landed: [], refused: originless }, (record) => addressLabel(record, editorIds));
       if (records.length === 0) { reportOriginless(); return; }
 
-      const mode = await pickCopyMode();
+      const withChildren = await recordsWithChildren(client, records, reporter);
+      if (!withChildren) return;
+      const mode = await pickCopyMode(withChildren.length > 0);
       if (!mode) return;
       const destinations = await pickCopyDestinations(client, mode, records, reporter);
       if (!destinations) return;
 
-      const replacing = mode === 'Override'
-        ? await confirmReplacement(client, records, destinations, editorIds, ask, reporter)
+      const replacing = isOverride(mode)
+        ? await confirmReplacement(
+          client, recordsAskedToReplace(mode, records, withChildren), destinations, editorIds, ask, reporter)
         : [];
       if (replacing === undefined) return;
 
@@ -239,7 +253,7 @@ export function registerRecordCopyCommands(
           `Could not make ${answer.refused.length} of ${written.length + answer.refused.length} copies.`,
           answer, into);
         reportOriginless();
-      }, invokedFrom);
+      }, runsUnderPluginsBar(mode) ? undefined : invokedFrom);
     }),
   ];
 }
