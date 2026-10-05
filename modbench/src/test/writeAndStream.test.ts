@@ -6,7 +6,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { applyRecordEdit } from '../editor/applyRecordEdit';
-import { RecordDecorationProvider } from '../editor/RecordDecorationProvider';
+import { RecordDecorationProvider } from '../plugins/RecordDecorationProvider';
 import { PluginTreeProvider, RecordNode, RecordTypeNode } from '../plugins/PluginTreeProvider';
 import { subscribeRecordPanelsToNotifications } from '../editor/notificationWiring';
 import { subscribeTreeToNotifications } from '../plugins/treeNotifications';

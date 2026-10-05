@@ -9,7 +9,6 @@ import { routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps
 import type { FocusedCells } from './focusedCells';
 import type { RecordWriteDeps } from './applyRecordEdit';
 import { ExtendedFieldDocuments } from './extendedFieldEditor';
-import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecorationProvider';
 import { commitField, registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerGridKeyCommands } from './gridKeyCommands';
 import {
@@ -37,7 +36,6 @@ export interface EditorCommandDeps {
   editsInFlight: EditsInFlight<vscode.WebviewPanel>;
   // Each panel's focused cell, which a field gesture from the palette acts on.
   focusedCells: FocusedCells<vscode.WebviewPanel>;
-  recordBadgeSource: RecordBadgeSource;
   meditClient: Pick<MEditClient,
     | 'editRecord' | 'searchRecords'
     | 'deleteRecords' | 'copyRecords'
@@ -133,19 +131,16 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
 
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
-    context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, recordBadgeSource, meditClient,
+    context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, meditClient,
     outputChannel,
   } = deps;
-  // One decoration provider per activation: it reads the tree's cache live, so it needs no copy
-  // of that state.
-  const recordDecorationProvider = new RecordDecorationProvider(recordBadgeSource);
   const writeDeps = recordPanelWriteDeps(deps);
   const commitDeps = { ...writeDeps, editGateOf: (address: EditAddress) => editsInFlight.gateShowing(recordPanels, address) };
   const extendedFields = new ExtendedFieldDocuments({
     client: meditClient, reporter: deps.reporterFor('extendedField'),
     commit: (field, value) => commitField(commitDeps, field, value),
   });
-  // Lives for the activation, like the decoration provider above — disposed alongside it.
+  // Lives for the activation, disposed with the editor commands.
   const loadOrderStatusTracker = trackLoadOrderStatus(
     meditClient, () => announceConflictsComputed(recordPanels, editsInFlight));
   // The picker and the panel's name are each panel's own, added per panel below.
@@ -159,10 +154,8 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
 
   return [
     { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker, editsInFlight) },
-    recordDecorationProvider,
     extendedFields,
     { dispose: () => { loadOrderStatusTracker.dispose(); } },
-    vscode.window.registerFileDecorationProvider(recordDecorationProvider),
     vscode.window.registerCustomEditorProvider(
       RECORD_EDITOR_VIEW_TYPE, recordEditorProvider, { webviewOptions: { retainContextWhenHidden: true } }),
     // The native right-click menus write from here directly, with no panel in the path — the same
