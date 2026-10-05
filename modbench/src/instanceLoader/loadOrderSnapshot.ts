@@ -201,9 +201,8 @@ export function buildLoadOrderRows(
   return [...listed, ...outside, ...strays];
 }
 
-/** ADR-0013's snapshot, none without a listable game folder, and none while a mod provides a
- *  plugin and no mod folder is that mod's. Active: the plugins the game loads with no line, then
- *  each enabled line's winner. */
+/** ADR-0013's snapshot, none without a listable game folder or while a mod's plugin has no mod folder.
+ *  Active: the plugins the game loads with no line, then each enabled line's winner. */
 export function loadOrderSnapshotOf(value: {
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   readonly gameFolder: GameFolder;
