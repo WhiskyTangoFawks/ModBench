@@ -33,7 +33,7 @@ import { PLUGINS_KEY_ARGS } from '../gestureEntry';
 import { CellNode, ChildRecordNode, RecordNode, RecordTypeNode, WorldspaceNode } from '../PluginTreeProvider';
 import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 import { ImplicitMasterNode, PluginNode, PluginsTreeProvider, pluginFileOf, type PluginsTreeNode } from '../PluginsTreeProvider';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';

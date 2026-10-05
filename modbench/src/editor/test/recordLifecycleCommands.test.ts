@@ -28,7 +28,7 @@ vi.mock('vscode', async () => {
 import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, recordArgument,
 } from '../recordLifecycleCommands';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { RecordWrite } from '../../drivingLib/writingGesture';
 import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from '../ReferencedByTreeProvider';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
@@ -319,7 +319,7 @@ describe('registerRecordLifecycleCommands', () => {
       expect(writing).toEqual([]);
     });
 
-    it('ends the write after a call mEdit never answered, and reports it', async () => {
+    it('ends the write after mEdit refuses the call, and reports it', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { refused: true, message: 'Could not delete 1 record — socket hang up' });
       const { writing, reporter } = invoke(client, 'Delete');
@@ -669,7 +669,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     expect(writing).toEqual([]);
   });
 
-  it('ends the write after a call mEdit never answered, and reports it', async () => {
+  it('ends the write after mEdit refuses the call, and reports it', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
     client.setCommandResult('copyRecords', { refused: true, message: 'Could not copy 1 record — socket hang up' });

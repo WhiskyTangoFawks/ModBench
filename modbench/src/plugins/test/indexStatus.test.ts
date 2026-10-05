@@ -17,8 +17,9 @@ vi.mock('vscode', () => ({
 import { followIndexStatus, settleReconciled, syncActiveFilter, type IndexStatusDeps } from '../indexStatus';
 import { createStatusBar } from '../statusBar';
 import {
-  InMemoryMEditClient, type LoadOrderProgress, type PluginLoadFailure,
+  type LoadOrderProgress, type PluginLoadFailure,
 } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 

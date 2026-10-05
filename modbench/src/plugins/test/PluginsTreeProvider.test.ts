@@ -7,10 +7,12 @@ import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/
 import type { PluginAddress } from '../../wire/pluginAddress';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import {
-  InMemoryMEditClient, type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
-  type WorldspaceSummary, type WorldspaceBlocks, type InteriorCellBlock, type RecordSummary, type CellChildRecords,
+  type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
+  type WorldspaceSummary, type InteriorCellBlock, type RecordSummary, type CellChildRecords,
   type ContainerChildSummary, type CellSummary, type ChildRecordSummary,
 } from '../../client';
+import type { WorldspaceBlocks } from '../../client/apiClient';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFile, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,

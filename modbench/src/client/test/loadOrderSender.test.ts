@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { InMemoryMEditClient } from '../InMemoryMEditClient';
+import { InMemoryMEditClient } from './InMemoryMEditClient';
 import { createLoadOrderSender, type LoadOrderSnapshot } from '../loadOrderSender';
 import type { LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress } from '../MEditClient';
 import { present } from '../../ports/present';

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createLoadOrderSender, InMemoryMEditClient } from '../client';
+import { createLoadOrderSender } from '../client';
+import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { editingFlow, type Told } from '../instanceCommands/editing';
 import { loadOrderSnapshotOf } from '../instanceLoader/loadOrderSnapshot';
 import { loadOrderPutOnEachValue } from '../syncWiring';

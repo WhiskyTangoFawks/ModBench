@@ -57,7 +57,7 @@ vi.mock('vscode', () => {
 
 import { createPluginsView, pluginsViewProgress } from '../pluginsView';
 import { PluginTreeProvider } from '../PluginTreeProvider';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';

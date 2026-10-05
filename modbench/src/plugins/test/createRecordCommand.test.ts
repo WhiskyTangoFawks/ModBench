@@ -21,7 +21,7 @@ vi.mock('vscode', () => ({
   Uri: { from: uriFrom },
 }));
 
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -176,7 +176,7 @@ describe('modbench.record.create ends when the write does', () => {
     expect(writing).toEqual(['picked', 'opens', 'create', 'ends']);
   });
 
-  it('ends the write after a create mEdit never answered', async () => {
+  it('ends the write after mEdit refuses the create', async () => {
     const { client, writing, create } = harness();
     client.setCommandHandler('createRecord', () => Promise.resolve({ refused: true, message: 'no answer' }));
 

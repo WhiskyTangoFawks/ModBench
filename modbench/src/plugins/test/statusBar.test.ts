@@ -20,7 +20,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { createStatusBar } from '../statusBar';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { present } from '../../ports/present';
 
 const theItem = (): FakeItem => present(h.items[0], 'the one status bar item');

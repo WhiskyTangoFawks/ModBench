@@ -64,7 +64,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { createEditor } from '..';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { recordUri } from '../recordUri';
 import { ReferencedByTreeProvider } from '../ReferencedByTreeProvider';
