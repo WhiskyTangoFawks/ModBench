@@ -178,9 +178,8 @@ public sealed class SourceRepository
     public IReadOnlyList<string> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys) =>
         PluginSourceChecks.CollidingFormKeys(plugin.Name, Locator.FilesOf(plugin), formKeys);
 
-    /// <summary>Where the source and <paramref name="serialized"/>, the door's tree for the mod it
-    /// compiles to, first part ways, none when they match, and the files held at another leaf name
-    /// than the layout's. An unreadable file outranks every other answer.</summary>
+    /// <summary>Where the source and <paramref name="serialized"/>, the door's tree, first part ways,
+    /// and the files held at another leaf name than the layout's. An unreadable file outranks the rest.</summary>
     public SourceComparison Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
         PluginSourceChecks.Compare(plugin.Name, Locator.FilesOf(plugin), serialized);
 

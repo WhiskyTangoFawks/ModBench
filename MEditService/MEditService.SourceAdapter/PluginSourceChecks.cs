@@ -19,8 +19,8 @@ public enum SourceDivergenceKind
 /// as the mod folder spells it.</summary>
 public sealed record SourceDivergence(SourceDivergenceKind Kind, string Path);
 
-/// <summary>A record's file held at <see cref="HeldPath"/>, where the layout puts it at
-/// <see cref="BelongsAt"/>, both as the mod folder spells them.</summary>
+/// <summary>A record's file held at HeldPath, where the layout puts it at BelongsAt, both as the mod
+/// folder spells them.</summary>
 public sealed record MisplacedFile(string FormKey, string HeldPath, string BelongsAt);
 
 /// <summary>Where a plugin's source and what the door writes for it part ways, and the files that
