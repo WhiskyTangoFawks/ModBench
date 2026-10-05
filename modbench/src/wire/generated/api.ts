@@ -769,7 +769,6 @@ export interface components {
         PluginCreatedResponse: {
             name: string;
             origin: string;
-            path: string;
         };
         PluginDecompileRefusal: {
             item: components["schemas"]["PluginAddress"];

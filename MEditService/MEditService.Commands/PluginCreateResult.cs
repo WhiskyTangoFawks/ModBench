@@ -12,6 +12,7 @@ public enum PluginCreateRefusal
     FolderGone,
     FileExists,
     LightPluginUnsupported,
+    NotAPluginFile,
 
     /// <summary>The file system refused the write (ADR-0003), and the way out is outside Modbench.</summary>
     WriteFailed,
