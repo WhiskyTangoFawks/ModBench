@@ -115,16 +115,52 @@ public static class RecordEndpoints
         .WithSummary("Copy records into destination plugins, each record into each destination on its own.")
         .WithDescription(
             "Override: the source record's own text lands verbatim in the destination under the same " +
-            "FormKey; the master dependency is derived at compile (ADR-0008). A destination that already " +
-            "holds the record is refused unless replace is given, and a replacement changes its own fields " +
-            "only, keeping the children the destination's copy carries. New: a duplicate under the " +
-            "destination's next free FormID, with an EditorID derived from the source's; a container's " +
-            "embedded children copy under fresh FormKeys, and a self-reference follows the copy. Each " +
-            "record and destination is applied or refused on its own, and the answer names both.")
+            "FormKey, without its child records; the master dependency is derived at compile (ADR-0008). " +
+            "DeepOverride: the same for a record with child records, and every child record at any depth " +
+            "lands with it; a record with none copies as Override. New: a duplicate without its child " +
+            "records under the destination's next free FormID, with an EditorID derived from the source's, " +
+            "and a self-reference follows the copy. A cell or a worldspace is refused as New. In every " +
+            "mode, a container the destination lacks is copied in as an override. Replace applies to Override and DeepOverride only. Under " +
+            "Override, a destination that already holds the record is refused unless replace is given, and " +
+            "a replacement changes the record's own fields only, keeping the children the destination's " +
+            "copy carries. Under DeepOverride, replace overwrites each child record the destination " +
+            "holds and keeps its copy of the record itself; a child record the destination holds and the " +
+            "source lacks stays. Each record and destination is applied or refused on its own, and the " +
+            "answer names both.")
         .WithTags("Records")
         .Produces<RecordCopyResponse>()
         .ProducesProblem(400)
         .ProducesProblem(500)
+        .ProducesProblem(503);
+
+        app.MapPost("/records/with-children", (RecordsWithChildrenRequest request, ChildRecordQueryService svc) =>
+            OverRecords(request.Records ?? [], "asking for child records", logger, validateOptions: () => null, answer: addressed =>
+                Task.FromResult(Results.Ok(
+                    svc.WithChildRecords([.. addressed.Select(r => new RecordIn(r.Plugin, r.FormKey))])
+                        .Select(r => Addressed(new RecordAt(r.Plugin, r.FormKey)))))))
+        .WithName("GetRecordsWithChildren")
+        .WithSummary("Which of the records have child records in their own plugin.")
+        .WithTags("Records")
+        .Produces<IReadOnlyList<RecordAddress>>()
+        .ProducesProblem(400)
+        .ProducesProblem(503);
+
+        app.MapPost("/records/children-in-destinations", (ChildrenInDestinationsRequest request, ChildRecordQueryService svc) =>
+        {
+            var destinations = request.Destinations ?? [];
+            return OverRecords(request.Records ?? [], "asking for child records", logger, validateOptions: () =>
+                    destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin))
+                        ? Results.Problem("Every destination needs a name and an origin.", statusCode: 400)
+                        : null,
+                answer: addressed => Task.FromResult(Results.Ok(
+                    svc.HoldersOfChildRecords([.. addressed.Select(r => new RecordIn(r.Plugin, r.FormKey))], destinations)
+                        .Select(h => new RecordChildHolders(Addressed(new RecordAt(h.Record.Plugin, h.Record.FormKey)), h.Destinations)))));
+        })
+        .WithName("GetChildrenInDestinations")
+        .WithSummary("For each record, the destination plugins that hold any of its child records, at any depth.")
+        .WithTags("Records")
+        .Produces<IReadOnlyList<RecordChildHolders>>()
+        .ProducesProblem(400)
         .ProducesProblem(503);
 
         return app;
@@ -205,7 +241,7 @@ public static class RecordEndpoints
                 return Results.Problem("At least one destination is required.", statusCode: 400);
             if (destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin)))
                 return Results.Problem("Every destination needs a name and an origin.", statusCode: 400);
-            if (request.Replace && request.Mode != CopyMode.Override)
+            if (request.Replace && request.Mode == CopyMode.New)
                 return Results.Problem("The replace Option applies to a copy as override only.", statusCode: 400);
             return null;
         }, answer: addressed =>

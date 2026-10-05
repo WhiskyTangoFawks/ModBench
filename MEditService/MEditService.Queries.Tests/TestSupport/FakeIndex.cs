@@ -91,6 +91,8 @@ internal sealed class FakeReads(
     public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
     public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey) => [];
     public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
+    public bool HasChildRecords(PluginAddress plugin, string formKey) => false;
+    public IReadOnlySet<PluginAddress> PluginsHoldingChildRecords(PluginAddress plugin, string formKey) => new HashSet<PluginAddress>();
 }
 
 /// <summary>The IQueryIndex door over a FakeReads: a settable status and sequence, since a hand

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using Microsoft.Extensions.Logging;
@@ -29,10 +30,19 @@ public sealed class CopyRecordHandler
         return ItemWrite.Over(
             records.SelectMany(record => destinations.Select(destination => new CopyItem(record, destination))),
             SameCopy.Instance,
-            item => mode == CopyMode.Override
-                ? _override.Copy(item.Record.Plugin, item.Record.FormKey, item.Destination, replace)
-                : _new.Copy(item.Record.Plugin, item.Record.FormKey, item.Destination),
+            item => mode switch
+            {
+                CopyMode.Override => _override.Copy(item.Record.Plugin, item.Record.FormKey, item.Destination, replace),
+                CopyMode.New => _new.Copy(item.Record.Plugin, item.Record.FormKey, item.Destination),
+                CopyMode.DeepOverride => RefuseDeepCopy(),
+                _ => throw new InvalidEnumArgumentException(nameof(mode), (int)mode, typeof(CopyMode)),
+            },
             item => $"Could not write the copy of {item.Record.FormKey} into {item.Destination.Name} ({item.Destination.Origin})",
             _logger);
     }
+
+    private static RecordEditResult RefuseDeepCopy() =>
+        RecordEditResult.Refused(
+            RecordEditRefusal.ContainerRecordNotYetSupported,
+            "A deep copy as override is not supported yet: it copies a container record with its child records.");
 }
