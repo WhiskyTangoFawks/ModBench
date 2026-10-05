@@ -27,14 +27,10 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         var formKey = child.FormKey;
         var ownFields = child with { Body = ContainerDocumentEdits.WithoutChildren(codec, child.Body, release, child.RecordType) };
 
-        // Held only at the last commit has no document to replace, so no replacement is asked for.
-        if (destination.Repository.HeldOnlyAtLastCommit(destination.Plugin, formKey))
-            return RefuseHeldOnlyAtLastCommit(formKey, destination.Plugin);
-
         if (destination.Repository.FormKeysUsed(destination.Plugin).Contains(formKey))
         {
+            if (Identity(destination, formKey, release) is not { } existing) return RefuseKeyWithNoDocument(destination, formKey);
             if (!replace) return RefuseHeldWithoutReplace(formKey, destination.Plugin);
-            var existing = Identity(destination, formKey, release) ?? throw NoDocumentCarries(destination.Plugin, formKey);
 
             // Replaced in place, never duplicated.
             return ReplaceEmbeddedChildInPlace(source.Plugin, existing, ownFields, destination, release);
@@ -179,8 +175,8 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         CopySource source, string worldspaceFormKey, SourceDocument cell, Destination destination, GameRelease release)
     {
         var cellFormKey = cell.FormKey;
-        if (destination.Repository.HeldOnlyAtLastCommit(destination.Plugin, cellFormKey))
-            return RefuseHeldOnlyAtLastCommit(cellFormKey, destination.Plugin);
+        if (destination.Repository.FormKeysUsed(destination.Plugin).Contains(cellFormKey))
+            return RefuseKeyWithNoDocument(destination, cellFormKey);
 
         if (Identity(destination, worldspaceFormKey, release) is null)
         {
@@ -231,11 +227,21 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
             $"{destination.Name} ({destination.Origin}) already holds {formKey}. Copy it again and confirm " +
             "the replacement to copy over it.");
 
-    internal static RecordEditResult RefuseHeldOnlyAtLastCommit(string formKey, PluginAddress destination) =>
-        RecordEditResult.Refused(
-            RecordEditRefusal.FormKeyCollision,
-            $"{destination.Name} ({destination.Origin}) holds {formKey} at the last commit, and its working tree deletes " +
-            "it. Commit or discard that deletion in Source Control, then copy it again.");
+    /// <summary>The refusal for a FormKey the destination uses and the tree names no record for: held only at the
+    /// last commit, or named by a document the codec cannot place.</summary>
+    internal static RecordEditResult RefuseKeyWithNoDocument(Destination destination, string formKey)
+    {
+        var plugin = destination.Plugin;
+        return destination.Repository.HeldOnlyAtLastCommit(plugin, formKey)
+            ? RecordEditResult.Refused(
+                RecordEditRefusal.FormKeyCollision,
+                $"{plugin.Name} ({plugin.Origin}) holds {formKey} at the last commit, and its working tree deletes " +
+                "it. Commit or discard that deletion in Source Control, then copy it again.")
+            : RecordEditResult.Refused(
+                RecordEditRefusal.FormKeyCollision,
+                $"{plugin.Name} ({plugin.Origin}) uses {formKey}, but no document in its source tree carries it. " +
+                "Check the Source Control panel.");
+    }
 
     // The destination's own tree named this FormKey, so a document ought to carry it; only a
     // concurrent external edit to the tree closes that gap.

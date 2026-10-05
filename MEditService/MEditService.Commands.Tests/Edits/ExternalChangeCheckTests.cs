@@ -45,7 +45,7 @@ public sealed class ExternalChangeCheckTests : IDisposable
 
     private void Track(params (string Plugin, byte[] Bytes)[] plugins) =>
         SourceRepository.Track(ModFolder, SourcePreset.Edits, [.. plugins.Select(p => (
-            (IReadOnlyList<TreeFile>)[new TreeFile(Path.Combine(SourceRepository.RootFor(p.Plugin), "RecordData.json"), "{}"u8.ToArray())],
+            (IReadOnlyList<TreeFile>)[new TreeFile(TreeTampering.HeaderDocumentOf(p.Plugin), "{}"u8.ToArray())],
             new BaselineTrailers(p.Plugin, null, TrailerHash(p.Bytes))))]);
 
     private ExternalChangeNotification TheExternalChange() =>

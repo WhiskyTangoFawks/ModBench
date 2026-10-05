@@ -321,7 +321,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", appeared[0], StringComparison.Ordinal);
         Assert.NotNull(Repository.Get(Plugin, FreeFormKey, Schemas));
         Assert.Null(Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas));
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(Repository));
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
@@ -336,7 +336,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var child = Repository.RelativePathOf(Plugin, Identity(_exteriorCell, "cell"));
         Assert.Contains("000F00_Embedded.esp", child, StringComparison.Ordinal);
         Assert.Null(Repository.RelativePathOf(Plugin, Identity(_worldspace, "wrld")));
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(Repository));
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
@@ -353,7 +353,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Single(appeared);
         Assert.Contains("Quests/", gone[0], StringComparison.Ordinal);
         Assert.Contains("000F00_Embedded.esp.json", appeared[0], StringComparison.Ordinal);
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(Repository));
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 

@@ -24,6 +24,16 @@ public sealed class SourceRepositoryMintingTests : IDisposable
     }
 
     [Fact]
+    public void APutThatSucceeds_MintsThePluginRootAndGroupFolder_WhichTheFailingPutBelowLeavesNoneOf()
+    {
+        var repository = Tracked();
+
+        repository.Put(Plugin, new SourceDocument("000800:Minting.esp", "npc_", "Fits", "{\"FormKey\": \"000800:Minting.esp\"}"));
+
+        Assert.True(Directory.Exists(Path.Combine(SourceRepository.RootIn(_modFolder, Plugin.Name), "Npcs")));
+    }
+
+    [Fact]
     public void APutWhoseWriteFailsAfterTheDirectoriesAboveItWereMinted_LeavesNoneOfThem()
     {
         var repository = Tracked();

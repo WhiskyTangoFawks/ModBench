@@ -85,7 +85,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
             new SourceDocument("00FFFF:Second.esp", "refr", "Nowhere", BodyOf("Second.esp", "Nowhere"));
         Assert.ThrowsAny<Exception>(() => transaction.Put(second, secondPlugin, recordWithNoGroupFolderAndNoDocumentCarryingIt));
 
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(first));
         Assert.Equal(beforeFirst, TreeSnapshot.Of(_firstFolder));
         Assert.Equal(beforeSecond, TreeSnapshot.Of(_secondFolder));
     }
@@ -113,23 +113,6 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     }
 
     [Fact]
-    public void ABatchAskedToRemoveAContainer_RefusesBeforeTouchingTheTree_ForKeepingOnlyItsOwnDocumentWouldLoseEverythingBeneath()
-    {
-        var (files, cell) = WorldspaceWithAnExteriorCellBeneathWhoseRemovalTakesASubtreeNotAFile("First.esp");
-        var repository = Track(_firstFolder, "First.esp", files);
-        var plugin = new PluginAddress("First.esp", "FirstMod");
-        var before = TreeSnapshot.Of(_firstFolder);
-
-        var transaction = new SourceRepository.SourceTransaction();
-        var refusal = Assert.Throws<NotSupportedException>(
-            () => transaction.Remove(repository, plugin, new RecordIdentity(cell.ToString(), "cell", "ExteriorCell")));
-
-        Assert.Contains(cell.ToString(), refusal.Message, StringComparison.Ordinal);
-        Assert.Empty(transaction.Rollback());
-        Assert.Equal(before, TreeSnapshot.Of(_firstFolder));
-    }
-
-    [Fact]
     public void ABatchAskedToPutAContainerTheTreeDoesNotHold_RefusesBeforeTouchingTheTree_ForMintingItsDirectoriesIsMoreThanTheOneDocumentsBytesABatchEntryHolds()
     {
         var repository = Track(_firstFolder, "First.esp");
@@ -142,12 +125,12 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
             new SourceDocument("000900:First.esp", "cell", "FreshCell", "{\n  \"FormKey\": \"000900:First.esp\"\n}")));
 
         Assert.Contains("000900:First.esp", refusal.Message, StringComparison.Ordinal);
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(repository));
         Assert.Equal(before, TreeSnapshot.Of(_firstFolder));
     }
 
     [Fact]
-    public void ABatchWhoseRemoveFollowsAPut_PutsBothBackOnRollback()
+    public void ABatchWhoseRekeyFollowsAPut_PutsBothBackOnRollback()
     {
         var repository = Track(_firstFolder, "First.esp");
         var plugin = new PluginAddress("First.esp", "FirstMod");
@@ -157,12 +140,13 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var siblingInTheGroupFolderTrackAlreadyMade =
             new SourceDocument("000900:First.esp", "npc_", "Sibling", "{\n  \"FormKey\": \"000900:First.esp\"\n}");
         transaction.Put(repository, plugin, siblingInTheGroupFolderTrackAlreadyMade);
-        Assert.Equal(
-            SourceRemoval.Removed,
-            transaction.Remove(repository, plugin, new RecordIdentity("000800:First.esp", "npc_", "Original")));
+        transaction.Rekey(
+            repository, plugin, new RecordIdentity("000800:First.esp", "npc_", "Original"), "000901:First.esp",
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
+            new DocumentRekey((document, newFormKey) => document.Body.Replace(document.FormKey, newFormKey, StringComparison.Ordinal), (_, _, _) => null));
 
         Assert.NotEqual(before, TreeSnapshot.Of(_firstFolder));
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(repository));
         Assert.Equal(before, TreeSnapshot.Of(_firstFolder));
     }
 }

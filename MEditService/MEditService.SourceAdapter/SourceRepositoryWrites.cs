@@ -133,9 +133,6 @@ internal sealed class SourceRepositoryWrites(
         return carrying with { Body = ownerText };
     }
 
-    /// <summary>The plugin's source in the working tree becomes <paramref name="files"/>, and the
-    /// last-compile ref names only the binary they were read from. A failure leaves both as they
-    /// were.</summary>
     internal void ReplaceSourceFrom(string pluginFileName, IReadOnlyList<TreeFile> files, string binarySha256)
     {
         // A mod folder another tool removed is not written back into being.

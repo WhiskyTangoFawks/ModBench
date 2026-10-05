@@ -82,7 +82,7 @@ public sealed partial class SourceRepository
 
     /// <summary>Throws <see cref="GitUnavailableException"/> when git cannot be run, so no repository
     /// can be made or written here.</summary>
-    public static void EnsureTrackable() => SourceRepositoryGit.EnsureOnPath();
+    public static void EnsureTrackable() => GitCli.EnsureOnPath();
 
     /// <summary>A repository for a mod that has none: <c>Track &lt;mod&gt;</c>, then one baseline commit
     /// per plugin on <c>main</c>, which stays checked out. Answers each plugin whose commit

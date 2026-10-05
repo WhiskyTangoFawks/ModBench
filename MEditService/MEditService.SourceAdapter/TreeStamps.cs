@@ -33,13 +33,8 @@ internal static class TreeStamps
 
     private readonly record struct KnownDocument(FileStamp Stamp, string FormKey, string Content);
 
-    /// <summary>The stamp of one document's text, as the UTF-8 the index stores it in: every side hashes
-    /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the index.</summary>
     internal static string ContentStamp(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
-    /// <summary>One listing of the plugin's tree. A file whose file-system stamp is unchanged and
-    /// settled is not read again. A FormKey two documents declare throws
-    /// <see cref="AmbiguousSourceUnitException"/>.</summary>
     internal static RecordStamps StampsOf(string modFolder, PluginAddress plugin)
     {
         var unreadable = new List<string>();

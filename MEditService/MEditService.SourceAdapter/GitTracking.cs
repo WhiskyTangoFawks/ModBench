@@ -22,7 +22,7 @@ internal static class GitTracking
         string modFolder, SourcePreset preset,
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
     {
-        SourceRepositoryGit.EnsureOnPath();
+        GitCli.EnsureOnPath();
         if (SourceRepositoryGit.IsTracked(modFolder) || SourceRepositoryGit.HoldsAnotherRepository(modFolder))
             throw new InvalidOperationException($"'{modFolder}' already holds a repository.");
 

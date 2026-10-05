@@ -59,4 +59,23 @@ public sealed class SourceRepositoryHeldOnlyAtLastCommitTests : IDisposable
 
         Assert.False(repository.HeldOnlyAtLastCommit(Plugin, "000802:Held.esp"));
     }
+
+    [Fact]
+    public void AnEmbeddedChildTheTreeHasTakenOutOfItsOwner_IsHeldOnlyAtTheLastCommit_AndItsOwnerIsNot()
+    {
+        var folder = RecordTypeDispatch.For(GameRelease.Fallout4).FolderNameFor("globalfloat")
+            ?? throw new InvalidOperationException("Expected 'globalfloat' to resolve to a group folder.");
+        var relativePath = Path.Combine(SourceRepository.RootFor(PluginName), folder, "Carrier - 00A000_Held.esp.json");
+        const string withTheChild =
+            "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Held.esp\",\n  \"Temporary\": [ { \"FormKey\": \"00A001:Held.esp\" } ]\n}";
+        PluginBaselines.Track(_modFolder, SourcePreset.Edits, [new TreeFile(relativePath, System.Text.Encoding.UTF8.GetBytes(withTheChild))]);
+        var repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be tracked.");
+        File.WriteAllText(
+            Path.Combine(_modFolder, relativePath),
+            "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Held.esp\"\n}");
+
+        Assert.True(repository.HeldOnlyAtLastCommit(Plugin, "00A001:Held.esp"));
+        Assert.False(repository.HeldOnlyAtLastCommit(Plugin, "00A000:Held.esp"));
+    }
 }

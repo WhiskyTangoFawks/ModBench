@@ -11,8 +11,6 @@ internal sealed class SourceRepositoryGit(string modFolder)
     private readonly string _modFolder = modFolder;
     private readonly string _gitDir = Path.Combine(modFolder, ".git");
 
-    internal static void EnsureOnPath() => GitCli.EnsureOnPath();
-
     /// <summary>True exactly when <paramref name="modFolder"/> holds a repository whose <c>main</c>
     /// exists. A <c>.git</c> with no <c>main</c> is Track's own, half made, or
     /// <see cref="HoldsAnotherRepository"/>.</summary>
@@ -67,13 +65,13 @@ internal sealed class SourceRepositoryGit(string modFolder)
     // Plugin and asset file names carry brackets and asterisks, which git otherwise reads as a glob.
     internal static string LiteralPathspec(string relativePath) => $":(literal){ToGitPath(relativePath)}";
 
-    /// <summary>One file's text at <paramref name="gitRef"/>, or null. cat-file -p, not git show: for
+    /// <summary>One file's text at the last commit, or null. cat-file -p, not git show: for
     /// a missing glob-shaped path, show exits 0 with empty output — a lying empty string.</summary>
-    internal string? ReadCommittedSourceText(string relativePath, string gitRef = "HEAD")
+    internal string? ReadCommittedSourceText(string relativePath)
     {
         if (!IsTracked(_modFolder)) return null;
 
-        return TryRun(out var stdout, "cat-file", "-p", $"{gitRef}:{ToGitPath(relativePath)}") ? stdout : null;
+        return TryRun(out var stdout, "cat-file", "-p", $"HEAD:{ToGitPath(relativePath)}") ? stdout : null;
     }
 
     /// <summary>Each path under the plugin's tree that git status names, with its index-column code;
@@ -125,8 +123,6 @@ internal sealed class SourceRepositoryGit(string modFolder)
         }
     }
 
-    /// <summary>Every binary hash Modbench last wrote for the plugin: one, or several while a write
-    /// was interrupted. Empty when none is recorded.</summary>
     internal IReadOnlyList<string> LastWrittenBinarySha256s(string pluginFileName)
     {
         if (!IsTracked(_modFolder)) return [];
@@ -137,9 +133,6 @@ internal sealed class SourceRepositoryGit(string modFolder)
         return [.. ReadTrailers(body, BinaryTrailer), .. ReadTrailers(body, EarlierBinaryTrailer)];
     }
 
-    /// <summary>Runs <paramref name="write"/>, which puts the plugin's binary on disk, recording
-    /// <paramref name="binarySha256"/> as the one last written. An interrupted write leaves a record
-    /// naming the old and the new binary (ADR-0003).</summary>
     internal void WriteBinary(string pluginFileName, string binarySha256, Action write)
     {
         var headSha = Run("rev-parse", "HEAD").Trim();

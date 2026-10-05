@@ -291,8 +291,7 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
         var cell = new RecordIdentity(cellFormKey, "cell", editorId);
 
         Assert.Equal(Worldspace.ToString(), repository.WorldspaceOf(DestinationPlugin, cell));
-        var blocks = Path.Combine($"{blockX}, {blockY}", $"{subX}, {subY}") + Path.DirectorySeparatorChar;
-        Assert.Contains(blocks, repository.RelativePathOf(DestinationPlugin, cell), StringComparison.Ordinal);
+        TreeTampering.AssertCellSitsInBlocks(DestinationModFolder, DestinationPlugin, cell, blockX, blockY, subX, subY);
     }
 
     private static void AddInteriorCell(Fallout4Mod mod, Cell cell, int blockNumber)

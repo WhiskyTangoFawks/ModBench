@@ -1,5 +1,8 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -74,6 +77,34 @@ internal static class TreeTampering
         var stray = Path.Combine(FolderOf(FileOf(modFolder, plugin, identity)), fileName);
         File.WriteAllText(stray, text);
         return stray;
+    }
+
+    /// <summary>The plugin header's document, relative to its mod folder.</summary>
+    internal static string HeaderDocumentOf(string pluginFileName) =>
+        Path.Combine(SourceRepository.RootFor(pluginFileName), "RecordData.json");
+
+    /// <summary>The block and sub-block folders the exterior cell's document sits in, as the whole-mod
+    /// serializer names them.</summary>
+    internal static void AssertCellSitsInBlocks(
+        string modFolder, PluginAddress plugin, RecordIdentity cell, int blockX, int blockY, int subX, int subY)
+    {
+        var blocks = Path.Combine($"{blockX}, {blockY}", $"{subX}, {subY}") + Path.DirectorySeparatorChar;
+        Assert.Contains(
+            blocks, TrackedTree.Repository(modFolder).RelativePathOf(plugin, cell), StringComparison.Ordinal);
+    }
+
+    /// <summary>A document that names <paramref name="formKey"/> in an embedded slot of a record that cannot
+    /// carry it, so the tree uses the key and no record answers to it.</summary>
+    internal static void NameInAnUnplaceableChild(string modFolder, PluginAddress plugin, string formKey)
+    {
+        var folder = Path.Combine(
+            modFolder, SourceRepository.RootFor(plugin.Name),
+            RecordTypeDispatch.For(GameRelease.Fallout4).FolderNameFor("globalfloat").Require());
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(
+            Path.Combine(folder, $"Carrier - 00A000_{plugin.Name}.json"),
+            "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:" + plugin.Name + "\",\n" +
+            "  \"Temporary\": [ { \"FormKey\": \"" + formKey + "\" } ]\n}");
     }
 
     private static string FolderOf(string file) =>

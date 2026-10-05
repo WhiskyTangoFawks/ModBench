@@ -376,9 +376,6 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         return _scansBySourceRoot[sourceRoot] = new TreeScan(sourceRoot, _release, onlyKey: null, listed);
     }
 
-    /// <summary>The document carrying <paramref name="identity"/>: its own, else its container's. Null
-    /// when no document holds it. Throws <see cref="UnreadableSourceDocumentException"/> when the
-    /// document carrying it names no record.</summary>
     internal SourceDocument? ContainerDocument(
         PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
@@ -396,8 +393,6 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         return new SourceDocument(owner.FormKey, owner.RecordType, owner.EditorId, text);
     }
 
-    /// <summary>The record that carries <paramref name="identity"/> inline, and the slot it sits in; null
-    /// for a record with a document of its own.</summary>
     internal DocumentContainment? ContainerOf(
         PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
@@ -443,8 +438,6 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             : new SourceDocument(formKey, recordType, DocumentText.RootStringIn(text, "EditorID"), text);
     }
 
-    /// <summary>Every file one plugin's source tree holds in the working tree, relative to the mod
-    /// folder — the carrier Track hands in, handed back out. Empty when there is no source there.</summary>
     internal PluginSourceFiles FilesOf(PluginAddress plugin)
     {
         if (!_filesByPlugin.TryGetValue(plugin.Name, out var files))

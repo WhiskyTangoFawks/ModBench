@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -80,7 +81,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         transaction.PutInWorldspace(Repository, Plugin, ACellAt("9, -9"), Worldspace);
 
         Assert.NotEqual(before, TreeSnapshot.Of(_modFolder));
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(Repository));
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 

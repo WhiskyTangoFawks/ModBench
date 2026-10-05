@@ -48,8 +48,6 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal static string ModNameIn(string modFolder) =>
         Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar));
 
-    /// <summary>The folder holding <paramref name="pluginFileName"/>'s documents. It need not exist:
-    /// an untracked mod has none until Track writes one.</summary>
     internal static string RootIn(string modFolder, string pluginFileName) =>
         Path.Combine(modFolder, RootFor(pluginFileName));
 

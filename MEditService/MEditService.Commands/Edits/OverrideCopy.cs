@@ -66,15 +66,11 @@ internal sealed class OverrideCopy
         if (RefuseIfCopySourceHasNoContainerOfItsOwn(identity.RecordType, release) is { } containerRefusal)
             return containerRefusal;
 
-        // A record held only at the last commit has no document to replace, so no replacement is asked for.
-        if (destination.Repository.HeldOnlyAtLastCommit(destinationPlugin, formKey))
-            return RecordCopy.RefuseHeldOnlyAtLastCommit(formKey, destinationPlugin);
-
         if (destination.Repository.FormKeysUsed(destinationPlugin).Contains(formKey))
         {
+            if (_recordCopy.Identity(destination, formKey, release) is not { } existingTarget)
+                return RecordCopy.RefuseKeyWithNoDocument(destination, formKey);
             if (!replace) return RecordCopy.RefuseHeldWithoutReplace(formKey, destinationPlugin);
-            var existingTarget = _recordCopy.Identity(destination, formKey, release)
-                ?? throw RecordCopy.NoDocumentCarries(destinationPlugin, formKey);
 
             // Own fields only, as xEdit's copy-into does: the children the destination's copy
             // carries stay.

@@ -84,11 +84,11 @@ public sealed class SourceTransactionTests : IDisposable
             Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "ExistingNpc", Body(Fk("000800"), "Rewritten")));
         transaction.Put(
             Repo, Plugin, new SourceDocument(Fk("000802"), "npc_", "NewNpc", Body(Fk("000802"), "NewNpc")));
-        transaction.Remove(Repo, Plugin, new RecordIdentity(Fk("000801"), "npc_", "DoomedNpc"));
+        Rekey(transaction, "npc_", "DoomedNpc", "000801", "000803");
         Rekey(transaction, "wrld", "Home", "000900", "000901");
 
         Assert.NotEqual(before, TreeSnapshot.Of(_root));
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(Repo));
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
 
@@ -101,7 +101,7 @@ public sealed class SourceTransactionTests : IDisposable
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "FreshNpc", Body(Fk("000800"), "FreshNpc")));
 
         Assert.True(Directory.Exists(Path.Combine(_root, "plugin-source", PluginName, "Npcs")));
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(Repo));
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
 
@@ -116,7 +116,7 @@ public sealed class SourceTransactionTests : IDisposable
         transaction.PutInWorldspace(Repo, Plugin, new SourceDocument(Fk("000910"), "cell", "Out", body), Fk("000900"));
 
         Assert.Equal(Fk("000910"), Repo.GetCellAt(Plugin, Fk("000900"), 9, -9, Schemas)?.FormKey);
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(Repo));
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
 
@@ -129,7 +129,7 @@ public sealed class SourceTransactionTests : IDisposable
         var pluginRoot = Path.Combine(_root, "plugin-source", PluginName);
         File.WriteAllText(Path.Combine(pluginRoot, "theirs.json"), "another tool's");
 
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(Repo));
         Assert.True(File.Exists(Path.Combine(pluginRoot, "theirs.json")));
         Assert.False(Directory.Exists(Path.Combine(pluginRoot, "Npcs")));
     }
@@ -146,7 +146,7 @@ public sealed class SourceTransactionTests : IDisposable
         Rekey(transaction, "wrld", "Shared", "000901", "000900");
 
         Assert.NotEqual(before, TreeSnapshot.Of(_root));
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(Repo));
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
 
@@ -163,7 +163,7 @@ public sealed class SourceTransactionTests : IDisposable
         var contestedFile = FlatFile(Fk("000800"), "npc_", "Contested");
         File.WriteAllText(contestedFile, "someone else's work");
 
-        var unrestored = transaction.Rollback();
+        var unrestored = transaction.Undo(Repo);
 
         var only = Assert.Single(unrestored);
         Assert.Equal(UnrestoredReason.ChangedByAnother, only.Reason);
@@ -183,7 +183,7 @@ public sealed class SourceTransactionTests : IDisposable
         var file = FlatFile(Fk("000800"), "npc_", "Doomed");
         File.Delete(file);
 
-        var only = Assert.Single(transaction.Rollback());
+        var only = Assert.Single(transaction.Undo(Repo));
         Assert.Equal(UnrestoredReason.RemovedByAnother, only.Reason);
         Assert.False(File.Exists(file));
     }
@@ -195,7 +195,7 @@ public sealed class SourceTransactionTests : IDisposable
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Fresh", Body(Fk("000800"), "Ours")));
         File.Delete(FlatFile(Fk("000800"), "npc_", "Fresh"));
 
-        var only = Assert.Single(transaction.Rollback());
+        var only = Assert.Single(transaction.Undo(Repo));
         Assert.Equal(UnrestoredReason.RemovedByAnother, only.Reason);
     }
 
@@ -210,7 +210,7 @@ public sealed class SourceTransactionTests : IDisposable
         Assert.ThrowsAny<Exception>(() => transaction.Put(
             Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Untouched", Body(Fk("000800"), "Rewritten"))));
 
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(Repo));
         Assert.Equal(Body(Fk("000800"), "Untouched"), File.ReadAllText(file));
     }
 
@@ -222,12 +222,12 @@ public sealed class SourceTransactionTests : IDisposable
 
         var transaction = new SourceRepository.SourceTransaction();
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "First", Body(Fk("000800"), "Ours")));
-        transaction.Remove(Repo, Plugin, new RecordIdentity(Fk("000801"), "npc_", "Second"));
+        Rekey(transaction, "npc_", "Second", "000801", "000802");
 
         var unwritableOnEveryPlatformWithNoPermissionBitsAPrivilegedRunnerWouldIgnore = FlatFile(Fk("000801"), "npc_", "Second");
         Directory.CreateDirectory(unwritableOnEveryPlatformWithNoPermissionBitsAPrivilegedRunnerWouldIgnore);
 
-        var only = Assert.Single(transaction.Rollback());
+        var only = Assert.Single(transaction.Undo(Repo));
         Assert.Equal(UnrestoredReason.RestoreFailed, only.Reason);
         Assert.NotNull(only.Error);
         Assert.Equal(Body(Fk("000800"), "First"), File.ReadAllText(FlatFile(Fk("000800"), "npc_", "First")));
@@ -244,7 +244,7 @@ public sealed class SourceTransactionTests : IDisposable
         var transaction = new SourceRepository.SourceTransaction();
         Assert.ThrowsAny<Exception>(() => Rekey(transaction, "wrld", "Home", "000900", "000901"));
 
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(Repo));
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
 
@@ -265,7 +265,7 @@ public sealed class SourceTransactionTests : IDisposable
 
         var transaction = new SourceRepository.SourceTransaction();
         Assert.ThrowsAny<Exception>(() => RunSequence(transaction, failAt));
-        Assert.Empty(transaction.Rollback());
+        Assert.Empty(transaction.Undo(Repo));
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
 
@@ -293,7 +293,7 @@ public sealed class SourceTransactionTests : IDisposable
         At(failAt, () => transaction.Put(
             Repo, Plugin, new SourceDocument(Fk("000801"), "npc_", "NpcB", Body(Fk("000801"), "NpcB rewritten"))));
         At(failAt, () => Rekey(transaction, "wrld", "Home", "000900", "000901"));
-        At(failAt, () => transaction.Remove(Repo, Plugin, new RecordIdentity(Fk("000A00"), "race", "DoomedRace")));
+        At(failAt, () => Rekey(transaction, "race", "DoomedRace", "000A00", "000A01"));
         At(failAt, () => Rekey(transaction, "wrld", "Other", "000902", "000903"));
         return act;
     }

@@ -105,14 +105,9 @@ public sealed partial class SourceRepository
         /// <summary>Takes one repository's record out of the tree, holding the document's bytes so the
         /// rollback puts it back. The pre-image is that one document, so a shape whose removal takes more
         /// than it is refused.</summary>
-        public SourceRemoval Remove(SourceRepository repository, PluginAddress plugin, RecordIdentity identity)
+        internal SourceRemoval Remove(SourceRepository repository, PluginAddress plugin, RecordIdentity identity)
         {
             if (repository.Locator.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
-
-            // Refused before the tree is touched: a container's removal takes its whole directory, block
-            // subtree and all, and one document's bytes cannot put that back (commands.md, A failed
-            // gesture writes nothing).
-            if (unit.IsDirectoryPerRecord) throw NotRestorable(unit, identity);
 
             var before = Snapshot(unit.FullPath);
             try
@@ -133,11 +128,6 @@ public sealed partial class SourceRepository
         private static NotSupportedException NotRestorableRename(SourceUnit unit, RecordIdentity identity) =>
             new($"Putting {identity.FormKey} under a new EditorID would rename {unit.RelativePath}, and a batch " +
                 "holds the bytes of one path per act, so it cannot put that back — put it outside the batch.");
-
-        private static NotSupportedException NotRestorable(SourceUnit unit, RecordIdentity identity) =>
-            new($"{identity.FormKey} has a directory of its own at {unit.RelativePath}, and removing it takes " +
-                "every document under that directory. A batch holds one document's bytes per act, so it " +
-                "cannot put that back — remove it outside the batch.");
 
         // Recorded in execution order and undone in reverse, so a rename is put back before the create that
         // provoked it.
@@ -185,7 +175,7 @@ public sealed partial class SourceRepository
         /// <summary>Puts every recorded act back, most recent first, so a name this action took is vacated
         /// before an earlier act moves back into it. A restore failure is collected, never thrown
         /// (ADR-0019).</summary>
-        public IReadOnlyList<UnrestoredPath> Rollback()
+        internal IReadOnlyList<UnrestoredPath> Rollback()
         {
             var unrestored = new List<UnrestoredPath>();
             for (var i = _log.Count - 1; i >= 0; i--)

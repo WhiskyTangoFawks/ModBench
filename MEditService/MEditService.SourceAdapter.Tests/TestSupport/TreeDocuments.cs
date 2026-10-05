@@ -40,11 +40,35 @@ internal static class TreeDocuments
         ];
     }
 
-    // An embedded child follows the document that carries it, and that document spells the child's own
-    // FormKey member.
-    private static bool IsEmbeddedIn(PluginDocument owner, PluginDocument child) =>
-        child.FormKey != owner.FormKey
-        && owner.Text.Contains($"\"FormKey\": \"{child.FormKey}\"", StringComparison.Ordinal);
+    // An embedded child follows the document that carries it, and that document holds an object of the
+    // child's own FormKey below its root.
+    private static bool IsEmbeddedIn(PluginDocument owner, PluginDocument child)
+    {
+        using var json = JsonDocument.Parse(owner.Text);
+        return child.FormKey != owner.FormKey && HoldsBelowTheRoot(json.RootElement, child.FormKey, atRoot: true);
+    }
+
+    private static bool HoldsBelowTheRoot(JsonElement element, string formKey, bool atRoot)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var member in element.EnumerateObject())
+                {
+                    if (!atRoot && member.Name == "FormKey" && member.Value.ValueKind == JsonValueKind.String
+                        && member.Value.GetString() == formKey)
+                    {
+                        return true;
+                    }
+                    if (HoldsBelowTheRoot(member.Value, formKey, atRoot: false)) return true;
+                }
+                return false;
+            case JsonValueKind.Array:
+                return element.EnumerateArray().Any(item => HoldsBelowTheRoot(item, formKey, atRoot: false));
+            default:
+                return false;
+        }
+    }
 
     private static string? EditorIdOf(string text)
     {
