@@ -47,11 +47,22 @@ describe('isTestSupport', () => {
 });
 
 describe('productionFiles', () => {
-  it('lists .ts files and drops tests, tsx and test folders', () => {
+  it('lists .ts and .tsx files and drops every file isTestSupport holds', () => {
     const dir = plantedTree({
-      'a.ts': '', 'a.test.ts': '', 'b.tsx': '', 'test/c.ts': '', 'sub/d.ts': '', 'sub/test/e.ts': '',
+      'a.ts': '', 'b.tsx': '', 'sub/d.ts': '',
+      'a.test.ts': '', 'b.test.tsx': '', 'sub/foo.test.ts': '',
+      'test/c.ts': '', 'sub/test/e.ts': '', 'integration/f.ts': '', 'sub/integration/g.ts': '',
     });
-    expect(productionFiles(dir).sort()).toEqual([join(dir, 'a.ts'), join(dir, 'sub', 'd.ts')]);
+    expect(productionFiles(dir).sort()).toEqual([join(dir, 'a.ts'), join(dir, 'b.tsx'), join(dir, 'sub', 'd.ts')].sort());
+  });
+
+  it('lists the webview components', () => {
+    expect(productionFiles(WEBVIEW_SRC).some((path) => path.endsWith('.tsx'))).toBe(true);
+  });
+
+  it('is not fooled by a test directory above the root', () => {
+    const dir = plantedTree({ 'test/src/a.ts': '' });
+    expect(productionFiles(join(dir, 'test', 'src'))).toEqual([join(dir, 'test', 'src', 'a.ts')]);
   });
 });
 

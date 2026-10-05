@@ -13,7 +13,7 @@ export const isTestSupport = (relativePath: string): boolean =>
   relativePath.split(/[\\/]/).some((segment) => segment === 'test' || segment === 'integration') || relativePath.includes('.test.');
 
 export const productionFiles = (root: string): string[] =>
-  tsFiles(root, { exclude: ['test'], tsx: false, includeTests: false });
+  tsFiles(root).filter((path) => !isTestSupport(relative(root, path)));
 
 export const rootFiles = (src: string = SRC): string[] =>
   productionFiles(src).filter((path) => basename(path) === relative(src, path));
