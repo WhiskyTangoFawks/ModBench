@@ -132,7 +132,7 @@ public sealed class PluginAdapterTests
     }
 
     [Fact]
-    public async Task SaveAsync_WithALoadOrder_WritesTheMasterListInThatOrder()
+    public async Task Commit_WithALoadOrder_WritesTheMasterListInThatOrder()
     {
         using var data = new PluginFixtureBuilder("adapter-masters")
             .WithPlugin("AlphaBase.esm", mod => mod.Npcs.AddNew("AlphaNpc"))
@@ -152,7 +152,12 @@ public sealed class PluginAdapterTests
             Assert.NotEqual(reversed, natural.ModHeader.MasterReferences.Select(m => m.Master.FileName.ToString()));
         }
 
-        await PluginWriter.SaveAsync(patchPath, GameRelease.Fallout4, reversed);
+        using (var patch = Fallout4Mod.CreateFromBinary(
+            new ModPath(ModKey.FromFileName("Patch.esp"), patchPath), Fallout4Release.Fallout4))
+        using (var prep = await PluginWriter.PrepareFromModAsync(patch, patchPath, reversed))
+        {
+            prep.Commit();
+        }
 
         using var reread = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Patch.esp"), patchPath), Fallout4Release.Fallout4);
