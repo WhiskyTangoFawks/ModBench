@@ -19,26 +19,6 @@ public sealed class SchemaReflectorAvailabilityTests
     }
 
     [Fact]
-    public void IsSupported_ReturnsFalseForReleaseWhoseAssemblyIsNotReferenced_SkyrimSEBeingUnreferencedByThisBuild()
-    {
-        var reflector = new SchemaReflector();
-
-        var supported = reflector.IsSupported(GameRelease.SkyrimSE);
-
-        Assert.False(supported);
-    }
-
-    [Fact]
-    public void IsSupported_ReturnsTrueForReferencedRelease_BecauseFallout4AssemblyIsReferencedAndAStubAlwaysReturningFalseMustFail()
-    {
-        var reflector = new SchemaReflector();
-
-        var supported = reflector.IsSupported(GameRelease.Fallout4);
-
-        Assert.True(supported);
-    }
-
-    [Fact]
     public void GetSchemas_ForUnsupportedRelease_ThrowsUnsupportedGameReleaseException_NotFileNotFoundException()
     {
         var reflector = new SchemaReflector();
@@ -50,14 +30,14 @@ public sealed class SchemaReflectorAvailabilityTests
     }
 
     [Fact]
-    public void IsSupported_LogsOneWarning_NotOncePerCall()
+    public void GetSchemas_ForUnsupportedRelease_LogsOneWarning_NotOncePerCall()
     {
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
         var reflector = new SchemaReflector(loggerFactory.CreateLogger<SchemaReflector>());
 
-        reflector.IsSupported(GameRelease.SkyrimSE);
-        reflector.IsSupported(GameRelease.SkyrimSE);
+        Assert.Throws<UnsupportedGameReleaseException>(() => reflector.GetSchemas(GameRelease.SkyrimSE));
+        Assert.Throws<UnsupportedGameReleaseException>(() => reflector.GetSchemas(GameRelease.SkyrimSE));
 
         var warnings = entries.Where(e =>
             e.Level == LogLevel.Warning && e.Message.Contains("SkyrimSE") && e.Message.Contains("Mutagen.Bethesda.Skyrim"))

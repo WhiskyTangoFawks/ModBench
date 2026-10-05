@@ -111,17 +111,6 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
 
     private string TableFor(Type? concrete) => RecordTableName.Of(concrete, schemas);
 
-    /// <summary>The record type a document goes by: the schema table its path or its
-    /// <c>MutagenObjectType</c> names, else that declared type verbatim, so a document no schema
-    /// indexes still has a name a refusal can print.</summary>
-    public string TypeNameOf(string pathRecordType, byte[] bytes)
-    {
-        if (schemas.ContainsKey(pathRecordType)) return pathRecordType;
-
-        var declared = EmbeddedChildLocator.RootDiscriminator(bytes) ?? pathRecordType;
-        return RecordTypeNamed(declared) ?? declared;
-    }
-
     /// <summary>Every child a document carries inline, at any depth: a worldspace's own document
     /// holds its top cell, which holds its placed references.</summary>
     public IEnumerable<ChildDocument> EmbeddedDescendantsOf(string ownerRecordType, JsonElement ownerRoot)
