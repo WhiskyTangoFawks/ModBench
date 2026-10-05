@@ -285,12 +285,12 @@ export type PluginTreeNode =
 
 const SPATIAL_GROUP_FACTORIES: Record<
   string,
-  (pluginName: string, group: PluginRecordTypeCount, origin: string, conditions: PluginConditions) => PluginTreeNode
+  (plugin: PluginAddress, group: PluginRecordTypeCount, conditions: PluginConditions) => PluginTreeNode
 > = {
-  wrld: (pluginName, g, origin, conditions) =>
-    new WorldspacesNode(pluginName, g.displayName, g.count, origin, g.hasParseFailure, conditions),
-  cell: (pluginName, g, origin, conditions) =>
-    new InteriorCellsNode(pluginName, g.displayName, g.count, origin, g.hasParseFailure, conditions),
+  wrld: (plugin, g, conditions) =>
+    new WorldspacesNode(plugin.name, g.displayName, g.count, plugin.origin, g.hasParseFailure, conditions),
+  cell: (plugin, g, conditions) =>
+    new InteriorCellsNode(plugin.name, g.displayName, g.count, plugin.origin, g.hasParseFailure, conditions),
 };
 
 // Which raw record-type signature gets RecordNode's own containerChildType flag (Collapsed,
@@ -432,12 +432,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
    *  its own rows, whose whole knowledge of this side is the plugin and the
    *  conditions that row states. */
   async getPluginChildren(plugin: PluginAddress, conditions: PluginConditions = NOT_EDITABLE): Promise<PluginTreeNode[]> {
-    const { name: pluginName, origin } = plugin;
-    return this.orErrorNode(`getPluginChildren(${pluginName})`, async () => {
+    return this.orErrorNode(`getPluginChildren(${plugin.name})`, async () => {
       const types = await this.repository.getRecordTypes(plugin);
       return types
-        .map(t => SPATIAL_GROUP_FACTORIES[t.type]?.(pluginName, t, origin, conditions)
-          ?? new RecordTypeNode(pluginName, t, origin, conditions));
+        .map(t => SPATIAL_GROUP_FACTORIES[t.type]?.(plugin, t, conditions)
+          ?? new RecordTypeNode(plugin.name, t, plugin.origin, conditions));
     });
   }
 
