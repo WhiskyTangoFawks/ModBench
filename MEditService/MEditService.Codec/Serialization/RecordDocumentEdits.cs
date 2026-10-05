@@ -13,13 +13,14 @@ public readonly record struct NamedDocument(string Text, string? EditorId);
 public static class RecordDocumentEdits
 {
     /// <summary>The record under <paramref name="newFormKey"/> with every child slot cleared and its
-    /// EditorID replaced through <paramref name="deriveEditorId"/> — what Copy as New Record lands
-    /// for a record with a group of its own.</summary>
+    /// EditorID replaced through <paramref name="deriveEditorId"/> — what Copy as New Record lands.</summary>
     public static NamedDocument DuplicatedWithoutChildren(
         RecordTextCodec codec, string text, GameRelease release, string? recordType, string newFormKey,
         Func<string?, string?> deriveEditorId)
     {
-        var duplicate = Duplicated(codec, text, release, recordType, newFormKey);
+        var source = codec.Deserialize(text, release, recordType);
+        var duplicate = source.Duplicate(FormKey.Factory(newFormKey));
+        RemapSelfLink(duplicate, source.FormKey.ToString(), newFormKey);
         duplicate.EditorID = deriveEditorId(duplicate.EditorID);
         ContainerChildFields.ClearAllChildSlots(duplicate);
         return Named(codec, duplicate, release);
@@ -51,16 +52,6 @@ public static class RecordDocumentEdits
 
     private static NamedDocument Named(RecordTextCodec codec, IMajorRecordGetter record, GameRelease release) =>
         new(codec.SerializeToText(record, release), record.EditorID);
-
-    private static MajorRecord Duplicated(
-        RecordTextCodec codec, string text, GameRelease release, string? recordType, string newFormKey)
-    {
-        var source = codec.Deserialize(text, release, recordType);
-        var oldFormKey = source.FormKey.ToString();
-        var duplicate = source.Duplicate(FormKey.Factory(newFormKey));
-        RemapSelfLink(duplicate, oldFormKey, newFormKey);
-        return duplicate;
-    }
 
     // A record holding no links at all is left alone: a duplicate's self-link is optional.
     private static void RemapSelfLink(IMajorRecordGetter record, string oldFormKey, string newFormKey)

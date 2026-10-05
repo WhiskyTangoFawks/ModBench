@@ -37,12 +37,9 @@ internal sealed class NewRecordCopy
 
     private RecordEditResult CopyAsNewRecord(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)
     {
-        var (source, identity, destination, release, body) = copy;
-        var formKey = identity.FormKey;
+        var (source, identity, destination, release, _) = copy;
         if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType) is { } disallowedRefusal) return disallowedRefusal;
 
-        // A record with no group of its own copies into its container's document (a topic into its
-        // quest, a response into its topic); a placed reference has no such container and refuses.
         if (RecordTypeDispatch.For(release).FolderNameFor(identity.RecordType) is null)
         {
             if (source.ContainerOf(identity) is { } container)
@@ -50,53 +47,43 @@ internal sealed class NewRecordCopy
             if (WriteTargets.RefuseIfContainerType(identity.RecordType, release) is { } containerRefusal) return containerRefusal;
         }
 
-        if (FormKeyAllocator.Over(destination.Repository, destinationPlugin, release).Next(out var targetFormKey)
-            is { } refusedTarget) return refusedTarget;
-
-        var duplicate = RecordDocumentEdits.DuplicatedWithoutChildren(
-            _codec, body, release, identity.RecordType, targetFormKey,
-            EditorIdDeriver(destination.Repository.EditorIdsHeld(destinationPlugin)));
-        destination.Repository.Put(
-            destinationPlugin,
-            new SourceDocument(targetFormKey, identity.RecordType, duplicate.EditorId, duplicate.Text));
-
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation(
-                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new record {NewFormKey} into " +
-                "{DestinationPlugin} ({DestinationOrigin}) — new working-tree source document",
-                formKey, source.Plugin.Name, source.Plugin.Origin, targetFormKey, destinationPlugin.Name,
-                destinationPlugin.Origin);
-        }
-        return RecordEditResult.Success(targetFormKey);
+        return CopyUnderNextFormKey(
+            copy, destinationPlugin,
+            duplicate =>
+            {
+                destination.Repository.Put(destinationPlugin, duplicate);
+                return RecordEditResult.Success();
+            },
+            "new working-tree source document");
     }
 
-    // A missing container chain auto-creates bare and Partial Form.
     private RecordEditResult CopyEmbeddedChildAsNewRecord(
-        WriteTargets.CopyTarget copy, DocumentContainment container, PluginAddress destinationPlugin)
+        WriteTargets.CopyTarget copy, DocumentContainment container, PluginAddress destinationPlugin) =>
+        CopyUnderNextFormKey(
+            copy, destinationPlugin,
+            duplicate => _recordCopy.AppendEmbeddedChild(copy.Source, container, duplicate, copy.Destination, copy.Release),
+            $"inside {container.ParentFormKey}'s {container.SlotName} slot");
+
+    private RecordEditResult CopyUnderNextFormKey(
+        WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, Func<SourceDocument, RecordEditResult> land, string landedAt)
     {
         var (source, identity, destination, release, body) = copy;
-
         if (FormKeyAllocator.Over(destination.Repository, destinationPlugin, release).Next(out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
-        var duplicate = RecordDocumentEdits.DuplicatedWithoutChildren(
+        var named = RecordDocumentEdits.DuplicatedWithoutChildren(
             _codec, body, release, identity.RecordType, targetFormKey,
             EditorIdDeriver(destination.Repository.EditorIdsHeld(destinationPlugin)));
-
-        var appended = _recordCopy.AppendEmbeddedChild(
-            source, container,
-            new SourceDocument(targetFormKey, identity.RecordType, duplicate.EditorId, duplicate.Text),
-            destination, release);
-        if (!appended.Applied) return appended;
+        var landed = land(new SourceDocument(targetFormKey, identity.RecordType, named.EditorId, named.Text));
+        if (!landed.Applied) return landed;
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new record {NewFormKey} into " +
-                "{DestinationPlugin} ({DestinationOrigin}) — inside {ContainerFormKey}'s {SlotName} slot",
+                "{DestinationPlugin} ({DestinationOrigin}) — {LandedAt}",
                 identity.FormKey, source.Plugin.Name, source.Plugin.Origin, targetFormKey, destinationPlugin.Name,
-                destinationPlugin.Origin, container.ParentFormKey, container.SlotName);
+                destinationPlugin.Origin, landedAt);
         }
         return RecordEditResult.Success(targetFormKey);
     }

@@ -45,6 +45,7 @@ public static class CommandHandlers
         // The container half both copy modes take. Held once: singletons only, nothing per
         // request.
         services.AddSingleton(sp => new RecordCopy(
+            sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(RecordCopy)),
             sp.GetRequiredService<RecordTextCodec>()));

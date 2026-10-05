@@ -56,7 +56,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
         var quest = _fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString());
         Assert.NotNull(quest);
-        Assert.True(quest.IsPartialForm());
+        Assert.False(quest.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.QuestEditorId, quest.EditorId);
 
         Assert.Empty(Responses(newTopicFormKey));
 
@@ -117,6 +118,44 @@ public sealed class CopyAsNewContainerTests : IDisposable
     }
 
     [Fact]
+    public void CopyAsNewRecord_OnASelfLinkingResponse_RemapsTheLinkOntoTheNewFormKey()
+    {
+        var result = _fixture.CopyHandler.CopyAsNew(
+            _fixture.SourcePlugin, _fixture.Response1.ToString(), _fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var landed = Assert.Single(Responses(_fixture.DialogTopic.ToString()));
+        Assert.Equal(result.NewFormKey, Member(landed, "PreviousDialog"));
+    }
+
+    [Fact]
+    public void CopyAsNewRecord_OnAResponseLinkingItsSibling_LeavesTheLinkAtTheOriginal()
+    {
+        var result = _fixture.CopyHandler.CopyAsNew(
+            _fixture.SourcePlugin, _fixture.Response2.ToString(), _fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var landed = Assert.Single(Responses(_fixture.DialogTopic.ToString()));
+        Assert.Equal(_fixture.Response1.ToString(), Member(landed, "PreviousDialog"));
+    }
+
+    [Fact]
+    public void CopyAsNewRecord_OnAReferenceInAWorldspacesPersistentCell_CopiesTheWorldspaceAndItsPersistentCellIn()
+    {
+        var result = _fixture.CopyHandler.CopyAsNew(
+            _fixture.SourcePlugin, _fixture.TopCellRef.ToString(), _fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var worldspace = _fixture.Document(_fixture.DestinationPlugin, _fixture.Worldspace.ToString()).Require();
+        Assert.False(worldspace.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
+        var topCell = JsonDocument.Parse(worldspace.Body).RootElement.GetProperty("TopCell");
+        Assert.Equal(ContainerCopyFixture.TopCellEditorId, topCell.GetProperty("EditorID").GetString());
+        var landed = Assert.Single(topCell.GetProperty("Temporary").EnumerateArray());
+        Assert.Equal(result.NewFormKey, landed.GetProperty("FormKey").GetString());
+    }
+
+    [Fact]
     public async Task CopyAsNewRecord_OnAResponseAlone_AutoCreatesTheQuestAndTopicChain()
     {
         var result = _fixture.CopyHandler.CopyAsNew(
@@ -126,8 +165,12 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var newFormKey = result.NewFormKey.Require();
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newFormKey, StringComparison.OrdinalIgnoreCase);
 
-        Assert.True(_fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString()).Require().IsPartialForm());
-        Assert.True(_fixture.Document(_fixture.DestinationPlugin, _fixture.DialogTopic.ToString()).Require().IsPartialForm());
+        var quest = _fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString()).Require();
+        Assert.False(quest.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.QuestEditorId, quest.EditorId);
+        var topic = _fixture.Document(_fixture.DestinationPlugin, _fixture.DialogTopic.ToString()).Require();
+        Assert.False(topic.IsPartialForm());
+        Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, topic.EditorId);
 
         var landed = Assert.Single(Responses(_fixture.DialogTopic.ToString()));
         Assert.Equal(newFormKey, Member(landed, "FormKey"));

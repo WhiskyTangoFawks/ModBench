@@ -54,7 +54,7 @@ public sealed class CreateRecordHandler
         if (FormKeyAllocator.Over(repository, plugin, release).Next(out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
-        var body = RecordMint.BareDocument(_codec, schema, release, targetFormKey, editorId: null, partialForm: false);
+        var body = RecordMint.BareDocument(_codec, schema, release, targetFormKey, editorId: null);
 
         // RefuseIfContainerType guarantees a flat record, so the repository's own layout is the whole
         // answer: no block path, and the group folder minted by the write when this type is new here.
