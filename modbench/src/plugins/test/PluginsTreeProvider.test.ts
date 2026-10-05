@@ -1720,7 +1720,6 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     expect(after).toEqual(before);
     expect(h.tree.getTreeItem(present(after[1], "B.esp's row")).description).toBe(statusBefore);
   });
-
 });
 
 describe('PluginsTreeProvider — applyBackendUnreachable', () => {
@@ -1733,7 +1732,6 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
 
     expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('mEdit is disconnected.');
   });
-
 });
 
 describe('PluginsTreeProvider — a record filter hides a plugin with no matches', () => {
