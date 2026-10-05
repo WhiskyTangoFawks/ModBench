@@ -14,7 +14,7 @@ import {
   referencedByCopyValueText,
   REFERENCED_BY_VIEW,
 } from '../ReferencedByTreeProvider';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordArgument } from '../recordLifecycleCommands';
 import { expectInstancesOf } from '../../test/expectInstanceOf';
 import type { ReferenceResult } from '../../client';

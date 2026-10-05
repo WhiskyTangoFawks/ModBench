@@ -1,19 +1,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rename as fsRename, rm, writeFile } from 'node:fs/promises';
-import type { PathLike } from 'node:fs';
+import { Dirent, type PathLike } from 'node:fs';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { present } from '../../ports/present';
 
 vi.mock('vscode', () => fakeVscodeModule());
-const real = vi.hoisted(() => ({ rename: undefined as typeof import('node:fs/promises').rename | undefined }));
+const real = vi.hoisted(() => ({
+  rename: undefined as typeof import('node:fs/promises').rename | undefined,
+  listDir: undefined as typeof import('../files').listDir | undefined,
+}));
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   real.rename = actual.rename;
   return { ...actual, rename: vi.fn(actual.rename) };
 });
+vi.mock('../files', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../files')>();
+  real.listDir = actual.listDir;
+  return { ...actual, listDir: vi.fn(actual.listDir) };
+});
+const actualListDir = (path: string): ReturnType<typeof listDir> => present(real.listDir, 'the real listDir')(path);
 const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
 
+import { listDir } from '../files';
 import type { FileOrigin, InstanceAdapter } from '../instanceAdapter';
 import { mo2InstanceAdapter } from '../mo2Instance';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
@@ -66,6 +76,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
   });
   afterEach(async () => {
     vi.mocked(fsRename).mockImplementation(actualRename);
+    vi.mocked(listDir).mockImplementation(actualListDir);
     await rm(root, { recursive: true, force: true });
   });
 
@@ -176,8 +187,11 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     });
 
     it('refuses two files that the rename would put on one name, which on a file system that tells case apart would overwrite one with the other', async () => {
-      await put(`${MOD}/tracked patch mod.ini`);
-      await refused(() => rename(), /is in the way/);
+      class TwinIni extends Dirent {
+        override name = 'tracked patch mod.ini';
+      }
+      vi.mocked(listDir).mockImplementation(async (path) => [...await actualListDir(path), ...(path === at(MOD) ? [new TwinIni()] : [])]);
+      await refused(() => rename().finally(() => vi.mocked(listDir).mockImplementation(actualListDir)), /is in the way/);
     });
 
     it.each(['a/b.esp', 'a\\b.esp', '..', ''])('refuses the name "%s", which is no file of the origin', (name) =>

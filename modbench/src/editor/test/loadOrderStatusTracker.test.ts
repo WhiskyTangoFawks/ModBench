@@ -1,7 +1,7 @@
 import type { NotificationEvent } from '../../client/apiClient';
 import { describe, it, expect, vi } from 'vitest';
 import type { PluginLoadFailure } from '../../client';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { trackLoadOrderStatus } from '../loadOrderStatusTracker';
 
 function tick(conflictsComputed: boolean, failures: PluginLoadFailure[] = []): NotificationEvent {

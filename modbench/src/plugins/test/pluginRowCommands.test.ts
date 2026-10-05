@@ -46,7 +46,8 @@ import {
 } from '../pluginRowCommands';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { InMemoryMEditClient, type PluginAddress } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { type PluginAddress } from '../../client';
 import type { ItemRefusal } from '../../ports/selectionOutcome';
 import { PluginNode } from '../PluginsTreeProvider';
 import { assertAskedOnce, recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';

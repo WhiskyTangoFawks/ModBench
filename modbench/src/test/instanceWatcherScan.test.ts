@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
-import { productionFiles, SRC } from '../../test/scanSource';
+import { productionFiles, SRC } from './scanSource';
 
 const ALLOWED = new Set([join('instanceAdapter', 'mo2Watch.ts')]);
 

@@ -50,7 +50,8 @@ vi.mock('vscode', () => ({
 }));
 
 import { ExtendedFieldDocuments, EDITABLE_FIELD_SCHEME, READONLY_FIELD_SCHEME, type OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
-import { InMemoryMEditClient, type CompareResult } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { type CompareResult } from '../../client';
 import type { Reporter } from '../../ports/reporter';
 
 type Diff = CompareResult['diffs'][number];

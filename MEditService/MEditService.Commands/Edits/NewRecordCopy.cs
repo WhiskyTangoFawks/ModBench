@@ -53,8 +53,6 @@ internal sealed class NewRecordCopy
         if (FormKeyAllocator.Over(destination.Repository, destinationPlugin, release).Next(out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
-        // Own-record-only, like Copy as Override: a container's children never ride along (deep copy
-        // is a separate operation).
         var duplicate = RecordDocumentEdits.DuplicatedWithoutChildren(
             _codec, body, release, identity.RecordType, targetFormKey,
             EditorIdDeriver(destination.Repository.EditorIdsHeld(destinationPlugin)));
@@ -73,28 +71,17 @@ internal sealed class NewRecordCopy
         return RecordEditResult.Success(targetFormKey);
     }
 
-    // The embedded subtree rides along, each record under a fresh key drawn before anything is written.
     // A missing container chain auto-creates bare and Partial Form.
     private RecordEditResult CopyEmbeddedChildAsNewRecord(
         WriteTargets.CopyTarget copy, DocumentContainment container, PluginAddress destinationPlugin)
     {
         var (source, identity, destination, release, body) = copy;
 
-        var allocator = FormKeyAllocator.Over(destination.Repository, destinationPlugin, release);
-        if (allocator.Next(out var targetFormKey) is { } refusedTarget) return refusedTarget;
+        if (FormKeyAllocator.Over(destination.Repository, destinationPlugin, release).Next(out var targetFormKey)
+            is { } refusedTarget) return refusedTarget;
 
-        // Its own text carries its whole embedded subtree, so the codec has already read every
-        // descendant by the time one can be re-keyed.
-        var rekeys = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var descendant in RecordDocumentEdits.EmbeddedDescendantFormKeys(
-                     _codec, body, release, identity.RecordType))
-        {
-            if (allocator.Next(out var childFormKey) is { } refused) return refused;
-            rekeys[descendant] = childFormKey;
-        }
-
-        var duplicate = RecordDocumentEdits.DuplicatedWithSubtreeRekeyed(
-            _codec, body, release, identity.RecordType, targetFormKey, rekeys,
+        var duplicate = RecordDocumentEdits.DuplicatedWithoutChildren(
+            _codec, body, release, identity.RecordType, targetFormKey,
             EditorIdDeriver(destination.Repository.EditorIdsHeld(destinationPlugin)));
 
         var appended = _recordCopy.AppendEmbeddedChild(
@@ -107,10 +94,9 @@ internal sealed class NewRecordCopy
         {
             _logger.LogInformation(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new record {NewFormKey} into " +
-                "{DestinationPlugin} ({DestinationOrigin}) — inside {ContainerFormKey}'s {SlotName} slot, " +
-                "with {DescendantCount} embedded descendant(s) each under a fresh FormKey",
+                "{DestinationPlugin} ({DestinationOrigin}) — inside {ContainerFormKey}'s {SlotName} slot",
                 identity.FormKey, source.Plugin.Name, source.Plugin.Origin, targetFormKey, destinationPlugin.Name,
-                destinationPlugin.Origin, container.ParentFormKey, container.SlotName, rekeys.Count);
+                destinationPlugin.Origin, container.ParentFormKey, container.SlotName);
         }
         return RecordEditResult.Success(targetFormKey);
     }

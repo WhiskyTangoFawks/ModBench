@@ -16,7 +16,7 @@ import { makeReporter } from '../reporter';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { applyRecordEdit } from '../editor/applyRecordEdit';
 import { registerRecordLifecycleCommands } from '../editor/recordLifecycleCommands';
-import { InMemoryMEditClient } from '../client';
+import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { present } from '../ports/present';
 import type { RecordEditEnvelope } from '../wire/messages';
 

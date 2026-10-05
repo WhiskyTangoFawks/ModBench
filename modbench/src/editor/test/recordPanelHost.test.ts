@@ -38,7 +38,7 @@ import { registerEditorCommands } from '../recordPanelHost';
 import { ActiveRecordTracker } from '../ActiveRecordTracker';
 import { EditsInFlight } from '../followRecord';
 import { FocusedCells } from '../focusedCells';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const reporter = { report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() };
 
