@@ -15,8 +15,6 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private const string DebrisEditorId = "FixtureDebris";
-
     private static readonly string[] TwoModels =
     [
         """{"Percentage": 50, "ModelFilename": "First.nif", "TextureFileHashes": "0x1122"}""",
@@ -25,7 +23,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
 
     private string SeedDebrisWithTwoModelsCarryingBlobs()
     {
-        var created = _mod.CreateHandler.CreateRecord(_mod.Plugin, "debr", DebrisEditorId);
+        var created = _mod.CreateHandler.CreateRecord(_mod.Plugin, "debr");
         Assert.True(created.Applied, created.Message);
 
         var seed = Service().Set(_mod.Plugin, created.NewFormKey.Require(), "Models",

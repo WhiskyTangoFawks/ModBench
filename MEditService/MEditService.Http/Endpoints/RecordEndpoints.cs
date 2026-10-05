@@ -158,7 +158,6 @@ public static class RecordEndpoints
                 new PluginAddress(request.Plugin, request.Origin), decoded,
                 new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value)),
             onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled, result.NewFormKey)),
-            onMalformedFormKey: null,
             onNoLoadOrder: ex =>
             {
                 // 503, matching every sibling's own mapping for it: the load order went away

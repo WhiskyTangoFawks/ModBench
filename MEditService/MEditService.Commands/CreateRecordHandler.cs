@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands;
 
 /// <summary>The Create gesture's handler (ADR-0014): mints a bare record (plugins.md, Create record, story 2) and
-/// writes it as a new source file. FormKey allocation is <see cref="WriteTargets"/>'s alone.</summary>
+/// writes it as a new source file under the next free FormKey of <see cref="FormKeyAllocator"/>.</summary>
 public sealed class CreateRecordHandler
 {
     private readonly WriteTargets _targets;
@@ -30,15 +30,12 @@ public sealed class CreateRecordHandler
             (targets, loadOrder, codec, schemaReflector, logger);
     }
 
-    /// <summary>The FormKey is <paramref name="requestedFormKey"/> (xEdit's typed-FormID path) or the next
-    /// free local ID, collision-checked at both refs so an uncompiled create or a working-tree-deleted
-    /// record is never handed out twice.</summary>
-    public RecordEditResult CreateRecord(PluginAddress plugin, string recordType, string? editorId, string? requestedFormKey = null) =>
-        ItemWrite.RefusingTheWriteFailure(
-            () => MintRecord(plugin, recordType, editorId, requestedFormKey),
+    public RecordEditResult CreateRecord(PluginAddress plugin, string recordType) =>
+        WriteFailure.Refused(
+            () => MintRecord(plugin, recordType),
             $"Could not write the source file for the new {recordType}", _logger);
 
-    private RecordEditResult MintRecord(PluginAddress plugin, string recordType, string? editorId, string? requestedFormKey)
+    private RecordEditResult MintRecord(PluginAddress plugin, string recordType)
     {
         if (_targets.RefuseUnlessTrackedAndLoaded(plugin, out var openedRepository) is { } blocked) return blocked;
         var repository = openedRepository
@@ -53,15 +50,14 @@ public sealed class CreateRecordHandler
         }
         if (WriteTargets.RefuseIfContainerType(recordType, release) is { } containerRefusal) return containerRefusal;
 
-        if (_targets.ResolveTargetFormKey(repository, plugin, requestedFormKey, out var targetFormKey)
+        if (FormKeyAllocator.Over(repository, plugin, release).Next(out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
-        var name = string.IsNullOrWhiteSpace(editorId) ? null : editorId;
-        var body = RecordMint.BareDocument(_codec, schema, release, targetFormKey, name, partialForm: false);
+        var body = RecordMint.BareDocument(_codec, schema, release, targetFormKey, editorId: null, partialForm: false);
 
         // RefuseIfContainerType guarantees a flat record, so the repository's own layout is the whole
         // answer: no block path, and the group folder minted by the write when this type is new here.
-        repository.Put(plugin, new SourceDocument(targetFormKey, recordType, name, body));
+        repository.Put(plugin, new SourceDocument(targetFormKey, recordType, null, body));
 
         if (_logger.IsEnabled(LogLevel.Information))
         {

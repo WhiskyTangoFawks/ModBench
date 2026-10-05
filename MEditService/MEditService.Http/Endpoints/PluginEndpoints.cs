@@ -285,9 +285,8 @@ public static class PluginEndpoints
         }
     }
 
-    // FormKey null means auto-allocate; non-null is xEdit's typed-FormID path, validated
-    // server-side either way. logReceived is null on purpose: no PluginEndpoints handler logs on
-    // entry, UseSerilogRequestLogging's per-request summary covers it.
+    // logReceived is null on purpose: no PluginEndpoints handler logs on entry,
+    // UseSerilogRequestLogging's per-request summary covers it.
     internal static IResult CreateRecord(
         string plugin, RecordCreateRequest req, CreateRecordHandler edits, ILoggerFactory loggerFactory)
     {
@@ -304,15 +303,8 @@ public static class PluginEndpoints
                     return Results.Problem("A record type is required.", statusCode: 400);
                 return null;
             },
-            execute: () => edits.CreateRecord(WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType, req.EditorId, req.FormKey),
+            execute: () => edits.CreateRecord(WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType),
             onApplied: result => Results.Ok(new RecordCreateResponse(true, WriteEndpointMapping.RequireNewFormKey(result), req.RecordType)),
-            // req.FormKey reaches Mutagen's FormKey.Factory with no TryFactory guard, so a malformed
-            // value throws ArgumentException: malformed syntax is a 400, never Refusal's 422.
-            onMalformedFormKey: ex =>
-            {
-                logger.LogError(ex, "Malformed FormKey creating a {RecordType} in {Plugin}", req.RecordType, decoded);
-                return WriteEndpointMapping.MalformedFormKey(ex);
-            },
             onNoLoadOrder: ex =>
             {
                 logger.LogError(ex, "No usable loadOrder while creating a record in {Plugin}", decoded);

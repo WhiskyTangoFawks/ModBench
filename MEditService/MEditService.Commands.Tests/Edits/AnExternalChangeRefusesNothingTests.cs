@@ -27,7 +27,7 @@ public sealed class AnExternalChangeRefusesNothingTests : IDisposable
     {
         _mod.ChangeOutsideModbench();
 
-        var result = _mod.CreateHandler.CreateRecord(_mod.Plugin, "npc_", "New");
+        var result = _mod.CreateHandler.CreateRecord(_mod.Plugin, "npc_");
 
         Assert.True(result.Applied, result.Message);
     }

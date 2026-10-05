@@ -50,8 +50,7 @@ internal sealed class NewRecordCopy
             if (WriteTargets.RefuseIfContainerType(identity.RecordType, release) is { } containerRefusal) return containerRefusal;
         }
 
-        if (_targets.ResolveTargetFormKey(
-                destination.Repository, destinationPlugin, requestedFormKey: null, out var targetFormKey)
+        if (FormKeyAllocator.Over(destination.Repository, destinationPlugin, release).Next(out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
         // Own-record-only, like Copy as Override: a container's children never ride along (deep copy
@@ -81,20 +80,16 @@ internal sealed class NewRecordCopy
     {
         var (source, identity, destination, release, body) = copy;
 
-        var allocator = _targets.AllocatorOver(destination.Repository, destinationPlugin);
-        if (WriteTargets.ResolveTargetFormKey(allocator, requestedFormKey: null, out var targetFormKey) is { } refusedTarget)
-            return refusedTarget;
+        var allocator = FormKeyAllocator.Over(destination.Repository, destinationPlugin, release);
+        if (allocator.Next(out var targetFormKey) is { } refusedTarget) return refusedTarget;
 
         // Its own text carries its whole embedded subtree, so the codec has already read every
         // descendant by the time one can be re-keyed.
-        var taken = new HashSet<string>(StringComparer.Ordinal) { targetFormKey };
         var rekeys = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var descendant in RecordDocumentEdits.EmbeddedDescendantFormKeys(
                      _codec, body, release, identity.RecordType))
         {
-            if (WriteTargets.ResolveTargetFormKey(allocator, requestedFormKey: null, out var childFormKey, taken) is { } refused)
-                return refused;
-            taken.Add(childFormKey);
+            if (allocator.Next(out var childFormKey) is { } refused) return refused;
             rekeys[descendant] = childFormKey;
         }
 

@@ -58,9 +58,7 @@ public record RecordEditResponse(bool Applied, string FormKey, string Path, stri
 // identity, refusals as ProblemDetails carrying the same `refusal` extension) Edit already
 // established.
 
-/// <summary><see cref="FormKey"/> null means auto-allocate the next free local FormID (both-refs
-/// collision-safe); non-null is xEdit's typed-FormID path.</summary>
-public record RecordCreateRequest(string Origin, string RecordType, string? EditorId, string? FormKey);
+public record RecordCreateRequest(string Origin, string RecordType);
 
 public record RecordCreateResponse(bool Applied, string FormKey, string RecordType);
 

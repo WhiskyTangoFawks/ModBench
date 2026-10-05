@@ -33,14 +33,14 @@ public sealed class EditRecordHandler
     {
         (_targets, _loadOrder, _codec, _schemaReflector, _logger) =
             (targets, loadOrder, codec, schemaReflector, logger);
-        _formKeyChange = new FormKeyChange(targets, codec, logger);
+        _formKeyChange = new FormKeyChange(codec, logger);
         _cellLanding = new CellLanding(targets, codec, schemaReflector, logger);
     }
 
     /// <summary>The single write path (ADR-0007): <see cref="DocumentEdit"/> patches the
     /// document, and this method owns only the IO around it.</summary>
     public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
-        ItemWrite.RefusingTheWriteFailure(
+        WriteFailure.Refused(
             () => EditSource(plugin, formKey, envelope), $"Could not write the source file for {formKey}", _logger);
 
     private RecordEditResult EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)

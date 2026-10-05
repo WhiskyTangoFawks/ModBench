@@ -38,8 +38,6 @@ public sealed class ClearFieldApiTests(LoadedApiFixture<TestPluginFixture> loade
         {
             origin = Origin,
             recordType = "npc_",
-            editorId = "ToClear",
-            formKey = (string?)null,
         });
         created.EnsureSuccessStatusCode();
         var formKey = DocumentNodes.StringValueOf((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));

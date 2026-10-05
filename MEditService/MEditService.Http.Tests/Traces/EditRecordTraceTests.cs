@@ -101,7 +101,7 @@ public sealed class EditRecordTraceTests : HostedTests
         using var stream = await Client.NotificationStream();
 
         var created = await Client.PostAsJsonAsync(
-            $"/plugins/{Plugin}/records", new { origin = Origin, recordType = "npc_", editorId = "Fresh", formKey = (string?)null });
+            $"/plugins/{Plugin}/records", new { origin = Origin, recordType = "npc_" });
 
         created.EnsureSuccessStatusCode();
         var formKey = (await Body(created)).GetProperty("formKey").GetString().Require();
@@ -109,7 +109,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var rows = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(formKey)))[^1];
         Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
         Assert.Equal(Origin, rows.GetProperty("origin").GetString());
-        Assert.Equal("Fresh", (await Client.Record(formKey)).GetProperty("editorId").GetString());
+        Assert.Equal(formKey, (await Client.Record(formKey)).GetProperty("formKey").GetString());
     }
 
     private const string UntrackedPlugin = "Untracked.esp";
@@ -243,16 +243,4 @@ public sealed class EditRecordTraceTests : HostedTests
     private static (string FormKey, string Destination) CopiedInto(JsonElement item) =>
         (item.GetProperty("record").GetProperty("formKey").GetString().Require(),
             item.GetProperty("destination").GetProperty("name").GetString().Require());
-
-    [Fact]
-    public async Task CreatingARecordWithAMalformedFormKey_Is400()
-    {
-        using var fx = await Loaded(Origin);
-
-        var response = await Client.PostAsJsonAsync(
-            $"/plugins/{Plugin}/records",
-            new { origin = Origin, recordType = "npc_", editorId = "Broken", formKey = "not-a-formkey" });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
 }
