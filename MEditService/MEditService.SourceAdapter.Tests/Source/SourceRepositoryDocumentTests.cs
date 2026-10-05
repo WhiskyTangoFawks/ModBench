@@ -243,6 +243,37 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
+    public void Put_OfACellDirectorySomethingElseRenamed_MovesItToTheNameTheLayoutComputes()
+    {
+        const string cellKey = "000A00:Fixture.esp";
+        PluginBaselines.TrackWithNoRecords(_modFolder);
+        var repository = RequireOpened();
+        var body = $"{{\n  \"FormKey\": \"{cellKey}\",\n  \"EditorID\": \"Cell\"\n}}";
+        repository.Put(Plugin, new SourceDocument(cellKey, "cell", "Cell", body));
+        var cells = Path.Combine(_modFolder, "plugin-source", PluginName, "Cells");
+        var held = Directory.GetDirectories(cells, "Cell*", SearchOption.AllDirectories).Single();
+        var blockFolder = Path.GetDirectoryName(held) ?? throw new InvalidOperationException(held);
+        Directory.Move(held, Path.Combine(blockFolder, $"RenamedOutside - 000A00_{PluginName}"));
+
+        repository.Put(Plugin, new SourceDocument(cellKey, "cell", "Cell", body));
+
+        Assert.Equal([Path.Combine(blockFolder, $"Cell - 000A00_{PluginName}")], Directory.GetDirectories(blockFolder));
+    }
+
+    [Fact]
+    public void Put_OfAFileFoundByItsTextUnderANameCarryingNoFormKey_MovesItToTheNameTheLayoutComputes()
+    {
+        var repository = Opened();
+        File.Move(Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json"), Path.Combine(NpcGroupFolder, "HandName.json"));
+        var identity = new RecordIdentity(NpcFormKey, "npc_", NpcEditorId);
+        Assert.NotNull(repository.Get(Plugin, identity));
+
+        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody));
+
+        Assert.Equal([$"{NpcEditorId} - 000800_{PluginName}.json"], NpcFileNames());
+    }
+
+    [Fact]
     public void Put_OverADocumentThatIsNotJson_RefusesWithAReason_AndLeavesTheFileAsItWas()
     {
         var repository = Opened();
@@ -258,7 +289,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Put_OfTheEditorIdTheDocumentAlreadyHas_LeavesAFileSomethingElseRenamedWhereItIs()
+    public void Put_OfAFileSomethingElseRenamed_MovesItToTheNameTheLayoutComputes()
     {
         var repository = Opened();
         var renamed = Path.Combine(NpcGroupFolder, $"RenamedOutside - 000800_{PluginName}.json");
@@ -266,7 +297,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
         repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody));
 
-        Assert.Equal([Path.GetFileName(renamed)], NpcFileNames());
+        Assert.Equal([$"{NpcEditorId} - 000800_{PluginName}.json"], NpcFileNames());
     }
 
     [Fact]

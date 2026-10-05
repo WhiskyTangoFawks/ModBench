@@ -45,9 +45,9 @@ public sealed class SourceTransaction
         // which one document's bytes cannot take back.
         if (repository.Locator.LocateToPlace(plugin, identity) is not { } unit) throw NotRestorableCreate(plugin, identity);
 
-        // Refused before the tree is touched: the move a changed EditorID makes is a path this
+        // Refused before the tree is touched: the move to another leaf name is a path this
         // batch holds no bytes for.
-        if (SourceRepositoryWrites.ChangesEditorId(unit, document)) throw NotRestorableRename(unit, identity);
+        if (SourceRepositoryWrites.MovesToAnotherLeafName(unit, document)) throw NotRestorableMove(unit, identity);
 
         var before = Snapshot(unit.FullPath);
         var minted = SourceRepositoryLayout.LevelsMintedBy(PathShape.DirectoryOf(unit.FullPath));
@@ -123,8 +123,8 @@ public sealed class SourceTransaction
             "own, so putting it would create one and mint the levels above it. A batch holds one " +
             "document's bytes per act, so it cannot put that back — put it outside the batch.");
 
-    private static NotSupportedException NotRestorableRename(SourceUnit unit, RecordIdentity identity) =>
-        new($"Putting {identity.FormKey} under a new EditorID would rename {unit.RelativePath}, and a batch " +
+    private static NotSupportedException NotRestorableMove(SourceUnit unit, RecordIdentity identity) =>
+        new($"Putting {identity.FormKey} would move {unit.RelativePath}, and a batch " +
             "holds the bytes of one path per act, so it cannot put that back — put it outside the batch.");
 
     // Recorded in execution order and undone in reverse, so a rename is put back before the create that
