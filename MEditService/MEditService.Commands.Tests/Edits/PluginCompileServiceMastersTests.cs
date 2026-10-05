@@ -97,7 +97,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     public async Task Compile_ForAnOverrideOfAnotherPluginsRecord_NamesThatPluginAsAMaster()
     {
         SourceEdits.Write(
-            SourceRepository.Open(_modFolder, GameRelease.Fallout4).Require(), _plugin,
+            SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require(), _plugin,
             new Keyword(_deltaKeyword, Fallout4Release.Fallout4) { EditorID = "DeltaKeyword" },
             "kywd", GameRelease.Fallout4);
 
@@ -116,7 +116,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     public async Task Compile_ForALinkIntoAnotherPluginNamingTheWrongRecordType_ReportsIt()
     {
         SourceEdits.Rewrite<Npc>(
-            SourceRepository.Open(_modFolder, GameRelease.Fallout4).Require(), _plugin,
+            SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require(), _plugin,
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
             npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_bravoRace)));
 
@@ -148,7 +148,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     public async Task Compile_AfterAnEditIntroducesAReferenceToAnUnreferencedPlugin_AddsItAsAMaster()
     {
         SourceEdits.Rewrite<Npc>(
-            SourceRepository.Open(_modFolder, GameRelease.Fallout4).Require(), _plugin,
+            SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require(), _plugin,
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
             npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_deltaKeyword)));
 

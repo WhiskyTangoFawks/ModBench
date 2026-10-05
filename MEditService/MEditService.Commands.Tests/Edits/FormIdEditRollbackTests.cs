@@ -110,7 +110,7 @@ public sealed class FormIdEditRollbackTests
 
     private static string RelocatedWorldspaceDirectory(SourceContainerFixture fixture, string newFormKey)
     {
-        var repository = SourceRepository.Over(fixture.ModFolder, GameRelease.Fallout4);
+        var repository = SourceRepository.Over(TestMod.In(fixture.ModFolder), GameRelease.Fallout4);
         var identity = new RecordIdentity(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId);
         repository.Put(fixture.Plugin, new SourceDocument(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId, "{}"));
         var directory = TreeTampering.DirectoryOf(fixture.ModFolder, fixture.Plugin, identity);

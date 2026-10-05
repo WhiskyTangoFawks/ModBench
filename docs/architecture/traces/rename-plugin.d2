@@ -1,0 +1,31 @@
+# Rename a plugin, cyan and blue.
+...@../styles
+shape: sequence_diagram
+plugins: @../target-architecture.modbench_driving.plugins
+plugins.label: Plugins
+pluginscommands: @../target-architecture.modbench_core.pluginscommands
+pluginscommands.label: plugins commands
+client: @../target-architecture.modbench_repositories.client
+client.label: mEdit client
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+
+plugins."the name"
+plugins -> pluginscommands: "the gesture: the plugin, the new name" {class: loadorder}
+pluginscommands -> client: "the plugin's dependants" {class: query}
+client -> pluginscommands: "the dependants" {class: query}
+pluginscommands."confirm, when there are dependants"
+pluginscommands -> client: "rename source: the plugin, the new name; the rest is edit-record" {class: edit}
+client -> pluginscommands: applied or refusal {class: edit}
+pluginscommands -> instanceadapter: "the change: the file names · the lines, every profile; the rest is update-load-order-file" {class: loadorder}
+pluginscommands -> plugins: applied or refusal {class: loadorder}
+plugins -> instanceloader: refresh {class: loadorder}
+
+refused: "refused, before any write" {
+  pluginscommands -> plugins: "the refusal" {class: loadorder}
+}
+failed: "the files failed after the source" {
+  pluginscommands -> plugins: "the failure: the plugin" {class: loadorder}
+}

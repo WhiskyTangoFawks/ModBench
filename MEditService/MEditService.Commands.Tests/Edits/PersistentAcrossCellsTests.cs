@@ -128,7 +128,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     private static List<string> Group(JsonObject cell, string group) =>
         [.. (cell[group] as JsonArray ?? []).Select(placed => placed.Require()["EditorID"].Require().GetValue<string>())];
 
-    private SourceRepository Tree => SourceRepository.Open(_plugins.FolderOf(Override), GameRelease.Fallout4).Require();
+    private SourceRepository Tree => SourceRepository.Open(TestMod.In(_plugins.FolderOf(Override)), GameRelease.Fallout4).Require();
 
     [Fact]
     public void SettingPersistent_WhereTheWorldspaceHoldsNoPersistentCell_CopiesItInFromItsMaster()

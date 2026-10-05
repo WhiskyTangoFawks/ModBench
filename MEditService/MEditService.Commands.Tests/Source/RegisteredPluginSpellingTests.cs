@@ -27,7 +27,7 @@ public sealed class RegisteredPluginSpellingTests
             .TrackModAsync(scratch.LoadOrder, Origin);
 
         Assert.Empty(result.Refused);
-        var repository = SourceRepository.Open(scratch.ModFolder, Release).Require();
+        var repository = SourceRepository.Open(TestMod.In(scratch.ModFolder), Release).Require();
         Assert.NotEmpty(repository.FormKeysUsed(scratch.Plugin));
         Assert.Empty(repository.ChangedSinceLastCommit(
             scratch.Plugin, SharedSchemaReflector.Instance.GetSchemas(Release)));

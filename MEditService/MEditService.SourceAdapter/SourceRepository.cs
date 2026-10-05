@@ -12,7 +12,7 @@ namespace MEditService.SourceAdapter;
 public sealed class SourceRepository
 {
     private readonly string _modFolder;
-    private readonly string? _modName;
+    private readonly string _modName;
     private readonly GameRelease _release;
     private readonly SourceRepositoryGit _git;
 
@@ -24,9 +24,7 @@ public sealed class SourceRepository
 
     internal SourceRepositoryWrites Writes { get; }
 
-    // Private so a repository comes from one of the two named doors, each stating what it observed:
-    // Open, which found a tracked folder, or Over, which established that or did not need it.
-    private SourceRepository(string modFolder, GameRelease release, string? modName = null)
+    private SourceRepository(string modFolder, GameRelease release, string modName)
     {
         (_modFolder, _release, _modName) = (modFolder, release, modName);
         _git = new SourceRepositoryGit(modFolder);
@@ -35,20 +33,10 @@ public sealed class SourceRepository
         Writes = new SourceRepositoryWrites(modFolder, release, Locator, Layout, _git);
     }
 
-    /// <summary>The repository over <paramref name="modFolder"/>, or null when the folder is not
-    /// tracked and so has no source tree to answer from. <paramref name="release"/> is the game
-    /// whose record types name the tree's group folders.</summary>
-    public static SourceRepository? Open(string modFolder, GameRelease release) =>
-        IsTracked(modFolder) ? new SourceRepository(modFolder, release) : null;
-
-    /// <summary>As <see cref="Open(string, GameRelease)"/>, for a mod's plugins alone.</summary>
+    /// <summary>The repository over <paramref name="mod"/>'s folder, or null when the folder is not
+    /// tracked and so has no source tree to answer from.</summary>
     public static SourceRepository? Open(PluginProvider.FromMod mod, GameRelease release) =>
         IsTracked(mod.Folder) ? Over(mod, release) : null;
-
-    /// <summary>The repository over a folder whose tracked state the caller has already established,
-    /// or does not need: the document verbs answer either way, and a git verb over an untracked folder
-    /// answers empty rather than throwing.</summary>
-    public static SourceRepository Over(string root, GameRelease release) => new(root, release);
 
     /// <summary>The repository over a mod's folder, which refuses the last-written record of a plugin
     /// another mod provides (ADR-0012): a repository knows only its folder.</summary>
@@ -251,7 +239,7 @@ public sealed class SourceRepository
 
     private void RefuseUnlessProvidedByThisMod(PluginAddress plugin)
     {
-        if (_modName is not null && !string.Equals(plugin.Origin, _modName, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(plugin.Origin, _modName, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
                 $"{plugin.Name} is provided by '{plugin.Origin}', and this repository holds '{_modName}'.", nameof(plugin));

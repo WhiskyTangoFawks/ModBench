@@ -144,6 +144,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | compare file | reads | `modbench.mod.compareFile` | a copy of a file in a mod or Overwrite | - | none | Open VS Code's diff editor on a mod's copy of a file and the winning copy. | none |
 | go to mod | reads | `modbench.mod.goToMod` | a copy of a file in a mod or Overwrite | other mod: a pick, when the copy wins over several | MO2 Information dialog, Conflicts tab, Go to... | Select, in Mods, the mod or Overwrite whose copy wins the file, or a mod whose copy it wins over. | none |
 | exclude / include file | writes | `modbench.mod.excludeFile`, `modbench.mod.includeFile` | files in mods or Overwrite | - | MO2 Information dialog, Conflicts tab, Hide; MO2 mod list, Restore hidden files | Keep each file from the game by renaming it with MO2's `.mohidden` suffix, or restore its name. | update-load-order-file |
+| rename | writes | `modbench.mod.rename` | mod | name | MO2 mod list | Rename a mod's folder and its name in every profile's `modlist.txt`. | update-load-order-file |
 
 ## Separator
 
@@ -166,6 +167,7 @@ A separator is a row in mod order.
 | decompile | writes | `modbench.plugin.decompile` | plugins | - | none | Read each plugin's bytes into its plugin source, in the working tree of the checked-out branch. It commits nothing. | decompile-plugin |
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the system's file manager. | none |
+| rename | writes | `modbench.plugin.rename` | plugin | name | none | Rename a tracked plugin: its file, its plugin source and its line in every profile's `plugins.txt`. | rename-plugin |
 
 ## Record
 
