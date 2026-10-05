@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
@@ -8,13 +6,11 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The write side's shared concerns (target-architecture.d2 medit_core.commands): target resolution, its pre-write refusals,
-/// and FormKey allocation. An internal seam, tested through the
-/// gestures.</summary>
+/// <summary>The write side's shared concerns (target-architecture.d2 medit_core.commands): target resolution and its pre-write refusals.
+/// An internal seam, tested through the gestures.</summary>
 internal sealed class WriteTargets(
     LoadOrderHolder loadOrder,
     IPluginAdapter adapter,
@@ -200,150 +196,6 @@ internal sealed class WriteTargets(
               "folder to hold its source. Move it into a mod, then edit it there."
             : $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be tracked. " +
               "Author a patch plugin and edit the override there.";
-
-    // Everything the allocator needs about one plugin, read from its tree once per gesture: a
-    // per-child re-read would walk the whole tree again for every key drawn.
-    public readonly record struct Allocator(
-        PluginAddress Plugin, GameRelease Release, bool IsLight, bool EslFlagIsRemovable,
-        IReadOnlySet<string> Used);
-
-    // From the tree alone (ADR-0015).
-    internal Allocator AllocatorOver(SourceRepository repository, PluginAddress plugin) =>
-        AllocatorOver(
-            plugin,
-            IsLightByRemovableFlag(repository, plugin),
-            repository.FormKeysUsed(plugin));
-
-    // A .esl extension also reads as light, and no header edit can un-flag that one.
-    private Allocator AllocatorOver(
-        PluginAddress plugin, bool byRemovableFlag, IReadOnlySet<string> used) =>
-        new(plugin,
-            loadOrder.Current.GameRelease,
-            byRemovableFlag || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase),
-            byRemovableFlag,
-            used);
-
-    // One allocator read per gesture, for the gestures that draw a single key. The embedded copy
-    // draws several from one allocator and calls the overload below directly.
-    internal RecordEditResult? ResolveTargetFormKey(
-        SourceRepository repository, PluginAddress plugin, string? requestedFormKey, out string targetFormKey) =>
-        ResolveTargetFormKey(AllocatorOver(repository, plugin), requestedFormKey, out targetFormKey);
-
-    // Non-null is the refusal; targetFormKey is "" then, so call sites need no second null-check.
-    // taken: keys this gesture drew but has not written, so one document's records get distinct keys.
-    internal static RecordEditResult? ResolveTargetFormKey(
-        Allocator allocator, string? requestedFormKey, out string targetFormKey, IReadOnlySet<string>? taken = null)
-    {
-        var plugin = allocator.Plugin;
-        if (requestedFormKey != null)
-        {
-            if (RefuseIfNotNativeTarget(requestedFormKey, plugin, allocator.IsLight) is { } notNative)
-            {
-                targetFormKey = "";
-                return notNative;
-            }
-            if (allocator.Used.Contains(requestedFormKey))
-            {
-                targetFormKey = "";
-                return RecordEditResult.Refused(
-                    RecordEditRefusal.FormKeyCollision,
-                    $"{requestedFormKey} is already held by a record in {plugin.Name} at some ref.");
-            }
-            targetFormKey = requestedFormKey;
-            return null;
-        }
-
-        var allocated = NextFreeNativeFormId(allocator, allocator.IsLight, taken);
-        if (allocated != null)
-        {
-            targetFormKey = allocated;
-            return null;
-        }
-
-        targetFormKey = "";
-        var freeAboveTheLightCap = allocator.IsLight
-            && allocator.EslFlagIsRemovable
-            && NextFreeNativeFormId(allocator, isLight: false, taken) != null;
-        return RecordEditResult.Refused(
-            RecordEditRefusal.FormKeySpaceExhausted,
-            FormKeySpaceExhaustedMessage(plugin, allocator.IsLight, freeAboveTheLightCap));
-    }
-
-    // The working tree's header document decides (ADR-0007), so a flag flipped this
-    // session caps minting immediately.
-    private static bool IsLightByRemovableFlag(SourceRepository repository, PluginAddress plugin)
-    {
-        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
-        var header = repository.Get(plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, null));
-        return header?.Body is { } body && HeaderDocument.IsLight(Encoding.UTF8.GetBytes(body));
-    }
-
-    private static bool IsNativeTo(string formKey, PluginAddress plugin) =>
-        FormKey.TryFactory(formKey, out var parsed)
-        && parsed.ModKey.FileName.String.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase);
-
-    // A foreign ModKey would land a record inside this plugin's tree while claiming another origin,
-    // indistinguishable from a corrupt override; xEdit never offers one either. Range is checked
-    // after ownership.
-    private static RecordEditResult? RefuseIfNotNativeTarget(string requestedFormKey, PluginAddress plugin, bool isLight)
-    {
-        var parsed = FormKey.Factory(requestedFormKey);
-        var requestedOwner = parsed.ModKey.FileName.String;
-        if (!IsNativeTo(requestedFormKey, plugin))
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.NotNativeRecord,
-                $"{requestedFormKey} belongs to {requestedOwner}, not {plugin.Name} — a requested FormKey " +
-                "must be native to the plugin that is to hold it.");
-        }
-
-        if (isLight && parsed.ID > PluginFlagPredicates.LightLocalFormIdCap)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.LightPluginFormIdOutOfRange,
-                $"{requestedFormKey} exceeds {plugin.Name}'s ESL local FormID range — a light-flagged " +
-                $"plugin can only address local FormIDs up to 0x{PluginFlagPredicates.LightLocalFormIdCap:X}. " +
-                "Choose a FormID within that range, or un-flag the plugin as ESL.");
-        }
-
-        return null;
-    }
-
-    // Null means exhausted.
-    private static string? NextFreeNativeFormId(Allocator allocator, bool isLight, IReadOnlySet<string>? taken = null)
-    {
-        var floor = PluginFlagPredicates.HighRangeFormIdFloor(allocator.Release);
-        var highest = allocator.Used
-            .Where(key => IsNativeTo(key, allocator.Plugin))
-            .Concat(taken ?? Enumerable.Empty<string>())
-            .Select(LocalId)
-            .DefaultIfEmpty(0u)
-            .Max();
-        var next = Math.Max(floor, highest + 1);
-        var cap = isLight ? PluginFlagPredicates.LightLocalFormIdCap : FormID.FullIdMask;
-        return next > cap ? null : $"{next:X6}:{allocator.Plugin.Name}";
-    }
-
-    // Shared by create and copy as new (plugins.md, Create record, story 3): every branch
-    // names both remedies, even where one is moot for this plugin.
-    internal static string FormKeySpaceExhaustedMessage(PluginAddress plugin, bool isLight, bool freeAboveTheLightCap)
-    {
-        const string remedies = "Clear the light flag in the header, or change a record's FormID.";
-        if (freeAboveTheLightCap)
-        {
-            return $"{plugin.Name} has exhausted its ESL FormKey space — every local FormID up to 0xFFF is " +
-                "already in use (a light-flagged plugin's addressable range) — but native space remains " +
-                $"free above it. {remedies}";
-        }
-        return isLight
-            ? $"{plugin.Name} has exhausted its ESL FormKey space — every local FormID up to 0xFFF is " +
-              $"already in use (a light-flagged plugin's addressable range). {remedies}"
-            : $"{plugin.Name} has exhausted its FormKey space — every local FormID up to 0xFFFFFF is " +
-              $"already in use. {remedies}";
-    }
-
-    private static uint LocalId(string formKey) =>
-        uint.Parse(formKey[..formKey.IndexOf(':')], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
     /// <summary>The EditorID a written document's own text names, which the put names the unit by.</summary>
     internal static string? EditorIdOf(string text)

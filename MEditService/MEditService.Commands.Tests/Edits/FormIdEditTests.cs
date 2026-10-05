@@ -33,8 +33,7 @@ public sealed class FormIdEditTests
     {
         using var mod = SourceEditFixture.Tracked();
         const string oldFormKey = "800000:Fixture.esp";
-        var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNew", oldFormKey);
-        Assert.True(seeded.Applied, seeded.Message);
+        TrackedTree.Seed(mod.ModFolder, mod.Plugin, oldFormKey);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, oldFormKey, FreeFormKey);
 

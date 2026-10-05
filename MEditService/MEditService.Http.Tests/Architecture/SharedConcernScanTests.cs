@@ -5,19 +5,17 @@ namespace MEditService.Http.Tests.Architecture;
 
 public sealed class SharedConcernScanTests
 {
-    private static readonly (string Concern, string Needle)[] ConcernMechanismNeedles =
+    private static readonly (string Concern, string Needle, string Module)[] ConcernMechanismNeedles =
     [
-        ("target resolution", @"\.Get\(plugin, formKey, schemaReflector\b"),
-        ("FormKey allocation", @"\bHighRangeFormIdFloor\b"),
-        ("FormKey allocation", @"\bFullIdMask\b"),
+        ("target resolution", @"\.Get\(plugin, formKey, schemaReflector\b", "WriteTargets.cs"),
+        ("FormKey allocation", @"\bHighRangeFormIdFloor\b", "FormKeyAllocator.cs"),
+        ("FormKey allocation", @"\bFullIdMask\b", "FormKeyAllocator.cs"),
     ];
 
     private static readonly string[] ScannedRoots =
         ["MEditService.Commands", "MEditService.Commands/Edits", "MEditService.Http"];
 
-    private const string SharedModuleFileName = "WriteTargets.cs";
-
-    [Fact]
+        [Fact]
     public void TheWriteSide_CarriesNoCopyOfASharedConcernsMechanism()
     {
         var counts = Counts(ServiceProjects.SolutionDirectory(), ScannedRoots);
@@ -32,21 +30,22 @@ public sealed class SharedConcernScanTests
     [Fact]
     public void EveryNeedle_MatchesTheSharedModuleItself()
     {
-        var module = File.ReadAllText(Path.Combine(
-            ServiceProjects.SolutionDirectory(), "MEditService.Commands", "Edits", SharedModuleFileName));
+        var edits = Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.Commands", "Edits");
 
-        Assert.Empty(ConcernMechanismNeedles.Where(c => Regex.Count(module, c.Needle) == 0).Select(c => $"{c.Concern}: {c.Needle}"));
+        Assert.Empty(ConcernMechanismNeedles
+            .Where(c => Regex.Count(File.ReadAllText(Path.Combine(edits, c.Module)), c.Needle) == 0)
+            .Select(c => $"{c.Concern}: {c.Needle}"));
     }
 
     [Fact]
-    public void NoTestFile_NamesTheSharedModule()
+    public void NoTestFile_NamesASharedModule()
     {
         var root = ServiceProjects.SolutionDirectory();
 
         var hits = Directory.EnumerateDirectories(root, "MEditService.*Tests*")
             .SelectMany(SourceTree.CSharpFiles)
             .Where(file => !Path.GetFileName(file).Equals(nameof(SharedConcernScanTests) + ".cs", StringComparison.Ordinal))
-            .Where(file => Regex.IsMatch(File.ReadAllText(file), @"\bWriteTargets\b"))
+            .Where(file => Regex.IsMatch(File.ReadAllText(file), @"\b(WriteTargets|FormKeyAllocator)\b"))
             .Select(file => Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'))
             .Order(StringComparer.Ordinal)
             .ToList();
@@ -63,7 +62,8 @@ public sealed class SharedConcernScanTests
             Path.Combine(root, "Layer", "Second.cs"),
             "found = repository.Get(plugin, formKey, schemaReflector.GetSchemas(release));\n"
             + "var floor = PluginFlagPredicates.HighRangeFormIdFloor(release);\n");
-        File.WriteAllText(Path.Combine(root, "Layer", SharedModuleFileName), "repository.Get(plugin, id, schemaReflector.GetSchemas(release));");
+        File.WriteAllText(Path.Combine(root, "Layer", "WriteTargets.cs"), "repository.Get(plugin, id, schemaReflector.GetSchemas(release));");
+        File.WriteAllText(Path.Combine(root, "Layer", "FormKeyAllocator.cs"), "var floor = PluginFlagPredicates.HighRangeFormIdFloor(release);");
         File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "repository.Get(plugin, formKey, schemaReflector.GetSchemas(release));");
         File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "repository.Put(plugin, document);");
 
@@ -80,13 +80,13 @@ public sealed class SharedConcernScanTests
     private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots) =>
         [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar))))
-            .Where(file => !Path.GetFileName(file).Equals(SharedModuleFileName, StringComparison.Ordinal))
-            .SelectMany(file => References(File.ReadAllText(file))
+            .SelectMany(file => References(Path.GetFileName(file), File.ReadAllText(file))
                 .Select(r => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {r.Needle}: {r.Count}"))
             .Order(StringComparer.Ordinal)];
 
-    private static IEnumerable<(string Needle, int Count)> References(string text) =>
+    private static IEnumerable<(string Needle, int Count)> References(string fileName, string text) =>
         ConcernMechanismNeedles
+            .Where(c => !c.Module.Equals(fileName, StringComparison.Ordinal))
             .Select(c => (c.Needle, Count: Regex.Count(text, c.Needle)))
             .Where(r => r.Count > 0);
 }

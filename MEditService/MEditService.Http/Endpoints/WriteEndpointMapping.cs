@@ -78,6 +78,7 @@ internal static class WriteEndpointMapping
             PluginCreateRefusal.FolderGone => 404,
             PluginCreateRefusal.FileExists => 409,
             // The request is sound; the file system refused the write.
+            PluginCreateRefusal.WriteFailed => 422,
             // Well-formed, and still not a plugin this game can load.
             _ => 422,
         },
@@ -112,11 +113,11 @@ internal static class WriteEndpointMapping
         return Results.Ok(response([.. result.Landed.Select(landed)], [.. result.Refused.Select(refused)]));
     }
 
-    internal static void LogRefusal(ILogger logger, string gesture, object? refusal, string? message, object? item = null)
-    {
-        if (item is null) logger.LogWarning("Refused {Gesture}: {Refusal} — {Message}", gesture, refusal, message);
-        else logger.LogWarning("Refused {Gesture} of {Item}: {Refusal} — {Message}", gesture, item, refusal, message);
-    }
+    internal static void LogRefusal<TRefusal>(ILogger logger, string gesture, TRefusal refusal, string? message) =>
+        logger.LogWarning("Refused {Gesture}: {Refusal} — {Message}", gesture, refusal, message);
+
+    internal static void LogRefusal<TRefusal, TItem>(ILogger logger, string gesture, TRefusal refusal, string? message, TItem item) =>
+        logger.LogWarning("Refused {Gesture} of {Item}: {Refusal} — {Message}", gesture, item, refusal, message);
 
     private static IResult RecordEditProblem(RecordEditRefusal refusal, string message, string? path) => Results.Problem(
         detail: message,
@@ -146,14 +147,8 @@ internal static class WriteEndpointMapping
     /// request.</summary>
     internal static IResult NoLoadOrder(NoLoadOrderException ex) => Results.Problem(ex.Message, statusCode: 503);
 
-    /// <summary>An argument the adapter itself refuses — malformed syntax is a 400. Same shape as
-    /// <see cref="MalformedFormKey"/>, kept separate because the argument here is never a FormKey.</summary>
+    /// <summary>An argument the adapter itself refuses — malformed syntax is a 400.</summary>
     internal static IResult InvalidArgument(ArgumentException ex) => Results.Problem(ex.Message, statusCode: 400);
-
-    /// <summary>xEdit's typed-FormID path reaches Mutagen's FormKey.Factory with no TryFactory
-    /// guard, so a malformed value throws ArgumentException: malformed syntax is a 400, never
-    /// <see cref="Refusal(RecordEditResult)"/>'s 422.</summary>
-    internal static IResult MalformedFormKey(ArgumentException ex) => Results.Problem(ex.Message, statusCode: 400);
 
     /// <summary>No Index gate here (ADR-0015): the Index serializes its own projections
     /// afterwards, so a source write never queues behind one and never answers "busy".</summary>
@@ -163,7 +158,6 @@ internal static class WriteEndpointMapping
         Func<IResult?> validate,
         Func<RecordEditResult> execute,
         Func<RecordEditResult, IResult> onApplied,
-        Func<ArgumentException, IResult>? onMalformedFormKey,
         Func<NoLoadOrderException, IResult> onNoLoadOrder)
     {
         logReceived?.Invoke();
@@ -178,10 +172,6 @@ internal static class WriteEndpointMapping
 
             LogRefusal(logger, gesture, result.Refusal, result.Message);
             return Refusal(result);
-        }
-        catch (ArgumentException ex) when (onMalformedFormKey is not null)
-        {
-            return onMalformedFormKey(ex);
         }
         catch (NoLoadOrderException ex)
         {

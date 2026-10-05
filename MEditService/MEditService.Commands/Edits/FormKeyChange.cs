@@ -10,8 +10,7 @@ namespace MEditService.Commands.Edits;
 
 /// <summary>An edit of a record's FormID changes its FormKey and nothing else: the records that
 /// reference it, itself included, are left as they are, and updating them is a script.</summary>
-internal sealed class FormKeyChange(
-    WriteTargets targets, RecordTextCodec codec, ILogger logger)
+internal sealed class FormKeyChange(RecordTextCodec codec, ILogger logger)
 {
     /// <summary>The document member a record's FormID is, which the edit's path names.</summary>
     internal const string Member = RecordMembers.FormKey;
@@ -55,7 +54,7 @@ internal sealed class FormKeyChange(
                 $"Change its FormID in {originatingPlugin}, where the record is native.");
         }
 
-        if (targets.ResolveTargetFormKey(repository, plugin, requestedFormKey, out var targetFormKey)
+        if (FormKeyAllocator.Over(repository, plugin, release).Claim(requestedFormKey, out var targetFormKey)
             is { } refusedTarget) return refusedTarget with { Path = Member };
 
         var transaction = new SourceTransaction();

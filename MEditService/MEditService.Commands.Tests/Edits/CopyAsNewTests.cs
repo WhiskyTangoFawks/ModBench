@@ -133,8 +133,7 @@ public sealed class CopyAsNewTests
     public void CopyRecordAsNewRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
         using var mod = CopyFixture.Create();
-        var seeded = mod.CreateHandler.CreateRecord(mod.DestinationPlugin, "npc_", "AtTheTop", "FFFFFF:Destination.esp");
-        Assert.True(seeded.Applied, seeded.Message);
+        TrackedTree.Seed(mod.ModFolderOf(mod.DestinationPlugin), mod.DestinationPlugin, "FFFFFF:Destination.esp");
 
         var result = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 

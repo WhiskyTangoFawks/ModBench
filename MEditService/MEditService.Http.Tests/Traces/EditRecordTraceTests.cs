@@ -243,16 +243,4 @@ public sealed class EditRecordTraceTests : HostedTests
     private static (string FormKey, string Destination) CopiedInto(JsonElement item) =>
         (item.GetProperty("record").GetProperty("formKey").GetString().Require(),
             item.GetProperty("destination").GetProperty("name").GetString().Require());
-
-    [Fact]
-    public async Task CreatingARecordWithAMalformedFormKey_Is400()
-    {
-        using var fx = await Loaded(Origin);
-
-        var response = await Client.PostAsJsonAsync(
-            $"/plugins/{Plugin}/records",
-            new { origin = Origin, recordType = "npc_", editorId = "Broken", formKey = "not-a-formkey" });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
 }
