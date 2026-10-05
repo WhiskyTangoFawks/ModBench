@@ -51,7 +51,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     private void Reconcile() =>
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
-    private void ArrivalAnnouncing(Predicate<Notification> announced)
+    private void ArrivalAnnouncing(Predicate<INotification> announced)
     {
         var before = _notifications.Notifications.Count;
         _index.NextSnapshotUntil(() => _notifications.Since(before).Any(n => announced(n)), "the arrival's announcement");

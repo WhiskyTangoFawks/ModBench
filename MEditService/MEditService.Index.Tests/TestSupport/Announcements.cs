@@ -7,19 +7,19 @@ namespace MEditService.Index.Tests.TestSupport;
 /// <summary>What an arrival announces, as a test waits for it (ADR-0015).</summary>
 internal static class Announcements
 {
-    internal static Predicate<Notification> PluginChanged(LoadOrderEntry plugin) =>
+    internal static Predicate<INotification> PluginChanged(LoadOrderEntry plugin) =>
         n => n is PluginChangedNotification changed && PluginAddress.Comparer.Equals(changed.Plugin, plugin.KeyOf());
 
-    internal static Predicate<Notification> RowsChanged(string formKey) =>
+    internal static Predicate<INotification> RowsChanged(string formKey) =>
         n => n is RowsChangedNotification rows && rows.Keys.Contains(formKey);
 
-    internal static Predicate<Notification> FailureNamed(string plugin) =>
+    internal static Predicate<INotification> FailureNamed(string plugin) =>
         n => n is LoadOrderStatusNotification status && status.Status.Failures.Any(f => f.Name == plugin);
 
     /// <summary>Two equal arrivals, each answered once the change it found is announced. An arrival
     /// validates every plugin before it announces, so a plugin neither announced is known quiet.</summary>
-    internal static IReadOnlyList<Notification> AnnouncedByEqualArrivals(
-        this OpenedIndex index, InMemoryNotificationPublisher notifications, Func<Predicate<Notification>> change)
+    internal static IReadOnlyList<INotification> AnnouncedByEqualArrivals(
+        this OpenedIndex index, InMemoryNotificationPublisher notifications, Func<Predicate<INotification>> change)
     {
         var start = notifications.Notifications.Count;
         for (var arrival = 0; arrival < 2; arrival++)
@@ -32,14 +32,14 @@ internal static class Announcements
     }
 
     /// <summary>An untracked plugin's binary rewritten: announced as the plugin.</summary>
-    internal static Predicate<Notification> Touched(LoadOrderEntry plugin)
+    internal static Predicate<INotification> Touched(LoadOrderEntry plugin)
     {
         PluginBinaries.Touch(plugin.Path);
         return PluginChanged(plugin);
     }
 
     /// <summary>A tracked plugin's one NPC renamed on disk under a new name: announced as its rows.</summary>
-    internal static Predicate<Notification> RenamedByHand(this LoadOrderEntry plugin, IRecordReads reads)
+    internal static Predicate<INotification> RenamedByHand(this LoadOrderEntry plugin, IRecordReads reads)
     {
         var listed = reads.Search(new RecordQuery(Plugin: plugin.Name, Origin: plugin.Origin, RecordTypes: ["npc_"], Limit: 1)).Items.Single();
         var document = reads.DocumentOf(listed.FormKey, plugin.KeyOf());
@@ -47,6 +47,6 @@ internal static class Announcements
         return RowsChanged(listed.FormKey);
     }
 
-    internal static IReadOnlyList<Notification> Since(this InMemoryNotificationPublisher notifications, int count) =>
+    internal static IReadOnlyList<INotification> Since(this InMemoryNotificationPublisher notifications, int count) =>
         [.. notifications.Notifications.Skip(count)];
 }

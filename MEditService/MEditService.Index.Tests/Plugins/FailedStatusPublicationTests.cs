@@ -50,7 +50,7 @@ public sealed class FailedStatusPublicationTests : IDisposable
     {
         public bool Armed { get; set; }
 
-        public void Publish(Notification notification)
+        public void Publish(INotification notification)
         {
             if (Armed && notification is PluginChangedNotification) throw new InvalidOperationException("the stream could not take the push");
         }
