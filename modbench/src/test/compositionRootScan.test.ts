@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, join, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
-import { ESLint, Linter } from 'eslint';
+import { Linter } from 'eslint';
 import { rootFiles, SRC } from './scanSource';
 import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../eslint-rules/activationDecides.mjs';
 
@@ -26,6 +27,24 @@ function restrictedSyntaxApplied(config: unknown, message: string): string[] {
       && 'selector' in option && typeof option.selector === 'string' ? [option.selector] : []));
 }
 
+const ESLINT_CONFIG = join(SRC, '..', 'eslint.config.mjs');
+
+async function flatConfigBlocks(path: string): Promise<unknown[]> {
+  const loaded: unknown = await import(pathToFileURL(path).href);
+  const blocks = typeof loaded === 'object' && loaded !== null && 'default' in loaded ? loaded.default : undefined;
+  return Array.isArray(blocks) ? blocks as unknown[] : [];
+}
+
+const namesFile = (block: unknown, file: string): boolean =>
+  typeof block === 'object' && block !== null && 'files' in block && Array.isArray(block.files) && block.files.includes(file);
+
+function restrictedSyntaxOf(blocks: readonly unknown[], file: string, message: string): string[] {
+  return blocks.filter((block) => namesFile(block, join('src', file).split(sep).join('/')))
+    .map((block) => restrictedSyntaxApplied(block, message))
+    .filter((selectors) => selectors.length > 0)
+    .at(-1) ?? [];
+}
+
 function exportedNames(source: ts.SourceFile): string[] {
   return source.statements.flatMap((statement) => {
     if (ts.isExportDeclaration(statement) || ts.isExportAssignment(statement)) return ['<re-export>'];
@@ -44,8 +63,12 @@ describe('the composition root builds each box, registers it with VS Code and de
   });
 
   it.each([ACTIVATION, ...WIRING])('the lint config applies the deciding selectors to %s', async (file) => {
-    const config: unknown = await new ESLint({ cwd: join(SRC, '..') }).calculateConfigForFile(join(SRC, file));
-    expect(restrictedSyntaxApplied(config, ACTIVATION_DECIDES_MESSAGE)).toEqual(ACTIVATION_DECIDES_SELECTORS);
+    expect(restrictedSyntaxOf(await flatConfigBlocks(ESLINT_CONFIG), file, ACTIVATION_DECIDES_MESSAGE)).toEqual(ACTIVATION_DECIDES_SELECTORS);
+  });
+
+  it('a config block that names the root files without the deciding selectors is not the rule', () => {
+    const planted = [{ files: ['src/extension.ts'], rules: { 'no-restricted-syntax': ['error', { selector: 'IfStatement', message: 'other' }] } }];
+    expect(restrictedSyntaxOf(planted, ACTIVATION, ACTIVATION_DECIDES_MESSAGE)).toEqual([]);
   });
 
   it('exports nothing from the activation file but what VS Code and the integration tests take', () => {

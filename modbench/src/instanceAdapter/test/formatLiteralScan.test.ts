@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename, sep } from 'node:path';
 import ts from 'typescript';
-import { productionFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from '../../test/scanSource';
+import { MO2_NAMES, pathSegments, productionFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from '../../test/scanSource';
 import { tsFiles } from '../../test/tsFiles';
 
 interface Codec {
@@ -51,9 +51,11 @@ const LAYOUT_OWNERS: Record<string, readonly string[]> = {
   'ModOrganizer.ini': [join(ADAPTER_CODECS, 'modOrganizerIni.ts')],
   'meta.ini': [join(ADAPTER_CODECS, 'metaIni.ts')],
   '.meta': [join(ADAPTER_CODECS, 'downloads.ts')],
+  '.mohidden': [join('instanceAdapter', 'layout.ts')],
   'plugins.txt': [LOAD_ORDER_FILE_CODEC],
 };
 const LAYOUT_NAMES = Object.keys(LAYOUT_OWNERS);
+const MO2_LAYOUT_NAMES: readonly string[] = [...MO2_NAMES.files, ...MO2_NAMES.directories];
 
 function stringLiterals(sourceText: string, fileName: string): string[] {
   const scriptKind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
@@ -204,32 +206,8 @@ describe('format literals, scanned over the extension and webview trees against 
   });
 });
 
-function isNotAPath(node: ts.Node): boolean {
-  const parent = node.parent as ts.Node | undefined;
-  if (!parent) return false;
-  if (ts.isLiteralTypeNode(parent)) return true;
-  if ((ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) && parent.moduleSpecifier === node) return true;
-  if (ts.isExternalModuleReference(parent)) return true;
-  return ts.isCallExpression(parent) && parent.expression.kind === ts.SyntaxKind.ImportKeyword;
-}
-
-function pathLiterals(sourceText: string, fileName: string): string[] {
-  const scriptKind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
-  const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, scriptKind);
-  const found: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if ((ts.isStringLiteralLike(node) || ts.isTemplateHead(node)) && !isNotAPath(node)) found.push(node.text);
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return found;
-}
-
 function layoutLeaks(sourceText: string, fileName: string): string[] {
-  const segments = new Set<string>();
-  for (const literal of pathLiterals(sourceText, fileName)) {
-    for (const segment of literal.split(/[/\\]/)) segments.add(segment);
-  }
+  const segments = pathSegments(sourceText, fileName);
   return LAYOUT_NAMES.filter((name) => segments.has(name));
 }
 
@@ -255,6 +233,10 @@ describe('layout names', () => {
       .map((owner) => `${owner} lacks ${name}`));
 
     expect(ownersLackingTheirName).toEqual([]);
+  });
+
+  it('name every file and directory of MO2 that the manager-name scan holds', () => {
+    expect(MO2_LAYOUT_NAMES.filter((name) => !LAYOUT_NAMES.includes(name))).toEqual([]);
   });
 
   it('appear in no production file of either tree but their owner', () => {
@@ -309,6 +291,6 @@ describe('layout names', () => {
 
   it('the Instance adapter spells the directory names and no file name of a codec’s, a codec\'s file name spelled in the layout too being how one name gets two spellers without either scan noticing', () => {
     const path = join(SRC, 'instanceAdapter', 'layout.ts');
-    expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toEqual(['profiles', 'mods', 'downloads']);
+    expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toEqual(['profiles', 'mods', 'downloads', '.mohidden']);
   });
 });

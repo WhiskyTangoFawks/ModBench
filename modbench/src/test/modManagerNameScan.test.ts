@@ -4,17 +4,13 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
-import { isTestSupport, MO2_CONSTRUCTION as MO2_CONSTRUCTION_SITE, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
+import { isTestSupport, MO2_CONSTRUCTION as MO2_CONSTRUCTION_SITE, MO2_NAMES, pathSegments, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 const ADAPTER = 'instanceAdapter';
 const ADAPTER_INTERFACE = join(ADAPTER, 'instanceAdapter.ts');
 const MO2_CONSTRUCTION = MO2_CONSTRUCTION_SITE.file;
 const MO2_ENTRY = `./${MO2_CONSTRUCTION_SITE.module.split(sep).join('/')}`;
-
-const NAMES_ANYWHERE_IN_FILE = [/mo2/i, /\bMod Organizer\b/i];
-
-const NAMES_IN_STRING_LITERALS = ['modlist.txt', 'ModOrganizer.ini', 'meta.ini', '.mohidden'];
 
 const isMo2Implementation = (relPath: string): boolean =>
   relPath.startsWith(ADAPTER + sep) && relPath !== ADAPTER_INTERFACE;
@@ -50,10 +46,12 @@ function withoutConstruction(sourceText: string, fileName: string): string {
 }
 
 function managerMentions(sourceText: string, fileName: string): string[] {
-  const names = NAMES_ANYWHERE_IN_FILE.filter((name) => name.test(sourceText)).map((name) => name.source);
+  const names = MO2_NAMES.anywhere.filter((name) => name.test(sourceText)).map((name) => name.source);
   const literals = stringLiterals(sourceText, fileName);
-  const literalNames = NAMES_IN_STRING_LITERALS.filter((name) => literals.some((literal) => literal.includes(name)));
-  return [...names, ...literalNames];
+  const fileNames = MO2_NAMES.files.filter((name) => literals.some((literal) => literal.includes(name)));
+  const segments = pathSegments(sourceText, fileName);
+  const directoryNames = MO2_NAMES.directories.filter((name) => segments.has(name));
+  return [...names, ...fileNames, ...directoryNames];
 }
 
 function findOffenders(roots: readonly string[]): Record<string, string[]> {
@@ -62,7 +60,7 @@ function findOffenders(roots: readonly string[]): Record<string, string[]> {
     for (const path of tsFiles(root, { exclude: ['generated'] })) {
       const relPath = relative(root, path);
       if (isMo2Implementation(relPath) || isTestSupport(relPath)) continue;
-      const inPath = NAMES_ANYWHERE_IN_FILE.some((name) => name.test(relPath)) ? ['file name'] : [];
+      const inPath = MO2_NAMES.anywhere.some((name) => name.test(relPath)) ? ['file name'] : [];
       const text = readFileSync(path, 'utf8');
       const scanned = relPath === MO2_CONSTRUCTION ? withoutConstruction(text, path) : text;
       const found = [...inPath, ...managerMentions(scanned, path)];
@@ -130,6 +128,9 @@ describe('no extension file names MO2 outside its implementation of the Instance
       [join('mods', 'message.ts')]: 'export const say = (mod: string) => `"${mod}" was created, but its modlist.txt line could not be written.`;\n',
       [join('plugins', 'command.ts')]: 'export const run = (mo2: { instance: unknown }) => mo2.instance;\n',
       [join('views', 'mo2Trees.ts')]: 'export const trees = [];\n',
+      [join('mods', 'identifier.ts')]: 'export const modorganizerRoot = 1;\n',
+      [join('mods', 'layout.ts')]: "export const root = (base: string) => join(base, 'profiles', 'overwrite');\n",
+      [join('mods', 'prose.ts')]: "export const say = 'the mods and profiles are fine';\nimport x from '../mods/y';\n",
       [join('mods', 'clean.ts')]: 'export const say = (file: string) => `its ${file} line could not be written.`;\n',
       [join('mods', 'test', 'fixture.ts')]: "export const ini = 'ModOrganizer.ini';\n",
       [join(ADAPTER, 'mo2Instance.ts')]: "export const manager = 'MO2';\n",
@@ -138,6 +139,8 @@ describe('no extension file names MO2 outside its implementation of the Instance
     try {
       expect(findOffenders([dir])).toEqual({
         [join('mods', 'comment.ts')]: ['mo2'],
+        [join('mods', 'identifier.ts')]: ['modorganizer'],
+        [join('mods', 'layout.ts')]: ['profiles', 'overwrite'],
         [join('mods', 'tooltip.ts')]: ['\\bMod Organizer\\b'],
         [join('mods', 'message.ts')]: ['modlist.txt'],
         [join('plugins', 'command.ts')]: ['mo2'],
