@@ -36,8 +36,7 @@ public sealed class SourceRepository
     }
 
     /// <summary>The repository over <paramref name="mod"/>'s folder, or null when the folder is not
-    /// tracked and so has no source tree to answer from. <paramref name="release"/> is the game
-    /// whose record types name the tree's group folders.</summary>
+    /// tracked and so has no source tree to answer from.</summary>
     public static SourceRepository? Open(PluginProvider.FromMod mod, GameRelease release) =>
         IsTracked(mod.Folder) ? Over(mod, release) : null;
 
