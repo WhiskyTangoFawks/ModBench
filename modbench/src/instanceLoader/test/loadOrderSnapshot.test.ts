@@ -5,8 +5,9 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { buildFileConflictIndex, FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
   buildLoadOrderRows, loadOrderSnapshotOf, originFiles, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
-  type LoadOrderPluginLine, type PluginAddress,
+  type LoadOrderPluginLine,
 } from '../loadOrderSnapshot';
+import type { PluginAddress } from '../../wire/pluginAddress';
 
 type LoadOrderPluginRow = LoadOrderPlugin | LoadOrderPluginLine;
 import { present } from '../../ports/present';

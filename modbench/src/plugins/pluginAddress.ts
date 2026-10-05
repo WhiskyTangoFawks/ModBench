@@ -1,27 +1,24 @@
-/** ADR-0012. */
-export function pluginAddressKey(name: string, origin: string): string {
-  return `${origin.toLowerCase()}|${name.toLowerCase()}`;
-}
+import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
 /** Every fact is filed and read under origin and filename (ADR-0012). */
 export class ByPluginAddress<T> {
   private readonly byAddress = new Map<string, T>();
 
-  set(name: string, origin: string, value: T): void {
-    this.byAddress.set(pluginAddressKey(name, origin), value);
+  set(plugin: PluginAddress, value: T): void {
+    this.byAddress.set(pluginAddressKey(plugin), value);
   }
 
   // `this` narrows to an array-valued instance.
-  append<U>(this: ByPluginAddress<U[]>, name: string, origin: string, item: U): void {
-    const addressKey = pluginAddressKey(name, origin);
-    this.byAddress.set(addressKey, [...(this.byAddress.get(addressKey) ?? []), item]);
+  append<U>(this: ByPluginAddress<U[]>, plugin: PluginAddress, item: U): void {
+    const key = pluginAddressKey(plugin);
+    this.byAddress.set(key, [...(this.byAddress.get(key) ?? []), item]);
   }
 
-  get(name: string, origin: string): T | undefined {
-    return this.byAddress.get(pluginAddressKey(name, origin));
+  get(plugin: PluginAddress): T | undefined {
+    return this.byAddress.get(pluginAddressKey(plugin));
   }
 
-  has(name: string, origin: string): boolean {
-    return this.byAddress.has(pluginAddressKey(name, origin));
+  has(plugin: PluginAddress): boolean {
+    return this.byAddress.has(pluginAddressKey(plugin));
   }
 }

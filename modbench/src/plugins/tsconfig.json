@@ -14,7 +14,8 @@
     { "path": "../instanceLoader" },
     { "path": "../instanceCommands" },
     { "path": "../pluginsCommands" },
-    { "path": "../ports" }
+    { "path": "../ports" },
+    { "path": "../wire" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

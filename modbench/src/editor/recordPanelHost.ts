@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
+import type { PluginAddress } from '../wire/pluginAddress';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import type { EditAddress, EditsInFlight } from './followRecord';
 import { showWebviewPage } from '../drivingLib/webviewPage';
@@ -48,7 +49,7 @@ export interface EditorCommandDeps {
   recordWrite: RecordWrite;
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
   // object, narrowed to a callback like focusedViewSelection.
-  refreshSourceControlFor: (plugin: string, origin: string) => void;
+  refreshSourceControlFor: (plugin: PluginAddress) => void;
   outputChannel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
   // Kernel ports the composition root implements (target-architecture.d2, Ports).
   reporterFor: (tag: string) => Reporter;
@@ -58,7 +59,7 @@ export interface EditorCommandDeps {
 function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
   return {
     meditClient: deps.meditClient,
-    refreshSourceControlFor: (plugin, origin) => { deps.refreshSourceControlFor(plugin, origin); },
+    refreshSourceControlFor: (plugin) => { deps.refreshSourceControlFor(plugin); },
     // Surfaces a refused edit (ADR-0019).
     reporter: deps.reporterFor('recordPanel'),
   };

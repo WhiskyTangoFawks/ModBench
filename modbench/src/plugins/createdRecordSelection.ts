@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { UNLIMITED_RECORDS, type MEditClient, type PluginAddress } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
-import { pluginAddressKey } from './pluginAddress';
+import { pluginAddressKey } from '../wire/pluginAddress';
 
 /** A plugin's group of one record type. */
 export interface RecordGroup {
@@ -49,7 +49,7 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
         reportUnselected(group, error);
         return () => {};
       }
-      const address = pluginAddressKey(group.plugin.name, group.plugin.origin);
+      const address = pluginAddressKey(group.plugin);
       const settle = async (): Promise<void> => {
         let created: string | undefined;
         try {
@@ -65,7 +65,7 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
         await selectAndOpen(group, created);
       };
       const unsubscribe = deps.client.onNotification('rows-changed', (event) => {
-        if (pluginAddressKey(event.plugin.name, event.plugin.origin) === address) void settle();
+        if (pluginAddressKey(event.plugin) === address) void settle();
       });
       const forget = () => {
         unsubscribe();

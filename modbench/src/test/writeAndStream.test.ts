@@ -52,7 +52,7 @@ describe('a write and the stream, together: the write\'s own callback is silent 
     tracker.setFormKey(panel, FORM_KEY);
     subscribeRecordPanelsToNotifications(meditClient, recordPanels, new EditsInFlight(tracker));
     await applyRecordEdit(
-      { meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter() }, FORM_KEY, 'Test.esp', 'ModA', { op: 'set', path: [] });
+      { meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter() }, FORM_KEY, { name: 'Test.esp', origin: 'ModA' }, { op: 'set', path: [] });
     expect(panel.webview.postMessage).not.toHaveBeenCalled();
 
     meditClient.emit(rowsChanged());
@@ -77,7 +77,7 @@ describe('a write and the stream, together: the write\'s own callback is silent 
 
     await applyRecordEdit(
       { meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter() },
-      FORM_KEY, 'Test.esp', 'ModA', { op: 'set', path: [] });
+      FORM_KEY, { name: 'Test.esp', origin: 'ModA' }, { op: 'set', path: [] });
 
     expect(treeChanges).toBe(0);
     expect(badgeChanges).toEqual([]);

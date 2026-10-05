@@ -7,7 +7,7 @@ import type {
 } from '../client';
 import { parseRecordResourceUri, recordResourceUri } from './recordResourceUri';
 import { failurePrefixIcon } from './failurePrefixIcon';
-import { pluginAddressKey } from './pluginAddress';
+import { pluginAddressKey, pluginAddressOf } from '../wire/pluginAddress';
 import type { PluginConditions } from './pluginFacts';
 import { errorMessage } from '../ports/errorMessage';
 import { UNLIMITED_RECORDS } from '../client';
@@ -338,7 +338,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   private cachedRecord(plugin: string, origin: string, formKey: string): RecordSummary | undefined {
-    const prefix = `${pluginAddressKey(plugin, origin)}::`;
+    const prefix = `${pluginAddressKey({ name: plugin, origin })}::`;
     for (const [key, page] of this.pageCache) {
       if (!key.startsWith(prefix)) continue;
       const item = page.items.find(r => r.formKey === formKey);
@@ -398,7 +398,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   private cacheKey(node: RecordTypeNode): string {
-    return `${pluginAddressKey(node.plugin, node.origin)}::${node.recordType}`;
+    return `${pluginAddressKey(pluginAddressOf(node))}::${node.recordType}`;
   }
 
   private err(e: unknown): string {
@@ -442,14 +442,14 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   private fetchWorldspaces(node: WorldspacesNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchWorldspaces(${node.plugin})`, async () => {
-      const worldspaces = await this.repository.getWorldspaces({ name: node.plugin, origin: node.origin });
+      const worldspaces = await this.repository.getWorldspaces(pluginAddressOf(node));
       return worldspaces.map(w => new WorldspaceNode(node.plugin, w, node.origin, node.conditions));
     });
   }
 
   private fetchWorldspaceChildren(node: WorldspaceNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchWorldspaceChildren(${node.worldspace.formKey})`, async () => {
-      const data = await this.repository.getWorldspaceBlocks({ name: node.plugin, origin: node.origin }, node.worldspace.formKey);
+      const data = await this.repository.getWorldspaceBlocks(pluginAddressOf(node), node.worldspace.formKey);
       const nodes: PluginTreeNode[] = data.topCells.map(c => new CellNode(node.plugin, c, node.origin, node.conditions));
       nodes.push(...data.blocks.map(b => new BlockNode(node.plugin, b, node.origin, node.conditions)));
       return nodes;
@@ -458,9 +458,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   private fetchCellGroups(node: CellNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchCellGroups(${node.cell.formKey})`, async () => {
-      const cacheKey = `${pluginAddressKey(node.plugin, node.origin)}::${node.cell.formKey}`;
+      const cacheKey = `${pluginAddressKey(pluginAddressOf(node))}::${node.cell.formKey}`;
       const refs = await this.getOrLoad(this.refCache, cacheKey,
-        () => this.repository.getCellChildRecords({ name: node.plugin, origin: node.origin }, node.cell.formKey));
+        () => this.repository.getCellChildRecords(pluginAddressOf(node), node.cell.formKey));
       const groups: ChildRecordGroupNode[] = [];
       if (refs.persistent.length) groups.push(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin, node.conditions));
       if (refs.temporary.length) groups.push(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'temporary', refs.temporary, node.origin, node.conditions));
@@ -471,7 +471,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // A returned "dial" child is itself expandable to its Responses; every other type is a leaf.
   private fetchContainerChildren(node: RecordNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchContainerChildren(${node.record.formKey})`, async () => {
-      const cacheKey = `${pluginAddressKey(node.record.plugin, node.origin)}::${node.record.formKey}`;
+      const cacheKey = `${pluginAddressKey({ name: node.record.plugin, origin: node.origin })}::${node.record.formKey}`;
       const children = await this.getOrLoad(this.containerChildCache, cacheKey,
         () => this.repository.getContainerChildren({ name: node.record.plugin, origin: node.origin }, node.record.formKey));
       return children.map(c => new RecordNode(
@@ -482,8 +482,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // Every interior cell in one call (plugins.md, The tree, story 8).
   private fetchInteriorCells(node: InteriorCellsNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchInteriorCells(${node.plugin})`, async () => {
-      const blocks = await this.getOrLoad(this.interiorCache, pluginAddressKey(node.plugin, node.origin),
-        () => this.repository.getInteriorCells({ name: node.plugin, origin: node.origin }));
+      const blocks = await this.getOrLoad(this.interiorCache, pluginAddressKey(pluginAddressOf(node)),
+        () => this.repository.getInteriorCells(pluginAddressOf(node)));
       return blocks.map(b => new InteriorBlockNode(node.plugin, b, node.origin, node.conditions));
     });
   }
@@ -496,7 +496,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       const key = this.cacheKey(node);
       const wasCached = this.pageCache.has(key);
       const cached = await this.getOrLoad(this.pageCache, key,
-        () => this.repository.getRecords({ name: node.plugin, origin: node.origin }, node.recordType, 0, UNLIMITED_RECORDS));
+        () => this.repository.getRecords(pluginAddressOf(node), node.recordType, 0, UNLIMITED_RECORDS));
       const read = !wasCached && this.pageCache.get(key) === cached;
       // qust/dial rows are collapsible here too — a Quest reached from its flat record-type
       // listing still expands into its container children, the same mechanism
