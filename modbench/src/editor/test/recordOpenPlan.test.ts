@@ -32,9 +32,10 @@ describe('recordOpenPlan', () => {
     expect(recordOpenPlan({ kind, formKey: A.formKey }, []).addresses).toEqual([A]);
   });
 
-  it('carries a header\'s origin', () => {
-    const header = { formKey: '000000:A.esp', origin: 'ModA' };
+  it('reads a Plugin Header record by its plugin\'s address', () => {
+    const header = { header: { name: 'A.esp', origin: 'ModA' } };
     expect(recordOpenPlan(header, []).addresses).toEqual([header]);
+    expect(recordOpenPlan({ ...header, placement: 'beside' }, [])).toEqual({ addresses: [header], beside: true, preview: false });
   });
 
   it('skips a row that states no record', () => {

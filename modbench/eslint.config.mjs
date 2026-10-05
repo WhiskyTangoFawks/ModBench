@@ -78,7 +78,7 @@ export default defineConfig(
     // named the way the errno reader is, not a suppression widened to a whole client or module.
     // Pinned by unsafeTypeAssertionAllowlist.test.ts.
     {
-        files: ['webview/src/columnKey.ts', 'webview/src/parseCompareResult.ts'],
+        files: ['src/wire/columnKey.ts', 'webview/src/parseCompareResult.ts'],
         rules: {
             '@typescript-eslint/no-unsafe-type-assertion': 'off',
         },

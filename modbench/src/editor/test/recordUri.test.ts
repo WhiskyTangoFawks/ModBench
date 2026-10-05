@@ -7,12 +7,11 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE } from '../recordUri';
+import { recordUri, recordTabAddressOf, formKeyOf, RECORD_EDITOR_VIEW_TYPE } from '../recordUri';
 
-describe('recordUri / formKeyOfRecordUri', () => {
+describe('a record tab\'s address', () => {
   it('round-trips a FormKey through its own URI', () => {
-    const uri = recordUri({ formKey: 'Fallout4.esm:000001' });
-    expect(formKeyOfRecordUri(uri)).toBe('Fallout4.esm:000001');
+    expect(recordTabAddressOf(recordUri({ formKey: 'Fallout4.esm:000001' }))).toEqual({ formKey: 'Fallout4.esm:000001' });
   });
 
   it('gives two different FormKeys two different URIs', () => {
@@ -24,17 +23,22 @@ describe('recordUri / formKeyOfRecordUri', () => {
   });
 
   it('survives a FormKey containing "/"', () => {
-    const uri = recordUri({ formKey: 'Weird/Plugin.esp:000001' });
-    expect(formKeyOfRecordUri(uri)).toBe('Weird/Plugin.esp:000001');
+    expect(recordTabAddressOf(recordUri({ formKey: 'Weird/Plugin.esp:000001' }))).toEqual({ formKey: 'Weird/Plugin.esp:000001' });
   });
 
-  it('gives one header FormKey from two origins two URIs, since a filename alone names no one plugin', () => {
-    const header = '000000:MyPatch.esp';
-    expect(recordUri({ formKey: header, origin: 'ModA' })).not.toEqual(recordUri({ formKey: header, origin: 'ModB' }));
+  it('round-trips a Plugin Header record\'s plugin address through its own URI', () => {
+    const header = { name: 'Mod/Patch.esp', origin: 'Mods/A' };
+    expect(recordTabAddressOf(recordUri({ header }))).toEqual({ header });
   });
 
-  it('reads the same FormKey back from a header address, whatever its origin', () => {
-    expect(formKeyOfRecordUri(recordUri({ formKey: '000000:MyPatch.esp', origin: 'ModA' }))).toBe('000000:MyPatch.esp');
+  it('gives the headers of two plugins that share a filename two URIs', () => {
+    expect(recordUri({ header: { name: 'MyPatch.esp', origin: 'ModA' } }))
+      .not.toEqual(recordUri({ header: { name: 'MyPatch.esp', origin: 'ModB' } }));
+  });
+
+  it('asks mEdit for a header at the FormKey mEdit indexes it at', () => {
+    expect(formKeyOf({ header: { name: 'MyPatch.esp', origin: 'ModA' } })).toBe('000000:MyPatch.esp');
+    expect(formKeyOf({ formKey: '000800:MyPatch.esp' })).toBe('000800:MyPatch.esp');
   });
 
   it('names the registered custom editor viewType', () => {

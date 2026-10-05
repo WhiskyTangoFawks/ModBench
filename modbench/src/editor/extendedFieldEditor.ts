@@ -2,22 +2,16 @@ import * as vscode from 'vscode';
 import type { CompareResult, MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
-import type { PathHop } from '../wire/messages';
-import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
+import type { PathHop, StringValueContext } from '../wire/messages';
+import { columnKey } from '../wire/columnKey';
+import { pluginAddressOf, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
+import type { EditAddress } from './followRecord';
 
-/** Where a cell's text lives: the record, the plugin copy of it, and the field's path (ADR-0012). */
-export interface FieldAddress {
-  formKey: string;
-  plugin: string;
-  origin: string;
-  path: PathHop[];
-}
+/** Where a cell's text lives: the plugin copy of the record, and the field's path. */
+export interface FieldAddress extends EditAddress { path: PathHop[] }
 
-export interface OpenExtendedFieldEditorParams extends FieldAddress {
-  recordLabel: string;
-  fieldName: string;
-  readOnly: boolean;
-}
+export type OpenExtendedFieldEditorParams =
+  Pick<StringValueContext, 'formKey' | 'plugin' | 'origin' | 'path' | 'recordLabel' | 'fieldName' | 'readOnly'>;
 
 export interface ExtendedFieldDocumentsDeps {
   client: Pick<MEditClient, 'getComparison' | 'onNotification'>;
@@ -30,20 +24,21 @@ export interface ExtendedFieldDocumentsDeps {
 export const EDITABLE_FIELD_SCHEME = 'modbench-field';
 export const READONLY_FIELD_SCHEME = 'modbench-field-readonly';
 
-// Mirrors the backend's `ColumnKey.Of`: the Data origin is elided.
-const columnKeyOf = (plugin: string, origin: string): string =>
-  origin.toLowerCase() === 'data' ? plugin : `${plugin}|${origin}`;
+function isPluginAddress(value: unknown): value is PluginAddress {
+  if (typeof value !== 'object' || value === null) return false;
+  return ['name', 'origin'].every(name => typeof Reflect.get(value, name) === 'string');
+}
 
 function isFieldAddress(value: unknown): value is FieldAddress {
   if (typeof value !== 'object' || value === null) return false;
-  return ['formKey', 'plugin', 'origin'].every(name => typeof Reflect.get(value, name) === 'string')
+  return typeof Reflect.get(value, 'formKey') === 'string' && isPluginAddress(Reflect.get(value, 'plugin'))
     && Array.isArray(Reflect.get(value, 'path'));
 }
 
 function textAt(result: CompareResult, field: FieldAddress): string | undefined {
-  const column = columnKeyOf(field.plugin, field.origin);
+  const column = columnKey(field.plugin);
   const [root, ...hops] = field.path;
-  if (root?.kind !== 'member' || !result.overrides.some(o => columnKeyOf(o.plugin, o.origin) === column)) return undefined;
+  if (root?.kind !== 'member' || !result.overrides.some(o => samePluginAddress(pluginAddressOf(o), field.plugin))) return undefined;
   let diff = result.diffs.find(d => d.fieldName === root.name);
   for (const hop of hops) {
     const children = diff?.children ?? [];
@@ -120,7 +115,7 @@ class FieldFileSystem implements vscode.FileSystemProvider {
     const result = await this.deps.client.getComparison(formKey);
     if (!result) throw vscode.FileSystemError.FileNotFound(`The record ${formKey} is gone.`);
     const text = textAt(result, field.address);
-    if (text === undefined) throw vscode.FileSystemError.FileNotFound(`The record ${formKey} has no such field in ${plugin}.`);
+    if (text === undefined) throw vscode.FileSystemError.FileNotFound(`The record ${formKey} has no such field in ${plugin.name}.`);
     return { text, field };
   }
 }
@@ -130,11 +125,12 @@ const asSegment = (text: string): string => text.replaceAll('/', '_');
 // The address rides in the query, so two columns that share a filename (ADR-0012) are two
 // documents and a restored tab can read its field again; the last path segment is the tab's title.
 function fieldUri(params: OpenExtendedFieldEditorParams): vscode.Uri {
-  const { formKey, plugin, origin, path } = params;
+  const { formKey, path } = params;
+  const address: FieldAddress = { formKey, plugin: pluginAddressOf(params), path };
   return vscode.Uri.from({
     scheme: params.readOnly ? READONLY_FIELD_SCHEME : EDITABLE_FIELD_SCHEME,
-    path: `/${asSegment(params.recordLabel)}/${asSegment(params.fieldName)} [${asSegment(plugin)}]`,
-    query: JSON.stringify({ formKey, plugin, origin, path }),
+    path: `/${asSegment(params.recordLabel)}/${asSegment(params.fieldName)} [${asSegment(params.plugin)}]`,
+    query: JSON.stringify(address),
   });
 }
 
@@ -154,7 +150,7 @@ export class ExtendedFieldDocuments implements vscode.Disposable {
         for (const files of both) files.changedWhere(field => event.keys.includes(field.formKey));
       }),
       deps.client.onNotification('plugin-changed', event => {
-        for (const files of both) files.changedWhere(field => samePluginAddress(pluginAddressOf(field), event.plugin));
+        for (const files of both) files.changedWhere(field => samePluginAddress(field.plugin, event.plugin));
       }),
     ];
     this.registrations = [

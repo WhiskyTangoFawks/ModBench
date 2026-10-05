@@ -6,7 +6,6 @@ import { lastGoodReadMessage, type Instance, type InstanceValue, type InstanceVi
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
-import { headerFormKeyFor } from './formKeyIdentity';
 import type { PluginsDrop } from '../pluginsCommands/plugins';
 import { moveOrderRefusal, type PluginOrderFactsOf } from '../pluginsCommands/pluginOrder';
 import { failurePrefixIcon } from './failurePrefixIcon';
@@ -114,8 +113,8 @@ function rowIdentity(kind: string, plugin: PluginAddress, formKey?: string): str
   return [kind, pluginAddressKey(plugin), ...(formKey === undefined ? [] : [formKey])].join(':');
 }
 
-function openHeaderCommand(plugin: string, origin: string): vscode.Command {
-  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: headerFormKeyFor(plugin), origin }] };
+function openHeaderCommand(header: PluginAddress): vscode.Command {
+  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ header }] };
 }
 
 /** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
@@ -134,7 +133,7 @@ export class PluginNode extends vscode.TreeItem {
     // xEdit parity: selecting a plugin node shows its File Header, with no separate affordance.
     // plugins.md, Menus and keys, story 2: the game loads no disabled plugin's records, so a click
     // on its row only selects it.
-    if (plugin.enabled) this.command = openHeaderCommand(plugin.name, origin);
+    if (plugin.enabled) this.command = openHeaderCommand({ name: plugin.name, origin });
     this.checkboxState = plugin.enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
@@ -153,7 +152,7 @@ export class ImplicitMasterNode extends vscode.TreeItem {
     // plugins.md, A plugin the game loads with no line: the reference tool's one sentence alone —
     // the label already shows the greyed file name, so the tooltip does not repeat it.
     this.tooltip = "This plugin can't be disabled or moved (enforced by the game).";
-    this.command = openHeaderCommand(name, origin);
+    this.command = openHeaderCommand({ name, origin });
     if (path !== undefined) this.resourceUri = lockedRowUri(path);
   }
 }
@@ -345,7 +344,7 @@ export class PluginsTreeProvider
   async getChildren(element?: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     if (element === undefined) return this.rows();
     const children = isRow(element)
-      ? await this.expandPluginRow(element, pluginFileOf(element))
+      ? await this.expandPluginRow(element)
       : await (this.records?.getChildren(element) ?? []);
     return this.adopted(children, element);
   }
@@ -382,12 +381,12 @@ export class PluginsTreeProvider
     return (await this.getChildren(group)).find((row) => row.kind === 'record' && row.record.formKey === formKey);
   }
 
-  private async expandPluginRow(element: PluginListNode, file: string): Promise<PluginsTreeNode[]> {
+  private async expandPluginRow(element: PluginListNode): Promise<PluginsTreeNode[]> {
     const address = addressOfRow(element);
     const expansion = this.facts.expansion(address);
     if (expansion.kind === 'error') return [new ErrorNode(expansion.message)];
     if (expansion.kind === 'indexing') return [new IndexingNode()];
-    return this.records?.getPluginChildren(file, element.origin, this.facts.conditions(address)) ?? noRecordBrowser();
+    return this.records?.getPluginChildren(address, this.facts.conditions(address)) ?? noRecordBrowser();
   }
 
   private async rows(): Promise<(PluginListNode | ErrorNode)[]> {
