@@ -25,8 +25,6 @@ internal sealed class PluginCompileService(
     public async Task<CompileResult> CompileAsync(PluginAddress plugin)
     {
         var loadOrder = loadOrderHolder.Current;
-        if (loadOrder.Plugins.Count == 0)
-            return CompileResult.Refused(CompileRefusal.PluginNotInLoadOrder, "No load order has been received.");
         if (loadOrder.Plugin(plugin) is not { } registered)
             return CompileResult.Refused(CompileRefusal.PluginNotInLoadOrder, $"{plugin.Name} is not in the load order.");
         if (SourceRepository.TrackedModOf(loadOrder, plugin) is not { } mod)

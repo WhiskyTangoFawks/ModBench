@@ -14,13 +14,9 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         _mod.CompileService();
 
     [Fact]
-    public async Task Compile_BeforeAnyLoadOrderHasArrived_RefusesSayingSo()
-    {
-        var result = await CompileServices.Over(LoadOrderSnapshot.Empty).CompileOneAsync(_mod.Plugin);
-
-        Assert.False(result.Succeeded);
-        Assert.Equal("No load order has been received.", result.RefusalReason);
-    }
+    public async Task Compile_BeforeAnyLoadOrderHasArrived_WritesNothingAndThrowsNoLoadOrder() =>
+        await Assert.ThrowsAsync<NoLoadOrderException>(
+            () => CompileServices.Over(LoadOrderSnapshot.Empty).CompileOneAsync(_mod.Plugin));
 
     [Fact]
     public async Task Compile_OfAPluginTheArrivedLoadOrderDoesNotHold_RefusesNamingThePlugin()
