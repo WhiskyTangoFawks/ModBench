@@ -31,42 +31,35 @@ public sealed class SourcePathLiteralScanTests
     [Fact]
     public void TheScan_PassesTheRepositorysOwnFiles_AndNamesALiteralPlantedElsewhere()
     {
-        var root = Directory.CreateTempSubdirectory("medit-source-path-scan-").FullName;
-        try
-        {
-            Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceAdapter", "obj"));
-            File.WriteAllText(
-                Path.Combine(root, "MEditService.SourceAdapter", "SourceRepositoryLayout.cs"),
-                "internal const string RootFolderName = \"plugin-source\";\n"
-                + "internal const string RecordDataFileName = \"RecordData.json\";\n");
-            Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
-            File.WriteAllText(
-                Path.Combine(root, "Layer", "EditService.cs"),
-                "var tree = Path.Combine(modFolder, \"plugin-source\", plugin);\n"
-                + "var glob = Directory.EnumerateFiles(tree, \"*.json\");\n");
-            File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "var root = \"plugin-source\";");
-            File.WriteAllText(
-                Path.Combine(root, "Layer", "SourceRepositoryRival.cs"), "internal const string Root = \"plugin-source\";");
+        using var root = new ScratchDirectory("medit-source-path-scan-");
+        Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceAdapter", "obj"));
+        File.WriteAllText(
+            Path.Combine(root, "MEditService.SourceAdapter", "SourceRepositoryLayout.cs"),
+            "internal const string RootFolderName = \"plugin-source\";\n"
+            + "internal const string RecordDataFileName = \"RecordData.json\";\n");
+        Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
+        File.WriteAllText(
+            Path.Combine(root, "Layer", "EditService.cs"),
+            "var tree = Path.Combine(modFolder, \"plugin-source\", plugin);\n"
+            + "var glob = Directory.EnumerateFiles(tree, \"*.json\");\n");
+        File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "var root = \"plugin-source\";");
+        File.WriteAllText(
+            Path.Combine(root, "Layer", "SourceRepositoryRival.cs"), "internal const string Root = \"plugin-source\";");
 
-            var counts = Counts(root, ["MEditService.SourceAdapter", "Layer"]);
+        var counts = Counts(root, ["MEditService.SourceAdapter", "Layer"]);
 
-            Assert.Equal(
-                ["Layer/EditService.cs: \"plugin-source\": 1", "Layer/SourceRepositoryRival.cs: \"plugin-source\": 1"],
-                counts);
+        Assert.Equal(
+            ["Layer/EditService.cs: \"plugin-source\": 1", "Layer/SourceRepositoryRival.cs: \"plugin-source\": 1"],
+            counts);
 
-            var unallowed = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(counts, [], AllowlistPath));
-            Assert.Contains("Layer/EditService.cs: \"plugin-source\": 1", unallowed.Message, StringComparison.Ordinal);
-            Assert.Contains("Layer/SourceRepositoryRival.cs: \"plugin-source\": 1", unallowed.Message, StringComparison.Ordinal);
+        var unallowed = Assert.Throws<Xunit.Sdk.TrueException>(
+            () => AssertCountsMatchAllowlist(counts, [], AllowlistPath));
+        Assert.Contains("Layer/EditService.cs: \"plugin-source\": 1", unallowed.Message, StringComparison.Ordinal);
+        Assert.Contains("Layer/SourceRepositoryRival.cs: \"plugin-source\": 1", unallowed.Message, StringComparison.Ordinal);
 
-            var stale = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(counts, [.. counts, "Layer/Gone.cs: \".json\": 2"], AllowlistPath));
-            Assert.Contains("Layer/Gone.cs: \".json\": 2", stale.Message, StringComparison.Ordinal);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        var stale = Assert.Throws<Xunit.Sdk.TrueException>(
+            () => AssertCountsMatchAllowlist(counts, [.. counts, "Layer/Gone.cs: \".json\": 2"], AllowlistPath));
+        Assert.Contains("Layer/Gone.cs: \".json\": 2", stale.Message, StringComparison.Ordinal);
     }
 
     private static void AssertCountsMatchAllowlist(

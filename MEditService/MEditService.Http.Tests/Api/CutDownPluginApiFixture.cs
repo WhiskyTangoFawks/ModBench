@@ -10,11 +10,12 @@ public sealed class CutDownPluginApiFixture : IApiPluginFixture<CutDownPluginApi
 {
     public string DataFolder { get; }
     public IReadOnlyList<LoadOrderEntry> Plugins { get; }
-    public string InstanceRoot { get; }
+    public string InstanceRoot => _scratch.Path;
+
+    private readonly ScratchDirectory _scratch = new("medit-cutdown-api-");
 
     public CutDownPluginApiFixture()
     {
-        InstanceRoot = Directory.CreateTempSubdirectory("medit-cutdown-api-").FullName;
         DataFolder = Directory.CreateDirectory(Path.Combine(InstanceRoot, "GameDir")).FullName;
         Plugins =
         [
@@ -24,10 +25,7 @@ public sealed class CutDownPluginApiFixture : IApiPluginFixture<CutDownPluginApi
         ];
     }
 
-    public void Dispose()
-    {
-        try { Directory.Delete(InstanceRoot, recursive: true); } catch (IOException) { /* scratch, best-effort */ }
-    }
+    public void Dispose() => _scratch.Dispose();
 
     public static CutDownPluginApiFixture Create() => new();
 }

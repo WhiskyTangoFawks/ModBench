@@ -7,8 +7,8 @@ public sealed class PluginResponseTests
 {
     private static PluginRow Row(bool isTracked = false, bool isBlueprint = false, int? loadOrderIndex = 0) =>
         new(new RegisteredPlugin(
-            "Fixture.esp", "FixtureMod", Path.Combine(Path.GetTempPath(), "no-such-mod", "Fixture.esp"),
-            new PluginProvider.FromMod("FixtureMod", Path.Combine(Path.GetTempPath(), "no-such-mod"))),
+            "Fixture.esp", "FixtureMod", Path.GetFullPath(Path.Combine("no-such-mod", "Fixture.esp")),
+            new PluginProvider.FromMod("FixtureMod", Path.GetFullPath("no-such-mod"))),
             loadOrderIndex, IsImmutable: loadOrderIndex is null,
             new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: isBlueprint, Masters: [], RecordCount: 1, IsMedium: false),
             MasterIssues: [], HasMatchingRecords: true, HasParseFailure: false, IsTracked: isTracked);

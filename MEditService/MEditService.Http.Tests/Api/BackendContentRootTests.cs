@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -14,7 +15,7 @@ public sealed class BackendContentRootTests
     [Fact]
     public async Task SpawnedFromArbitraryCwd_AnchorsContentRootToItsOwnDirectory_ARealProcessSinceWebApplicationFactoryNeverReproducesTheCwd()
     {
-        var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
+        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
         var lines = new List<string>();
         using var process = SpawnThroughTheDotnetMuxer(["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost], workingDirectory, lines);
         try
@@ -34,7 +35,7 @@ public sealed class BackendContentRootTests
         }
         finally
         {
-            Cleanup(process, workingDirectory);
+            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
         }
     }
 
@@ -42,7 +43,7 @@ public sealed class BackendContentRootTests
     public async Task SpawnedFromArbitraryCwd_WithExtensionArgv_SuppressesRequestPipelineLogsButKeepsAppInfo()
     {
         var port = GetFreeTcpPort();
-        var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
+        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
         var lines = new List<string>();
         using var process = SpawnThroughTheDotnetMuxer(
             ["--urls", $"http://localhost:{port}", "--Serilog:MinimumLevel:Default", "Debug"],
@@ -76,7 +77,7 @@ public sealed class BackendContentRootTests
         }
         finally
         {
-            Cleanup(process, workingDirectory);
+            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
         }
     }
 
@@ -84,7 +85,7 @@ public sealed class BackendContentRootTests
     public async Task SpawnedFromArbitraryCwd_RequestLogging_ShowsFailuresButNotSuccessesAtDefaultLevel()
     {
         var port = GetFreeTcpPort();
-        var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
+        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
         var lines = new List<string>();
         using var process = SpawnThroughTheDotnetMuxer(["--urls", $"http://localhost:{port}"], workingDirectory, lines);
         try
@@ -111,14 +112,14 @@ public sealed class BackendContentRootTests
         }
         finally
         {
-            Cleanup(process, workingDirectory);
+            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
         }
     }
 
     [Fact]
     public async Task SpawnedWithLogDirectory_WritesItsLogFileThere()
     {
-        var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
+        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
         var lines = new List<string>();
         using var process = SpawnThroughTheDotnetMuxer(["--urls", EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost], workingDirectory, lines);
         try
@@ -133,7 +134,7 @@ public sealed class BackendContentRootTests
         }
         finally
         {
-            Cleanup(process, workingDirectory);
+            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
         }
     }
 
@@ -195,18 +196,6 @@ public sealed class BackendContentRootTests
         finally
         {
             listener.Stop();
-        }
-    }
-
-    private static void Cleanup(Process process, string workingDirectory)
-    {
-        try
-        {
-            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
-        }
-        finally
-        {
-            Directory.Delete(workingDirectory, recursive: true);
         }
     }
 
