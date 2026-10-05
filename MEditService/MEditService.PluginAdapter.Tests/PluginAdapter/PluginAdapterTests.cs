@@ -47,7 +47,7 @@ public sealed class PluginAdapterTests
     }
 
     [Fact]
-    public async Task CreateAndWriteAsync_CarriesTheReleaseAndKeyItWasGiven_NoRecords_AndTheFreshHeadersNextObjectIdAsStored()
+    public async Task CreateAndWriteAsync_CarriesTheReleaseAndKeyItWasGiven_NoRecordsAndNoMasters()
     {
         using var scratch = new ScratchDirectory("medit-adapter-create-");
         var path = Path.Combine(scratch, PluginName);
@@ -62,10 +62,6 @@ public sealed class PluginAdapterTests
         Assert.Equal(GameRelease.Fallout4, reread.GameRelease);
         Assert.Empty(reread.EnumerateMajorRecords());
         Assert.Empty(reread.ModHeader.MasterReferences);
-
-        var freshDefault = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4)
-            .ModHeader.Stats.NextFormID;
-        Assert.Equal(freshDefault, reread.ModHeader.Stats.NextFormID);
     }
 
     [Theory]

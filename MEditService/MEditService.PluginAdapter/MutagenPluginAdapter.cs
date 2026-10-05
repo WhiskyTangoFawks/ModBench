@@ -192,8 +192,8 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     }
 
     /// <summary>Bytes at <paramref name="destinationPath"/>, written in place: the temp file and rename
-    /// that replace a plugin are <see cref="PluginWriter"/>'s. Null takes Mutagen's own master order
-    /// (ADR-0008) and strings folder.</summary>
+    /// that replace a plugin are <see cref="PluginWriter"/>'s. A mod read from a source tree has no
+    /// header masters (ADR-0008), so it needs <paramref name="masterOrder"/>.</summary>
     internal static async Task WriteAsync(
         IMod plugin,
         string destinationPath,
@@ -201,15 +201,11 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         string? stringsFolder = null,
         bool noModKeySync = false)
     {
-        // ADR-0006: the header's stored NextObjectID and record count are written as stored, never
-        // recomputed. Mutagen's Iterate defaults re-derive both, and real override plugins routinely
-        // carry stored values that match neither.
-        var writeBuilder = plugin.BeginWrite
-            .ToPath(destinationPath)
-            .WithLoadOrderFromHeaderMasters()
-            .WithNoDataFolder()
-            .NoNextFormIDProcessing()
-            .WithRecordCount(RecordCountOption.NoCheck);
+        var toPath = plugin.BeginWrite.ToPath(destinationPath);
+        var writeBuilder = (masterOrder is null
+                ? toPath.WithLoadOrderFromHeaderMasters()
+                : toPath.WithLoadOrder(masterOrder.Select(name => ModKey.FromFileName(name))))
+            .WithNoDataFolder();
         // A destination named other than plugin's ModKey needs this lifted.
         if (noModKeySync) writeBuilder = writeBuilder.NoModKeySync();
 
@@ -232,11 +228,6 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         {
             stringsWriter?.Dispose();
         }
-
-        // The master order follows the load order when supplied (ADR-0008), so the written file's
-        // master list matches what xEdit shows (ADR-0018).
-        if (masterOrder != null)
-            writeBuilder = writeBuilder.WithMastersListOrdering(masterOrder.Select(name => ModKey.FromFileName(name)));
 
         await writeBuilder.WriteAsync();
     }

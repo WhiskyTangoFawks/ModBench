@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -28,11 +27,8 @@ internal sealed class ForgedTreeWriteAdapter(string pluginFileName, TreeDeserial
 
         await recompiled.BeginWrite
             .ToPath(destinationPath)
-            .WithLoadOrderFromHeaderMasters()
+            .WithLoadOrder(masterOrder.Select(name => ModKey.FromFileName(name)))
             .WithNoDataFolder()
-            .NoNextFormIDProcessing()
-            .WithRecordCount(RecordCountOption.NoCheck)
-            .WithMastersListOrdering(masterOrder.Select(name => ModKey.FromFileName(name)))
             .WriteAsync();
     }
 }

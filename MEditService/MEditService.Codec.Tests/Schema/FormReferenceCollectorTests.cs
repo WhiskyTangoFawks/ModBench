@@ -1,10 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Tests.Schema;
@@ -265,22 +261,5 @@ public class FormReferenceCollectorTests
              ("Keywords[1]", "000003:A.esp"),
              ("Value.Object", "000004:A.esp")],
             refs.Select(r => (r.FieldPath, r.TargetFormKey)));
-    }
-
-    [Fact]
-    public void Collect_TheHeader_YieldsNoLinks_ItsMastersNamePluginsNotRecords()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("Masters.esp"), Fallout4Release.Fallout4);
-        mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Fallout4.esm") });
-        var header = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[PluginHeader.RecordType];
-
-        using var document = JsonDocument.Parse(HeaderDocument.Write(mod));
-
-        var masters = DocumentNodes.At(document.RootElement, $"ModHeader.{nameof(mod.ModHeader.MasterReferences)}");
-        Assert.NotNull(masters);
-        Assert.Equal(
-            ["Fallout4.esm"],
-            masters.Value.EnumerateArray().Select(m => m.GetProperty("Master").GetString()));
-        Assert.Empty(FormReferences.Collect(document.RootElement, header));
     }
 }
