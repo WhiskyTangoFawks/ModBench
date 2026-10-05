@@ -13,7 +13,7 @@ import { failurePrefixIcon } from './failurePrefixIcon';
 import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from '../drivingLib/errorNode';
-import { pluginAddressKey } from './pluginAddress';
+import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
 import { PluginFacts, placeOf, type PluginWarning } from './pluginFacts';
 import { isRecordRow, PLUGINS_KEY_ARGS } from './gestureEntry';
 import { runWritingGesture } from '../drivingLib/writingGesture';
@@ -111,7 +111,7 @@ export interface PluginsTreeProviderOptions {
 // plugins.md, A row, Identity: VS Code keeps expansion and selection across a rebuild by it, and
 // refuses two rows that share one.
 function rowIdentity(kind: string, plugin: PluginAddress, formKey?: string): string {
-  return [kind, pluginAddressKey(plugin.name, plugin.origin), ...(formKey === undefined ? [] : [formKey])].join(':');
+  return [kind, pluginAddressKey(plugin), ...(formKey === undefined ? [] : [formKey])].join(':');
 }
 
 function openHeaderCommand(plugin: string, origin: string): vscode.Command {
@@ -177,6 +177,10 @@ const OWN_ROW_KINDS = new Set<string>(['plugin', 'implicitMaster']);
 /** The plugin file a row stands for, and its label. */
 export function pluginFileOf(node: PluginListNode): string {
   return node.kind === 'plugin' ? node.plugin.name : node.name;
+}
+
+function addressOfRow(node: PluginListNode): PluginAddress {
+  return { name: pluginFileOf(node), origin: node.origin };
 }
 
 type RowDecoration = {
@@ -317,21 +321,20 @@ export class PluginsTreeProvider
   }
 
   resolvePluginPath(row: PluginNode | ImplicitMasterNode): Promise<string | undefined> {
-    return Promise.resolve(this.pluginFile({ name: pluginFileOf(row), origin: row.origin }));
+    return Promise.resolve(this.pluginFile(addressOfRow(row)));
   }
 
   /** The plugin's own file (ADR-0012), or the game folder's copy for a game-folder plugin the
    *  Instance value lists no file for. */
-  pluginFile({ name, origin }: PluginAddress): string | undefined {
-    const address = pluginAddressKey(name, origin);
-    const listed = this.instanceValue.plugins.find((p) => pluginAddressKey(p.name, p.origin) === address)?.path;
-    return listed ?? (origin === DATA_DIRECTORY_ORIGIN ? this.dataFolderFile(name) : undefined);
+  pluginFile(address: PluginAddress): string | undefined {
+    const listed = this.instanceValue.plugins.find((p) => samePluginAddress(p, address))?.path;
+    return listed ?? (address.origin === DATA_DIRECTORY_ORIGIN ? this.dataFolderFile(address.name) : undefined);
   }
 
   /** Whether the row's line is enabled now: a row the view still holds may predate the value. */
   isEnabled(row: PluginNode): boolean {
-    const address = pluginAddressKey(row.plugin.name, row.origin);
-    return this.instanceValue.plugins.some((p) => p.winning && p.enabled && pluginAddressKey(p.name, p.origin) === address);
+    const address = addressOfRow(row);
+    return this.instanceValue.plugins.some((p) => p.winning && p.enabled && samePluginAddress(p, address));
   }
 
   /** Lowercased, and empty before the first render. A live read, not a snapshot. */
@@ -367,13 +370,12 @@ export class PluginsTreeProvider
   private pluginOf(node: PluginsTreeNode): PluginAddress | undefined {
     let current: PluginsTreeNode | undefined = node;
     while (current !== undefined && !isRow(current)) current = this.parentOf.get(current);
-    return current && { name: pluginFileOf(current), origin: current.origin };
+    return current && addressOfRow(current);
   }
 
   /** The row of a record, once mEdit lists it in its group. */
   async recordRow({ plugin, recordType }: RecordGroup, formKey: string): Promise<PluginsTreeNode | undefined> {
-    const address = pluginAddressKey(plugin.name, plugin.origin);
-    const pluginRow = (await this.rows()).find((row) => row.kind === 'plugin' && pluginAddressKey(row.plugin.name, row.origin) === address);
+    const pluginRow = (await this.rows()).find((row) => row.kind === 'plugin' && samePluginAddress(addressOfRow(row), plugin));
     if (pluginRow === undefined) return undefined;
     const group = (await this.getChildren(pluginRow)).find((row) => row.kind === 'recordType' && row.recordType === recordType);
     if (group === undefined) return undefined;
@@ -381,7 +383,7 @@ export class PluginsTreeProvider
   }
 
   private async expandPluginRow(element: PluginListNode, file: string): Promise<PluginsTreeNode[]> {
-    const address = { name: file, origin: element.origin };
+    const address = addressOfRow(element);
     const expansion = this.facts.expansion(address);
     if (expansion.kind === 'error') return [new ErrorNode(expansion.message)];
     if (expansion.kind === 'indexing') return [new IndexingNode()];
@@ -418,17 +420,17 @@ export class PluginsTreeProvider
     // While Mod Management cannot name the plugins the game loads with no line (ADR-0013), a
     // plugins.txt line for one renders as an ordinary row, which is what the file says.
     const loadedWithNoLine = this.instanceValue.pluginsLoadedWithNoLine ?? [];
-    const implicitLower = new Set(loadedWithNoLine.map((p) => p.name.toLowerCase()));
+    const implicitKeys = new Set(loadedWithNoLine.map(pluginAddressKey));
 
     const listed = listedPlugins(this.instanceValue);
 
     // A name in both sets renders once, as the implicit row: the game loads it first, wherever its
     // line sits. A name on two lines renders once, at its first.
-    const shown = new Set(implicitLower);
+    const shown = new Set(implicitKeys);
     const dedupedOrder = listed.filter((p) => {
-      const folded = p.name.toLowerCase();
-      if (shown.has(folded)) return false;
-      shown.add(folded);
+      const key = pluginAddressKey(p);
+      if (shown.has(key)) return false;
+      shown.add(key);
       return true;
     });
     this.lastOrder = dedupedOrder.map(({ name, origin }) => ({ name, origin }));
@@ -478,7 +480,7 @@ export class PluginsTreeProvider
 
   // plugins.md, A row: description and icon stay unset when no status applies.
   private decoratePlugin(row: PluginNode): void {
-    const address = { name: row.plugin.name, origin: row.origin };
+    const address = addressOfRow(row);
     const icon = this.facts.icon(address);
     if (icon !== undefined) {
       row.iconPath = icon === 'warning' ? warningIcon() : failurePrefixIcon();
@@ -570,8 +572,8 @@ export class PluginsTreeProvider
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {
     if (!this.client) return undefined;
     try {
-      const shown = new Set(this.builtRows().map((row) => pluginAddressKey(pluginFileOf(row), row.origin)));
-      return (await this.client.getPlugins()).filter((p) => shown.has(pluginAddressKey(p.name, p.origin)));
+      const shown = new Set(this.builtRows().map((row) => pluginAddressKey(addressOfRow(row))));
+      return (await this.client.getPlugins()).filter((p) => shown.has(pluginAddressKey(p)));
     } catch (err) {
       const message = errorMessage(err);
       this.log('error', `[PluginsTreeProvider] reading the backend's plugin list failed: ${message}`);
@@ -598,7 +600,7 @@ export class PluginsTreeProvider
   }
 
   private isHiddenByFilter(row: PluginListNode): boolean {
-    return this.facts.hiddenByRecordFilter({ name: pluginFileOf(row), origin: row.origin });
+    return this.facts.hiddenByRecordFilter(addressOfRow(row));
   }
 
   // ── drag and drop ─────────────────────────────────────────────────────────
@@ -611,7 +613,7 @@ export class PluginsTreeProvider
     _token: vscode.CancellationToken,
   ): void {
     const plugins = source.filter((n): n is PluginNode => n instanceof PluginNode)
-      .map((n) => ({ name: n.plugin.name, origin: n.origin }));
+      .map(addressOfRow);
     if (plugins.length === 0) return;
     dataTransfer.set(DND_MIME, new vscode.DataTransferItem({ plugins }));
   }

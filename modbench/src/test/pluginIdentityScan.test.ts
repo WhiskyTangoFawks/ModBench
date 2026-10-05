@@ -8,13 +8,14 @@ import { productionFiles, SRC } from './scanSource';
 
 const WIRE_BOX = 'wire';
 const CLIENT_BOX = 'client';
-const PLUGIN_NAME = /^(.*?)(plugin|pluginName|fileName)$/i;
+const PLUGIN_NAME = /^(.*?)(plugins?|pluginName|fileName)$/i;
 
 interface Member { name: string; isString: boolean }
 
 const isString = (type: ts.TypeNode | undefined): boolean =>
   type?.kind === ts.SyntaxKind.StringKeyword
-  || (type !== undefined && ts.isUnionTypeNode(type) && type.types.some((t) => t.kind === ts.SyntaxKind.StringKeyword));
+  || (type !== undefined && ts.isArrayTypeNode(type) && isString(type.elementType))
+  || (type !== undefined && ts.isUnionTypeNode(type) && type.types.some(isString));
 
 const member = (name: ts.Node, type: ts.TypeNode | undefined): Member[] =>
   (ts.isIdentifier(name) ? [{ name: name.text, isString: isString(type) }] : []);
@@ -25,15 +26,14 @@ function siblings(node: ts.Node): Member[] {
   return node.members.flatMap((m) => (ts.isPropertySignature(m) ? member(m.name, m.type) : []));
 }
 
-function stringPlugins(members: Member[], originBesideIsEnough: boolean): string[] {
-  return members.filter((m) => m.isString).flatMap(({ name }) => {
-    const match = PLUGIN_NAME.exec(name);
-    if (!match) return [];
-    if (!originBesideIsEnough) return [name];
-    const origin = `${match[1]}origin`.toLowerCase();
-    return members.some((m) => m.name.toLowerCase() === origin) ? [] : [name];
+const stringPlugins = (members: Member[]): Member[] =>
+  members.filter((m) => m.isString && PLUGIN_NAME.test(m.name));
+
+const lackingOriginBeside = (plugins: Member[], members: Member[]): string[] =>
+  plugins.map(({ name }) => name).filter((name) => {
+    const origin = `${PLUGIN_NAME.exec(name)?.[1] ?? ''}origin`.toLowerCase();
+    return !members.some((m) => m.name.toLowerCase() === origin);
   });
-}
 
 function seamFiles(src: string = SRC): string[] {
   return [WIRE_BOX, CLIENT_BOX].flatMap((box) => productionFiles(join(src, box)))
@@ -48,7 +48,9 @@ function findOffenders(src: string = SRC): Record<string, string[]> {
     const source = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
     const found: string[] = [];
     const visit = (node: ts.Node): void => {
-      found.push(...stringPlugins(siblings(node), originBesideIsEnough(src, path)));
+      const members = siblings(node);
+      const plugins = stringPlugins(members);
+      found.push(...(originBesideIsEnough(src, path) ? lackingOriginBeside(plugins, members) : plugins.map((m) => m.name)));
       ts.forEachChild(node, visit);
     };
     visit(source);
@@ -75,7 +77,7 @@ describe('a plugin crosses a Modbench seam as an address (ADR-0012)', () => {
     expect(findOffenders()).toEqual({});
   });
 
-  it('flags in the webview protocol a string plugin or filename with no origin of its own prefix beside it, and in the client any string plugin or filename', async () => {
+  it('flags in the webview protocol a string plugin or filename with no origin of its own prefix beside it', async () => {
     const dir = await plantedSeams({
       [join('wire', 'newMessage.ts')]: [
         'export interface Bare { plugin: string; formKey: string }',
@@ -83,9 +85,23 @@ describe('a plugin crosses a Modbench seam as an address (ADR-0012)', () => {
         'export type Prefixed = { sourcePlugin: string; sourceOrigin: string; destinationPlugin: string };',
         'export type Nullable = { readonly pluginName?: string | null };',
         'export type Nested = { origin: string; record: { plugin: string } };',
-        'export type Typed = { plugin: PluginAddress; plugins: string[] };',
+        'export type Typed = { plugin: PluginAddress; plugins: PluginAddress[] };',
+        'export type List = { plugins: string[] };',
         '',
       ].join('\n'),
+      [join('client', 'empty.ts')]: 'export {};\n',
+    });
+    try {
+      expect(findOffenders(dir)).toEqual({
+        [join('wire', 'newMessage.ts')]: ['plugin', 'destinationPlugin', 'pluginName', 'plugin', 'plugins'],
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('flags in the client any string plugin or filename, and only in the seams', async () => {
+    const dir = await plantedSeams({
       [join('client', 'port.ts')]: [
         'export interface Port {',
         '  read(fileName: string, origin: string): void;',
@@ -96,14 +112,12 @@ describe('a plugin crosses a Modbench seam as an address (ADR-0012)', () => {
         'export class Adapter { constructor(readonly plugin: string) {} }',
         '',
       ].join('\n'),
+      [join('wire', 'empty.ts')]: 'export {};\n',
       [join('client', 'test', 'fixture.ts')]: 'export const bare = (plugin: string) => plugin;\n',
       [join('plugins', 'outsideTheSeams.ts')]: 'export const bare = (plugin: string) => plugin;\n',
     });
     try {
-      expect(findOffenders(dir)).toEqual({
-        [join('wire', 'newMessage.ts')]: ['plugin', 'destinationPlugin', 'pluginName', 'plugin'],
-        [join('client', 'port.ts')]: ['fileName', 'fileName', 'plugin', 'plugin'],
-      });
+      expect(findOffenders(dir)).toEqual({ [join('client', 'port.ts')]: ['fileName', 'fileName', 'plugin', 'plugin'] });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

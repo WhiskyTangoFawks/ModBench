@@ -40,7 +40,7 @@ export class NotificationListenerRegistry {
         this.deliver('external-change', { origin, changedPlugins: event.changedPlugins ?? [] });
         break;
       case 'untracked-plugins':
-        this.deliver('untracked-plugins', { origin, plugins: keys });
+        this.deliver('untracked-plugins', { plugins: keys.map((name) => ({ name, origin })) });
         break;
       case 'rows-changed':
         this.deliver('rows-changed', { plugin: { name: plugin, origin }, keys });

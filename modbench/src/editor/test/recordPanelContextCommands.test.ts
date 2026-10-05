@@ -160,7 +160,7 @@ describe('right-click array ops write one envelope from the host', () => {
 
     await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(parentContext([{ kind: 'member', name: 'Values' }]));
 
-    expect(refreshSourceControlFor).toHaveBeenCalledWith(IDENTITY.plugin, IDENTITY.origin);
+    expect(refreshSourceControlFor).toHaveBeenCalledWith({ name: IDENTITY.plugin, origin: IDENTITY.origin });
   });
 
   it('surfaces a refusal as a warning and does not re-read', async () => {
@@ -255,7 +255,7 @@ describe('the extended editor opens and saves from the host, from the context it
       IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       { op: 'set', path, value: 'edited in the tab' },
     ]);
-    expect(refreshSourceControlFor).toHaveBeenCalledWith(IDENTITY.plugin, IDENTITY.origin);
+    expect(refreshSourceControlFor).toHaveBeenCalledWith({ name: IDENTITY.plugin, origin: IDENTITY.origin });
   });
 
   it('a second save of the same tab writes again', async () => {
@@ -314,7 +314,7 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
     await editField()(IDENTITY, envelope);
 
     expect(editRecordCalls(meditClient).map(c => c.args)).toEqual([[IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin }, envelope]]);
-    expect(refreshSourceControlFor).toHaveBeenCalledWith(IDENTITY.plugin, IDENTITY.origin);
+    expect(refreshSourceControlFor).toHaveBeenCalledWith({ name: IDENTITY.plugin, origin: IDENTITY.origin });
   });
 
   it('goes through the gate of the panels showing the record its Argument names', async () => {

@@ -1,5 +1,6 @@
 import type * as vscode from 'vscode';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
+import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
 
 export type FollowedPanel = { title: string; webview: Pick<vscode.Webview, 'postMessage'> };
 
@@ -103,7 +104,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
       for (const move of ended) move.readAt = readAt;
       const reached = ended;
       ended = moves.filter(move => move.readAt === undefined && reached.some(later =>
-        later.from === move.to && later.plugin === move.plugin && later.origin === move.origin));
+        later.from === move.to && samePluginAddress(pluginAddressOf(later), pluginAddressOf(move))));
     }
   }
 
@@ -159,7 +160,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   private targetOf(panel: Panel, address: EditAddress, addressedAt: number): string {
     let formKey = address.formKey;
     for (const move of this.moves.get(panel) ?? []) {
-      const samePlugin = move.plugin === address.plugin && move.origin === address.origin;
+      const samePlugin = samePluginAddress(pluginAddressOf(move), pluginAddressOf(address));
       if (samePlugin && move.from === formKey && (move.readAt === undefined || addressedAt < move.readAt)) formKey = move.to;
     }
     return formKey;

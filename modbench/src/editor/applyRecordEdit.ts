@@ -1,5 +1,6 @@
 import type { Reporter } from '../ports/reporter';
 import type { MEditClient, RecordEditEnvelope } from '../client';
+import type { PluginAddress } from '../wire/pluginAddress';
 import type { PathHop } from '../wire/messages';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -11,7 +12,7 @@ export interface RecordWriteDeps {
   meditClient: Pick<MEditClient, 'editRecord'>;
   // The native Source Control panel does not pick up a field edit's working-tree change on its own.
   // The records and their badges are not the edit's to touch: they follow mEdit's changed rows.
-  refreshSourceControlFor: (plugin: string, origin: string) => void;
+  refreshSourceControlFor: (plugin: PluginAddress) => void;
   reporter: Reporter;
 }
 
@@ -22,13 +23,13 @@ function spellField(path: PathHop[]): string {
 /** An edit goes through the extension host because a refusal becomes a native notification
  *  (editor.md, Reporting, story 1). Resolves the new FormKey an edit of the FormID landed under. */
 export async function applyRecordEdit(
-  deps: RecordWriteDeps, formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope,
+  deps: RecordWriteDeps, formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope,
 ): Promise<string | undefined> {
   const field = spellField(envelope.path);
   try {
-    const outcome = await deps.meditClient.editRecord(formKey, { name: plugin, origin }, envelope);
+    const outcome = await deps.meditClient.editRecord(formKey, plugin, envelope);
     if (outcome.applied) {
-      deps.refreshSourceControlFor(plugin, origin);
+      deps.refreshSourceControlFor(plugin);
       return outcome.newFormKey;
     }
     deps.reporter.report('warning', `${field}: ${outcome.message}`);
