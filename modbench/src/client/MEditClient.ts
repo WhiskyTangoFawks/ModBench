@@ -201,11 +201,9 @@ export interface MEditClient {
   getRecordOwner(formKey: string): Promise<PluginAddress | undefined>;
   /** Every plugin that holds a copy of the record, its own included. */
   getRecordHolders(formKey: string): Promise<PluginAddress[]>;
-  /** One record as every active plugin has it: the record panel's host asks for this and posts it
-   *  to the webview untransformed (target-architecture.d2 `modbench_driving.editor`). Null is a
-   *  record held by no active plugin. With `text`, that plugin's column and the conflict states are
-   *  read from its `documentText` whether or not the plugin is active, and nothing is stored; text
-   *  that is no record document is a column that could not be parsed. */
+  /** One record as every active plugin has it, posted to the webview untransformed (target-architecture.d2
+   *  `modbench_driving.editor`). Null: no active plugin holds it. With `text`, that plugin's column
+   *  and the conflict states read from its `documentText`. */
   getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null>;
   /** Several records side by side: one column per copy, in the order given, with no conflict
    *  state on any cell or row. Null is a copy no plugin holds and no `documentText` gives. */
