@@ -51,6 +51,14 @@ internal sealed class SourceRepositoryGit(string modFolder)
             .OfType<string>()];
     }
 
+    // Windows refuses to delete the read-only files git writes.
+    internal void Delete()
+    {
+        foreach (var file in Directory.EnumerateFiles(_gitDir, "*", SearchOption.AllDirectories))
+            File.SetAttributes(file, FileAttributes.Normal);
+        Directory.Delete(_gitDir, recursive: true);
+    }
+
     internal string Run(params string[] args) => GitCli.Run(_gitDir, _modFolder, args);
 
     internal string RunWithIndex(string indexFile, params string[] args) =>
@@ -158,10 +166,6 @@ internal sealed class SourceRepositoryGit(string modFolder)
         ParkSnapshot("Decompile", pluginFileName, tree, headSha, [$"{BinaryTrailer}: {binarySha256}"]);
     }
 
-    /// <summary>Points the plugin's last-compile ref at a baseline commit Track made, whose own
-    /// trailers name the binary.</summary>
-    internal void ParkBaseline(string pluginFileName, string commitSha) => Park(pluginFileName, commitSha);
-
     // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written. The
     // subject names the gesture that made the snapshot.
     private void ParkSnapshot(string gesture, string pluginFileName, string tree, string parent, IEnumerable<string> trailers)
@@ -170,7 +174,7 @@ internal sealed class SourceRepositoryGit(string modFolder)
         Park(pluginFileName, Run("commit-tree", tree, "-p", parent, "-m", message).Trim());
     }
 
-    // The one place the last-compile ref moves, whichever of Track, a compile or a decompile moves it.
+    // The one place the last-compile ref moves.
     private void Park(string pluginFileName, string commitSha) =>
         Run("update-ref", LastCompileRef(pluginFileName), commitSha);
 

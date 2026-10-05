@@ -20,11 +20,23 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
             _modFolder, SourcePreset.Edits, [Baseline("A.esp"), BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp"), Baseline("C.esp")]);
 
         Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
-        Assert.Equal(["Track SomeMod", "Track A.esp", "Track C.esp"], SubjectsOnMain());
+        Assert.Equal(["Track SomeMod"], SubjectsOnMain());
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source", "Bad.esp")));
         Assert.True(File.Exists(Path.Combine(_modFolder, "plugin-source", "C.esp", "npc_", "C.esp", "000001.json")));
         Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
         Assert.Equal(string.Empty, Git("status", "--porcelain"));
+    }
+
+    [Fact]
+    public void Track_WhenEveryPluginIsRefused_LeavesNoRepositoryAndNoGitignore()
+    {
+        var refused = SourceRepository.Track(
+            _modFolder, SourcePreset.Edits, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
+
+        Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
+        Assert.False(SourceRepository.IsTracked(_modFolder));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
+        Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
     }
 
     [Fact]
@@ -48,7 +60,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var refused = SourceRepository.Track(_modFolder, SourcePreset.Everything, [Baseline("A.esp")]);
 
         Assert.Empty(refused);
-        Assert.Equal(["Track SomeMod", "Track A.esp"], SubjectsOnMain());
+        Assert.Equal(["Track SomeMod"], SubjectsOnMain());
         Assert.True(SourceRepository.IsTracked(_modFolder));
         Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
     }

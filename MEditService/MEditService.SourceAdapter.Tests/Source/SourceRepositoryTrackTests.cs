@@ -1,3 +1,4 @@
+using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -26,56 +27,41 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     }
 
     [Fact]
-    public void Track_WithNoUpstreamVersion_LeavesItOutOfTheSubjectAndTheTrailers()
-    {
-        SourceRepository.Track(
-            _modFolder, SourcePreset.Edits,
-            [(SourceOf("Test.esp"), new BaselineTrailers("Test.esp", UpstreamVersion: null, BinarySha256: "ABCDEF0123"))]);
-
-        Assert.Equal("Track Test.esp", Git("log", "-1", "--format=%s", "main").Trim());
-        Assert.Equal("Plugin: Test.esp\nBinary-SHA256: ABCDEF0123", Git("log", "-1", "--format=%(trailers:only,unfold)", "main").Trim());
-    }
-
-    [Fact]
-    public void Track_WithAnUpstreamVersion_NamesItInEachPluginsSubjectAndTrailers_UnderTheModsOwnCommit()
-    {
-        SourceRepository.Track(
-            _modFolder, SourcePreset.Edits,
-            [
-                (SourceOf("First.esp"), new BaselineTrailers("First.esp", "1.2.3", "AAAA")),
-                (SourceOf("Second.esp"), new BaselineTrailers("Second.esp", "1.2.3", "BBBB")),
-            ]);
-
-        Assert.Equal(["Track SomeMod", "Track First.esp 1.2.3", "Track Second.esp 1.2.3"], SubjectsOnMain());
-        Assert.Equal(
-            "Plugin: First.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: AAAA",
-            Git("log", "-1", "--format=%(trailers:only,unfold)", "main~1").Trim());
-        Assert.Equal(
-            "Plugin: Second.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: BBBB",
-            Git("log", "-1", "--format=%(trailers:only,unfold)", "main").Trim());
-    }
-
-    [Fact]
-    public void Track_CommitsEachPluginsSourceOnlyInItsOwnBaseline()
+    public void Track_MakesOneCommitNamedForTheMod_HoldingEveryPluginsSource()
     {
         PluginBaselines.Track(_modFolder, SourcePreset.Edits, [.. SourceOf("A.esp"), .. SourceOf("B.esp")]);
 
-        Assert.Equal([".gitignore"], PathsIn("main~2"));
-        Assert.Equal(["plugin-source/A.esp/npc_/A.esp/000001.json"], PathsIn("main~1"));
-        Assert.Equal(["plugin-source/B.esp/npc_/B.esp/000001.json"], PathsIn("main"));
+        Assert.Equal(["Track SomeMod"], SubjectsOnMain());
+        Assert.Equal(
+            [".gitignore", "plugin-source/A.esp/npc_/A.esp/000001.json", "plugin-source/B.esp/npc_/B.esp/000001.json"],
+            PathsIn("main"));
     }
 
     [Fact]
-    public void Track_UnderEverything_CommitsTheModsAssetsInTheModsOwnCommit()
+    public void Track_UnderEverything_CommitsTheModsAssetsInTheSameCommit()
     {
         Directory.CreateDirectory(Path.Combine(_modFolder, "Textures"));
         File.WriteAllText(Path.Combine(_modFolder, "Textures", "Thing.dds"), "pixels");
 
         PluginBaselines.Track(_modFolder, SourcePreset.Everything, SourceOf("A.esp"));
 
-        Assert.Equal("Track SomeMod", Git("log", "-1", "--format=%s", "main~1").Trim());
-        Assert.Equal([".gitignore", "Textures/Thing.dds"], PathsIn("main~1"));
-        Assert.Equal(["plugin-source/A.esp/npc_/A.esp/000001.json"], PathsIn("main"));
+        Assert.Equal(["Track SomeMod"], SubjectsOnMain());
+        Assert.Equal([".gitignore", "Textures/Thing.dds", "plugin-source/A.esp/npc_/A.esp/000001.json"], PathsIn("main"));
+    }
+
+    [Fact]
+    public void Track_KeepsEachFilesLineEndingsAsWritten()
+    {
+        var crlf = "{\r\n  \"a\": 1\r\n}\r\n"u8.ToArray();
+        var lf = "{\n  \"a\": 1\n}\n"u8.ToArray();
+
+        PluginBaselines.Track(_modFolder, SourcePreset.Edits,
+            [new TreeFile("plugin-source/A.esp/npc_/A.esp/crlf.json", crlf), new TreeFile("plugin-source/A.esp/npc_/A.esp/lf.json", lf)]);
+
+        Assert.Equal(crlf, File.ReadAllBytes(Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "crlf.json")));
+        Assert.Equal(Encoding.UTF8.GetString(crlf), Git("show", "main:plugin-source/A.esp/npc_/A.esp/crlf.json"));
+        Assert.Equal(Encoding.UTF8.GetString(lf), Git("show", "main:plugin-source/A.esp/npc_/A.esp/lf.json"));
+        Assert.Equal(string.Empty, Git("status", "--porcelain"));
     }
 
     [Fact]

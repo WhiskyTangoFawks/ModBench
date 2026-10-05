@@ -2,8 +2,7 @@ using MEditService.Codec.Serialization;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>One plugin's facts as its baseline commit's trailers carry them (ADR-0007),
-/// on the write side and the read side alike. A fact with no value is left out of the commit.</summary>
+/// <summary>One plugin's facts as Track hands them in (ADR-0007).</summary>
 public sealed record BaselineTrailers(string Plugin, string? UpstreamVersion, string? BinarySha256);
 
 /// <summary>The two <c>.gitignore</c> presets (plugins.md, Track, story 2).</summary>
@@ -13,11 +12,11 @@ public enum SourcePreset
     Everything,
 }
 
-/// <summary>Makes a mod's repository: <c>Track &lt;mod&gt;</c>, then one baseline commit per plugin on
-/// <c>main</c>, which stays checked out.</summary>
+/// <summary>Makes a mod's repository: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, which stays
+/// checked out. A track that lands no plugin leaves no repository.</summary>
 internal static class GitTracking
 {
-    /// <summary>Answers each plugin whose commit failed.</summary>
+    /// <summary>Answers each plugin whose files could not be written.</summary>
     internal static IReadOnlyList<(string Plugin, string Reason)> Track(
         string modFolder, SourcePreset preset,
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
@@ -27,27 +26,36 @@ internal static class GitTracking
             throw new InvalidOperationException($"'{modFolder}' already holds a repository.");
 
         var git = new SourceRepositoryGit(modFolder);
-        CreateRepository(git, modFolder, preset);
-        var refused = CommitEachBaseline(git, modFolder, baselines);
-        // The baselines were committed through a scratch index, so the real one catches up with main.
-        git.Run("reset", "-q");
+        CreateRepository(git);
+        var (written, refused) = WriteEachPlugin(git, modFolder, baselines);
+        if (written.Count == 0 && refused.Count > 0)
+        {
+            git.Delete();
+            return refused;
+        }
+
+        File.WriteAllText(Path.Combine(modFolder, ".gitignore"), GitignoreContent(preset));
+        git.Run("add", "-A");
+        git.Run("commit", "-q", "-m", $"Track {SourceRepositoryLayout.ModNameIn(modFolder)}");
+        foreach (var plugin in written)
+        {
+            if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Plugin, binarySha256);
+        }
         return refused;
     }
 
-    // No rollback beyond git's: the commits before a failed one stand, and git's own clean takes the
-    // failed plugin's files back out of the work tree.
-    private static List<(string Plugin, string Reason)> CommitEachBaseline(
+    // Git's own clean takes a failed plugin's files back out of the work tree.
+    private static (List<BaselineTrailers> Written, List<(string Plugin, string Reason)> Refused) WriteEachPlugin(
         SourceRepositoryGit git, string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
     {
-        var refused = new List<(string Plugin, string Reason)>();
+        List<BaselineTrailers> written = [];
+        List<(string Plugin, string Reason)> refused = [];
         foreach (var (files, trailers) in baselines)
         {
             try
             {
                 PristineFileWriter.WriteAll(files, workTree);
-                git.ParkBaseline(trailers.Plugin, CommitToMain(
-                    git, [SourceRepositoryGit.LiteralPathspec(SourceRepositoryLayout.RootFor(trailers.Plugin))],
-                    BaselineMessage(TrackSubject(trailers), trailers)));
+                written.Add(trailers);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
@@ -55,10 +63,10 @@ internal static class GitTracking
                 refused.Add((trailers.Plugin, ex.Message));
             }
         }
-        return refused;
+        return (written, refused);
     }
 
-    private static void CreateRepository(SourceRepositoryGit git, string modFolder, SourcePreset preset)
+    private static void CreateRepository(SourceRepositoryGit git)
     {
         git.Run("init", "-q", "-b", "main");
         git.Run("config", "core.autocrlf", "false");
@@ -68,46 +76,6 @@ internal static class GitTracking
         // and every porcelain reader here expects the raw path.
         git.Run("config", "core.quotePath", "false");
         EnsureCommitIdentity(git);
-
-        File.WriteAllText(Path.Combine(modFolder, ".gitignore"), GitignoreContent(preset));
-        git.Run("add", "-A");
-        git.Run("commit", "-q", "-m", $"Track {SourceRepositoryLayout.ModNameIn(modFolder)}");
-    }
-
-    // main's own tree with just the pathspecs restaged from the work tree, through a scratch index:
-    // another tool, such as VS Code's own git, may hold the real one's lock on the repository (ADR-0003).
-    private static string CommitToMain(SourceRepositoryGit git, string[] pathspecs, string message)
-    {
-        var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-main-index-{Guid.NewGuid():N}");
-        try
-        {
-            var parentSha = git.Run("rev-parse", "refs/heads/main").Trim();
-            git.RunWithIndex(scratchIndex, "read-tree", parentSha);
-            git.RunWithIndex(scratchIndex, ["add", "-A", "--", .. pathspecs]);
-            var treeSha = git.RunWithIndex(scratchIndex, "write-tree").Trim();
-            var commitSha = git.Run("commit-tree", treeSha, "-p", parentSha, "-m", message).Trim();
-            // The old value makes the move conditional, so a main another tool moved in between is not
-            // overwritten (ADR-0003).
-            git.Run("update-ref", "refs/heads/main", commitSha, parentSha);
-            return commitSha;
-        }
-        finally
-        {
-            if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
-        }
-    }
-
-    private static string TrackSubject(BaselineTrailers trailers) =>
-        trailers.UpstreamVersion is { } version ? $"Track {trailers.Plugin} {version}" : $"Track {trailers.Plugin}";
-
-    // git's message convention: the subject, a blank line, then the trailer block. commit-tree is
-    // plumbing with no --trailer flag, so the block is written here.
-    private static string BaselineMessage(string subject, BaselineTrailers trailers)
-    {
-        List<string> lines = [subject, "", $"Plugin: {trailers.Plugin}"];
-        if (trailers.UpstreamVersion is { } upstreamVersion) lines.Add($"Upstream-Version: {upstreamVersion}");
-        if (trailers.BinarySha256 is { } binarySha256) lines.Add($"Binary-SHA256: {binarySha256}");
-        return string.Join('\n', lines) + "\n";
     }
 
     // Pins a repo-local identity only when the global one is unset; never overwrites a real identity.
