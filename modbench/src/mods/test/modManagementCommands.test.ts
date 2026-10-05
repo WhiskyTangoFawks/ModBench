@@ -595,7 +595,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
     showInputBox.mockResolvedValueOnce(undefined);
 
     registerSeparatorCommands(
-      accessHolding([{ kind: 'separator', name: 'Group A' }, { kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group B' }], []), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
+      accessHolding([{ kind: 'separator', name: 'Group A', enabled: true }, { kind: 'mod', name: 'Mod A', enabled: true }, { kind: 'separator', name: 'Group B', enabled: true }], []), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
     await invoke('modbench.separator.rename', groupB);
 
     const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
@@ -694,7 +694,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
   it('refuses in the prompt a name a separator with no folder has, since a line in mod order is a separator whose folder may be gone', async () => {
     showInputBox.mockResolvedValueOnce(undefined);
 
-    registerSeparatorCommands(accessHolding([{ kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group A' }], []), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
+    registerSeparatorCommands(accessHolding([{ kind: 'mod', name: 'Mod A', enabled: true }, { kind: 'separator', name: 'Group A', enabled: true }], []), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
     await invoke('modbench.separator.add', modA);
 
     const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the add prompt\'s validateInput');
@@ -1491,7 +1491,8 @@ describe('rename mod refuses in its prompt', () => {
 
   it('a name another mod has, listed or in a folder, and a path separator, and takes its own name', async () => {
     const validate = await validatorOver(accessHolding(
-      [{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }, { kind: 'mod', name: 'Listed Only' }], [{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }, { kind: 'mod', name: 'Folder Only' }]));
+      [{ kind: 'mod', name: 'Mod A', enabled: true }, { kind: 'mod', name: 'Mod B', enabled: true }, { kind: 'mod', name: 'Listed Only', enabled: true }],
+      [{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }, { kind: 'mod', name: 'Folder Only' }]));
     expect(await validate('Mod A')).toBe(MOD_CLASH);
     expect(await validate('Folder Only')).toBe(MOD_CLASH);
     expect(await validate('Listed Only')).toBe(MOD_CLASH);
