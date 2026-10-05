@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { basename, join, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -35,7 +35,8 @@ async function flatConfigBlocks(path: string): Promise<unknown[]> {
   return Array.isArray(blocks) ? blocks as unknown[] : [];
 }
 
-const LINT_CONFIG_BLOCKS = await flatConfigBlocks(ESLINT_CONFIG);
+let LINT_CONFIG_BLOCKS: unknown[] = [];
+beforeAll(async () => { LINT_CONFIG_BLOCKS = await flatConfigBlocks(ESLINT_CONFIG); });
 
 const namesFile =(block: unknown, file: string): boolean =>
   typeof block === 'object' && block !== null && 'files' in block && Array.isArray(block.files) && block.files.includes(file);
