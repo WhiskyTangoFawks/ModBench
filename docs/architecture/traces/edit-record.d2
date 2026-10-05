@@ -25,21 +25,6 @@ create: "create, on a plugin: the type pick first" {
   client -> editor: the creatable record types {class: query}
 }
 
-copy: "copy, on records: the mode pick, then the replace question" {
-  editor -> client: "which records have child records" {class: query}
-  client -> http: question {class: query}
-  http -> queries: question {class: query}
-  queries -> http: "answer: the records with child records" {class: query}
-  http -> client: answer {class: query}
-  client -> editor: "the records with child records" {class: query}
-  editor -> client: "which destinations hold child records" {class: query}
-  client -> http: question {class: query}
-  http -> queries: question {class: query}
-  queries -> http: "answer: the destinations, per record" {class: query}
-  http -> client: answer {class: query}
-  client -> editor: "the destinations, per record" {class: query}
-}
-
 editor -> client: "the gesture: the records and its Options" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
