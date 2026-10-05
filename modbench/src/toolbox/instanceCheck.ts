@@ -26,17 +26,11 @@ export function whenOpened<T>(opened: OpenedFolder, on: { instance: (instanceRoo
   return opened.folder === 'instance' ? on.instance(opened.instanceRoot) : on.notAnInstance();
 }
 
-export interface FirstReadMark extends vscode.Disposable {
-  readonly landed: boolean;
-}
-
 /** A failed read lands no value, so the key waits for the first read that does. */
-export function markFirstReadLanded(instance: Pick<InstanceView, 'subscribe'>): FirstReadMark {
-  let landed = false;
+export function markFirstReadLanded(instance: Pick<InstanceView, 'subscribe'>): vscode.Disposable {
   const subscription = instance.subscribe(() => {
     subscription.dispose();
-    landed = true;
     void vscode.commands.executeCommand('setContext', INSTANCE_READ_KEY, true);
   });
-  return { get landed() { return landed; }, dispose: () => { subscription.dispose(); } };
+  return subscription;
 }

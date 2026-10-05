@@ -36,7 +36,7 @@ import { pluginsCopyValueText, registerCreatePluginCommand } from './plugins/plu
 import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
 import type { RecordWrite } from './drivingLib/writingGesture';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
-import type { ModListProvider, ModlistNode } from './mods/ModListProvider';
+import type { ModlistNode } from './mods/ModListProvider';
 import { registerModDecorations } from './mods/modDecorations';
 import { showModRepositories } from './mods/modRepositories';
 import { createModsView } from './mods/modsView';
@@ -48,13 +48,12 @@ import {
   registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand,
   registerSeparatorCommands, registerCreateEmptyModCommand, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText,
 } from './mods/modManagementCommands';
-import { DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
+import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { downloadsCopyValueText } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import { openedFolder, whenOpened, markFirstReadLanded } from './toolbox/instanceCheck';
-import type { FolderCheck } from './toolbox/folderContext';
 import { refreshOnGameDirectoryChange } from './toolbox/gameDirectorySetting';
 import { launchBackend } from './toolbox/autoLaunch';
 import { pluginSyncOver } from './pluginsCommands/plugins';
@@ -113,14 +112,8 @@ interface InstanceFacts {
 }
 
 interface InstanceSide {
-  instanceRead: () => boolean;
-  /** Absent together, on the paths with no instance to read. Exposed for integration
-   *  tests — production reaches all of these through the views. */
+  /** Absent together, on the path with no instance to read. */
   instance?: Instance;
-  modListProvider?: ModListProvider;
-  downloadsProvider?: DownloadsProvider;
-  pluginsTree?: PluginsTreeProvider;
-  pluginListView?: PluginsView['view'];
   enterEditing?: () => Promise<void>;
   toolboxProvider: ToolboxProvider;
   facts: InstanceFacts;
@@ -133,7 +126,7 @@ interface InstanceSide {
   trackSelection: () => readonly unknown[];
 }
 
-type Views = InstanceSide & vscode.Disposable & { folder: FolderCheck };
+type Views = InstanceSide & vscode.Disposable;
 
 const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
   disposables.forEach((disposable) => own(disposable));
@@ -141,7 +134,6 @@ const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
 
 function buildBareSide(own: Own): InstanceSide {
   return {
-    instanceRead: () => false,
     toolboxProvider: own(new ToolboxProvider({ instance: undefined })),
     facts: { trackedMods: () => new Set(), modDirs: () => new Map(), refresh: () => Promise.resolve() },
     plugins: {
@@ -167,7 +159,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   const instance = own(new Instance({
     adapter, window: vscode.window, log, logReadFailure: (line) => outputChannel.error(line),
   }));
-  const firstRead = own(markFirstReadLanded(instance));
+  own(markFirstReadLanded(instance));
   own(refreshOnGameDirectoryChange(GAME_FOLDER_SETTING, vscode.workspace.onDidChangeConfiguration, () => instance.refresh()));
   // Fire-and-forget: watchers alone leave the value at its EMPTY sentinel until a change, so
   // this kicks off the first real read. The Plugins tree's own `sequence === 0` guard is
@@ -231,7 +223,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   ownAll(own, registerConflictTable(instance, deps.extensionUri, () => modListView.selection, reporterFor('mod.openConflicts'), vscode.workspace));
   own(vscode.commands.registerCommand('modbench.mod.sync', (value: InstanceValue) => modSync.run(value.modSyncArguments)));
   own(vscode.commands.registerCommand('modbench.plugin.sync', (value: InstanceValue) => plugins.pluginSync.run(value.pluginSyncArguments)));
-  const { provider: downloadsProvider, view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
+  const { view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
     access, instance, reporter: reporterFor('downloadList'), ask, trash,
     install: {
       nameNewMod: (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)),
@@ -259,7 +251,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     refresh: refreshIndex, nextRefill: () => plugins.narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
-    instance, instanceRead: () => firstRead.landed, modListProvider, toolboxProvider, downloadsProvider, pluginsTree, pluginListView,
+    instance, toolboxProvider,
     enterEditing: () => editing.enter(instance.landed()),
     facts: { trackedMods: () => instance.value.trackedMods, modDirs: () => instance.value.paths.modDirs, refresh: () => instance.refresh() },
     plugins: {
@@ -309,7 +301,6 @@ function buildViews(deps: ViewsDeps): Views {
 
   return {
     ...side,
-    folder: opened.folder,
     dispose: () => {
       owned.reverse().forEach((disposable) => { disposable.dispose(); });
       owned.length = 0;
@@ -317,9 +308,7 @@ function buildViews(deps: ViewsDeps): Views {
   };
 }
 
-export type ActivateExports = ReturnType<typeof activate>;
-
-export function activate(context: vscode.ExtensionContext) {
+export function activate(context: vscode.ExtensionContext): void {
   const session: ExtensionSession = {};
   const attachPort = meditConfig().get<number>('attachToBackendPort');
 
@@ -395,19 +384,6 @@ export function activate(context: vscode.ExtensionContext) {
       onConfigChange: vscode.workspace.onDidChangeConfiguration,
     }),
   );
-
-  // Exposed for integration tests — unused in production. `client`: a test drives a status
-  // transition directly, outside exitEditing. `instance`: lets a test await past a sequence
-  // instead of sleeping.
-  return {
-    folder: views.folder, instanceRead: views.instanceRead,
-    modListProvider: views.modListProvider, downloadsProvider: views.downloadsProvider,
-    pluginsTree: views.pluginsTree,
-    pluginListView: views.pluginListView,
-    outputChannel, enterEditing: views.enterEditing, exitEditing: () => exitEditing(session, meditClient),
-    client: meditClient, instance: views.instance,
-    focusRecordCell: editor.focusRecordCell,
-  };
 }
 
 interface PluginRowCommandDeps {

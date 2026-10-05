@@ -67,6 +67,7 @@ import { createEditor } from '..';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { recordUri } from '../recordUri';
+import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { ReferencedByTreeProvider } from '../ReferencedByTreeProvider';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 
@@ -202,9 +203,9 @@ describe('Referenced By follows the record tab in focus', () => {
 describe('the focused cell of the record tab in focus', () => {
   it('publishes its keys, enters the record grid as the focused view and is what copy value copies from it', () => {
     const { editor, open, focusedView } = makeEditor();
-    open('000801:A.esp');
+    const panel = open('000801:A.esp');
 
-    editor.focusRecordCell({ webviewSection: 'field', copyText: 'Iron' });
+    panel.receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: { webviewSection: 'field', copyText: 'Iron' }, entered: true });
 
     expect(h.contextKeys.get('modbench.record.focusedCellSection')).toBe('field');
     expect(focusedView.id()).toBe('modbench.recordGrid');
