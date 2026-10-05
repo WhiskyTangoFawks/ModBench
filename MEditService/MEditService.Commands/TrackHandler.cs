@@ -24,7 +24,7 @@ public sealed class TrackHandler
 
     /// <summary>Each name is a mod, whose plugins and folder the held load order says. Throws
     /// <see cref="NoLoadOrderException"/> with nothing written when none is held; git missing refuses
-    /// the whole selection once, before any write (commands.md, A selection is one gesture).</summary>
+    /// the whole selection once.</summary>
     public async Task<SelectionResult<string, TrackRefusal, TrackedMod>> TrackAsync(
         IReadOnlyList<string> mods, CancellationToken cancel = default)
     {
