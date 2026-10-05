@@ -39,7 +39,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
 
         var progress = await stream.EventsUntil(
             "track-progress", e => e.GetProperty("trackProgress").GetProperty("phase").GetString() == "Idle");
-        Assert.Contains(progress, e => e.GetProperty("trackProgress").GetProperty("origin").GetString() == Origin);
+        Assert.Contains(progress, e => e.GetProperty("trackProgress").GetProperty("mod").GetString() == Origin);
 
         var edit = await Client.Edit(await Client.FirstFormKey(Plugin, Origin), Plugin, Origin, "HeightMax", 0.75);
         edit.EnsureSuccessStatusCode();
