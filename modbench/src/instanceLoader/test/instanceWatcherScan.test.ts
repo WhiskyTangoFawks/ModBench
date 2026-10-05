@@ -2,15 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
-import { tsFiles } from '../../test/tsFiles';
-
-const SRC = join(__dirname, '..', '..');
+import { productionFiles, SRC } from '../../test/scanSource';
 
 const ALLOWED = new Set([join('instanceAdapter', 'mo2Watch.ts')]);
 
 const WATCHER_FACTORY = /^create\w*Watcher$/;
-
-const PRODUCTION_FILES: Parameters<typeof tsFiles>[1] = { exclude: ['generated'], tsx: false, includeTests: false };
 
 function trailingNameOfCallTarget(node: ts.CallExpression): string | undefined {
   const target = node.expression;
@@ -35,12 +31,12 @@ function watcherFactoryCalls(sourceText: string, fileName: string): string[] {
 
 describe('every watcher on the instance is created inside the Instance adapter\'s watch, as a view or command wiring its own would duplicate the recompute trigger', () => {
   it('scans a real body of files', () => {
-    expect(tsFiles(SRC, PRODUCTION_FILES).length).toBeGreaterThan(100);
+    expect(productionFiles(SRC).length).toBeGreaterThan(100);
   });
 
   it('no other production file calls a watcher factory', () => {
     const offenders: Record<string, string[]> = {};
-    for (const path of tsFiles(SRC, PRODUCTION_FILES)) {
+    for (const path of productionFiles(SRC)) {
       const rel = relative(SRC, path);
       if (ALLOWED.has(rel)) continue;
       const calls = watcherFactoryCalls(readFileSync(path, 'utf8'), path);

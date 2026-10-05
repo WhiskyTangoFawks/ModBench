@@ -47,8 +47,6 @@ function collapsibleWhen(hasChildren: boolean): vscode.TreeItemCollapsibleState 
 // PluginsTreeProvider's. Do not reintroduce one: reconciling a "pluginImmutable" contextValue
 // with the row's own read-only-ness story is an open question.
 
-export type { PluginConditions };
-
 // A row whose plugin no caller has described offers no record edit.
 const NOT_EDITABLE: PluginConditions = { tracked: false, editable: false };
 
