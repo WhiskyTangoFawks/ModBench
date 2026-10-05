@@ -68,7 +68,6 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         Assert.Contains("Run \"Modbench: Decompile Plugin\" to regenerate the source.", result.RefusalReason);
         Assert.DoesNotContain("Track", result.RefusalReason);
         Assert.Empty(result.Diagnostics);
-        Assert.Empty(result.Masters);
     }
 
     [Fact]
@@ -85,6 +84,5 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         Assert.DoesNotContain("Track", result.RefusalReason);
         Assert.Contains(CompileFixture.NpcEditorId, result.RefusalReason);
         Assert.Empty(result.Diagnostics);
-        Assert.Empty(result.Masters);
     }
 }

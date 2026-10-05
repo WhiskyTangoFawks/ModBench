@@ -148,6 +148,37 @@ public sealed class GitMissingApiTests : HostedTests
         Assert.Equal(before, FilesOutsideGit(modFolder));
     }
 
+    [Fact]
+    public async Task CompilingASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndChangesNoFile()
+    {
+        using var fx = new PluginFixtureBuilder("trace-compile-without-git")
+            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
+            .WithPlugin("Second.esp", mod => mod.Npcs.AddNew("SecondNpc"), origin: "SecondMod")
+            .BuildScattered();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track([Origin, "SecondMod"])).EnsureSuccessStatusCode();
+        var modFolders = fx.Plugins.Select(p => Path.GetDirectoryName(p.Path).Require()).ToList();
+        var before = modFolders.Select(FilesOutsideGit).ToList();
+
+        HttpResponseMessage response;
+        var path = Environment.GetEnvironmentVariable("PATH");
+        Environment.SetEnvironmentVariable("PATH", string.Empty);
+        try
+        {
+            response = await Client.Compile([(Plugin, Origin), ("Second.esp", "SecondMod")]);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", path);
+        }
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
+        Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
+        Assert.Equal(before, modFolders.Select(FilesOutsideGit));
+    }
+
     private static SortedDictionary<string, string> FilesOutsideGit(string modFolder) =>
         new(Directory.EnumerateFiles(modFolder, "*", SearchOption.AllDirectories)
             .Select(file => Path.GetRelativePath(modFolder, file))

@@ -558,20 +558,18 @@ export interface components {
             sourceRelativePath: string;
             message: string;
         };
-        CompileRefused: {
-            plugin: components["schemas"]["PluginAddress"];
-            message: string;
-        };
+        /** @enum {string} */
+        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "NoSource" | "SourceUnreadable" | "SourceDoesNotParse" | "SourceDoesNotRoundTrip" | "FormKeyCollision" | "LightFormIdOutOfRange" | "FormIdUnmappable" | "WriteFailed" | "GitUnavailable";
         CompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
         };
         CompileResponse: {
             applied: components["schemas"]["CompiledPlugin"][];
-            refused: components["schemas"]["CompileRefused"][];
+            refused: components["schemas"]["PluginCompileRefusal"][];
         };
         CompiledPlugin: {
-            plugin: components["schemas"]["PluginAddress"];
-            masters: string[];
+            name: string;
+            origin: string;
             diagnostics: components["schemas"]["CompileDiagnostic"][];
         };
         /** @enum {string} */
@@ -606,17 +604,12 @@ export interface components {
         };
         /** @enum {string} */
         DecompileRefusal: "None" | "PluginNotLoaded" | "NotInTrackedMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "WriteFailed" | "GitUnavailable";
-        DecompileRefused: {
-            plugin: components["schemas"]["PluginAddress"];
-            refusal: components["schemas"]["DecompileRefusal"];
-            message: string;
-        };
         DecompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
         };
         DecompileResponse: {
             applied: components["schemas"]["PluginAddress"][];
-            refused: components["schemas"]["DecompileRefused"][];
+            refused: components["schemas"]["PluginDecompileRefusal"][];
         };
         EnumMember: {
             value: string;
@@ -768,10 +761,20 @@ export interface components {
             refusal: components["schemas"]["TrackRefusal"];
             message: string;
         };
+        PluginCompileRefusal: {
+            item: components["schemas"]["PluginAddress"];
+            refusal: components["schemas"]["CompileRefusal"];
+            message: string;
+        };
         PluginCreatedResponse: {
             name: string;
             origin: string;
             path: string;
+        };
+        PluginDecompileRefusal: {
+            item: components["schemas"]["PluginAddress"];
+            refusal: components["schemas"]["DecompileRefusal"];
+            message: string;
         };
         PluginDiagnosisReport: {
             plugin: string;

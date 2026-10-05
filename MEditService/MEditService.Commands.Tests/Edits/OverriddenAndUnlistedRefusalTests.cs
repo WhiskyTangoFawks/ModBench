@@ -106,7 +106,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.DeleteHandler.DeleteRecords(
+        var result = mod.DeleteHandler.DeleteRecordsSync(
             [new RecordAt(mod.OverriddenPlugin, mod.OverriddenNpc.ToString())]);
 
         Assert.Empty(result.Landed);
@@ -206,7 +206,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.DeleteHandler.DeleteRecords(
+        var result = mod.DeleteHandler.DeleteRecordsSync(
             [new RecordAt(mod.UnlistedPlugin, mod.UnlistedNpc.ToString())]);
 
         Assert.Empty(result.Landed);

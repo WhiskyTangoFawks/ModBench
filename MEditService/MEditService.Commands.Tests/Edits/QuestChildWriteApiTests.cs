@@ -145,7 +145,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     [Fact]
     public async Task DeletingATopic_RemovesItAndItsResponsesFromTheQuestDocument_LeavingItsSiblingsInPlace_AndCompiles()
     {
-        var result = _fixture.DeleteHandler.DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.DialogTopic.ToString())]);
+        var result = _fixture.DeleteHandler.DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.DialogTopic.ToString())]);
 
         Assert.Empty(result.Refused);
         var after = QuestText;

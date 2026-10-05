@@ -16,7 +16,7 @@ public sealed class CopyRecordHandlerTests
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
         var faction = new RecordAt(mod.SourcePlugin, mod.SelfLinkingFaction.ToString());
 
-        var result = mod.CopyHandler.Copy([npc, faction], mode, [mod.DestinationPlugin, mod.SourcePlugin], replace: false);
+        var result = mod.CopyHandler.CopySync([npc, faction], mode, [mod.DestinationPlugin, mod.SourcePlugin], replace: false);
 
         Assert.Equal(
             [new CopyItem(npc, mod.DestinationPlugin), new CopyItem(faction, mod.DestinationPlugin)],
@@ -37,7 +37,7 @@ public sealed class CopyRecordHandlerTests
         var faction = new RecordAt(mod.SourcePlugin, mod.SelfLinkingFaction.ToString());
         TreeTampering.NameInAnUnplaceableChild(mod.DestinationModFolder, mod.DestinationPlugin, mod.SourceNpc.ToString());
 
-        var result = mod.CopyHandler.Copy([npc, faction], CopyMode.Override, [mod.DestinationPlugin], replace);
+        var result = mod.CopyHandler.CopySync([npc, faction], CopyMode.Override, [mod.DestinationPlugin], replace);
 
         Assert.Equal([new CopyItem(faction, mod.DestinationPlugin)], result.Landed.Select(landed => landed.Item));
         var refused = Assert.Single(result.Refused);
@@ -55,7 +55,7 @@ public sealed class CopyRecordHandlerTests
         LeaveTextTheCodecWouldRespell(mod);
         var before = TrackedTree.Records(mod.SourceModFolder, mod.SourcePlugin);
 
-        var result = mod.CopyHandler.Copy([npc], CopyMode.Override, [mod.SourcePlugin], replace);
+        var result = mod.CopyHandler.CopySync([npc], CopyMode.Override, [mod.SourcePlugin], replace);
 
         Assert.Equal([new CopyItem(npc, mod.SourcePlugin)], result.Landed.Select(landed => landed.Item));
         Assert.Empty(result.Refused);
@@ -76,7 +76,7 @@ public sealed class CopyRecordHandlerTests
         var sameDestination = new PluginAddress(
             mod.DestinationPlugin.Name.ToUpperInvariant(), mod.DestinationPlugin.Origin);
 
-        var result = mod.CopyHandler.Copy([npc, npc], CopyMode.New, [mod.DestinationPlugin, sameDestination], replace: false);
+        var result = mod.CopyHandler.CopySync([npc, npc], CopyMode.New, [mod.DestinationPlugin, sameDestination], replace: false);
 
         Assert.Single(result.Landed);
         Assert.Empty(result.Refused);

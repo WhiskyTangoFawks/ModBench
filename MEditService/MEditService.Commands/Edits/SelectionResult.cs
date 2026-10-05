@@ -5,7 +5,7 @@ namespace MEditService.Commands.Edits;
 /// <summary>A record and the plugin holding it (ADR-0012).</summary>
 public readonly record struct RecordAt(PluginAddress Plugin, string FormKey);
 
-// The plugin compares as every other lookup on it does, and a FormKey's mod name is a filename.
+// A FormKey's mod name is a filename, so it compares as one.
 internal sealed class SameRecord : IEqualityComparer<RecordAt>
 {
     internal static readonly SameRecord Instance = new();
@@ -19,34 +19,42 @@ internal sealed class SameRecord : IEqualityComparer<RecordAt>
         StringComparer.OrdinalIgnoreCase.GetHashCode(record.FormKey));
 }
 
-/// <summary><see cref="NewFormKey"/> is the duplicate's, and null for every write that makes none.</summary>
-public sealed record ItemLanded<TItem>(TItem Item, string? NewFormKey);
+/// <summary>An item of a selection that wrote, and what the write made of it: a duplicate's
+/// FormKey, a compile's diagnostics, <see cref="NoOutcome"/> for a write that makes nothing.</summary>
+public sealed record ItemLanded<TItem, TOutcome>(TItem Item, TOutcome Outcome);
+
+/// <summary>The outcome of a write that makes nothing.</summary>
+public readonly record struct NoOutcome;
 
 /// <summary>An item of a selection that wrote nothing, with the typed refusal and the message naming
 /// the way out.</summary>
-public sealed record ItemRefused<TItem>(TItem Item, RecordEditRefusal Refusal, string Message);
+public sealed record ItemRefused<TItem, TRefusal>(TItem Item, TRefusal Refusal, string Message);
+
+/// <summary>A cause no item of a selection escapes.</summary>
+public sealed record SelectionRefusal<TRefusal>(TRefusal Refusal, string Message);
 
 /// <summary>A gesture over a selection (commands.md, A selection is one gesture): the items that
 /// landed, each refused item with its reason, and a cause no item escapes as
 /// <see cref="SelectionRefusal"/> (ADR-0019).</summary>
-public sealed class SelectionResult<TItem>
+public sealed class SelectionResult<TItem, TRefusal, TOutcome>
 {
     private SelectionResult(
-        IReadOnlyList<ItemLanded<TItem>> landed, IReadOnlyList<ItemRefused<TItem>> refused, RecordEditResult? selectionRefusal) =>
+        IReadOnlyList<ItemLanded<TItem, TOutcome>> landed, IReadOnlyList<ItemRefused<TItem, TRefusal>> refused,
+        SelectionRefusal<TRefusal>? selectionRefusal) =>
         (Landed, Refused, SelectionRefusal) = (landed, refused, selectionRefusal);
 
-    internal static SelectionResult<TItem> PerItem(
-        IReadOnlyList<ItemLanded<TItem>> landed, IReadOnlyList<ItemRefused<TItem>> refused) =>
+    internal static SelectionResult<TItem, TRefusal, TOutcome> PerItem(
+        IReadOnlyList<ItemLanded<TItem, TOutcome>> landed, IReadOnlyList<ItemRefused<TItem, TRefusal>> refused) =>
         new(landed, refused, selectionRefusal: null);
 
-    internal static SelectionResult<TItem> WholeSelectionRefused(RecordEditRefusal refusal, string message) =>
-        new([], [], RecordEditResult.Refused(refusal, message));
+    internal static SelectionResult<TItem, TRefusal, TOutcome> WholeSelectionRefused(TRefusal refusal, string message) =>
+        new([], [], new SelectionRefusal<TRefusal>(refusal, message));
 
-    public IReadOnlyList<ItemLanded<TItem>> Landed { get; }
+    public IReadOnlyList<ItemLanded<TItem, TOutcome>> Landed { get; }
 
-    public IReadOnlyList<ItemRefused<TItem>> Refused { get; }
+    public IReadOnlyList<ItemRefused<TItem, TRefusal>> Refused { get; }
 
-    public RecordEditResult? SelectionRefusal { get; }
+    public SelectionRefusal<TRefusal>? SelectionRefusal { get; }
 
     public bool AllApplied => Refused.Count == 0 && SelectionRefusal is null;
 }

@@ -22,7 +22,7 @@ public sealed class CopyRecordHandler
     /// <summary>Each record lands in each destination or is refused on its own; <paramref name="replace"/>
     /// lets an override copy over the one a destination holds. Throws <see cref="NoLoadOrderException"/>
     /// with no load order held.</summary>
-    public SelectionResult<CopyItem> Copy(
+    public Task<SelectionResult<CopyItem, RecordEditRefusal, string?>> Copy(
         IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace)
     {
         _loadOrder.Require();

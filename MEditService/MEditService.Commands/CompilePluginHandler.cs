@@ -16,37 +16,30 @@ public sealed class CompilePluginHandler
 
     /// <summary>Throws <see cref="NoLoadOrderException"/> with nothing written when none is held: no
     /// plugin of the selection escapes it (commands.md, A selection is one gesture).</summary>
-    public async Task<CompileSelectionResult> CompileAsync(IReadOnlyList<PluginAddress> plugins)
+    public Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileAsync(
+        IReadOnlyList<PluginAddress> plugins)
     {
         _loadOrder.Require();
-        var landed = new List<CompiledPlugin>();
-        var refused = new List<CompileRefused>();
-        foreach (var plugin in plugins)
-        {
-            var result = await CompileOneAsync(plugin);
-            if (result.Succeeded)
-            {
-                landed.Add(new CompiledPlugin(plugin, result.Masters, result.Diagnostics));
-                continue;
-            }
-
-            var reason = result.RefusalReason
-                ?? throw new InvalidOperationException("Expected a refused compile to carry the reason it was refused.");
-            refused.Add(new CompileRefused(plugin, reason));
-        }
-        return new CompileSelectionResult(landed, refused);
+        return ItemWrite.OverAsync(plugins, PluginAddress.Comparer, CompileRefusal.GitUnavailable, CompileOneAsync);
     }
 
-    private async Task<CompileResult> CompileOneAsync(PluginAddress plugin)
+    private async Task<ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileOneAsync(PluginAddress plugin)
     {
         // A write the file system refuses (ADR-0003) is this plugin's refusal alone.
         try
         {
-            return await _compileService.CompileAsync(plugin);
+            var result = await _compileService.CompileAsync(plugin);
+            return result.Succeeded
+                ? ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>.Landed(result.Diagnostics)
+                : ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>.Refused(
+                    result.Refusal,
+                    result.RefusalReason
+                        ?? throw new InvalidOperationException("Expected a refused compile to carry the reason it was refused."));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return CompileResult.Refused(
+            return ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>.Refused(
+                CompileRefusal.WriteFailed,
                 $"Could not write {plugin.Name}: {ex.Message} Its source is untouched, so compiling again rebuilds it.");
         }
     }

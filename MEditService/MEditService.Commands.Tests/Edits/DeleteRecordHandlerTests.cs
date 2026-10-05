@@ -23,7 +23,7 @@ public sealed class DeleteRecordHandlerTests
         var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
         var otherNpc = new RecordAt(mod.Plugin, mod.OtherNpc.ToString());
 
-        var result = mod.DeleteHandler.DeleteRecords([npc, header, otherNpc]);
+        var result = mod.DeleteHandler.DeleteRecordsSync([npc, header, otherNpc]);
 
         Assert.Equal([npc, otherNpc], result.Landed.Select(landed => landed.Item));
         var refused = Assert.Single(result.Refused);
@@ -47,7 +47,7 @@ public sealed class DeleteRecordHandlerTests
             new PluginAddress(mod.Plugin.Name.ToUpperInvariant(), mod.Plugin.Origin.ToLowerInvariant()),
             mod.Npc.ToString().ToLowerInvariant());
 
-        var result = mod.DeleteHandler.DeleteRecords([npc, otherNpc, npc, npcSpelledOtherwise]);
+        var result = mod.DeleteHandler.DeleteRecordsSync([npc, otherNpc, npc, npcSpelledOtherwise]);
 
         Assert.Equal([npc, otherNpc], result.Landed.Select(landed => landed.Item));
         Assert.Empty(result.Refused);
@@ -62,7 +62,7 @@ public sealed class DeleteRecordHandlerTests
         var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
         var keyword = new RecordAt(mod.Plugin, mod.Keyword.ToString());
 
-        var result = mod.DeleteHandler.DeleteRecords([otherNpc, npc, keyword]);
+        var result = mod.DeleteHandler.DeleteRecordsSync([otherNpc, npc, keyword]);
 
         Assert.Equal([otherNpc, keyword], result.Landed.Select(landed => landed.Item));
         var refused = Assert.Single(result.Refused);
@@ -143,12 +143,12 @@ public sealed class DeleteRecordHandlerTests
         return mod;
     }
 
-    private static SelectionResult<RecordAt> DeleteWhileLocked(SourceModFixture mod, string directory, IReadOnlyList<RecordAt> records)
+    private static SelectionResult<RecordAt, RecordEditRefusal, string?> DeleteWhileLocked(SourceModFixture mod, string directory, IReadOnlyList<RecordAt> records)
     {
         FileModes.Set(directory, "500");
         try
         {
-            return mod.DeleteHandler.DeleteRecords(records);
+            return mod.DeleteHandler.DeleteRecordsSync(records);
         }
         finally
         {
@@ -185,7 +185,7 @@ public sealed class DeleteRecordHandlerTests
         using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
-        var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, headerFormKey)]);
+        var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, headerFormKey)]);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
@@ -198,7 +198,7 @@ public sealed class DeleteRecordHandlerTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
+        var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
         Assert.Empty(result.Refused);
         Assert.Null(mod.Document(mod.Npc.ToString()));
@@ -214,7 +214,7 @@ public sealed class DeleteRecordHandlerTests
         var notifications = new InMemoryNotificationPublisher();
         var handler = TestEditService.Over(holder, notifications: notifications).GetRequiredService<DeleteRecordHandler>();
 
-        var result = handler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
+        var result = handler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
         Assert.True(result.AllApplied);
         Assert.Empty(notifications.Notifications);
@@ -229,7 +229,7 @@ public sealed class DeleteRecordHandlerTests
         Assert.NotNull(created.NewFormKey);
         var newFormKey = created.NewFormKey;
 
-        var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, newFormKey)]);
+        var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, newFormKey)]);
 
         Assert.Empty(result.Refused);
         Assert.Null(mod.Document(newFormKey));
@@ -241,7 +241,7 @@ public sealed class DeleteRecordHandlerTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
+        mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
         Assert.NotNull(mod.Document(mod.OtherNpc.ToString()));
     }
@@ -251,7 +251,7 @@ public sealed class DeleteRecordHandlerTests
     {
         using var mod = SourceEditFixture.Untracked();
 
-        var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
+        var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, refused.Refusal);
@@ -263,7 +263,7 @@ public sealed class DeleteRecordHandlerTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, "FFFFFF:Fixture.esp")]);
+        var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, "FFFFFF:Fixture.esp")]);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(RecordEditRefusal.RecordNotFound, refused.Refusal);

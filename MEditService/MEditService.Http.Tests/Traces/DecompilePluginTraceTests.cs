@@ -128,7 +128,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
         response.EnsureSuccessStatusCode();
         var refused = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
         Assert.Equal("NotInTrackedMod", refused.GetProperty("refusal").GetString());
-        Assert.Equal("Other.esp", refused.GetProperty("plugin").GetProperty("name").GetString());
+        Assert.Equal("Other.esp", refused.GetProperty("item").GetProperty("name").GetString());
     }
 
     [Fact]

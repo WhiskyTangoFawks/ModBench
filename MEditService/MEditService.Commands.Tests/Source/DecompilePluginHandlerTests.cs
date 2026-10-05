@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -59,7 +60,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
         var result = await Decompile(Tracked("Second.esp"));
 
-        Assert.Equal([Tracked("Second.esp")], result.Landed);
+        Assert.Equal([Tracked("Second.esp")], result.Landed.Select(landed => landed.Item));
         Assert.Empty(result.Refused);
         Assert.Contains("SecondNpc", SourceTextOf("Second.esp"), StringComparison.Ordinal);
         Assert.Equal(headBefore, Head());
@@ -87,7 +88,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
         var result = await Decompile(Tracked("First.esp"));
 
-        Assert.Equal([Tracked("First.esp")], result.Landed);
+        Assert.Equal([Tracked("First.esp")], result.Landed.Select(landed => landed.Item));
         Assert.False(File.Exists(stray));
         var text = SourceTextOf("First.esp");
         Assert.Contains("UpgradedNpc", text, StringComparison.Ordinal);
@@ -111,9 +112,20 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     {
         var result = await Decompile(new PluginAddress("NoSuch.esp", TrackedModName), Tracked("Second.esp"));
 
-        Assert.Equal([Tracked("Second.esp")], result.Landed);
+        Assert.Equal([Tracked("Second.esp")], result.Landed.Select(landed => landed.Item));
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((new PluginAddress("NoSuch.esp", TrackedModName), DecompileRefusal.PluginNotLoaded), (refused.Plugin, refused.Refusal));
+        Assert.Equal((new PluginAddress("NoSuch.esp", TrackedModName), DecompileRefusal.PluginNotLoaded), (refused.Item, refused.Refusal));
+    }
+
+    [Fact]
+    public async Task Decompile_OfASelectionNamingAPluginTwice_LandsItOnce()
+    {
+        var spelledAgain = new PluginAddress("SECOND.ESP", TrackedModName);
+
+        var result = await Decompile(Tracked("Second.esp"), spelledAgain);
+
+        Assert.Empty(result.Refused);
+        Assert.Equal([Tracked("Second.esp")], result.Landed.Select(landed => landed.Item));
     }
 
     [Fact]
@@ -138,10 +150,10 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
     private static PluginAddress Tracked(string plugin) => new(plugin, TrackedModName);
 
-    private Task<DecompileSelectionResult> Decompile(params PluginAddress[] plugins) =>
+    private Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> Decompile(params PluginAddress[] plugins) =>
         TestEditService.DecompileHandler(_holder).DecompileAsync(plugins);
 
-    private Task<DecompileSelectionResult> Decompile(IPluginAdapter adapter, params PluginAddress[] plugins) =>
+    private Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> Decompile(IPluginAdapter adapter, params PluginAddress[] plugins) =>
         TestEditService.DecompileHandler(_holder, adapter).DecompileAsync(plugins);
 
     private static void WritePlugin(string modFolder, string name, string editorId)

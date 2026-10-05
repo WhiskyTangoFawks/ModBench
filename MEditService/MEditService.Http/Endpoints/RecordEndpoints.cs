@@ -172,7 +172,7 @@ public static class RecordEndpoints
             });
     }
 
-    internal static IResult DeleteRecord(RecordDeleteRequest request, DeleteRecordHandler edits, ILogger logger)
+    internal static Task<IResult> DeleteRecord(RecordDeleteRequest request, DeleteRecordHandler edits, ILogger logger)
     {
         var records = request.Records ?? [];
         if (logger.IsEnabled(LogLevel.Information))
@@ -181,15 +181,16 @@ public static class RecordEndpoints
         }
         return OverRecords(records, "deleting", logger, validateOptions: () => null, answer: addressed =>
         {
-            return Answered(
+            return WriteEndpointMapping.Answered(
                 edits.DeleteRecords(addressed),
+                WriteEndpointMapping.Refusal,
                 landed => Addressed(landed.Item),
                 refused => new RecordAddressRefusal(Addressed(refused.Item), refused.Refusal, refused.Message),
                 (applied, refused) => new RecordDeleteResponse(applied, refused));
         });
     }
 
-    internal static IResult CopyRecord(RecordCopyRequest request, CopyRecordHandler edits, ILogger logger)
+    internal static Task<IResult> CopyRecord(RecordCopyRequest request, CopyRecordHandler edits, ILogger logger)
     {
         var records = request.Records ?? [];
         var destinations = request.Destinations ?? [];
@@ -210,9 +211,10 @@ public static class RecordEndpoints
             return null;
         }, answer: addressed =>
         {
-            return Answered(
+            return WriteEndpointMapping.Answered(
                 edits.Copy(addressed, request.Mode, destinations, request.Replace),
-                landed => new RecordCopyLanded(Addressed(landed.Item.Record), landed.Item.Destination, landed.NewFormKey),
+                WriteEndpointMapping.Refusal,
+                landed => new RecordCopyLanded(Addressed(landed.Item.Record), landed.Item.Destination, landed.Outcome),
                 refused => new RecordCopyRefusal(
                     new RecordCopyItem(Addressed(refused.Item.Record), refused.Item.Destination), refused.Refusal, refused.Message),
                 (applied, refused) => new RecordCopyResponse(applied, refused));
@@ -221,9 +223,9 @@ public static class RecordEndpoints
 
     // The routes over a selection of records share their request's shape and one answer that is no
     // record's: the load order went away underneath the request, a "not right now".
-    private static IResult OverRecords(
+    private static async Task<IResult> OverRecords(
         IReadOnlyList<RecordAddress> records, string gesture, ILogger logger,
-        Func<IResult?> validateOptions, Func<IReadOnlyList<RecordAt>, IResult> answer)
+        Func<IResult?> validateOptions, Func<IReadOnlyList<RecordAt>, Task<IResult>> answer)
     {
         if (records.Count == 0)
             return Results.Problem("At least one record is required.", statusCode: 400);
@@ -234,7 +236,7 @@ public static class RecordEndpoints
 
         try
         {
-            return answer([.. records.Select(r => new RecordAt(new PluginAddress(r.Plugin, r.Origin), r.FormKey))]);
+            return await answer([.. records.Select(r => new RecordAt(new PluginAddress(r.Plugin, r.Origin), r.FormKey))]);
         }
         catch (NoLoadOrderException ex)
         {
@@ -242,15 +244,6 @@ public static class RecordEndpoints
             return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
-
-    private static IResult Answered<TItem, TLanded, TRefused>(
-        SelectionResult<TItem> result,
-        Func<ItemLanded<TItem>, TLanded> landed,
-        Func<ItemRefused<TItem>, TRefused> refused,
-        Func<IReadOnlyList<TLanded>, IReadOnlyList<TRefused>, object> response) =>
-        result.SelectionRefusal is { } selectionRefusal
-            ? WriteEndpointMapping.Refusal(selectionRefusal)
-            : Results.Ok(response([.. result.Landed.Select(landed)], [.. result.Refused.Select(refused)]));
 
     private static RecordAddress Addressed(RecordAt record) =>
         new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);

@@ -63,7 +63,7 @@ public sealed class ResponseWriteApiTests : IDisposable
     [Fact]
     public async Task DeletingAResponse_RemovesItsElementFromTheTopicDocument_LeavingItsSiblingInPlace_AndCompiles()
     {
-        var result = _fixture.DeleteHandler.DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.Response.ToString())]);
+        var result = _fixture.DeleteHandler.DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.Response.ToString())]);
 
         Assert.Empty(result.Refused);
         var after = QuestText;

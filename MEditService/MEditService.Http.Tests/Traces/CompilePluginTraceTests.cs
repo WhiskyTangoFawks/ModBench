@@ -47,7 +47,7 @@ public sealed class CompilePluginTraceTests : HostedTests
         var answer = await Answer(await Client.Compile([(Plugin, Origin)]));
 
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
-        var applied = Assert.Single(answer.GetProperty("applied").EnumerateArray()).GetProperty("plugin");
+        var applied = Assert.Single(answer.GetProperty("applied").EnumerateArray());
         Assert.Equal((Plugin, Origin), (applied.GetProperty("name").GetString(), applied.GetProperty("origin").GetString()));
         Assert.Equal(0.75, await HeightMaxOfTheWrittenBytes(fx, Plugin, Origin, formKey), 3);
     }
@@ -66,17 +66,29 @@ public sealed class CompilePluginTraceTests : HostedTests
 
         Assert.Equal(
             [(Plugin, Origin), (OtherPlugin, OtherOrigin)],
-            answer.GetProperty("applied").EnumerateArray().Select(a => a.GetProperty("plugin"))
+            answer.GetProperty("applied").EnumerateArray()
                 .Select(p => (p.GetProperty("name").GetString(), p.GetProperty("origin").GetString())));
         var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
         Assert.Equal(
             (UntrackedPlugin, UntrackedOrigin),
-            (refused.GetProperty("plugin").GetProperty("name").GetString(), refused.GetProperty("plugin").GetProperty("origin").GetString()));
+            (refused.GetProperty("item").GetProperty("name").GetString(), refused.GetProperty("item").GetProperty("origin").GetString()));
+        Assert.Equal("PluginNotTracked", refused.GetProperty("refusal").GetString());
         Assert.Equal(
             $"{UntrackedPlugin} is not tracked, so there is no source to compile.",
             refused.GetProperty("message").GetString());
         Assert.Equal(0.75, await HeightMaxOfTheWrittenBytes(fx, Plugin, Origin, formKey), 3);
         Assert.Equal(0.5, await HeightMaxOfTheWrittenBytes(fx, OtherPlugin, OtherOrigin, otherFormKey), 3);
+    }
+
+    [Fact]
+    public async Task CompilingASelectionNamingAPluginTwice_AnswersItAppliedOnce()
+    {
+        using var fx = await LoadedAndTracked();
+
+        var answer = await Answer(await Client.Compile([(Plugin, Origin), (Plugin, Origin)]));
+
+        Assert.Empty(answer.GetProperty("refused").EnumerateArray());
+        Assert.Single(answer.GetProperty("applied").EnumerateArray());
     }
 
     [Fact]
@@ -161,9 +173,10 @@ public sealed class CompilePluginTraceTests : HostedTests
 
             Assert.Equal(
                 [OtherPlugin],
-                answer.GetProperty("applied").EnumerateArray().Select(a => a.GetProperty("plugin").GetProperty("name").GetString()));
+                answer.GetProperty("applied").EnumerateArray().Select(a => a.GetProperty("name").GetString()));
             var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
-            Assert.Equal(Plugin, refused.GetProperty("plugin").GetProperty("name").GetString());
+            Assert.Equal(Plugin, refused.GetProperty("item").GetProperty("name").GetString());
+            Assert.Equal("WriteFailed", refused.GetProperty("refusal").GetString());
             Assert.StartsWith($"Could not write {Plugin}: ", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
         }
         finally

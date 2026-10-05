@@ -1,4 +1,5 @@
 using MEditService.Commands;
+using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.Queries;
 
@@ -238,39 +239,42 @@ public static class PluginEndpoints
     }
 
     // decompile-plugin: the selection (commands.md, A selection is one gesture).
-    internal static async Task<IResult> Decompile(
+    internal static Task<IResult> Decompile(
         DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory)
     {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        var plugins = req.Plugins ?? [];
-        if (plugins.Count == 0)
-            return Results.Problem("At least one plugin is required.", statusCode: 400);
-        if (plugins.Any(p => string.IsNullOrWhiteSpace(p.Name) || string.IsNullOrWhiteSpace(p.Origin)))
-            return Results.Problem("Every plugin needs a name and an origin.", statusCode: 400);
-
-        try
-        {
-            var result = await decompileHandler.DecompileAsync(plugins);
-            if (result.SelectionRefusal is { } selectionRefusal)
-            {
-                logger.LogWarning("Refused to decompile {Count} plugin(s): {Refusal} — {Message}",
-                    plugins.Count, selectionRefusal.Refusal, selectionRefusal.Message);
-                return WriteEndpointMapping.Refusal(selectionRefusal);
-            }
-            return Results.Ok(new DecompileResponse(result.Landed, result.Refused));
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No loadOrder when decompiling {Count} plugin(s)", plugins.Count);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        return OverPlugins(req.Plugins, "decompiling", loggerFactory, plugins => WriteEndpointMapping.Answered(
+            decompileHandler.DecompileAsync(plugins),
+            WriteEndpointMapping.Refusal,
+            landed => landed.Item,
+            refused => new PluginDecompileRefusal(refused.Item, refused.Refusal, refused.Message),
+            (applied, refused) => new DecompileResponse(applied, refused)));
     }
 
     // compile-plugin: the selection (commands.md, A selection is one gesture).
-    internal static async Task<IResult> Compile(CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
+    internal static Task<IResult> Compile(
+        CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        var plugins = req.Plugins ?? [];
+        return OverPlugins(req.Plugins, "compiling", loggerFactory, plugins => WriteEndpointMapping.Answered(
+            compileHandler.CompileAsync(plugins),
+            WriteEndpointMapping.Refusal,
+            landed => new CompiledPlugin(landed.Item.Name, landed.Item.Origin, landed.Outcome),
+            refused =>
+            {
+                logger.LogWarning("Refused to compile {Plugin} ({Origin}): {Refusal} — {Message}",
+                    refused.Item.Name, refused.Item.Origin, refused.Refusal, refused.Message);
+                return new PluginCompileRefusal(refused.Item, refused.Refusal, refused.Message);
+            },
+            (applied, refused) => new CompileResponse(applied, refused)));
+    }
+
+    // The routes over a selection of plugins share their request's shape and one answer that is no
+    // plugin's: the load order went away underneath the request, a "not right now".
+    private static async Task<IResult> OverPlugins(
+        IReadOnlyList<PluginAddress>? requested, string gesture, ILoggerFactory loggerFactory,
+        Func<IReadOnlyList<PluginAddress>, Task<IResult>> answer)
+    {
+        var plugins = requested ?? [];
         if (plugins.Count == 0)
             return Results.Problem("At least one plugin is required.", statusCode: 400);
         if (plugins.Any(p => string.IsNullOrWhiteSpace(p.Name) || string.IsNullOrWhiteSpace(p.Origin)))
@@ -278,17 +282,12 @@ public static class PluginEndpoints
 
         try
         {
-            var result = await compileHandler.CompileAsync(plugins);
-            foreach (var refused in result.Refused)
-            {
-                logger.LogWarning("Refused to compile {Plugin} ({Origin}): {Message}",
-                    refused.Plugin.Name, refused.Plugin.Origin, refused.Message);
-            }
-            return Results.Ok(new CompileResponse(result.Landed, result.Refused));
+            return await answer(plugins);
         }
         catch (NoLoadOrderException ex)
         {
-            logger.LogError(ex, "No loadOrder when compiling {Count} plugin(s)", plugins.Count);
+            loggerFactory.CreateLogger(nameof(PluginEndpoints))
+                .LogError(ex, "No loadOrder while {Gesture} {Count} plugin(s)", gesture, plugins.Count);
             return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
@@ -355,9 +354,20 @@ public record TrackResponse(
 public record DecompileRequest(IReadOnlyList<PluginAddress> Plugins);
 
 /// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
-public record DecompileResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<DecompileRefused> Refused);
+public record DecompileResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginDecompileRefusal> Refused);
+
+/// <summary>A plugin of the selection that wrote nothing, with the typed refusal and the message naming
+/// the way out.</summary>
+public record PluginDecompileRefusal(PluginAddress Item, DecompileRefusal Refusal, string Message);
 
 public record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 
 /// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
-public record CompileResponse(IReadOnlyList<CompiledPlugin> Applied, IReadOnlyList<CompileRefused> Refused);
+public record CompileResponse(IReadOnlyList<CompiledPlugin> Applied, IReadOnlyList<PluginCompileRefusal> Refused);
+
+/// <summary>A plugin of the selection whose binary was written, with its diagnostics (ADR-0007).</summary>
+public record CompiledPlugin(string Name, string Origin, IReadOnlyList<CompileDiagnostic> Diagnostics);
+
+/// <summary>A plugin of the selection that wrote nothing, with the typed refusal and the message naming
+/// the way out.</summary>
+public record PluginCompileRefusal(PluginAddress Item, CompileRefusal Refusal, string Message);

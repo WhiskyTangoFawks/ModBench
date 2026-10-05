@@ -84,15 +84,6 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         CompileServices.Over(_loadOrder);
 
     [Fact]
-    public async Task Compile_ReportsTheEffectiveMasters_InLoadOrder()
-    {
-        var result = await CompileService().CompileAsync(_plugin);
-
-        Assert.True(result.Succeeded, result.RefusalReason);
-        Assert.Equal([CharlieName, BravoName], result.Masters);
-    }
-
-    [Fact]
     public async Task Compile_ForALinkIntoAPluginTheLoadOrderHolds_ReportsNoUnresolvedDiagnostic()
     {
         var result = await CompileService().CompileAsync(_plugin);
@@ -113,7 +104,12 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         var result = await CompileService().CompileAsync(_plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
-        Assert.Equal([CharlieName, BravoName, DeltaName], result.Masters);
+
+        using var overlayDisposable = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(PluginName), Path.Combine(_modFolder, PluginName)), GameRelease.Fallout4);
+        var overlay = (IFallout4ModGetter)overlayDisposable;
+        Assert.Equal(
+            [CharlieName, BravoName, DeltaName], overlay.MasterReferences.Select(m => m.Master.FileName.String));
     }
 
     [Fact]
