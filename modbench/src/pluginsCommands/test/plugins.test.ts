@@ -193,6 +193,21 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     expect(await plugins()).toBe('*Base.esp\r\n*DLCCoast.esm\r\n');
   });
 
+  it('writes the plugins.txt of the profile it is handed, and leaves the active profile\'s alone', async () => {
+    const otherPath = join(dir, 'profiles', 'Other', 'plugins.txt');
+    await mkdir(join(dir, 'profiles', 'Other'));
+    await writeFile(join(dir, 'profiles', 'Other', 'modlist.txt'), '');
+    await writeFile(otherPath, '*Gone.esp\r\n');
+    const active = await plugins();
+
+    const outcome = await syncPlugins(
+      accessTo(dir), 'Other', await providedPluginsIn(dir, 'Other'), { kind: 'listed', names: new Set() }, []);
+
+    expect(outcome).toEqual({ applied: true, wrote: true, added: [], dropped: ['Gone.esp'] });
+    expect(await readFile(otherPath, 'utf8')).toBe('');
+    expect(await plugins()).toBe(active);
+  });
+
   it('never appends from Data: a Data-folder plugin with no line stays unlisted', async () => {
     await writeFile(join(dir, 'Game', 'Data', 'DLCCoast.esm'), 'vanilla');
 

@@ -11,7 +11,7 @@ import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../
 const ACTIVATION = 'extension.ts';
 const WIRING = ['syncWiring.ts'];
 const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'reporter.ts', 'trash.ts', 'workspaceConfig.ts'];
-const ACTIVATION_EXPORTS = ['ActivateExports', 'activate', 'deactivate'];
+const ACTIVATION_EXPORTS = ['activate', 'deactivate'];
 
 const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =>
   ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
@@ -60,6 +60,11 @@ function exportedNames(source: ts.SourceFile): string[] {
   }).sort();
 }
 
+function activateReturnType(source: ts.SourceFile): string | undefined {
+  const activate = source.statements.find((statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === 'activate');
+  return activate && ts.isFunctionDeclaration(activate) ? activate.type?.getText(source) : undefined;
+}
+
 describe('the composition root builds each box, registers it with VS Code and decides nothing', () => {
   it('holds the activation file, its wiring and the ports it implements, and no other file', () => {
     expect(rootFiles().map((path) => basename(path)).sort()).toEqual([ACTIVATION, ...WIRING, ...PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API].sort());
@@ -80,8 +85,12 @@ describe('the composition root builds each box, registers it with VS Code and de
     expect(text).not.toMatch(/webview/i);
   });
 
-  it('exports nothing from the activation file but what VS Code and the integration tests take', () => {
+  it('exports nothing from the activation file but what VS Code takes', () => {
     expect(exportedNames(parse(join(SRC, ACTIVATION)))).toEqual(ACTIVATION_EXPORTS);
+  });
+
+  it('activation returns nothing', () => {
+    expect(activateReturnType(parse(join(SRC, ACTIVATION)))).toBe('void');
   });
 
   describe('a plant is caught', () => {
