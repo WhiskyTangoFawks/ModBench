@@ -13,9 +13,9 @@ public static class PluginOrigin
 
     /// <summary>Whether origin is the reserved value above, compared as the load order compares
     /// every origin.</summary>
-    public static bool IsOverwrite(string origin) =>
+    internal static bool IsOverwrite(string origin) =>
         string.Equals(origin, Overwrite, StringComparison.OrdinalIgnoreCase);
 
-    public static bool IsDataDirectory(string origin) =>
+    internal static bool IsDataDirectory(string origin) =>
         string.Equals(origin, DataDirectory, StringComparison.OrdinalIgnoreCase);
 }

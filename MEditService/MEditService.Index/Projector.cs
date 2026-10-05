@@ -18,13 +18,12 @@ internal sealed class Projector(
 {
     /// <summary>The folder of the tree this plugin ingests from, or null when it reads its binary.
     /// Re-derived every call: a mod manager can replace the folder wholesale.</summary>
-    internal static string? TreeFolderOf(PluginAddress key, string pluginPath) =>
-        LoadOrderSnapshot.ModFolderOf(key.Origin, pluginPath) is { } modFolder
-        && SourceRepository.HoldsTreeFor(modFolder, key.Name)
-            ? modFolder
+    internal static string? TreeFolderOf(PluginAddress key, PluginProvider provider) =>
+        provider is PluginProvider.FromMod mod && SourceRepository.HoldsTreeFor(mod.Folder, key.Name)
+            ? mod.Folder
             : null;
 
-    internal static bool HoldsTree(PluginAddress key, string pluginPath) => TreeFolderOf(key, pluginPath) is not null;
+    internal static bool HoldsTree(PluginAddress key, PluginProvider provider) => TreeFolderOf(key, provider) is not null;
 
     /// <summary>What the tree's documents stamp, or the doubly claimed FormKey it named instead.</summary>
     internal static bool TryTreeStamps(
@@ -206,10 +205,10 @@ internal sealed class Projector(
         index.Announce(() => notifications?.Publish(new RowsChangedNotification(key, formKeys, index.Sequence)));
 
     /// <summary>ADR-0015: compares <paramref name="key"/>'s rows against the system of record they
-    /// came from (source documents when <paramref name="modFolder"/> holds its tree, the binary
+    /// came from (source documents when <paramref name="provider"/>'s mod holds its tree, the binary
     /// otherwise) and refreshes what differs.</summary>
-    internal ValidationReport Validate(PluginAddress key, string? modFolder) =>
-        modFolder != null && SourceRepository.HoldsTreeFor(modFolder, key.Name)
+    internal ValidationReport Validate(PluginAddress key, PluginProvider provider) =>
+        TreeFolderOf(key, provider) is { } modFolder
             ? ValidateAgainstTree(key, modFolder)
             : ValidateAgainstBinary(key);
 

@@ -61,14 +61,14 @@ public sealed class DecompilePluginHandler
                 $"{key.Name} from '{key.Origin}' is not in the load order, so there is nothing to decompile.");
         }
 
-        if (loadOrder.ModFolderOf(key) is not { } modFolder
-            || SourceRepository.Open(modFolder, loadOrder.GameRelease) is not { } repository)
+        if (plugin.Provider is not PluginProvider.FromMod mod
+            || SourceRepository.Open(mod, loadOrder.GameRelease) is not { } repository)
         {
             return Refuse(DecompileRefusal.NotInTrackedMod,
                 $"{plugin.Name} is not in a tracked mod, so there is no working tree to decompile it into.");
         }
 
-        var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, modFolder, onParsed: () => { }, cancel);
+        var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, cancel);
         if (decompiled.Files is not { } files) return Refuse(decompiled.Refusal, decompiled.Message);
 
         try
