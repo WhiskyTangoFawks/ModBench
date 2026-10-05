@@ -17,15 +17,15 @@ public static class ContainerChildEndpoints
                 logger.LogInformation("Received GetContainerChildren for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            var decodedPlugin = Uri.UnescapeDataString(plugin);
+            var address = WriteEndpointMapping.PluginAddressOf(plugin, origin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
             {
-                return Results.Ok(svc.GetChildren(decodedPlugin, decodedFk, origin));
+                return Results.Ok(svc.GetChildren(address, decodedFk));
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                logger.LogError(ex, "Failed to get container children for {Plugin} {FormKey}", decodedPlugin, decodedFk);
+                logger.LogError(ex, "Failed to get container children for {Plugin} {FormKey}", address.Name, decodedFk);
                 return Results.Problem(ex.Message);
             }
         })

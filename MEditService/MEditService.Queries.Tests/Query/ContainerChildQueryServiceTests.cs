@@ -77,7 +77,7 @@ public class ContainerChildQueryServiceTests
             });
         var svc = new ContainerChildQueryService(new StubIndex(reader));
 
-        var result = svc.GetChildren("M.esp", "qust1:M.esp", "Data");
+        var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
         Assert.Equal(
             ["dlbr1:M.esp", "dial2:M.esp", "scen1:M.esp", "dial1:M.esp"],
@@ -103,7 +103,7 @@ public class ContainerChildQueryServiceTests
             });
         var svc = new ContainerChildQueryService(new StubIndex(reader));
 
-        var result = svc.GetChildren("M.esp", "qust1:M.esp", "Data");
+        var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
         Assert.True(result.Single(r => r.FormKey == "dial1:M.esp").HasContainerChildren);
         Assert.False(result.Single(r => r.FormKey == "dial2:M.esp").HasContainerChildren);
@@ -127,7 +127,7 @@ public class ContainerChildQueryServiceTests
             });
         var svc = new ContainerChildQueryService(new StubIndex(reader));
 
-        var result = svc.GetChildren("M.esp", "dial1:M.esp", "Data");
+        var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "dial1:M.esp");
 
         Assert.Equal(["info2:M.esp", "info1:M.esp"], result.Select(r => r.FormKey).ToArray());
         Assert.All(result, r => Assert.Equal("info", r.RecordType));
@@ -139,7 +139,7 @@ public class ContainerChildQueryServiceTests
         var reader = new StubReader([]);
         var svc = new ContainerChildQueryService(new StubIndex(reader));
 
-        svc.GetChildren("M.esp", "qust1:M.esp", origin: "ModB");
+        svc.GetChildren(new PluginAddress("M.esp", "ModB"), "qust1:M.esp");
 
         Assert.Equal("ModB", reader.LastGetContainerChildrenOrigin);
     }
@@ -161,7 +161,7 @@ public class ContainerChildQueryServiceTests
         var svc = new ContainerChildQueryService(
             new StubIndex(reader), loggerFactory.CreateLogger<ContainerChildQueryService>());
 
-        var result = svc.GetChildren("M.esp", "qust1:M.esp", "Data");
+        var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
         Assert.Equal(["dial1:M.esp"], result.Select(r => r.FormKey).ToArray());
         var warning = Assert.Single(entries, e => e.Level == LogLevel.Warning);
@@ -177,7 +177,7 @@ public class ContainerChildQueryServiceTests
         var reader = new StubReader([]);
         var svc = new ContainerChildQueryService(new StubIndex(reader));
 
-        var result = svc.GetChildren("M.esp", "qust1:M.esp", "Data");
+        var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
         Assert.Empty(result);
         Assert.Empty(reader.SearchedRecordTypes);
@@ -187,6 +187,6 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_NoReads_ThrowsNoLoadOrderException()
     {
         var svc = new ContainerChildQueryService(new StubIndex(reads: null));
-        Assert.Throws<NoLoadOrderException>(() => svc.GetChildren("M.esp", "qust1:M.esp", "Data"));
+        Assert.Throws<NoLoadOrderException>(() => svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp"));
     }
 }

@@ -521,9 +521,8 @@ internal sealed class RelationReads(
     private static string FullNameOf(string alias) =>
         $"NULLIF({TranslatedStringSql.Resolved($"{alias}.body", "$.Name")}, '')";
 
-    // The callers hold ADR-0012, not this builder: RecordQueryService's
-    // RecordFilterGuard refuses a plugin without its origin, and every other caller passes both
-    // or neither.
+    // The callers hold ADR-0012, not this builder: every caller passes a plugin's name and origin
+    // both or neither.
     private static (string where, List<string> paramValues) BuildWhere(
         string? plugin, string? search, string? filterCondition = null, string? origin = null,
         IReadOnlyList<string>? recordTypes = null, string? groupCondition = null, string? searchFormKey = null)
