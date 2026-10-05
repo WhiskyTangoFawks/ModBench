@@ -22,6 +22,7 @@ export type CompareResult = Schemas['CompareResult'];
  *  `POST /plugins/track`. Counts are of *plugins*, not records. */
 export type TrackPhase = Schemas['TrackPhase'];
 export type TrackStatus = Schemas['TrackProgress'];
+export type ChangedPlugin = Schemas['ChangedPlugin'];
 
 /** A plugin compile wrote — `POST /plugins/compile` — with the diagnostics the reference check
  *  left. */

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SseNotificationSubscriber } from '../notificationStream';
+import { toLoadOrderStatus } from '../apiClient';
+import type { NotificationKind } from '../MEditClient';
 import type { NotificationEvent } from '../apiClient';
 import { present } from '../../ports/present';
 
@@ -30,6 +32,11 @@ function scriptedStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
 
 function streamResponse(chunks: Uint8Array[]): Response {
   return new Response(scriptedStream(chunks), { status: 200 });
+}
+
+class TestableSubscriber extends SseNotificationSubscriber {
+  constructor() { super({ openStream: () => Promise.reject(new Error('never opened')) }); }
+  receive(event: NotificationEvent): void { this.dispatch(event); }
 }
 
 describe('SseNotificationSubscriber', () => {
@@ -228,5 +235,68 @@ describe('SseNotificationSubscriber', () => {
     expect(sawSignal?.aborted).toBe(true);
     await vi.advanceTimersByTimeAsync(10_000);
     expect(openStream).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SseNotificationSubscriber — typed listeners', () => {
+  const loadOrderStatus: NotificationEvent['loadOrderStatus'] = {
+    state: 'Ready', totalPlugins: 3, activePlugins: 2, indexedPlugins: [{ name: 'A.esp', origin: 'ModA' }],
+    conflictsComputed: true, failures: [], version: 4,
+  };
+  const trackProgress: NotificationEvent['trackProgress'] = { mod: 'ModA', phase: 'Parsing', pluginsDone: 1, pluginsTotal: 2 };
+  const changedPlugins = [{ name: 'A.esp', bytesSha256: 'abc' }];
+
+  const cases: [NotificationKind, NotificationEvent, unknown][] = [
+    ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), toLoadOrderStatus(loadOrderStatus!)],
+    ['track-progress', rowsChanged([], { kind: 'track-progress', trackProgress }), trackProgress],
+    ['external-change', rowsChanged([], { kind: 'external-change', changedPlugins }), { origin: 'ModA', changedPlugins }],
+    ['untracked-plugins', rowsChanged(['A.esp', 'B.esp'], { kind: 'untracked-plugins' }), { origin: 'ModA', plugins: ['A.esp', 'B.esp'] }],
+    ['rows-changed', rowsChanged(['000001:Test.esp']), { plugin: 'Test.esp', origin: 'ModA', keys: ['000001:Test.esp'] }],
+    ['plugin-changed', rowsChanged([], { kind: 'plugin-changed' }), { plugin: 'Test.esp', origin: 'ModA' }],
+  ];
+
+  it.each(cases)('hands a %s listener its kind\'s payload', (kind, event, payload) => {
+    const subscriber = new TestableSubscriber();
+    const heard: unknown[] = [];
+    subscriber.onNotification(kind, (p) => heard.push(p));
+
+    subscriber.receive(event);
+
+    expect(heard).toEqual([payload]);
+  });
+
+  it('gives an external-change frame without changedPlugins an empty list', () => {
+    const subscriber = new TestableSubscriber();
+    const heard: unknown[] = [];
+    subscriber.onNotification('external-change', (p) => heard.push(p));
+
+    subscriber.receive(rowsChanged([], { kind: 'external-change' }));
+
+    expect(heard).toEqual([{ origin: 'ModA', changedPlugins: [] }]);
+  });
+
+  it.each(['load-order-status', 'track-progress'] as const)('skips a %s frame missing its payload', (kind) => {
+    const subscriber = new TestableSubscriber();
+    const heard: unknown[] = [];
+    subscriber.onNotification(kind, (p) => heard.push(p));
+
+    subscriber.receive(rowsChanged([], { kind }));
+
+    expect(heard).toEqual([]);
+  });
+
+  it('delivers to flat and typed listeners alike, and unsubscribe stops the typed one', () => {
+    const subscriber = new TestableSubscriber();
+    const flat: NotificationEvent[] = [];
+    const typed: unknown[] = [];
+    subscriber.subscribe('plugin-changed', (e) => flat.push(e));
+    const off = subscriber.onNotification('plugin-changed', (p) => typed.push(p));
+
+    subscriber.receive(rowsChanged([], { kind: 'plugin-changed' }));
+    off();
+    subscriber.receive(rowsChanged([], { kind: 'plugin-changed' }));
+
+    expect(flat).toHaveLength(2);
+    expect(typed).toHaveLength(1);
   });
 });

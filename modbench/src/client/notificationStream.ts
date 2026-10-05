@@ -1,11 +1,15 @@
-import type { NotificationEvent } from './apiClient';
-import { isNotificationKind, type NotificationKind } from './MEditClient';
+import { toLoadOrderStatus, type NotificationEvent } from './apiClient';
+import { isNotificationKind, type NotificationKind, type NotificationPayloads } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
 
 // Subscribing and dispatching for the one stream kind this file opens (SSE); `whenConnected`'s
 // default answer below is settled, which `SseNotificationSubscriber` overrides with its own.
-class NotificationListenerRegistry {
+export class NotificationListenerRegistry {
   private readonly listeners = new Map<NotificationKind, Set<(event: NotificationEvent) => void>>();
+  private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
+    'load-order-status': new Set(), 'track-progress': new Set(), 'external-change': new Set(),
+    'untracked-plugins': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
+  };
 
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void {
     const set = this.listeners.get(kind) ?? new Set();
@@ -14,15 +18,50 @@ class NotificationListenerRegistry {
     return () => { set.delete(listener); };
   }
 
+  onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
+    const set: Set<(payload: NotificationPayloads[K]) => void> = this.typedListeners[kind];
+    set.add(listener);
+    return () => { set.delete(listener); };
+  }
+
   whenConnected(): Promise<void> {
     return Promise.resolve();
   }
 
-  protected dispatch(event: NotificationEvent): void {
+  dispatch(event: NotificationEvent): void {
     // `event.kind` is `string` on the wire type; an event this build doesn't route stays
     // undelivered.
     if (!isNotificationKind(event.kind)) return;
     for (const listener of this.listeners.get(event.kind) ?? []) listener(event);
+    this.dispatchTyped(event);
+  }
+
+  private dispatchTyped(event: NotificationEvent): void {
+    const { origin, plugin, keys } = event;
+    switch (event.kind) {
+      case 'load-order-status':
+        if (event.loadOrderStatus) this.deliver('load-order-status', toLoadOrderStatus(event.loadOrderStatus));
+        break;
+      case 'track-progress':
+        if (event.trackProgress) this.deliver('track-progress', event.trackProgress);
+        break;
+      case 'external-change':
+        this.deliver('external-change', { origin, changedPlugins: event.changedPlugins ?? [] });
+        break;
+      case 'untracked-plugins':
+        this.deliver('untracked-plugins', { origin, plugins: keys });
+        break;
+      case 'rows-changed':
+        this.deliver('rows-changed', { plugin, origin, keys });
+        break;
+      case 'plugin-changed':
+        this.deliver('plugin-changed', { plugin, origin });
+        break;
+    }
+  }
+
+  private deliver<K extends NotificationKind>(kind: K, payload: NotificationPayloads[K]): void {
+    for (const listener of this.typedListeners[kind]) listener(payload);
   }
 }
 
