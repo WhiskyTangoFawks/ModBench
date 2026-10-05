@@ -10,6 +10,7 @@ import {
   moveSeparatorsInText,
   parseModlist,
   removeModFromText,
+  renameModLineInText,
   renameSeparatorInText,
   setEnabledInText,
 } from '../../codecs/modlistText';
@@ -202,6 +203,17 @@ describe('renameSeparatorInText', () => {
   it('renames the top separator without dropping or moving a leading BOM', () => {
     const out = renameSeparatorInText('\uFEFF+Sep_separator\r\n+A\r\n', 'Sep', 'NewSep');
     expect(out).toBe('\uFEFF+NewSep_separator\r\n+A\r\n');
+  });
+});
+
+describe('renameModLineInText', () => {
+  it('renames a mod line by its MO2 name, keeping its enabled state, place, CRLF and BOM', () => {
+    const out = renameModLineInText('\uFEFF+A\r\n-Old Mod\r\n+B\r\n', 'Old Mod', 'New Mod');
+    expect(out).toBe('\uFEFF+A\r\n-New Mod\r\n+B\r\n');
+  });
+
+  it('throws when no line carries the name', () => {
+    expect(() => renameModLineInText('+A\r\n', 'Gone', 'X')).toThrow(/Gone/);
   });
 });
 

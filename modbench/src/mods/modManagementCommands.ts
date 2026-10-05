@@ -198,6 +198,14 @@ async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion
   return (await ask(question, { modal: true }, 'Delete')) === 'Delete';
 }
 
+/** The new name for a row, prefilled with the current one; undefined on Esc, an empty name or the same name. */
+export async function promptRename(
+  prompt: string, oldName: string, validateInput: NonNullable<vscode.InputBoxOptions['validateInput']>,
+): Promise<string | undefined> {
+  const newName = await vscode.window.showInputBox({ prompt, value: oldName, validateInput });
+  return !newName || newName === oldName ? undefined : newName;
+}
+
 export function registerSeparatorCommands(
   access: ModlistAccess, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   viewSelection: () => readonly ModlistNode[],
@@ -207,10 +215,8 @@ export function registerSeparatorCommands(
         const node = singularArgument(entry, 'separator');
         if (!node) return;
         const oldName = node.separator.name;
-        const newName = await vscode.window.showInputBox({
-          prompt: 'Rename separator', value: oldName, validateInput: separatorNamePrompt(access, instance, oldName),
-        });
-        if (!newName || newName === oldName) return;
+        const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(access, instance, oldName));
+        if (newName === undefined) return;
         await runModsWriting(instance, () => reportFailure(reporter, 'Failed to rename separator.', async () => {
           applyOrThrow(await renameSeparator(access, instance.value.activeProfile, oldName, newName));
         }));
