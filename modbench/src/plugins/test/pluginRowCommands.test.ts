@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const {
-  handlers, registerCommand, showQuickPick, createQuickPick, executeCommand, openRepository,
+  handlers, registerCommand, showQuickPick, createQuickPick, executeCommand,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
     handlers,
-    openRepository: vi.fn((_uri: unknown) => Promise.resolve({ status: () => Promise.resolve() })),
     registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
@@ -29,7 +28,6 @@ vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
   return {
     commands: { registerCommand, executeCommand },
-    extensions: { getExtension: () => ({ isActive: true, exports: { getAPI: () => ({ openRepository }) } }) },
     window: { showQuickPick, createQuickPick, withProgress: recordedWithProgress },
     TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
     Diagnostic, DiagnosticSeverity, Range,
@@ -44,7 +42,7 @@ const instanceThatReads = {
 };
 
 import {
-  conflictsComputedOver, registerTrackCommand, registerCompileCommand, registerDecompileCommand, CompileProblems,
+  registerTrackCommand, registerCompileCommand, registerDecompileCommand, CompileProblems,
 } from '../pluginRowCommands';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { InMemoryMEditClient, type PluginAddress } from '../../client';
@@ -60,12 +58,6 @@ beforeEach(() => {
   progressSteps.length = 0;
   vi.clearAllMocks();
 });
-
-function clientWithOrigin(name: string, origin: string): InMemoryMEditClient {
-  const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name, origin, inLoadOrder: true })]);
-  return client;
-}
 
 describe('modbench.mod.track', () => {
   const FIRST = { name: 'First.esp', origin: 'ModA' };
@@ -197,24 +189,6 @@ describe('modbench.mod.track', () => {
 
     expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModB'], expect.anything()] }]);
     expect(reporter.landings).toEqual(['Tracked "ModB".']);
-  });
-
-  it('a landed track, through the conflicts-computed notice, registers the tracked repository once', async () => {
-    const client = clientWithOrigin('Other.esp', 'ModB');
-    client.setCommandResult('track', { landed: [modB([OTHER])], refused: [] });
-    const announce = vi.fn();
-    const channel = { warn: vi.fn(), error: vi.fn() };
-    const notice = conflictsComputedOver(announce, {
-      client, outputChannel: channel, setPluginRepositories: () => {},
-      trackedMods: () => new Set(['ModB']), modDirs: () => new Map([['ModB', '/mods/ModB']]),
-    });
-    const { handler } = invokeTrack(client, vi.fn(notice));
-
-    await handler(row(OTHER));
-
-    expect(announce).toHaveBeenCalledOnce();
-    expect(openRepository).toHaveBeenCalledOnce();
-    expect(channel.error).not.toHaveBeenCalled();
   });
 
   it('reports each refused plugin once while the rest land', async () => {

@@ -1,4 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('vscode', () => ({}));
+
 import { noticeExternalChanges } from '../externalChangeNotice';
 import { InMemoryMEditClient, type NotificationEvent } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
