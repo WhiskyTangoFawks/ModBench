@@ -252,12 +252,16 @@ describe('a record panel open while mEdit reports a plugin it cannot read', () =
     const postMessage = vi.fn();
     const panel: unknown = { webview: { postMessage } };
     if (!isPanel(panel)) throw new Error('not a panel');
-    register(() => [], { recordPanels: new Set([panel]), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient });
+    const tracker = new ActiveRecordTracker<vscode.WebviewPanel>();
+    tracker.setFormKey(panel, '000801:A.esp');
+    register(() => [], { recordPanels: new Set([panel]), tracker, meditClient });
 
     meditClient.emit(tick([bad]));
     meditClient.emit(tick([bad]));
-    expect(postMessage).toHaveBeenCalledTimes(1);
     meditClient.emit(tick([]));
-    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls).toEqual([
+      [{ type: 'loadRecord', formKey: '000801:A.esp' }],
+      [{ type: 'loadRecord', formKey: '000801:A.esp' }],
+    ]);
   });
 });

@@ -1,50 +1,36 @@
-import type * as vscode from 'vscode';
 import type { MEditClient } from '../client';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
 
-// A FormKey spans its override chain, so matching it is enough. `heldReads` holds a panel's reads
-// until its edit is answered; on reconnect, one waiting on a missed report reads once mEdit holds it.
-export function subscribeRecordPanelsToNotifications<Panel extends { webview: Pick<vscode.Webview, 'postMessage'> }>(
+// A FormKey spans its override chain, so matching it is enough. On reconnect, a panel waiting on a
+// missed report reads once mEdit holds it.
+export function subscribeRecordPanelsToNotifications<Panel>(
   client: Pick<MEditClient, 'onNotification' | 'onReconnected' | 'getRecordOwner'>,
   recordPanels: Set<Panel>,
-  activeRecordTracker: { formKeyOf(panel: Panel): string | undefined },
-  heldReads: {
-    holds(panel: Panel, keys: readonly string[]): boolean;
+  reads: {
+    reported(panel: Panel, keys: readonly string[]): void;
     waitingFor(panel: Panel): string | undefined;
-    release(panel: Panel, formKey: string): boolean;
+    release(panel: Panel, formKey: string): void;
   },
 ): () => void {
-  const read = (panel: Panel, formKey: string) => {
-    void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey } satisfies ExtensionToWebview);
-  };
   const unsubscribeRows = client.onNotification('rows-changed', (event) => {
-    for (const panel of recordPanels) {
-      if (heldReads.holds(panel, event.keys)) continue;
-      const formKey = activeRecordTracker.formKeyOf(panel);
-      if (formKey && event.keys.includes(formKey)) read(panel, formKey);
-    }
+    for (const panel of recordPanels) reads.reported(panel, event.keys);
   });
   const unsubscribeReconnect = client.onReconnected(() => {
     for (const panel of recordPanels) {
-      const formKey = heldReads.waitingFor(panel);
+      const formKey = reads.waitingFor(panel);
       if (!formKey) continue;
       // A failed ask leaves the panel waiting, as a missing key does: the report still reads it.
       client.getRecordOwner(formKey).then(
-        owner => { if (owner && heldReads.release(panel, formKey)) read(panel, formKey); },
+        owner => { if (owner) reads.release(panel, formKey); },
         () => undefined);
     }
   });
   return () => { unsubscribeRows(); unsubscribeReconnect(); };
 }
 
-/** A completed reconcile or a landed Track: every record panel refreshes its comparison, except
- *  one whose read `heldReads` holds, which refreshes when its hold ends. */
-export function announceConflictsComputed<Panel extends { webview: Pick<vscode.Webview, 'postMessage'> }>(
+/** A completed reconcile or a landed Track: every record panel reads its comparison again. */
+export function announceConflictsComputed<Panel>(
   recordPanels: Set<Panel>,
-  heldReads: { holdsRefresh(panel: Panel): boolean },
+  reads: { refresh(panel: Panel): void },
 ): void {
-  for (const panel of recordPanels) {
-    if (heldReads.holdsRefresh(panel)) continue;
-    void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED } satisfies ExtensionToWebview);
-  }
+  for (const panel of recordPanels) reads.refresh(panel);
 }

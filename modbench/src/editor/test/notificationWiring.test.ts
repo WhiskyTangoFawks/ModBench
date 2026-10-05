@@ -10,6 +10,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { subscribeRecordPanelsToNotifications } from '../notificationWiring';
+import { EditsInFlight } from '../followRecord';
 import { InMemoryMEditClient } from '../../client';
 
 function rowsChanged(keys: string[], overrides: Partial<NotificationEvent> = {}): NotificationEvent {
@@ -20,8 +21,8 @@ function pluginChanged(overrides: Partial<NotificationEvent> = {}): Notification
   return { kind: 'plugin-changed', plugin: 'Test.esp', origin: 'ModA', keys: [], sequence: 1, ...overrides };
 }
 
-function fakePanel(): { webview: { postMessage: ReturnType<typeof vi.fn> } } {
-  return { webview: { postMessage: vi.fn() } };
+function fakePanel(): { title: string; webview: { postMessage: ReturnType<typeof vi.fn> } } {
+  return { title: '', webview: { postMessage: vi.fn() } };
 }
 
 function fakeActiveRecordTrackerOfJustFormKeyOf() {
@@ -32,8 +33,6 @@ function fakeActiveRecordTrackerOfJustFormKeyOf() {
   };
 }
 
-const gateHoldingNoReadSinceNoEditIsInFlight = {holds: () => false, waitingFor: () => undefined, release: () => false };
-
 describe('subscribeRecordPanelsToNotifications', () => {
   it('rows-changed naming the panel\'s own FormKey re-reads that one panel', () => {
     const client = new InMemoryMEditClient();
@@ -41,7 +40,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTrackerOfJustFormKeyOf();
     tracker.setFormKey(panel, '000001:Test.esp');
-    subscribeRecordPanelsToNotifications(client, recordPanels, tracker, gateHoldingNoReadSinceNoEditIsInFlight);
+    subscribeRecordPanelsToNotifications(client, recordPanels, new EditsInFlight(tracker));
 
     client.emit(rowsChanged(['000001:Test.esp']));
 
@@ -54,7 +53,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTrackerOfJustFormKeyOf();
     tracker.setFormKey(panel, '000001:Test.esp');
-    subscribeRecordPanelsToNotifications(client, recordPanels, tracker, gateHoldingNoReadSinceNoEditIsInFlight);
+    subscribeRecordPanelsToNotifications(client, recordPanels, new EditsInFlight(tracker));
 
     client.emit(rowsChanged(['000002:Other.esp']));
 
@@ -67,7 +66,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTrackerOfJustFormKeyOf();
     tracker.setFormKey(panel, '000001:Test.esp');
-    subscribeRecordPanelsToNotifications(client, recordPanels, tracker, gateHoldingNoReadSinceNoEditIsInFlight);
+    subscribeRecordPanelsToNotifications(client, recordPanels, new EditsInFlight(tracker));
 
     client.emit(pluginChanged());
 
@@ -80,7 +79,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTrackerOfJustFormKeyOf();
     tracker.setFormKey(panel, '000001:Test.esp');
-    const unsubscribe = subscribeRecordPanelsToNotifications(client, recordPanels, tracker, gateHoldingNoReadSinceNoEditIsInFlight);
+    const unsubscribe = subscribeRecordPanelsToNotifications(client, recordPanels, new EditsInFlight(tracker));
 
     unsubscribe();
     client.emit(rowsChanged(['000001:Test.esp']));

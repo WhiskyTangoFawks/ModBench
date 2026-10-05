@@ -229,13 +229,16 @@ describe('the Referenced By selection', () => {
 });
 
 describe('conflicts computed', () => {
-  it('has every open record tab refresh its comparison', () => {
+  it('has every open record tab read its record again', () => {
     const { editor, open } = makeEditor();
     const tabs = [open('000801:A.esp'), open('000802:A.esp')];
 
     editor.announceConflictsComputed();
 
-    expect(tabs.map((tab) => tab.webview.postMessage.mock.calls)).toEqual([[[{ type: 'conflictsComputed' }]], [[{ type: 'conflictsComputed' }]]]);
+    expect(tabs.map((tab) => tab.webview.postMessage.mock.calls)).toEqual([
+      [[{ type: 'loadRecord', formKey: '000801:A.esp' }]],
+      [[{ type: 'loadRecord', formKey: '000802:A.esp' }]],
+    ]);
   });
 });
 

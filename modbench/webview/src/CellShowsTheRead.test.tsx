@@ -61,7 +61,7 @@ describe('a record panel cell after an edit (common.md, A gesture that writes, s
     expect(nameCell()).not.toHaveTextContent('After');
 
     disk = recordNamed('After');
-    tellPanel({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
+    tellPanel({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: FORM_KEY });
     await waitFor(() => expect(nameCell()).toHaveTextContent('After'));
   });
 });

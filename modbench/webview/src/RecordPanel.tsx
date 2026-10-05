@@ -60,8 +60,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     if (next.has(rowKey)) next.delete(rowKey); else next.add(rowKey);
     return next;
   });
-  // The one focused cell (editor.md, The focused cell). Reset on LOAD_RECORD (a different record has no "same cell") but
-  // not by refresh().
+  // The one focused cell (editor.md, The focused cell).
   const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
   const enteredCell = useRef(false);
   const scroller = useRef<HTMLDivElement>(null);
@@ -106,7 +105,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     };
   }, [tellFocusedCell]);
   // Keyed by column identity — two same-filename columns must collapse independently.
-  // Deliberately not reset by LOAD_RECORD: collapse state persists across record navigation.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
   const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | typeof LABEL_COLUMN, number>>(new Map());
   const resizeColumn = (key: ColumnKey | typeof LABEL_COLUMN, width: number) => setColumnWidths(prev => new Map(prev).set(key, width));
@@ -162,17 +160,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     }
   }, [client]);
 
-  // When the handler drives a new-formKey navigation it calls refresh directly,
-  // so the [formKey] effect must skip to avoid a double request.
-  const prevFormKeyRef = useRef(formKey);
-  const skipNextRefreshEffect = useRef(false);
-
-  useEffect(() => {
-    prevFormKeyRef.current = formKey;
-    if (!formKey) return;
-    if (skipNextRefreshEffect.current) { skipNextRefreshEffect.current = false; return; }
-    void refresh(formKey);
-  }, [formKey, refresh]);
+  // The tab's first read. Every read after it is the host's to ask for (editor.md, States, story 5).
+  useEffect(() => { if (latestRead.current === 0) void refresh(formKey); }, [formKey, refresh]);
 
   function toggleColumnCollapse(key: ColumnKey) {
     setCollapsedColumns(prev => {
@@ -187,8 +176,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     post(plugin, { op: 'set', path: hops, value });
   }, [post]);
 
-  // Every message here is a broadcast: the extension host has no live reference into this panel's
-  // React state, so it says what happened and each open panel decides whether it applies.
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       let msg;
@@ -197,25 +184,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       } catch {
         return; // Not one of ours, or a stale/mismatched build.
       }
-      if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) {
-        if (msg.formKey !== prevFormKeyRef.current) {
-          // formKey will change → [formKey] effect will fire; skip it.
-          skipNextRefreshEffect.current = true;
-          setResult(null);
-          setGone(false);
-          setError(null);
-          setFocusedCell(null);
-        }
-        setFormKey(msg.formKey);
-        // Unconditional, not left to the [formKey] effect: a LOAD_RECORD naming the record already
-        // open must still re-load (the effect never fires, formKey didn't change) — the
-        // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
-        void refresh(msg.formKey);
-      } else if (msg.type === EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED) {
-        // editor.md, States, story 3. Load-order-wide, not record-specific, so no self-filter:
-        // every open panel reacts.
-        void refresh(prevFormKeyRef.current);
-      }
+      if (msg.type !== EXTENSION_TO_WEBVIEW.LOAD_RECORD) return;
+      setFormKey(msg.formKey);
+      void refresh(msg.formKey);
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
