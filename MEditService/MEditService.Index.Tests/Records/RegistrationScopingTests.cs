@@ -142,7 +142,6 @@ public class RegistrationScopingTests
         Assert.Empty(reads.Search(new RecordQuery(Plugin: BetaKey.Name, Origin: BetaKey.Origin, Limit: 1000)).Items);
         Assert.DoesNotContain(reads.Search(new RecordQuery(Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
         Assert.Empty(reads.GetRecordTypeCounts(BetaKey));
-        Assert.Empty(reads.GetNativeFormKeys(BetaKey));
 
         Assert.Null(reads.Resolve(fx.BetaNpcFk));
         Assert.Empty(reads.GetReferencedBy(fx.BetaRaceFk));

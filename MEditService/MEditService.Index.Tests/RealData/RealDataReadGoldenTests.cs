@@ -70,7 +70,6 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
             SearchAllTypesTotal = _repo.Search(new RecordQuery(RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0)).Total,
             SearchByEditorId = _repo.Search(new RecordQuery(RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Search: "Workshop", Limit: WholeType, Offset: 0))
                 .Items.OrderBy(r => r.FormKey, StringComparer.Ordinal).Take(20).ToList(),
-            NativeFormKeyCount = _repo.GetNativeFormKeys(new PluginAddress(TestPluginName, Origin)).Count,
         };
 
         Golden.Verify("realdata-listings", captured);
