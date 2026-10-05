@@ -111,18 +111,9 @@ public sealed class EditRecordHandler
         LeftCopy? refillCopyOnTheLeft = null;
         if (cellToLookUp is not null || refills)
         {
-            IReadOnlySet<string> masters;
-            try
-            {
-                masters = RequiredMasters.InTheTree(repository, plugin, schemas);
-            }
-            catch (UnreadableSourceDocumentException ex)
-            {
-                return RecordEditResult.RefusedAt(
-                    RecordEditRefusal.RecordParseFailed, spelled,
-                    $"'{spelled}': the copy of {formKey} read to its left comes only from a master of {plugin.Name}, " +
-                    $"which its source tree names, and that tree cannot be read: {ex.Message.TrimEnd('.')}. Nothing was written.");
-            }
+            if (WriteTargets.MastersOf(
+                    repository, plugin, schemas, spelled, $"the copy of {formKey} read to its left", out var masters) is { } unreadable)
+                return unreadable;
             if (cellToLookUp is not null)
                 cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, cellToLookUp, PlacedCell.Says, among: masters);
             if (refills)

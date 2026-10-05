@@ -289,6 +289,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains("Statics", result.Message, StringComparison.Ordinal);
+        Assert.Contains("moves into comes only from a master of", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _plugins.Text(Override, _keys["Here"]));
     }
 }

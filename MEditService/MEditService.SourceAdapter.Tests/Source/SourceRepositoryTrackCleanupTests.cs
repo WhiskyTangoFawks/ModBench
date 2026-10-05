@@ -20,7 +20,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
             _modFolder, SourcePreset.Edits, [Baseline("A.esp"), BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp"), Baseline("C.esp")]);
 
         Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
-        Assert.Equal(["Track SomeMod", "Track A.esp", "Track C.esp"], SubjectsOnMain());
+        Assert.Equal(["Track SomeMod"], SubjectsOnMain());
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source", "Bad.esp")));
         Assert.True(File.Exists(Path.Combine(_modFolder, "plugin-source", "C.esp", "npc_", "C.esp", "000001.json")));
         Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
@@ -28,7 +28,87 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     }
 
     [Fact]
-    public void Track_AfterAFailedTrackOfTheModsOwnFiles_IsNotTracked_AndTrackingAgainCreatesTheRepository()
+    public void Track_WhenEveryPluginIsRefused_LeavesNoRepositoryAndNoGitignore()
+    {
+        var refused = SourceRepository.Track(
+            _modFolder, SourcePreset.Edits, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
+
+        Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
+        Assert.False(SourceRepository.IsTracked(_modFolder));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
+        Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
+    }
+
+    [Fact]
+    public void Track_WhenEveryPluginIsRefused_LeavesARepositoryItDidNotMakeAsItWas()
+    {
+        var theirs = Directory.CreateDirectory(Path.Combine(_modFolder, ".git")).FullName;
+        File.WriteAllText(Path.Combine(theirs, "config"), "[remote \"origin\"]\n");
+
+        SourceRepository.Track(
+            _modFolder, SourcePreset.Edits, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
+
+        Assert.Equal("[remote \"origin\"]\n", File.ReadAllText(Path.Combine(theirs, "config")));
+    }
+
+    [Fact]
+    public void Track_WhenTheCommitFails_LeavesARepositoryItDidNotMakeAsItWas()
+    {
+        var theirs = Directory.CreateDirectory(Path.Combine(_modFolder, ".git")).FullName;
+        File.WriteAllText(Path.Combine(theirs, "marker"), "theirs");
+        var asset = Path.Combine(_modFolder, "Locked.dds");
+        File.WriteAllText(asset, "pixels");
+        FileModes.Set(asset, "000");
+        try
+        {
+            Assert.ThrowsAny<InvalidOperationException>(
+                () => SourceRepository.Track(_modFolder, SourcePreset.Everything, [Baseline("A.esp")]));
+        }
+        finally
+        {
+            FileModes.Set(asset, "600");
+        }
+
+        Assert.Equal("theirs", File.ReadAllText(Path.Combine(theirs, "marker")));
+    }
+
+    [Fact]
+    public void Track_WhenTheCommitFails_RestoresTheSourceFileItReplaced()
+    {
+        var existing = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(existing).Require());
+        File.WriteAllText(existing, "theirs");
+        var asset = Path.Combine(_modFolder, "Locked.dds");
+        File.WriteAllText(asset, "pixels");
+        FileModes.Set(asset, "000");
+        try
+        {
+            Assert.ThrowsAny<InvalidOperationException>(
+                () => SourceRepository.Track(_modFolder, SourcePreset.Everything, [Baseline("A.esp")]));
+        }
+        finally
+        {
+            FileModes.Set(asset, "600");
+        }
+
+        Assert.Equal("theirs", File.ReadAllText(existing));
+    }
+
+    [Fact]
+    public void Track_WhenAPluginsWriteThrowsAnythingElse_TakesBackEveryPluginsFiles_AndThrows()
+    {
+        var nulInPath = new TreeFile("plugin-source/Bad.esp/npc_/\0.json", "{}"u8.ToArray());
+
+        Assert.ThrowsAny<ArgumentException>(
+            () => SourceRepository.Track(_modFolder, SourcePreset.Edits, [Baseline("A.esp"), ([nulInPath], new BaselineTrailers("Bad.esp", null, null))]));
+
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
+    }
+
+    [Fact]
+    public void Track_WhenTheCommitFails_TakesBackWhatItMade_AndTrackingAgainCreatesTheRepository()
     {
         var asset = Path.Combine(_modFolder, "Locked.dds");
         File.WriteAllText(asset, "pixels");
@@ -42,13 +122,14 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         {
             FileModes.Set(asset, "600");
         }
-        Assert.True(Directory.Exists(Path.Combine(_modFolder, ".git")));
-        Assert.False(SourceRepository.IsTracked(_modFolder));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
+        Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
 
         var refused = SourceRepository.Track(_modFolder, SourcePreset.Everything, [Baseline("A.esp")]);
 
         Assert.Empty(refused);
-        Assert.Equal(["Track SomeMod", "Track A.esp"], SubjectsOnMain());
+        Assert.Equal(["Track SomeMod"], SubjectsOnMain());
         Assert.True(SourceRepository.IsTracked(_modFolder));
         Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
     }
