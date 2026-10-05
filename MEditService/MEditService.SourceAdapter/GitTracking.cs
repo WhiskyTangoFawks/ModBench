@@ -12,9 +12,8 @@ public enum SourcePreset
     Everything,
 }
 
-/// <summary>Makes a mod's repository: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, which stays
-/// checked out. A track that lands no plugin leaves what it found: it takes back what it created, and
-/// a repository it did not create is never deleted (ADR-0003).</summary>
+/// <summary>Makes a mod's repository: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>. A track that
+/// lands no plugin restores what it found and never deletes a repository it did not make (ADR-0003).</summary>
 internal static class GitTracking
 {
     /// <summary>Answers each plugin whose files could not be written.</summary>
