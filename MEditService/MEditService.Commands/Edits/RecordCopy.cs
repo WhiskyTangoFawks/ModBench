@@ -253,9 +253,8 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
     private static SourceDocument DocumentOf(Destination destination, RecordIdentity existing) =>
         destination.Repository.Get(destination.Plugin, existing) ?? throw NoDocumentCarries(destination.Plugin, existing.FormKey);
 
-    /// <summary>A child record the destination holds in another document moves with the copy: it
-    /// leaves that document, and the copy lands it where the source has it. A record that carries
-    /// children of its own stays where it is.</summary>
+    /// <summary>A child record the destination holds in another document leaves it, and the copy lands
+    /// it where the source has it. A record with children of its own stays.</summary>
     internal void RemoveChildrenHeldElsewhere(
         Destination destination, string sourceBody, string sourceRecordType, SourceDocument? destinationUnit, GameRelease release)
     {
