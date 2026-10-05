@@ -50,17 +50,11 @@ export const toggleBtnStyle: React.CSSProperties = {
 };
 
 // editor-conflicts.md, The colours: each is a theme colour the extension manifest contributes.
-const COLOUR_NAMES = [
-  'conflictRowOverride', 'conflictRowConflict', 'conflictIdenticalToMaster', 'conflictOverride', 'conflictWins', 'conflictLoses',
-  'conflictLosesText',
-] as const;
-type ColourName = (typeof COLOUR_NAMES)[number];
-
-export const CONFLICT_COLOURS: readonly string[] = COLOUR_NAMES.map(name => `modbench.${name}`);
+type ColourName =
+  | 'conflictRowOverride' | 'conflictRowConflict' | 'conflictIdenticalToMaster' | 'conflictOverride' | 'conflictWins'
+  | 'conflictLoses' | 'conflictLosesText';
 
 const themeColour = (name: ColourName): string => `var(--vscode-modbench-${name})`;
-
-export const CONFLICT_VARIABLES: readonly string[] = COLOUR_NAMES.map(themeColour);
 
 // NoConflict and OnlyOne are absent: they paint no background, so an expanded row deferring to its
 // children reads the same way they do.
