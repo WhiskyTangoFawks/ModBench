@@ -23,6 +23,7 @@ import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { file, indexedValueOf } from './indexedValue';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
 
 const ACTIVE_PROFILE = 'Default';
 
@@ -54,36 +55,6 @@ const overwriteHolding = (count: number): InstanceValue['overwriteFiles'] =>
 
 const SEQUENCE_ALREADY_LOADED = 1;
 const SEQUENCE_NOT_READ_YET = 0;
-
-class FakeInstance {
-  value: InstanceValue;
-  sequence: number;
-  readFailure: string | undefined;
-  private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
-  private failureListeners: (() => void)[] = [];
-  constructor(initial: InstanceValue, sequence = SEQUENCE_ALREADY_LOADED) {
-    this.value = initial;
-    this.sequence = sequence;
-  }
-  subscribe(subscriber: (value: InstanceValue, sequence: number) => void) {
-    this.subscribers.push(subscriber);
-    return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscriber); } };
-  }
-  publish(value: InstanceValue): void {
-    this.value = value;
-    this.readFailure = undefined;
-    this.sequence++;
-    for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
-  }
-  onReadFailure(listener: () => void) {
-    this.failureListeners.push(listener);
-    return { dispose: () => { this.failureListeners = this.failureListeners.filter((l) => l !== listener); } };
-  }
-  fail(reason: string): void {
-    this.readFailure = reason;
-    for (const listener of [...this.failureListeners]) listener();
-  }
-}
 
 const explicitFailureIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
   pending,
@@ -691,6 +662,19 @@ describe('ModListProvider', () => {
   });
 
   describe('sort order toggle', () => {
+    it('flipping the direction of a rendered tree asks it to render again, and its rows come back reordered', async () => {
+      const provider = makeProvider([mod('Winning'), mod('Losing')]);
+      const modLabels = async () => (await provider.getChildren()).filter((n) => n instanceof ModNode).map((n) => n.label);
+      expect(await modLabels()).toEqual(['Losing', 'Winning']);
+
+      let askedToRerender = false;
+      provider.onDidChangeTreeData(() => { askedToRerender = true; });
+      provider.setViewDirection('winningAtTop');
+
+      expect(askedToRerender).toBe(true);
+      expect(await modLabels()).toEqual(['Winning', 'Losing']);
+    });
+
     it('toggled to winning-at-top: the mods within a separator, the entries preceding it, are in file order', async () => {
       const provider = makeProvider([
         mod('First'),

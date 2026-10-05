@@ -71,8 +71,9 @@ const access = accessTo('/instance');
 
 const folderOf = (entry: Pick<ModlistEntry, 'kind' | 'name'>) => ({ ...entry, path: `/instance/mods/${entry.name}` });
 
-function accessHolding(listed: readonly ModlistEntry[], folders: readonly Pick<ModlistEntry, 'kind' | 'name'>[] = listed): ModlistAccess {
-  const named = (kind: ModlistEntry['kind'], name: string) => (e: Pick<ModlistEntry, 'kind' | 'name'>) => e.kind === kind && e.name === name;
+function accessHolding(listed: readonly ModlistEntry[], folders: readonly Pick<ModlistEntry, 'kind' | 'name'>[] = []): ModlistAccess {
+  const named = (kind: ModlistEntry['kind'], name: string) =>
+    (e: Pick<ModlistEntry, 'kind' | 'name'>) => e.kind === kind && e.name.toLowerCase() === name.toLowerCase();
   return {
     adapter: {
       ...access.adapter,
@@ -584,8 +585,8 @@ describe('rename separator takes its separator through the gesture entry', () =>
     await invoke('modbench.separator.rename', groupB);
 
     const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
-    expect(await validate('Group A')).toBe(CLASH);
-    expect(await validate('Group B')).toBeUndefined();
+    expect(await validate('group a')).toBe(CLASH);
+    expect(await validate('GROUP B')).toBeUndefined();
     expect(await validate('Mod A')).toBeUndefined();
   });
 
@@ -597,8 +598,8 @@ describe('rename separator takes its separator through the gesture entry', () =>
     await invoke('modbench.separator.rename', groupB);
 
     const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
-    expect(await validate('Group A')).toBe(CLASH);
-    expect(await validate('Group B')).toBeUndefined();
+    expect(await validate('group a')).toBe(CLASH);
+    expect(await validate('GROUP B')).toBeUndefined();
     expect(await validate('Mod A')).toBeUndefined();
   });
 
@@ -1491,12 +1492,12 @@ describe('rename mod refuses in its prompt', () => {
     const validate = await validatorOver(accessHolding(
       [{ kind: 'mod', name: 'Mod A', enabled: true }, { kind: 'mod', name: 'Mod B', enabled: true }, { kind: 'mod', name: 'Listed Only', enabled: true }],
       [{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }, { kind: 'mod', name: 'Folder Only' }]));
-    expect(await validate('Mod A')).toBe(MOD_CLASH);
+    expect(await validate('mod a')).toBe(MOD_CLASH);
     expect(await validate('Folder Only')).toBe(MOD_CLASH);
     expect(await validate('Listed Only')).toBe(MOD_CLASH);
     expect(await validate('a/b')).toBe('A mod name cannot contain / or \\');
     expect(await validate('a\\b')).toBe('A mod name cannot contain / or \\');
-    expect(await validate('Mod B')).toBeUndefined();
+    expect(await validate('mod b')).toBeUndefined();
     expect(await validate('Fresh')).toBeUndefined();
     expect(await validate('')).toBeUndefined();
   });
