@@ -26,12 +26,6 @@ export class FocusedCells<TPanel> {
     if (userFocus) this.entered();
   }
 
-  /** The cell the panel in focus reports; nothing while no panel is. */
-  setActiveCell(cell: FocusedCellContext | undefined): void {
-    const active = this.activePanel();
-    if (active !== undefined) this.setCell(active, cell);
-  }
-
   /** The caller has made a panel the one in focus. */
   panelFocused(): void {
     this.show(this.current());

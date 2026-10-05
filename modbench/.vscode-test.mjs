@@ -17,11 +17,17 @@ const port = await freePort();
 const runDir = mkdtempSync(path.join(tmpdir(), 'modbench-it-'));
 process.on('exit', () => rmSync(runDir, { recursive: true, force: true, maxRetries: 5 }));
 
+// Named by the setting so the instance never falls back to detecting this machine's own install.
+const gameDirectory = path.join(runDir, 'game');
+mkdirSync(path.join(gameDirectory, 'Data'), { recursive: true });
+
 const workspace = (name, fixture) => {
   const folder = path.join(runDir, name);
   if (fixture) cpSync(path.join(import.meta.dirname, fixture), folder, { recursive: true });
   mkdirSync(path.join(folder, '.vscode'), { recursive: true });
-  writeFileSync(path.join(folder, '.vscode', 'settings.json'), JSON.stringify({ 'modbench.attachToBackendPort': port }));
+  writeFileSync(path.join(folder, '.vscode', 'settings.json'), JSON.stringify({
+    'modbench.attachToBackendPort': port, 'modbench.mods.gameDirectory': gameDirectory,
+  }));
   return folder;
 };
 
@@ -34,9 +40,12 @@ const shared = {
   // Installing a dependency downloads a second VS Code into the checkout, and the one dependency,
   // vscode.git, ships with VS Code.
   skipExtensionDependencies: true,
-  launchArgs: ['--user-data-dir', path.join(runDir, 'user-data'), '--extensions-dir', path.join(runDir, 'extensions')],
+  launchArgs: [
+    '--user-data-dir', path.join(runDir, 'user-data'), '--extensions-dir', path.join(runDir, 'extensions'),
+    '--logsPath', path.join(runDir, 'logs'),
+  ],
   // Linux's OS trash lives under XDG_DATA_HOME, and every run trashes folders of the same names.
-  env: { MODBENCH_TEST_PORT: String(port), XDG_DATA_HOME: path.join(runDir, 'data') },
+  env: { MODBENCH_TEST_PORT: String(port), XDG_DATA_HOME: path.join(runDir, 'data'), MODBENCH_TEST_LOGS: path.join(runDir, 'logs') },
   mocha: { timeout: 20000, ui: 'bdd' },
 };
 
