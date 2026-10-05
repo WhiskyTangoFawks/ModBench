@@ -27,6 +27,9 @@ public enum TrackRefusal
     /// <summary>The plugin passed its gate, and the file system refused its source files, or git refused the track's one commit.</summary>
     CommitFailed,
 
+    /// <summary>Every plugin of the mod was refused, each for its own reason, which the message names.</summary>
+    NoPluginTracked,
+
     /// <summary>git is not on PATH, so no repository can be created at all (ADR-0007).</summary>
     GitUnavailable,
 }

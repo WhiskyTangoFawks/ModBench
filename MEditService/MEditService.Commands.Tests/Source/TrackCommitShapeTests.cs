@@ -10,6 +10,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Strings;
 using Noggog.WorkEngine;
 
 namespace MEditService.Commands.Tests.Source;
@@ -111,6 +112,60 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Equal(TrackRefusal.RoundTripFailed, refusedMod.Refusal);
         Assert.Contains("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
         Assert.False(SourceRepository.IsTracked(_modFolder));
+    }
+
+    [Fact]
+    public async Task Track_OfAModWhoseEveryPluginIsRefusedForOneCause_KeepsThatCauseAsTheModsRefusal()
+    {
+        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
+
+        var result = await Track(new RoundTripFailsForEvery("First.esp", "Second.esp"));
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal((ModName, TrackRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
+        Assert.Contains("FirstNpc", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("SecondNpc", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Track_OfAModWhoseEveryPluginIsRefusedForDifferentCauses_RefusesTheModAsNoPluginTracked_NamingEachReason()
+    {
+        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        WriteLocalizedPluginWithoutItsStrings("Second.esp");
+
+        var result = await Track(new RoundTripFailsFor("First.esp"));
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal((ModName, TrackRefusal.NoPluginTracked), (refused.Item, refused.Refusal));
+        Assert.Contains("FirstNpc", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("Second_en.STRINGS", refused.Message, StringComparison.Ordinal);
+        Assert.False(SourceRepository.IsTracked(_modFolder));
+    }
+
+    private sealed class RoundTripFailsForEvery(params string[] plugins) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        public override Task WriteFromTreeAsync(
+            IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>
+            plugins.FirstOrDefault(plugin => files.Any(file => file.RelativePath.StartsWith(PluginSourceRoot.For(plugin), StringComparison.Ordinal))) is { } failing
+                ? new ForgedTreeWriteAdapter(failing, DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, cancel)
+                : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, cancel);
+
+        private static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken cancel)
+        {
+            var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, cancel);
+            deserialized.Npcs.First().EditorID += "Corrupted";
+            return deserialized;
+        }
+    }
+
+    private void WriteLocalizedPluginWithoutItsStrings(string name)
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
+        mod.Doors.AddNew("MainDoor").Name = new TranslatedString(Language.English, "The Big Door");
+        mod.UsingLocalization = true;
+        mod.WriteToBinary(Path.Combine(_modFolder, name));
+        Directory.Delete(Path.Combine(_modFolder, "Strings"), recursive: true);
     }
 
     private sealed class RoundTripFailsFor(string plugin) : DelegatingPluginAdapter(TestAdapters.Mutagen())

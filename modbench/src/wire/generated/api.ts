@@ -963,7 +963,7 @@ export interface components {
             pluginsTotal: number;
         };
         /** @enum {string} */
-        TrackRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyTracked" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "GitUnavailable";
+        TrackRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyTracked" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "NoPluginTracked" | "GitUnavailable";
         TrackRequest: {
             mods: string[];
         };

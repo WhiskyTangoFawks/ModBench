@@ -55,6 +55,4 @@ public sealed class SelectionResult<TItem, TRefusal, TOutcome>
     public IReadOnlyList<ItemRefused<TItem, TRefusal>> Refused { get; }
 
     public SelectionRefusal<TRefusal>? SelectionRefusal { get; }
-
-    public bool AllApplied => Refused.Count == 0 && SelectionRefusal is null;
 }

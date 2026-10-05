@@ -105,9 +105,10 @@ public sealed class TrackHandler
 
         SetProgress(modName, TrackPhase.Committing, total, total);
         var landed = Commit(modFolder, verified, refused);
-        return landed.Count > 0
-            ? ItemAnswer<TrackRefusal, TrackedMod>.Landed(new TrackedMod(landed, refused))
-            : ItemAnswer<TrackRefusal, TrackedMod>.Refused(refused[0].Refusal, string.Join('\n', refused.Select(r => r.Message)));
+        if (landed.Count > 0) return ItemAnswer<TrackRefusal, TrackedMod>.Landed(new TrackedMod(landed, refused));
+
+        var cause = refused.Select(r => r.Refusal).Distinct().ToList() is [var shared] ? shared : TrackRefusal.NoPluginTracked;
+        return ItemAnswer<TrackRefusal, TrackedMod>.Refused(cause, string.Join('\n', refused.Select(r => r.Message)));
     }
 
     // One commit holding the plugins that passed their gate; those the commit failed are refused too.

@@ -6,18 +6,24 @@ namespace MEditService.Commands.Tests.Architecture;
 
 public sealed class CommandHandlerConventionTests
 {
-    private static readonly (Type Handler, string LandedMemberSpelledNotNameof)[] Handlers =
+    private static readonly Type[] SingleWriteHandlers =
     [
-        (typeof(EditRecordHandler), "Applied"),
-        (typeof(DeleteRecordHandler), "AllApplied"),
-        (typeof(CreateRecordHandler), "Applied"),
-        (typeof(TrackHandler), "AllApplied"),
-        (typeof(CompilePluginHandler), "AllApplied"),
-        (typeof(DecompilePluginHandler), "AllApplied"),
-        (typeof(CopyRecordHandler), "AllApplied"),
-        (typeof(CreatePluginHandler), "Applied"),
-        (typeof(PutLoadOrderHandler), "Applied"),
+        typeof(EditRecordHandler),
+        typeof(CreateRecordHandler),
+        typeof(CreatePluginHandler),
+        typeof(PutLoadOrderHandler),
     ];
+
+    private static readonly Type[] SelectionHandlers =
+    [
+        typeof(DeleteRecordHandler),
+        typeof(TrackHandler),
+        typeof(CompilePluginHandler),
+        typeof(DecompilePluginHandler),
+        typeof(CopyRecordHandler),
+    ];
+
+    private static readonly Type[] Handlers = [.. SingleWriteHandlers, .. SelectionHandlers];
 
     private static readonly Type[] Carriers =
     [
@@ -33,10 +39,9 @@ public sealed class CommandHandlerConventionTests
 
     private const string CommandsNamespace = "MEditService.Commands";
 
-    public static IEnumerable<object[]> EveryHandler => Handlers.Select(entry => new object[] { entry.Handler });
+    public static IEnumerable<object[]> EveryHandler => Handlers.Select(handler => new object[] { handler });
 
-    public static IEnumerable<object[]> EveryAnswer =>
-        Handlers.Select(entry => new object[] { entry.Handler, entry.LandedMemberSpelledNotNameof });
+    public static IEnumerable<object[]> EverySingleWrite => SingleWriteHandlers.Select(handler => new object[] { handler });
 
     [Theory]
     [MemberData(nameof(EveryHandler))]
@@ -51,9 +56,10 @@ public sealed class CommandHandlerConventionTests
     }
 
     [Theory]
-    [MemberData(nameof(EveryAnswer))]
-    public void AHandler_AnswersWhetherTheWriteLanded(Type handler, string landed)
+    [MemberData(nameof(EverySingleWrite))]
+    public void ASingleWriteHandler_AnswersWhetherTheWriteLanded(Type handler)
     {
+        const string landed = "Applied";
         var answer = AnswerCarrierUnwrappingTask(DeclaredMethodsNotRequiredByAnInterface(handler).Single().ReturnType);
 
         Assert.True(
@@ -83,7 +89,7 @@ public sealed class CommandHandlerConventionTests
     public void NoInterfaceIsSharedByTwoHandlers()
     {
         var shared = Handlers
-            .SelectMany(entry => entry.Handler.GetInterfaces().Distinct())
+            .SelectMany(handler => handler.GetInterfaces().Distinct())
             .GroupBy(contract => contract)
             .Where(group => group.Count() > 1)
             .Select(group => group.Key.Name);
@@ -99,7 +105,7 @@ public sealed class CommandHandlerConventionTests
             .OrderBy(type => type.Name, StringComparer.Ordinal);
 
         Assert.Equal(
-            Handlers.Select(entry => entry.Handler).Concat(Carriers).OrderBy(type => type.Name, StringComparer.Ordinal),
+            Handlers.Concat(Carriers).OrderBy(type => type.Name, StringComparer.Ordinal),
             found);
     }
 
