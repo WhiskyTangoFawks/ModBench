@@ -29,8 +29,6 @@ export function isMEditGone(status: BackendStatus): status is 'disconnected' | '
  *  success arm. */
 export interface WriteRefused {
   readonly refused: true;
-  /** mEdit never answered, so the write may have landed. */
-  readonly unanswered?: true;
   readonly message: string;
 }
 
@@ -39,10 +37,6 @@ export interface WriteRefused {
  *  the HTTP adapter into a caller's test. */
 export function isRefused(result: unknown): result is WriteRefused {
   return typeof result === 'object' && result !== null && (result as { refused?: unknown }).refused === true;
-}
-
-export function isUnanswered(result: unknown): result is WriteRefused & { unanswered: true } {
-  return isRefused(result) && result.unanswered === true;
 }
 
 const NOTIFICATION_KINDS = [

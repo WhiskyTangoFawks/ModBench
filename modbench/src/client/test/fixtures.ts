@@ -1,5 +1,6 @@
 import type { NotificationEvent } from '../apiClient';
-import type { CompiledPlugin, PluginAddress, PluginMetadata, PluginRecordTypeCount, RecordSummary } from '../index';
+import type { PluginAddress, PluginMetadata, PluginRecordTypeCount, RecordSummary } from '../index';
+import type { CompiledPlugin } from '../MEditClient';
 import type { InMemoryMEditClient } from '../InMemoryMEditClient';
 
 /** A `PluginMetadata` with every required wire member at its neutral value — a test naming only

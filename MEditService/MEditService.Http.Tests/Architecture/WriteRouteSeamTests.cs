@@ -32,7 +32,7 @@ public sealed class WriteRouteSeamTests
         """Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400)""",
         """Results.Problem("At least one destination is required.", statusCode: 400)""",
         """Results.Problem("Every destination needs a name and an origin.", statusCode: 400)""",
-        """Results.Problem("The replace Option applies to a copy as override only.", statusCode: 400)""",
+        """Results.Problem("The replace Option does not apply to a copy as new.", statusCode: 400)""",
         """Results.Problem("Plugin name is required.", statusCode: 400)""",
         """Results.Problem("The folder and the origin are required.", statusCode: 400)""",
         """Results.Problem("Origin is required.", statusCode: 400)""",

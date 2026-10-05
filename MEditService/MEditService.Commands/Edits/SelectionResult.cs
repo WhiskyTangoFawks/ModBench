@@ -2,9 +2,6 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>A record and the plugin holding it (ADR-0012).</summary>
-public readonly record struct RecordAt(PluginAddress Plugin, string FormKey);
-
 // A FormKey's mod name is a filename, so it compares as one.
 internal sealed class SameRecord : IEqualityComparer<RecordAt>
 {
