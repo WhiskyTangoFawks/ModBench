@@ -35,14 +35,13 @@ export class ActiveRecordTracker<TPanel = unknown> {
     this.fire(panel === undefined ? undefined : this.formKeys.get(panel));
   }
 
-  /** The record tab in focus; none while another kind of tab has it or after it closed. */
+  /** The record tab last in focus; none once it closes. */
   activePanel(): TPanel | undefined {
     return this.active;
   }
 
-  /** VS Code has no "the last record tab just closed" event, so firing `undefined` then is this
-   *  class's job. A closing active tab with others open keeps its record: the next tab to gain
-   *  focus retargets, and a non-record tab leaves it. */
+  /** VS Code has no "last record tab closed" event, so firing `undefined` then is this class's job.
+   *  A closing active tab with others open keeps its record until another tab gains focus. */
   removePanel(panel: TPanel): void {
     this.formKeys.delete(panel);
     if (panel === this.active) this.active = undefined;
