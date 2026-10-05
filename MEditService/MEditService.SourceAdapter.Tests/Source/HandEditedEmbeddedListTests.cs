@@ -48,7 +48,7 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
             _modFolder,
             SourcePreset.Edits,
             [
-                new TreeFile(SourceRepository.HeaderDocumentFor(PluginName), HeaderDocument.Write(_mod)),
+                new TreeFile(Path.Combine(SourceRepository.RootFor(PluginName), "RecordData.json"), HeaderDocument.Write(_mod)),
                 new TreeFile(_questPath, _codec.SerializeToBytes(_quest, Release)),
             ]);
     }

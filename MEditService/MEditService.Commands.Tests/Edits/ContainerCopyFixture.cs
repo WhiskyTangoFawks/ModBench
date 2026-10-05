@@ -1,7 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -285,8 +284,16 @@ public sealed class ContainerCopyFixture : IDisposable, ITrackedPlugins
 
     public string ModFolderOf(PluginAddress plugin) => plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder;
 
-    internal CellPlacement? DestinationCellPlacement(string cellFormKey, string? editorId) =>
-        TreeTampering.CellPlacementOf(DestinationModFolder, DestinationPlugin, new RecordIdentity(cellFormKey, "cell", editorId));
+    internal void AssertDestinationCellSitsAt(
+        string cellFormKey, string? editorId, int blockX, int blockY, int subX, int subY)
+    {
+        var repository = TrackedTree.Repository(DestinationModFolder);
+        var cell = new RecordIdentity(cellFormKey, "cell", editorId);
+
+        Assert.Equal(Worldspace.ToString(), repository.WorldspaceOf(DestinationPlugin, cell));
+        var blocks = Path.Combine($"{blockX}, {blockY}", $"{subX}, {subY}") + Path.DirectorySeparatorChar;
+        Assert.Contains(blocks, repository.RelativePathOf(DestinationPlugin, cell), StringComparison.Ordinal);
+    }
 
     private static void AddInteriorCell(Fallout4Mod mod, Cell cell, int blockNumber)
     {

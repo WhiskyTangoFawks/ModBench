@@ -1,6 +1,5 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -11,15 +10,18 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     private static readonly PluginAddress Test = new("Test.esp", "TestMod");
     private static readonly PluginAddress Other = new("Other.esp", "TestMod");
 
-    private static TreeFile[] Files() =>
-    [
-        new("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()),
-        new("plugin-source/Other.esp/npc_/Other.esp/000002.json", "{}"u8.ToArray()),
-    ];
+    private const string OthersTrackedBinary = "TRACKED-FOR-OTHER";
 
     private static SourceRepository TrackedOver(ScratchDirectory modFolder)
     {
-        PluginBaselines.Track(modFolder, SourcePreset.Edits, Files());
+        SourceRepository.Track(
+            modFolder, SourcePreset.Edits,
+            [
+                ([new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
+                    new BaselineTrailers("Test.esp", null, null)),
+                ([new TreeFile("plugin-source/Other.esp/npc_/Other.esp/000002.json", "{}"u8.ToArray())],
+                    new BaselineTrailers("Other.esp", null, OthersTrackedBinary)),
+            ]);
         return SourceRepository.Over(modFolder, GameRelease.Fallout4);
     }
 
@@ -69,7 +71,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
         repository.WriteBinary(Test, "FOR-TEST", () => { });
 
         Assert.Equal(["FOR-TEST"], repository.LastWrittenBinarySha256s(Test));
-        Assert.Empty(repository.LastWrittenBinarySha256s(Other));
+        Assert.Equal([OthersTrackedBinary], repository.LastWrittenBinarySha256s(Other));
     }
 
     [Fact]

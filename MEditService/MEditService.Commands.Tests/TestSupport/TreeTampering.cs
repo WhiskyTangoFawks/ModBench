@@ -1,6 +1,5 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -22,10 +21,6 @@ internal static class TreeTampering
     /// <summary>The block directory holding an exterior cell's sub-block, cell directory and document.</summary>
     internal static string BlockDirectoryOf(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
         FolderOf(FolderOf(DirectoryOf(modFolder, plugin, identity)));
-
-    /// <summary>Where the tree puts a cell: the block levels its document sits in.</summary>
-    internal static CellPlacement? CellPlacementOf(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
-        TrackedTree.Repository(modFolder).CellPlacementOf(plugin, identity);
 
     internal static DateTime LastWrittenAt(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
         File.GetLastWriteTimeUtc(FileOf(modFolder, plugin, identity));

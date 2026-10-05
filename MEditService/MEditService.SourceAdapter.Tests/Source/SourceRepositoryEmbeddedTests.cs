@@ -184,12 +184,12 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     private RecordIdentity? IdentityOf(IMajorRecordGetter record) =>
-        Repository.IdentityOf(
+        Repository.Get(
             Plugin, record.FormKey.ToString(),
-            SharedSchemaReflector.Instance.GetSchemas(Release));
+            SharedSchemaReflector.Instance.GetSchemas(Release))?.Identity;
 
     [Fact]
-    public void IdentityOf_APlacedReferenceInsideItsCell_NamesItsTypeAndEditorId_FromTheTypeWrittenIntoItsOwnTextForItsSlotHoldsAnAbstractElementType()
+    public void Get_APlacedReferenceInsideItsCell_NamesItsTypeAndEditorId_FromTheTypeWrittenIntoItsOwnTextForItsSlotHoldsAnAbstractElementType()
     {
         Assert.Equal(
             new RecordIdentity(_persistentRef.FormKey.ToString(), "refr", "PersistRef"),
@@ -197,7 +197,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void IdentityOf_AResponseInsideAQuestsTopic_NamesTheTypeItsSlotHolds_ForAConcreteSlotLeavesNoTypeInTheDocument()
+    public void Get_AResponseInsideAQuestsTopic_NamesTheTypeItsSlotHolds_ForAConcreteSlotLeavesNoTypeInTheDocument()
     {
         Assert.Equal(
             new RecordIdentity(_response.FormKey.ToString(), "info", "Response"),
@@ -205,7 +205,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void IdentityOf_ATopicInsideItsQuest_NamesTheTypeItsSlotHolds()
+    public void Get_ATopicInsideItsQuest_NamesTheTypeItsSlotHolds()
     {
         Assert.Equal(
             new RecordIdentity(_topic.FormKey.ToString(), "dial", "Topic"),
@@ -213,7 +213,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void IdentityOf_AReferenceTwoEmbedLevelsDown_NamesItThroughTheWorldspacesTopCell()
+    public void Get_AReferenceTwoEmbedLevelsDown_NamesItThroughTheWorldspacesTopCell()
     {
         Assert.Equal(
             new RecordIdentity(_topCellRef.FormKey.ToString(), "refr", "TopCellRef"),
@@ -333,9 +333,9 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         transaction.Rekey(Repository, Plugin, Identity(_worldspace, "wrld"), FreeFormKey, Schemas, Rekeying);
 
-        var child = Repository.UnitHolding(Plugin, Identity(_exteriorCell, "cell"));
-        Assert.Contains("000F00_Embedded.esp", child?.RelativePath, StringComparison.Ordinal);
-        Assert.Null(Repository.UnitHolding(Plugin, Identity(_worldspace, "wrld")));
+        var child = Repository.RelativePathOf(Plugin, Identity(_exteriorCell, "cell"));
+        Assert.Contains("000F00_Embedded.esp", child, StringComparison.Ordinal);
+        Assert.Null(Repository.RelativePathOf(Plugin, Identity(_worldspace, "wrld")));
         Assert.Empty(transaction.Rollback());
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
@@ -406,24 +406,24 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Equal(_temporaryRef.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(found.Body));
         Assert.Equal(
             Path.GetRelativePath(_modFolder, FullPath(ExteriorCellPath)),
-            repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr"))?.RelativePath);
+            repository.RelativePathOf(Plugin, Identity(_temporaryRef, "refr")));
     }
 
     [Fact]
-    public void UnitHolding_AChildMovedTwiceWithinOneOperation_IsAbsentNeverTheOwnerThatLostIt()
+    public void RelativePathOf_AChildMovedTwiceWithinOneOperation_IsAbsentNeverTheOwnerThatLostIt()
     {
         var repository = Repository;
-        Assert.NotNull(repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
+        Assert.NotNull(repository.RelativePathOf(Plugin, Identity(_temporaryRef, "refr")));
         MoveTemporaryRef(_interiorCell, _exteriorCell);
-        Assert.NotNull(repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
+        Assert.NotNull(repository.RelativePathOf(Plugin, Identity(_temporaryRef, "refr")));
 
         MoveTemporaryRef(_exteriorCell, _interiorCell);
 
-        Assert.Null(repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
+        Assert.Null(repository.RelativePathOf(Plugin, Identity(_temporaryRef, "refr")));
     }
 
     [Fact]
-    public void UnitHolding_ForAChildInsideADocumentOfAPathAmbiguousGroup_FindsThatDocument_ThoughGlobalsMapsToFourTypesSoOnlyTheDocumentNamesItsOwn()
+    public void RelativePathOf_ForAChildInsideADocumentOfAPathAmbiguousGroup_FindsThatDocument_ThoughGlobalsMapsToFourTypesSoOnlyTheDocumentNamesItsOwn()
     {
         var folder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat")
             ?? throw new InvalidOperationException("Expected 'globalfloat' to resolve to a group folder.");
@@ -434,11 +434,10 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
             "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Embedded.esp\",\n" +
             "  \"Temporary\": [ { \"FormKey\": \"00A001:Embedded.esp\" } ]\n}");
 
-        var unit = Repository.UnitHolding(Plugin, new RecordIdentity("00A001:Embedded.esp", "refr", null));
+        var child = new RecordIdentity("00A001:Embedded.esp", "refr", null);
 
-        Assert.NotNull(unit);
-        Assert.Equal(Path.GetRelativePath(_modFolder, carrier), unit.RelativePath);
-        Assert.True(unit.IsEmbedded);
+        Assert.Equal(Path.GetRelativePath(_modFolder, carrier), Repository.RelativePathOf(Plugin, child));
+        Assert.Equal("00A000:Embedded.esp", Repository.ContainerDocument(Plugin, child, Schemas)?.FormKey);
     }
 
     [Fact]
@@ -488,7 +487,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void UnitHolding_ForAKeyADocumentNamesOutsideEveryEmbedSlot_FindsNoOwner_ForAFormKeyAnywhereElseIsAReferenceNotAChild()
+    public void RelativePathOf_ForAKeyADocumentNamesOutsideEveryEmbedSlot_FindsNoOwner_ForAFormKeyAnywhereElseIsAReferenceNotAChild()
     {
         var quest = File.ReadAllText(FullPath(QuestPath));
         File.WriteAllText(
@@ -497,7 +496,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         var identity = new RecordIdentity("00A001:Embedded.esp", "refr", "Absent");
 
-        Assert.Null(Repository.UnitHolding(Plugin, identity));
+        Assert.Null(Repository.RelativePathOf(Plugin, identity));
         Assert.Equal(SourceRemoval.NoDocumentHoldsIt, Repository.Remove(Plugin, identity));
     }
 
@@ -541,19 +540,19 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void UnitHolding_OfAChildAnotherToolMovedBetweenTwoOperations_IsItsNewOwner()
+    public void RelativePathOf_OfAChildAnotherToolMovedBetweenTwoOperations_IsItsNewOwner()
     {
-        Assert.NotNull(Repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
+        Assert.NotNull(Repository.RelativePathOf(Plugin, Identity(_temporaryRef, "refr")));
 
         MoveTemporaryRef(_interiorCell, _exteriorCell);
 
         Assert.Equal(
             Path.GetRelativePath(_modFolder, FullPath(ExteriorCellPath)),
-            Repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr"))?.RelativePath);
+            Repository.RelativePathOf(Plugin, Identity(_temporaryRef, "refr")));
     }
 
     [Fact]
-    public void IdentityOf_AChildAnotherToolDeletedBetweenTwoOperations_IsNothing()
+    public void Get_AChildAnotherToolDeletedBetweenTwoOperations_IsNothing()
     {
         Assert.NotNull(IdentityOf(_temporaryRef));
 
@@ -564,7 +563,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void IdentityOf_AChildInADocumentAnotherToolAddedBetweenTwoOperations_NamesIt()
+    public void Get_AChildInADocumentAnotherToolAddedBetweenTwoOperations_NamesIt()
     {
         var added = new PlacedObject(_mod) { EditorID = "AddedRef", Position = new P3Float(1f, 1f, 1f), Scale = 1f };
         Assert.Null(IdentityOf(added));
@@ -579,18 +578,18 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void UnitHolding_OfAChildWhoseOwnerAnotherToolRenamedBetweenTwoOperations_IsTheRenamedDocument()
+    public void RelativePathOf_OfAChildWhoseOwnerAnotherToolRenamedBetweenTwoOperations_IsTheRenamedDocument()
     {
-        Assert.NotNull(Repository.UnitHolding(Plugin, Identity(_response, "info")));
+        Assert.NotNull(Repository.RelativePathOf(Plugin, Identity(_response, "info")));
 
         var renamed = Path.Combine(Root, "Quests", "Renamed by hand.json");
         File.Move(FullPath(QuestPath), FullPath(renamed));
 
-        Assert.Equal(renamed, Repository.UnitHolding(Plugin, Identity(_response, "info"))?.RelativePath);
+        Assert.Equal(renamed, Repository.RelativePathOf(Plugin, Identity(_response, "info")));
     }
 
     [Fact]
-    public void IdentityOf_AChildAnotherToolRewroteUnderAnotherEditorIdBetweenTwoOperations_NamesTheNewEditorId()
+    public void Get_AChildAnotherToolRewroteUnderAnotherEditorIdBetweenTwoOperations_NamesTheNewEditorId()
     {
         Assert.Equal("TempRef", IdentityOf(_temporaryRef)?.EditorId);
 
@@ -601,7 +600,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void IdentityOf_AChildWhoseOwnerAnotherToolDeletedBetweenTwoOperations_IsNothing()
+    public void Get_AChildWhoseOwnerAnotherToolDeletedBetweenTwoOperations_IsNothing()
     {
         Assert.NotNull(IdentityOf(_response));
 
@@ -611,9 +610,9 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void UnitHolding_OfAChildWhoseOwnerAnotherToolMovedToAnotherFolderBetweenTwoOperations_IsTheMovedDocument()
+    public void RelativePathOf_OfAChildWhoseOwnerAnotherToolMovedToAnotherFolderBetweenTwoOperations_IsTheMovedDocument()
     {
-        Assert.NotNull(Repository.UnitHolding(Plugin, Identity(_persistentRef, "refr")));
+        Assert.NotNull(Repository.RelativePathOf(Plugin, Identity(_persistentRef, "refr")));
 
         var moved = Path.Combine(Root, "Cells", "1", "1", Leaf(_interiorCell));
         Directory.CreateDirectory(Path.GetDirectoryName(FullPath(moved)) ?? throw new InvalidOperationException($"Expected '{moved}' to have a parent directory."));
@@ -621,22 +620,22 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         Assert.Equal(
             Path.Combine(moved, "RecordData.json"),
-            Repository.UnitHolding(Plugin, Identity(_persistentRef, "refr"))?.RelativePath);
+            Repository.RelativePathOf(Plugin, Identity(_persistentRef, "refr")));
     }
 
     [Fact]
-    public void UnitHolding_OfAChildAnotherToolCopiedIntoASecondOwnerBetweenTwoOperations_IsRefusedAsAmbiguous()
+    public void RelativePathOf_OfAChildAnotherToolCopiedIntoASecondOwnerBetweenTwoOperations_IsRefusedAsAmbiguous()
     {
-        Assert.NotNull(Repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
+        Assert.NotNull(Repository.RelativePathOf(Plugin, Identity(_temporaryRef, "refr")));
 
         _exteriorCell.Temporary.Add(_temporaryRef);
         File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
 
-        Assert.Throws<AmbiguousSourceUnitException>(() => Repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
+        Assert.Throws<AmbiguousSourceUnitException>(() => Repository.RelativePathOf(Plugin, Identity(_temporaryRef, "refr")));
     }
 
     [Fact]
-    public void UnitHolding_OfAChildWhoseFormKeyAnotherToolWroteThroughAJsonEscape_IsItsOwner()
+    public void RelativePathOf_OfAChildWhoseFormKeyAnotherToolWroteThroughAJsonEscape_IsItsOwner()
     {
         var formKey = _temporaryRef.FormKey.ToString();
         var escaped = $"\"{formKey.Replace(":", "\\u003A", StringComparison.Ordinal)}\"";
@@ -646,17 +645,17 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains(escaped, File.ReadAllText(FullPath(InteriorCellPath)), StringComparison.Ordinal);
         Assert.Equal(
             Path.GetRelativePath(_modFolder, FullPath(InteriorCellPath)),
-            Repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr"))?.RelativePath);
+            Repository.RelativePathOf(Plugin, Identity(_temporaryRef, "refr")));
     }
 
     [Fact]
-    public void IdentityOf_EveryEmbeddedChildAskedInOneOperation_NamesEachOne()
+    public void Get_EveryEmbeddedChildAskedInOneOperation_NamesEachOne()
     {
         var repository = Repository;
         var schemas = SharedSchemaReflector.Instance.GetSchemas(Release);
         IMajorRecordGetter[] children = [_persistentRef, _temporaryRef, _topCellRef, _exteriorRef, _topic, _response, _response2];
 
-        var named = children.Select(child => repository.IdentityOf(Plugin, child.FormKey.ToString(), schemas)?.EditorId);
+        var named = children.Select(child => repository.Get(Plugin, child.FormKey.ToString(), schemas)?.EditorId);
 
         Assert.Equal(children.Select(child => child.EditorID), named);
     }

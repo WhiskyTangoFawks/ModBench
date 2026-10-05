@@ -21,7 +21,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     [Fact]
     public void ReplaceSourceFrom_LeavesExactlyTheNewFiles_AndParksTheBinaryAlone()
     {
-        Repository.ReplaceSourceFrom(Plugin, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha);
+        Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha);
 
         Assert.Equal(["npc_/A.esp/000002.json"], FilesUnderRoot());
         Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address));
@@ -36,7 +36,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         TreeFile[] secondFileNeedsADirectoryTheFirstOccupies = [File("npc_", "{}"), File("npc_/A.esp/000002.json", "{}")];
 
         Assert.ThrowsAny<IOException>(() => Repository.ReplaceSourceFrom(
-            Plugin, secondFileNeedsADirectoryTheFirstOccupies, Sha));
+            Address, secondFileNeedsADirectoryTheFirstOccupies, Sha));
 
         Assert.Equal(["npc_/A.esp/000001.json"], FilesUnderRoot());
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
@@ -46,7 +46,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     [Fact]
     public void ReplaceSourceFrom_ParksASnapshotOfWhatTheWorkingTreeHoldsNow_UntrackedSourceIncluded_NamedForDecompile()
     {
-        Repository.ReplaceSourceFrom(Plugin, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha);
+        Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha);
 
         var parked = LastWriteRecord.RefOfTheOnlyPlugin(_modFolder);
         Assert.Equal(
@@ -63,7 +63,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Git("checkout", "-q", "--orphan", "unborn");
 
         Assert.ThrowsAny<InvalidOperationException>(() => Repository.ReplaceSourceFrom(
-            Plugin, [File("npc_/A.esp/000002.json", "{}")], Sha));
+            Address, [File("npc_/A.esp/000002.json", "{}")], Sha));
 
         Assert.Equal(["npc_/A.esp/000001.json"], FilesUnderRoot());
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
@@ -77,7 +77,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Directory.Delete(_modFolder, recursive: true);
 
         var refused = Assert.Throws<InvalidOperationException>(() => repository.ReplaceSourceFrom(
-            Plugin, [File("npc_/A.esp/000002.json", "{}")], Sha));
+            Address, [File("npc_/A.esp/000002.json", "{}")], Sha));
 
         Assert.Contains("holds no repository", refused.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(_modFolder));
@@ -131,7 +131,7 @@ public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
         try
         {
             Assert.Throws<System.ComponentModel.Win32Exception>(() => repository.ReplaceSourceFrom(
-                "A.esp", [new TreeFile("plugin-source/A.esp/npc_/A.esp/000002.json", "{}"u8.ToArray())], "ABCDEF0123"));
+                new PluginAddress("A.esp", "TestMod"), [new TreeFile("plugin-source/A.esp/npc_/A.esp/000002.json", "{}"u8.ToArray())], "ABCDEF0123"));
         }
         finally
         {

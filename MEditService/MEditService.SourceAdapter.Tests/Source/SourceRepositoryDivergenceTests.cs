@@ -24,7 +24,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         PluginBaselines.Track(
             _modFolder,
             SourcePreset.Edits,
-            [new TreeFile(SourceRepository.HeaderDocumentFor(PluginName), "{\"MasterReferences\": []}"u8.ToArray())]);
+            [new TreeFile(Path.Combine(SourceRepository.RootFor(PluginName), "RecordData.json"), "{\"MasterReferences\": []}"u8.ToArray())]);
         Repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody));
     }
 
@@ -34,7 +34,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         SourceRepository.Open(_modFolder, GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
-    private static string HeaderPath => SourceRepository.HeaderDocumentFor(PluginName);
+    private static string HeaderPath => Path.Combine(SourceRepository.RootFor(PluginName), "RecordData.json");
 
     private static string ExtraPath => SourceRepository.PristineFilesOf(PluginName, [Extra]).Single().RelativePath;
 

@@ -176,7 +176,7 @@ public sealed class DeleteRecordHandlerTests
         TreeTampering.DirectoryOf(mod.ModFolder, mod.Plugin, IdentityCarrying(mod, text));
 
     private static List<SourceDocument> DocumentsCarrying(SourceModFixture mod, string text) =>
-        [.. SourceRepository.Over(mod.ModFolder, GameRelease.Fallout4).ReadAll(mod.Plugin)
+        [.. TreeDocuments.Of(SourceRepository.Over(mod.ModFolder, GameRelease.Fallout4), mod.Plugin)
             .Where(document => document.Body.Contains(text, StringComparison.Ordinal))];
 
     [Fact]

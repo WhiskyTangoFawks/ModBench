@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceAdapter;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -41,7 +40,7 @@ public sealed class UntrackedReadOnlyTests
 
         mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        Assert.Empty(SourceRepository.Over(mod.ModFolder, GameRelease.Fallout4).ReadAll(mod.Plugin));
+        Assert.False(SourceRepository.HoldsTreeFor(mod.ModFolder, mod.Plugin.Name));
     }
 
     [Fact]

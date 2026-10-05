@@ -1,6 +1,5 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -68,12 +67,9 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        Assert.Equal(
-            new CellPlacement(
-                _fixture.Worldspace.ToString(),
-                ContainerCopyFixture.OtherBlockX, ContainerCopyFixture.OtherBlockY,
-                ContainerCopyFixture.OtherSubX, ContainerCopyFixture.OtherSubY, IsInterior: false),
-            _fixture.DestinationCellPlacement(_fixture.OtherBlockCell.ToString(), editorId: null));
+        _fixture.AssertDestinationCellSitsAt(
+            _fixture.OtherBlockCell.ToString(), editorId: null,
+            ContainerCopyFixture.OtherBlockX, ContainerCopyFixture.OtherBlockY, ContainerCopyFixture.OtherSubX, ContainerCopyFixture.OtherSubY);
 
         var compiled = await ImportCompiled();
         var worldspace = compiled.Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace);
@@ -101,12 +97,9 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        Assert.Equal(
-            new CellPlacement(
-                _fixture.Worldspace.ToString(),
-                ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY,
-                ContainerCopyFixture.SameBlockOtherSubX, ContainerCopyFixture.SameBlockOtherSubY, IsInterior: false),
-            _fixture.DestinationCellPlacement(_fixture.SameBlockCell.ToString(), editorId: null));
+        _fixture.AssertDestinationCellSitsAt(
+            _fixture.SameBlockCell.ToString(), editorId: null,
+            ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY, ContainerCopyFixture.SameBlockOtherSubX, ContainerCopyFixture.SameBlockOtherSubY);
 
         var compiled = await ImportCompiled();
         var block = compiled.Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace)

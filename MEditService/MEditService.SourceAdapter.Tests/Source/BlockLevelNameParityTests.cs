@@ -13,10 +13,11 @@ public sealed class BlockLevelNameParityTests
     private const string Plugin = "Destination.esp";
     private const string WorldspaceFormKey = "000801:Source.esm";
     private const string CellFormKey = "000802:Source.esm";
-    private const short BlockX = 3;
-    private const short BlockY = -2;
-    private const short SubX = 0;
-    private const short SubY = -1;
+    private const short BlockX = 0;
+    private const short BlockY = -1;
+    private const short SubX = 1;
+    private const short SubY = -2;
+    private const string GridOfThatSubBlock = "9, -9";
 
     [Fact]
     public async Task TheDirectoriesTheWholeModSerializerWrites_AreNamedAsAPutPlacesThem()
@@ -55,10 +56,10 @@ public sealed class BlockLevelNameParityTests
         var repository = SourceRepository.Over(modFolder, Release);
 
         repository.Put(key, new SourceDocument(WorldspaceFormKey, "wrld", null, Body(WorldspaceFormKey)));
-        repository.Put(
+        repository.PutInWorldspace(
             key,
-            new SourceDocument(CellFormKey, "cell", null, Body(CellFormKey)),
-            new CellPlacement(WorldspaceFormKey, BlockX, BlockY, SubX, SubY, IsInterior: false));
+            new SourceDocument(CellFormKey, "cell", null, GridBody(CellFormKey)),
+            WorldspaceFormKey);
 
         return Directory
             .EnumerateDirectories(Path.Combine(SourceRepository.RootIn(modFolder, Plugin), "Worldspaces"))
@@ -66,6 +67,9 @@ public sealed class BlockLevelNameParityTests
     }
 
     private static string Body(string formKey) => $"{{\n  \"FormKey\": \"{formKey}\"\n}}";
+
+    private static string GridBody(string formKey) =>
+        $"{{\n  \"FormKey\": \"{formKey}\",\n  \"Grid\": {{\n    \"Point\": \"{GridOfThatSubBlock}\"\n  }}\n}}";
 
     private static Fallout4Mod OneExteriorCell()
     {

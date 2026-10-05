@@ -27,12 +27,14 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         var formKey = child.FormKey;
         var ownFields = child with { Body = ContainerDocumentEdits.WithoutChildren(codec, child.Body, release, child.RecordType) };
 
+        // Held only at the last commit has no document to replace, so no replacement is asked for.
+        if (destination.Repository.HeldOnlyAtLastCommit(destination.Plugin, formKey))
+            return RefuseHeldOnlyAtLastCommit(formKey, destination.Plugin);
+
         if (destination.Repository.FormKeysUsed(destination.Plugin).Contains(formKey))
         {
-            // Held only at Head has no document to replace, so no replacement is asked for.
-            if (Identity(destination, formKey, release) is not { } existing)
-                return RefuseHeldOnlyAtHead(formKey, destination.Plugin);
             if (!replace) return RefuseHeldWithoutReplace(formKey, destination.Plugin);
+            var existing = Identity(destination, formKey, release) ?? throw NoDocumentCarries(destination.Plugin, formKey);
 
             // Replaced in place, never duplicated.
             return ReplaceEmbeddedChildInPlace(source.Plugin, existing, ownFields, destination, release);
@@ -177,8 +179,8 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         CopySource source, string worldspaceFormKey, SourceDocument cell, Destination destination, GameRelease release)
     {
         var cellFormKey = cell.FormKey;
-        if (destination.Repository.FormKeysUsed(destination.Plugin).Contains(cellFormKey))
-            return RefuseHeldOnlyAtHead(cellFormKey, destination.Plugin);
+        if (destination.Repository.HeldOnlyAtLastCommit(destination.Plugin, cellFormKey))
+            return RefuseHeldOnlyAtLastCommit(cellFormKey, destination.Plugin);
 
         if (Identity(destination, worldspaceFormKey, release) is null)
         {
@@ -229,15 +231,15 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
             $"{destination.Name} ({destination.Origin}) already holds {formKey}. Copy it again and confirm " +
             "the replacement to copy over it.");
 
-    internal static RecordEditResult RefuseHeldOnlyAtHead(string formKey, PluginAddress destination) =>
+    internal static RecordEditResult RefuseHeldOnlyAtLastCommit(string formKey, PluginAddress destination) =>
         RecordEditResult.Refused(
             RecordEditRefusal.FormKeyCollision,
-            $"{destination.Name} ({destination.Origin}) holds {formKey} at HEAD, and its working tree deletes " +
+            $"{destination.Name} ({destination.Origin}) holds {formKey} at the last commit, and its working tree deletes " +
             "it. Commit or discard that deletion in Source Control, then copy it again.");
 
     // The destination's own tree named this FormKey, so a document ought to carry it; only a
     // concurrent external edit to the tree closes that gap.
-    private static InvalidOperationException NoDocumentCarries(PluginAddress plugin, string formKey) =>
+    internal static InvalidOperationException NoDocumentCarries(PluginAddress plugin, string formKey) =>
         new($"{plugin.Name} holds {formKey}, but no document in its source tree carries it.");
 
     // Bare fields, no EditorID is xEdit parity (AddIfMissingInternal's Assign() runs only under

@@ -28,10 +28,10 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
             foreach (var mod in mods)
             {
                 var origin = mod.First().Origin;
-                if (SourceRepository.IsTracked(mod.Key))
+                if (SourceRepository.Open(mod.Key, snapshot.GameRelease) is { } repository)
                 {
                     tracked.Add(mod.Key);
-                    Tell(origin, SourceRepository.Over(mod.Key, snapshot.GameRelease), [.. mod]);
+                    Tell(origin, repository, [.. mod]);
                 }
                 else if (_trackedAtLastCheck.Contains(mod.Key))
                 {
@@ -44,7 +44,7 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
 
     private void Tell(string origin, SourceRepository repository, IReadOnlyList<RegisteredPlugin> plugins)
     {
-        var tracked = plugins.ToLookup(plugin => SourceRepository.HoldsTreeFor(repository.ModFolder, plugin.Name));
+        var tracked = plugins.ToLookup(plugin => repository.HoldsTreeFor(plugin.Key));
         notifications.Publish(new ExternalChangeNotification(origin, [.. tracked[true]
             .Select(plugin => (plugin.Key, Observed: hashes.Of(plugin.Path)))
             .Where(plugin => !MatchesLastWrite(repository, plugin.Key, plugin.Observed))

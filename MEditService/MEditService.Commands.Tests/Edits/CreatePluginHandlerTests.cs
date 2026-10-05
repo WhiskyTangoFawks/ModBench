@@ -79,7 +79,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         Assert.True(result.Applied);
         Assert.Equal(firstBefore, TrackedTree.Records(folder, first));
-        Assert.Empty(SourceRepository.Open(folder, GameRelease.Fallout4).Require().ReadAll(new PluginAddress("Second.esp", "TrackedMod")));
+        Assert.False(SourceRepository.HoldsTreeFor(folder, "Second.esp"));
     }
 
     [Fact]

@@ -100,17 +100,19 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     private const string WorldspaceFormKey = FormKey;
     private const string CellFormKey = "000801:Vendor.esp";
 
-    private static readonly CellPlacement Somewhere =
-        new(WorldspaceFormKey, BlockX: 3, BlockY: -2, SubX: 0, SubY: -1, IsInterior: false);
+    private const string Somewhere = "9, -9";
 
     private IReadOnlyList<string> TreeAfterPuttingExteriorCell(
-        CellPlacement placement, string? editorId = "SomeCell", string formKey = CellFormKey)
+        string grid, string? editorId = "SomeCell", string formKey = CellFormKey)
     {
-        RepositoryOverATreeWithNoGit
-            .Put(Key, new SourceDocument(formKey, "cell", editorId, Body(formKey, editorId)), placement);
+        RepositoryOverATreeWithNoGit.PutInWorldspace(
+            Key, new SourceDocument(formKey, "cell", editorId, GridBody(formKey, editorId, grid)), WorldspaceFormKey);
 
         return Documents();
     }
+
+    private static string GridBody(string formKey, string? editorId, string grid) =>
+        $"{{\n  \"FormKey\": \"{formKey}\",\n  \"EditorID\": \"{editorId}\",\n  \"Grid\": {{\n    \"Point\": \"{grid}\"\n  }}\n}}";
 
     private string Text(string relativePath) => File.ReadAllText(Path.Combine(_modFolder, relativePath));
 
@@ -124,39 +126,38 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
             new[]
             {
                 Path.Combine(worldspace, "RecordData.json"),
-                Path.Combine(worldspace, "3, -2", "GroupRecordData.json"),
-                Path.Combine(worldspace, "3, -2", "0, -1", "GroupRecordData.json"),
-                Path.Combine(worldspace, "3, -2", "0, -1", "SomeCell - 000801_Vendor.esp", "RecordData.json"),
+                Path.Combine(worldspace, "0, -1", "GroupRecordData.json"),
+                Path.Combine(worldspace, "0, -1", "1, -2", "GroupRecordData.json"),
+                Path.Combine(worldspace, "0, -1", "1, -2", "SomeCell - 000801_Vendor.esp", "RecordData.json"),
             }.Order(StringComparer.Ordinal),
             TreeAfterPuttingExteriorCell(Somewhere));
     }
 
     [Fact]
-    public void AMintedBlockLevel_CarriesThePlacementsOwnNumbers()
+    public void AMintedBlockLevel_CarriesTheNumbersTheGridPlacesItAt()
     {
         TreeAfterPutting("wrld", "SomeWorld");
         TreeAfterPuttingExteriorCell(Somewhere);
         var worldspace = SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp");
 
         Assert.Equal(
-            "{\n  \"BlockNumberY\": -2,\n  \"BlockNumberX\": 3\n}",
-            Text(Path.Combine(worldspace, "3, -2", "GroupRecordData.json")));
-        Assert.Equal(
             "{\n  \"BlockNumberY\": -1\n}",
-            Text(Path.Combine(worldspace, "3, -2", "0, -1", "GroupRecordData.json")));
+            Text(Path.Combine(worldspace, "0, -1", "GroupRecordData.json")));
+        Assert.Equal(
+            "{\n  \"BlockNumberY\": -2,\n  \"BlockNumberX\": 1\n}",
+            Text(Path.Combine(worldspace, "0, -1", "1, -2", "GroupRecordData.json")));
     }
 
     [Fact]
-    public void AnExteriorCellsBlockLevels_AreNamedFromThePlacementsOwnNumbers_NotDerived()
+    public void AnExteriorCellsBlockLevels_AreNamedFromItsGrid_ASubBlockEightCellsASideAndABlockFourSubBlocks()
     {
         TreeAfterPutting("wrld", "SomeWorld");
 
         Assert.Contains(
             SpelledOutPathUnder(
-                "Worldspaces", "SomeWorld - 000800_Vendor.esp", "-7, 11", "4, -3",
+                "Worldspaces", "SomeWorld - 000800_Vendor.esp", "1, -1", "4, -3",
                 "SomeCell - 000801_Vendor.esp", "RecordData.json"),
-            TreeAfterPuttingExteriorCell(
-                new CellPlacement(WorldspaceFormKey, BlockX: -7, BlockY: 11, SubX: 4, SubY: -3, IsInterior: false)));
+            TreeAfterPuttingExteriorCell("33, -20"));
     }
 
     [Fact]
@@ -164,10 +165,10 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     {
         TreeAfterPutting("wrld", "SomeWorld");
         var worldspace = SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp");
-        var standing = Path.Combine(worldspace, "3, -2", "GroupRecordData.json");
-        const string HandWritten = "{\n  \"BlockNumberY\": -2,\n  \"BlockNumberX\": 3,\n  \"Timestamp\": 7\n}";
+        var standing = Path.Combine(worldspace, "0, -1", "GroupRecordData.json");
+        const string HandWritten = "{\n  \"BlockNumberY\": -1,\n  \"Timestamp\": 7\n}";
 
-        Directory.CreateDirectory(Path.Combine(_modFolder, worldspace, "3, -2"));
+        Directory.CreateDirectory(Path.Combine(_modFolder, worldspace, "0, -1"));
         File.WriteAllText(Path.Combine(_modFolder, standing), HandWritten);
 
         TreeAfterPuttingExteriorCell(Somewhere);
@@ -188,9 +189,9 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
         Assert.Equal(before, Text(Path.Combine(worldspace, "RecordData.json")));
         Assert.Single(Directory.EnumerateDirectories(Path.Combine(_modFolder, SpelledOutPathUnder("Worldspaces"))));
         Assert.Contains(
-            Path.Combine(worldspace, "3, -2", "0, -1", "OtherCell - 000802_Vendor.esp", "RecordData.json"), tree);
+            Path.Combine(worldspace, "0, -1", "1, -2", "OtherCell - 000802_Vendor.esp", "RecordData.json"), tree);
         Assert.Contains(
-            Path.Combine(worldspace, "3, -2", "0, -1", "SomeCell - 000801_Vendor.esp", "RecordData.json"), tree);
+            Path.Combine(worldspace, "0, -1", "1, -2", "SomeCell - 000801_Vendor.esp", "RecordData.json"), tree);
     }
 
     [Fact]

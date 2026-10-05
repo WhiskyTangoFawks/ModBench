@@ -2,6 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceAdapter;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -55,7 +56,7 @@ public sealed class FormIdEditRollbackTests
         var cellIdentity = new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId);
         var cellFile = TreeTampering.FileOf(mod.ModFolder, mod.Plugin, cellIdentity);
         var impostorFile = TreeTampering.DuplicateInSiblingDirectory(mod.ModFolder, mod.Plugin, cellIdentity);
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+        var before = TreeSnapshot.Of(mod.ModFolder);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, placed.ToString(), $"000F00:{pluginName}");
 
@@ -63,7 +64,7 @@ public sealed class FormIdEditRollbackTests
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, result.Refusal);
         Assert.Contains(Path.GetRelativePath(mod.ModFolder, cellFile), result.Message, StringComparison.Ordinal);
         Assert.Contains(Path.GetRelativePath(mod.ModFolder, impostorFile), result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+        Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
     }
 
     [Fact]

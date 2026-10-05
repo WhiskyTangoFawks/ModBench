@@ -169,5 +169,5 @@ public sealed class TrackCommitShapeTests : IDisposable
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
     private IReadOnlyList<SourceDocument> HeldBy(string plugin) =>
-        SourceRepository.Over(_modFolder, GameRelease.Fallout4).ReadAll(Key(plugin));
+        TreeDocuments.Of(SourceRepository.Over(_modFolder, GameRelease.Fallout4), Key(plugin));
 }

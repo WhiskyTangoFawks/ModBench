@@ -36,7 +36,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
     [Fact]
     public void AnUncommittedHeaderDocument_IsHeld_ThoughNoRefButTheWorkingTreeCarriesIt()
     {
-        var headerPath = SourceRepository.HeaderDocumentFor(PluginName);
+        var headerPath = Path.Combine(SourceRepository.RootFor(PluginName), "RecordData.json");
         var repository = Tracked(new TreeFile(headerPath, "{\"MasterReferences\": []}"u8.ToArray()));
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));
 

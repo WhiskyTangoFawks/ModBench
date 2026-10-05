@@ -3,6 +3,7 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -150,7 +151,9 @@ public sealed class EditRecordHandlerTests : IDisposable
         Assert.Equal(unreadableBefore, Unreadable());
     }
 
-    private string? Unreadable() => _mod.Repository.Require().UnreadableDocumentFor(_mod.Plugin, _mod.Npc.ToString());
+    private string Unreadable() => Assert.Throws<UnreadableSourceDocumentException>(
+        () => _mod.Repository.Require().Get(
+            _mod.Plugin, _mod.Npc.ToString(), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4))).Message;
 
     [Fact]
     public void EditEditorId_OfADocumentThatIsNotJson_RefusesAsUnreadable_AndRenamesNothing()

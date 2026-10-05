@@ -57,7 +57,7 @@ public sealed class CopyAsOverrideTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void CopyRecordAsOverride_Refuses_WhenTheDestinationHoldsTheFormKeyAtHeadOnly_WithOrWithoutReplace(bool replace)
+    public void CopyRecordAsOverride_Refuses_WhenTheDestinationHoldsTheFormKeyAtTheLastCommitOnly_WithOrWithoutReplace(bool replace)
     {
         using var mod = CopyFixture.Create();
         Assert.True(mod.CopyHandler.CopyAsOverride(
@@ -70,7 +70,7 @@ public sealed class CopyAsOverrideTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
-        Assert.Contains("HEAD", result.Message, StringComparison.Ordinal);
+        Assert.Contains("the last commit", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]

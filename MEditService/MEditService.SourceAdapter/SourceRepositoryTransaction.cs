@@ -67,7 +67,7 @@ public sealed partial class SourceRepository
 
         /// <summary>The put of an exterior cell at <paramref name="placement"/>, holding the bytes of every file
         /// it may write and the directories it mints, so the rollback takes a new cell's document away again.</summary>
-        public void Put(SourceRepository repository, PluginAddress plugin, SourceDocument document, CellPlacement placement)
+        internal void Put(SourceRepository repository, PluginAddress plugin, SourceDocument document, CellPlacement placement)
         {
             var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
             if (repository.Locator.LocateToPlace(plugin, identity) is not null)
@@ -87,7 +87,7 @@ public sealed partial class SourceRepository
             var minted = SourceRepositoryLayout.LevelsMintedBy(cell);
             try
             {
-                repository.Put(plugin, document, placement);
+                repository.Writes.Put(plugin, document, placement);
             }
             finally
             {
@@ -163,7 +163,7 @@ public sealed partial class SourceRepository
 
         /// <summary>Moves a container to <paramref name="newFormKey"/>'s leaf and records what moved. A
         /// no-op — nothing found, not a container, or already at that leaf — logs nothing.</summary>
-        public void Move(SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey)
+        internal void Move(SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey)
         {
             if (repository.Writes.Move(plugin, identity, newFormKey) is not { } moved) return;
             _log.Add(new EntryMove(repository.ModFolder, moved.From, moved.To));

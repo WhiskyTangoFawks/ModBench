@@ -36,7 +36,7 @@ public static class CutDownPluginFixture
         DocumentsOf(TrackedTree.Repository(modFolder));
 
     private static Dictionary<string, byte[]> DocumentsOf(SourceRepository repository) =>
-        repository.ReadAll(Plugin).ToDictionary(document => document.FormKey, document => Encoding.UTF8.GetBytes(document.Body));
+        TreeDocuments.Of(repository, Plugin).ToDictionary(document => document.FormKey, document => Encoding.UTF8.GetBytes(document.Body));
 
     // The library's whole-mod writer alone, not TrackService's own door: identical production code on
     // both sides would agree with itself about any file Track added.

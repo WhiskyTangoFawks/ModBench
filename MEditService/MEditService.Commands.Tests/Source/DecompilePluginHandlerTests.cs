@@ -73,7 +73,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     [Fact]
     public async Task Decompile_OfATrackedPlugin_ReplacesItsSourceInTheWorkingTree_WithWhatItsBytesHold_DiscardingHandEditsAndStrayDocuments()
     {
-        var first = Repository.ReadAll(Tracked("First.esp")).Single(document => document.EditorId == "FirstNpc");
+        var first = TreeDocuments.Of(Repository, Tracked("First.esp")).Single(document => document.EditorId == "FirstNpc");
         var identity = new RecordIdentity(first.FormKey, first.RecordType, first.EditorId);
         var stray = TreeTampering.Stray(_trackedMod, Tracked("First.esp"), identity, "Stray.json", "{}");
         TrackedTree.Overwrite(
@@ -98,7 +98,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.NotInTrackedMod, refused.Refusal);
         Assert.Contains("Other.esp", refused.Message, StringComparison.Ordinal);
-        Assert.Empty(SourceRepository.Over(_untrackedMod, GameRelease.Fallout4).ReadAll(new PluginAddress("Other.esp", UntrackedModName)));
+        Assert.False(SourceRepository.HoldsTreeFor(_untrackedMod, "Other.esp"));
     }
 
     [Fact]
@@ -149,5 +149,5 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     private SourceRepository Repository => SourceRepository.Open(_trackedMod, GameRelease.Fallout4).Require();
 
     private string SourceTextOf(string plugin) => string.Concat(
-        Repository.ReadAll(Tracked(plugin)).Select(document => document.Body).Order(StringComparer.Ordinal));
+        TreeDocuments.Of(Repository, Tracked(plugin)).Select(document => document.Body).Order(StringComparer.Ordinal));
 }

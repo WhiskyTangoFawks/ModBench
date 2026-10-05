@@ -15,8 +15,7 @@ public sealed partial class SourceRepository
     private readonly GameRelease _release;
     private readonly SourceRepositoryGit _git;
 
-    /// <summary>The folder this repository is over, for a caller naming a path relative to it.</summary>
-    public string ModFolder => _modFolder;
+    internal string ModFolder => _modFolder;
 
     internal SourceRepositoryLocator Locator { get; }
 
@@ -65,6 +64,9 @@ public sealed partial class SourceRepository
     public static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
         IsTracked(modFolder) && Directory.Exists(SourceRepositoryLayout.RootIn(modFolder, pluginFileName));
 
+    /// <summary>Whether this repository holds a source tree for the plugin.</summary>
+    public bool HoldsTreeFor(PluginAddress plugin) => HoldsTreeFor(_modFolder, plugin.Name);
+
     /// <summary><c>plugin-source/&lt;pluginFileName&gt;</c>, relative to the mod folder.</summary>
     public static string RootFor(string pluginFileName) => SourceRepositoryLayout.RootFor(pluginFileName);
 
@@ -72,9 +74,6 @@ public sealed partial class SourceRepository
     /// an untracked mod has none until Track writes one.</summary>
     public static string RootIn(string modFolder, string pluginFileName) =>
         SourceRepositoryLayout.RootIn(modFolder, pluginFileName);
-
-    /// <summary>The plugin header's own document, relative to the mod folder.</summary>
-    public static string HeaderDocumentFor(string pluginFileName) => SourceRepositoryLayout.HeaderDocumentFor(pluginFileName);
 
     /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and a
     /// re-baseline commit.</summary>
@@ -132,17 +131,6 @@ public sealed partial class SourceRepository
                 unit.IsDirectoryPerRecord)
             : null;
 
-    /// <summary>Which record the tree holds at <paramref name="formKey"/> — one with a document of
-    /// its own, an embedded child, or the header — or null when nothing carries it.</summary>
-    public RecordIdentity? IdentityOf(
-        PluginAddress plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        Locator.IdentityOf(plugin, formKey, schemas);
-
-    /// <summary>The reader's own words for a document whose name carries <paramref name="formKey"/>
-    /// and whose text is not one; null when the tree names no such document.</summary>
-    public string? UnreadableDocumentFor(PluginAddress plugin, string formKey) =>
-        Locator.UnreadableDocumentFor(plugin, formKey);
-
     /// <summary>The document carrying <paramref name="identity"/>: its own, else its container's. Null
     /// when no document holds it. Throws <see cref="UnreadableSourceDocumentException"/> when the
     /// document carrying it names no record.</summary>
@@ -161,11 +149,6 @@ public sealed partial class SourceRepository
     public string? RelativePathOf(PluginAddress plugin, RecordIdentity identity) =>
         Locator.Locate(plugin, identity)?.RelativePath;
 
-    /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
-    /// holds it. A worldspace document declaring no FormKey throws.</summary>
-    public CellPlacement? CellPlacementOf(PluginAddress plugin, RecordIdentity identity) =>
-        Locator.CellPlacementOf(plugin, identity);
-
     /// <summary>The worldspace carrying the cell <paramref name="identity"/> names; null for an interior
     /// cell or one the plugin does not hold. A cell filed under neither refuses with the reader's words.</summary>
     public string? WorldspaceOf(PluginAddress plugin, RecordIdentity identity)
@@ -183,11 +166,6 @@ public sealed partial class SourceRepository
         PluginAddress plugin, string worldspace, int x, int y, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         Locator.CellFormKeyAt(plugin, worldspace, x, y) is { } formKey ? Get(plugin, formKey, schemas) : null;
 
-    /// <summary>Every document one plugin's tree holds right now, each as the record at its root. An
-    /// embedded child belongs to its owner's document; <see cref="Get(PluginAddress, RecordIdentity)"/> answers with the child's own
-    /// text.</summary>
-    public IReadOnlyList<SourceDocument> ReadAll(PluginAddress plugin) => Locator.ReadAll(plugin);
-
     /// <summary>Every EditorID the plugin's tree holds now, a record with a document of its own and
     /// an embedded child alike — what a derived EditorID is checked against to stay unique in the
     /// destination.</summary>
@@ -198,6 +176,12 @@ public sealed partial class SourceRepository
     /// child's and the header's synthetic one. A deletion frees its key once committed.</summary>
     public IReadOnlySet<string> FormKeysUsed(PluginAddress plugin) =>
         DocumentTokens.FormKeysOf([.. Locator.ReadAll(plugin), .. ReadAllCommitted(plugin)], _release);
+
+    /// <summary>Whether the last commit holds <paramref name="formKey"/> and the tree does not: a
+    /// deletion the tree has not committed.</summary>
+    public bool HeldOnlyAtLastCommit(PluginAddress plugin, string formKey) =>
+        DocumentTokens.FormKeysOf(ReadAllCommitted(plugin), _release).Contains(formKey)
+        && !DocumentTokens.FormKeysOf(Locator.ReadAll(plugin), _release).Contains(formKey);
 
     /// <summary>The plugin's tree as the documents it holds right now, each record's own. The caller
     /// disposes it.</summary>
@@ -238,12 +222,6 @@ public sealed partial class SourceRepository
     /// own slot, every other byte untouched.</summary>
     public void Put(PluginAddress plugin, SourceDocument document) => Writes.Put(plugin, document, placement: null);
 
-    /// <summary>The put of an exterior cell, the one record whose directory sits inside another
-    /// record's: <paramref name="placement"/> names the worldspace holding it and its block numbers.
-    /// Every other record is placed from its identity alone.</summary>
-    public void Put(PluginAddress plugin, SourceDocument document, CellPlacement? placement) =>
-        Writes.Put(plugin, document, placement);
-
     /// <summary>The put of an exterior cell, which lands in the block its own grid falls in inside
     /// <paramref name="worldspace"/>'s directory. A cell the plugin already holds is replaced where it is.</summary>
     public void PutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
@@ -257,8 +235,8 @@ public sealed partial class SourceRepository
     /// <summary>The plugin's source in the working tree becomes <paramref name="files"/>, and the
     /// last-compile ref names only the binary they were read from. A failure leaves both as they
     /// were.</summary>
-    public void ReplaceSourceFrom(string pluginFileName, IReadOnlyList<TreeFile> files, string binarySha256) =>
-        Writes.ReplaceSourceFrom(pluginFileName, files, binarySha256);
+    public void ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> files, string binarySha256) =>
+        Writes.ReplaceSourceFrom(plugin.Name, files, binarySha256);
 
     /// <summary>Runs <paramref name="write"/>, which puts the plugin's binary on disk, recording
     /// <paramref name="binarySha256"/> as the one last written. An interrupted write leaves a record
