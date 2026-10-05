@@ -33,6 +33,7 @@ import { recordWriteOver } from './plugins/recordWrite';
 import { createPluginsView, type PluginsView, type PluginsViewDeps } from './plugins/pluginsView';
 import { editingView } from './plugins/editingView';
 import { pluginsCopyValueText, registerCreatePluginCommand } from './plugins/pluginListCommands';
+import { registerRenamePluginCommand } from './plugins/pluginRenameCommand';
 import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
 import type { RecordWrite } from './drivingLib/writingGesture';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
@@ -76,7 +77,7 @@ interface ExtensionSession {
 type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
-  'putLoadOrder' | 'rebuildIndex' | 'createPlugin' | 'getLightPluginsSupported'
+  'putLoadOrder' | 'rebuildIndex' | 'createPlugin' | 'renameSource' | 'getLightPluginsSupported'
   | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected'>;
 
 interface ViewsDeps {
@@ -222,6 +223,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   own(registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => modListView.selection));
   ownAll(own, registerConflictTable(instance, deps.extensionUri, () => modListView.selection, reporterFor('mod.openConflicts'), vscode.workspace));
   own(vscode.commands.registerCommand('modbench.mod.sync', (value: InstanceValue) => modSync.run(value.modSyncArguments)));
+  own(registerRenamePluginCommand({ client, access, instance, reporter: reporterFor('plugin.rename') }, () => pluginListView.selection));
   own(vscode.commands.registerCommand('modbench.plugin.sync', (value: InstanceValue) => plugins.pluginSync.run(value.pluginSyncArguments)));
   const { view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
     access, instance, reporter: reporterFor('downloadList'), ask, trash,

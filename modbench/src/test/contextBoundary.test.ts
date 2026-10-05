@@ -15,7 +15,7 @@ const EDITOR_DIR = 'editor';
 const GENERATED_DIR = 'generated';
 const WIRE_DIR = 'wire';
 
-const CLIENT_CALLERS = ['instanceCommands'];
+const CLIENT_CALLERS = ['instanceCommands', 'pluginsCommands'];
 
 const COMPOSITION_ROOT = rootFiles().map((path) => relative(SRC, path));
 

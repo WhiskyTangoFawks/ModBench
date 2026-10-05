@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
-import { isPluginFile } from '../instanceAdapter/instanceAdapter';
 import type { Instance } from '../instanceLoader/instance';
 import {
   ImplicitMasterNode, PluginNode, PluginsTreeProvider, type PluginListNode, type PluginsTreeNode,
@@ -11,6 +10,7 @@ import {
 import { gestureEntry, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import { CellNode, ChildRecordNode, RecordNode, WorldspaceNode } from './PluginTreeProvider';
 import { placeFolder, pluginPlaces } from './pluginPlaces';
+import { lightPluginsSupportedOf, pluginNameRefusal } from './pluginName';
 import type { Reporter } from '../ports/reporter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { errorMessage } from '../ports/errorMessage';
@@ -80,21 +80,11 @@ export function pluginsCopyValueText(
 async function promptPluginName(
   client: Pick<MEditClient, 'getLightPluginsSupported'>, reporter: Reporter,
 ): Promise<string | undefined> {
-  let lightPluginsSupported: boolean;
-  try {
-    lightPluginsSupported = await client.getLightPluginsSupported();
-  } catch (error) {
-    reporter.report('error', 'Could not look up whether this game has light plugins.', errorMessage(error));
-    return undefined;
-  }
+  const lightPluginsSupported = await lightPluginsSupportedOf(client, reporter);
+  if (lightPluginsSupported === undefined) return undefined;
   return vscode.window.showInputBox({
     prompt: 'Enter new plugin name (e.g. MyPatch.esp)',
-    validateInput: v => {
-      if (!v) return 'Name is required';
-      if (!isPluginFile(v)) return 'Extension must be .esp, .esm, or .esl';
-      if (!lightPluginsSupported && /\.esl$/i.test(v)) return 'This game has no light plugins';
-      return undefined;
-    },
+    validateInput: (name) => pluginNameRefusal(name, lightPluginsSupported),
   });
 }
 

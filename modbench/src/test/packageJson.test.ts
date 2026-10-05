@@ -614,7 +614,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(NO_PLUGINS_MESSAGE).toContain('title bar');
   });
 
-  it('plugin menu: reveal, enable or disable, create record, track, decompile, compile, copy value', () => {
+  it('plugin menu: reveal, enable or disable, rename, create record, track, decompile, compile, copy value', () => {
     expect(menuOf('plugin disabled inUntrackedMod untracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.enable', '2_change'],
@@ -624,6 +624,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf('plugin enabled inTrackedMod tracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.disable', '2_change'],
+      ['modbench.plugin.rename', '2_change'],
       ['modbench.record.create', '3_create'],
       ['modbench.plugin.decompile', '4_sourceControl'],
       ['modbench.plugin.compile', '4_sourceControl'],
@@ -631,10 +632,11 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ]);
   });
 
-  it('plugin menu on a disabled tracked plugin: decompile and compile, and no record edit', () => {
+  it('plugin menu on a disabled tracked plugin: rename, decompile and compile, and no record edit', () => {
     expect(menuOf('plugin disabled inTrackedMod tracked')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.enable', '2_change'],
+      ['modbench.plugin.rename', '2_change'],
       ['modbench.plugin.decompile', '4_sourceControl'],
       ['modbench.plugin.compile', '4_sourceControl'],
       ['modbench.copyValue', '5_copy'],
@@ -727,6 +729,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(pluginsKeys).toEqual([
       { command: 'modbench.plugin.enable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.plugin.selectionToggle == enable`, args: undefined },
       { command: 'modbench.plugin.disable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.plugin.selectionToggle == disable`, args: undefined },
+      { command: 'modbench.plugin.rename', key: 'f2', mac: undefined, when: `${ON_THE_TREE} && modbench.plugin.singleTracked`, args: undefined },
       { command: 'modbench.pluginListTree.deleteHere', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.plugin.allDeletableRecords`, args: undefined },
       { command: 'modbench.copyValue', key: 'ctrl+c', mac: 'cmd+c', when: ON_THE_TREE, args: PLUGINS_KEY_ARGS },
     ]);
@@ -1053,6 +1056,7 @@ describe('package.json compile\'s palette entry', () => {
 describe('package.json Plugins palette entries', () => {
   const PLUGINS_PALETTE = [
     ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
+    ['modbench.plugin.rename', 'modbench.plugin.singleTracked'],
     ['modbench.plugin.decompile', 'modbench.plugin.allInTrackedMod'],
     ['modbench.record.create', 'modbench.plugin.singleCreatable'],
     ['modbench.record.delete', 'modbench.plugin.allDeletableRecords'],

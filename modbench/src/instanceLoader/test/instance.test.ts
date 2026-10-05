@@ -585,6 +585,21 @@ describe('Instance — built by watching', () => {
 
 });
 
+describe('Instance — a write that changes several files', () => {
+  it('lands no value read while it runs, whether the read began before or inside it, and lands the refresh after it', async () => {
+    const { instance } = realInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+
+    await instance.quiet(async () => {
+      await instance.refresh();
+      expect(instance.sequence).toBe(before);
+    });
+
+    expect(instance.sequence).toBe(before + 1);
+  });
+});
+
 describe('Instance — a value that survives a bad read', () => {
   it('keeps the previous value and logs when a file is half-written', async () => {
     const { root, instance, readFailureLines } = realInstance();
