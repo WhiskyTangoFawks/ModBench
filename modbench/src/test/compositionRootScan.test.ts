@@ -38,7 +38,7 @@ async function flatConfigBlocks(path: string): Promise<unknown[]> {
 let LINT_CONFIG_BLOCKS: unknown[] = [];
 beforeAll(async () => { LINT_CONFIG_BLOCKS = await flatConfigBlocks(ESLINT_CONFIG); });
 
-const namesFile =(block: unknown, file: string): boolean =>
+const namesFile = (block: unknown, file: string): boolean =>
   typeof block === 'object' && block !== null && 'files' in block && Array.isArray(block.files) && block.files.includes(file);
 
 function restrictedSyntaxOf(blocks: readonly unknown[], file: string, message: string): string[] {

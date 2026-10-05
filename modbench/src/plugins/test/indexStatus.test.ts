@@ -176,6 +176,20 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
     expect(deps.log).toHaveBeenCalledWith('info', expect.stringContaining('3 in the load order, 0 failed'));
   });
 
+  it('logs the error and warns that rows will not expand when the tree could not read the plugin list', async () => {
+    const { client, deps } = followed();
+    deps.tree.applyReconciled.mockResolvedValue(undefined);
+
+    client.emit(statusEvent({ activePlugins: 2 }));
+    await flushed();
+
+    expect(deps.log).toHaveBeenCalledWith('error', expect.stringContaining('did not reach the tree'));
+    expect(deps.reporter.reports).toEqual([
+      expect.objectContaining({ severity: 'warning', message: expect.stringContaining('plugin list could not be read') }),
+    ]);
+    expect(deps.log).not.toHaveBeenCalledWith('info', expect.stringContaining('in the load order'));
+  });
+
   it.each([
     ['a later reconcile starts', { state: 'Reconciling', conflictsComputed: false, version: 2 }],
     ['the index is dropped', { state: 'None', conflictsComputed: false, totalPlugins: 0, version: 2 }],
