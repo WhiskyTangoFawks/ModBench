@@ -1,7 +1,6 @@
 import type { Reporter } from '../ports/reporter';
 import type { MEditClient, RecordEditEnvelope } from '../client';
 import { errorMessage } from '../ports/errorMessage';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
 
 /** What any record-panel gesture needs to write, whichever surface it arrives from — the webview's
  *  inline and keyboard edits through the message router, the right-click menus straight from the
@@ -13,7 +12,6 @@ export interface RecordWriteDeps {
   // The records and their badges are not the edit's to touch: they follow mEdit's changed rows.
   refreshSourceControlFor: (plugin: string, origin: string) => void;
   reporter: Reporter;
-  tellPanels: (message: ExtensionToWebview) => void;
 }
 
 /** An edit goes through the extension host because a refusal becomes a native notification
@@ -21,8 +19,6 @@ export interface RecordWriteDeps {
 export async function applyRecordEdit(
   deps: RecordWriteDeps, formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope,
 ): Promise<string | undefined> {
-  const edit = { formKey, plugin, origin, envelope };
-  deps.tellPanels({ type: EXTENSION_TO_WEBVIEW.EDIT_WRITTEN, ...edit });
   try {
     const outcome = await deps.meditClient.editRecord(formKey, plugin, origin, envelope);
     if (outcome.applied) {
@@ -31,10 +27,8 @@ export async function applyRecordEdit(
     }
     deps.reporter.report('warning', outcome.message);
   } catch (err) {
-    // No answer: only the disk can say whether it wrote, so the panels keep the edit marked.
     deps.reporter.report(
       'error', 'Could not edit this record.', errorMessage(err));
     return undefined;
   }
-  deps.tellPanels({ type: EXTENSION_TO_WEBVIEW.EDIT_REFUSED, ...edit });
 }

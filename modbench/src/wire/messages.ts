@@ -10,11 +10,6 @@ export const EXTENSION_TO_WEBVIEW = {
   // The host's answer to REQUEST_RECORD_LOAD: the comparison, the plugin list and whether the
   // winner sweep has run, posted untransformed, so the webview names no port.
   RECORD_LOAD_ANSWERED: 'recordLoadAnswered',
-  // Every record edit, broadcast as it is sent, and again if mEdit answers with a refusal: the
-  // panel showing the record marks the edit until the disk confirms it (common.md, Unconfirmed
-  // writes).
-  EDIT_WRITTEN: 'editWritten',
-  EDIT_REFUSED: 'editRefused',
   // The grid's keys are VS Code keybindings; these reach the focused cell of the panel in focus,
   // which alone holds its editor and its field's schema to parse pasted text with.
   OPEN_CELL_EDITOR: 'openCellEditor',
@@ -22,9 +17,6 @@ export const EXTENSION_TO_WEBVIEW = {
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
-  // The webview has no route to the 'Modbench' channel of its own — this is
-  // the bridge. The webview composes the full message text; the host does a level→method forward.
-  LOG: 'log',
   // Routed through the extension host because a refused edit becomes a native notification
   // (editor.md, Reporting, story 1).
   EDIT_FIELD: 'editField',
@@ -41,14 +33,11 @@ export const WEBVIEW_TO_EXTENSION = {
   REQUEST_RECORD_LOAD: 'requestRecordLoad',
 } as const;
 
-export type LogLevel = 'debug' | 'info' | 'warn';
-
 export type ConflictThis = components['schemas']['ConflictThis'];
 export type ConflictAll = components['schemas']['ConflictAll'];
 
 
 export type WebviewToExtension =
-  | { type: typeof WEBVIEW_TO_EXTENSION.LOG; level: LogLevel; message: string }
   | {
       type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD;
       formKey: string;
@@ -191,24 +180,11 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
   | ({ type: typeof EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED; requestId: string } & RecordLoadAnswer)
-  | ({ type: typeof EXTENSION_TO_WEBVIEW.EDIT_WRITTEN | typeof EXTENSION_TO_WEBVIEW.EDIT_REFUSED } & RecordEdit)
   | { type: typeof EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR }
   | { type: typeof EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL; text: string };
 
-/** One edit, addressed to the plugin copy of the record it writes. */
-export interface RecordEdit {
-  formKey: string;
-  plugin: string;
-  origin: string;
-  envelope: RecordEditEnvelope;
-}
-
 function isString(value: unknown): value is string {
   return typeof value === 'string';
-}
-
-function isLogLevel(value: unknown): value is LogLevel {
-  return value === 'debug' || value === 'info' || value === 'warn';
 }
 
 export function isRecordEditEnvelope(value: unknown): value is RecordEditEnvelope {
@@ -225,12 +201,6 @@ type WebviewToExtensionWitness = {
   plugin?: unknown; origin?: unknown; envelope?: unknown;
   requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown; entered?: unknown;
 };
-
-function parseLog(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isLogLevel(w.level)) throw new Error('Expected "log" to carry a level of debug, info or warn.');
-  if (!isString(w.message)) throw new Error('Expected "log" to carry a string message.');
-  return { type: WEBVIEW_TO_EXTENSION.LOG, level: w.level, message: w.message };
-}
 
 function parseEditField(w: WebviewToExtensionWitness): WebviewToExtension {
   if (!isString(w.formKey)) throw new Error('Expected "editField" to carry a string formKey.');
@@ -282,7 +252,6 @@ export function parseWebviewToExtension(value: unknown): WebviewToExtension {
   }
   const w = value as WebviewToExtensionWitness;
   switch (w.type) {
-    case WEBVIEW_TO_EXTENSION.LOG: return parseLog(w);
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return parseEditField(w);
     case WEBVIEW_TO_EXTENSION.ADD_ELEMENT: return parseAddElement(w);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return parseOpenFormKeyPicker(w);
@@ -347,14 +316,6 @@ function parseRecordLoadAnswer(w: {
   };
 }
 
-function parseRecordEdit(w: { formKey?: unknown; plugin?: unknown; origin?: unknown; envelope?: unknown }): RecordEdit {
-  if (!isString(w.formKey) || !isString(w.plugin) || !isString(w.origin)) {
-    throw new Error('Expected a record edit to carry a string formKey, plugin and origin.');
-  }
-  if (!isRecordEditEnvelope(w.envelope)) throw new Error('Expected a record edit to carry an envelope with an op and a path.');
-  return { formKey: w.formKey, plugin: w.plugin, origin: w.origin, envelope: w.envelope };
-}
-
 /** The webview message router's other direction: every `EXTENSION_TO_WEBVIEW` listener parses
  *  through this rather than asserting `event.data`'s shape itself. */
 export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
@@ -362,7 +323,7 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
     throw new Error(`Expected an extension-to-webview message object, got ${typeof value}.`);
   }
   const w = value as {
-    type?: unknown; formKey?: unknown; requestId?: unknown; plugin?: unknown; origin?: unknown; envelope?: unknown;
+    type?: unknown; formKey?: unknown; requestId?: unknown;
     ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
     text?: unknown;
   };
@@ -371,8 +332,6 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
     case EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED: return { type: w.type };
     case EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED: return parseFormKeyPicked(w);
     case EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED: return { type: w.type, ...parseRecordLoadAnswer(w) };
-    case EXTENSION_TO_WEBVIEW.EDIT_WRITTEN:
-    case EXTENSION_TO_WEBVIEW.EDIT_REFUSED: return { type: w.type, ...parseRecordEdit(w) };
     default: return parseFocusedCellMessage(w);
   }
 }

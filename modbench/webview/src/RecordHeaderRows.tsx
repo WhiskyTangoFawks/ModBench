@@ -3,9 +3,7 @@ import { DiskCell } from './DiskCell';
 import { formKeyLabel } from './FormKeyLink';
 import { ExpandArrow } from './ExpandArrow';
 import { baseCell, labelCell, focusedRowStyle, mono, fg } from './gridStyles';
-import { toStr, type Column } from './recordUtils';
-import { WrittenValue } from './WrittenValue';
-import type { WriteAt } from './unconfirmedWrites';
+import type { Column } from './recordUtils';
 import type { FocusedCell } from './DiffRow';
 import type { ColumnKey, PathHop } from './types';
 import { LABEL_COLUMN } from './columnKey';
@@ -124,12 +122,11 @@ interface FormIdRowProps {
   focusedCell: FocusedCell | null;
   onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
   onCommitFormId: (plugin: ColumnKey, formKey: string) => void;
-  writeAt: WriteAt;
 }
 
 /** editor.md, The record header, story 2: each column reads its own copy's FormKey. */
 export function FormIdRow({
-  label, readOnlyReason, columns, collapsedColumns, columnStyle, editableColumns, focusedCell, onFocusCell, onCommitFormId, writeAt,
+  label, readOnlyReason, columns, collapsedColumns, columnStyle, editableColumns, focusedCell, onFocusCell, onCommitFormId,
 }: Readonly<FormIdRowProps>) {
   const cellStyle = (key: ColumnKey): React.CSSProperties => ({ ...baseCell, ...columnStyle(key) });
   return (
@@ -147,17 +144,12 @@ export function FormIdRow({
             title={readOnlyReason ?? undefined}
             copyText={formKeyLabel(override.formKey, override)}
           >
-            <WrittenValue write={writeAt(key, FORM_ID_PATH)} disk={override.formKey}>
-              {value => (
-                <FormIdCell
-                  formKey={toStr(value)}
-                  // A FormKey the disk does not hold yet names no record.
-                  label={value === override.formKey ? formKeyLabel(override.formKey, override) : toStr(value)}
-                  editable={editableColumns.has(key) && readOnlyReason == null}
-                  onCommit={formKey => onCommitFormId(key, formKey)}
-                />
-              )}
-            </WrittenValue>
+            <FormIdCell
+              formKey={override.formKey}
+              label={formKeyLabel(override.formKey, override)}
+              editable={editableColumns.has(key) && readOnlyReason == null}
+              onCommit={formKey => onCommitFormId(key, formKey)}
+            />
           </DiskCell>
         ))}
     </tr>

@@ -51,7 +51,7 @@ describe('a write and the stream, together: the write\'s own callback is silent 
     tracker.setFormKey(panel, FORM_KEY);
     subscribeRecordPanelsToNotifications(meditClient, recordPanels, tracker, { holds: () => false, waitingFor: () => undefined, release: () => false });
     await applyRecordEdit(
-      { meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter(), tellPanels: vi.fn() }, FORM_KEY, 'Test.esp', 'ModA', { op: 'set', path: [] });
+      { meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter() }, FORM_KEY, 'Test.esp', 'ModA', { op: 'set', path: [] });
     expect(panel.webview.postMessage).not.toHaveBeenCalled();
 
     meditClient.emit(rowsChanged());
@@ -75,7 +75,7 @@ describe('a write and the stream, together: the write\'s own callback is silent 
     badges.onDidChangeFileDecorations((changed) => { badgeChanges.push(changed); });
 
     await applyRecordEdit(
-      { meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter(), tellPanels: vi.fn() },
+      { meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter() },
       FORM_KEY, 'Test.esp', 'ModA', { op: 'set', path: [] });
 
     expect(treeChanges).toBe(0);

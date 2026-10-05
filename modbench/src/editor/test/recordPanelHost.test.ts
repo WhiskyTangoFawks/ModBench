@@ -202,23 +202,6 @@ describe('modbench.record.editField, fired with only the record, the plugin and 
     expect(tracker.formKeyOf(elsewhere)).toBe('000801:Mod.esp');
     expect(meditClient.calls.filter(c => c.method === 'editRecord')).toHaveLength(1);
   });
-
-  it('tells every open panel the edit as it is sent', async () => {
-    const meditClient = new InMemoryMEditClient();
-    meditClient.setCommandResult('editRecord', { applied: true });
-    const first = posting();
-    const second = posting();
-    register(() => [], {
-      recordPanels: new Set([fakePanel(first), fakePanel(second)]), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient,
-    });
-    const envelope = { op: 'set', path: [{ kind: 'member', name: 'Name' }], value: 'x' };
-    const written = { type: 'editWritten', formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'ModA', envelope };
-
-    await commandHandlers.get('modbench.record.editField')?.({ formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'ModA' }, envelope);
-
-    expect(first).toHaveBeenCalledWith(written);
-    expect(second).toHaveBeenCalledWith(written);
-  });
 });
 
 describe('the record grid\'s F2', () => {

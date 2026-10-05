@@ -15,9 +15,7 @@ export interface RouteRecordPanelMessageDeps {
   // The FormKey picker's search and the panel's own read — one client serves both, and the
   // per-panel picker bundle below reuses it.
   meditClient: Pick<MEditClient, 'searchRecords' | 'getComparison' | 'getPlugins'>;
-  // The leveled 'Modbench' channel the webview has no direct route to — the webview composes the
-  // message text, this is a pure level→method forward.
-  channel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
+  channel: Pick<vscode.LogOutputChannel, 'warn'>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
   // reconstructed per message at the call site rather than shared like `channel`.
@@ -64,7 +62,6 @@ const HANDLERS: {
     deps: RouteRecordPanelMessageDeps, m: Extract<WebviewToExtension, { type: T }>,
   ) => Promise<void> | void;
 } = {
-  [WEBVIEW_TO_EXTENSION.LOG]: (deps, m) => { deps.channel[m.level](m.message); },
   [WEBVIEW_TO_EXTENSION.EDIT_FIELD]: editField,
   [WEBVIEW_TO_EXTENSION.ADD_ELEMENT]: async (_deps, m) => {
     await vscode.commands.executeCommand('modbench.record.addElement', m.context, m.value);
@@ -78,7 +75,6 @@ const HANDLERS: {
 // cast — the narrowing is exactly the correlation `HANDLERS[m.type]` cannot prove on its own.
 function dispatch(deps: RouteRecordPanelMessageDeps, m: WebviewToExtension): Promise<void> | void {
   switch (m.type) {
-    case WEBVIEW_TO_EXTENSION.LOG: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.ADD_ELEMENT: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return HANDLERS[m.type](deps, m);

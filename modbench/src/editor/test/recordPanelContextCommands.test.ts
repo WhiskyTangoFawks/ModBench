@@ -21,7 +21,7 @@ const openExtendedFieldEditor =
   vi.fn<(params: OpenExtendedFieldEditorParams) => Promise<void>>();
 
 import { commitField, registerRecordPanelContextCommands, type RecordPanelContextCommandDeps } from '../recordPanelContextCommands';
-import { EXTENSION_TO_WEBVIEW, type ArrayElementContext, type ArrayParentContext, type ExtensionToWebview, type StringValueContext } from '../../wire/messages';
+import type { ArrayElementContext, ArrayParentContext, StringValueContext } from '../../wire/messages';
 import { InMemoryMEditClient } from '../../client';
 import { present } from '../../ports/present';
 
@@ -35,18 +35,16 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
   meditClient.setCommandResult('editRecord', { applied: true });
   const refreshSourceControlFor = vi.fn();
   const report = vi.fn();
-  const tellPanels = vi.fn<(message: ExtensionToWebview) => void>();
   const deps: RecordPanelContextCommandDeps = {
     meditClient,
     refreshSourceControlFor,
-    tellPanels,
     reporter: { report, landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() },
     extendedFields: { open: openExtendedFieldEditor },
     editGateOf: gateSendingEachWriteWhereItWasAddressed,
     focusedCell: () => undefined,
     ...overrides,
   };
-  return { deps, meditClient, refreshSourceControlFor, report, tellPanels };
+  return { deps, meditClient, refreshSourceControlFor, report };
 }
 
 const IDENTITY = { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA' };
@@ -348,61 +346,6 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
     await editField()(IDENTITY, envelope);
 
     expect(report).toHaveBeenCalledWith('error', expect.any(String), 'ECONNREFUSED');
-  });
-
-  describe('tells every panel', () => {
-    const written = { type: EXTENSION_TO_WEBVIEW.EDIT_WRITTEN, ...IDENTITY, envelope };
-    const refused = { type: EXTENSION_TO_WEBVIEW.EDIT_REFUSED, ...IDENTITY, envelope };
-
-    it('the edit as it is sent, and nothing more once mEdit applies it', async () => {
-      const { deps, meditClient, tellPanels } = makeDeps();
-      tellPanels.mockImplementation(() => { expect(editRecordCalls(meditClient)).toHaveLength(0); });
-      registerRecordPanelContextCommands(deps);
-
-      await editField()(IDENTITY, envelope);
-
-      expect(tellPanels.mock.calls).toEqual([[written]]);
-    });
-
-    it('a refused edit', async () => {
-      const { deps, meditClient, tellPanels } = makeDeps();
-      meditClient.setCommandResult('editRecord', { applied: false, refusal: 'NotTracked', message: 'Track the mod first.' });
-      registerRecordPanelContextCommands(deps);
-
-      await editField()(IDENTITY, envelope);
-
-      expect(tellPanels.mock.calls).toEqual([[written], [refused]]);
-    });
-
-    it('nothing more of an edit mEdit never answered, since only the disk can say what it did', async () => {
-      const { deps, meditClient, tellPanels } = makeDeps();
-      meditClient.setCommandFailure('editRecord', new Error('ECONNREFUSED'));
-      registerRecordPanelContextCommands(deps);
-
-      await editField()(IDENTITY, envelope);
-
-      expect(tellPanels.mock.calls).toEqual([[written]]);
-    });
-
-    it('nothing more of an element removed with no answer', async () => {
-      const { deps, meditClient, tellPanels } = makeDeps();
-      meditClient.setCommandFailure('editRecord', new Error('ECONNREFUSED'));
-      registerRecordPanelContextCommands(deps);
-      const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Values' }, { kind: 'index', index: 1 }];
-
-      await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')(elementContext(path));
-
-      expect(tellPanels.mock.calls).toEqual([[{ ...written, envelope: { op: 'remove', path } }]]);
-    });
-
-    it('the FormKey the gate writes to, where the tab followed the record', async () => {
-      const { deps, tellPanels } = makeDeps({ editGateOf: () => async (_address, write) => { await write('000900:MyMod.esp'); } });
-      registerRecordPanelContextCommands(deps);
-
-      await editField()(IDENTITY, envelope);
-
-      expect(tellPanels.mock.calls).toEqual([[{ ...written, formKey: '000900:MyMod.esp' }]]);
-    });
   });
 
   it('from the palette, asks for the focused string cell\'s new text and sets it at the cell\'s path', async () => {
