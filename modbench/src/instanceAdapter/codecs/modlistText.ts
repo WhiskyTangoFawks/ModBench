@@ -99,20 +99,23 @@ export function insertSeparatorAtIndexInText(
   });
 }
 
-export function renameSeparatorInText(text: string, oldName: string, newName: string): string {
+export function renameModLineInText(text: string, oldModName: string, newModName: string): string {
   return withBomPreserved(text, (bomless) => {
     for (const { start, end, contentEnd } of lineRanges(bomless)) {
       const content = bomless.slice(start, contentEnd);
-      if (matchesModLine(content, separatorModName(oldName))) {
+      if (matchesModLine(content, oldModName)) {
         const eol = bomless.slice(contentEnd, end);
         // content matched `+`/`-` above, so its first character is that prefix, never absent.
         const prefix = content.slice(0, 1);
-        return bomless.slice(0, start) + prefix + separatorModName(newName) + eol + bomless.slice(end);
+        return bomless.slice(0, start) + prefix + newModName + eol + bomless.slice(end);
       }
     }
-    throw new Error(`Separator not found in modlist: ${oldName}`);
+    throw new Error(`Mod not found in modlist: ${oldModName}`);
   });
 }
+
+export const renameSeparatorInText = (text: string, oldName: string, newName: string): string =>
+  renameModLineInText(text, separatorModName(oldName), separatorModName(newName));
 
 /** Removes the separator line only; the mods it wrapped join the section above. */
 export function deleteSeparatorInText(text: string, name: string): string {
