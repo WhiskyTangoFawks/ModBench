@@ -12,13 +12,8 @@ import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
-<<<<<<< HEAD
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type CreatableRecordType,
-  type RebuildIndexOutcome, type CopyItem, type CopyMode,
-=======
-  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type CreatableRecordType,
   type RebuildIndexOutcome, type CopyItem, type CopyMode, type RecordChildHolders,
->>>>>>> main
   type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
