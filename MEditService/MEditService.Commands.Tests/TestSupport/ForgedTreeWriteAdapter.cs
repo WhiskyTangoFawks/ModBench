@@ -1,6 +1,6 @@
-using MEditService.TestSupport;
 using MEditService.Codec.Serialization;
 using MEditService.PluginAdapter;
+using MEditService.TestSupport;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
 namespace MEditService.Commands.Tests.TestSupport;
