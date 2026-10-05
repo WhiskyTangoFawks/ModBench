@@ -6,7 +6,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -43,7 +42,7 @@ public sealed class TrackCommitShapeTests : IDisposable
     }
 
     [Fact]
-    public async Task Track_OfAPluginInAModThatAlreadyHasARepository_RefusesIt_PointingAtDecompile_AndCommitsNothing()
+    public async Task Track_OfAPluginInAModThatAlreadyHasARepository_RefusesTheMod_PointingAtDecompile_AndCommitsNothing()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         await Track();
@@ -53,16 +52,15 @@ public sealed class TrackCommitShapeTests : IDisposable
         var result = await Track();
 
         Assert.Empty(result.Landed);
-        Assert.Equal(
-            [(Key("First.esp"), TrackRefusal.AlreadyTracked), (Key("Second.esp"), TrackRefusal.AlreadyTracked)],
-            result.Refused.Select(r => (r.Plugin, r.Refusal)));
-        Assert.All(result.Refused, r => Assert.Contains("decompile", r.Message, StringComparison.Ordinal));
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal((ModName, TrackRefusal.AlreadyTracked), (refused.Item, refused.Refusal));
+        Assert.Contains("decompile", refused.Message, StringComparison.Ordinal);
         Assert.Equal(firstBefore, HeldBy("First.esp"));
         Assert.Empty(HeldBy("Second.esp"));
     }
 
     [Fact]
-    public async Task Track_IntoAModWhoseRepositoryHasHistoryButNoMain_RefusesThePlugin_AndChangesNothingOfTheRepository()
+    public async Task Track_IntoAModWhoseRepositoryHasHistoryButNoMain_RefusesTheMod_AndChangesNothingOfTheRepository()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         Git("init", "-q", "-b", "master");
@@ -75,7 +73,7 @@ public sealed class TrackCommitShapeTests : IDisposable
 
         Assert.Empty(result.Landed);
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((Key("First.esp"), TrackRefusal.AlreadyTracked), (refused.Plugin, refused.Refusal));
+        Assert.Equal((ModName, TrackRefusal.AlreadyTracked), (refused.Item, refused.Refusal));
         Assert.Contains(_modFolder, refused.Message, StringComparison.Ordinal);
         Assert.Empty(SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4).FormKeysUsed(Key("First.esp")));
         Assert.Empty(HeldBy("First.esp"));
@@ -91,9 +89,10 @@ public sealed class TrackCommitShapeTests : IDisposable
 
         var result = await Track(new RoundTripFailsFor("Second.esp"));
 
-        Assert.Equal([Key("First.esp"), Key("Third.esp")], result.Landed);
-        var refused = Assert.Single(result.Refused);
-        Assert.Equal((Key("Second.esp"), TrackRefusal.RoundTripFailed), (refused.Plugin, refused.Refusal));
+        var landed = Assert.Single(result.Landed);
+        Assert.Equal([Key("First.esp"), Key("Third.esp")], landed.Outcome.Tracked);
+        var refused = Assert.Single(landed.Outcome.Refused);
+        Assert.Equal((Key("Second.esp"), TrackRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
         Assert.Contains("SecondNpc", refused.Message, StringComparison.Ordinal);
         Assert.NotEmpty(HeldBy("First.esp"));
         Assert.NotEmpty(HeldBy("Third.esp"));
@@ -108,7 +107,9 @@ public sealed class TrackCommitShapeTests : IDisposable
         var result = await Track(new RoundTripFailsFor("Second.esp"));
 
         Assert.Empty(result.Landed);
-        Assert.Single(result.Refused);
+        var refusedMod = Assert.Single(result.Refused);
+        Assert.Equal(TrackRefusal.RoundTripFailed, refusedMod.Refusal);
+        Assert.Contains("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
         Assert.False(SourceRepository.IsTracked(_modFolder));
     }
 
@@ -139,17 +140,16 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private static PluginAddress Key(string plugin) => new(plugin, ModName);
 
-    private Task<TrackSelectionResult> Track() => Track(TestAdapters.Mutagen());
+    private Task<SelectionResult<string, TrackRefusal, TrackedMod>> Track() => Track(TestAdapters.Mutagen());
 
-    private Task<TrackSelectionResult> Track(IPluginAdapter adapter)
+    private Task<SelectionResult<string, TrackRefusal, TrackedMod>> Track(IPluginAdapter adapter)
     {
         var entries = Directory.GetFiles(_modFolder, "*.esp")
             .Order(StringComparer.Ordinal)
             .Select((path, slot) => new LoadOrderEntry(Path.GetFileName(path), path, ModName, slot, Enabled: true, Winning: true))
             .ToList();
         var loadOrder = SnapshotPlugins.Snapshot(_gameDir, _gameDir, GameRelease.Fallout4, entries);
-        return new TrackService(NullLogger<TrackService>.Instance, adapter)
-            .TrackAsync(loadOrder, [ModName]);
+        return TrackEveryPluginOf.ModAsync(loadOrder, ModName, adapter);
     }
 
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);

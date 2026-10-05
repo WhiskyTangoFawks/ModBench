@@ -47,7 +47,8 @@ import {
   conflictsComputedOver, registerTrackCommand, registerCompileCommand, registerDecompileCommand, CompileProblems,
 } from '../pluginRowCommands';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient, type PluginAddress } from '../../client';
+import type { ItemRefusal } from '../../ports/selectionOutcome';
 import { PluginNode } from '../PluginsTreeProvider';
 import { assertAskedOnce, recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
@@ -71,6 +72,8 @@ describe('modbench.mod.track', () => {
   const SECOND = { name: 'Second.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const MOD_DIRS = new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB'], ['ModC', '/mods/ModC']]);
+  const modA = (tracked: PluginAddress[], refused: ItemRefusal<PluginAddress>[] = []) => ({ mod: 'ModA', tracked, refused });
+  const modB = (tracked: PluginAddress[]) => ({ mod: 'ModB', tracked, refused: [] });
 
   class ModsRowStandIn extends TreeItem {
     readonly kind = 'mod';
@@ -102,7 +105,7 @@ describe('modbench.mod.track', () => {
 
   it('on a plugin row, tracks the plugin\'s mod, asking nothing', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [FIRST, SECOND], refused: [], refusedMods: [] });
+    client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
     const { handler, onTracked, reporter } = invokeTrack(client);
 
     await handler(row(FIRST));
@@ -117,7 +120,7 @@ describe('modbench.mod.track', () => {
 
   it('ends the gesture on a read the Instance loader makes after the track, and clears its message line', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [FIRST, SECOND], refused: [], refusedMods: [] });
+    client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
     const { handler, said } = invokeTrack(client);
 
     await handler(row(FIRST));
@@ -130,7 +133,7 @@ describe('modbench.mod.track', () => {
 
   it('shows the Mods view\'s bar when a Mods row was clicked', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [FIRST, SECOND], refused: [], refusedMods: [] });
+    client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
     const { handler } = invokeTrack(client);
 
     await handler(new ModsRowStandIn('ModA'));
@@ -140,7 +143,7 @@ describe('modbench.mod.track', () => {
 
   it('on selected plugin rows of one mod, tracks that mod once', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [FIRST, SECOND], refused: [], refusedMods: [] });
+    client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
     const { handler } = invokeTrack(client);
 
     await handler(row(SECOND), [row(FIRST), row(SECOND)]);
@@ -150,7 +153,7 @@ describe('modbench.mod.track', () => {
 
   it('on selected Mods rows, tracks every mod in one call', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [FIRST, SECOND, OTHER], refused: [], refusedMods: [] });
+    client.setCommandResult('track', { landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
     const { handler, reporter } = invokeTrack(client);
     const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
 
@@ -162,7 +165,7 @@ describe('modbench.mod.track', () => {
 
   it('on an Editor column header, tracks the column plugin\'s mod', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [FIRST, SECOND], refused: [], refusedMods: [] });
+    client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
     const { handler } = invokeTrack(client);
     const header = {
       webviewSection: 'recordHeader', formKey: '000801:Other.esp', plugin: 'Second.esp', origin: 'ModA',
@@ -176,7 +179,7 @@ describe('modbench.mod.track', () => {
 
   it('from the palette, tracks the mods of a Mods selection', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [OTHER], refused: [], refusedMods: [] });
+    client.setCommandResult('track', { landed: [modB([OTHER])], refused: [] });
     const { handler, reporter } = invokeTrack(client, undefined, () => [new ModsRowStandIn('ModB')]);
 
     await handler();
@@ -187,7 +190,7 @@ describe('modbench.mod.track', () => {
 
   it('from the palette, tracks the mod of a Plugins selection', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [OTHER], refused: [], refusedMods: [] });
+    client.setCommandResult('track', { landed: [modB([OTHER])], refused: [] });
     const { handler, reporter } = invokeTrack(client, undefined, () => [row(OTHER)]);
 
     await handler();
@@ -198,7 +201,7 @@ describe('modbench.mod.track', () => {
 
   it('a landed track, through the conflicts-computed notice, registers the tracked repository once', async () => {
     const client = clientWithOrigin('Other.esp', 'ModB');
-    client.setCommandResult('track', { landed: [OTHER], refused: [], refusedMods: [] });
+    client.setCommandResult('track', { landed: [modB([OTHER])], refused: [] });
     const announce = vi.fn();
     const channel = { warn: vi.fn(), error: vi.fn() };
     const notice = conflictsComputedOver(announce, {
@@ -216,7 +219,7 @@ describe('modbench.mod.track', () => {
 
   it('reports each refused plugin once while the rest land', async () => {
     const client = new InMemoryMEditClient();
-    const outcome = { landed: [FIRST], refused: [{ item: SECOND, reason: 'Second.esp does not round-trip.' }], refusedMods: [] };
+    const outcome = { landed: [modA([FIRST], [{ item: SECOND, reason: 'Second.esp does not round-trip.' }])], refused: [] };
     client.setCommandResult('track', outcome);
     const { handler, onTracked, reporter } = invokeTrack(client);
 
@@ -232,9 +235,8 @@ describe('modbench.mod.track', () => {
   it('names a mod mEdit refused, and a refused plugin, in one notification while the rest land', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('track', {
-      landed: [FIRST],
-      refused: [{ item: SECOND, reason: 'Second.esp does not round-trip.' }],
-      refusedMods: [{ item: 'ModC', reason: 'ModC provides no plugin.' }],
+      landed: [modA([FIRST], [{ item: SECOND, reason: 'Second.esp does not round-trip.' }])],
+      refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }],
     });
     const { handler, onTracked, reporter } = invokeTrack(client);
     const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModC')];
@@ -252,7 +254,7 @@ describe('modbench.mod.track', () => {
 
   it('never sends an origin that is not a mod as a mod name: refuses that plugin as not in a mod and tracks the rest', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [OTHER], refused: [], refusedMods: [] });
+    client.setCommandResult('track', { landed: [modB([OTHER])], refused: [] });
     const { handler, onTracked, reporter } = invokeTrack(client);
     const loose = { name: 'Loose.esp', origin: 'Overwrite' };
 
@@ -280,7 +282,7 @@ describe('modbench.mod.track', () => {
 
   it('sends the mod as the instance spells it when the plugin\'s origin differs in case', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [FIRST], refused: [], refusedMods: [] });
+    client.setCommandResult('track', { landed: [modA([FIRST])], refused: [] });
     const { handler } = invokeTrack(client);
 
     await handler(row({ name: 'First.esp', origin: 'moda' }));
@@ -304,7 +306,7 @@ describe('modbench.mod.track', () => {
 
   it('names the mod it is about to track before mEdit answers, then the mod mEdit reports progress on, phase included', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [FIRST, SECOND, OTHER], refused: [], refusedMods: [] });
+    client.setCommandResult('track', { landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
     const trackSpy = vi.spyOn(client, 'track');
     const { handler, said } = invokeTrack(client);
     const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];

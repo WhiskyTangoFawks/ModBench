@@ -1,4 +1,3 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
@@ -8,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>One mod tracked once, holding one record of every owning type: the expensive part is the <see
-/// cref="TrackService"/> setup, not the records.</summary>
+/// cref="TrackHandler"/> setup, not the records.</summary>
 public sealed class AbstractUnionCompileFixture : TestInstance
 {
     public const string PluginName = "AbstractUnion611.esp";

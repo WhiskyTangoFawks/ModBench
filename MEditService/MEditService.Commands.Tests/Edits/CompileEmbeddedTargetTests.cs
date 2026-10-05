@@ -1,10 +1,8 @@
 using MEditService.Codec.Schema;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -62,11 +60,9 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
                 Target(enabled: true),
                 Referrer,
             ]);
-
-        var trackService = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        trackService.TrackModAsync(_loadOrder, TargetOrigin)
+        TrackEveryPluginOf.ModAsync(_loadOrder, TargetOrigin)
             .GetAwaiter().GetResult();
-        trackService.TrackModAsync(_loadOrder, ReferrerOrigin)
+        TrackEveryPluginOf.ModAsync(_loadOrder, ReferrerOrigin)
             .GetAwaiter().GetResult();
     }
 

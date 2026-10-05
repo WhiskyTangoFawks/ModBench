@@ -1,11 +1,9 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -126,11 +124,10 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             Holder.Apply(_loadOrder);
         }
 
-        public async Task<TrackResult> TrackAsync(TreeDeserializer? deserialize = null) =>
-            (await new TrackService(
-                    NullLogger<TrackService>.Instance,
-                    deserialize is { } forged ? new ForgedTreeWriteAdapter(Plugin.Name, forged) : TestAdapters.Mutagen())
-                .TrackModAsync(_loadOrder, Plugin.Origin)).Only();
+        public async Task<PluginTrack> TrackAsync(TreeDeserializer? deserialize = null) =>
+            (await TrackEveryPluginOf.ModAsync(
+                _loadOrder, Plugin.Origin,
+                deserialize is { } forged ? new ForgedTreeWriteAdapter(Plugin.Name, forged) : null)).Only();
 
         public CompilePluginHandler CompileService() =>
             CompileServices.Over(Holder.Current);

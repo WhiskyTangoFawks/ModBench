@@ -1,21 +1,159 @@
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Ports;
+using MEditService.SourceAdapter;
+using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
 
-/// <summary>The Track gesture's handler (ADR-0014). Parsing, serializing, the round-trip
-/// gate, the commit and its own progress notifications stay on <see cref="TrackService"/>.</summary>
+/// <summary>The Track gesture's handler (ADR-0007, ADR-0014). The mod is the item of the selection:
+/// it lands with one commit, `Track &lt;mod&gt;`, holding the source of the plugins that passed their gate.</summary>
 public sealed class TrackHandler
 {
-    private readonly TrackService _trackService;
     private readonly LoadOrderHolder _loadOrder;
+    private readonly ILogger _logger;
+    private readonly INotificationPublisher _notifications;
+    private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal TrackHandler(TrackService trackService, LoadOrderHolder loadOrder) =>
-        (_trackService, _loadOrder) = (trackService, loadOrder);
+    internal TrackHandler(
+        LoadOrderHolder loadOrder, IPluginAdapter adapter, INotificationPublisher notifications, ILogger<TrackHandler> logger) =>
+        (_loadOrder, _notifications, _logger, _decompiler) = (loadOrder, notifications, logger, new PluginDecompiler(logger, adapter));
 
     /// <summary>Each name is a mod, whose plugins and folder the held load order says. Throws
-    /// <see cref="NoLoadOrderException"/> with nothing written when none is held.</summary>
-    public Task<TrackSelectionResult> TrackAsync(IReadOnlyList<string> mods, CancellationToken cancel = default) =>
-        _trackService.TrackAsync(_loadOrder.Require(), mods, cancel);
+    /// <see cref="NoLoadOrderException"/> with nothing written when none is held; git missing refuses
+    /// the whole selection once, before any write (commands.md, A selection is one gesture).</summary>
+    public async Task<SelectionResult<string, TrackRefusal, TrackedMod>> TrackAsync(
+        IReadOnlyList<string> mods, CancellationToken cancel = default)
+    {
+        var loadOrder = _loadOrder.Require();
+        var total = mods.Distinct(StringComparer.OrdinalIgnoreCase).Sum(mod => ProvidedBy(loadOrder, mod).Count);
+        var done = 0;
+        try
+        {
+            return await ItemWrite.OverAsync(mods, StringComparer.OrdinalIgnoreCase, TrackRefusal.GitUnavailable, async mod =>
+            {
+                var plugins = ProvidedBy(loadOrder, mod);
+                var answer = await TrackModAsync(loadOrder, mod, plugins, done, total, cancel);
+                done += plugins.Count;
+                return answer;
+            });
+        }
+        finally
+        {
+            // Idle at rest, success or failure alike: a client must never keep showing a track that has finished.
+            SetProgress(null, TrackPhase.Idle, 0, 0);
+        }
+    }
+
+    private static List<RegisteredPlugin> ProvidedBy(LoadOrderSnapshot loadOrder, string modName) =>
+        [.. loadOrder.Plugins.Where(plugin => plugin.Provider is PluginProvider.FromMod mod
+            && string.Equals(mod.Name, modName, StringComparison.OrdinalIgnoreCase))];
+
+    private async Task<ItemAnswer<TrackRefusal, TrackedMod>> TrackModAsync(
+        LoadOrderSnapshot loadOrder, string modName, List<RegisteredPlugin> plugins, int done, int total, CancellationToken cancel)
+    {
+        if (plugins.Count == 0)
+        {
+            return ItemAnswer<TrackRefusal, TrackedMod>.Refused(TrackRefusal.ModProvidesNoPlugin,
+                $"'{modName}' provides no plugin in the load order, so there is nothing to track.");
+        }
+
+        var modFolder = ((PluginProvider.FromMod)plugins[0].Provider).Folder;
+
+        // Track takes a mod with no repository (ADR-0007).
+        if (SourceRepository.IsTracked(modFolder))
+        {
+            return ItemAnswer<TrackRefusal, TrackedMod>.Refused(TrackRefusal.AlreadyTracked,
+                $"'{modFolder}' is already tracked. To put a plugin's source into its working tree, decompile it.");
+        }
+
+        // A repository with history but no main is someone else's, never written to (ADR-0003).
+        if (SourceRepository.HoldsAnotherRepository(modFolder))
+        {
+            return ItemAnswer<TrackRefusal, TrackedMod>.Refused(TrackRefusal.AlreadyTracked,
+                $"'{modFolder}' already holds a repository with no main branch.");
+        }
+
+        var verified = new List<(RegisteredPlugin Plugin, IReadOnlyList<TreeFile> Files)>();
+        var refused = new List<ItemRefused<PluginAddress, TrackRefusal>>();
+        foreach (var plugin in plugins)
+        {
+            cancel.ThrowIfCancellationRequested();
+            SetProgress(modName, TrackPhase.Parsing, done, total);
+            var decompiled = await _decompiler.DecompileAsync(
+                loadOrder, plugin, modFolder, onParsed: () => SetProgress(modName, TrackPhase.Serializing, done, total), cancel);
+            if (decompiled.Files is { } files)
+            {
+                verified.Add((plugin, files));
+            }
+            else
+            {
+                refused.Add(new ItemRefused<PluginAddress, TrackRefusal>(
+                    plugin.Key,
+                    decompiled.Refusal == DecompileRefusal.MissingLocalizationStrings
+                        ? TrackRefusal.MissingLocalizationStrings
+                        : TrackRefusal.RoundTripFailed,
+                    decompiled.Message));
+            }
+
+            done++;
+            SetProgress(modName, TrackPhase.Serializing, done, total);
+        }
+
+        SetProgress(modName, TrackPhase.Committing, total, total);
+        var landed = Commit(modFolder, verified, refused);
+        return landed.Count > 0
+            ? ItemAnswer<TrackRefusal, TrackedMod>.Landed(new TrackedMod(landed, refused))
+            : ItemAnswer<TrackRefusal, TrackedMod>.Refused(refused[0].Refusal, string.Join('\n', refused.Select(r => r.Message)));
+    }
+
+    // One commit holding the plugins that passed their gate; those the commit failed are refused too.
+    private List<PluginAddress> Commit(
+        string modFolder, List<(RegisteredPlugin Plugin, IReadOnlyList<TreeFile> Files)> verified,
+        List<ItemRefused<PluginAddress, TrackRefusal>> refused)
+    {
+        if (verified.Count == 0) return [];
+
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("Tracking {PluginCount} plugin(s) into {ModFolder}: {FileCount} source files",
+                verified.Count, modFolder, verified.Sum(v => v.Files.Count));
+        }
+
+        IReadOnlyList<(string Plugin, string Reason)> failed;
+        try
+        {
+            failed = SourceRepository.Track(modFolder,
+                [.. verified.Select(v => (v.Files, new DecompiledPlugin(v.Plugin.Name, PluginBinaryHash.TrailerFormOfFile(v.Plugin.Path))))]);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // The track's one commit failed and Track took back what it made: no plugin landed (plugins.md, Track, story 5).
+            _logger.LogError(ex, "Could not finish tracking into {ModFolder}", modFolder);
+            failed = [.. verified.Select(v => (v.Plugin.Name, ex.Message))];
+        }
+
+        var landed = new List<PluginAddress>();
+        foreach (var plugin in verified.Select(v => v.Plugin))
+        {
+            if (failed.FirstOrDefault(f => string.Equals(f.Plugin, plugin.Name, StringComparison.OrdinalIgnoreCase)) is { Reason: { } reason })
+            {
+                _logger.LogWarning("Refused to track {Plugin} ({Origin}): its source could not be tracked — {Reason}", plugin.Name, plugin.Origin, reason);
+                refused.Add(new ItemRefused<PluginAddress, TrackRefusal>(
+                    plugin.Key, TrackRefusal.CommitFailed, $"{plugin.Name}'s source could not be tracked: {reason}"));
+            }
+            else
+            {
+                landed.Add(plugin.Key);
+            }
+        }
+
+        return landed;
+    }
+
+    private void SetProgress(string? mod, TrackPhase phase, int pluginsDone, int pluginsTotal) =>
+        _notifications.Publish(new TrackProgressNotification(new TrackProgress(mod, phase, pluginsDone, pluginsTotal)));
 }

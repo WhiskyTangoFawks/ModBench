@@ -1,10 +1,8 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -23,8 +21,7 @@ public sealed class RegisteredPluginSpellingTests
     {
         using var scratch = new ModFolderUnderAnInstanceRootScratch();
 
-        var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(scratch.LoadOrder, Origin);
+        var result = await TrackEveryPluginOf.ModAsync(scratch.LoadOrder, Origin);
 
         Assert.Empty(result.Refused);
         var repository = SourceRepository.Open(TestMod.In(scratch.ModFolder), Release).Require();

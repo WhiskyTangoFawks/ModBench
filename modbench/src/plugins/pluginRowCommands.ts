@@ -15,7 +15,7 @@ import { PluginNode, type PluginsTreeNode } from './PluginsTreeProvider';
 import {
   compilableSelected, pluginsGestureEntry, selectionArgument, PLUGINS_KEY_ARGS, type GestureEntry,
 } from './gestureEntry';
-import type { SelectionOutcome } from '../ports/selectionOutcome';
+import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
@@ -93,7 +93,7 @@ async function trackMods(deps: TrackDeps, { mods, notInMod }: TrackTargets, invo
   const refusedHere = notInMod.map((item) => ({ item, reason: NOT_IN_A_MOD }));
   const [firstMod] = mods;
   if (firstMod === undefined) {
-    if (refusedHere.length > 0) reportRefused(reporter, 0, { landed: [], refused: refusedHere, refusedMods: [] });
+    if (refusedHere.length > 0) reportRefused(reporter, 0, { refused: [], tracked: [], refusedPlugins: refusedHere });
     return;
   }
   const what = mods.length === 1 ? `"${firstMod}"` : `${mods.length} mods`;
@@ -106,27 +106,39 @@ async function trackMods(deps: TrackDeps, { mods, notInMod }: TrackTargets, invo
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
       if (result.landed.length > 0) await onTracked();
-      const outcome = { ...result, refused: [...refusedHere, ...result.refused] };
-      if (outcome.refused.length + outcome.refusedMods.length > 0) reportRefused(reporter, mods.length, outcome);
-      else if (outcome.landed.length > 0) reporter.landed(`Tracked ${what}.`);
+      const outcome = {
+        refused: result.refused,
+        tracked: result.landed.flatMap((landed) => landed.tracked),
+        refusedPlugins: [...refusedHere, ...result.landed.flatMap((landed) => landed.refused)],
+      };
+      if (outcome.refused.length + outcome.refusedPlugins.length > 0) reportRefused(reporter, mods.length, outcome);
+      else if (result.landed.length > 0) reporter.landed(`Tracked ${what}.`);
     } finally {
       progress.say(undefined);
     }
   });
 }
 
+interface TrackReport {
+  refused: TrackOutcome['refused'];
+  tracked: readonly PluginAddress[];
+  refusedPlugins: readonly ItemRefusal<PluginAddress>[];
+}
+
 // commands.md, "each item lands on its own": one notification naming each refused mod and each
 // refused plugin.
-function reportRefused(reporter: Reporter, modCount: number, outcome: TrackOutcome): void {
+function reportRefused(reporter: Reporter, modCount: number, report: TrackReport): void {
   const counts = [
-    ...(outcome.refusedMods.length > 0 ? [`${outcome.refusedMods.length} of ${modCount} mods`] : []),
-    ...(outcome.refused.length > 0 ? [`${outcome.refused.length} of ${outcome.landed.length + outcome.refused.length} plugins`] : []),
+    ...(report.refused.length > 0 ? [`${report.refused.length} of ${modCount} mods`] : []),
+    ...(report.refusedPlugins.length > 0
+      ? [`${report.refusedPlugins.length} of ${report.tracked.length + report.refusedPlugins.length} plugins`]
+      : []),
   ];
   reporter.selectionOutcome(`Could not track ${counts.join(' and ')}.`, {
-    landed: outcome.landed.map(rowName),
+    landed: report.tracked.map(rowName),
     refused: [
-      ...outcome.refused.map(({ item, reason }) => ({ item: rowName(item), reason })),
-      ...outcome.refusedMods.map(({ item, reason }) => ({ item, reason })),
+      ...report.refusedPlugins.map(({ item, reason }) => ({ item: rowName(item), reason })),
+      ...report.refused,
     ],
   }, (name) => name);
 }

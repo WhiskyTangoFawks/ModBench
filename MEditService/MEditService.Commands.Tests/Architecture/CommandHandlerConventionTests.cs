@@ -28,10 +28,7 @@ public sealed class CommandHandlerConventionTests
         typeof(PutLoadOrderRefusal),
         typeof(PutLoadOrderResult),
         typeof(TrackRefusal),
-        typeof(TrackRefused),
-        typeof(TrackRefusedMod),
-        typeof(TrackResult),
-        typeof(TrackSelectionResult),
+        typeof(TrackedMod),
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";

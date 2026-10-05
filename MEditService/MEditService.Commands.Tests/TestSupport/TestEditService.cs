@@ -1,6 +1,5 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Composition;
-using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
@@ -28,7 +27,6 @@ internal static class TestEditService
             .AddSingleton(adapter ?? new MutagenPluginAdapter())
             .AddSingleton<RecordTextCodec>()
             .AddSingleton(SharedSchemaReflector.Instance)
-            .AddSingleton<TrackService>()
             .AddCommandHandlers()
             .BuildServiceProvider();
 
@@ -47,8 +45,9 @@ internal static class TestEditService
     internal static CompilePluginHandler CompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<CompilePluginHandler>();
 
-    internal static TrackHandler TrackHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<TrackHandler>();
+    internal static TrackHandler TrackHandler(
+        LoadOrderHolder holder, IPluginAdapter? adapter = null, INotificationPublisher? notifications = null) =>
+        Over(holder, adapter: adapter, notifications: notifications).GetRequiredService<TrackHandler>();
 
     internal static DecompilePluginHandler DecompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<DecompilePluginHandler>();

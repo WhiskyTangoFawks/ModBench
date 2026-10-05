@@ -65,8 +65,10 @@ public static class CommandHandlers
             sp.GetRequiredService<ILogger<CopyRecordHandler>>()));
 
         services.AddSingleton(sp => new TrackHandler(
-            sp.GetRequiredService<TrackService>(),
-            sp.GetRequiredService<LoadOrderHolder>()));
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<IPluginAdapter>(),
+            sp.GetRequiredService<INotificationPublisher>(),
+            sp.GetRequiredService<ILogger<TrackHandler>>()));
 
         services.AddSingleton(sp => new DecompilePluginHandler(
             sp.GetRequiredService<LoadOrderHolder>(),

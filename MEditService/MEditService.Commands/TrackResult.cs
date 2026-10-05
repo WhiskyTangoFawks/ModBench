@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 
 namespace MEditService.Commands;
@@ -30,48 +31,7 @@ public enum TrackRefusal
     GitUnavailable,
 }
 
-/// <summary>One plugin's Track outcome, or a whole selection's refusal (ADR-0014). The
-/// message names the way out.</summary>
-public sealed record TrackResult(bool Applied, TrackRefusal Refusal, string Message)
-{
-    public static TrackResult Success() => new(true, TrackRefusal.None, "");
-
-    public static TrackResult Refused(TrackRefusal refusal, string message) => new(false, refusal, message);
-}
-
-/// <summary>A plugin of the selection that wrote nothing of its own, with the typed refusal and the
-/// message naming the way out.</summary>
-public sealed record TrackRefused(PluginAddress Plugin, TrackRefusal Refusal, string Message);
-
-/// <summary>A mod of the selection that provides no plugin in the load order: it wrote nothing, and the
-/// other mods went on.</summary>
-public sealed record TrackRefusedMod(string Mod, TrackRefusal Refusal, string Message);
-
-/// <summary>Track over a selection (commands.md, A selection is one gesture): a cause no plugin
-/// escapes is <see cref="SelectionRefusal"/>.</summary>
-public sealed class TrackSelectionResult
-{
-    private TrackSelectionResult(
-        IReadOnlyList<PluginAddress> landed,
-        IReadOnlyList<TrackRefused> refused,
-        IReadOnlyList<TrackRefusedMod> refusedMods,
-        TrackResult? selectionRefusal) =>
-        (Landed, Refused, RefusedMods, SelectionRefusal) = (landed, refused, refusedMods, selectionRefusal);
-
-    public static TrackSelectionResult PerPlugin(
-        IReadOnlyList<PluginAddress> landed, IReadOnlyList<TrackRefused> refused, IReadOnlyList<TrackRefusedMod> refusedMods) =>
-        new(landed, refused, refusedMods, selectionRefusal: null);
-
-    public static TrackSelectionResult WholeSelectionRefused(TrackRefusal refusal, string message) =>
-        new([], [], [], TrackResult.Refused(refusal, message));
-
-    public IReadOnlyList<PluginAddress> Landed { get; }
-
-    public IReadOnlyList<TrackRefused> Refused { get; }
-
-    public IReadOnlyList<TrackRefusedMod> RefusedMods { get; }
-
-    public TrackResult? SelectionRefusal { get; }
-
-    public bool AllApplied => Refused.Count == 0 && RefusedMods.Count == 0 && SelectionRefusal is null;
-}
+/// <summary>A mod of the selection that tracked: the plugins whose source landed in its commit, and the
+/// plugins of it that wrote nothing, each with its reason. A mod none of whose plugins tracked is
+/// refused instead.</summary>
+public sealed record TrackedMod(IReadOnlyList<PluginAddress> Tracked, IReadOnlyList<ItemRefused<PluginAddress, TrackRefusal>> Refused);

@@ -29,12 +29,15 @@ public sealed class DecompilePluginTraceTests : HostedTests
         await Loaded();
         using var stream = await Client.NotificationStream();
 
-        var tracked = await Client.Track(Origin);
+        var response = await Client.Track(Origin);
 
-        tracked.EnsureSuccessStatusCode();
-        var body = await tracked.Content.ReadFromJsonAsync<JsonElement>();
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         var applied = Assert.Single(body.GetProperty("applied").EnumerateArray());
-        Assert.Equal((Plugin, Origin), (applied.GetProperty("name").GetString(), applied.GetProperty("origin").GetString()));
+        Assert.Equal(Origin, applied.GetProperty("mod").GetString());
+        var tracked = Assert.Single(applied.GetProperty("tracked").EnumerateArray());
+        Assert.Equal((Plugin, Origin), (tracked.GetProperty("name").GetString(), tracked.GetProperty("origin").GetString()));
+        Assert.Empty(applied.GetProperty("refused").EnumerateArray());
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
 
         var progress = await stream.EventsUntil(
@@ -89,9 +92,9 @@ public sealed class DecompilePluginTraceTests : HostedTests
 
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal([Plugin], body.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
-        var refused = Assert.Single(body.GetProperty("refusedMods").EnumerateArray());
-        Assert.Equal(("NoSuchMod", "ModProvidesNoPlugin"), (refused.GetProperty("mod").GetString(), refused.GetProperty("refusal").GetString()));
+        Assert.Equal([Origin], body.GetProperty("applied").EnumerateArray().Select(m => m.GetProperty("mod").GetString()));
+        var refused = Assert.Single(body.GetProperty("refused").EnumerateArray());
+        Assert.Equal(("NoSuchMod", "ModProvidesNoPlugin"), (refused.GetProperty("item").GetString(), refused.GetProperty("refusal").GetString()));
         Assert.Contains("NoSuchMod", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 

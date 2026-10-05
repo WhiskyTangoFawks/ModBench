@@ -1,8 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
-using MEditService.Commands.Edits;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -60,11 +58,10 @@ internal static class TrackedTemplates
         using var gameDirectory = new ScratchDirectory("medit-tracked-template-game-");
         var loadOrder = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Slot: 0, Enabled: true, Winning: true)]);
-        var result = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(loadOrder, origin)
+        var result = TrackEveryPluginOf.ModAsync(loadOrder, origin)
             .GetAwaiter().GetResult();
-        if (result.Landed.Count != 1)
-            throw new InvalidOperationException($"Expected {pluginName} to track: {string.Join("; ", result.Refused.Select(r => r.Message))}");
+        if (result.Landed.Sum(l => l.Outcome.Tracked.Count) != 1)
+            throw new InvalidOperationException($"Expected {pluginName} to track: {string.Join("; ", result.RefusalMessages())}");
     }
 
     internal static void CopyDirectory(string sourceFolder, string destinationFolder)

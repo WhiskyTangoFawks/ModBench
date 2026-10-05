@@ -1,9 +1,7 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Commands.Tests.RealData;
 
@@ -72,9 +70,8 @@ public sealed class MasterPruningRoundTripGateTests
             _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, _origin, _gameDirectory);
         }
 
-        public async Task<TrackResult> TrackAsync() =>
-            (await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(_loadOrder, _origin)).Only();
+        public async Task<PluginTrack> TrackAsync() =>
+            (await TrackEveryPluginOf.ModAsync(_loadOrder, _origin)).Only();
 
         public void Dispose()
         {

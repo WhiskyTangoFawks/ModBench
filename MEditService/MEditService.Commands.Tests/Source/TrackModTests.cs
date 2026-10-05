@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
@@ -15,25 +14,24 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Commands.Tests.Source;
 
-public sealed class TrackServiceTests
+public sealed class TrackModTests
 {
     [Fact]
-    public async Task TrackAsync_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
+    public async Task TrackMod_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
     {
         using var gameDir = new ScratchDirectory("medit-track-noorigin-game-");
         var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], []);
 
-        var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackAsync(loadOrder, ["NoSuchMod"]);
+        var result = await TrackEveryPluginOf.ModAsync(loadOrder, "NoSuchMod");
 
         Assert.Null(result.SelectionRefusal);
-        var refusal = Assert.Single(result.RefusedMods);
-        Assert.Equal(("NoSuchMod", TrackRefusal.ModProvidesNoPlugin), (refusal.Mod, refusal.Refusal));
+        var refusal = Assert.Single(result.Refused);
+        Assert.Equal(("NoSuchMod", TrackRefusal.ModProvidesNoPlugin), (refusal.Item, refusal.Refusal));
         Assert.Contains("NoSuchMod", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task TrackAsync_RefusesAPluginTheAdapterCannotRead_AndTracksTheRest()
+    public async Task TrackMod_RefusesAPluginTheAdapterCannotRead_AndTracksTheRest()
     {
         using var modFolder = new ScratchDirectory("medit-track-unopened-");
         using var gameDir = new ScratchDirectory("medit-track-unopened-game-");
@@ -51,12 +49,12 @@ public sealed class TrackServiceTests
             new LoadOrderEntry("Locked.esp", existingFileTheAdapterCannotRead, "FixtureMod", 1, Enabled: true, Winning: true),
         ]);
 
-        var result = await new TrackService(NullLogger<TrackService>.Instance, new LockedPluginAdapter("Locked.esp"))
-            .TrackModAsync(loadOrder, "FixtureMod");
+        var result = await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", new LockedPluginAdapter("Locked.esp"));
 
-        Assert.Equal([new PluginAddress("Fixture.esp", "FixtureMod")], result.Landed);
-        var refused = Assert.Single(result.Refused);
-        Assert.Equal((new PluginAddress("Locked.esp", "FixtureMod"), TrackRefusal.RoundTripFailed), (refused.Plugin, refused.Refusal));
+        var tracked = Assert.Single(result.Landed);
+        Assert.Equal([new PluginAddress("Fixture.esp", "FixtureMod")], tracked.Outcome.Tracked);
+        var refused = Assert.Single(tracked.Outcome.Refused);
+        Assert.Equal((new PluginAddress("Locked.esp", "FixtureMod"), TrackRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
         Assert.Contains("cannot be read", refused.Message, StringComparison.Ordinal);
         Assert.True(SourceRepository.HoldsTreeFor(modFolder, "Fixture.esp"));
         Assert.False(SourceRepository.HoldsTreeFor(modFolder, "Locked.esp"));
@@ -73,7 +71,7 @@ public sealed class TrackServiceTests
     }
 
     [Fact]
-    public async Task TrackAsync_RealLoadOrder_TracksTheModFolder_HoldingEachRecordWithoutCarriageReturns()
+    public async Task TrackMod_RealLoadOrder_TracksTheModFolder_HoldingEachRecordWithoutCarriageReturns()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-");
         using var gameDir = new ScratchDirectory("medit-trackservice-game-");
@@ -86,9 +84,7 @@ public sealed class TrackServiceTests
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
-
-        var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        await service.TrackModAsync(loadOrder, "FixtureMod");
+        await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
         Assert.True(SourceRepository.IsTracked(modFolder));
 
@@ -108,7 +104,7 @@ public sealed class TrackServiceTests
     }
 
     [Fact]
-    public async Task TrackAsync_OfAPluginInAModWithARepository_RefusesBeforeParsingIt()
+    public async Task TrackMod_OfAPluginInAModWithARepository_RefusesBeforeParsingIt()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-alreadytracked-");
         using var gameDir = new ScratchDirectory("medit-trackservice-alreadytracked-game-");
@@ -123,16 +119,14 @@ public sealed class TrackServiceTests
 
         byte[] notAPluginSoAnyDeepParseFails = [0x00, 0x01, 0x02, 0x03];
         File.WriteAllBytes(pluginPath, notAPluginSoAnyDeepParseFails);
-
-        var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        var result = (await service.TrackModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.AlreadyTracked, result.Refusal);
     }
 
     [Fact]
-    public async Task TrackAsync_OfAMod_TracksOnlyThePluginsItProvides_NotAnotherModsPluginOfTheSameFileName()
+    public async Task TrackMod_OfAMod_TracksOnlyThePluginsItProvides_NotAnotherModsPluginOfTheSameFileName()
     {
         using var modA = new ScratchDirectory("medit-trackservice-twomods-a-");
         using var modB = new ScratchDirectory("medit-trackservice-twomods-b-");
@@ -152,16 +146,15 @@ public sealed class TrackServiceTests
             new LoadOrderEntry("Same.esp", pathB, "ModB", Slot: 1, Enabled: true, Winning: true),
         ]);
 
-        var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackAsync(loadOrder, ["ModA"]);
+        var result = await TrackEveryPluginOf.ModAsync(loadOrder, "ModA");
 
-        Assert.Equal([new PluginAddress("Same.esp", "ModA")], result.Landed);
+        Assert.Equal([new PluginAddress("Same.esp", "ModA")], Assert.Single(result.Landed).Outcome.Tracked);
         Assert.True(SourceRepository.IsTracked(modA));
         Assert.False(SourceRepository.IsTracked(modB));
     }
 
     [Fact]
-    public async Task TrackAsync_OverTwoPluginsOfOneOrigin_ProgressStepsBetweenThePluginsObservableMidFlight()
+    public async Task TrackMod_OverTwoPluginsOfOneOrigin_ProgressStepsBetweenThePlugins_AndEndsIdle()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-progress-");
         using var gameDir = new ScratchDirectory("medit-trackservice-progress-game-");
@@ -182,22 +175,17 @@ public sealed class TrackServiceTests
                 new LoadOrderEntry("Second.esp", secondPluginPath, "FixtureMod", Slot: 1, Enabled: true, Winning: true),
             ]);
 
-        var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        Assert.Equal(TrackPhase.Idle, service.Progress.Phase);
+        var notifications = new InMemoryNotificationPublisher();
+        await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", notifications: notifications);
 
-        var observed = new List<TrackProgress>();
-        var trackTask = service.TrackModAsync(loadOrder, "FixtureMod");
-        while (!trackTask.IsCompleted)
-            observed.Add(service.Progress);
-        await trackTask;
-
+        var observed = notifications.Notifications.OfType<TrackProgressNotification>().Select(n => n.Progress).ToList();
         Assert.Contains(observed, p => p.Phase == TrackPhase.Serializing && p.PluginsDone > 0 && p.PluginsDone < p.PluginsTotal);
         Assert.All(observed.Where(p => p.Phase != TrackPhase.Idle), p => Assert.Equal("FixtureMod", p.Mod));
-        Assert.Equal(TrackPhase.Idle, service.Progress.Phase);
+        Assert.Equal(TrackPhase.Idle, observed[^1].Phase);
     }
 
     [Fact]
-    public async Task TrackAsync_RealLoadOrder_RunsTheRoundTripGateForRealBeforeSucceeding()
+    public async Task TrackMod_RealLoadOrder_RunsTheRoundTripGateForRealBeforeSucceeding()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-gateran-");
         using var gameDir = new ScratchDirectory("medit-trackservice-gateran-game-");
@@ -217,16 +205,16 @@ public sealed class TrackServiceTests
             return await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
         }
 
-        var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", CountingDeserialize));
+        var adapter = new ForgedTreeWriteAdapter("Fixture.esp", CountingDeserialize);
 
-        await service.TrackModAsync(loadOrder, "FixtureMod");
+        await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter);
 
         Assert.Equal(1, deserializeCalls);
         Assert.True(SourceRepository.IsTracked(modFolder));
     }
 
     [Fact]
-    public async Task TrackAsync_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()
+    public async Task TrackMod_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-badroundtrip-");
         using var gameDir = new ScratchDirectory("medit-trackservice-badroundtrip-game-");
@@ -246,9 +234,9 @@ public sealed class TrackServiceTests
             return deserialized;
         }
 
-        var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenCorruptTheNpc));
+        var adapter = new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenCorruptTheNpc);
 
-        var result = (await service.TrackModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -259,7 +247,7 @@ public sealed class TrackServiceTests
     }
 
     [Fact]
-    public async Task TrackAsync_WithAFloatFieldThatFailsToRoundTrip_RefusesNamingTheRecordAndTheField()
+    public async Task TrackMod_WithAFloatFieldThatFailsToRoundTrip_RefusesNamingTheRecordAndTheField()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-floatroundtrip-");
         using var gameDir = new ScratchDirectory("medit-trackservice-floatroundtrip-game-");
@@ -281,9 +269,9 @@ public sealed class TrackServiceTests
             return deserialized;
         }
 
-        var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenMutateTheFloat));
+        var adapter = new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenMutateTheFloat);
 
-        var result = (await service.TrackModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -295,7 +283,7 @@ public sealed class TrackServiceTests
     }
 
     [Fact]
-    public async Task TrackAsync_WithOpaqueTes4HeaderSubrecordsSet_TracksSuccessfully()
+    public async Task TrackMod_WithOpaqueTes4HeaderSubrecordsSet_TracksSuccessfully()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-opaqueheader-");
         using var gameDir = new ScratchDirectory("medit-trackservice-opaqueheader-game-");
@@ -316,9 +304,7 @@ public sealed class TrackServiceTests
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
-        var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-
-        await service.TrackModAsync(loadOrder, "FixtureMod");
+        await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
         Assert.True(SourceRepository.IsTracked(modFolder));
     }
@@ -338,7 +324,7 @@ public sealed class TrackServiceTests
 
     [Theory]
     [MemberData(nameof(HeaderFieldCorruptionsMirroringCodecsOpaqueHeaderFields))]
-    public async Task TrackAsync_ForEveryAllowListedHeaderField_RefusesNamingItWhenCorruptedAlone(
+    public async Task TrackMod_ForEveryAllowListedHeaderField_RefusesNamingItWhenCorruptedAlone(
         string fieldName, Action<Fallout4ModHeader> setBaseline, Action<Fallout4ModHeader> corrupt)
     {
         using var modFolder = new ScratchDirectory($"medit-trackservice-header-{fieldName}-");
@@ -360,9 +346,9 @@ public sealed class TrackServiceTests
             return deserialized;
         }
 
-        var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenCorrupt));
+        var adapter = new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenCorrupt);
 
-        var result = (await service.TrackModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -372,7 +358,7 @@ public sealed class TrackServiceTests
     }
 
     [Fact]
-    public async Task TrackAsync_WithARecordThatOnlyGainsSubrecordsOnRewrite_RefusesNamingTheRealFieldNotSubrecordInventory()
+    public async Task TrackMod_WithARecordThatOnlyGainsSubrecordsOnRewrite_RefusesNamingTheRealFieldNotSubrecordInventory()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-furn-insert-");
         using var gameDir = new ScratchDirectory("medit-trackservice-furn-insert-game-");
@@ -385,9 +371,7 @@ public sealed class TrackServiceTests
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
-
-        var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        var result = (await service.TrackModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -438,7 +422,7 @@ public sealed class TrackServiceTests
     }
 
     [Fact]
-    public async Task TrackAsync_LocalizedPluginWithABsaBesideIt_TracksAndMaterializesTheRealString()
+    public async Task TrackMod_LocalizedPluginWithABsaBesideIt_TracksAndMaterializesTheRealString()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-localized-");
         using var gameDir = new ScratchDirectory("medit-trackservice-localized-game-");
@@ -451,9 +435,7 @@ public sealed class TrackServiceTests
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
-
-        var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        await service.TrackModAsync(loadOrder, "FixtureMod");
+        await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
         Assert.True(SourceRepository.IsTracked(modFolder));
 
@@ -462,7 +444,7 @@ public sealed class TrackServiceTests
     }
 
     [Fact]
-    public async Task TrackAsync_LocalizedPluginMissingItsStringsFile_RefusesNamingTheMissingFile_SinceMutagenLookupOfAMissingFileDoesNotThrow()
+    public async Task TrackMod_LocalizedPluginMissingItsStringsFile_RefusesNamingTheMissingFile_SinceMutagenLookupOfAMissingFileDoesNotThrow()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-localized-missing-");
         using var gameDir = new ScratchDirectory("medit-trackservice-localized-missing-game-");
@@ -474,9 +456,7 @@ public sealed class TrackServiceTests
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
-
-        var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        var result = (await service.TrackModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.MissingLocalizationStrings, result.Refusal);
