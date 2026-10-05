@@ -25,6 +25,8 @@ public sealed class WriteRouteHandlerTests
 
     private static readonly string[] PrefixesWhoseMutatingRoutesAreWriteRoutes = ["/records", "/plugins"];
 
+    private static readonly string[] QueriesPostedForTheirBody = ["POST /records/with-children", "POST /records/children-in-destinations"];
+
     public static IEnumerable<object[]> EveryRoute =>
         Routes.Select(route => new object[] { route.Method, route.Pattern, route.Handler });
 
@@ -56,6 +58,7 @@ public sealed class WriteRouteHandlerTests
                     && Array.Exists(PrefixesWhoseMutatingRoutesAreWriteRoutes, prefix =>
                         route.Pattern.StartsWith(prefix, StringComparison.Ordinal))))
             .Select(route => $"{route.Method} {route.Pattern}")
+            .Except(QueriesPostedForTheirBody)
             .Order(StringComparer.Ordinal);
 
         Assert.Equal(
