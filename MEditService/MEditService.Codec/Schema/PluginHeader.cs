@@ -10,7 +10,7 @@ public static class PluginHeader
 
     /// <summary>The header's masters member, reflected as a read-only column: a write to it is refused
     /// (ADR-0008). Never a runtime branch; the missing delegate is the enforcement.</summary>
-    internal const string MastersFieldName = "MasterReferences";
+    public const string MastersFieldName = "MasterReferences";
 
     /// <summary>Why the header's FormID refuses every write, as its member or as its FormKey.</summary>
     public const string FormIdReadOnly = "a plugin header's FormID names the plugin itself, not a record in it";

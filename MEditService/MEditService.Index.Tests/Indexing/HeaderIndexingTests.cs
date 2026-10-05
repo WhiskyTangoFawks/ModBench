@@ -20,8 +20,12 @@ public class HeaderIndexingTests
 
     private static PluginFixtureData OnePlugin(string prefix, string name, Action<Fallout4Mod>? configure = null) =>
         new PluginFixtureBuilder(prefix)
-            .WithPlugin(name, configure, writeParams: new BinaryWriteParameters { MastersListContent = MastersListContentOption.NoCheck, MastersListOrdering = MastersListOrderingOption.NoCheck })
+            .WithPlugin(name, configure)
             .Build();
+
+    private static List<string> MastersOf(RecordDocument header) =>
+        [.. Assert.IsType<JsonElement>(FieldValueOf(header, "MasterReferences")).EnumerateArray()
+            .Select(e => e.GetProperty("Master").GetString() ?? "")];
 
     private static RecordDocument Header(OpenedIndex index, string name) =>
         index.RequireReads().DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(name)), new PluginAddress(name, "Data"));
@@ -84,16 +88,68 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void GetDocument_Header_MastersField_HoldsNothing_BecauseTheHeaderDocumentLeavesTheDerivedMastersOut()
+    public void GetDocument_Header_MastersField_ListsTheMastersItsRecordsRequire_InLoadOrder()
     {
-        using var fixture = OnePlugin("header-masters", "MastersTest.esp", mod =>
-        {
-            mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Fallout4.esm") });
-            mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("DLCRobot.esm") });
-        });
+        using var fixture = new PluginFixtureBuilder("header-masters")
+            .WithPlugin("Zeta.esm", mod => mod.Npcs.AddNew("ZetaNpc"))
+            .WithPlugin("Alpha.esm", mod => mod.Keywords.AddNew("AlphaKeyword"))
+            .WithPlugin("MastersTest.esp", (mod, masters) =>
+            {
+                var overridden = mod.Npcs.GetOrAddAsOverride(masters[0].Npcs.Single());
+                overridden.Keywords = [masters[1].Keywords.Single().ToLink()];
+            })
+            .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.Null(FieldValueOf(Header(index, "MastersTest.esp"), "MasterReferences"));
+        Assert.Equal(["Zeta.esm", "Alpha.esm"], MastersOf(Header(index, "MastersTest.esp")));
+    }
+
+    [Fact]
+    public void GetDocument_Header_MastersField_LeavesOutAMasterTheBinaryListsButNoRecordRequires()
+    {
+        using var fixture = new PluginFixtureBuilder("header-unrequired-master")
+            .WithPlugin("Required.esm", mod => mod.Npcs.AddNew("RequiredNpc"))
+            .WithPlugin("Unrequired.esm")
+            .WithPlugin(
+                "MastersTest.esp",
+                (mod, masters) =>
+                {
+                    mod.Npcs.GetOrAddAsOverride(masters[0].Npcs.Single());
+                    mod.ModHeader.MasterReferences.Add(new MasterReference { Master = masters[0].ModKey });
+                    mod.ModHeader.MasterReferences.Add(new MasterReference { Master = masters[1].ModKey });
+                },
+                writeParams: new BinaryWriteParameters { MastersListContent = MastersListContentOption.NoCheck })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+
+        Assert.Equal(["Required.esm"], MastersOf(Header(index, "MastersTest.esp")));
+    }
+
+    [Fact]
+    public void GetDocument_Header_MastersField_FollowsTheWorkingTree_OfATrackedPlugin()
+    {
+        using var fixture = new PluginFixtureBuilder("header-masters-tracked")
+            .WithPlugin("Kept.esm", mod => mod.Npcs.AddNew("KeptNpc"), origin: "KeptMod")
+            .WithPlugin("Dropped.esm", mod => mod.Npcs.AddNew("DroppedNpc"), origin: "DroppedMod")
+            .WithPlugin(
+                "MastersTest.esp",
+                (mod, masters) =>
+                {
+                    foreach (var master in masters) mod.Npcs.GetOrAddAsOverride(master.Npcs.Single());
+                },
+                origin: "MastersTestMod")
+            .BuildScattered()
+            .Tracked();
+        using var index = Indexes.Reconciled(fixture);
+        var plugin = fixture.Plugins.Single(p => p.Name == "MastersTest.esp");
+        var header = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
+        var reads = index.RequireReads();
+        Assert.Equal(["Kept.esm", "Dropped.esm"], MastersOf(reads.DocumentOf(header, plugin.KeyOf())));
+
+        var droppedOverride = reads.GetDocuments(plugin.KeyOf()).Single(d => d.EditorId == "DroppedNpc");
+        index.Delete(plugin, droppedOverride);
+
+        Assert.Equal(["Kept.esm"], MastersOf(reads.DocumentOf(header, plugin.KeyOf())));
     }
 
     [Fact]
