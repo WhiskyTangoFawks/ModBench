@@ -49,7 +49,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         SourceRepository.Track(
             _modFolder, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
 
-        Assert.Equal("[medit]\n\ttrack = true\n[remote \"origin\"]\n",File.ReadAllText(Path.Combine(theirs, "config")));
+        Assert.Equal("[medit]\n\ttrack = true\n[remote \"origin\"]\n", File.ReadAllText(Path.Combine(theirs, "config")));
     }
 
     [Fact]
