@@ -128,7 +128,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
         Assert.True(failures.Count == 0, $"{failures.Count} gestures did not land as exactly their path:\n{string.Join("\n", failures.Take(20))}");
     }
 
-    private SourceRepository TrackedTree() => SourceRepository.Open(_modFolder, GameRelease.Fallout4)
+    private SourceRepository TrackedTree() => SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
         ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private static IEnumerable<(RecordEditEnvelope Gesture, string Path)> EveryGestureWithThePathItMayChange(RecordTableSchema schema, JsonElement root)

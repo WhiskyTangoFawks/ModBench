@@ -16,7 +16,7 @@ public sealed class UnreadableCopySourceTests : IDisposable
     private void MakeNoJsonDocument(FormKey formKey)
     {
         var document = _mod.Document(_mod.SourcePlugin, formKey.ToString()).Require();
-        SourceRepository.Open(_mod.SourceModFolder, GameRelease.Fallout4).Require()
+        SourceRepository.Open(TestMod.In(_mod.SourceModFolder), GameRelease.Fallout4).Require()
             .Put(_mod.SourcePlugin, document with { Body = document.Body.Replace('{', '[') });
     }
 

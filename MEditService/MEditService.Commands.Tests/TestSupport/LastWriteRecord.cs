@@ -10,11 +10,11 @@ namespace MEditService.Commands.Tests.TestSupport;
 internal static class LastWriteRecord
 {
     internal static IReadOnlyList<string> Of(string modFolder, string pluginName) =>
-        SourceRepository.Over(modFolder, GameRelease.Fallout4)
+        SourceRepository.Over(ModOf(modFolder), GameRelease.Fallout4)
             .LastWrittenBinarySha256s(new PluginAddress(pluginName, Path.GetFileName(modFolder)));
 
     internal static void Interrupt(string modFolder, string pluginName, string binarySha256, Action write) =>
-        Assert.Throws<IOException>(() => SourceRepository.Over(modFolder, GameRelease.Fallout4).WriteBinary(
+        Assert.Throws<IOException>(() => SourceRepository.Over(ModOf(modFolder), GameRelease.Fallout4).WriteBinary(
             new PluginAddress(pluginName, Path.GetFileName(modFolder)), binarySha256, () =>
             {
                 write();
@@ -26,6 +26,8 @@ internal static class LastWriteRecord
 
     internal static string LockFileOfTheOnlyPlugin(string modFolder) =>
         Path.Combine(GitDir(modFolder), RefOfTheOnlyPlugin(modFolder) + ".lock");
+
+    private static PluginProvider.FromMod ModOf(string modFolder) => new(Path.GetFileName(modFolder), modFolder);
 
     private static string GitDir(string modFolder) => Path.Combine(modFolder, ".git");
 
