@@ -86,7 +86,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     [Fact]
     public void FactionsStructArray_WholeArrayWriteWithAChangedSubField_LandsInTheSourceDocument()
     {
-        var faction = _mod.CreateHandler.CreateRecord(_mod.Plugin, "fact", "FixtureFaction");
+        var faction = _mod.CreateHandler.CreateRecord(_mod.Plugin, "fact");
         Assert.True(faction.Applied, faction.Message);
 
         var seed = Service().Set(

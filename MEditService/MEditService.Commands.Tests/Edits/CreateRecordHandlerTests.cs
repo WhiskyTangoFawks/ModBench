@@ -18,7 +18,7 @@ public sealed class CreateRecordHandlerTests
     public void EditField_OnANeverCommittedRecord_LandsInTheTree()
     {
         using var mod = SourceEditFixture.Tracked();
-        var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
+        var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
         Assert.True(created.Applied, created.Message);
         Assert.NotNull(created.NewFormKey);
         var newFormKey = created.NewFormKey;
@@ -36,11 +36,11 @@ public sealed class CreateRecordHandlerTests
     public void CreateRecord_WhenTheFileSystemRefusesTheWrite_RefusesWithItsWords_AndLeavesTheTreeAsItWas()
     {
         using var mod = SourceEditFixture.Tracked();
-        const string newFormKey = "000F00:Fixture.esp";
-        TreeTampering.BlockWrite(mod.ModFolder, mod.Plugin, new RecordIdentity(newFormKey, "npc_", SourceEditFixture.NpcEditorId));
+        const string newFormKey = "000804:Fixture.esp";
+        TreeTampering.BlockWrite(mod.ModFolder, mod.Plugin, new RecordIdentity(newFormKey, "npc_", null));
         var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", SourceEditFixture.NpcEditorId, newFormKey);
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.Equal(RecordEditRefusal.SourceWriteFailed, result.Refusal);
         Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
@@ -53,7 +53,7 @@ public sealed class CreateRecordHandlerTests
         var creatable = CreatableRecordTypes.Of(SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), GameRelease.Fallout4);
 
         var refused = creatable
-            .Select(type => (type, result: mod.CreateHandler.CreateRecord(mod.Plugin, type, editorId: null)))
+            .Select(type => (type, result: mod.CreateHandler.CreateRecord(mod.Plugin, type)))
             .Where(created => !created.result.Applied)
             .Select(created => $"{created.type}: {created.result.Message}");
 
@@ -69,7 +69,7 @@ public sealed class CreateRecordHandlerTests
         using var mod = SourceEditFixture.Tracked();
         Assert.DoesNotContain(recordType, CreatableRecordTypes.Of(SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), GameRelease.Fallout4));
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType, editorId: null);
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType);
 
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
     }
@@ -79,7 +79,7 @@ public sealed class CreateRecordHandlerTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
@@ -88,7 +88,7 @@ public sealed class CreateRecordHandlerTests
 
         var document = mod.Document(newFormKey);
         Assert.NotNull(document);
-        Assert.Equal("BrandNewNpc", document.EditorId);
+        Assert.Null(document.EditorId);
     }
 
     [Fact]
@@ -99,14 +99,14 @@ public sealed class CreateRecordHandlerTests
         var deleted = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
         Assert.Empty(deleted.Refused);
 
-        var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AfterTheGap");
+        var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
         Assert.True(created.Applied, created.Message);
 
         var npcs = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
         Assert.DoesNotContain(npcs, n => n.Contains(SourceEditFixture.NpcEditorId, StringComparison.Ordinal));
         Assert.Contains(npcs, n => n.Contains("\"EditorID\": \"UntouchedNpc\"", StringComparison.Ordinal));
-        Assert.Contains(npcs, n => n.Contains("\"EditorID\": \"AfterTheGap\"", StringComparison.Ordinal));
+        Assert.NotNull(mod.Document(created.NewFormKey.Require()));
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class CreateRecordHandlerTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.NotNull(result.NewFormKey);
         Assert.Contains(result.NewFormKey, mod.ChangedFormKeys());
@@ -126,15 +126,13 @@ public sealed class CreateRecordHandlerTests
     public void CreateRecord_AllocatesAboveAnIdOnlyTheCommittedTreeStillHolds()
     {
         using var mod = SourceEditFixture.Tracked();
-        var headOnly = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "HeadOnlySeed", "F00000:Fixture.esp");
-        Assert.True(headOnly.Applied, headOnly.Message);
-        Assert.NotNull(headOnly.NewFormKey);
-        var headOnlyFormKey = headOnly.NewFormKey;
+        const string headOnlyFormKey = "F00000:Fixture.esp";
+        TrackedTree.Seed(mod.ModFolder, mod.Plugin, headOnlyFormKey);
         Commit(mod);
         Assert.Empty(mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, headOnlyFormKey)]).Refused);
         Assert.Null(mod.Document(headOnlyFormKey));
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AllocatedAfter");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
@@ -153,7 +151,7 @@ public sealed class CreateRecordHandlerTests
             mod.Plugin,
             new SourceDocument(masterKey, "npc_", "Overridden", $"{{\n  \"FormKey\": \"{masterKey}\",\n  \"EditorID\": \"Overridden\"\n}}"));
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "Allocated");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
@@ -173,7 +171,7 @@ public sealed class CreateRecordHandlerTests
     {
         using var mod = SourceEditFixture.Untracked();
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "New");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -185,7 +183,7 @@ public sealed class CreateRecordHandlerTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "not-a-real-type", "New");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "not-a-real-type");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordTypeNotFound, result.Refusal);
@@ -196,42 +194,19 @@ public sealed class CreateRecordHandlerTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "header", "New");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "header");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordTypeNotFound, result.Refusal);
     }
 
     [Fact]
-    public void CreateRecord_WithARequestedFormKey_Refuses_WhenItBelongsToADifferentPlugin()
-    {
-        using var mod = SourceEditFixture.Tracked();
-
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "New", "900000:SomeOtherPlugin.esp");
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
-    }
-
-    [Fact]
-    public void CreateRecord_WithARequestedFormKey_Refuses_WhenItCollides()
-    {
-        using var mod = SourceEditFixture.Tracked();
-
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "New", mod.Npc.ToString());
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
-    }
-
-    [Fact]
     public void CreateRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
         using var mod = SourceEditFixture.Tracked();
-        var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
-        Assert.True(seeded.Applied, seeded.Message);
+        TrackedTree.Seed(mod.ModFolder, mod.Plugin, "FFFFFF:Fixture.esp");
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "OneTooMany");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
@@ -244,10 +219,9 @@ public sealed class CreateRecordHandlerTests
     public void CreateRecord_OnALightEspPlugin_Refuses_WhenTheEslRangeIsExhausted()
     {
         using var mod = SourceEditFixture.TrackedLight();
-        var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap", "000FFF:Fixture.esp");
-        Assert.True(seeded.Applied, seeded.Message);
+        TrackedTree.Seed(mod.ModFolder, mod.Plugin, "000FFF:Fixture.esp");
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "OneTooMany");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
@@ -257,10 +231,9 @@ public sealed class CreateRecordHandlerTests
     public void CreateRecord_OnALightEspPlugin_WhenEslRangeExhausted_NamesBothRemedies()
     {
         using var mod = SourceEditFixture.TrackedLight();
-        var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap", "000FFF:Fixture.esp");
-        Assert.True(seeded.Applied, seeded.Message);
+        TrackedTree.Seed(mod.ModFolder, mod.Plugin, "000FFF:Fixture.esp");
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "OneTooMany");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.Contains(BothRemedies, result.Message, StringComparison.Ordinal);
     }
@@ -269,10 +242,9 @@ public sealed class CreateRecordHandlerTests
     public void CreateRecord_OnALightEspPlugin_AllocatesUpToTheEslCap()
     {
         using var mod = SourceEditFixture.TrackedLight();
-        var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "OneBelowTheEslCap", "000FFE:Fixture.esp");
-        Assert.True(seeded.Applied, seeded.Message);
+        TrackedTree.Seed(mod.ModFolder, mod.Plugin, "000FFE:Fixture.esp");
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal("000FFF:Fixture.esp", result.NewFormKey);
@@ -282,10 +254,9 @@ public sealed class CreateRecordHandlerTests
     public void CreateRecord_OnAPlainEslPlugin_Refuses_WhenTheEslRangeIsExhausted()
     {
         using var mod = SourceEditFixture.TrackedLight("Fixture.esl");
-        var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap", "000FFF:Fixture.esl");
-        Assert.True(seeded.Applied, seeded.Message);
+        TrackedTree.Seed(mod.ModFolder, mod.Plugin, "000FFF:Fixture.esl");
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "OneTooMany");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
@@ -295,47 +266,12 @@ public sealed class CreateRecordHandlerTests
     public void CreateRecord_OnAPlainEslPlugin_AllocatesUpToTheEslCap()
     {
         using var mod = SourceEditFixture.TrackedLight("Fixture.esl");
-        var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "OneBelowTheEslCap", "000FFE:Fixture.esl");
-        Assert.True(seeded.Applied, seeded.Message);
+        TrackedTree.Seed(mod.ModFolder, mod.Plugin, "000FFE:Fixture.esl");
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal("000FFF:Fixture.esl", result.NewFormKey);
     }
 
-    [Fact]
-    public void CreateRecord_TypedTarget_OnALightPlugin_Refuses_AboveTheEslCap()
-    {
-        using var mod = SourceEditFixture.TrackedLight();
-
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "New", "001000:Fixture.esp");
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
-    }
-
-    [Fact]
-    public void CreateRecord_TypedTarget_OnAnUnflaggedPlugin_AtTheSameId_Succeeds()
-    {
-        using var mod = SourceEditFixture.Tracked();
-        const string requested = "001000:Fixture.esp";
-
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "New", requested);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(requested, result.NewFormKey);
-    }
-
-    [Fact]
-    public void CreateRecord_WithAFreeRequestedFormKey_UsesItExactly()
-    {
-        using var mod = SourceEditFixture.Tracked();
-        const string requested = "900000:Fixture.esp";
-
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "New", requested);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(requested, result.NewFormKey);
-    }
 }

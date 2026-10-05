@@ -157,7 +157,7 @@ describe('HttpMEditClient — creating a record', () => {
     expect(result).toEqual({ applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' });
     const request = fetch.mock.calls[0]?.[0];
     expect(request?.url).toMatch(/\/plugins\/MyPatch\.esp\/records$/);
-    expect(await request?.json()).toEqual({ origin: 'ModA', recordType: 'npc_', editorId: null, formKey: null });
+    expect(await request?.json()).toEqual({ origin: 'ModA', recordType: 'npc_' });
   });
 
   it('answers a full FormID space as a refusal carrying mEdit\'s remedies, asking once, nothing offering to remove the flag and try again', async () => {

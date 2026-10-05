@@ -95,7 +95,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CreateHandler.CreateRecord(mod.OverriddenPlugin, "npc_", "NewNpc");
+        var result = mod.CreateHandler.CreateRecord(mod.OverriddenPlugin, "npc_");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
@@ -195,7 +195,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CreateHandler.CreateRecord(mod.UnlistedPlugin, "npc_", "NewNpc");
+        var result = mod.CreateHandler.CreateRecord(mod.UnlistedPlugin, "npc_");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);

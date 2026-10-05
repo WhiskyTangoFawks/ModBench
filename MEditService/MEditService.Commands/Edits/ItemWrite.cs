@@ -61,28 +61,9 @@ internal static class ItemWrite
             items, sameItem, RecordEditRefusal.GitUnavailable,
             item =>
             {
-                var result = RefusingTheWriteFailure(() => write(item), failure(item), logger);
+                var result = WriteFailure.Refused(() => write(item), failure(item), logger);
                 return Task.FromResult(result.Applied
                     ? ItemAnswer<RecordEditRefusal, string?>.Landed(result.NewFormKey)
                     : ItemAnswer<RecordEditRefusal, string?>.Refused(result.Refusal, result.Message));
             });
-
-    /// <summary>A write a single-item gesture makes: the same two refusals <see cref="Over"/> gives an
-    /// item.</summary>
-    internal static RecordEditResult RefusingTheWriteFailure(Func<RecordEditResult> write, string failure, ILogger logger)
-    {
-        try
-        {
-            return write();
-        }
-        catch (AmbiguousSourceUnitException ex)
-        {
-            return RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, ex.Message);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogError(ex, "{Failure}", failure);
-            return RecordEditResult.Refused(RecordEditRefusal.SourceWriteFailed, $"{failure}: {ex.Message}");
-        }
-    }
 }

@@ -875,8 +875,6 @@ export interface components {
         RecordCreateRequest: {
             origin: string;
             recordType: string;
-            editorId?: string | null;
-            formKey?: string | null;
         };
         RecordCreateResponse: {
             applied: boolean;

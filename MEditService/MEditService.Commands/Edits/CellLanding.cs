@@ -186,7 +186,7 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
                     Parsed(ContainerDocumentEdits.WithoutChildren(codec, copy, move.Release, move.CellType), move.Worldspace));
         }
 
-        if (targets.ResolveTargetFormKey(move.Repository, move.Plugin, null, out var formKey) is { } exhausted)
+        if (FormKeyAllocator.Over(move.Repository, move.Plugin, move.Release).Next(out var formKey) is { } exhausted)
             return new Step<JsonObject>.Refused(exhausted with { Path = move.Spelled });
         var cell = Parsed(
             RecordMint.BareDocument(codec, schemaReflector.GetSchemas(move.Release)[move.CellType], move.Release, formKey, editorId: null, partialForm: false),

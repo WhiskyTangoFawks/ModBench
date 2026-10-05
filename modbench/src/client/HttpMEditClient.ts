@@ -330,7 +330,7 @@ export class HttpMEditClient implements MEditClient {
       failMsg,
       post: () => this.apiClient.POST('/plugins/{plugin}/records', {
         params: { path: { plugin } },
-        body: { origin, recordType, editorId: null, formKey: null },
+        body: { origin, recordType },
       }),
     });
     return answer;

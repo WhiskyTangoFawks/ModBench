@@ -4,6 +4,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -84,6 +85,16 @@ internal static class TrackedTree
     /// text the codec cannot read would.</summary>
     internal static void Overwrite(string modFolder, PluginAddress plugin, RecordIdentity identity, string body) =>
         Repository(modFolder).Put(plugin, new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body));
+
+    /// <summary>A bare npc_ the tree holds under <paramref name="formKey"/>, as a record created there would.</summary>
+    internal static void Seed(string modFolder, PluginAddress plugin, string formKey)
+    {
+        var body = RecordMint.BareDocument(
+            new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["npc_"],
+            GameRelease.Fallout4, formKey, editorId: null, partialForm: false);
+        Repository(modFolder).Put(plugin, new SourceDocument(formKey, "npc_", null, body));
+    }
 
     internal static void Remove(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
         Repository(modFolder).Remove(plugin, identity);

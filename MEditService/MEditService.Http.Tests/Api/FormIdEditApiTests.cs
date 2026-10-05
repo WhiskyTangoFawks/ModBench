@@ -48,8 +48,6 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         {
             origin = Origin,
             recordType = "npc_",
-            editorId = "BrandNew",
-            formKey = (string?)null,
         });
         created.EnsureSuccessStatusCode();
         var oldFormKey = DocumentNodes.StringValueOf((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));

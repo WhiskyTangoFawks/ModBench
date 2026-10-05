@@ -224,7 +224,7 @@ public sealed class DeleteRecordHandlerTests
     public void DeleteRecords_OnANeverCommittedRecord_LeavesNothingUsed()
     {
         using var mod = SourceEditFixture.Tracked();
-        var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNew");
+        var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
         Assert.True(created.Applied, created.Message);
         Assert.NotNull(created.NewFormKey);
         var newFormKey = created.NewFormKey;

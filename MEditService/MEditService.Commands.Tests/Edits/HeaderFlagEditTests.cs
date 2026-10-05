@@ -43,22 +43,9 @@ public sealed class HeaderFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void AfterSettingIsLight_ATypedTargetOutsideTheLightRange_IsRefusedImmediately()
-    {
-        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
-
-        var result = _fixture.CreateHandler.CreateRecord(
-            _fixture.Plugin, "npc_", "OutOfRange", $"001000:{SourceEditFixture.PluginName}");
-
-        Assert.False(result.Applied);
-        Assert.Contains("0xFFF", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task Compile_WithTheLightFlagAndAnOutOfRangeRecord_IsRefused_NamingTheRecordAndTheThreeRemedies()
     {
-        Assert.True(_fixture.CreateHandler.CreateRecord(
-            _fixture.Plugin, "npc_", "BigId", $"001000:{SourceEditFixture.PluginName}").Applied);
+        TrackedTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
         var compile = await CompileService().CompileOneAsync(_fixture.Plugin);
@@ -73,8 +60,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     [Fact]
     public async Task Compile_OfAnOutOfRangeRecord_Succeeds_OnceTheLightFlagIsCleared()
     {
-        Assert.True(_fixture.CreateHandler.CreateRecord(
-            _fixture.Plugin, "npc_", "BigId", $"001000:{SourceEditFixture.PluginName}").Applied);
+        TrackedTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false)).Applied);
 
