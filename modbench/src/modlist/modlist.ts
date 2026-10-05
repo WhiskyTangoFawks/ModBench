@@ -276,6 +276,31 @@ export async function createEmptyMod(access: ModlistAccess, profile: string, nam
   return line;
 }
 
+/** `lineRefusals` names each profile whose line could not be renamed: the folder is renamed, and
+ *  that profile loses the mod's place until `mod sync` adopts the folder. */
+export type RenameModResult =
+  | { applied: true; lineRefusals: { profile: string; refusal: string }[] }
+  | { applied: false; refusal: string };
+
+/** The folder first, then the line in each of `profiles`, the active one first. A mod a profile
+ *  does not list leaves that profile as it was. */
+export async function renameMod(
+  access: ModlistAccess, activeProfile: string, profiles: readonly string[], from: string, to: string,
+): Promise<RenameModResult> {
+  try {
+    await access.adapter.renameModFolder(from, to);
+  } catch (err) {
+    return refuse(err);
+  }
+  const lineRefusals: { profile: string; refusal: string }[] = [];
+  const ordered = [activeProfile, ...profiles.filter((profile) => profile !== activeProfile)];
+  for (const profile of ordered) {
+    const line = await changeModOrder(access, profile, () => [{ kind: 'renameMod', from, to }]);
+    if (!line.applied) lineRefusals.push({ profile, refusal: line.refusal });
+  }
+  return { applied: true, lineRefusals };
+}
+
 export type ModSyncResult =
   | { applied: true; added: string[]; dropped: string[] }
   | { applied: false; refusal: string };

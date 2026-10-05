@@ -210,6 +210,7 @@ export type ModOrderChange =
   | { readonly kind: 'addAtWinningEnd'; readonly entry: EntryRef }
   | { readonly kind: 'addSeparator'; readonly separator: string; readonly afterIndex: number }
   | { readonly kind: 'renameSeparator'; readonly from: string; readonly to: string }
+  | { readonly kind: 'renameMod'; readonly from: string; readonly to: string }
   | { readonly kind: 'dropMod'; readonly mod: string }
   | { readonly kind: 'dropSeparator'; readonly separator: string };
 
@@ -379,6 +380,9 @@ export interface InstanceAdapter {
   // Put and rename in mods/.
   /** Refuses a folder already there, whatever it holds, matched as the manager matches names. */
   createModFolder(mod: string): Promise<void>;
+  /** Renames the folder that holds `from` to `to`, in place. Refuses when none holds `from`, and a
+   *  folder already there under another name, matched as the manager matches names. */
+  renameModFolder(from: string, to: string): Promise<void>;
   /** Marks a file or folder by its own name; a mark already true changes nothing. Refuses an
    *  include on an unmarked name a folder excludes, and a mark replacing a file. Rejects a path
    *  outside the origin. */

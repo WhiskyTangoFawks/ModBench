@@ -807,6 +807,27 @@ describe('the MO2 Instance adapter', () => {
       assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
 
+    it('renames a mod\'s folder, keeping what is in it, and takes a case-only rename', async () => {
+      await adapter.renameModFolder('harder vats', 'Harder VATS 2');
+      await adapter.renameModFolder('Harder VATS 2', 'HARDER VATS 2');
+
+      expect(await isThere(join(root, 'mods', 'Harder VATS'))).toBe(false);
+      expect(await isThere(join(root, 'mods', 'HARDER VATS 2', 'meta.ini'))).toBe(true);
+    });
+
+    it('refuses to rename a folder that is not there', async () => {
+      await expect(adapter.renameModFolder('No Such Mod', 'Anything')).rejects.toThrow(/No Such Mod/);
+    });
+
+    it('refuses a rename onto a folder already there, in any case, and moves nothing', async () => {
+      const before = await snapshotTree(root);
+
+      await expect(adapter.renameModFolder('Harder VATS', 'unofficial fallout 4 patch'))
+        .rejects.toThrow(`The folder "${join(root, 'mods', 'Unofficial Fallout 4 Patch')}" is in the way`);
+
+      assertOnlyChanged(before, await snapshotTree(root), new Set());
+    });
+
     it('moves the folder that holds a mod or a separator to the trash, and answers false when none does', async () => {
       const trashed: string[] = [];
       const trash = (path: string): Promise<void> => {
@@ -1024,6 +1045,28 @@ describe('the MO2 Instance adapter', () => {
       expect(modNames(await adapter.modOrder('Default'))).toContain('separator:Core Mods:false');
       expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
       expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(false);
+    });
+
+    it('renames a mod\'s line in place, keeping its state, and nothing else', async () => {
+      const before = await snapshotTree(root);
+      const order = modNames(await adapter.modOrder('Default'));
+
+      expect(await change([{ kind: 'renameMod', from: 'harder vats', to: 'Harder VATS 2' }])).toEqual({ wrote: true });
+
+      expect(modNames(await adapter.modOrder('Default'))).toEqual(order.map((n) => n.replace('mod:Harder VATS:', 'mod:Harder VATS 2:')));
+      assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_MODLIST]));
+    });
+
+    it('writes nothing for a rename of a mod the profile does not list', async () => {
+      expect(await change([{ kind: 'renameMod', from: 'No Such Mod', to: 'Anything' }])).toEqual({ wrote: false });
+    });
+
+    it('refuses a rename onto a name another listed mod has, in any case', async () => {
+      const before = await text(root, DEFAULT_MODLIST);
+
+      await expect(change([{ kind: 'renameMod', from: 'Harder VATS', to: 'unofficial fallout 4 patch' }])).rejects.toThrow();
+
+      expect(await text(root, DEFAULT_MODLIST)).toBe(before);
     });
 
     it('writes nothing when the changes are already true of mod order', async () => {

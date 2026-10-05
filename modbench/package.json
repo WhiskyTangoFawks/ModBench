@@ -466,6 +466,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.mod.rename",
+        "title": "Rename Mod…",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.mod.uninstall",
         "title": "Uninstall Mod…",
         "category": "Modbench"
@@ -676,6 +681,10 @@
         {
           "command": "modbench.mod.move",
           "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind"
+        },
+        {
+          "command": "modbench.mod.rename",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == mod && modbench.mod.singleRow"
         },
         {
           "command": "modbench.mod.uninstall",
@@ -1068,6 +1077,11 @@
           "group": "2_change@2"
         },
         {
+          "command": "modbench.mod.rename",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
+          "group": "2_change@3"
+        },
+        {
           "command": "modbench.mod.uninstall",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
           "group": "6_destroy@1"
@@ -1353,6 +1367,12 @@
         "key": "Delete",
         "mac": "cmd+backspace",
         "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionKind == separator"
+      },
+      {
+        "command": "modbench.mod.rename",
+        "key": "f2",
+        "mac": "enter",
+        "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionKind == mod && modbench.mod.singleRow"
       },
       {
         "command": "modbench.separator.rename",

@@ -3,9 +3,9 @@ import { fakeVscodeModule } from './fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { uninstallMods } from '../../modlist/modlist';
+import { renameMod, uninstallMods } from '../../modlist/modlist';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree,
 } from './corpusFixture';
@@ -56,5 +56,27 @@ describe('mod lifecycle corpus (uninstall)', () => {
 
     assertOnlyChanged(before, after, new Set(['mods/Harder VATS/meta.ini', MODLIST]));
     expect(after.has('mods/Harder VATS/meta.ini')).toBe(false);
+  });
+
+  it('renameMod moves the folder with its repository, plugin source and meta.ini, and renames the line in each profile — nothing else', async () => {
+    const folder = (name: string) => join(dir, 'mods', name);
+    await mkdir(join(folder('Harder VATS'), '.git'));
+    await mkdir(join(folder('Harder VATS'), 'plugin-source'));
+    await writeFile(join(folder('Harder VATS'), '.git', 'HEAD'), 'ref: refs/heads/main\n');
+    await writeFile(join(folder('Harder VATS'), 'plugin-source', 'a.psc'), 'Scriptname a\n');
+    const before = await snapshotTree(dir);
+
+    await renameMod(accessTo(dir), PROFILE, [PROFILE, 'Secondary'], 'Harder VATS', 'Harder VATS 2');
+    const after = await snapshotTree(dir);
+
+    const moved = [...before.keys()].filter((path) => path.startsWith('mods/Harder VATS/'));
+    expect(moved).toEqual(expect.arrayContaining([
+      'mods/Harder VATS/meta.ini', 'mods/Harder VATS/.git/HEAD', 'mods/Harder VATS/plugin-source/a.psc',
+    ]));
+    for (const path of moved) {
+      expect(after.get(path.replace('mods/Harder VATS/', 'mods/Harder VATS 2/')), path).toEqual(before.get(path));
+    }
+    assertOnlyChanged(before, after, new Set([...moved, ...moved.map((p) => p.replace('/Harder VATS/', '/Harder VATS 2/')), MODLIST, 'profiles/Secondary/modlist.txt']));
+    expect((await readModlistEntries(dir)).find((e) => e.name === 'Harder VATS 2')).toEqual({ kind: 'mod', name: 'Harder VATS 2', enabled: false });
   });
 });
