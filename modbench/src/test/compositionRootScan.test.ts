@@ -74,7 +74,7 @@ describe('the composition root builds each box, registers it with VS Code and de
   it.each(rootFiles().map((path) => basename(path)))('%s reaches the Editor only through its index and names no webview', (file) => {
     const text = readFileSync(join(SRC, file), 'utf8');
     expect(importSpecifiers(text, file).filter((specifier) => specifier.startsWith('./editor/'))).toEqual([]);
-    expect(text).not.toMatch(/\bWebview/);
+    expect(text).not.toMatch(/webview/i);
   });
 
   it('exports nothing from the activation file but what VS Code and the integration tests take', () => {

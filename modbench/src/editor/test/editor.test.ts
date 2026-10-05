@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   contextKeys: new Map<string, unknown>(),
   executed: [] as unknown[][],
   editorProviders: [] as unknown[],
+  editorProviderDisposals: 0,
   treeViews: [] as FakeTreeView[],
 }));
 
@@ -40,7 +41,7 @@ vi.mock('vscode', () => ({
   window: {
     registerCustomEditorProvider: (_viewType: string, provider: unknown) => {
       h.editorProviders.push(provider);
-      return { dispose: () => undefined };
+      return { dispose: () => { h.editorProviderDisposals++; } };
     },
     createTreeView: (_id: string, options: unknown) => {
       const listeners: ((event: unknown) => void)[] = [];
@@ -219,5 +220,17 @@ describe('a record gesture from the palette', () => {
 
     expect(h.contextKeys.get('modbench.record.selectionIn')).toBe('modbench.pluginListTree');
     expect(opened()).toEqual([recordUri({ formKey: '000803:A.esp' })]);
+  });
+});
+
+describe('the Editor disposed', () => {
+  it('lets go of what it registered once, however often it is disposed', () => {
+    const { editor } = makeEditor();
+    h.editorProviderDisposals = 0;
+
+    editor.dispose();
+    editor.dispose();
+
+    expect(h.editorProviderDisposals).toBe(1);
   });
 });

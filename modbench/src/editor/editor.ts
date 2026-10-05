@@ -19,7 +19,6 @@ export type EditorDeps = Omit<EditorCommandDeps,
 };
 
 export interface Editor extends vscode.Disposable {
-  /** A completed reconcile or a landed Track. */
   announceConflictsComputed(): void;
   nameFilters: ReadonlyMap<string, Pick<NameFilter, 'open' | 'clear'>>;
   copyValue: readonly CopyValueAdapter[];
@@ -67,6 +66,6 @@ export function createEditor(deps: EditorDeps): Editor {
       { text: (clicked, allSelected) => referencedByCopyValueText(referencedByView, clicked, allSelected), reporterTag: 'referencedByTree.copy' },
     ],
     focusRecordCell: (cell) => { focusedCells.setActiveCell(cell); },
-    dispose: () => { owned.reverse().forEach((disposable) => { disposable.dispose(); }); },
+    dispose: () => { owned.splice(0).reverse().forEach((disposable) => { disposable.dispose(); }); },
   };
 }
