@@ -130,6 +130,22 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
         PluginTrees.DivergenceBetween(modPath, recompiledPath, gameRelease, strings)?.Describe();
 
+    public async Task<PluginByteComparison> CompareBytesAsync(
+        string originalPath, string recompiledPath, CancellationToken cancel = default)
+    {
+        var originalBytes = await File.ReadAllBytesAsync(originalPath, cancel);
+        var recompiledBytes = await File.ReadAllBytesAsync(recompiledPath, cancel);
+        if (originalBytes.AsSpan().SequenceEqual(recompiledBytes))
+            return new PluginByteComparison(Identical: true);
+
+        if (PluginBinaryWalk.FindFirstSubrecordLoss(originalBytes, recompiledBytes) is not { } loss)
+            return new PluginByteComparison(Identical: false);
+
+        var cause = MalformedPluginScan.Scan(originalBytes).FirstOrDefault(d =>
+            d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
+        return new PluginByteComparison(Identical: false, loss, cause);
+    }
+
     internal static IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
         => ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(strings));
 

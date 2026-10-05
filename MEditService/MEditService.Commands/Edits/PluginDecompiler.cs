@@ -91,18 +91,15 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
             return $"{pluginName} does not round-trip through its own source: {diagnosis.Describe()}";
         }
 
-        var originalBytes = await PluginBinaryHash.ExactBytesOfFileAsync(originalPluginPath, cancel);
-        var recompiledBytes = await PluginBinaryHash.ExactBytesOfFileAsync(recompiledPath, cancel);
-        if (originalBytes.AsSpan().SequenceEqual(recompiledBytes))
+        var comparison = await adapter.CompareBytesAsync(originalPluginPath, recompiledPath, cancel);
+        if (comparison.Identical)
             return null;
 
-        if (PluginBinaryWalk.FindFirstSubrecordLoss(originalBytes, recompiledBytes) is { } loss)
+        if (comparison.Loss is { } loss)
         {
             // A Kind B diagnosis on the record names the cause ahead of the drop it produced.
-            var kindB = MalformedPluginScan.Scan(originalBytes).FirstOrDefault(d =>
-                d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
-            return $"{pluginName} does not round-trip through its own source: " + (kindB != null
-                ? $"{kindB.Describe()} — parsing the malformed subrecord dropped " +
+            return $"{pluginName} does not round-trip through its own source: " + (comparison.LossCause is { } cause
+                ? $"{cause.Describe()} — parsing the malformed subrecord dropped " +
                   $"{string.Join(", ", loss.Signatures)} before its source was written."
                 : $"{loss.RecordType} {loss.FormId:X8} is missing {string.Join(", ", loss.Signatures)} " +
                   "present in the original — dropped during parsing, before its source was written.");
