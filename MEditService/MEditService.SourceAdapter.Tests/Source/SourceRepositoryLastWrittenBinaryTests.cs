@@ -67,6 +67,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
         var repository = TrackedOver(modFolder);
+        Assert.Empty(repository.LastWrittenBinarySha256s(Test));
 
         repository.WriteBinary(Test, "FOR-TEST", () => { });
 

@@ -47,17 +47,17 @@ public sealed class DecompilePluginTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task Tracking_RecordsTheRequestsUpstreamVersion_InTheBaselinesSubjectAndTrailers()
+    public async Task Tracking_MakesOneCommit_NamedForTheMod()
     {
         await Loaded();
 
-        var tracked = await Client.Track([(Plugin, Origin)], upstreamVersionByOrigin: new Dictionary<string, string> { [Origin] = "1.2.3" });
+        var tracked = await Client.Track(Plugin, Origin);
 
         tracked.EnsureSuccessStatusCode();
         var modFolder = OtherTool.ModFolderOf(_instance, Origin);
         Assert.Equal(
-            $"Track {Plugin} 1.2.3\n\nPlugin: {Plugin}\nUpstream-Version: 1.2.3",
-            GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "show", "-s", "--format=%s%n%n%(trailers:only,unfold,key=Plugin,key=Upstream-Version)", "main").TrimEnd('\n'));
+            [$"Track {Path.GetFileName(modFolder)}"],
+            GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "log", "--format=%s", "main").Split('\n', StringSplitOptions.RemoveEmptyEntries));
     }
 
     [Fact]
