@@ -170,7 +170,7 @@ describe('right-click array ops write one envelope from the host', () => {
 
     await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(parentContext([{ kind: 'member', name: 'Values' }]));
 
-    expect(report).toHaveBeenCalledWith('warning', 'Track the mod first.');
+    expect(report).toHaveBeenCalledWith('warning', 'Values: Track the mod first.');
     expect(refreshSourceControlFor).not.toHaveBeenCalled();
   });
 
@@ -334,8 +334,19 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
 
     await editField()(IDENTITY, envelope);
 
-    expect(report).toHaveBeenCalledWith('warning', 'Track the mod first.');
+    expect(report).toHaveBeenCalledWith('warning', 'Height: Track the mod first.');
     expect(refreshSourceControlFor).not.toHaveBeenCalled();
+  });
+
+  it('names a nested field as mEdit spells its path', async () => {
+    const { deps, meditClient, report } = makeDeps();
+    meditClient.setCommandResult('editRecord', { applied: false, refusal: 'ReadOnly', message: 'Read-only.' });
+    registerRecordPanelContextCommands(deps);
+    const nested = [{ kind: 'member' as const, name: 'Conditions' }, { kind: 'index' as const, index: 0 }, { kind: 'member' as const, name: 'Data' }];
+
+    await editField()(IDENTITY, { op: 'set', path: nested, value: 1 });
+
+    expect(report).toHaveBeenCalledWith('warning', 'Conditions[0].Data: Read-only.');
   });
 
   it('reports a transport failure as an error', async () => {
@@ -345,7 +356,7 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
 
     await editField()(IDENTITY, envelope);
 
-    expect(report).toHaveBeenCalledWith('error', expect.any(String), 'ECONNREFUSED');
+    expect(report).toHaveBeenCalledWith('error', 'Could not edit Height.', 'ECONNREFUSED');
   });
 
   it('from the palette, asks for the focused string cell\'s new text and sets it at the cell\'s path', async () => {

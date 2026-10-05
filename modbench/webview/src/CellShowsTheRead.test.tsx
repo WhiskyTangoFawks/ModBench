@@ -68,6 +68,21 @@ describe('a record panel cell after an edit (common.md, A gesture that writes, s
   });
 });
 
+describe('a record panel cell after a refused edit (editor.md, Reporting, story 1)', () => {
+  it('stays at the last read, since the host answers a refusal with a notification and no read', async () => {
+    render(<RecordPanel client={panelClient(() => disk, { plugins })} />);
+    await waitFor(() => screen.getByText('Before'));
+    fireEvent.doubleClick(within(nameCell()).getByText('Before'));
+    const input = required(nameCell().querySelector('input'), "the cell's input");
+    fireEvent.change(input, { target: { value: 'Refused' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD })));
+    expect(nameCell()).toHaveTextContent('Before');
+    expect(nameCell()).not.toHaveTextContent('Refused');
+  });
+});
+
 describe('a record panel reading the FormKey its record moved to (editor.md, States, story 5)', () => {
   const MOVED = '000002:Fallout4.esm';
   const answered = (result: CompareResult) => ({
