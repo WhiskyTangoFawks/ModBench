@@ -10,6 +10,7 @@ import { modOfOrigin } from './modOfOrigin';
 import { pluginAddressKey } from './pluginAddress';
 import { trackProgressMessage } from './trackProgress';
 import { PluginNode, type PluginsTreeNode } from './PluginsTreeProvider';
+import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { compilableSelected, PLUGINS_KEY_ARGS } from './gestureEntry';
 import { gestureEntry, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
@@ -233,24 +234,21 @@ async function argumentOf(
 
 // plugins.md, Compile, story 3: from the palette, a pick of the tracked, editable plugins. An
 // extension cannot tell whether the Plugins view has focus, so it always asks, a selected
-// compilable plugin first.
+// compilable plugin first and marked.
 async function pickCompilable(deps: CompileDeps, entry: GestureEntry<PluginsTreeNode>): Promise<PluginAddress[] | undefined> {
   const selected = compilableSelected(entry.selection);
   const selectedKey = selected && pluginAddressKey(selected.plugin.name, selected.origin);
-  const isSelected = (p: PluginAddress) => pluginAddressKey(p.name, p.origin) === selectedKey;
+  const isSelected = (item: { label: string; description: string }) => pluginAddressKey(item.label, item.description) === selectedKey;
   const plugins = await deps.client.getPlugins().catch((err: unknown) => {
     deps.reporter.report('error', 'Could not list the plugins to compile.', errorMessage(err));
     return undefined;
   });
   if (plugins === undefined) return undefined;
-  const compilable = plugins
+  const items = plugins
     .filter((p) => p.isTracked)
-    .map((p) => ({ name: p.name, origin: p.origin }))
+    .map((p) => ({ label: p.name, description: p.origin }))
     .sort((a, b) => Number(isSelected(b)) - Number(isSelected(a)));
-  const choice = await vscode.window.showQuickPick(
-    compilable.map((p) => ({ label: p.name, description: p.origin })),
-    { placeHolder: 'Compile which plugin?' },
-  );
+  const choice = await pickWithMarked(items, items.find(isSelected), 'Compile which plugin?');
   return choice && [{ name: choice.label, origin: choice.description }];
 }
 
