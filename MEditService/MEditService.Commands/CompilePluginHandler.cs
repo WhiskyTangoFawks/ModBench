@@ -4,8 +4,7 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
-/// <summary>The Compile gesture's handler (ADR-0014): it owns the selection, and every
-/// step of the compile itself stays on <see cref="PluginCompileService"/>.</summary>
+/// <summary>The Compile gesture's handler (ADR-0014), and Compile's only way in.</summary>
 public sealed class CompilePluginHandler
 {
     private readonly PluginCompileService _compileService;
