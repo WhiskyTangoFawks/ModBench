@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { selectUpgradeCandidates } from '../upgradeCandidates';
+import { describe, it, expect, vi } from 'vitest';
+import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
+
+const { createQuickPick } = vi.hoisted(() => ({ createQuickPick: vi.fn() }));
+vi.mock('vscode', () => ({ window: { createQuickPick } }));
+
+import { chooseInstallTarget, selectUpgradeCandidates } from '../installTarget';
 import type { DownloadRow, InstanceValue } from '../../instanceLoader/instance';
 
 const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): InstanceValue['mods'][number] => ({
@@ -74,11 +79,12 @@ describe('selectUpgradeCandidates', () => {
     ]);
   });
 
-  it('flags an installationFile match from a hand-installed mod with no Nexus mod id of its own, on its meta.ini record alone', () => {
-    const value = valueOf([mod({ name: 'Hand Installed', archiveFilename: 'foo.7z' })]);
-    expect(selectUpgradeCandidates(value, download({ modID: '111', name: 'foo.7z' }))).toEqual([
-      { modName: 'Hand Installed', version: undefined, tier: 'installationFile' },
+  it('leaves out a mod installed from this file that does not share the mod id', () => {
+    const value = valueOf([
+      mod({ name: 'Hand Installed', archiveFilename: 'foo.7z' }),
+      mod({ name: 'Other Id', nexusId: '222', archiveFilename: 'foo.7z' }),
     ]);
+    expect(selectUpgradeCandidates(value, download({ modID: '111', name: 'foo.7z' }))).toEqual([]);
   });
 
   it('drops the installationFile tier, listing the mod tierless, when a fileId match exists elsewhere in the pool', () => {
@@ -99,5 +105,42 @@ describe('selectUpgradeCandidates', () => {
     expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999', name: 'harder-vats-v1.7z' }))).toEqual([
       { modName: 'Harder VATS', version: '1.0', tier: 'installationFile' },
     ]);
+  });
+});
+
+describe('chooseInstallTarget', () => {
+  const row = (over: { modID?: string }) => ({ name: 'foo.7z', path: '/downloads/foo.7z', ...over });
+  const pickDouble = () => {
+    const double = fakeQuickPick<{ label: string }>();
+    createQuickPick.mockReturnValue(double.qp);
+    return double;
+  };
+
+  it('asks for a new mod name, with no pick, when no mod shares the mod id', async () => {
+    const nameNewMod = vi.fn().mockResolvedValue('Foo');
+    const value = valueOf([mod({ name: 'Hand Installed', archiveFilename: 'foo.7z' })]);
+    expect(await chooseInstallTarget(value, row({ modID: '111' }), nameNewMod)).toEqual({ kind: 'new', name: 'Foo' });
+    expect(nameNewMod).toHaveBeenCalledWith('foo');
+    expect(createQuickPick).not.toHaveBeenCalled();
+  });
+
+  it('takes an upgrade from the pick without asking for a name', async () => {
+    const double = pickDouble();
+    const nameNewMod = vi.fn();
+    const result = chooseInstallTarget(valueOf([mod({ name: 'Harder VATS', nexusId: '111' })]), row({ modID: '111' }), nameNewMod);
+    await vi.waitFor(() => expect(double.qp.show).toHaveBeenCalled());
+    const upgrade = double.qp.items.find((item) => item.label === 'Harder VATS');
+    if (!upgrade) throw new Error('the pick lists the mod');
+    double.accept(upgrade);
+    expect(await result).toEqual({ kind: 'upgrade', name: 'Harder VATS' });
+    expect(nameNewMod).not.toHaveBeenCalled();
+  });
+
+  it('installs nothing on Esc', async () => {
+    const double = pickDouble();
+    const result = chooseInstallTarget(valueOf([mod({ name: 'Harder VATS', nexusId: '111' })]), row({ modID: '111' }), vi.fn());
+    await vi.waitFor(() => expect(double.qp.show).toHaveBeenCalled());
+    double.escape();
+    expect(await result).toBeUndefined();
   });
 });

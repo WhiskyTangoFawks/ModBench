@@ -532,10 +532,13 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     expect(createQuickPick).not.toHaveBeenCalled();
   });
 
-  it('a download with a mod id no installed mod carries, and no installationFile match, never shows the pick', async () => {
+  it('a download with a mod id no installed mod carries never shows the pick, even when a mod was installed from this file', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
+    const instance = fakeInstance([
+      mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' }),
+      mod({ name: 'Hand Installed', archiveFilename: 'foo.7z' }),
+    ]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
     registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
