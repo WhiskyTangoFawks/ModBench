@@ -47,13 +47,13 @@ describe('SseNotificationSubscriber', () => {
     const event = rowsChanged(['000001:Test.esp']);
     const openStream = vi.fn().mockResolvedValue(streamResponse([commentFrame(), sseFrame(event)]));
     const subscriber = new SseNotificationSubscriber({ openStream });
-    const received: NotificationEvent[] = [];
-    subscriber.subscribe('rows-changed', (e) => received.push(e));
+    const received: unknown[] = [];
+    subscriber.onNotification('rows-changed', (p) => received.push(p));
 
     subscriber.start();
     await vi.waitFor(() => expect(received).toHaveLength(1));
 
-    expect(received[0]).toEqual(event);
+    expect(received[0]).toEqual({ plugin: event.plugin, origin: event.origin, keys: event.keys });
     subscriber.stop();
   });
 
@@ -63,8 +63,8 @@ describe('SseNotificationSubscriber', () => {
       .mockResolvedValueOnce(streamResponse([]))
       .mockResolvedValueOnce(streamResponse([sseFrame(secondEvent)]));
     const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
-    const received: NotificationEvent[] = [];
-    subscriber.subscribe('rows-changed', (e) => received.push(e));
+    const received: unknown[] = [];
+    subscriber.onNotification('rows-changed', (p) => received.push(p));
 
     subscriber.start();
     await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
@@ -72,7 +72,7 @@ describe('SseNotificationSubscriber', () => {
     await vi.waitFor(() => expect(received).toHaveLength(1));
 
     expect(openStream).toHaveBeenCalledTimes(2);
-    expect(received[0]).toEqual(secondEvent);
+    expect(received[0]).toEqual({ plugin: secondEvent.plugin, origin: secondEvent.origin, keys: secondEvent.keys });
     subscriber.stop();
   });
 
@@ -82,8 +82,8 @@ describe('SseNotificationSubscriber', () => {
       .mockResolvedValueOnce(streamResponse([frameOfValidJsonMissingTheFieldsAnEventRequires()]))
       .mockResolvedValueOnce(streamResponse([sseFrame(goodEvent)]));
     const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
-    const received: NotificationEvent[] = [];
-    subscriber.subscribe('rows-changed', (e) => received.push(e));
+    const received: unknown[] = [];
+    subscriber.onNotification('rows-changed', (p) => received.push(p));
 
     subscriber.start();
     await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
@@ -91,7 +91,7 @@ describe('SseNotificationSubscriber', () => {
     await vi.waitFor(() => expect(received).toHaveLength(1));
 
     expect(openStream).toHaveBeenCalledTimes(2);
-    expect(received[0]).toEqual(goodEvent);
+    expect(received[0]).toEqual({ plugin: goodEvent.plugin, origin: goodEvent.origin, keys: goodEvent.keys });
     subscriber.stop();
   });
 
@@ -101,8 +101,8 @@ describe('SseNotificationSubscriber', () => {
       .mockRejectedValueOnce(new Error('ECONNREFUSED'))
       .mockResolvedValueOnce(streamResponse([sseFrame(event)]));
     const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 500 });
-    const received: NotificationEvent[] = [];
-    subscriber.subscribe('rows-changed', (e) => received.push(e));
+    const received: unknown[] = [];
+    subscriber.onNotification('rows-changed', (p) => received.push(p));
 
     subscriber.start();
     await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
@@ -285,18 +285,15 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     expect(heard).toEqual([]);
   });
 
-  it('delivers to flat and typed listeners alike, and unsubscribe stops the typed one', () => {
+  it('unsubscribe stops a typed listener', () => {
     const subscriber = new TestableSubscriber();
-    const flat: NotificationEvent[] = [];
     const typed: unknown[] = [];
-    subscriber.subscribe('plugin-changed', (e) => flat.push(e));
     const off = subscriber.onNotification('plugin-changed', (p) => typed.push(p));
 
     subscriber.receive(rowsChanged([], { kind: 'plugin-changed' }));
     off();
     subscriber.receive(rowsChanged([], { kind: 'plugin-changed' }));
 
-    expect(flat).toHaveLength(2);
     expect(typed).toHaveLength(1);
   });
 });

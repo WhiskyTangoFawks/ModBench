@@ -1,4 +1,5 @@
-import type { MEditClient, NotificationKind, NotificationPayloads, NotificationEvent, BackendStatus } from './MEditClient';
+import type { MEditClient, NotificationKind, NotificationPayloads, BackendStatus } from './MEditClient';
+import type { NotificationEvent } from './apiClient';
 import { NotificationListenerRegistry } from './notificationStream';
 
 // Every query and command a test can script; `putLoadOrder` counts as a command here — the
@@ -142,11 +143,6 @@ export class InMemoryMEditClient implements MEditClient {
 
   start(): Promise<void> { this.record('start', []); return Promise.resolve(); }
   stop(): Promise<void> { this.record('stop', []); return Promise.resolve(); }
-
-  subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void {
-    this.record('subscribe', [kind]);
-    return this.notifications.subscribe(kind, listener);
-  }
 
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
     this.record('onNotification', [kind]);

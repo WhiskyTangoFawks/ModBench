@@ -11,7 +11,7 @@ import { SseNotificationSubscriber } from './notificationStream';
 import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
-  type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind, type NotificationPayloads,
+  type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type CreatableRecordType,
   type RebuildIndexOutcome, type CopyItem, type CopyMode,
   type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
@@ -107,10 +107,6 @@ export class HttpMEditClient implements MEditClient {
   stop(): Promise<void> { return this.lifecycle.stop(); }
 
   // ── notifications ────────────────────────────────────────────────────────
-
-  subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void {
-    return this.notifications.subscribe(kind, listener);
-  }
 
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
     return this.notifications.onNotification(kind, listener);
