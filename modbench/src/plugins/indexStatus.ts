@@ -60,7 +60,7 @@ const UNREACHABLE_REASON = {
 };
 
 export interface IndexStatusDeps {
-  client: Pick<MEditClient, 'subscribe' | 'onStatusChanged' | 'onReconnected' | 'getActiveFilter'>;
+  client: Pick<MEditClient, 'onNotification' | 'onStatusChanged' | 'onReconnected' | 'getActiveFilter'>;
   tree: Pick<PluginsTreeProvider,
     'applyIndexed' | 'applyRefused' | 'applyReconciled' | 'applyBackendUnreachable' | 'refreshFacts'>;
   /** The record browser a reconciled load order refreshes. */

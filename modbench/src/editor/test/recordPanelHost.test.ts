@@ -103,7 +103,7 @@ describe('a record panel and the notifications', () => {
     const onReconnected = vi.spyOn(meditClient, 'onReconnected');
     register(undefined, { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient });
 
-    expect(meditClient.calls).toContainEqual({ method: 'subscribe', args: ['rows-changed'] });
+    expect(meditClient.calls).toContainEqual({ method: 'onNotification', args: ['rows-changed'] });
     expect(onReconnected).toHaveBeenCalled();
   });
 });

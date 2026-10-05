@@ -11,7 +11,7 @@ export interface RecordGroup {
 }
 
 export interface CreatedRecordSelectionDeps<Row> {
-  client: Pick<MEditClient, 'subscribe' | 'getRecords'>;
+  client: Pick<MEditClient, 'onNotification' | 'getRecords'>;
   reporter: Reporter;
   rowOf(group: RecordGroup, formKey: string): Promise<Row | undefined>;
   view: { reveal(row: Row, options: { select: boolean; focus: boolean }): PromiseLike<void> };
@@ -64,7 +64,7 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
         forget();
         await selectAndOpen(group, created);
       };
-      const unsubscribe = deps.client.subscribe('rows-changed', (event) => {
+      const unsubscribe = deps.client.onNotification('rows-changed', (event) => {
         if (pluginAddressKey(event.plugin, event.origin) === address) void settle();
       });
       const forget = () => {
