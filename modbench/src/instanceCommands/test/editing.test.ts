@@ -13,7 +13,7 @@ const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: STATUS };
 const NO_SNAPSHOT: LoadOrderSource = { gameName: 'Fallout 4', gameRelease: 'Fallout4', loadOrderSnapshot: undefined };
 
 function valueWith(name: string): LoadOrderSource {
-  const plugin = { name, path: `/game/Data/${name}`, origin: 'Data' };
+  const plugin = { name, path: `/game/Data/${name}`, origin: 'Data', provider: { kind: 'Game' as const } };
   return {
     ...NO_SNAPSHOT,
     loadOrderSnapshot: { plugins: [plugin], active: [{ name, origin: 'Data' }], loadedWithNoLine: [], dataFolder: '/game/Data' },
@@ -62,6 +62,33 @@ function wired(status: 'running' | 'starting', first: LoadOrderSource) {
     failSends: () => { sendFails = true; },
   };
 }
+
+const REFUSED: LoadOrderSource = { ...NO_SNAPSHOT, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } };
+
+describe('a load order the loader refused', () => {
+  it('is told on entering, with nothing sent, before editing is left', async () => {
+    const { flow, told, exitEditing, putPluginNames } = wired('running', REFUSED);
+
+    await flow.enter();
+
+    expect(told).toEqual([{ kind: 'put', put: { sent: false, refusal: 'a.esp has no mod folder' } }]);
+    expect(putPluginNames()).toEqual([]);
+    expect(exitEditing).toHaveBeenCalledOnce();
+  });
+
+  it('is told at a later recompute, with nothing sent and editing kept', async () => {
+    const { flow, told, toldCount, exitEditing, land, putPluginNames } = wired('running', valueWith('A.esp'));
+    await flow.enter();
+    await toldCount(1);
+
+    land(REFUSED);
+    await toldCount(2);
+
+    expect(told[1]).toEqual({ kind: 'put', put: { sent: false, refusal: 'a.esp has no mod folder' } });
+    expect(putPluginNames()).toEqual(['A.esp']);
+    expect(exitEditing).not.toHaveBeenCalled();
+  });
+});
 
 describe('entering editing', () => {
   it('starts the backend while the first read lands, then puts the load order it carries', async () => {

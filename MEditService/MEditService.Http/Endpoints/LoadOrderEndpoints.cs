@@ -15,7 +15,7 @@ public static class LoadOrderEndpoints
             .WithTags(Tag)
             .WithDescription(
                 "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
-                "the instance, each with its origin and path, the active plugins in load order, and " +
+                "the instance, each with its origin, path and provider, the active plugins in load order, and " +
                 "the plugins loaded with no line, as Mod Management decided them. Plugins new to the snapshot are opened and " +
                 "registered (indexed only if never seen), plugins absent from it are unregistered, " +
                 "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +
@@ -43,10 +43,9 @@ public static class LoadOrderEndpoints
 
         if (WriteEndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
-        if (req.Plugins is not { } plugins
-            || plugins.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin)))
+        if (RegisteredPluginsOf(req.Plugins) is not { } registered)
         {
-            return Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin.", statusCode: 400);
+            return Results.Problem("Each plugin entry must have a non-empty Name, Path, Origin and Provider.", statusCode: 400);
         }
         // Never defaulted here (ADR-0013).
         if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine)
@@ -56,7 +55,7 @@ public static class LoadOrderEndpoints
         {
             var result = handler.Put(
                 req.GameDirectory, req.InstanceRoot, gameRelease,
-                [.. plugins.Select(p => new RegisteredPlugin(p.Name, p.Origin, p.Path))], active, loadedWithNoLine);
+                registered, active, loadedWithNoLine);
             return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -64,5 +63,21 @@ public static class LoadOrderEndpoints
             logger.LogError(ex, "Failed to apply the load order for {InstanceRoot}", req.InstanceRoot);
             return WriteEndpointMapping.WriteFailure(ex.Message);
         }
+    }
+
+    private static List<RegisteredPlugin>? RegisteredPluginsOf(IReadOnlyList<LoadOrderPlugin>? plugins)
+    {
+        if (plugins is null) return null;
+        List<RegisteredPlugin> registered = [];
+        foreach (var p in plugins)
+        {
+            if (string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin)
+                || p.Provider?.ToProvider() is not { } provider)
+            {
+                return null;
+            }
+            registered.Add(new RegisteredPlugin(p.Name, p.Origin, p.Path, provider));
+        }
+        return registered;
     }
 }

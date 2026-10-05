@@ -12,7 +12,7 @@ const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
 
 function snapshot(name: string): LoadOrderSnapshot {
   return {
-    plugins: [{ name, path: `/game/Data/${name}`, origin: 'Data' }],
+    plugins: [{ name, path: `/game/Data/${name}`, origin: 'Data', provider: { kind: 'Game' } }],
     active: [{ name, origin: 'Data' }],
     loadedWithNoLine: [],
     gameDirectory: '/game/Data',

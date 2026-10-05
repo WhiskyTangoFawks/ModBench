@@ -1,3 +1,4 @@
+import type { SyncFailureReport } from '../drivingLib/syncFailureReport';
 import type { Told } from '../instanceCommands/editing';
 import type { PutLoadOrderResult } from '../instanceCommands/loadOrder';
 
@@ -16,10 +17,12 @@ export interface EditingViewDeps {
   reportEntry: (message: string) => void;
   log: { info(message: string): void; error(message: string): void };
   revealLog: () => void;
+  /** The load order the loader refused to build, the Plugins view's message line and the Output. */
+  loadOrderPut: Pick<SyncFailureReport, 'run'>;
 }
 
 export function editingView(deps: EditingViewDeps) {
-  const { narrator, progress, reportPut, reportEntry, log, revealLog } = deps;
+  const { narrator, progress, reportPut, reportEntry, log, revealLog, loadOrderPut } = deps;
 
   const around = (entry: () => Promise<void>): Promise<void> => progress.while(async () => {
     revealLog();
@@ -47,7 +50,12 @@ export function editingView(deps: EditingViewDeps) {
   // A game folder not found, or one whose plugins cannot be listed, is told by the views and the
   // Output already; a line per value would repeat it.
   const tellPut = async (put: PutLoadOrderResult): Promise<void> => {
-    if (!put.sent) return;
+    if (!put.sent) {
+      const { refusal } = put;
+      if (refusal !== undefined) await loadOrderPut.run(() => Promise.resolve({ applied: false as const, refusal }));
+      return;
+    }
+    await loadOrderPut.run(() => Promise.resolve({ applied: true as const, added: [], dropped: [] }));
     const { plugins, active } = put.snapshot;
     log.info(`[toolbox] handed mEdit the load order snapshot (${plugins.length} plugins, ${active.length} active)`);
     const { outcome } = put;

@@ -27,7 +27,7 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
         Client = _app.CreateClient();
         var resp = await Client.PutLoadOrderAndAwaitReady(new
         {
-            plugins = Plugin.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            plugins = Plugin.Plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(Plugin.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(Plugin.Plugins),
             gameDirectory = Plugin.DataFolder,

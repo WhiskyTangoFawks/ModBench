@@ -8,7 +8,7 @@ namespace MEditService.TestSupport;
 public static class SnapshotPlugins
 {
     public static IReadOnlyList<RegisteredPlugin> Of(IEnumerable<LoadOrderEntry> entries) =>
-        [.. entries.Select(entry => new RegisteredPlugin(entry.Name, entry.Origin, entry.Path))];
+        [.. entries.Select(entry => new RegisteredPlugin(entry.Name, entry.Origin, entry.Path, entry.Provider))];
 
     public static IReadOnlyList<PluginAddress> Active(IEnumerable<LoadOrderEntry> entries) =>
         [.. entries.Where(entry => entry.Enabled && entry.Winning && entry.Slot is not null)
@@ -34,7 +34,7 @@ public static class SnapshotPlugins
         {
             gameDirectory,
             instanceRoot,
-            plugins = list.Select(p => new { p.Name, p.Path, p.Origin }),
+            plugins = list.Select(p => p.Wire),
             active = Active(list),
             loadedWithNoLine = LoadedWithNoLine(list),
             gameRelease,

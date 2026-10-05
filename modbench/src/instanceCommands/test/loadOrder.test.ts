@@ -9,8 +9,8 @@ const READY_STATUS: LoadOrderProgress = {
 };
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };
 
-const PLUGIN = { name: 'TestMod.esp', path: '/instance/mods/TestMod/TestMod.esp', origin: 'TestMod' };
-const MASTER = { name: 'Master.esm', path: '/game/Data/Master.esm', origin: 'Data' };
+const PLUGIN = { name: 'TestMod.esp', path: '/instance/mods/TestMod/TestMod.esp', origin: 'TestMod', provider: { kind: 'Mod' as const, mod: 'TestMod', folder: '/instance/mods/TestMod' } };
+const MASTER = { name: 'Master.esm', path: '/game/Data/Master.esm', origin: 'Data', provider: { kind: 'Game' as const } };
 const SENT_PLUGINS = [MASTER, PLUGIN];
 const SENT_ACTIVE = [{ name: 'Master.esm', origin: 'Data' }, { name: PLUGIN.name, origin: PLUGIN.origin }];
 const SENT_LOADED_WITH_NO_LINE = [{ name: 'Master.esm', origin: 'Data' }];
@@ -72,6 +72,18 @@ describe('put load order', () => {
 
     expect(client.calls).toEqual([]);
     expect(result).toEqual({ sent: false });
+  });
+});
+
+describe('put load order, refused by the loader', () => {
+  it('sends nothing and carries the refusal for the caller to tell', async () => {
+    const client = attachedClient();
+
+    const result = await putLoadOrder(
+      createLoadOrderSender(client), '/instance', { ...VALUE, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } });
+
+    expect(client.calls).toEqual([]);
+    expect(result).toEqual({ sent: false, refusal: 'a.esp has no mod folder' });
   });
 });
 

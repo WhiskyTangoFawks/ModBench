@@ -3,7 +3,7 @@
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
   buildLoadOrderRows, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin,
-  type LoadOrderPluginLine, type LoadOrderSnapshotValue, type PluginAddress,
+  type LoadOrderPluginLine, type LoadOrderSnapshotRefusal, type LoadOrderSnapshotValue, type PluginAddress,
 } from './loadOrderSnapshot';
 import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
@@ -94,7 +94,7 @@ export interface InstanceValue {
   readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
   /** ADR-0013's snapshot; undefined while the game folder is not found or its plugins cannot be
    *  listed, so nothing silently wrong is sent. */
-  readonly loadOrderSnapshot: LoadOrderSnapshotValue | undefined;
+  readonly loadOrderSnapshot: LoadOrderSnapshotValue | LoadOrderSnapshotRefusal | undefined;
   /** Overwrite's own files, recursive; none when the folder is absent or empty. */
   readonly overwriteFiles: readonly OriginFile[];
   /** Overwrite's folders, as `overwriteFiles` holds its files. */
@@ -437,7 +437,7 @@ export class Instance implements Subscription {
       gameFolder,
       dataFolderPlugins,
       pluginsLoadedWithNoLine,
-      loadOrderSnapshot: loadOrderSnapshotOf({ plugins, gameFolder, pluginsLoadedWithNoLine }),
+      loadOrderSnapshot: loadOrderSnapshotOf({ plugins, gameFolder, pluginsLoadedWithNoLine, modFolders }),
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
       paths: pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders),

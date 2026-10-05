@@ -117,7 +117,7 @@ public sealed class LoadOrderHolderTests
         Assert.Equal((applied, version), holder.Held);
     }
 
-    private static RegisteredPlugin Registered(string name) => new(name, "ModA", $@"C:\MO2\Fallout4\mods\ModA\{name}");
+    private static RegisteredPlugin Registered(string name) => new(name, "ModA", $@"C:\MO2\Fallout4\mods\ModA\{name}", new PluginProvider.FromMod("ModA", @"C:\MO2\Fallout4\mods\ModA"));
 
     private static LoadOrderSnapshot SnapshotActivatingInTheOrderGiven(string? instanceRoot, params string[] active) =>
         new(@"C:\Games\Fallout4\Data", instanceRoot, GameRelease.Fallout4,

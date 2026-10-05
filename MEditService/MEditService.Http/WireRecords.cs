@@ -16,7 +16,23 @@ public record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, string GameDirectory, string InstanceRoot,
     string GameRelease = "Fallout4");
-public record LoadOrderPlugin(string Name, string Path, string Origin);
+public record LoadOrderPlugin(string Name, string Path, string Origin, PluginProviderRequest Provider);
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PluginProviderKind { Mod, Game, None }
+
+// Only Kind Mod has a Mod and a Folder.
+public record PluginProviderRequest(PluginProviderKind Kind, string? Mod = null, string? Folder = null)
+{
+    internal PluginProvider? ToProvider() => Kind switch
+    {
+        PluginProviderKind.Game when Mod is null && Folder is null => PluginProvider.Game,
+        PluginProviderKind.None when Mod is null && Folder is null => PluginProvider.NoMod,
+        PluginProviderKind.Mod when !string.IsNullOrEmpty(Mod) && !string.IsNullOrEmpty(Folder) =>
+            new PluginProvider.FromMod(Mod, Folder),
+        _ => null,
+    };
+}
 
 // The Refresh rebuild's own request (ADR-0010), keyed on the instance as
 // LoadOrderRequest is.

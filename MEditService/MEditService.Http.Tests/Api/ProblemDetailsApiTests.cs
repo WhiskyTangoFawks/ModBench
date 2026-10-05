@@ -33,7 +33,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     {
         var resp = await _client.PutAsJsonAsync("/load-order", new
         {
-            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            plugins = _fixture.Plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(_fixture.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             gameDirectory = badGameDir ?? _fixture.DataFolder,
@@ -53,7 +53,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
 
         var resp = await client.PutAsJsonAsync("/load-order", new
         {
-            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            plugins = _fixture.Plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(_fixture.Plugins),
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             gameDirectory = _fixture.DataFolder,

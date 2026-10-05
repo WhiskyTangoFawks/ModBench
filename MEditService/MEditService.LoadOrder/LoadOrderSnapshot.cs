@@ -3,11 +3,9 @@ using Mutagen.Bethesda;
 namespace MEditService.LoadOrder;
 
 /// <summary>One plugin file in the instance (ADR-0013).</summary>
-public sealed record RegisteredPlugin(string Name, string Origin, string Path)
+public sealed record RegisteredPlugin(string Name, string Origin, string Path, PluginProvider Provider)
 {
     public PluginAddress Key => new(Name, Origin);
-
-    public PluginProvider Provider => PluginProvider.Of(Origin, Path);
 }
 
 /// <summary>ADR-0013's snapshot. Immutable: nothing here opens, holds or disposes a
