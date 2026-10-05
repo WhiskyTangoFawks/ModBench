@@ -24,8 +24,6 @@ public sealed class SourceRepository
 
     internal SourceRepositoryWrites Writes { get; }
 
-    // Private so a repository comes from one of the two named doors, each stating what it observed:
-    // Open, which found a tracked folder, or Over, which established that or did not need it.
     private SourceRepository(string modFolder, GameRelease release, string modName)
     {
         (_modFolder, _release, _modName) = (modFolder, release, modName);
