@@ -10,6 +10,7 @@ import { PluginsTreeProvider, type PluginFactsClient, type PluginsInstance, type
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import { publishPluginWarnings } from './loadDiagnostics';
 import { pluginsKeyContext } from './gestureEntry';
+import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { registerPluginSortCommands, registerRevealInExplorerCommand } from './pluginListCommands';
@@ -101,8 +102,11 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   });
   const unsubscribe = subscribeTreeToNotifications(client, recordBrowser, () => { void tree.refreshFacts(); });
   // Disposed in order: what reads the tree and the view goes before them.
+  const recordDecorations = new RecordDecorationProvider(recordBrowser);
   const disposable = vscode.Disposable.from(
     indexStatus,
+    recordDecorations,
+    vscode.window.registerFileDecorationProvider(recordDecorations),
     { dispose: unsubscribe },
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, lens),
     ...registerPluginEnableCommands(

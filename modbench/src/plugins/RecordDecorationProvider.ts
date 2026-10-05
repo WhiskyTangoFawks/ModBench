@@ -1,14 +1,8 @@
 import * as vscode from 'vscode';
-import type { WorkingTreeState } from '../client';
+import type { PluginTreeProvider } from './PluginTreeProvider';
 
-/** Editor's own view of the tree whose rows it badges: a structural shape, not
- *  `PluginTreeProvider` itself, since Editor names no Plugins-view type. */
-export interface RecordBadgeSource {
-  /** Undefined for a URI that is not one of its record rows. */
-  workingTreeStateOf(uri: vscode.Uri): WorkingTreeState | undefined;
-  /** The rows a read from mEdit just answered, so their badges follow that read. */
-  onDidReadRecords(listener: (uris: readonly vscode.Uri[]) => void): vscode.Disposable;
-}
+export type RecordBadgeSource = Pick<PluginTreeProvider, 'workingTreeStateOf' | 'onDidReadRecords'>;
+
 
 /** Record-row M/A badges in git's vocabulary; a deleted record has no row, so no D. VS Code keeps
  *  a decoration until its provider names the URI, so each read from mEdit names its rows. */
