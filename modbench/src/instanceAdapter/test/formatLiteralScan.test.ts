@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename, sep } from 'node:path';
 import ts from 'typescript';
+import { productionFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from '../../test/scanSource';
 import { tsFiles } from '../../test/tsFiles';
 
 interface Codec {
@@ -54,10 +55,6 @@ const LAYOUT_OWNERS: Record<string, readonly string[]> = {
 };
 const LAYOUT_NAMES = Object.keys(LAYOUT_OWNERS);
 
-const EXTENSION_SRC = join(__dirname, '..', '..');
-const WEBVIEW_SRC = join(__dirname, '..', '..', '..', 'webview', 'src');
-const SRC_ROOTS = [EXTENSION_SRC, WEBVIEW_SRC];
-
 function stringLiterals(sourceText: string, fileName: string): string[] {
   const scriptKind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, scriptKind);
@@ -97,18 +94,18 @@ function findLeaks(roots: readonly string[]): Record<string, string[]> {
 
 describe('format literals, scanned over the extension and webview trees against each format\'s codec allowlist', () => {
   it('covers the whole extension source tree', () => {
-    expect(allFiles(SRC_ROOTS).length).toBeGreaterThan(100);
+    expect(allFiles(SOURCE_ROOTS).length).toBeGreaterThan(100);
   });
 
   it('reaches the webview tree too, not only the extension host’s, as it is built and shipped from its own tsconfig and a walk stopping at src/ would let it spell anything', () => {
-    expect(allFiles(SRC_ROOTS)).toContain(join(WEBVIEW_SRC, 'RecordPanel.tsx'));
+    expect(allFiles(SOURCE_ROOTS)).toContain(join(WEBVIEW_SRC, 'RecordPanel.tsx'));
   });
 
   it('every codec file exists and names at least one token of its own format, so the list is load-bearing rather than decorative', () => {
     const codecsNamingNoTokenOfTheirFormat = FORMATS.flatMap(({ codecs, tokens }) => codecs
       .map(({ file }) => file)
       .filter((file) => {
-        const path = join(EXTENSION_SRC, file);
+        const path = join(SRC, file);
         return tokenLeaks(readFileSync(path, 'utf8'), path).filter((token) => tokens.includes(token)).length === 0;
       }));
 
@@ -116,7 +113,7 @@ describe('format literals, scanned over the extension and webview trees against 
   });
 
   it('appear only in their own format\'s codec or its own test, nowhere else in either tree', () => {
-    expect(findLeaks(SRC_ROOTS)).toEqual({});
+    expect(findLeaks(SOURCE_ROOTS)).toEqual({});
   });
 
   it('the tree walk itself catches a literal planted in a nested non-kernel production file, a handler re-deriving a format marker by hand instead of calling the kernel module that owns it', async () => {
@@ -202,7 +199,7 @@ describe('format literals, scanned over the extension and webview trees against 
 
   it('lineScan.ts is not (and cannot honestly be) a codec file, holding no format token of its own', () => {
     expect(CODECS.map(({ file }) => file)).not.toContain(LINE_SCAN);
-    const path = join(EXTENSION_SRC, LINE_SCAN);
+    const path = join(SRC, LINE_SCAN);
     expect(tokenLeaks(readFileSync(path, 'utf8'), path)).toEqual([]);
   });
 });
@@ -236,12 +233,9 @@ function layoutLeaks(sourceText: string, fileName: string): string[] {
   return LAYOUT_NAMES.filter((name) => segments.has(name));
 }
 
-const isTestFile = (path: string): boolean => /\.test\.tsx?$/.test(path) || path.split(sep).includes('test');
-
 function findLayoutLeaks(roots: readonly string[]): Record<string, string[]> {
   const leaks: Record<string, string[]> = {};
-  for (const path of allFiles(roots)) {
-    if (isTestFile(path)) continue;
+  for (const path of roots.flatMap((root) => productionFiles(root))) {
     const leaked = new Set(layoutLeaks(readFileSync(path, 'utf8'), path));
     const found = Object.entries(LAYOUT_OWNERS)
       .filter(([name, owners]) => leaked.has(name) && !owners.some((owner) => path.endsWith(sep + owner)))
@@ -255,7 +249,7 @@ describe('layout names', () => {
   it('every name is spelled by each file that owns it, a name dropped from its owner freeing every other file to spell it again with the production assertion still green', () => {
     const ownersLackingTheirName = Object.entries(LAYOUT_OWNERS).flatMap(([name, owners]) => owners
       .filter((owner) => {
-        const path = join(EXTENSION_SRC, owner);
+        const path = join(SRC, owner);
         return !layoutLeaks(readFileSync(path, 'utf8'), path).includes(name);
       })
       .map((owner) => `${owner} lacks ${name}`));
@@ -264,7 +258,7 @@ describe('layout names', () => {
   });
 
   it('appear in no production file of either tree but their owner', () => {
-    expect(findLayoutLeaks(SRC_ROOTS)).toEqual({});
+    expect(findLayoutLeaks(SOURCE_ROOTS)).toEqual({});
   });
 
   it('the walk catches a name planted in a nested production file that owns none of them, a mod folder guessed as the mods directory joined with an origin', async () => {
@@ -301,16 +295,20 @@ describe('layout names', () => {
     expect(layoutLeaks('const url = `https://www.nexusmods.com/${slug}/mods/${id}`;\n', 'x.ts')).toEqual([]);
   });
 
-  it('leaves test files to spell their own fixtures, their literal paths keeping them independent of the layout module under test', () => {
-    expect(isTestFile(join('src', 'instanceLoader', 'test', 'instance.test.ts'))).toBe(true);
-    expect(isTestFile(join('src', 'test', 'mo2', 'corpusFixture.ts'))).toBe(true);
-    expect(isTestFile(join('webview', 'src', 'RecordPanel.test.tsx'))).toBe(true);
-    expect(isTestFile(join('src', 'instanceLoader', 'instance.ts'))).toBe(false);
-    expect(isTestFile(join('webview', 'src', 'RecordPanel.tsx'))).toBe(false);
+  it('leaves test files to spell their own fixtures, their literal paths keeping them independent of the layout module under test', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'medit-layout-scan-'));
+    try {
+      await mkdir(join(dir, 'box', 'test'), { recursive: true });
+      await writeFile(join(dir, 'box', 'test', 'fixture.ts'), "export const root = join(base, 'mods');\n");
+      await writeFile(join(dir, 'box', 'guess.test.ts'), "export const root = join(base, 'mods');\n");
+      expect(findLayoutLeaks([dir])).toEqual({});
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('the Instance adapter spells the directory names and no file name of a codec’s, a codec\'s file name spelled in the layout too being how one name gets two spellers without either scan noticing', () => {
-    const path = join(EXTENSION_SRC, 'instanceAdapter', 'layout.ts');
+    const path = join(SRC, 'instanceAdapter', 'layout.ts');
     expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toEqual(['profiles', 'mods', 'downloads']);
   });
 });
