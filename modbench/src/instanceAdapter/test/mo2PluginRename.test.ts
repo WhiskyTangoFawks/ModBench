@@ -201,6 +201,39 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       refused(() => adapter.renamePlugin(ORIGIN, 'Tracked Patch Mod.esp', 'Renamed Patch.esp', undefined), /release/i));
   });
 
+  describe('checking a rename before it is made', () => {
+    const check = (to = 'Renamed Patch.esp', from = 'Tracked Patch Mod.esp'): Promise<void> =>
+      adapter.checkPluginRename(ORIGIN, from, to, 'Fallout4');
+
+    it('passes a rename that would be made, and changes nothing', async () => {
+      const before = await snapshotTree(root);
+
+      await expect(check()).resolves.toBeUndefined();
+
+      assertOnlyChanged(before, await snapshotTree(root), new Set());
+    });
+
+    it.each([
+      ['a plugin that is not in the origin', () => check('Renamed Patch.esp', 'Missing.esp'), /Missing\.esp/],
+      ['a name no file can have', () => check('a/b.esp'), /not a valid/i],
+      ['a release the tables hold no row for', () => adapter.checkPluginRename(ORIGIN, 'Tracked Patch Mod.esp', 'Renamed Patch.esp', undefined), /release/i],
+      ['a name a file of the origin already has', async () => {
+        await put(`${MOD}/RENAMED PATCH.esp`);
+        await check();
+      }, /RENAMED PATCH\.esp/],
+      ['a name a profile already lists for another plugin', async () => {
+        await put(SECONDARY_PLUGINS, 'Tracked Patch Mod.esp\r\n*renamed patch.ESP\r\n');
+        await check();
+      }, /renamed patch\.ESP/],
+    ])('refuses %s, as the rename would, and changes nothing', async (_name, attempt, reason) => {
+      const before = await snapshotTree(root);
+
+      await expect(attempt()).rejects.toThrow(reason);
+
+      assertOnlyChanged(before, await snapshotTree(root), new Set([`${MOD}/RENAMED PATCH.esp`, SECONDARY_PLUGINS]));
+    });
+  });
+
   describe('a failed write leaves every file under its old name', () => {
     it('puts back the files and the lines already written when a later line cannot be written', async () => {
       const before = await snapshotTree(root);

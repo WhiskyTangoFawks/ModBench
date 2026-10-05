@@ -886,6 +886,22 @@ describe('HttpMEditClient — whether the game has light plugins', () => {
   });
 });
 
+describe('HttpMEditClient — the plugins that list a plugin as a master', () => {
+  it('answers the dependants and the plugins whose masters could not be read', async () => {
+    const answer = { dependants: [{ name: 'Child.esp', origin: 'ChildMod' }], unreadable: [{ name: 'Bad.esp', origin: 'BadMod' }] };
+    const client = makeClient(vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, answer))));
+
+    await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).resolves.toEqual(answer);
+  });
+
+  it('rejects, naming the reason, while mEdit has not finished indexing', async () => {
+    const client = makeClient(vi.fn((_req: Request) =>
+      Promise.resolve(jsonResponse(503, { detail: 'mEdit has not finished indexing the plugins.' }))));
+
+    await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).rejects.toThrow(/not finished indexing/);
+  });
+});
+
 describe('HttpMEditClient — read timeout, checked through getRecordTypes, standing in for the read verbs that share the race', () => {
   it('rejects a hung read after the configured timeout, aborting the request', async () => {
     let sawSignal: AbortSignal | undefined;
@@ -963,6 +979,7 @@ describe('HttpMEditClient — a plugin address on the wire', () => {
 
   it.each([
     ['getRecordTypes', (c: HttpMEditClient) => c.getRecordTypes(plugin), []],
+    ['getPluginDependants', (c: HttpMEditClient) => c.getPluginDependants(plugin), { dependants: [], unreadable: [] }],
     ['getWorldspaces', (c: HttpMEditClient) => c.getWorldspaces(plugin), []],
     ['getWorldspaceBlocks', (c: HttpMEditClient) => c.getWorldspaceBlocks(plugin, '000800:Shared.esp'), { topCells: [], blocks: [] }],
     ['getCellChildRecords', (c: HttpMEditClient) => c.getCellChildRecords(plugin, '000800:Shared.esp'), { persistent: [], temporary: [] }],

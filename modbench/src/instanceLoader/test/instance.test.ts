@@ -586,7 +586,7 @@ describe('Instance — built by watching', () => {
 });
 
 describe('Instance — a write that changes several files', () => {
-  it('lands no value read while it runs, whether the read began before or inside it, and lands the refresh after it', async () => {
+  it('lands no value read inside it, and lands the refresh after it', async () => {
     const { instance } = realInstance();
     await instance.refresh();
     const before = instance.sequence;
@@ -597,6 +597,21 @@ describe('Instance — a write that changes several files', () => {
     });
 
     expect(instance.sequence).toBe(before + 1);
+  });
+
+  it('reports only the failure of the read after it, not of one inside it that fails on a file the write is half-way through', async () => {
+    const { root, instance, readFailureLines } = realInstance();
+    await instance.refresh();
+    const heard = vi.fn();
+    instance.onReadFailure(heard);
+
+    await instance.quiet(async () => {
+      await writeFile(join(root, 'ModOrganizer.ini'), '');
+      await instance.refresh();
+    });
+
+    expect(heard).toHaveBeenCalledTimes(1);
+    expect(readFailureLines).toHaveLength(1);
   });
 });
 

@@ -12,7 +12,7 @@ import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
-  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type CreatableRecordType,
+  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type CreatableRecordType,
   type RebuildIndexOutcome, type CopyItem, type CopyMode,
   type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
@@ -451,6 +451,17 @@ export class HttpMEditClient implements MEditClient {
     const { data, error, response } = await this.apiClient.GET('/plugins/diagnoses', {});
     this.ensureOk('GET /plugins/diagnoses', response, error);
     return data ?? [];
+  }
+
+  async getPluginDependants({ name: plugin, origin }: PluginAddress): Promise<PluginDependants> {
+    return this.withTimeout(`getPluginDependants(${plugin})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/dependants', {
+        params: { path: { plugin }, query: { origin } },
+        signal,
+      });
+      this.ensureOk(`getPluginDependants(${plugin})`, response, error);
+      return data ?? { dependants: [], unreadable: [] };
+    });
   }
 
   async getRecordTypes({ name: plugin, origin }: PluginAddress): Promise<PluginRecordTypeCount[]> {

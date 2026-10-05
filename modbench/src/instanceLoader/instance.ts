@@ -259,8 +259,8 @@ export class Instance implements Subscription {
   }
 
   /** The recompute activation runs, and the one that corrects the value after a change the
-   *  adapter never signalled. Identical to the one a signal runs. Settles when its read has landed
-   *  or failed. */
+   *  adapter never signalled. Identical to the one a signal runs. Settles when its read has run;
+   *  a read that overlapped `quiet` is dropped, not landed. */
   refresh(): Promise<void> {
     clearTimeout(this.timer); // a refresh mid-burst is the burst's recompute, not a second one
     return this.run();
@@ -339,6 +339,7 @@ export class Instance implements Subscription {
     try {
       next = await this.read();
     } catch (err) {
+      if (epoch !== this.quietEpoch || this.quiets > 0) return;
       const failure = errorMessage(err);
       this.options.logReadFailure(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
