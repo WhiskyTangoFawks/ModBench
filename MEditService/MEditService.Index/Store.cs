@@ -475,7 +475,8 @@ internal sealed class Store : IDisposable
     {
         _openProjection.Value = scope.Parent;
 
-        List<Action> announcements;
+        // Held through the announcements, which readers of the sequence also take: the sequence
+        // reaches N only once N's announcements are out, so a caller that awaited it finds them.
         lock (_projectionLock)
         {
             // Nested: the debt and the announcements are the enclosing projection's, so a batch
@@ -493,11 +494,10 @@ internal sealed class Store : IDisposable
                 Advance();
                 scope.BumpOwed = false;
             }
-            announcements = [.. scope.Announcements];
+            var announcements = scope.Announcements.ToArray();
             scope.Announcements.Clear();
+            foreach (var publish in announcements) publish();
         }
-
-        foreach (var publish in announcements) publish();
     }
 
     // Calls back into the store to end the scope rather than holding the store itself: the scope
@@ -515,10 +515,13 @@ internal sealed class Store : IDisposable
 
     public long CurrentSequence()
     {
-        using var connection = OpenReadConnection();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"SELECT value FROM {SequenceRelation}";
-        return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        lock (_projectionLock)
+        {
+            using var connection = OpenReadConnection();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"SELECT value FROM {SequenceRelation}";
+            return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
     }
 
     // ADR-0015: raises the sequence to at least atLeast, never lowers it — Sequence
