@@ -133,6 +133,27 @@ internal sealed class WriteTargets(
     internal static RecordEditResult RefuseUnreadableSourceTree(string formKey, string why) =>
         RecordEditResult.Refused(RecordEditRefusal.RecordParseFailed, $"{formKey} cannot be copied: {why} Nothing was written.");
 
+    /// <summary>The masters <paramref name="plugin"/>'s source tree requires, or the refusal of a tree that
+    /// cannot be read. <paramref name="what"/> names what the caller reads from one of them.</summary>
+    internal static RecordEditResult? MastersOf(
+        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        string spelled, string what, out IReadOnlySet<string> masters)
+    {
+        masters = new HashSet<string>();
+        try
+        {
+            masters = RequiredMasters.InTheTree(repository, plugin, schemas);
+            return null;
+        }
+        catch (UnreadableSourceDocumentException ex)
+        {
+            return RecordEditResult.RefusedAt(
+                RecordEditRefusal.RecordParseFailed, spelled,
+                $"'{spelled}': {what} comes only from a master of {plugin.Name}, " +
+                $"which its source tree names, and that tree cannot be read: {ex.Message.TrimEnd('.')}. Nothing was written.");
+        }
+    }
+
     // The six record gestures enter here first.
     internal RecordEditResult? RefuseUnlessTrackedAndLoaded(PluginAddress plugin, out SourceRepository? repository)
     {

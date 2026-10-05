@@ -165,7 +165,7 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
 
     // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile; ADR-0018).
     private Step<IReadOnlySet<string>> MastersOf(Move move) =>
-        RequiredMasters.InTheTree(
+        WriteTargets.MastersOf(
             move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release), move.Spelled,
             $"the cell {move.Moved.FormKey} moves into", out var masters) is { } unreadable
             ? new Step<IReadOnlySet<string>>.Refused(unreadable)

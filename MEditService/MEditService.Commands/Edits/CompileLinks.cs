@@ -10,6 +10,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
+internal sealed record CompiledPlugin(
+    PluginAddress Address, RegisteredPlugin Registered, LoadOrderSnapshot LoadOrder, SourceRepository Repository);
+
 internal sealed record SourceRecord(
     string RecordType, RecordTableSchema Schema, PluginDocument Document, string? EditorId);
 
@@ -19,12 +22,12 @@ internal sealed class CompileLinks(IPluginAdapter adapter, SchemaReflector schem
     // The binary is written and the snapshot parked, so the report is the only thing left to go
     // wrong: it becomes a diagnostic saying so, never a refusal of a compile that happened.
     internal List<CompileDiagnostic> Report(
-        IReadOnlyList<SourceRecord> records, IReadOnlyCollection<string> links, PluginAddress plugin, RegisteredPlugin registered, LoadOrderSnapshot loadOrder,
-        SourceRepository repository)
+        CompiledPlugin compiled, IReadOnlyList<SourceRecord> records, IReadOnlyCollection<string> links)
     {
+        var (plugin, _, _, repository) = compiled;
         try
         {
-            return LinkDiagnostics(records, links, plugin, registered, loadOrder, repository);
+            return LinkDiagnostics(compiled, records, links);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -37,9 +40,9 @@ internal sealed class CompileLinks(IPluginAdapter adapter, SchemaReflector schem
     // A dangling link is a diagnostic, not a refusal (ADR-0007), answered after the write by the
     // files the game loads, the one just written among them.
     private List<CompileDiagnostic> LinkDiagnostics(
-        IReadOnlyList<SourceRecord> records, IReadOnlyCollection<string> links, PluginAddress plugin, RegisteredPlugin registered, LoadOrderSnapshot loadOrder,
-        SourceRepository repository)
+        CompiledPlugin compiled, IReadOnlyList<SourceRecord> records, IReadOnlyCollection<string> links)
     {
+        var (plugin, registered, loadOrder, repository) = compiled;
         var answers = adapter.LinkTargets(
             loadOrder, registered, schemaReflector.GetSchemas(loadOrder.GameRelease), links);
         ResolvedFormKey? Resolve(string formKey) =>

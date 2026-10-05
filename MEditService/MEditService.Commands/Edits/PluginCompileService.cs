@@ -16,7 +16,7 @@ public sealed class PluginCompileService(
     IPluginAdapter adapter,
     ILogger<PluginCompileService> logger)
 {
-    private readonly CompileLinks links = new(adapter, schemaReflector, logger);
+    private readonly CompileLinks _links = new(adapter, schemaReflector, logger);
 
     // The palette entry verbatim; a tracked mod refuses Track, so decompile is the way back
     // (ADR-0007).
@@ -120,7 +120,7 @@ public sealed class PluginCompileService(
             logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
                 plugin.Name, plugin.Origin, tree.FormKeys.Count);
         }
-        return CompileResult.Success(links.Report(content.Records, content.Links, plugin, registered, loadOrder, repository), content.Masters);
+        return CompileResult.Success(_links.Report(new CompiledPlugin(plugin, registered, loadOrder, repository), content.Records, content.Links), content.Masters);
     }
 
     private sealed record Content(

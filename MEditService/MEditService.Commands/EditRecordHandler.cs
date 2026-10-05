@@ -111,7 +111,7 @@ public sealed class EditRecordHandler
         LeftCopy? refillCopyOnTheLeft = null;
         if (cellToLookUp is not null || refills)
         {
-            if (RequiredMasters.InTheTree(
+            if (WriteTargets.MastersOf(
                     repository, plugin, schemas, spelled, $"the copy of {formKey} read to its left", out var masters) is { } unreadable)
                 return unreadable;
             if (cellToLookUp is not null)
