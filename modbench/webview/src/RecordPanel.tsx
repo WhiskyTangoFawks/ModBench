@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PluginHeader } from './PluginHeader';
 import { ColumnEdge } from './ColumnEdge';
 import { DiffRow, type FocusedCell } from './DiffRow';
-import { buildColumns, wirePath, headerCellContext, combineVscodeContexts, recordLabel } from './recordUtils';
+import { buildColumns, headerCellContext, recordLabel } from './recordUtils';
 import { mono, fg, headerCell, headerBackground, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
 import type {
   ColumnKey, CompareOverride, CompareResult, PathHop, PluginLoadFailure, RecordEditEnvelope,
@@ -15,7 +15,7 @@ import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
 import { RecordHeaderRow, FormIdRow } from './RecordHeaderRows';
 import { navigate } from './gridNavigation';
-import { recordRows, visibleRows, navRows, RECORD_HEADER_ROW, FORM_ID_PATH, type FieldRow, type RecordRow } from './recordRows';
+import { recordRows, visibleRows, navRows, FORM_ID_PATH, type RecordRow } from './recordRows';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
@@ -198,8 +198,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result],
   );
   const rows = useMemo(
-    () => result ? recordRows({ result, columns, editableColumns, partialFormColumns }) : [],
-    [result, columns, editableColumns, partialFormColumns],
+    () => result
+      ? recordRows({ result, columns, editableColumns, partialFormColumns, recordLabel: recordLabel(result.overrides, formKey) })
+      : [],
+    [result, columns, editableColumns, partialFormColumns, formKey],
   );
 
   const containerStyle: React.CSSProperties = {
@@ -239,7 +241,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   const title = recordLabel(overrides, formKey);
 
-  const headerExpanded = !collapsedRows.has(RECORD_HEADER_ROW);
   const navColumns = columns.filter(c => !collapsedColumns.has(c.key)).map(c => c.key);
 
   function handleGridKey(e: React.KeyboardEvent<HTMLTableSectionElement>) {
@@ -255,53 +256,29 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     else handleFocusCell(move.focus.rowKey, move.focus.plugin);
   }
 
-  function renderRow(row: FieldRow) {
-    const { key, diff, meta, path, rootField, parent } = row;
-    return (
-      <DiffRow
-        key={key}
-        diff={diff}
-        meta={meta}
-        columns={columns}
-        columnStyle={columnStyle}
-        editableColumns={row.editable}
-        onEditCell={(plugin: ColumnKey, value: unknown) => {
-          const hops = wirePath(rootField, path, plugin);
-          if (hops) handleCellCommit(plugin, hops, value);
-        }}
-        onAddElement={addElement}
-        collapsedColumns={collapsedColumns}
-        recordLabel={title}
-        context={{ path, rootField, depth: row.depth }}
-        rowKey={key}
-        parentRowKey={parent}
-        focusedCell={focusedCell}
-        onFocusCell={handleFocusCell}
-        isExpanded={!collapsedRows.has(key)}
-        isLastElement={row.isLastElement}
-        keyMembers={row.keyMembers}
-        ownerPresent={row.present}
-        cellMetas={row.cellMetas}
-        onToggle={() => toggleRow(key)}
-      />
-    );
+  function renderRow(row: RecordRow) {
+    const shared = { key: row.key, columns, collapsedColumns, columnStyle, focusedCell, onFocusCell: handleFocusCell };
+    const onToggle = () => toggleRow(row.key);
+    switch (row.kind) {
+      case 'recordHeader':
+        return <RecordHeaderRow {...shared} row={row} expanded={!collapsedRows.has(row.key)} onToggle={onToggle} />;
+      case 'formId':
+        // The FormID reads each copy's own FormKey, and edits as the FormKey typed.
+        return (
+          <FormIdRow
+            {...shared} row={row} editableColumns={editableColumns}
+            onCommitFormId={(plugin, value) => handleCellCommit(plugin, FORM_ID_PATH, value)}
+          />
+        );
+      case 'field':
+        return (
+          <DiffRow
+            {...shared} row={row} isExpanded={!collapsedRows.has(row.key)} onToggle={onToggle}
+            onEdit={handleCellCommit} onAddElement={addElement}
+          />
+        );
+    }
   }
-
-  // The FormID reads each copy's own FormKey, and edits as the FormKey typed.
-  const renderFormId = (row: Extract<RecordRow, { kind: 'formId' }>) => (
-    <FormIdRow
-      key={row.key}
-      label={row.meta.displayLabel ?? row.meta.name}
-      readOnlyReason={row.meta.readOnlyReason}
-      columns={columns}
-      collapsedColumns={collapsedColumns}
-      columnStyle={columnStyle}
-      editableColumns={editableColumns}
-      focusedCell={focusedCell}
-      onFocusCell={handleFocusCell}
-      onCommitFormId={(plugin, value) => handleCellCommit(plugin, FORM_ID_PATH, value)}
-    />
-  );
 
   return (
     <div style={containerStyle}>
@@ -342,27 +319,16 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                     style={{ backgroundColor: headerBackground(col.override.conflictThis), ...columnStyle(col.key) }}
                     // Copy… is offered on every column: copying from a read-only plugin is the
                     // ordinary case.
-                    vscodeContext={combineVscodeContexts(
-                      headerCellContext(
-                        col.override.formKey, col.override.plugin, col.override.origin, tracked && !isImmutable,
-                      ),
-                    )}
+                    vscodeContext={JSON.stringify(headerCellContext(
+                      col.override.formKey, col.override.plugin, col.override.origin, tracked && !isImmutable,
+                    ))}
                   />
                 );
               })}
             </tr>
           </thead>
           <tbody onKeyDown={handleGridKey}>
-            <RecordHeaderRow
-              columns={columns}
-              collapsedColumns={collapsedColumns}
-              columnStyle={columnStyle}
-              expanded={headerExpanded}
-              onToggle={() => toggleRow(RECORD_HEADER_ROW)}
-              focusedCell={focusedCell}
-              onFocusCell={handleFocusCell}
-            />
-            {visibleRows(rows, collapsedRows).map(row => row.kind === 'formId' ? renderFormId(row) : renderRow(row))}
+            {visibleRows(rows, collapsedRows).map(renderRow)}
           </tbody>
         </table>
       </div>

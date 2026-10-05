@@ -11,26 +11,21 @@ vi.mock('./nativeBridge', () => ({
 import { DiskCell } from './DiskCell';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
+import { cellContext } from './recordUtils';
 import { fieldMeta, parseJsonRecord, tellPanel } from './test/fixtures';
 import { EXTENSION_TO_WEBVIEW } from '../../src/wire/messages';
 
 const renderCell = (props: Partial<React.ComponentProps<typeof DiskCell>> = {}, child: React.ReactNode = <span>cell</span>) =>
   render(
     <table><tbody><tr>
-      <DiskCell style={{}} isFocused onFocusCell={vi.fn()} copyText="copied" {...props}>{child}</DiskCell>
+      <DiskCell style={{}} isFocused onFocusCell={vi.fn()} context={cellContext('copied')} {...props}>{child}</DiskCell>
     </tr></tbody></table>);
 
 describe('DiskCell — the right-click menu', () => {
-  const contextOf = () => parseJsonRecord(screen.getByText('cell').closest('td')?.getAttribute('data-vscode-context') ?? '{}');
-
-  it('is the spec\'s items alone on every cell, offering copy value its text', () => {
+  it('is the context it is given', () => {
     renderCell();
-    expect(contextOf()).toEqual({ webviewSection: 'cell', copyText: 'copied', preventDefaultContextMenuItems: true });
-  });
-
-  it('merges what the caller adds', () => {
-    renderCell({ contexts: [{ webviewSection: 'extra', more: 1 }] });
-    expect(contextOf()).toMatchObject({ webviewSection: 'cell extra', more: 1, preventDefaultContextMenuItems: true });
+    const context = parseJsonRecord(screen.getByText('cell').closest('td')?.getAttribute('data-vscode-context') ?? '{}');
+    expect(context).toEqual({ webviewSection: 'cell', copyText: 'copied', preventDefaultContextMenuItems: true });
   });
 });
 
@@ -48,8 +43,8 @@ describe('DiskCell — the keys\' commands reach only the focused cell', () => {
     const other = vi.fn();
     render(
       <table><tbody><tr>
-        <DiskCell style={{}} isFocused onFocusCell={vi.fn()} paste={focused}>a</DiskCell>
-        <DiskCell style={{}} isFocused={false} onFocusCell={vi.fn()} paste={other}>b</DiskCell>
+        <DiskCell style={{}} isFocused onFocusCell={vi.fn()} context={cellContext('a')} paste={focused}>a</DiskCell>
+        <DiskCell style={{}} isFocused={false} onFocusCell={vi.fn()} context={cellContext('b')} paste={other}>b</DiskCell>
       </tr></tbody></table>);
     tellPanel({ type: EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL, text: 'from the clipboard' });
     expect(focused).toHaveBeenCalledWith('from the clipboard');
@@ -122,7 +117,7 @@ describe('DiskCell — one gesture opens one editor', () => {
     const link = screen.getByText('000019:Fallout4.esm');
     fireEvent.click(link);
     rerender(
-      <table><tbody><tr><DiskCell style={{}} isFocused onFocusCell={vi.fn()}>{reference}</DiskCell></tr></tbody></table>);
+      <table><tbody><tr><DiskCell style={{}} isFocused onFocusCell={vi.fn()} context={cellContext(undefined)}>{reference}</DiskCell></tr></tbody></table>);
     fireEvent.click(link);
     fireEvent.doubleClick(link);
     expect(pickFormKey).toHaveBeenCalledTimes(1);

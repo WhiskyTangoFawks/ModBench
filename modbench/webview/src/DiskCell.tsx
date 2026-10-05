@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { focusedCellStyle } from './gridStyles';
 import { beginDrag, currentDrag, endDrag, type CellDrag } from './cellDrag';
-import { cellContext, combineVscodeContexts } from './recordUtils';
+import type { CellContext } from './recordUtils';
 import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview, type ExtensionToWebview } from '../../src/wire/messages';
 
 // `tabIndex` plus the effect below make the focused cell a really focused DOM element, not just
@@ -32,25 +32,20 @@ const messageOf = (event: MessageEvent<unknown>): ExtensionToWebview | undefined
 };
 
 export function DiskCell({
-  style, title, isFocused, onFocusCell, onDoubleClick, copyText, paste, drag, landing, contexts = [], children,
+  style, title, isFocused, onFocusCell, onDoubleClick, context, paste, drag, landing, children,
 }: Readonly<{
   style: React.CSSProperties;
   title?: string;
   isFocused: boolean;
   onFocusCell: () => void;
   onDoubleClick?: () => void;
-  // What Ctrl+C on the focused cell copies (editor-fields.md, By type); absent when the cell
-  // copies nothing. The palette's copy value reads it off the cell too.
-  copyText?: string;
+  context: CellContext;
   // What Ctrl+V's text writes here, parsed as this cell's field; absent where the cell takes none.
   paste?: (text: string) => void;
   // What dragging this cell carries; absent when there is nothing to drag.
   drag?: CellDrag;
   // What dropping a drag here does; absent when the drop cannot land.
   landing?: (dragged: CellDrag) => (() => void) | undefined;
-  // What this cell's right-click menu is gated on beyond every cell's own: each is merged into the
-  // `data-vscode-context` VS Code's `contributes.menus["webview/context"]` reads.
-  contexts?: readonly (object | undefined)[];
   children: React.ReactNode;
 }>) {
   const ref = useRef<HTMLTableCellElement>(null);
@@ -78,15 +73,15 @@ export function DiskCell({
       tabIndex={0}
       title={title}
       style={{ ...style, ...(isFocused ? focusedCellStyle : undefined) }}
-      data-vscode-context={combineVscodeContexts(cellContext(copyText), ...contexts)}
+      data-vscode-context={JSON.stringify(context)}
       data-focused-cell={isFocused || undefined}
-      data-copy-text={copyText}
+      data-copy-text={context.copyText}
       draggable={drag !== undefined}
       onDragStart={e => {
         if (!drag || inside(e.target, '[data-editor]')) { e.preventDefault(); return; }
         beginDrag(drag);
         e.dataTransfer.effectAllowed = 'copy';
-        e.dataTransfer.setData('text/plain', copyText ?? '');
+        e.dataTransfer.setData('text/plain', context.copyText ?? '');
       }}
       onDragEnd={endDrag}
       onDragOver={e => {

@@ -10,7 +10,8 @@ vi.mock('./nativeBridge', () => ({
 
 import { DiffRow } from './DiffRow';
 import type { Column, PathSegment } from './recordUtils';
-import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
+import type { ColumnKey, CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
+import { fieldRow } from './recordRows';
 import { columnKey } from './columnKey';
 import { DIMMED_OPACITY } from './gridStyles';
 import { diffNode, fieldMeta, parseJsonRecord, required } from './test/fixtures';
@@ -41,7 +42,20 @@ function diff(partial: Partial<FieldDiff> = {}): FieldDiff {
   });
 }
 
-function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}): React.ComponentProps<typeof DiffRow> {
+// The row model's inputs beside the row's own props, so each case names the field, its placement
+// and the columns that can be edited, and the row is built as the panel builds it.
+type RowProps = Omit<React.ComponentProps<typeof DiffRow>, 'row'> & {
+  diff: FieldDiff;
+  meta: FieldMetadata;
+  context: { path: PathSegment[]; rootField: string; depth: number };
+  rowKey: string;
+  parentRowKey: string | null;
+  editableColumns: ReadonlySet<ColumnKey>;
+  recordLabel: string;
+  ownerPresent?: (column: ColumnKey) => boolean;
+};
+
+function baseProps(overrides: Partial<RowProps> = {}): RowProps {
   const master = override('Fallout4.esm');
   const mod = override('MyMod.esp');
   const diffOfThisCallBehindTheDefaultContext = overrides.diff ?? diff();
@@ -58,12 +72,18 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     parentRowKey: null,
     focusedCell: null,
     onFocusCell: vi.fn(),
+    onEdit: vi.fn(),
+    onAddElement: vi.fn(),
     ...overrides,
   };
 }
 
-function renderRow(props: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
-  return render(<table><tbody>{React.createElement(DiffRow, baseProps(props))}</tbody></table>);
+function renderRow(props: Partial<RowProps> = {}) {
+  const { diff: node, meta, context, rowKey, parentRowKey, editableColumns, recordLabel, ownerPresent, ...rowProps } = baseProps(props);
+  const row = fieldRow(node, meta, {
+    ...context, key: rowKey, parent: parentRowKey, present: ownerPresent ?? (() => true), editable: editableColumns,
+  }, rowProps.columns, recordLabel);
+  return render(<table><tbody><DiffRow {...rowProps} row={row} /></tbody></table>);
 }
 
 describe('DiffRow — top-level scalar row', () => {
@@ -352,7 +372,7 @@ describe('DiffRow — flags cell wiring', () => {
     enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }],
   });
 
-  function flagsRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
+  function flagsRow(overrides: Partial<RowProps> = {}) {
     return renderRow({
       meta: flagMeta,
       diff: diff({ values: { 'Fallout4.esm': ['A'], 'MyMod.esp': ['A'] } }),
@@ -361,10 +381,10 @@ describe('DiffRow — flags cell wiring', () => {
   }
 
   it('a click on a flag in a non-editable column writes nothing', () => {
-    const onEditCell = vi.fn();
-    flagsRow({ isExpanded: true, editableColumns: new Set([columnKey('MyMod.esp', null)]), onEditCell });
+    const onEdit = vi.fn();
+    flagsRow({ isExpanded: true, editableColumns: new Set([columnKey('MyMod.esp', null)]), onEdit });
     fireEvent.click(required(screen.getAllByRole('checkbox')[1], "the second checkbox (Fallout4.esm's B)"));
-    expect(onEditCell).not.toHaveBeenCalled();
+    expect(onEdit).not.toHaveBeenCalled();
   });
 
   it('a flags row, which has the collapse toggle though its children are the checkbox lines inside the cell rather than child rows, starts collapsed: chevron closed, compact summary, no checkboxes', () => {
@@ -377,22 +397,22 @@ describe('DiffRow — flags cell wiring', () => {
     expect(onToggle).toHaveBeenCalled();
   });
 
-  it('toggling a checkbox calls onEditCell with the column and the names now set, where the value goes being the row builder\'s to decide', () => {
-    const onEditCell = vi.fn();
+  it('toggling a checkbox writes the names now set, at the row\'s path, to the column\'s plugin copy', () => {
+    const onEdit = vi.fn();
     flagsRow({
       isExpanded: true,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onEditCell,
+      onEdit,
     });
     fireEvent.click(required(screen.getAllByRole('checkbox')[3], "the fourth checkbox (MyMod.esp's B)"));
-    expect(onEditCell).toHaveBeenCalledWith(columnKey('MyMod.esp', null), ['A', 'B']);
+    expect(onEdit).toHaveBeenCalledWith(columnKey('MyMod.esp', null), [{ kind: 'member', name: 'Name' }], ['A', 'B']);
   });
 });
 
 describe('DiffRow — formKey cell wiring', () => {
   const fkMeta = fieldMeta({ name: 'Race', type: 'formKey', validFormKeyTypes: ['race'] });
 
-  function fkRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
+  function fkRow(overrides: Partial<RowProps> = {}) {
     return renderRow({
       meta: fkMeta,
       diff: diff({ values: { 'Fallout4.esm': '000019:Fallout4.esm', 'MyMod.esp': '000019:Fallout4.esm' } }),
@@ -411,24 +431,23 @@ describe('DiffRow — formKey cell wiring', () => {
   it('a formKey cell in an editable, focused column opens the picker with the field’s valid types', () => {
     fkRow({
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onEditCell: vi.fn(),
       focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
     });
     fireEvent.click(required(screen.getAllByText('000019:Fallout4.esm')[1], "the '000019:Fallout4.esm' match at index 1"));
     expect(pickFormKeyBehindAcquireVsCodeApi).toHaveBeenCalledWith('000019:Fallout4.esm', ['race']);
   });
 
-  it('committing a picked FormKey calls onEditCell with the column and the picked value', async () => {
-    const onEditCell = vi.fn();
+  it('committing a picked FormKey writes the picked value, at the row\'s path, to the column\'s plugin copy', async () => {
+    const onEdit = vi.fn();
     pickFormKeyBehindAcquireVsCodeApi.mockResolvedValueOnce('00001A:Fallout4.esm');
     fkRow({
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onEditCell,
+      onEdit,
       focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
     });
     fireEvent.click(required(screen.getAllByText('000019:Fallout4.esm')[1], "the '000019:Fallout4.esm' match at index 1"));
-    await vi.waitFor(() => expect(onEditCell)
-      .toHaveBeenCalledWith(columnKey('MyMod.esp', null), '00001A:Fallout4.esm'));
+    await vi.waitFor(() => expect(onEdit)
+      .toHaveBeenCalledWith(columnKey('MyMod.esp', null), [{ kind: 'member', name: 'Name' }], '00001A:Fallout4.esm'));
   });
 });
 
@@ -444,7 +463,6 @@ describe('DiffRow — string cell right-click menu, the extended editor\'s only 
   it('a mutable string cell carries a stringValue context with readOnly: false, its current value, and for a top-level row a wire path of the record\'s own member alone', () => {
     renderRow({
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onEditCell: vi.fn(),
     });
     expect(stringContext('disk-value', 1)).toEqual({
       webviewSection: 'cell editableCell stringValue',
@@ -462,7 +480,7 @@ describe('DiffRow — string cell right-click menu, the extended editor\'s only 
     });
   });
 
-  it('an immutable string cell (no onEditCell wired at all) still carries the context, with readOnly: true', () => {
+  it('an immutable string cell still carries the context, with readOnly: true', () => {
     renderRow();
     const ctx = stringContext('disk-value', 0);
     expect(ctx.webviewSection).toBe('cell stringValue');
@@ -473,7 +491,6 @@ describe('DiffRow — string cell right-click menu, the extended editor\'s only 
     const path: PathSegment[] = [{ kind: 'member', name: 'Sub' }];
     renderRow({
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onEditCell: vi.fn(),
       context: { path, rootField: 'Struct', depth: path.length },
     });
     const ctx = stringContext('disk-value', 1);
@@ -482,7 +499,7 @@ describe('DiffRow — string cell right-click menu, the extended editor\'s only 
   });
 
   it('double click opens the inline editor in place, never a tab, calling no callback', () => {
-    renderRow({ editableColumns: new Set([columnKey('MyMod.esp', null)]), onEditCell: vi.fn() });
+    renderRow({ editableColumns: new Set([columnKey('MyMod.esp', null)]) });
     fireEvent.doubleClick(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1"));
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
   });
@@ -518,12 +535,11 @@ describe('DiffRow — array parent/element right-click context, a nested array\'
       diff: arrayDiff(),
       meta: intArrayMeta,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onAddElement: vi.fn(),
       context: { path: [], rootField: 'Items', depth: 0 },
       isExpanded: false,
     });
     const ctx = vscodeContextFor('[2]', 1);
-    expect(ctx.webviewSection).toBe('cell arrayParent');
+    expect(ctx.webviewSection).toBe('cell arrayParent editableCell');
     expect(ctx.path).toEqual([{ kind: 'member', name: 'Items' }]);
     expect(ctx.index).toBeUndefined();
     expect(ctx.fieldName).toBeUndefined();
@@ -535,7 +551,6 @@ describe('DiffRow — array parent/element right-click context, a nested array\'
       diff: arrayDiff(),
       meta: intArrayMeta,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onAddElement: vi.fn(),
       context: { path, rootField: 'Container', depth: path.length },
       isExpanded: false,
     });
@@ -549,11 +564,10 @@ describe('DiffRow — array parent/element right-click context, a nested array\'
       diff: diff({ fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': 2 } }),
       meta: intMetaLeaf,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onAddElement: vi.fn(),
       context: { path, rootField: 'Items', depth: path.length },
     });
     const ctx = vscodeContextFor('2', 1);
-    expect(ctx.webviewSection).toBe('cell arrayElement');
+    expect(ctx.webviewSection).toBe('cell arrayElement editableCell');
     expect(ctx.path).toEqual([{ kind: 'member', name: 'Items' }, ...path]);
     expect(ctx.index).toBeUndefined();
   });
@@ -564,7 +578,6 @@ describe('DiffRow — array parent/element right-click context, a nested array\'
       diff: diff({ fieldName: '[0]', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }),
       meta: intMetaLeaf,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onAddElement: vi.fn(),
       context: { path, rootField: 'Container', depth: path.length },
     });
     const ctx = vscodeContextFor('5', 1);
@@ -697,7 +710,7 @@ describe('DiffRow — an enum whose values are wire tokens, Mutagen class names,
 
     const cell = required(required(screen.getAllByText('Reference')[0], "the 'Reference' match at index 0").closest('td'), 'its td ancestor');
 
-    expect(cell).toHaveAttribute('data-copy-text', 'Reference');
+    expect(parseJsonRecord(required(cell.getAttribute('data-vscode-context'), 'its context')).copyText).toBe('Reference');
   });
 });
 

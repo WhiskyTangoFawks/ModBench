@@ -4,7 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { PluginHeader } from './PluginHeader';
-import { headerCellContext, combineVscodeContexts } from './recordUtils';
+import { headerCellContext } from './recordUtils';
 import type { CompareOverride } from './types';
 import { compareOverride, required } from './test/fixtures';
 
@@ -128,7 +128,7 @@ describe('PluginHeader', () => {
   });
 
   it('carries on the whole header cell the data-vscode-context payload its native right-click menu gates the copy commands on', () => {
-    const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'ModA', false));
+    const vscodeContext = JSON.stringify(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'ModA', false));
     const { header } = renderHeader({}, { vscodeContext });
     expect(header).toHaveAttribute('data-vscode-context', vscodeContext);
   });
