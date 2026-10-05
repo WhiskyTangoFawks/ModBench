@@ -283,9 +283,6 @@ describe('PluginFacts — which plugins mEdit holds and the record filter', () =
 
   it('hides nothing and matches something while mEdit has not said', () => {
     const facts = new PluginFacts();
-    facts.refreshed([held({ hasMatchingRecords: false })]);
-
-    facts.matchesUnknown();
 
     expect(facts.hiddenByRecordFilter(A)).toBe(false);
     expect(facts.recordFilterMatchesNothing()).toBe(false);

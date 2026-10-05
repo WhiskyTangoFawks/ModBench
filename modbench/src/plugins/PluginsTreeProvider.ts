@@ -568,8 +568,6 @@ export class PluginsTreeProvider
       const message = errorMessage(err);
       this.log('error', `[PluginsTreeProvider] reading the backend's plugin list failed: ${message}`);
       this.facts.unreachable(message);
-      // Briefly over-showing rows beats freezing every one behind a stale filter answer.
-      this.facts.matchesUnknown();
       this._onDidChangeTreeData.fire(undefined);
       return undefined;
     }

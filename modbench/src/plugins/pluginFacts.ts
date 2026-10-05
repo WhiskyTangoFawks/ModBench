@@ -176,12 +176,6 @@ export class PluginFacts {
     for (const address of [...this.changedByMod.values()].flat()) this.changed.set(address, true);
   }
 
-  /** The read could not say which plugins match: show every row rather than freeze behind a
-   *  stale answer. */
-  matchesUnknown(): void {
-    this.matches = undefined;
-  }
-
   isHeld(address: PluginAddress): boolean {
     return this.held.has(address);
   }
