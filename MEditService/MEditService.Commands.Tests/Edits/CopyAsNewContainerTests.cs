@@ -24,7 +24,9 @@ public sealed class CopyAsNewContainerTests : IDisposable
     {
         var topic = _fixture.Document(_fixture.DestinationPlugin, topicFormKey);
         Assert.NotNull(topic);
-        return [.. JsonDocument.Parse(topic.Body).RootElement.GetProperty("Responses").EnumerateArray()];
+        return JsonDocument.Parse(topic.Body).RootElement.TryGetProperty("Responses", out var responses)
+            ? [.. responses.EnumerateArray()]
+            : [];
     }
 
     private static string Member(JsonElement response, string name) => response.GetProperty(name).GetString().Require();
@@ -43,7 +45,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
     }
 
     [Fact]
-    public async Task CopyAsNewRecord_OnADialogTopicWithResponses_MintsFreshKeysForEach_WithoutRemappingSiblingLinks()
+    public async Task CopyAsNewRecord_OnADialogTopicWithResponses_LandsTheTopicWithoutItsResponses()
     {
         var result = _fixture.CopyHandler.CopyAsNew(
             _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
@@ -56,34 +58,17 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.NotNull(quest);
         Assert.True(quest.IsPartialForm());
 
-        var responses = Responses(newTopicFormKey);
-        Assert.Equal(2, responses.Count);
-        Assert.Equal(
-            [ContainerCopyFixture.Response1EditorId + "DUPLICATE001", ContainerCopyFixture.Response2EditorId + "DUPLICATE001"],
-            [.. responses.Select(r => Member(r, "EditorID"))]);
-        Assert.All(responses, r =>
-            Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, Member(r, "FormKey"), StringComparison.OrdinalIgnoreCase));
-        var responseKeys = responses.Select(r => Member(r, "FormKey")).ToList();
-        Assert.DoesNotContain(_fixture.Response1.ToString(), responseKeys);
-        Assert.DoesNotContain(_fixture.Response2.ToString(), responseKeys);
-
-        var topicText = _fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.DialogTopicEditorId + "DUPLICATE001").Body;
-        Assert.All(responseKeys, key => Assert.Contains(key, topicText, StringComparison.Ordinal));
+        Assert.Empty(Responses(newTopicFormKey));
 
         var compiled = await ImportCompiled();
         var compiledQuest = compiled.Quests.Single(q => q.FormKey == _fixture.Quest);
         var compiledTopic = compiledQuest.DialogTopics.Single(t => t.FormKey.ToString() == newTopicFormKey);
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId + "DUPLICATE001", compiledTopic.EditorID);
-        Assert.Equal(
-            [ContainerCopyFixture.Response1EditorId + "DUPLICATE001", ContainerCopyFixture.Response2EditorId + "DUPLICATE001"],
-            [.. compiledTopic.Responses.Select(r => r.EditorID.Require())]);
-        var copiedResponse2 = compiledTopic.Responses.Single(
-            r => r.EditorID == ContainerCopyFixture.Response2EditorId + "DUPLICATE001");
-        Assert.Equal(_fixture.Response1, copiedResponse2.PreviousDialog.FormKeyNullable);
+        Assert.Empty(compiledTopic.Responses);
     }
 
     [Fact]
-    public void CopyAsNewRecord_OnADialogTopicWithResponses_CopiedTwice_EachRecordGetsItsOwnNextCounter()
+    public void CopyAsNewRecord_OnADialogTopic_CopiedTwice_EachRecordGetsItsOwnNextCounter()
     {
         var first = _fixture.CopyHandler.CopyAsNew(
             _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
@@ -93,15 +78,9 @@ public sealed class CopyAsNewContainerTests : IDisposable
             _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
         Assert.True(second.Applied, second.Message);
 
-        var secondTopicFormKey = second.NewFormKey.Require();
-        var secondTopic = _fixture.Document(_fixture.DestinationPlugin, secondTopicFormKey);
+        var secondTopic = _fixture.Document(_fixture.DestinationPlugin, second.NewFormKey.Require());
         Assert.NotNull(secondTopic);
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId + "DUPLICATE002", secondTopic.EditorId);
-
-        var responses = Responses(secondTopicFormKey);
-        Assert.Equal(
-            [ContainerCopyFixture.Response1EditorId + "DUPLICATE002", ContainerCopyFixture.Response2EditorId + "DUPLICATE002"],
-            [.. responses.Select(r => Member(r, "EditorID"))]);
     }
 
     [Fact]
