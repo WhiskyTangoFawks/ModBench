@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -26,6 +27,26 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.Equal(["npc_/A.esp/000002.json"], FilesUnderRoot());
         Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address));
         Assert.Equal(" D plugin-source/A.esp/npc_/A.esp/000001.json", Git("status", "--porcelain", "--untracked-files=no").TrimEnd('\n'));
+    }
+
+    [Fact]
+    public void ReplaceSourceFrom_WritesOnlyWhatDiffers_SoAnUnchangedFileKeepsItsStamp_AndAnEmptiedDirectoryGoes()
+    {
+        Repository.ReplaceSourceFrom(
+            Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{\"a\":3}"), File("weap/A.esp/000004.json", "{}")], Sha);
+        var unchanged = Path.Combine(Root, "npc_", "A.esp", "000001.json");
+        var rewritten = Path.Combine(Root, "armo", "A.esp", "000003.json");
+        var unchangedBefore = FileStamp.Of(unchanged);
+        var rewrittenBefore = FileStamp.Of(rewritten);
+
+        Repository.ReplaceSourceFrom(
+            Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{\"a\":33}")], Sha);
+
+        Assert.Equal(unchangedBefore, FileStamp.Of(unchanged));
+        Assert.NotEqual(rewrittenBefore, FileStamp.Of(rewritten));
+        Assert.Equal("{\"a\":33}", System.IO.File.ReadAllText(rewritten));
+        Assert.Equal(["armo/A.esp/000003.json", "npc_/A.esp/000001.json"], FilesUnderRoot());
+        Assert.False(Directory.Exists(Path.Combine(Root, "weap")));
     }
 
     [Fact]
