@@ -219,19 +219,25 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
         if (destination.Repository.FormKeysUsed(destination.Plugin).Contains(cellFormKey))
             return RefuseKeyWithNoDocument(destination, cellFormKey);
 
+        SourceDocument? worldspaceCopy = null;
         if (Identity(destination, worldspaceFormKey, release) is null)
         {
             var worldspace = HeldBy(source, worldspaceFormKey);
             if (targets.HighestOverrideVisibleToTheDestination(source, worldspace, destination, out var visibleText) is { } refused)
                 return refused;
-            destination.Repository.Put(destination.Plugin, OwnFieldsOf(source, worldspace, visibleText, release));
+            worldspaceCopy = OwnFieldsOf(source, worldspace, visibleText, release);
         }
 
         var sourceCell = source.Identity(cellFormKey)
             ?? throw new InvalidOperationException(
                 $"{source.Plugin.Name} does not hold {cellFormKey} — its own worldspace named it.");
-        PutExteriorCell(
-            worldspaceFormKey, cell with { RecordType = sourceCell.RecordType }, source.Body(sourceCell), destination, release);
+        var landing = WithGridFrom(source.Body(sourceCell), cell with { RecordType = sourceCell.RecordType }, release);
+        var (repository, plugin) = destination;
+        SourceTransaction.Atomically(repository, transaction =>
+        {
+            if (worldspaceCopy is not null) transaction.Apply(repository, repository.ChangesToPut(plugin, worldspaceCopy));
+            transaction.Apply(repository, repository.ChangesToPutInWorldspace(plugin, landing, worldspaceFormKey));
+        });
         return RecordEditResult.Success();
     }
 
@@ -241,7 +247,7 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
     internal void PutExteriorCell(
         string worldspaceFormKey, SourceDocument cell, string sourceCellText, Destination destination, GameRelease release) =>
         destination.Repository.PutInWorldspace(
-            destination.Plugin, cell with { Body = WithGridFrom(sourceCellText, cell, release) }, worldspaceFormKey);
+            destination.Plugin, WithGridFrom(sourceCellText, cell, release), worldspaceFormKey);
 
     /// <summary>A cell the destination holds takes the source's own fields, its children kept and the
     /// source's merged into them, at the place it already has.</summary>
@@ -346,14 +352,14 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
     private static JsonNode RequireParsed(string text) =>
         JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a document's text to parse as JSON.");
 
-    private string WithGridFrom(string sourceCellText, SourceDocument cell, GameRelease release)
+    private SourceDocument WithGridFrom(string sourceCellText, SourceDocument cell, GameRelease release)
     {
         var grid = RequireParsed(sourceCellText).AsObject()[RecordTypeDispatch.CellGridMember];
-        if (grid == null) return cell.Body;
+        if (grid == null) return cell;
 
         var withGrid = RequireParsed(cell.Body).AsObject();
         withGrid[RecordTypeDispatch.CellGridMember] = grid.DeepClone();
-        return codec.RoundTrip(withGrid.ToJsonString(), release, cell.RecordType);
+        return cell with { Body = codec.RoundTrip(withGrid.ToJsonString(), release, cell.RecordType) };
     }
 
     /// <summary>What the destination's tree names at <paramref name="formKey"/>, or null when nothing

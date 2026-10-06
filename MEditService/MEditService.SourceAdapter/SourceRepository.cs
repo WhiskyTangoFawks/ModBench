@@ -225,17 +225,28 @@ public sealed class SourceRepository
         LastCommitComparison.Of(_modFolder, _release, _git, Locator, plugin, schemas);
 
     /// <summary>Creates or replaces the record's document, placing an absent one from its identity
-    /// alone and minting the levels above it. A record another document carries is replaced at its
-    /// own slot, every other byte untouched.</summary>
-    public void Put(PluginAddress plugin, SourceDocument document) => Writes.Put(plugin, document, placement: null);
+    /// alone with the levels above it. A record another document carries is replaced at its own slot.
+    /// A failure writes nothing.</summary>
+    public void Put(PluginAddress plugin, SourceDocument document) =>
+        Write(plugin, document, () => ChangesToPut(plugin, document));
 
     /// <summary>The put of an exterior cell, which lands in the block its own grid falls in inside
-    /// <paramref name="worldspace"/>'s directory. A cell the plugin already holds is replaced where it is.</summary>
+    /// <paramref name="worldspace"/>'s directory. A held cell is replaced where it is. A failure writes nothing.</summary>
     public void PutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
-        Writes.Put(plugin, cell, SourceRepositoryWrites.PlacementIn(worldspace, cell));
+        Write(plugin, cell, () => ChangesToPutInWorldspace(plugin, cell, worldspace));
 
-    /// <summary>What <see cref="Put"/> of a document the tree holds whole changes, written nowhere.</summary>
+    private void Write(PluginAddress plugin, SourceDocument document, Func<SourceChanges> changes)
+    {
+        Writes.RefuseOverwritingWhatIsNoDocument(plugin, document);
+        SourceTransaction.Atomically(this, transaction => transaction.Apply(this, changes()));
+    }
+
+    /// <summary>What <see cref="Put"/> changes, written nowhere.</summary>
     public SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document) => Writes.ChangesToPut(plugin, document);
+
+    /// <summary>What rewriting a document the tree holds changes, written nowhere. One no document holds
+    /// throws: an edit never creates.</summary>
+    public SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) => Writes.ChangesToRewrite(plugin, document);
 
     /// <summary>What <see cref="PutInWorldspace"/> changes, written nowhere.</summary>
     public SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>

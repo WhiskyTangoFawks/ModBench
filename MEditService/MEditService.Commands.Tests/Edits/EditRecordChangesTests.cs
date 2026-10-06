@@ -125,6 +125,22 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.Equal("not a document", File.ReadAllText(file));
     }
 
+    [Theory]
+    [InlineData("npc")]
+    [InlineData("quest")]
+    [InlineData("cell")]
+    public void AFieldEdit_OfARecordWhoseFileWasRemovedAfterItWasRead_IsRefused_AndChangesNothing(string record)
+    {
+        var formKey = (record switch { "npc" => _mod.Npc, "quest" => _mod.Quest, _ => _mod.Cell }).ToString();
+        var given = TextOf(_mod, _mod.Plugin, formKey);
+        File.Delete(Path.Combine(_mod.ModFolder, _mod.DocumentFile(formKey).Require()));
+
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, formKey, Set("EditorID", "\"Edited\""), given);
+
+        Assert.Equal(RecordEditRefusal.RecordNotFound, answer.Outcome.Refusal);
+        Assert.Empty(answer.Changes.Documents);
+    }
+
     [Fact]
     public void AFormIdEdit_BuildsOnTheTextItIsGiven_NotOnTheFile()
     {
