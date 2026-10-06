@@ -47,21 +47,32 @@ function importsFromDir(imports: string[], dir: string): string[] {
 const EDITING_VIEW_DIRS = [PLUGINS_VIEW_DIR, EDITOR_DIR, SOURCE_LANGUAGE_DIR];
 const DRIVING_LIB_DIR = 'drivingLib';
 
-function speaksForEditingAlone(root: string, libFile: string): boolean {
-  const importers = tsFiles(root).filter((path) => !isTestSupport(relative(root, path))
-    && importsOf(readFileSync(path, 'utf8')).some((s) => s.startsWith('.') && `${join(dirname(path), s)}.ts` === libFile));
-  return importers.length > 0 && importers.every((path) => EDITING_VIEW_DIRS.includes(relative(root, path).split(sep)[0] ?? ''));
+function boxesImportingLibFiles(root: string): Map<string, string[]> {
+  const boxes = new Map<string, string[]>();
+  for (const path of tsFiles(root)) {
+    const text = readFileSync(path, 'utf8');
+    if (isTestSupport(relative(root, path)) || !text.includes(DRIVING_LIB_DIR)) continue;
+    for (const imported of importsOf(text).filter((s) => s.startsWith('.')).map((s) => `${join(dirname(path), s)}.ts`)) {
+      boxes.set(imported, [...(boxes.get(imported) ?? []), relative(root, path).split(sep)[0] ?? '']);
+    }
+  }
+  return boxes;
 }
 
 function findOffenders(root: string): Offense[] {
   const offenses: Offense[] = [];
+  const importingBoxes = boxesImportingLibFiles(root);
+  const speaksForEditingAlone = (libFile: string) => {
+    const boxes = importingBoxes.get(libFile) ?? [];
+    return boxes.length > 0 && boxes.every((box) => EDITING_VIEW_DIRS.includes(box));
+  };
   for (const path of tsFiles(root)) {
     const relPath = relative(root, path);
     if (isExcluded(relPath)) continue;
     const text = readFileSync(path, 'utf8');
     const imports = importsOf(text);
     const clientImports = CLIENT_CALLERS.includes(relPath.split(sep)[0] ?? '') ? [] : importsFromDir(imports, CLIENT_DIR);
-    const isEditingLibFile = relPath.split(sep)[0] === DRIVING_LIB_DIR && speaksForEditingAlone(root, path);
+    const isEditingLibFile = relPath.split(sep)[0] === DRIVING_LIB_DIR && speaksForEditingAlone(path);
     const vocab = isEditingLibFile ? [] : domainVocabIn(text);
     if (clientImports.length > 0 || vocab.length > 0) offenses.push({ path: relPath, clientImports, vocab });
   }
