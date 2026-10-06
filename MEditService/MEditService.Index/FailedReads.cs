@@ -1,18 +1,13 @@
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Index;
 
 /// <summary>A plugin that failed to read stays in its error state (ADR-0013) until what it reads
-/// from changes, which the state recorded beside it detects.</summary>
+/// from changes, which the state taken before the read detects.</summary>
 internal sealed class FailedReads(DuckDbRecordIndex index)
 {
     private readonly Lock _lock = new();
-    private readonly Dictionary<PluginAddress, FailedRead?> _failed = new(PluginAddress.Comparer);
-
-    // What a failed read read from: the binary's hash, and for a plugin with a tree, each document's
-    // content stamp then, or the doubly claimed FormKey the tree named instead (ADR-0003).
-    private sealed record FailedRead(string? Binary, RecordStamps? Stamps, string? Ambiguity = null);
+    private readonly Dictionary<PluginAddress, ReadState?> _failed = new(PluginAddress.Comparer);
 
     public IReadOnlyList<PluginAddress> Keys
     {
@@ -23,19 +18,32 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
     /// paid again.</summary>
     public bool StillFailing(RegisteredPlugin plugin)
     {
-        FailedRead? failedAt;
+        ReadState? failedAt;
         lock (_lock)
         {
             if (!_failed.TryGetValue(plugin.Key, out failedAt)) return false;
         }
-        return failedAt is not null && ReadStateOf(plugin) is { } now && failedAt == now;
+        return failedAt is not null && failedAt == ReadStateOf(plugin);
     }
 
-    /// <summary>Remembers the bytes (or tree) the plugin failed on.</summary>
-    public void Remember(RegisteredPlugin plugin)
+    /// <summary>Runs one read of <paramref name="plugin"/> over what it reads from, taken first, as a
+    /// file can change during the read. A read that answers false or throws is remembered against
+    /// that state.</summary>
+    public void Read(RegisteredPlugin plugin, Func<ReadState, bool> read)
     {
         var state = ReadStateOf(plugin);
-        lock (_lock) _failed[plugin.Key] = state;
+        bool succeeded;
+        try
+        {
+            succeeded = read(state);
+        }
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        {
+            Remember(plugin.Key, state);
+            throw;
+        }
+        if (succeeded) Forget(plugin.Key);
+        else Remember(plugin.Key, state);
     }
 
     /// <summary>Remembers a failure that vouches for nothing: a file another process held is read
@@ -50,16 +58,18 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
         lock (_lock) _failed.Remove(key);
     }
 
-    // Null, which vouches for nothing, when what the plugin reads from cannot be read: an untracked
-    // binary, or a tree with an unreadable document.
-    private FailedRead? ReadStateOf(RegisteredPlugin plugin)
+    private void Remember(PluginAddress key, ReadState state)
+    {
+        lock (_lock) _failed[key] = state.Vouches ? state : null;
+    }
+
+    private ReadState ReadStateOf(RegisteredPlugin plugin)
     {
         var binary = index.FileContentHash(plugin.Path);
-        if (Projector.TreeModOf(plugin.Key, plugin.Provider) is not { } mod)
-            return binary is null ? null : new FailedRead(binary, null);
+        if (Projector.TreeModOf(plugin.Key, plugin.Provider) is not { } mod) return new ReadState(binary, null, null);
 
-        if (!Projector.TryTreeStamps(mod, index.Release, plugin.Key, out var stamps, out var ambiguity))
-            return new FailedRead(binary, null, ambiguity);
-        return stamps.Unreadable.Count == 0 ? new FailedRead(binary, stamps) : null;
+        return Projector.TryTreeStamps(mod, index.Release, plugin.Key, out var stamps, out var ambiguity)
+            ? new ReadState(binary, stamps, null)
+            : new ReadState(binary, null, ambiguity);
     }
 }
