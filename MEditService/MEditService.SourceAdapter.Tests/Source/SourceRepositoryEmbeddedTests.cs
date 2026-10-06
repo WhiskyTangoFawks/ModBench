@@ -396,12 +396,32 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
+    public void ChangesToRewrite_OfAChildItsOwnersTextNamesWhereItsTypeHoldsNone_RefusesAsNoDocumentHoldingIt()
+    {
+        var folder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat").Require();
+        var carrier = Path.Combine(_modFolder, Root, folder, $"Carrier - 00A000_{PluginName}.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(carrier).Require());
+        File.WriteAllText(
+            carrier,
+            "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Embedded.esp\",\n" +
+            "  \"Temporary\": [ { \"FormKey\": \"00A001:Embedded.esp\" } ]\n}");
+        var child = new SourceDocument("00A001:Embedded.esp", "refr", null, "{\n  \"FormKey\": \"00A001:Embedded.esp\"\n}");
+
+        var refused = Assert.Throws<SourceUnitNotFoundException>(() => Repository.ChangesToRewrite(Plugin, child));
+
+        Assert.Contains("its own text does not carry it", refused.Message, StringComparison.Ordinal);
+        Assert.EndsWith(
+            "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit so the index re-reads the tree.",
+            refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Rekey_OfAChildItsOwnersTextDoesNotCarry_RefusesInOneSentence_BeforeTheTreeIsTouched()
     {
         var before = TreeSnapshot.Of(_modFolder);
         var ownerLacksIt = Rekeying with { ChildOfOwner = (_, _, _) => null };
 
-        var refused = Assert.Throws<InvalidOperationException>(() => new SourceTransaction().Rekey(
+        var refused = Assert.Throws<SourceUnitNotFoundException>(() => new SourceTransaction().Rekey(
             Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, ownerLacksIt));
 
         Assert.Contains("its own text does not carry it", refused.Message, StringComparison.Ordinal);

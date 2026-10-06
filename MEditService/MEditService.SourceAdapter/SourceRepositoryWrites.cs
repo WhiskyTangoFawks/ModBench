@@ -74,8 +74,9 @@ internal sealed class SourceRepositoryWrites(
     internal SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) =>
         locator.LocateToPlace(plugin, document.Identity) is { } unit && (unit.IsEmbedded || File.Exists(unit.FullPath))
             ? ChangesToHeld(unit, document)
-            : throw new InvalidOperationException(
-                $"No document in {plugin.Name}'s tree holds {document.FormKey}, so there is none to rewrite.");
+            : throw new SourceUnitNotFoundException(
+                $"No document in {plugin.Name}'s tree holds {document.FormKey}, so there is none to rewrite. It was moved or " +
+                "removed outside Modbench. Check the Source Control panel.");
 
     private SourceChanges ChangesToPlace(PluginAddress plugin, SourceDocument document, CellPlacement? placement)
     {
@@ -339,6 +340,31 @@ internal sealed class SourceRepositoryWrites(
         new($"No document in {plugin.Name}'s tree holds {identity.FormKey}, and its type has no file of " +
             "its own, so there is nowhere to write it.");
 
-    private static InvalidOperationException NoLongerCarried(SourceUnit unit, string formKey) =>
-        new($"{unit.RelativePath} was found holding {formKey}, but its own text does not carry it.");
+    private static SourceUnitNotFoundException NoLongerCarried(SourceUnit unit, string formKey) =>
+        new(SourceUnitNotFoundException.NotCarried(unit.RelativePath, formKey));
+}
+
+/// <summary>The tree holds no document carrying the record a write needs.</summary>
+public sealed class SourceUnitNotFoundException : InvalidOperationException
+{
+    // A defect reads identically to another tool's change, and a wrong explanation sends the user hunting a
+    // problem that is not there, so this blames neither.
+    public const string DefectOrOutsideChange =
+        "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit " +
+        "so the index re-reads the tree.";
+
+    public static string NotCarried(string? relativePath, string formKey) =>
+        $"{relativePath} was found holding {formKey}, but its own text does not carry it. {DefectOrOutsideChange}";
+
+    public SourceUnitNotFoundException() : base("No document holds the record.")
+    {
+    }
+
+    public SourceUnitNotFoundException(string message) : base(message)
+    {
+    }
+
+    public SourceUnitNotFoundException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
 }
