@@ -23,4 +23,15 @@ public sealed class RecordTableNameTests
 
         Assert.All(read.GameSettings, setting => Assert.Equal("gmst", RecordTableName.Of(setting, schemas)));
     }
+
+    [Fact]
+    public void ARecordClassThatInheritsItsGrupSignature_BelongsToThatGrupsTable()
+    {
+        const string deletedObjectModificationMutagenReadsWhenADeletedOmodHasNoData =
+            "Mutagen.Bethesda.Fallout4.DeletedObjectModification";
+        var inheriting = typeof(AObjectModification).Assembly.GetType(deletedObjectModificationMutagenReadsWhenADeletedOmodHasNoData);
+        Assert.NotNull(inheriting);
+
+        Assert.Equal("omod", RecordTableName.Of(inheriting, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)));
+    }
 }

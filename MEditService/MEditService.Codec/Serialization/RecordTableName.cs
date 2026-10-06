@@ -25,8 +25,8 @@ public static class RecordTableName
 
         // A table built from several concrete classes (Globals) binds its RecordType to whichever
         // was discovered first, so a sibling matches nothing above — and the GRUP signature the
-        // schema names that table after is on the record's own class.
-        return GrupSignatureOf(RecordClassOf(concrete)) ?? concrete.Name.ToLowerInvariant();
+        // schema names that table after is on the record's own class, or a base it inherits it from.
+        return GrupSignatureOf(RecordClassOf(concrete), BindingFlags.FlattenHierarchy) ?? concrete.Name.ToLowerInvariant();
     }
 
     /// <summary>The record signature a table is named after: the table is its lowercase.</summary>
@@ -53,8 +53,8 @@ public static class RecordTableName
         }
     }
 
-    private static string? GrupSignatureOf(Type type) =>
-        type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static) is { } grup
+    private static string? GrupSignatureOf(Type type, BindingFlags inherited = BindingFlags.Default) =>
+        type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static | inherited) is { } grup
             ? ((RecordType)(grup.GetValue(null)
                 ?? throw new InvalidOperationException($"Expected '{type.Name}.GrupRecordType' to hold a value."))).Type.ToLowerInvariant()
             : null;
