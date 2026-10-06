@@ -73,7 +73,7 @@ public class CompoundPluginIdentityTests
         using var fixture = SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey("identity-list", out var npcKey);
         using var index = Indexes.Reconciled(fixture);
 
-        var modAResult = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "Shared.esp", Origin: "ModA", Limit: 100, Offset: 0));
+        var modAResult = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "Shared.esp", Origin: "ModA", Limit: 100, Offset: 0));
 
         var item = Assert.Single(modAResult.Items);
         Assert.Equal(npcKey.ToString(), item.FormKey);

@@ -23,7 +23,7 @@ public sealed class FilterAfterValidationTests
 
         index.NextSnapshot();
 
-        var listed = index.RequireReads().Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var listed = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal([formKey], listed.Items.Select(i => i.FormKey));
     }
 }

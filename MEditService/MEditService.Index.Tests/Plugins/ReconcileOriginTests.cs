@@ -41,7 +41,7 @@ public sealed class ReconcileOriginTests
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
         var reads = manager.RequireReads();
-        var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "A.esp", Limit: 10, Offset: 0));
+        var result = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "A.esp", Limit: 10, Offset: 0));
 
         var row = Assert.Single(result.Items);
         Assert.Equal("SomeMod", row.Origin);

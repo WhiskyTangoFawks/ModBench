@@ -24,10 +24,10 @@ public class SearchRecordsTests(TestPluginFixture fixture)
         using var manager = MakeLoadedManager(holder);
         var reader = manager.RequireReads();
 
-        var byEditorId = reader.Search(new RecordQuery(RecordTypes: ["npc_"], Search: "TestNPC01", Limit: 10, Offset: 0));
+        var byEditorId = reader.Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_"], Search: "TestNPC01", Limit: 10, Offset: 0));
         var formKey = byEditorId.Items[0].FormKey;
 
-        var result = reader.Search(new RecordQuery(RecordTypes: ["npc_", "weap"], Search: formKey, Limit: 10, Offset: 0));
+        var result = reader.Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_", "weap"], Search: formKey, Limit: 10, Offset: 0));
 
         Assert.Equal(1, result.Total);
         Assert.Equal(formKey, result.Items[0].FormKey);

@@ -17,12 +17,12 @@ public class FilterTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var all = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         var firstFormKey = all.Items[0].FormKey;
 
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key, 'x' AS plugin", "filter.sql");
 
-        var filtered = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var filtered = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(1, filtered.Total);
         Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
     }
@@ -48,13 +48,13 @@ public class FilterTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var all = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, all.Total);
 
         var firstFormKey = all.Items[0].FormKey;
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
 
-        var filtered = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var filtered = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(1, filtered.Total);
         Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
     }
@@ -64,30 +64,26 @@ public class FilterTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var all = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         var firstFormKey = all.Items[0].FormKey;
 
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
         index.ClearFilter();
 
-        var restored = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var restored = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, restored.Total);
     }
 
     [Fact]
-    public void SearchRecords_WithActiveFilter_ReturnsOnlyMatchingRecords()
+    public void ASearch_IsNotNarrowedByTheRecordFilter()
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
-        Assert.Equal(TestPluginFixture.RecordCount, all.Total);
+        index.SetFilter($"SELECT '{_fixture.Npc1FormKey}' AS form_key", "filter.sql");
 
-        var firstFormKey = all.Items[0].FormKey;
-        index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
+        var found = reads.Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["NPC_"], Search: "TestNPC02", Limit: 100));
 
-        var filtered = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
-        Assert.Equal(1, filtered.Total);
-        Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
+        Assert.Equal(["TestNPC02"], found.Items.Select(r => r.EditorId));
     }
 
     [Fact]
@@ -95,7 +91,7 @@ public class FilterTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var all = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         var firstFormKey = all.Items[0].FormKey;
 
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
@@ -108,7 +104,7 @@ public class FilterTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var all = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         var firstFormKey = all.Items[0].FormKey;
 
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");

@@ -28,7 +28,7 @@ public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<Worldspace
         var repo = _index.RequireReads();
         // Without an origin filter, two same-filename plugins' worldspace lists silently merge
         // into one under this plugin name.
-        var query = new RecordQuery(RecordTypes: ["wrld"], Plugin: plugin.Name, Origin: plugin.Origin, Limit: WorldspaceListLimit, Offset: 0, GroupOnly: true);
+        var query = new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["wrld"], Plugin: plugin.Name, Origin: plugin.Origin, Limit: WorldspaceListLimit, Offset: 0, GroupOnly: true);
         var holdingCells = repo.GetWorldspacesHoldingCells(plugin);
         return [.. repo.Search(query)
             .Items.Select(r => new WorldspaceSummary(

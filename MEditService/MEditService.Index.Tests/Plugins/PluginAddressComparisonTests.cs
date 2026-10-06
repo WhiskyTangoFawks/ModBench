@@ -61,7 +61,7 @@ public sealed class PluginAddressComparisonTests : IDisposable
     [Fact]
     public void ASearchFilteredUnderAnotherCase_FindsThePluginsRecords()
     {
-        var query = new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginName(OtherCase.Name), Origin: OtherCase.Origin);
+        var query = new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: new PluginName(OtherCase.Name), Origin: OtherCase.Origin);
 
         Assert.Equal(1, _index.RequireReads().Search(query).Total);
     }
@@ -81,6 +81,6 @@ public sealed class PluginAddressComparisonTests : IDisposable
         using var reopened = Indexes.Reconciled(_fixture.GameDirectory,
             [entry with { Name = OtherCase.Name, Origin = OtherCase.Origin }], _fixture.InstanceRoot);
 
-        Assert.Equal(1, reopened.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"])).Total);
+        Assert.Equal(1, reopened.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"])).Total);
     }
 }

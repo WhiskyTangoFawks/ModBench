@@ -49,7 +49,7 @@ public class FormLookupTests
         index.NextSnapshot();
 
         Assert.Equal(before, reads.GetDocuments(key).Count);
-        Assert.Equal(1, reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10)).Total);
+        Assert.Equal(1, reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10)).Total);
         Assert.Equal(new RecordLookupEntry("npc_", "TestNPC01"), reads.Resolve(npcFormKey.ToString()));
     }
 }

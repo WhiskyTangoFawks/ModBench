@@ -39,7 +39,7 @@ public sealed class SqlDoorSchemaTests : IDisposable
     }
 
     private IReadOnlyList<RecordSummary> Listing() =>
-        _index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10)).Items;
+        _index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10)).Items;
 
     [Fact]
     public void ARecordTypeView_ExposesTheIdentityColumns_AndTheDerivedWinnerAndLoadOrder()

@@ -37,7 +37,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         page.Items.Single(i => i.FormKey == formKey);
 
     private PagedResult<RecordSummary> Listing(OpenedIndex index) =>
-        index.RequireReads().Search(new RecordQuery(Plugin: _baseKey.Name, Origin: _baseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
+        index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: _baseKey.Name, Origin: _baseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
 
     [Fact]
     public void Search_EditedRecord_ReportsModified_AndUntouchedSiblingReportsNone()

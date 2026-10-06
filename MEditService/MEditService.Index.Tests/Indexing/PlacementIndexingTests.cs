@@ -202,7 +202,7 @@ public class PlacementIndexingTests
     public void Index_PlacedObjects_AreAlsoIndexedAsRefrRecords()
     {
         using var b = new Built();
-        var result = b.Reads.Search(new RecordQuery(RecordTypes: ["refr"], Plugin: Key.Name, Limit: 100, Offset: 0));
+        var result = b.Reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["refr"], Plugin: Key.Name, Limit: 100, Offset: 0));
         Assert.Equal(3, result.Total);
     }
 

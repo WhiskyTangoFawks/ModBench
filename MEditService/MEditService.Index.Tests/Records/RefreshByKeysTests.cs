@@ -62,7 +62,7 @@ public sealed class RefreshByKeysTests : IDisposable
         Refresh();
 
         Assert.Equal("HandCreated", Reads.GetDocument(formKey, _mod.KeyOf())?.EditorId);
-        var listing = Reads.Search(new RecordQuery(Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
+        var listing = Reads.Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
         Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == formKey).WorkingTreeState);
     }
 

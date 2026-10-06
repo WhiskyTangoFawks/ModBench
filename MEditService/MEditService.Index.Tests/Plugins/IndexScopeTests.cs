@@ -58,7 +58,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var manager = MakeIndexer(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        var result = manager.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
+        var result = manager.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 100, Offset: 0));
 
         Assert.Equal(TestPluginFixture.RecordCount, result.Total);
         Assert.All(result.Items, r => Assert.True(r.IsWinner));
@@ -183,13 +183,13 @@ public class IndexScopeTests(TestPluginFixture fixture)
             var reads = manager.RequireReads();
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'", "filter.sql");
-            Assert.Equal(0, reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+            Assert.Equal(0, reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NowMatches");
 
             manager.NextSnapshot();
 
-            var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            var result = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(1, result.Total);
             Assert.Equal(npcKey.ToString(), result.Items[0].FormKey);
         }
@@ -210,13 +210,13 @@ public class IndexScopeTests(TestPluginFixture fixture)
             var reads = manager.RequireReads();
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'StillMatches'", "filter.sql");
-            Assert.Equal(1, reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+            Assert.Equal(1, reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NoLongerMatches");
 
             manager.NextSnapshot();
 
-            var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            var result = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(0, result.Total);
         }
     }

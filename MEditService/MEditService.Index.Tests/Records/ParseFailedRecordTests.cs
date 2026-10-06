@@ -192,7 +192,7 @@ public sealed class ParseFailedRecordTests
     }
 
     private static IReadOnlyList<RecordSummary> Perks(Scratch scratch) =>
-        scratch.Reads.Search(new RecordQuery(
+        scratch.Reads.Search(new RecordQuery(RecordQueryScope.Navigator,
             RecordTypes: ["perk"], Plugin: scratch.Plugin.Name, Origin: scratch.Plugin.Origin,
             Search: null, Limit: 1000, Offset: 0)).Items;
 

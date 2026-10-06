@@ -60,9 +60,9 @@ public class HeaderIndexingTests
         Assert.Contains("\"Author\": \"Vault Dweller\"", body, StringComparison.Ordinal);
 
         index.SetFilter("SELECT form_key FROM header WHERE \"Author\" = 'Vault Dweller'", "filter.sql");
-        Assert.Single(index.RequireReads().Search(new RecordQuery(RecordTypes: [PluginHeader.RecordType], Limit: 10)).Items);
+        Assert.Single(index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [PluginHeader.RecordType], Limit: 10)).Items);
         index.SetFilter("SELECT form_key FROM records WHERE record_type = 'header' AND json_extract_string(body, '$.Author') = 'Vault Dweller'", "filter.sql");
-        Assert.Empty(index.RequireReads().Search(new RecordQuery(RecordTypes: [PluginHeader.RecordType], Limit: 10)).Items);
+        Assert.Empty(index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [PluginHeader.RecordType], Limit: 10)).Items);
     }
 
     [Fact]

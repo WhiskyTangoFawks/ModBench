@@ -30,14 +30,14 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
 
     private IReadOnlyList<string> LowestFormKeysOf(string type)
     {
-        var page = _repo.Search(new RecordQuery(RecordTypes: [type], Limit: WholeType, Offset: 0));
+        var page = _repo.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [type], Limit: WholeType, Offset: 0));
         Assert.True(page.Total <= WholeType, $"'{type}' has {page.Total} records, more than the {WholeType} one page lists.");
         return [.. page.Items.Select(r => r.FormKey).Order(StringComparer.Ordinal).Take(PerType)];
     }
 
     private object WholeListing(string type)
     {
-        var page = _repo.Search(new RecordQuery(RecordTypes: [type], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0));
+        var page = _repo.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [type], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0));
         Assert.True(page.Total <= WholeType, $"'{type}' has {page.Total} records, more than the {WholeType} one page lists.");
         return new
         {
@@ -67,8 +67,8 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
             Counts = Types.ToDictionary(t => t, t => _repo.GetRecordTypeCounts(new PluginAddress(TestPluginName, Origin))
                 .FirstOrDefault(c => string.Equals(c.Type, t, StringComparison.OrdinalIgnoreCase))?.Count ?? 0),
             Listings = Types.ToDictionary(t => t, WholeListing),
-            SearchAllTypesTotal = _repo.Search(new RecordQuery(RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0)).Total,
-            SearchByEditorId = _repo.Search(new RecordQuery(RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Search: "Workshop", Limit: WholeType, Offset: 0))
+            SearchAllTypesTotal = _repo.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0)).Total,
+            SearchByEditorId = _repo.Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Search: "Workshop", Limit: WholeType, Offset: 0))
                 .Items.OrderBy(r => r.FormKey, StringComparer.Ordinal).Take(20).ToList(),
         };
 

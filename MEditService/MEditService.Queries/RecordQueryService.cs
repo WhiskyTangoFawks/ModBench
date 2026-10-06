@@ -67,10 +67,11 @@ public sealed class RecordQueryService(
             return new PagedResult<RecordSummary>([], 0);
         PluginName? pluginFilter = null;
         if (plugin is { } address) pluginFilter = address.Name;
+        var scope = search is null ? RecordQueryScope.Navigator : RecordQueryScope.Search;
         var query = new RecordQuery(
-            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: plugin?.Origin, Search: search,
+            scope, RecordTypes: recordTypes, Plugin: pluginFilter, Origin: plugin?.Origin, Search: search,
             SearchFormKey: FormKeyOfFormId(search, reads), Limit: limit, Offset: offset,
-            GroupOnly: search is null);
+            GroupOnly: scope == RecordQueryScope.Navigator);
         return reads.Search(query).ToQuery();
     }
 

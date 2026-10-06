@@ -179,6 +179,16 @@ public sealed class RecordQueryServiceTests
     }
 
     [Theory]
+    [InlineData("TestNPC01", RecordQueryScope.Search)]
+    [InlineData(null, RecordQueryScope.Navigator)]
+    public void GetRecords_IsASearch_OnlyWithSearchText(string? search, RecordQueryScope scope)
+    {
+        _svc.GetRecords(types: ["npc_"], plugin: null, search: search, limit: 10, offset: 0);
+
+        Assert.Equal(scope, _reads.LastSearch?.Scope);
+    }
+
+    [Theory]
     [InlineData("01000800", "Patch.esp")]
     [InlineData("0x01000800", "Patch.esp")]
     [InlineData("FE000800", "Light.esp")]

@@ -105,7 +105,7 @@ public sealed class RecordFilterNarrowsSpatialReadsTests
         internal void Filter(string sql) => _index.SetFilter(sql, "filter.sql");
 
         internal IReadOnlyList<RecordSummary> Worldspaces() =>
-            Reads.Search(new RecordQuery(
+            Reads.Search(new RecordQuery(RecordQueryScope.Navigator,
                 RecordTypes: ["wrld"], Plugin: PluginName, Origin: Plugin.Origin, Limit: 100, GroupOnly: true)).Items;
 
         public void Dispose()
