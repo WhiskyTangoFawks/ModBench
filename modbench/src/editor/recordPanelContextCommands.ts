@@ -2,14 +2,15 @@ import * as vscode from 'vscode';
 import { hasSection, isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type ArrayParentContext, type ReferenceContext, type StringValueContext } from '../wire/messages';
 import type { RecordEditEnvelope } from '../client';
 import { pluginAddressOf } from '../wire/pluginAddress';
-import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 import type { ExtendedFieldDocuments, FieldAddress } from './extendedFieldEditor';
 import type { EditAddress, EditGate } from './followRecord';
 import type { FocusedCellContext } from './focusedCells';
 
-export interface FieldCommitDeps extends RecordWriteDeps {
+export interface FieldCommitDeps {
   // An edit's gate is that of the panels showing the record it is addressed to.
   editGateOf: (address: EditAddress) => EditGate;
+  // Resolves the new FormKey an edit of the FormID gives.
+  edit: (address: EditAddress, envelope: RecordEditEnvelope) => Promise<string | undefined>;
 }
 
 export interface RecordPanelContextCommandDeps extends FieldCommitDeps {
@@ -95,7 +96,7 @@ export function commitField(deps: FieldCommitDeps, field: FieldAddress, value: s
 }
 
 function writeGated(deps: FieldCommitDeps, address: EditAddress, envelope: RecordEditEnvelope): Promise<void> {
-  return deps.editGateOf(address)(address, formKey => applyRecordEdit(deps, formKey, address.plugin, envelope));
+  return deps.editGateOf(address)(address, formKey => deps.edit({ formKey, plugin: address.plugin }, envelope));
 }
 
 const CONTEXT_COMMANDS: ContextCommand[] = [

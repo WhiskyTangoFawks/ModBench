@@ -12,7 +12,7 @@ import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
-/** What `editRecord` is handed, re-exported because its caller reaches the backend only through
+/** What `getEditChanges` is handed, re-exported because its caller reaches the backend only through
  *  this port. */
 export type { RecordEditEnvelope } from '../wire/messages';
 
@@ -94,14 +94,10 @@ export interface LoadOrderOptions {
   signal?: AbortSignal;
 }
 
-/** A refusal is an outcome, not an exception: `refusal` is the backend's own name for it, and
- *  `'Unknown'` this side's own addition. `newFormKey` is set by an edit of the FormID. */
-export type RecordEditOutcome =
-  | { applied: true; newFormKey?: string }
-  | { applied: false; refusal: string; message: string };
-
 /** An edit answered as the changes it makes to plugin source, or the refusal the edit gives:
- *  each move first, then each document's new text at its path once moved. */
+ *  each move first, then each document's new text at its absolute path once moved. A refusal is an
+ *  outcome, not an exception: `refusal` is the backend's own name for it, and `'Unknown'` this side's
+ *  own addition. `newFormKey` is set by an edit of the FormID. */
 export type RecordEditChangesOutcome =
   | ({ applied: true; newFormKey?: string } & Pick<components['schemas']['RecordEditChangesResponse'], 'moves' | 'documents'>)
   | { applied: false; refusal: string; message: string };
@@ -198,8 +194,6 @@ export interface MEditClient {
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused>;
-  // Today's field-edit write, grouped here per the ruling: "edit (today the repository's)".
-  editRecord(formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope): Promise<RecordEditOutcome>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter).

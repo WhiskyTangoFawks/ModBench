@@ -29,6 +29,7 @@ vi.mock('vscode', () => ({
       value: () => `${parts.scheme}:${parts.path}?${parts.query ?? ''}`,
     }),
     joinPath: (...parts: unknown[]) => parts.join('/'),
+    file: (fsPath: string) => fakeUri(fsPath),
   },
   ViewColumn: { Active: -1, One: 1, Beside: -2 },
   commands: {
@@ -54,6 +55,7 @@ vi.mock('vscode', () => ({
       },
     },
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
+    openTextDocument: (uri: unknown) => Promise.resolve({ uri, getText: () => '{}' }),
     onDidChangeTextDocument: (listener: (event: { document: unknown; contentChanges: unknown[] }) => void) => {
       h.documentChanges.add(listener);
       return { dispose: () => h.documentChanges.delete(listener) };
@@ -310,19 +312,21 @@ describe('conflicts computed', () => {
 describe('a record tab whose record an edit of its FormID moved', () => {
   const [OLD, MOVED] = ['000800:Mod.esp', '000900:Mod.esp'];
   const editField = (formKey: string) => h.commands.get('modbench.record.editField')?.(
-    { formKey, plugin: 'Mod.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'Name' }], value: 'x' });
-  const editedFormKeys = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'editRecord').map(c => c.args[0]);
+    { formKey, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin }, { op: 'set', path: [{ kind: 'member', name: 'Name' }], value: 'x' });
+  const editedFormKeys = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'getEditChanges').map(c => c.args[0]);
 
   it('sends an edit of the moved plugin addressed with the old FormKey to the new one until the tab\'s read of it is answered, and not after', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
     client.setQueryAnswer('getPlugins', activeA);
+    client.setQueryAnswer('getRecordFile', { path: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
+    client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
     const { open } = makeEditor(client);
     const tab = open(OLD);
-    client.setCommandResult('editRecord', { applied: true, newFormKey: MOVED });
+    client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], documents: [] });
     await editField(OLD);
-    client.setCommandResult('editRecord', { applied: true });
+    client.setQueryAnswer('getEditChanges', { applied: true, moves: [], documents: [] });
     client.emit({ kind: 'rows-changed', plugin: 'Mod.esp', origin: 'ModA', keys: [OLD, MOVED], sequence: 2 });
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: MOVED }]]);
 

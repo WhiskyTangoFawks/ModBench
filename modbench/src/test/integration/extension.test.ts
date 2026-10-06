@@ -98,6 +98,17 @@ function documentTextOf(body: string): unknown {
   return typeof parsed === 'object' && parsed !== null && 'documentText' in parsed ? parsed.documentText : undefined;
 }
 
+interface EditAsked { value: unknown; text: string }
+function editAskedOf(body: string): EditAsked {
+  const parsed: unknown = JSON.parse(body);
+  if (!isRecord(parsed) || !isRecord(parsed.edit) || typeof parsed.text !== 'string') throw new Error(`expected an edit and a text, got: ${body}`);
+  return { value: parsed.edit.value, text: parsed.text };
+}
+const editsAsked: EditAsked[] = [];
+type EditAnswer = { status: number; body: unknown };
+const refusedAsUntracked: EditAnswer = { status: 409, body: { refusal: 'PluginNotTracked', detail: 'Tracked.esp is not tracked, so it is read-only.' } };
+let answerEdit: (asked: EditAsked) => EditAnswer = () => refusedAsUntracked;
+
 function pluginNamesOf(body: string): string[] {
   const parsed: unknown = JSON.parse(body);
   const plugins = typeof parsed === 'object' && parsed !== null && 'plugins' in parsed ? parsed.plugins : undefined;
@@ -257,6 +268,18 @@ function createMockBackend(): http.Server {
       });
       return;
     }
+    if (method === 'POST' && /^\/records\/[^/?]+\/edit-changes$/.test(url)) {
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        const asked = editAskedOf(body);
+        editsAsked.push(asked);
+        const { status, body: answer } = answerEdit(asked);
+        res.writeHead(status, { 'Content-Type': status === 200 ? 'application/json' : 'application/problem+json' });
+        res.end(JSON.stringify(answer));
+      });
+      return;
+    }
     const wonFormKey = /^\/records\/([^/?]+)$/.exec(url)?.[1];
     if (wonFormKey !== undefined && decodeURIComponent(wonFormKey) === NOT_HELD_FORM_KEY) {
       res.writeHead(404);
@@ -378,13 +401,14 @@ after(async () => {
   );
 });
 
+function modbenchLog(): string {
+  const log = fs.readdirSync(LOGS, { recursive: true, encoding: 'utf8' }).find((file) => file.endsWith(path.join(EXTENSION_ID, 'Modbench.log')));
+  return log === undefined ? '' : fs.readFileSync(path.join(LOGS, log), 'utf8');
+}
+
 describe('Modbench output channel', () => {
   it('writes a leveled log, as a LogOutputChannel does and a plain text channel does not', async () => {
-    const ownLog = path.join(EXTENSION_ID, 'Modbench.log');
-    await waitFor('a leveled line in the Modbench log', () => {
-      const log = fs.readdirSync(LOGS, { recursive: true, encoding: 'utf8' }).find((file) => file.endsWith(ownLog));
-      return log !== undefined && /\[(trace|debug|info|warning|error)\]/.test(fs.readFileSync(path.join(LOGS, log), 'utf8'));
-    });
+    await waitFor('a leveled line in the Modbench log', () => /\[(trace|debug|info|warning|error)\]/.test(modbenchLog()));
   });
 });
 
@@ -685,6 +709,95 @@ describe('a child record of a tracked plugin', () => {
     await replaceAll(container, fromContainer);
     for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: plugin.name, origin: plugin.origin, keys: [TRACKED_FORM_KEY] });
     await waitFor('the child\'s document to show the container\'s save', () => child.getText() === fromContainer);
+  });
+});
+
+describe('an edit in a tracked copy\'s grid', () => {
+  const plugin = { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN };
+  const savedText = fs.readFileSync(TRACKED_FILE, 'utf8');
+  const MOVED_FILE = path.join(path.dirname(TRACKED_FILE), 'Moved.json');
+  const MOVED_FORM_KEY = '000900:Tracked.esp';
+  const edit = (formKey: string, value: unknown) => vscode.commands.executeCommand(
+    'modbench.record.editField', { formKey, plugin: plugin.name, origin: plugin.origin }, { op: 'set', path: [{ kind: 'member', name: 'Edits' }], value });
+  const editedText = ({ text, value }: EditAsked) => `${text}+${String(value)}`;
+  const answeredIn = (file: string, moved: { moves: unknown[]; newFormKey: string } = { moves: [], newFormKey: '' }) => (asked: EditAsked): EditAnswer => ({
+    status: 200,
+    body: { formKey: TRACKED_FORM_KEY, path: 'Edits', ...moved, newFormKey: moved.newFormKey || null, documents: [{ path: file, text: editedText(asked) }] },
+  });
+  const recordTabsOn = (fsPath: string) => openTabs().filter((t) =>
+    t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.record' && t.input.uri.fsPath === fsPath);
+  const openFileTab = async () => {
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: TRACKED_FORM_KEY, plugin });
+    await waitFor('the file\'s tab', () => recordTabsOn(TRACKED_FS_PATH).length > 0);
+  };
+  const shown = (document: vscode.TextDocument) => ({ text: document.getText(), unsaved: document.isDirty });
+
+  before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
+  afterEach(async () => {
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    answerEdit = () => refusedAsUntracked;
+    if (fs.existsSync(MOVED_FILE)) fs.renameSync(MOVED_FILE, TRACKED_FILE);
+    fs.writeFileSync(TRACKED_FILE, savedText);
+  });
+
+  it('changes the file\'s document to the text mEdit answers for the document\'s own text, and saves it', async () => {
+    await openFileTab();
+    answerEdit = answeredIn(TRACKED_FILE);
+
+    await edit(TRACKED_FORM_KEY, 1);
+
+    assert.strictEqual(editsAsked.at(-1)?.text, savedText);
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    assert.deepStrictEqual(shown(document), { text: `${savedText}+1`, unsaved: false });
+    assert.strictEqual(fs.readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1`);
+  });
+
+  it('builds each edit on the text the one before it left, the second fired before the first is saved', async () => {
+    await openFileTab();
+    answerEdit = answeredIn(TRACKED_FILE);
+
+    await Promise.all([edit(TRACKED_FORM_KEY, 1), edit(TRACKED_FORM_KEY, 2)]);
+
+    assert.strictEqual(fs.readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1+2`);
+  });
+
+  it('changes no document when mEdit refuses the edit, and says why, naming the field', async () => {
+    await openFileTab();
+
+    await edit(TRACKED_FORM_KEY, 1);
+
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    assert.deepStrictEqual(shown(document), { text: savedText, unsaved: false });
+    await waitFor('the refusal in the Modbench log', () => modbenchLog().includes('warning: Edits: Tracked.esp is not tracked, so it is read-only.'));
+  });
+
+  it('moves the file where mEdit answers, and the tab goes with it, reading the record it moved to from the document', async () => {
+    await openFileTab();
+    answerEdit = answeredIn(MOVED_FILE, { moves: [{ from: TRACKED_FILE, to: MOVED_FILE }], newFormKey: MOVED_FORM_KEY });
+    const readsBefore = comparedTexts.length;
+
+    await edit(TRACKED_FORM_KEY, 'moved');
+
+    await waitFor('the tab on the moved file', () => recordTabsOn(vscode.Uri.file(MOVED_FILE).fsPath).length === 1);
+    assert.deepStrictEqual(recordTabsOn(TRACKED_FS_PATH), []);
+    assert.strictEqual(fs.existsSync(TRACKED_FILE), false);
+    const moved = await vscode.workspace.openTextDocument(vscode.Uri.file(MOVED_FILE));
+    assert.deepStrictEqual(shown(moved), { text: `${savedText}+moved`, unsaved: false });
+    await waitFor('the moved tab to read its new record from the document', () => comparedTexts.slice(readsBefore).includes(`${savedText}+moved`));
+  });
+
+  it('edits a child record through its own tab\'s document', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: CHILD_FORM_KEY, plugin });
+    const tab = await waitFor('the child\'s tab', () => openTabs().find((t) =>
+      t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.record' && t.input.uri.scheme !== 'file'));
+    if (!(tab.input instanceof vscode.TabInputCustom)) throw new Error('expected a custom editor tab');
+    const child = await vscode.workspace.openTextDocument(tab.input.uri);
+    answerEdit = answeredIn(TRACKED_FILE);
+
+    await edit(CHILD_FORM_KEY, 1);
+
+    assert.deepStrictEqual(shown(child), { text: `${savedText}+1`, unsaved: false });
+    assert.strictEqual(fs.readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1`);
   });
 });
 

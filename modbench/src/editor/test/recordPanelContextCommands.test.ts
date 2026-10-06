@@ -20,9 +20,8 @@ import type { FieldAddress, OpenExtendedFieldEditorParams } from '../extendedFie
 const openExtendedFieldEditor =
   vi.fn<(params: OpenExtendedFieldEditorParams) => Promise<void>>();
 
-import { commitField, registerRecordPanelContextCommands, type RecordPanelContextCommandDeps } from '../recordPanelContextCommands';
+import { commitField, registerRecordPanelContextCommands, type FieldCommitDeps, type RecordPanelContextCommandDeps } from '../recordPanelContextCommands';
 import type { ArrayElementContext, ArrayParentContext, StringValueContext } from '../../wire/messages';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { present } from '../../ports/present';
 
 beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); showInputBox.mockReset(); executeCommand.mockReset(); });
@@ -31,32 +30,27 @@ const gateSendingEachWriteWhereItWasAddressed: RecordPanelContextCommandDeps['ed
   () => async (address, write) => { await write(address.formKey); };
 
 function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
-  const meditClient = new InMemoryMEditClient();
-  meditClient.setCommandResult('editRecord', { applied: true });
-  const refreshSourceControlFor = vi.fn();
-  const report = vi.fn();
+  const edit = vi.fn<FieldCommitDeps['edit']>(() => Promise.resolve(undefined));
   const deps: RecordPanelContextCommandDeps = {
-    meditClient,
-    refreshSourceControlFor,
-    reporter: { report, landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() },
+    edit,
     extendedFields: { open: openExtendedFieldEditor },
     editGateOf: gateSendingEachWriteWhereItWasAddressed,
     focusedCell: () => undefined,
     ...overrides,
   };
-  return { deps, meditClient, refreshSourceControlFor, report };
+  return { deps, edit };
 }
 
 const IDENTITY = { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA' };
 
-function editRecordCalls(client: InMemoryMEditClient) {
-  return client.calls.filter(c => c.method === 'editRecord');
+function editsMade(edit: ReturnType<typeof makeDeps>['edit']) {
+  return edit.mock.calls.map(([{ formKey, plugin }, envelope]) => ({ args: [formKey, plugin, envelope] }));
 }
 
 function envelopeValueNarrowedFromUnknownCallArgs(args: unknown[]): string {
   const envelope = args[2];
   const value: unknown = typeof envelope === 'object' && envelope !== null ? Reflect.get(envelope, 'value') : undefined;
-  if (typeof value !== 'string') throw new Error('expected an editRecord envelope carrying a string value');
+  if (typeof value !== 'string') throw new Error('expected an edit envelope carrying a string value');
   return value;
 }
 
@@ -82,40 +76,40 @@ function elementContext(path: ArrayElementContext['path']): ArrayElementContext 
 
 describe('right-click array ops write one envelope from the host', () => {
   it('Add lands an add envelope at a nested array\'s own path', async () => {
-    const { deps, meditClient } = makeDeps();
+    const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(parentContext(
       [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }],
     ));
 
-    expect(editRecordCalls(meditClient)).toHaveLength(1);
-    expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
+    expect(editsMade(edit)).toHaveLength(1);
+    expect(present(editsMade(edit)[0], "the sole edit").args).toEqual([
       IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       { op: 'add', path: [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }] },
     ]);
   });
 
   it('Add lands the value a drop supplies in its add envelope', async () => {
-    const { deps, meditClient } = makeDeps();
+    const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
       parentContext([{ kind: 'member', name: 'Values' }]), 6);
 
-    expect(present(editRecordCalls(meditClient)[0], 'the sole editRecord call').args[2])
+    expect(present(editsMade(edit)[0], 'the sole edit').args[2])
       .toEqual({ op: 'add', path: [{ kind: 'member', name: 'Values' }], value: 6 });
   });
 
   it('Remove lands a remove envelope at the element\'s own path', async () => {
-    const { deps, meditClient } = makeDeps();
+    const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.removeElement'), "the handler registered for 'modbench.record.removeElement'")(elementContext(
       [{ kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 }],
     ));
 
-    expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
+    expect(present(editsMade(edit)[0], "the sole edit").args).toEqual([
       IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       { op: 'remove', path: [{ kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 }] },
     ]);
@@ -125,14 +119,14 @@ describe('right-click array ops write one envelope from the host', () => {
     ['modbench.record.moveElementUp', 1],
     ['modbench.record.moveElementDown', 3],
   ] as const)('%s lands a move envelope carrying the neighbour position', async (command, destination) => {
-    const { deps, meditClient } = makeDeps();
+    const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get(command), "the handler registered for the command under test")(elementContext(
       [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }, { kind: 'index', index: 2 }],
     ));
 
-    expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
+    expect(present(editsMade(edit)[0], "the sole edit").args).toEqual([
       IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       {
         op: 'move',
@@ -143,44 +137,24 @@ describe('right-click array ops write one envelope from the host', () => {
   });
 
   it('Move Up on the first element still lands the move, to the position before it, since the webview posts what the user asked for', async () => {
-    const { deps, meditClient } = makeDeps();
+    const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.moveElementUp'), "the handler registered for 'modbench.record.moveElementUp'")(elementContext([{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }]));
 
-    expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
+    expect(present(editsMade(edit)[0], "the sole edit").args).toEqual([
       IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       { op: 'move', path: [{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }], value: -1 },
     ]);
   });
 
-  it('tells the panel to re-read once the edit has landed', async () => {
-    const { deps, refreshSourceControlFor } = makeDeps();
-    registerRecordPanelContextCommands(deps);
-
-    await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(parentContext([{ kind: 'member', name: 'Values' }]));
-
-    expect(refreshSourceControlFor).toHaveBeenCalledWith({ name: IDENTITY.plugin, origin: IDENTITY.origin });
-  });
-
-  it('surfaces a refusal as a warning and does not re-read', async () => {
-    const { deps, meditClient, refreshSourceControlFor, report } = makeDeps();
-    meditClient.setCommandResult('editRecord', { applied: false, refusal: 'NotTracked', message: 'Track the mod first.' });
-    registerRecordPanelContextCommands(deps);
-
-    await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(parentContext([{ kind: 'member', name: 'Values' }]));
-
-    expect(report).toHaveBeenCalledWith('warning', 'Values: Track the mod first.');
-    expect(refreshSourceControlFor).not.toHaveBeenCalled();
-  });
-
   it('does nothing when a command fires with no context', async () => {
-    const { deps, meditClient } = makeDeps();
+    const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(undefined);
 
-    expect(editRecordCalls(meditClient)).toHaveLength(0);
+    expect(editsMade(edit)).toHaveLength(0);
   });
 });
 
@@ -192,14 +166,14 @@ describe('right-click edits go through the gate of the panels showing the record
 
   it('an array op writes through the gate', async () => {
     const gated: string[] = [];
-    const { deps, meditClient } = makeDeps({ editGateOf: movedGate(gated) });
+    const { deps, edit } = makeDeps({ editGateOf: movedGate(gated) });
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
       parentContext([{ kind: 'member', name: 'Entries' }]));
 
     expect(gated).toEqual([IDENTITY.formKey]);
-    expect(editRecordCalls(meditClient).map(c => c.args[0])).toEqual(['000900:Fallout4.esm']);
+    expect(editsMade(edit).map(c => c.args[0])).toEqual(['000900:Fallout4.esm']);
   });
 
   it('takes the gate of the panels showing the record it is addressed to', async () => {
@@ -215,13 +189,13 @@ describe('right-click edits go through the gate of the panels showing the record
 
   it('a save of the extended editor writes through the gate of the panel it was opened from', async () => {
     const gated: string[] = [];
-    const { deps, meditClient } = makeDeps({ editGateOf: movedGate(gated) });
+    const { deps, edit } = makeDeps({ editGateOf: movedGate(gated) });
     registerRecordPanelContextCommands(deps);
 
     await commitField(deps, fieldOf(stringContext()), 'saved');
 
     expect(gated).toEqual([IDENTITY.formKey]);
-    expect(editRecordCalls(meditClient).map(c => c.args[0])).toEqual(['000900:Fallout4.esm']);
+    expect(editsMade(edit).map(c => c.args[0])).toEqual(['000900:Fallout4.esm']);
   });
 });
 
@@ -244,8 +218,8 @@ describe('the extended editor opens and saves from the host, from the context it
     });
   });
 
-  it('a save lands one set envelope at the leaf\'s own path, and re-reads', async () => {
-    const { deps, meditClient, refreshSourceControlFor } = makeDeps();
+  it('a save lands one set envelope at the leaf\'s own path', async () => {
+    const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);
     const path = [
       { kind: 'member', name: 'Container' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' },
@@ -253,54 +227,53 @@ describe('the extended editor opens and saves from the host, from the context it
 
     await commitField(deps, fieldOf(stringContext({ path })), 'edited in the tab');
 
-    expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
+    expect(present(editsMade(edit)[0], "the sole edit").args).toEqual([
       IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       { op: 'set', path, value: 'edited in the tab' },
     ]);
-    expect(refreshSourceControlFor).toHaveBeenCalledWith({ name: IDENTITY.plugin, origin: IDENTITY.origin });
   });
 
   it('a second save of the same tab writes again', async () => {
-    const { deps, meditClient } = makeDeps();
+    const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
     await commitField(deps, fieldOf(stringContext()), 'first save');
     await commitField(deps, fieldOf(stringContext()), 'second save');
 
-    expect(editRecordCalls(meditClient).map(c => envelopeValueNarrowedFromUnknownCallArgs(c.args))).toEqual(['first save', 'second save']);
+    expect(editsMade(edit).map(c => envelopeValueNarrowedFromUnknownCallArgs(c.args))).toEqual(['first save', 'second save']);
   });
 });
 
 describe('a field gesture from the palette, which hands it no cell', () => {
   it('acts on the focused cell of the record tab in focus', async () => {
     const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 1 }];
-    const { deps, meditClient } = makeDeps({ focusedCell: () => elementContext(path) });
+    const { deps, edit } = makeDeps({ focusedCell: () => elementContext(path) });
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(editRecordCalls(meditClient).map(c => c.args[2])).toEqual([{ op: 'remove', path }]);
+    expect(editsMade(edit).map(c => c.args[2])).toEqual([{ op: 'remove', path }]);
   });
 
   it('does nothing with no focused cell', async () => {
-    const { deps, meditClient } = makeDeps();
+    const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(editRecordCalls(meditClient)).toEqual([]);
+    expect(editsMade(edit)).toEqual([]);
   });
 
   it('acts on a cell whose context carries its section beside another, as a string element of an array does', async () => {
     const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Names' }, { kind: 'index', index: 0 }];
-    const { deps, meditClient } = makeDeps({
+    const { deps, edit } = makeDeps({
       focusedCell: () => ({ ...elementContext(path), webviewSection: 'arrayElement stringValue' }),
     });
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(editRecordCalls(meditClient).map(c => c.args[2])).toEqual([{ op: 'remove', path }]);
+    expect(editsMade(edit).map(c => c.args[2])).toEqual([{ op: 'remove', path }]);
   });
 });
 
@@ -310,13 +283,12 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
   const editField = () => present(handlers.get('modbench.record.editField'), 'the editField handler');
 
   it('writes the envelope to the plugin copy its Argument names', async () => {
-    const { deps, meditClient, refreshSourceControlFor } = makeDeps();
+    const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
     await editField()(IDENTITY, envelope);
 
-    expect(editRecordCalls(meditClient).map(c => c.args)).toEqual([[IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin }, envelope]]);
-    expect(refreshSourceControlFor).toHaveBeenCalledWith({ name: IDENTITY.plugin, origin: IDENTITY.origin });
+    expect(editsMade(edit).map(c => c.args)).toEqual([[IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin }, envelope]]);
   });
 
   it('goes through the gate of the panels showing the record its Argument names', async () => {
@@ -329,47 +301,15 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
     expect(asked).toEqual([IDENTITY.formKey]);
   });
 
-  it('surfaces a refusal as a warning, and re-reads nothing', async () => {
-    const { deps, meditClient, refreshSourceControlFor, report } = makeDeps();
-    meditClient.setCommandResult('editRecord', { applied: false, refusal: 'NotTracked', message: 'Track the mod first.' });
-    registerRecordPanelContextCommands(deps);
-
-    await editField()(IDENTITY, envelope);
-
-    expect(report).toHaveBeenCalledWith('warning', 'Height: Track the mod first.');
-    expect(refreshSourceControlFor).not.toHaveBeenCalled();
-  });
-
-  it('names a nested field as mEdit spells its path', async () => {
-    const { deps, meditClient, report } = makeDeps();
-    meditClient.setCommandResult('editRecord', { applied: false, refusal: 'ReadOnly', message: 'Read-only.' });
-    registerRecordPanelContextCommands(deps);
-    const nested = [{ kind: 'member' as const, name: 'Conditions' }, { kind: 'index' as const, index: 0 }, { kind: 'member' as const, name: 'Data' }];
-
-    await editField()(IDENTITY, { op: 'set', path: nested, value: 1 });
-
-    expect(report).toHaveBeenCalledWith('warning', 'Conditions[0].Data: Read-only.');
-  });
-
-  it('reports a transport failure as an error', async () => {
-    const { deps, meditClient, report } = makeDeps();
-    meditClient.setCommandFailure('editRecord', new Error('ECONNREFUSED'));
-    registerRecordPanelContextCommands(deps);
-
-    await editField()(IDENTITY, envelope);
-
-    expect(report).toHaveBeenCalledWith('error', 'Could not edit Height.', 'ECONNREFUSED');
-  });
-
   it('from the palette, asks for the focused string cell\'s new text and sets it at the cell\'s path', async () => {
     showInputBox.mockResolvedValue('a new description');
-    const { deps, meditClient } = makeDeps({ focusedCell: () => stringContext() });
+    const { deps, edit } = makeDeps({ focusedCell: () => stringContext() });
     registerRecordPanelContextCommands(deps);
 
     await editField()();
 
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'a long description' }));
-    expect(editRecordCalls(meditClient).map(c => c.args)).toEqual([[
+    expect(editsMade(edit).map(c => c.args)).toEqual([[
       IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
       { op: 'set', path: [{ kind: 'member', name: 'Description' }], value: 'a new description' },
     ]]);
@@ -377,31 +317,31 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
 
   it('from the palette, writes nothing when the prompt is dismissed', async () => {
     showInputBox.mockResolvedValue(undefined);
-    const { deps, meditClient } = makeDeps({ focusedCell: () => stringContext() });
+    const { deps, edit } = makeDeps({ focusedCell: () => stringContext() });
     registerRecordPanelContextCommands(deps);
 
     await editField()();
 
-    expect(editRecordCalls(meditClient)).toEqual([]);
+    expect(editsMade(edit)).toEqual([]);
   });
 
   it('from the palette, on a cell that is not a string value, writes nothing', async () => {
-    const { deps, meditClient } = makeDeps({ focusedCell: () => parentContext(path) });
+    const { deps, edit } = makeDeps({ focusedCell: () => parentContext(path) });
     registerRecordPanelContextCommands(deps);
 
     await editField()();
 
     expect(showInputBox).not.toHaveBeenCalled();
-    expect(editRecordCalls(meditClient)).toEqual([]);
+    expect(editsMade(edit)).toEqual([]);
   });
 
   it('writes nothing for an Argument that is not a record\'s plugin copy', async () => {
-    const { deps, meditClient } = makeDeps();
+    const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
     await editField()({ formKey: IDENTITY.formKey }, envelope);
 
-    expect(editRecordCalls(meditClient)).toEqual([]);
+    expect(editsMade(edit)).toEqual([]);
   });
 });
 

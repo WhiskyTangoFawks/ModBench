@@ -29,6 +29,7 @@ vi.mock('vscode', async () => ({
     registerFileSystemProvider: (...args: unknown[]) => registerFileSystemProvider(...args),
     registerTextDocumentContentProvider: () => ({ dispose: () => undefined }),
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
+    openTextDocument: (uri: unknown) => Promise.resolve({ uri, getText: () => '{}' }),
   },
   window: {
     registerFileDecorationProvider: () => ({ dispose: () => undefined }),
@@ -306,7 +307,9 @@ describe('modbench.record.editField, fired with only the record, the plugin and 
   it('moves every tab showing the record to its new FormKey, as an agent fires it with no panel', async () => {
     const tracker = new ActiveRecordTracker<vscode.WebviewPanel>();
     const meditClient = new InMemoryMEditClient();
-    meditClient.setCommandResult('editRecord', { applied: true, newFormKey: MOVED });
+    meditClient.setQueryAnswer('getRecordFile', { path: '/mods/ModA/plugin-source/Mod.esp/Npcs/Npc.json' });
+    meditClient.setQueryAnswer('getRecordOfFile', { formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'ModA' });
+    meditClient.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], documents: [] });
     const [one, other, elsewhere] = [fakePanel(undefined, '000800:Mod.esp'), fakePanel(undefined, '000800:Mod.esp'), fakePanel()];
     tracker.setFormKey(one, '000800:Mod.esp');
     tracker.setFormKey(other, '000800:Mod.esp');
@@ -318,7 +321,7 @@ describe('modbench.record.editField, fired with only the record, the plugin and 
 
     expect([tracker.formKeyOf(one), tracker.formKeyOf(other)]).toEqual([MOVED, MOVED]);
     expect(tracker.formKeyOf(elsewhere)).toBe('000801:Mod.esp');
-    expect(meditClient.calls.filter(c => c.method === 'editRecord')).toHaveLength(1);
+    expect(meditClient.calls.filter(c => c.method === 'getEditChanges')).toHaveLength(1);
   });
 });
 

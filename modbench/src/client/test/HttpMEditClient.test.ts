@@ -551,35 +551,6 @@ describe('HttpMEditClient — decompiling plugins answers per plugin', () => {
   });
 });
 
-describe('HttpMEditClient — an applied edit', () => {
-  it('editRecord carries the new FormKey an edit of the FormID answers with', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
-      applied: true, formKey: '000800:MyPatch.esp', path: 'FormKey', newFormKey: '000900:MyPatch.esp',
-    })));
-    const client = makeClient(fetch);
-
-    const outcome = await client.editRecord(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' },
-      { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' },
-    );
-
-    expect(outcome).toEqual({ applied: true, newFormKey: '000900:MyPatch.esp' });
-  });
-
-  it('editRecord answers no new FormKey for an edit of any other field', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
-      applied: true, formKey: '000800:MyPatch.esp', path: 'EditorID', newFormKey: null,
-    })));
-    const client = makeClient(fetch);
-
-    const outcome = await client.editRecord(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
-    );
-
-    expect(outcome).toEqual({ applied: true });
-  });
-});
-
 describe('HttpMEditClient — an edit answered as its source changes', () => {
   const plugin = { name: 'MyPatch.esp', origin: 'ModA' };
   const renamed: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' };
@@ -625,14 +596,14 @@ describe('HttpMEditClient — an edit answered as its source changes', () => {
 
 describe('HttpMEditClient — the not-OK response text', () => {
 
-  it('editRecord leaves an ordinary typed refusal exactly as the backend worded it', async () => {
+  it('getEditChanges leaves an ordinary typed refusal exactly as the backend worded it', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {
       refusal: 'PluginNotTracked', detail: 'MyPatch.esp is not tracked, so it is read-only.',
     })));
     const client = makeClient(fetch);
 
-    const outcome = await client.editRecord(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
+    const outcome = await client.getEditChanges(
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' }, '{}',
     );
 
     expect(outcome).toEqual({
@@ -640,14 +611,14 @@ describe('HttpMEditClient — the not-OK response text', () => {
     });
   });
 
-  it('editRecord carries a refused disk write as the typed SourceWriteFailed, not Unknown', async () => {
+  it('getEditChanges carries a refused disk read as the typed SourceWriteFailed, not Unknown', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {
       refusal: 'SourceWriteFailed', detail: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
     })));
     const client = makeClient(fetch);
 
-    const outcome = await client.editRecord(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
+    const outcome = await client.getEditChanges(
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' }, '{}',
     );
 
     expect(outcome).toEqual({
@@ -655,12 +626,12 @@ describe('HttpMEditClient — the not-OK response text', () => {
     });
   });
 
-  it('editRecord leaves the load-order-absent 503 alone, its outcome carrying this side\'s own Unknown as there is no typed refusal in it', async () => {
+  it('getEditChanges leaves the load-order-absent 503 alone, its outcome carrying this side\'s own Unknown as there is no typed refusal in it', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
 
-    const outcome = await client.editRecord(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
+    const outcome = await client.getEditChanges(
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' }, '{}',
     );
 
     expect(outcome).toEqual({ applied: false, refusal: 'Unknown', message: 'No load order has been received.' });
@@ -1218,12 +1189,5 @@ describe('HttpMEditClient — a plugin address on the wire', () => {
 
     expect(new URL(request.url).pathname).toContain('/plugins/Shared.esp/');
     expect(new URL(request.url).searchParams.get('origin')).toBe('ModA');
-  });
-
-  it('editRecord posts the plugin and its origin in the body beside the envelope', async () => {
-    const request = await requestOf(
-      (c) => c.editRecord('000800:Shared.esp', plugin, { op: 'set', path: [], value: 1 }), { applied: true });
-
-    expect(await request.json()).toEqual({ plugin: 'Shared.esp', origin: 'ModA', op: 'set', path: [], value: 1 });
   });
 });

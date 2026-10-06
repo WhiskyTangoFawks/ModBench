@@ -77,7 +77,7 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
 
   it('reads the record it shows once, after the answer, when mEdit reports a record it shows as a column changed', async () => {
     const { client, panel, edits } = openOn('000800:Mod.esp');
-    edits.answered(panel, '000800:Mod.esp', ['000801:Mod.esp']);
+    edits.answered(panel, '000800:Mod.esp', [{ formKey: '000801:Mod.esp', plugin: EDITED_MOD_ESP_FROM_MODA.plugin }]);
     const { write, answer } = writeAnsweredWhenTheTestChooses();
 
     const editing = edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, write);
