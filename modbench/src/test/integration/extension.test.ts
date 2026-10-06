@@ -251,7 +251,6 @@ const TRACKED_FILE = path.join(
   fs.mkdtempSync(path.join(os.tmpdir(), 'modbench-tracked-')), TRACKED_ORIGIN, 'plugin-source', TRACKED_PLUGIN, 'Weapons', 'TrackedGun.json');
 fs.mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
 fs.writeFileSync(TRACKED_FILE, JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun' }));
-// The path as VS Code names the file, its drive letter lowercased on Windows.
 const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
 
 const HELD_FORM_KEY = '000801:Held.esp';
