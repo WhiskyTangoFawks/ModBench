@@ -8,10 +8,18 @@ interface VsCodeApi<Message> {
   postMessage: (msg: Message) => void;
 }
 
+/** What the page keeps with its tab, which VS Code restores with the tab after a reload. */
+export interface TabState {
+  getState: () => unknown;
+  setState: (state: unknown) => void;
+}
+
 // VS Code hands a page this once; each page posts its own protocol through it.
-declare function acquireVsCodeApi(): VsCodeApi<unknown>;
+declare function acquireVsCodeApi(): VsCodeApi<unknown> & TabState;
 
 const api = acquireVsCodeApi();
+
+export const tabState: TabState = api;
 
 export const vscode: VsCodeApi<WebviewToExtension> = api;
 

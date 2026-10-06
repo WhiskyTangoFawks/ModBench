@@ -131,15 +131,15 @@ describe('modbench.record.open from the palette, with no Argument', () => {
     return { meditClient };
   };
 
-  it('opens the records selected in the focused view, each in a tab of its own', async () => {
+  it('opens the records selected in the focused view as one grid, pinned, on the first record\'s document', async () => {
     register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }, { kind: 'record', record: { formKey: '000802:A.esp' } }], ...renderingTheWinner() });
 
     await open();
 
-    const opened = executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith');
-    expect(opened.map(([, , , options]) => options)).toEqual([
-      { viewColumn: -1, preview: false }, { viewColumn: -1, preview: false },
-    ]);
+    expect(executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith')).toEqual([[
+      'vscode.openWith', renderedDocumentUri({ formKey: '000801:A.esp', plugin: winner }, 'Gun.json'), 'modbench.record',
+      { viewColumn: -1, preview: false },
+    ]]);
   });
 
   it('asks for a record when the focused view has none selected, and opens the one picked as a preview', async () => {
@@ -174,15 +174,14 @@ describe('modbench.record.open from the palette, with no Argument', () => {
     expect(executeCommand).not.toHaveBeenCalled();
   });
 
-  it('reports a record VS Code could not open, and still opens the rest', async () => {
+  it('reports a record VS Code could not open', async () => {
     reporter.report.mockClear();
     executeCommand.mockRejectedValueOnce(new Error('no editor'));
-    register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }, { formKey: '000802:A.esp', kind: 'placed' }], ...renderingTheWinner() });
+    register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }], ...renderingTheWinner() });
 
     await open();
 
     expect(reporter.report.mock.calls).toEqual([['error', 'Failed to open "000801:A.esp".', 'no editor']]);
-    expect(executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith')).toHaveLength(2);
   });
 
   it('does not ask when the selection holds a record', async () => {
@@ -273,6 +272,20 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     await commandHandlers.get('modbench.record.open')?.({ formKey: GUN });
 
     expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, `No active plugin holds ${GUN}.`]]);
+    expect(opened()).toEqual([]);
+  });
+
+  it('refuses several records when no active plugin holds one given without a plugin, naming it, and opens nothing', async () => {
+    reporter.report.mockClear();
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setQueryAnswer('getRecordOwner', undefined);
+    meditClient.setQueryAnswer('getRecordFile', { path: null });
+    meditClient.setQueryAnswer('getRenderedDocument', { fileName: 'Gun.json', text: '{}' });
+    register({ meditClient });
+
+    await commandHandlers.get('modbench.record.open')?.([{ formKey: GUN, plugin }, { formKey: '000802:A.esp' }]);
+
+    expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, 'No active plugin holds 000802:A.esp.']]);
     expect(opened()).toEqual([]);
   });
 

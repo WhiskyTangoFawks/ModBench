@@ -4,11 +4,13 @@ import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import type { RecordDocumentClient } from '../drivingLib/recordDocument';
 import { hoverAt } from './formKeyHover';
 import { definitionsOf } from './formKeyDefinition';
+import { referencesOf } from './formKeyReferences';
+import { locationOf } from './recordLocation';
 import { completionsAt } from './completion';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
 
 export interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles' | 'reporter'> {
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords'> & RecordDocumentClient & SourceProblemsDeps['client'];
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferences'> & RecordDocumentClient & SourceProblemsDeps['client'];
 }
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
@@ -55,15 +57,21 @@ export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposabl
       return new vscode.CompletionList(items, found.isIncomplete);
     },
   });
-  const definitionAt = definitionsOf({ client, reporter: deps.reporter, open: (uri) => vscode.workspace.openTextDocument(uri) });
+  const open = (uri: vscode.Uri) => vscode.workspace.openTextDocument(uri);
+  const definitionAt = definitionsOf({ client, reporter: deps.reporter, open });
   const definition = vscode.languages.registerDefinitionProvider(pluginSource, {
     async provideDefinition(document, position) {
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
       const found = await definitionAt(document.getText(), document.offsetAt(position));
-      if (!found) return undefined;
-      const { uri, document: target, start, end } = found;
-      return new vscode.Location(uri, new vscode.Range(target.positionAt(start), target.positionAt(end)));
+      return found && locationOf(found);
     },
   });
-  return vscode.Disposable.from(hover, completion, definition, sourceProblems(deps));
+  const referencesAt = referencesOf({ client, reporter: deps.reporter, open });
+  const references = vscode.languages.registerReferenceProvider(pluginSource, {
+    async provideReferences(document, position) {
+      if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
+      return (await referencesAt(document.getText(), document.offsetAt(position))).map(locationOf);
+    },
+  });
+  return vscode.Disposable.from(hover, completion, definition, references, sourceProblems(deps));
 }

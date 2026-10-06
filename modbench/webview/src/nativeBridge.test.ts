@@ -96,16 +96,17 @@ describe('requestRecordLoad, whose request shape and reply unwrapping are its ow
     return call.requestId;
   }
 
-  it('posts REQUEST_RECORD_LOAD with the formKey', () => {
-    void requestRecordLoad('000001:A.esp');
+  it('posts REQUEST_RECORD_LOAD with the formKey and the columns', () => {
+    const columns = [{ formKey: '000002:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }];
+    void requestRecordLoad('000001:A.esp', columns);
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
-      type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, formKey: '000001:A.esp',
+      type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, formKey: '000001:A.esp', columns,
     }));
   });
 
   it('resolves the host\'s answer untransformed', async () => {
-    const resultPromise = requestRecordLoad('000001:A.esp');
+    const resultPromise = requestRecordLoad('000001:A.esp', []);
     const requestId = postedFormKeyRequestId();
 
     window.dispatchEvent(new MessageEvent('message', {
