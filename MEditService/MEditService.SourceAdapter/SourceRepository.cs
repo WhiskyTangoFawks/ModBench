@@ -117,6 +117,13 @@ public sealed class SourceRepository
         PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         Locator.ContainerDocument(plugin, identity, schemas);
 
+    /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>:
+    /// the tree only says which document that is. Null when nothing holds it; text naming no record throws
+    /// <see cref="UnreadableSourceDocumentException"/>.</summary>
+    public (RecordIdentity Record, SourceDocument Carrying)? CarryingFromText(
+        PluginAddress plugin, string formKey, string text, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        Locator.CarryingFromText(plugin, formKey, text, schemas);
+
     /// <summary>The record that carries <paramref name="identity"/> inline, and the slot it sits in; null
     /// for a record with a document of its own.</summary>
     public DocumentContainment? ContainerOf(
@@ -215,6 +222,19 @@ public sealed class SourceRepository
     /// <paramref name="worldspace"/>'s directory. A cell the plugin already holds is replaced where it is.</summary>
     public void PutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
         Writes.Put(plugin, cell, SourceRepositoryWrites.PlacementIn(worldspace, cell));
+
+    /// <summary>What <see cref="Put"/> of a document the tree holds whole changes, written nowhere.</summary>
+    public SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document) => Writes.ChangesToPut(plugin, document);
+
+    /// <summary>What <see cref="PutInWorldspace"/> changes, written nowhere.</summary>
+    public SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
+        Writes.ChangesToPutInWorldspace(plugin, cell, worldspace);
+
+    /// <summary>What changing the FormKey of <paramref name="identity"/> changes, from the text of the document
+    /// <paramref name="carrying"/> it, written nowhere. A folder already at the new key's leaf name throws.</summary>
+    public SourceChanges ChangesToRekey(
+        PluginAddress plugin, SourceDocument carrying, RecordIdentity identity, string newFormKey, DocumentRekey rekey) =>
+        Writes.ChangesToRekey(plugin, carrying, identity, newFormKey, rekey);
 
     /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
     /// record's document. Already gone is the state asked for; the other two outcomes say what

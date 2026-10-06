@@ -14,7 +14,7 @@ import {
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type CreatableRecordType,
   type RebuildIndexOutcome, type CopyItem, type CopyMode, type RecordChildHolders,
-  type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
+  type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditChangesOutcome, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
@@ -46,6 +46,19 @@ function selectionOutcome<L, R>(
   answer: { applied: L[]; refused: { item: R; message: string }[] },
 ): { landed: readonly L[]; refused: readonly ItemRefusal<R>[] } {
   return { landed: answer.applied, refused: itemRefusals(answer.refused) };
+}
+
+// The backend's typed discriminator, off the ProblemDetails extension rather than re-derived from the
+// status: only it tells "not tracked" from "no folder", whose ways out differ.
+function editRefused(
+  error: { refusal?: unknown; detail?: string | null } | undefined, status: number,
+): { applied: false; refusal: string; message: string } {
+  const refusal = error?.refusal;
+  return {
+    applied: false,
+    refusal: typeof refusal === 'string' ? refusal : 'Unknown',
+    message: error?.detail ?? (errorText(error) || `Edit failed (${status}).`),
+  };
 }
 
 function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
@@ -396,16 +409,26 @@ export class HttpMEditClient implements MEditClient {
     });
     if (response.ok && data?.applied) return data.newFormKey ? { applied: true, newFormKey: data.newFormKey } : { applied: true };
 
-    // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived
-    // from the status: only it tells "not tracked" from "no folder", whose ways out differ.
-    // `refusal` reads through ProblemDetails' own index signature — no cast.
-    const refusal = error?.refusal;
-    const outcome: RecordEditOutcome = {
-      applied: false,
-      refusal: typeof refusal === 'string' ? refusal : 'Unknown',
-      message: error?.detail ?? (errorText(error) || `Edit failed (${response.status}).`),
-    };
+    const outcome = editRefused(error, response.status);
     this.log(`[HttpMEditClient] editRecord(${formKey} ${envelope.op} ${spelled}) refused: ${outcome.refusal} — ${outcome.message}`);
+    return outcome;
+  }
+
+  /** Only a transport failure rejects, as `editRecord`'s does. */
+  async getEditChanges(
+    formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope, text: string,
+  ): Promise<RecordEditChangesOutcome> {
+    const { data, error, response } = await this.apiClient.POST('/records/{formKey}/edit-changes', {
+      params: { path: { formKey } },
+      body: { edit: { plugin, origin, ...envelope }, text },
+    });
+    if (response.ok && data) {
+      const { moves, documents, newFormKey } = data;
+      return newFormKey ? { applied: true, moves, documents, newFormKey } : { applied: true, moves, documents };
+    }
+
+    const outcome = editRefused(error, response.status);
+    this.log(`[HttpMEditClient] getEditChanges(${formKey} ${envelope.op} ${JSON.stringify(envelope.path)}) refused: ${outcome.refusal} — ${outcome.message}`);
     return outcome;
   }
 

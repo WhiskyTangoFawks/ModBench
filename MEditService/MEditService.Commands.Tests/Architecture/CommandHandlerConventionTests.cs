@@ -24,7 +24,12 @@ public sealed class CommandHandlerConventionTests
         typeof(CopyRecordHandler),
     ];
 
-    private static readonly Type[] Handlers = [.. SingleWriteHandlers, .. SelectionHandlers];
+    private static readonly Type[] HandlersThatWriteNothing =
+    [
+        typeof(EditRecordChangesHandler),
+    ];
+
+    private static readonly Type[] Handlers = [.. SingleWriteHandlers, .. SelectionHandlers, .. HandlersThatWriteNothing];
 
     private static readonly Type[] Carriers =
     [
