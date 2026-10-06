@@ -38,7 +38,10 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
 
   watch(): vscode.Disposable { return new vscode.Disposable(() => undefined); }
   stat(uri: vscode.Uri): Thenable<vscode.FileStat> { return vscode.workspace.fs.stat(containerFileOf(uri)); }
-  readFile(uri: vscode.Uri): Thenable<Uint8Array> { return vscode.workspace.fs.readFile(containerFileOf(uri)); }
+  // Read as text, as every read of Modbench's is, so none yields a plugin's bytes (ADR-0004).
+  async readFile(uri: vscode.Uri): Promise<Uint8Array> {
+    return new TextEncoder().encode(new TextDecoder().decode(await vscode.workspace.fs.readFile(containerFileOf(uri))));
+  }
   writeFile(uri: vscode.Uri, content: Uint8Array): Thenable<void> { return vscode.workspace.fs.writeFile(containerFileOf(uri), content); }
   readDirectory(): [string, vscode.FileType][] { return []; }
   createDirectory(uri: vscode.Uri): void { throw vscode.FileSystemError.NoPermissions(uri); }

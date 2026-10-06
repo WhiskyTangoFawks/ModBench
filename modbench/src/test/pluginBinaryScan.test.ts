@@ -119,6 +119,20 @@ function acquisitionIsFollowed(node: ts.Node): boolean {
     && parent.right === current;
 }
 
+const isUtf8Decoder = (node: ts.Expression): boolean => {
+  if (!ts.isNewExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== 'TextDecoder') return false;
+  const [label, ...rest] = node.arguments ?? [];
+  return rest.length === 0 && (label === undefined || isTextEncoding(label));
+};
+
+function decodedOnArrival(read: ts.CallExpression): boolean {
+  let current: ts.Node = read;
+  while (ts.isParenthesizedExpression(current.parent) || ts.isAwaitExpression(current.parent)) current = current.parent;
+  const { parent } = current;
+  return ts.isCallExpression(parent) && parent.arguments[0] === current && ts.isPropertyAccessExpression(parent.expression)
+    && parent.expression.name.text === 'decode' && isUtf8Decoder(unwrap(parent.expression.expression));
+}
+
 const memberLabel = (expression: ts.Expression, member: string): string => {
   const inner = unwrap(expression);
   return ts.isIdentifier(inner) ? `${inner.text}.${member}` : member;
@@ -170,7 +184,7 @@ function scan(sourceText: string, fileName: string): Offences {
     if (ts.isCallExpression(node)) {
       const callee = ts.isPropertyAccessExpression(node.expression) ? node.expression.name.text
         : ts.isIdentifier(node.expression) ? node.expression.text : undefined;
-      if (callee !== undefined && DECODING_READS.has(callee) && !statesATextEncoding(node.arguments[1])) {
+      if (callee !== undefined && DECODING_READS.has(callee) && !statesATextEncoding(node.arguments[1]) && !decodedOnArrival(node)) {
         undecodedReads.push(callee);
       }
     }
@@ -308,6 +322,16 @@ describe('the extension interprets no plugin binary (ADR-0004): its one byte-lev
   it('does not flag a text-decoded read, by argument or by options object', () => {
     const decoded = "readFile(p, 'utf8');\nreadFileSync(p, { encoding: 'utf-8' });\n";
     expect(scan(decoded, 'x.ts').undecodedReads).toEqual([]);
+  });
+
+  it('does not flag a read that takes no encoding, as VS Code\'s does, handed straight to a UTF-8 TextDecoder', () => {
+    const decoded = "new TextDecoder().decode(await vscode.workspace.fs.readFile(u));\nnew TextDecoder('utf-8').decode(await fs.readFile(u));\n";
+    expect(scan(decoded, 'x.ts').undecodedReads).toEqual([]);
+  });
+
+  it('flags a read whose bytes are kept, or decoded by a byte-preserving TextDecoder or any other decoder', () => {
+    const planted = "const bytes = await vscode.workspace.fs.readFile(u);\nnew TextDecoder('latin1').decode(await readFile(p));\nheaderParser.decode(await readFile(p));\n";
+    expect(scan(planted, 'masterReader.ts').undecodedReads).toEqual(['readFile', 'readFile', 'readFile']);
   });
 
   it('flags a header read through a dynamically imported namespace', () => {
