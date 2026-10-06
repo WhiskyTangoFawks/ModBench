@@ -30,8 +30,7 @@ public sealed class RenameSourceHandler
 
         if (!ModKey.TryFromFileName(newName, out _))
         {
-            return Refused(RenameSourceRefusal.NotAPluginFile,
-                $"{newName} is not a plugin file: its extension must be .esp, .esm or .esl.");
+            return Refused(RenameSourceRefusal.NotAPluginFile, NotAPluginFile.Message(newName, loadOrder.GameRelease));
         }
 
         if (loadOrder.Plugin(plugin) is not { } loaded)
