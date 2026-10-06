@@ -99,10 +99,11 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
 
   constructor(private readonly deps: RecordEditorProviderDeps) {}
 
-  /** Opens the grid on `uri`, with `columns` beside the document's own copy. */
+  /** Opens the grid on `uri`, with `columns` beside the document's own copy, and none when there
+   *  are none, so a tab shown again shows every active plugin's copy. */
   async open(uri: vscode.Uri, columns: readonly RecordCopy[], options: vscode.TextDocumentShowOptions): Promise<void> {
     const key = uri.toString();
-    if (columns.length > 0) this.columnsToShow.set(key, columns);
+    this.columnsToShow.set(key, columns);
     let untaken: readonly RecordCopy[] | undefined;
     try {
       await vscode.commands.executeCommand('vscode.openWith', uri, RECORD_VIEW_TYPE, options);
@@ -203,11 +204,9 @@ function showRecord(
     activeRecordTracker.removePanel(panel);
   });
 
-  panel.webview.onDidReceiveMessage((msg: unknown) => {
-    // A reply and a follow reach the one panel that asked, never a broadcast; `routerDeps` is
-    // shared across panels, so the per-panel fields are rebuilt with the panel this closure holds.
-    void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight, tab));
-  });
+  // A reply and a follow reach the one panel that asked, never a broadcast.
+  const panelRouterDeps = routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight, tab);
+  panel.webview.onDidReceiveMessage((msg: unknown) => { void routeRecordPanelMessage(msg, panelRouterDeps); });
 
   showWebviewPage(panel.webview, context.extensionUri, {
     script: 'main.js', globals: { mEditFormKey: formKey, mEditColumns: columns },

@@ -463,6 +463,25 @@ describe('a record file\'s tab', () => {
   });
 });
 
+describe('a record tab closed while its read is in flight', () => {
+  it('is told nothing when the read lands', async () => {
+    const GUN = '000801:A.esp';
+    const client = new InMemoryMEditClient();
+    let land: (answer: null) => void = () => undefined;
+    client.setQueryAnswerOnce('getComparison', new Promise<null>((resolve) => { land = resolve; }));
+    client.setQueryAnswer('getPlugins', []);
+    const { openDocument } = makeEditor(client);
+    const tab = await openDocument(renderedDocumentUri({ formKey: GUN, plugin: COPY_PLUGIN }, 'Gun.json'));
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
+
+    tab.close();
+    land(null);
+    await settle();
+
+    expect(tab.webview.postMessage).not.toHaveBeenCalled();
+  });
+});
+
 describe('an untracked copy\'s tab', () => {
   const GUN = '000801:A.esp';
   const RENDERED = renderedDocumentUri({ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' } }, 'Gun.json');
@@ -574,6 +593,16 @@ describe('several records opened at once', () => {
       type: 'showColumns', columns: [{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }],
     }]]);
     expect(elsewhere.webview.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('leave the tab they opened to show every active plugin\'s copy again when its record is opened alone onto it', async () => {
+    const { vsCodeOpensTabs } = makeEditor(severalClient());
+    const tabOn = vsCodeOpensTabs();
+    await openSeveral();
+
+    await h.commands.get('modbench.record.open')?.({ formKey: GUN, plugin: COPY_PLUGIN });
+
+    expect(tabOn(gunDocument)?.webview.postMessage.mock.calls).toEqual([[{ type: 'showColumns', columns: [] }]]);
   });
 
   it('read the tab again when mEdit reports a record of another column changed, and not for a record it does not show', async () => {

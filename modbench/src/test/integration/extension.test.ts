@@ -556,14 +556,17 @@ describe('a tracked copy of a record', () => {
     assert.strictEqual(openTabs().length, 2);
   });
 
-  it('shows the file already open in a tab, which reads the other records opened with it beside its own', async () => {
+  it('shows the file already open in a tab, which reads beside its own the records opened with it, and none once its record is opened alone', async () => {
     await vscode.commands.executeCommand('modbench.record.open', trackedCopy);
     await waitFor('the file\'s tab', () => fileTabs().length > 0);
     const copies = [trackedCopy, { formKey: 'Fallout4.esm:000070', plugin: { name: 'Fallout4.esm', origin: 'Data' } }];
 
     await vscode.commands.executeCommand('modbench.record.open', [trackedCopy, { formKey: 'Fallout4.esm:000070' }]);
-
     await waitFor('the records read side by side', () => comparedSideBySide.some((asked) => JSON.stringify(asked) === JSON.stringify(copies)));
+    const readsBefore = reads();
+    await vscode.commands.executeCommand('modbench.record.open', trackedCopy);
+
+    await waitFor('the record read alone', () => reads() > readsBefore);
     assert.strictEqual(openTabs().length, 1);
   });
 

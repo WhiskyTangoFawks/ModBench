@@ -12,7 +12,7 @@ import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, member, panelClient,
+  compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, lastToldCell, member, panelClient,
   parseJsonRecord, required,
   type PanelOpts,
 } from './test/fixtures';
@@ -2341,6 +2341,15 @@ describe('RecordPanel — several records side by side', () => {
     await waitFor(() => expect(screen.getByText('Non-Player Character Gun [000801:A.esp]')).toBeInTheDocument());
   });
 
+  it('files a string field\'s own tab under its column\'s record', async () => {
+    renderPanel(sideBySide, { plugins: tracked });
+    await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Ammo Name'));
+
+    expect(lastToldCell(vscode.postMessage)).toMatchObject({ formKey: AMMO, recordLabel: 'Ammo [000802:A.esp]' });
+  });
+
   it('says nothing of an incomplete comparison: the colours compare copies of one record', async () => {
     renderPanel(sideBySide, { plugins: tracked, conflictsComputed: false });
 
@@ -2372,5 +2381,21 @@ describe('RecordPanel — several records side by side', () => {
 
     expect(client.showColumns).toHaveBeenCalledWith(columns);
     await waitFor(() => expect(client.load).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('RecordPanel — a string field\'s own tab, opened from one record\'s column', () => {
+  beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is filed under the record as the panel names it, by the winning copy\'s EditorID, from any column', async () => {
+    const renamed = structuredClone(compareResult);
+    required(renamed.overrides[0], 'the master copy').editorId = 'OldNPC';
+    renderPanel(renamed);
+    await waitFor(() => expect(screen.getByText('Original Name')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Original Name'));
+
+    expect(lastToldCell(vscode.postMessage)).toMatchObject({ plugin: 'Fallout4.esm', recordLabel: 'TestNPC [000001:Fallout4.esm]' });
   });
 });

@@ -175,4 +175,15 @@ describe('RecordPanelClient, the records a tab shows beside its document\'s own'
     expect(postedColumns()).toEqual([knife]);
     expect(tab.getState()).toEqual({ columns: [knife] });
   });
+
+  it('reads none once the host shows none, though the page gave some', () => {
+    vi.stubGlobal('mEditColumns', [ammo]);
+    const client = createRecordPanelClient();
+
+    client.showColumns([]);
+    void client.load('000001:A.esp');
+
+    expect(postedColumns()).toEqual([]);
+    expect(tab.getState()).toEqual({ columns: [] });
+  });
 });

@@ -47,19 +47,23 @@ export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPi
 /** What a tab's document gives the reads of its panel. */
 export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'unsavedText'>;
 
-/** The router's bundle for one panel's messages: the picker and the record load both reply to it. */
-export function routerDepsForPanel<Panel extends FollowedPanel>(
+/** The router's bundle for one panel's messages: the picker and the record load both reply to it,
+ *  until it closes, as an answer can land after. */
+export function routerDepsForPanel<Panel extends FollowedPanel & Pick<vscode.WebviewPanel, 'onDidDispose'>>(
   shared: SharedRecordPanelDeps,
   panel: Panel,
   focusedCells: FocusedCells<Panel>,
   editsInFlight: Pick<EditsInFlight<Panel>, 'answered'>,
   tab: TabDocument,
 ): RouteRecordPanelMessageDeps {
+  let open = true;
+  panel.onDidDispose(() => { open = false; });
+  const reply = (m: ExtensionToWebview): void => { if (open) void panel.webview.postMessage(m); };
   return {
     ...shared,
-    formKeyPicker: { meditClient: shared.meditClient, reporter: shared.reporter, reply: (m) => { void panel.webview.postMessage(m); } },
+    formKeyPicker: { meditClient: shared.meditClient, reporter: shared.reporter, reply },
     focusCell: (context, userFocus) => { focusedCells.setCell(panel, context, userFocus); },
-    reply: (m) => { void panel.webview.postMessage(m); },
+    reply,
     ...tab,
     readAnswered: (formKey, columns) => { editsInFlight.answered(panel, formKey, columns); },
   };

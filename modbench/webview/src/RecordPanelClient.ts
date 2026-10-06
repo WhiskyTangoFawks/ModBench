@@ -30,28 +30,27 @@ export interface RecordPanelClient {
   // lets a test hold a bare reference to it (`vi.mocked(client.load)`) without an
   // unbound-method warning.
   load: (formKey: string) => Promise<LoadResult>;
-  // The records the tab shows beside its document's own from now on (editor.md, Columns, story 7).
   showColumns: (columns: ColumnCopy[]) => void;
 }
 
 const mEditWindow = window as Window & typeof globalThis & { mEditColumns?: unknown };
 
-// The columns are kept with the tab, so they outlive a reload; the page states them only when the
-// tab is new.
-function keptColumns(): ColumnCopy[] {
+// The columns are kept with the tab, so they outlive a reload.
+function keptColumns(): ColumnCopy[] | undefined {
   const state = tabState.getState();
   const kept = typeof state === 'object' && state !== null && 'columns' in state ? state.columns : undefined;
-  if (isColumnCopies(kept)) return kept;
-  const given = isColumnCopies(mEditWindow.mEditColumns) ? mEditWindow.mEditColumns : [];
-  tabState.setState({ columns: given });
-  return given;
+  return isColumnCopies(kept) ? kept : undefined;
 }
 
+const keepColumns = (columns: ColumnCopy[]): void => { tabState.setState({ columns }); };
+
 export function createRecordPanelClient(): RecordPanelClient {
+  // The page states the columns only when the tab is new.
+  if (!keptColumns()) keepColumns(isColumnCopies(mEditWindow.mEditColumns) ? mEditWindow.mEditColumns : []);
   return {
-    showColumns(columns) { tabState.setState({ columns }); },
+    showColumns: keepColumns,
     async load(formKey) {
-      const answer = await requestRecordLoad(formKey, keptColumns());
+      const answer = await requestRecordLoad(formKey, keptColumns() ?? []);
       if (!answer.ok) return { ok: false, error: answer.error };
       // Keyed by compound identity (ADR-0012), so one origin's mutability never wins for another
       // origin's plugin of the same filename.

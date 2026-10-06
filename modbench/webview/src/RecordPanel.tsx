@@ -155,9 +155,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   );
   const rows = useMemo(
     () => result
-      ? recordRows({ result, columns, editableColumns, partialFormColumns, recordLabel: recordLabel(result.overrides, formKey) })
+      ? recordRows({ result, columns, editableColumns, partialFormColumns, recordLabel: copy => recordLabel(result.overrides, copy.formKey) })
       : [],
-    [result, columns, editableColumns, partialFormColumns, formKey],
+    [result, columns, editableColumns, partialFormColumns],
   );
 
   const focused = useMemo<GridCell | ValueCell | undefined>(
@@ -305,8 +305,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                 Field<ColumnEdge onResize={width => resizeColumn(LABEL_COLUMN, width)} />
               </th>
               {columns.map(col => {
-                // Keyed by col.key (ADR-0012), so two columns that share a file name collapse,
-                // resize and read-only apart.
+                // Keyed by col.key (ADR-0012), so two columns that share a file name collapse and
+                // resize apart; a status is the plugin's, by its compound key.
                 const isImmutable = immutableSet.has(pluginKeyOf(col.override));
                 const tracked = trackedSet?.has(pluginKeyOf(col.override)) === true;
                 return (

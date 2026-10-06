@@ -53,7 +53,7 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string; columns: ColumnCopy[] };
 
 /** A record's copy the grid shows beside its document's own (editor.md, Columns, story 7). */
-export interface ColumnCopy { formKey: string; plugin: PluginAddress }
+export type ColumnCopy = Omit<components['schemas']['RecordCopy'], 'documentText'>;
 
 function isPluginAddress(value: unknown): value is PluginAddress {
   return typeof value === 'object' && value !== null
