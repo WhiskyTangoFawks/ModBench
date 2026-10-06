@@ -85,7 +85,7 @@ public sealed class DeleteRecordHandlerTests
         Assert.Empty(DocumentsCarrying(mod, "\"SecondNpc\""));
         var refused = Assert.Single(result.Refused);
         Assert.Equal(worldAt, refused.Item);
-        Assert.Equal(RecordEditRefusal.SourceWriteFailed, refused.Refusal);
+        Assert.Equal(RecordEditRefusal.SourceAccessFailed, refused.Refusal);
         Assert.Contains(worldAt.FormKey, refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, TreeTampering.FilesUnder(worldDirectory));
     }

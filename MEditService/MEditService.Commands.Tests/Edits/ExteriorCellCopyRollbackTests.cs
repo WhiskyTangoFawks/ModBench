@@ -26,7 +26,7 @@ public sealed class ExteriorCellCopyRollbackTests
         var result = fixture.CopyHandler.CopySync(
             [new RecordAt(fixture.SourcePlugin, copied.ToString())], mode, [fixture.DestinationPlugin], replace: false);
 
-        Assert.Equal(RecordEditRefusal.SourceWriteFailed, Assert.Single(result.Refused).Refusal);
+        Assert.Equal(RecordEditRefusal.SourceAccessFailed, Assert.Single(result.Refused).Refusal);
         Assert.Equal(before, TreeSnapshot.Of(destinationTree));
     }
 }

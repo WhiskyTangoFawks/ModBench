@@ -57,9 +57,9 @@ public enum RecordEditRefusal
     /// a computed path: a container's path lives in the tree, not in a formula.</summary>
     SourceUnitNotFound,
 
-    /// <summary>The file system refused the write (ADR-0003), so the message is the file system's own
-    /// words, and the way out is outside Modbench.</summary>
-    SourceWriteFailed,
+    /// <summary>The file system refused a read or write of the source (ADR-0003), so the message is the file
+    /// system's own words, and the way out is outside Modbench.</summary>
+    SourceAccessFailed,
 
     /// <summary>Two documents in the tree claim one FormKey, most likely left by another tool or an
     /// interrupted rename; which to change is the user's call, so the way out is resolving it by hand.</summary>

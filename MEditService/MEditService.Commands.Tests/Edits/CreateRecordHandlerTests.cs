@@ -44,7 +44,7 @@ public sealed class CreateRecordHandlerTests
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
-        Assert.Equal(RecordEditRefusal.SourceWriteFailed, result.Refusal);
+        Assert.Equal(RecordEditRefusal.SourceAccessFailed, result.Refusal);
         Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
     }
 

@@ -611,9 +611,9 @@ describe('HttpMEditClient — the not-OK response text', () => {
     });
   });
 
-  it('getEditChanges answers a refused disk read with its cause, SourceWriteFailed', async () => {
+  it('getEditChanges answers a refused disk read with its cause, SourceAccessFailed', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {
-      refusal: 'SourceWriteFailed', detail: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
+      refusal: 'SourceAccessFailed', detail: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
     })));
     const client = makeClient(fetch);
 
@@ -622,7 +622,7 @@ describe('HttpMEditClient — the not-OK response text', () => {
     );
 
     expect(outcome).toEqual({
-      applied: false, refusal: 'SourceWriteFailed', message: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
+      applied: false, refusal: 'SourceAccessFailed', message: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
     });
   });
 

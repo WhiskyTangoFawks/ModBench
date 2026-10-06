@@ -60,7 +60,7 @@ public sealed class SourceTransaction
                 _log.Add(new EntryMove(repository.ModFolder, from, to));
             }
 
-            foreach (var document in documents) Write(repository.ModFolder, document);
+            foreach (var (path, text) in documents) Write(repository.ModFolder, path, text);
         }
         finally
         {
@@ -68,15 +68,14 @@ public sealed class SourceTransaction
         }
     }
 
-    private void Write(string modFolder, DocumentChange document)
+    private void Write(string modFolder, string path, string text)
     {
-        var path = document.Path;
         var before = Snapshot(path);
         var directory = PathShape.DirectoryOf(path);
         var minted = SourceRepositoryLayout.LevelsMintedBy(directory);
         try
         {
-            SourceRepositoryLayout.InMintedDirectory(directory, () => SourceRepositoryLayout.WriteTextAtomic(path, document.Text));
+            SourceRepositoryLayout.InMintedDirectory(directory, () => SourceRepositoryLayout.WriteTextAtomic(path, text));
         }
         finally
         {
