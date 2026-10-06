@@ -8,6 +8,7 @@ public static class QueryServices
     {
         services.AddSingleton<IRecordQueryService, RecordQueryService>();
         services.AddSingleton<MalformedPluginQueryService>();
+        services.AddSingleton<PluginDependantsQueryService>();
         services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
         services.AddSingleton<ContainerChildQueryService>();
         services.AddSingleton<ChildRecordQueryService>();

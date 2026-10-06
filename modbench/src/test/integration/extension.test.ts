@@ -589,11 +589,11 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
     await holdPluginsTxt('*TestMod.esp\r\nOther.esp\r\n');
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 
-    await waitFor('the disable to reach plugins.txt', async () => {
-      await selectFirstRow('modbench.pluginListTree', 'TestMod.esp');
-      await vscode.commands.executeCommand('modbench.plugin.disable');
-      return /^TestMod\.esp\r?$/m.test(fs.readFileSync(pluginsTxtPath, 'utf8'));
-    });
+    await selectFirstRow('modbench.pluginListTree', 'TestMod.esp');
+
+    await vscode.commands.executeCommand('modbench.plugin.disable');
+
+    await waitFor('the disable to reach plugins.txt', () => /^TestMod\.esp\r?$/m.test(fs.readFileSync(pluginsTxtPath, 'utf8')));
   });
 });
 

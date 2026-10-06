@@ -78,7 +78,7 @@ interface ExtensionSession {
 type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
-  'putLoadOrder' | 'rebuildIndex' | 'createPlugin' | 'renameSource' | 'getLightPluginsSupported'
+  'putLoadOrder' | 'rebuildIndex' | 'createPlugin' | 'renameSource' | 'getPluginDependants' | 'getLightPluginsSupported'
   | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected'>;
 
 interface ViewsDeps {
@@ -176,7 +176,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     log: (level, msg) => outputChannel[level](msg),
   }));
-  const { tree: pluginsTree, view: pluginListView, nameFilter: pluginsFilter } = plugins;
+  const { tree: pluginsTree, view: pluginListView, selection: pluginsSelection, nameFilter: pluginsFilter } = plugins;
   const { provider: modListProvider, view: modListView, nameFilter: modListFilter, modSync } = own(createModsView({
     instance, log: (line) => outputChannel.warn(`[modList] ${line}`), syncMods: modSyncOver(access), channel: outputChannel,
   }));
@@ -224,7 +224,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   own(registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => modListView.selection));
   ownAll(own, registerConflictTable(instance, deps.extensionUri, () => modListView.selection, reporterFor('mod.openConflicts'), vscode.workspace));
   own(vscode.commands.registerCommand('modbench.mod.sync', (value: InstanceValue) => modSync.run(value.modSyncArguments)));
-  own(registerRenamePluginCommand({ client, access, instance, reporter: reporterFor('plugin.rename') }, () => pluginListView.selection));
+  own(registerRenamePluginCommand({ client, adapter: access.adapter, ask, instance, reporter: reporterFor('plugin.rename') }, pluginsSelection));
   own(vscode.commands.registerCommand('modbench.plugin.sync', (value: InstanceValue) => plugins.pluginSync.run(value.pluginSyncArguments)));
   const { view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
     access, instance, reporter: reporterFor('downloadList'), ask, trash,
@@ -258,7 +258,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     enterEditing: () => editing.enter(instance.landed()),
     facts: { trackedMods: () => instance.value.trackedMods, modDirs: () => instance.value.paths.modDirs, refresh: () => instance.refresh() },
     plugins: {
-      selection: () => pluginListView.selection, progress: plugins.progress,
+      selection: pluginsSelection, progress: plugins.progress,
       recordRow: (group, formKey) => pluginsTree.recordRow(group, formKey),
       reveal: (row, options) => pluginListView.reveal(row, options),
       refreshFacts: () => pluginsTree.refreshFacts(),
@@ -266,7 +266,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     },
     latestSent: () => sender.latest(),
     originFiles: (origin) => originFiles(instance.value, origin),
-    modListSelection: () => modListView.selection, pluginsSelection: () => pluginListView.selection,
+    modListSelection: () => modListView.selection, pluginsSelection,
     downloadsSelection: () => downloadsView.selection, trackSelection,
   };
 }
