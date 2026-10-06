@@ -77,13 +77,54 @@ public sealed class CompareRecordsApiTests : HostedTests
     [Theory]
     [InlineData("{ not json")]
     [InlineData("[]")]
-    public async Task ADocumentTextThatIsNoJsonObject_Is400(string text)
+    public async Task ADocumentTextThatIsNoRecordDocument_IsAColumnThatCouldNotBeParsed(string text)
     {
         var (npc, _) = await Loaded();
 
         var response = await Client.PostAsJsonAsync("/records/compare", new { copies = new[] { Copy(npc, WithNpc, WithNpcMod, text) } });
 
+        response.EnsureSuccessStatusCode();
+        var column = (await response.Body()).GetProperty("overrides").EnumerateArray().Single();
+        Assert.False(string.IsNullOrWhiteSpace(column.GetProperty("parseDiagnosis").GetString()));
+    }
+
+    [Fact]
+    public async Task OneRecordWithAPluginsText_IsThatPluginsColumnReadFromIt()
+    {
+        var (npc, _) = await Loaded();
+
+        var response = await Client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(npc)}/compare",
+            new { plugin = new { name = WithNpc, origin = WithNpcMod }, documentText = "{ not json" });
+
+        response.EnsureSuccessStatusCode();
+        var column = (await response.Body()).GetProperty("overrides").EnumerateArray().Single();
+        Assert.Equal((WithNpc, WithNpcMod), (column.GetProperty("plugin").GetString(), column.GetProperty("origin").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(column.GetProperty("parseDiagnosis").GetString()));
+    }
+
+    [Fact]
+    public async Task OneRecordWithATextButNoOrigin_Is400()
+    {
+        var (npc, _) = await Loaded();
+
+        var response = await Client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(npc)}/compare",
+            new { plugin = new { name = WithNpc, origin = "" }, documentText = "{}" });
+
         await response.AssertIsProblem(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task OneRecordNoPluginIndexes_WithAText_Is404()
+    {
+        await Loaded();
+
+        var response = await Client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString("00DEAD:Nowhere.esp")}/compare",
+            new { plugin = new { name = WithNpc, origin = WithNpcMod }, documentText = "{}" });
+
+        await response.AssertIsProblem(HttpStatusCode.NotFound);
     }
 
     [Fact]

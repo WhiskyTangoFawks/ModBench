@@ -13,11 +13,13 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
 
     // resolveFormKey (ADR-0005), batched once per Classify so every formKey leaf's
     // Resolutions fills in this pass. loadOrderFormIds orders a keyed array's FormKeys.
+    // outsideTheComparison: columns shown that win no cell and carry no state.
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         GameRelease release,
         Func<string, RecordLookupEntry?> resolveFormKey,
-        Func<string, uint?> loadOrderFormIds)
+        Func<string, uint?> loadOrderFormIds,
+        IReadOnlyList<RecordDetail>? outsideTheComparison = null)
     {
         // The fallback for a field no column carries; a lone override is its own winner whatever
         // its IsWinner flag says.
@@ -27,11 +29,14 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
                 $"No winner in {conflictingRecords.Count} overrides for FormKey '{conflictingRecords[0].FormKey}'");
 
         var columns = conflictingRecords.Select(Column).ToList();
+        var shown = conflictingRecords.Concat(outsideTheComparison ?? []).ToList();
+        var shownColumns = shown.Select(Column).ToList();
         var ctx = ContextOf(
-            conflictingRecords, columns, winner, release, resolveFormKey, loadOrderFormIds,
-            shadowed: conflictingRecords.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal),
-            cellStates: (values, same) => ConflictRules.ComputeCellStates(values, columns[0], OrderOf(conflictingRecords, columns), same));
-        var diffs = RecordChildren(conflictingRecords, ctx);
+            shown, shownColumns, winner, release, resolveFormKey, loadOrderFormIds,
+            shadowed: shown.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal),
+            cellStates: (values, same) => ConflictRules.ComputeCellStates(values, columns[0], OrderOf(conflictingRecords, columns), same),
+            comparedCount: conflictingRecords.Count);
+        var diffs = RecordChildren(shown, ctx);
 
         if (conflictingRecords.Count == 1)
             return new ClassifyResult(
@@ -72,12 +77,13 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
     private DiffContext ContextOf(
         IReadOnlyList<RecordDetail> records, IReadOnlyList<string> columns, int winner, GameRelease release,
         Func<string, RecordLookupEntry?> resolveFormKey, Func<string, uint?> loadOrderFormIds,
-        IReadOnlySet<string> shadowed, CellStatesOf cellStates) =>
+        IReadOnlySet<string> shadowed, CellStatesOf cellStates, int? comparedCount = null) =>
         new(
             MasterColumn: columns[0],
             RecordWinnerColumn: columns[winner],
             Columns: columns,
             ColumnOrder: OrderOf(records, columns),
+            ComparedOrder: OrderOf([.. records.Take(comparedCount ?? records.Count)], columns),
             PartialFormColumns: records.Select((r, i) => (r, i)).Where(t => t.r.IsPartialForm).Select(t => columns[t.i]).ToHashSet(StringComparer.Ordinal),
             ShadowedColumns: shadowed,
             StatesOf: cellStates,
@@ -98,6 +104,7 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
         string RecordWinnerColumn,
         IReadOnlyList<string> Columns,
         IReadOnlyList<(string Column, int LoadOrderIndex)> ColumnOrder,
+        IReadOnlyList<(string Column, int LoadOrderIndex)> ComparedOrder,
         IReadOnlySet<string> PartialFormColumns,
         IReadOnlySet<string> ShadowedColumns,
         CellStatesOf StatesOf,
@@ -122,7 +129,7 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
         DiffContext ctx,
         bool ignoredInConflicts = false)
     {
-        var carrying = ctx.ColumnOrder.Where(c => values.GetValueOrDefault(c.Column) != null).ToList();
+        var carrying = ctx.ComparedOrder.Where(c => values.GetValueOrDefault(c.Column) != null).ToList();
         var winnerColumn = carrying.Count > 0 ? carrying.MaxBy(c => c.LoadOrderIndex).Column : ctx.RecordWinnerColumn;
         var shape = shapes[winnerColumn];
 
