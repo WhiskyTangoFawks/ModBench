@@ -7,18 +7,17 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
 
-/// <summary>What is wrong in a record of a plugin's source, on the file that holds it: a reference
-/// from the record <paramref name="FormKey"/> to <paramref name="TargetFormKey"/>, which no active
-/// plugin holds.</summary>
-public sealed record SourceProblem(string FormKey, string TargetFormKey, string SourceRelativePath, string Message);
+/// <summary>What is wrong in a plugin's source, on its file: a link at <paramref name="FieldPath"/> to
+/// <paramref name="TargetFormKey"/>, which no active plugin holds, or a file the read stopped at.</summary>
+public sealed record SourceProblem(
+    string? FormKey, string? TargetFormKey, string? FieldPath, string SourceRelativePath, string Message);
 
-/// <summary><paramref name="Failure"/> is set when the plugin's problems could not be placed on files,
-/// so its empty <paramref name="Problems"/> is not a clean bill (ADR-0019).</summary>
+/// <summary><paramref name="Failure"/> is set when the plugin's links could not be placed on files, so
+/// its <paramref name="Problems"/> are not a clean bill (ADR-0019).</summary>
 public sealed record PluginProblems(PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null);
 
-/// <summary>The Problems panel's source, per tracked active plugin, in load order. A plugin that
-/// holds no problem is answered with none, so a problem that cleared is told apart from a plugin
-/// never asked.</summary>
+/// <summary>The Problems panel's source, per active plugin with a tree, in load order. A plugin whose
+/// read failed is answered with the files that stopped it and the links its standing rows hold.</summary>
 public sealed class PluginProblemQueryService(IQueryIndex index, LoadOrderHolder loadOrder)
 {
     /// <summary>Null until the index is ready: a plugin it has not reached holds no record yet, so
@@ -30,6 +29,7 @@ public sealed class PluginProblemQueryService(IQueryIndex index, LoadOrderHolder
 
         var reads = index.RequireReads();
         var tracked = reads.GetTrackedPlugins();
+        var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
         var held = snapshot.Active.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var missing = reads
             .GetReferencesToMissingRecordsOnFiles(plugin => held.GetValueOrDefault(plugin)?.Provider as PluginProvider.FromMod)
@@ -37,19 +37,25 @@ public sealed class PluginProblemQueryService(IQueryIndex index, LoadOrderHolder
         return
         [
             .. snapshot.Active
-                .Where(plugin => tracked.Contains(plugin.Key))
-                .Select(plugin => ProblemsOf(plugin.Key, snapshot.GameRelease, missing[plugin.Key].ToList())),
+                .Where(plugin => tracked.Contains(plugin.Key) || stopped.Contains(plugin.Key))
+                .Select(plugin => ProblemsOf(
+                    plugin.Key, snapshot.GameRelease, [.. stopped[plugin.Key].Select(Problem)], missing[plugin.Key].ToList())),
         ];
     }
 
-    private static PluginProblems ProblemsOf(PluginAddress plugin, GameRelease release, List<MissingReferenceOnFile> rows) =>
+    private static PluginProblems ProblemsOf(
+        PluginAddress plugin, GameRelease release, List<SourceProblem> stoppedAt, List<MissingReferenceOnFile> rows) =>
         rows.FirstOrDefault(row => row.Failure is not null) is { } failed
-            ? new(plugin, [], failed.Failure)
-            : new(plugin, [.. rows.Select(row => Problem(row, release))]);
+            ? new(plugin, stoppedAt, failed.Failure)
+            : new(plugin, [.. stoppedAt, .. rows.Select(row => Problem(row, release))]);
+
+    private static SourceProblem Problem(SourceFileFailure failure) =>
+        new(failure.FormKey, null, null, failure.SourceRelativePath, failure.Message);
 
     private static SourceProblem Problem(MissingReferenceOnFile row, GameRelease release) =>
         new(row.Reference.FormKey,
             row.Reference.TargetFormKey,
+            row.Reference.FieldPath,
             row.SourceRelativePath ?? throw new InvalidOperationException($"Expected {row.Reference.FormKey} to be placed."),
             $"{row.Reference.FieldPath}: {Unresolved(row.Reference.TargetFormKey, release)}");
 

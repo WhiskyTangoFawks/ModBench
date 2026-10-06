@@ -64,7 +64,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         if (!Directory.Exists(_root)) yield break;
 
-        var filedAt = new Dictionary<string, string>(StringComparer.Ordinal);
+        var holders = new OneDocumentPerFormKey(_modFolder);
         foreach (var groupDirectory in Directory.EnumerateDirectories(_root))
         {
             var folder = Path.GetFileName(groupDirectory);
@@ -73,9 +73,9 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
             var documents = directoryPerRecord switch
             {
-                null => FlatGroup(groupDirectory, filedAt),
-                var type when _containers.IsCell(type) => InteriorCells(groupDirectory, filedAt),
-                _ => Worldspaces(groupDirectory, filedAt),
+                null => FlatGroup(groupDirectory, holders),
+                var type when _containers.IsCell(type) => InteriorCells(groupDirectory, holders),
+                _ => Worldspaces(groupDirectory, holders),
             };
             foreach (var document in documents) yield return document;
         }
@@ -83,13 +83,13 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
     // A group with no directory-per-record type files its records flat, and a container that is not a
     // cell or a worldspace keeps its own directory directly under it.
-    private IEnumerable<PluginDocument> FlatGroup(string groupDirectory, Dictionary<string, string> filedAt) =>
+    private IEnumerable<PluginDocument> FlatGroup(string groupDirectory, OneDocumentPerFormKey holders) =>
         Directory
             .EnumerateFiles(groupDirectory, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories)
-            .SelectMany(file => DocumentsAt(file, cell: null, filedAt));
+            .SelectMany(file => DocumentsAt(file, cell: null, holders));
 
     // A block level's directory is named by its number, as the whole-mod serializer writes it.
-    private IEnumerable<PluginDocument> InteriorCells(string cellsDirectory, Dictionary<string, string> filedAt)
+    private IEnumerable<PluginDocument> InteriorCells(string cellsDirectory, OneDocumentPerFormKey holders)
     {
         foreach (var blockDirectory in Directory.EnumerateDirectories(cellsDirectory))
         {
@@ -100,18 +100,18 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
                 foreach (var cellDirectory in Directory.EnumerateDirectories(subBlockDirectory))
                 {
                     var cell = SourceRepositoryLayout.ContainerDocumentHeldBy(cellDirectory);
-                    foreach (var document in DocumentsAt(cell, structure, filedAt)) yield return document;
+                    foreach (var document in DocumentsAt(cell, structure, holders)) yield return document;
                 }
             }
         }
     }
 
-    private IEnumerable<PluginDocument> Worldspaces(string worldspacesDirectory, Dictionary<string, string> filedAt)
+    private IEnumerable<PluginDocument> Worldspaces(string worldspacesDirectory, OneDocumentPerFormKey holders)
     {
         foreach (var worldspaceDirectory in Directory.EnumerateDirectories(worldspacesDirectory))
         {
             var own = SourceRepositoryLayout.ContainerDocumentHeldBy(worldspaceDirectory);
-            foreach (var document in DocumentsAt(own, cell: null, filedAt)) yield return document;
+            foreach (var document in DocumentsAt(own, cell: null, holders)) yield return document;
 
             var worldspaceFormKey = DocumentText.FormKeyDeclaredBy(own, _pluginFileName);
             foreach (var blockDirectory in Directory.EnumerateDirectories(worldspaceDirectory))
@@ -126,7 +126,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
                     foreach (var cellDirectory in Directory.EnumerateDirectories(subBlockDirectory))
                     {
                         var cell = SourceRepositoryLayout.ContainerDocumentHeldBy(cellDirectory);
-                        foreach (var document in DocumentsAt(cell, structure, filedAt)) yield return document;
+                        foreach (var document in DocumentsAt(cell, structure, holders)) yield return document;
                     }
                 }
             }
@@ -135,7 +135,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
     // The header is the one document with a file of its own that is not yielded here: it has its own
     // member, and the index writes its row through a door of its own.
-    private IEnumerable<PluginDocument> DocumentsAt(string file, CellStructure? cell, Dictionary<string, string> filedAt)
+    private IEnumerable<PluginDocument> DocumentsAt(string file, CellStructure? cell, OneDocumentPerFormKey holders)
     {
         if (SourceRepositoryLayout.CarriesNoRecord(file)) yield break;
 
@@ -149,25 +149,24 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         {
             using var document = JsonDocument.Parse(text);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
-                throw new UnreadableSourceDocumentException(file, "its root is not an object");
+                throw Unreadable(file, "its root is not an object");
         }
         catch (JsonException ex)
         {
-            throw new UnreadableSourceDocumentException(file, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
+            throw Unreadable(file, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
         }
 
+        var declared = DocumentText.FormKeyDeclaredIn(text, relativePath, _pluginFileName);
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
             ?? _containers.RecordTypeNamed(DocumentText.RootStringIn(text, MutagenObjectTypeMember))
-            ?? throw new UnreadableSourceDocumentException(file, "neither its path nor its text names a record type");
+            ?? throw Unreadable(file, "neither its path nor its text names a record type", declared);
+        var formKey = declared ?? throw Unreadable(file, "it declares no FormKey");
 
-        var formKey = DocumentText.FormKeyDeclaredIn(text, relativePath, _pluginFileName)
-            ?? throw new UnreadableSourceDocumentException(file, "it declares no FormKey");
-
-        OneDocumentPerFormKey.Claim(filedAt, formKey, file, _modFolder);
+        holders.Claim(formKey, file);
         yield return new PluginDocument(recordType, formKey, text, null, cell, ContentsOf(recordType, text));
         foreach (var child in Embedded(recordType, formKey, text, file))
         {
-            OneDocumentPerFormKey.Claim(filedAt, child.FormKey, file, _modFolder);
+            holders.Claim(child.FormKey, file);
             yield return child;
         }
     }
@@ -191,7 +190,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         yield return (formKey, text);
         var table = _containers.RecordTypeNamed(recordType) ?? recordType;
-        foreach (var embedded in EmbeddedTexts(table, formKey, text, formKey))
+        foreach (var embedded in EmbeddedTexts(table, formKey, text, ownerFile: null))
             yield return (embedded.Child.FormKey, embedded.Text);
     }
 
@@ -202,15 +201,15 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         foreach (var embedded in EmbeddedTexts(recordType, formKey, text, file)) TypeOf(embedded.Child, file);
     }
 
-    private static string TypeOf(ContainerDocuments.ChildDocument child, string ownerDocument) =>
-        child.RecordType ?? throw new UnreadableSourceDocumentException(ownerDocument, child.WhyUntyped);
+    private string TypeOf(ContainerDocuments.ChildDocument child, string ownerFile) =>
+        child.RecordType ?? throw Unreadable(ownerFile, child.WhyUntyped, child.FormKey);
 
     private IEnumerable<PluginDocument> Embedded(
-        string ownerRecordType, string ownerFormKey, string ownerText, string ownerDocument)
+        string ownerRecordType, string ownerFormKey, string ownerText, string ownerFile)
     {
-        foreach (var (child, text, directOwner) in EmbeddedTexts(ownerRecordType, ownerFormKey, ownerText, ownerDocument))
+        foreach (var (child, text, directOwner) in EmbeddedTexts(ownerRecordType, ownerFormKey, ownerText, ownerFile))
         {
-            var childType = TypeOf(child, ownerDocument);
+            var childType = TypeOf(child, ownerFile);
             // The one embedded cell: a worldspace's top cell, outside every exterior block grid.
             var cell = _containers.IsCell(childType)
                 ? CellPlacement.TopCellOf(directOwner).Structure
@@ -223,7 +222,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     // worldspace embeds its top cell, which embeds its placed references. An untyped child has no
     // slots to read.
     private IEnumerable<(ContainerDocuments.ChildDocument Child, string Text, string DirectOwner)> EmbeddedTexts(
-        string ownerRecordType, string ownerFormKey, string ownerText, string ownerDocument)
+        string ownerRecordType, string ownerFormKey, string ownerText, string? ownerFile)
     {
         List<ContainerDocuments.ChildDocument> children;
         using (var document = JsonDocument.Parse(ownerText))
@@ -237,14 +236,15 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
             // The index holds the file's own bytes (ADR-0005), so a hand edit the codec would respell
             // reaches it as the file spells it.
+            var noSpan = $"its '{child.SlotName}' names '{child.FormKey}', and a child an embedded slot " +
+                "names has a span of its owner's text that nothing here carries";
             var text = EmbeddedChildSplice.TextOf(ownerBytes, containerType, child.FormKey, _release)
-                ?? throw new UnreadableSourceDocumentException(
-                    ownerDocument,
-                    $"its '{child.SlotName}' names '{child.FormKey}', and a child an embedded slot " +
-                    "names has a span of its owner's text that nothing here carries");
+                ?? throw (ownerFile is null
+                    ? new UnreadableSourceDocumentException(ownerFormKey, noSpan)
+                    : Unreadable(ownerFile, noSpan, child.FormKey));
             yield return (child, text, ownerFormKey);
             if (child.RecordType is not { } childType) continue;
-            foreach (var deeper in EmbeddedTexts(childType, child.FormKey, text, ownerDocument)) yield return deeper;
+            foreach (var deeper in EmbeddedTexts(childType, child.FormKey, text, ownerFile)) yield return deeper;
         }
     }
 
@@ -276,6 +276,10 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             return null;
         }
     }
+
+    private UnreadableSourceDocumentException Unreadable(string file, string because, string? formKey = null) =>
+        new(new UnreadableFile(
+            Path.GetRelativePath(_modFolder, file), UnreadableSourceDocumentException.Because(file, because), formKey));
 }
 
 /// <summary>A file a plugin's source tree files as a record that this reader cannot turn into a
@@ -295,8 +299,18 @@ public sealed class UnreadableSourceDocumentException : InvalidOperationExceptio
     {
     }
 
-    internal UnreadableSourceDocumentException(string filePath, string because)
-        : base($"'{filePath}' is filed as a record in this plugin's source tree, but {because}.")
+    internal UnreadableSourceDocumentException(string filePath, string because) : base(Because(filePath, because))
     {
     }
+
+    internal UnreadableSourceDocumentException(UnreadableFile file) : base(file.Message)
+    {
+        File = file;
+    }
+
+    /// <summary>The file that could not be read, when one is known.</summary>
+    public UnreadableFile? File { get; }
+
+    internal static string Because(string filePath, string because) =>
+        $"'{filePath}' is filed as a record in this plugin's source tree, but {because}.";
 }

@@ -537,4 +537,12 @@ public sealed class AmbiguousSourceUnitException : InvalidOperationException
     public AmbiguousSourceUnitException(string message, Exception innerException) : base(message, innerException)
     {
     }
+
+    internal AmbiguousSourceUnitException(ClaimedFormKey claim) : base(claim.Message)
+    {
+        Claim = claim;
+    }
+
+    /// <summary>The FormKey and the documents that claim it, when they are known.</summary>
+    public ClaimedFormKey? Claim { get; }
 }
