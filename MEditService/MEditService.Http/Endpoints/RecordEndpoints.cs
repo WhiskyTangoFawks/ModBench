@@ -73,7 +73,9 @@ public static class RecordEndpoints
         .WithSummary("One record as every active plugin has it, one plugin's copy read from the document text given.")
         .WithDescription(
             "The named plugin's column, and the conflict states, are read from the text whether or not that plugin " +
-            "is active. Text that is no record document is a column that could not be parsed. Nothing is stored.")
+            "is active. The text is the document carrying the record: its own, or an embedded child's container's. " +
+            "Text that is no record document, or does not carry the record, is a column that could not be parsed. " +
+            "Nothing is stored.")
         .WithTags("Records")
         .Produces<CompareResult>()
         .ProducesProblem(400)
@@ -85,7 +87,7 @@ public static class RecordEndpoints
         .WithName("CompareRecords")
         .WithSummary("Several records side by side: one column per copy, in the order given, with no conflict state.")
         .WithDescription(
-            "A copy's DocumentText, when given, is the document that column is read from, whether or not " +
+            "A copy's DocumentText, when given, is the document carrying that column's record, read whether or not " +
             "its plugin is active; the copy is otherwise the one its plugin holds.")
         .WithTags("Records")
         .Produces<CompareResult>()

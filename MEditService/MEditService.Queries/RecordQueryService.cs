@@ -96,7 +96,7 @@ public sealed class RecordQueryService(
         {
             var at = active.FindIndex(c => PluginAddress.Comparer.Equals(c.Plugin, text.Plugin));
             var loadOrderIndex = at >= 0 ? active[at].LoadOrderIndex : snapshot.LoadOrderIndex(text.Plugin) ?? NotInLoadOrder;
-            var fromText = reads.DocumentFromText(formKey, text.Plugin, loadOrderIndex, text.DocumentText);
+            var fromText = CopyFromText(reads, formKey, text.Plugin, loadOrderIndex, text.DocumentText);
             if (fromText is null) return null;
             if (at >= 0) active[at] = fromText with { IsWinner = active[at].IsWinner };
             else outside.Add(fromText);
@@ -130,7 +130,7 @@ public sealed class RecordQueryService(
         foreach (var copy in copies)
         {
             var document = copy.DocumentText is { } text
-                ? reads.DocumentFromText(copy.FormKey, copy.Plugin, snapshot.LoadOrderIndex(copy.Plugin) ?? NotInLoadOrder, text)
+                ? CopyFromText(reads, copy.FormKey, copy.Plugin, snapshot.LoadOrderIndex(copy.Plugin) ?? NotInLoadOrder, text)
                 : reads.GetDocument(copy.FormKey, copy.Plugin);
             if (document == null) return null;
             documents.Add(document);
@@ -145,6 +145,30 @@ public sealed class RecordQueryService(
 
         return new CompareResult(overrides, diffs, ConflictAll.NoConflict, RequireSchemas().DisplayNameFor(documents[0].RecordType));
     }
+
+    // The text is the document carrying the record. A plugin's source tree says which document that is, as it
+    // does for an edit; a plugin with no tree has only the record's own.
+    private RecordDocument? CopyFromText(
+        IRecordReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string text)
+    {
+        var snapshot = _loadOrder.Require();
+        if (SourceRepository.TrackedModOf(snapshot, plugin) is not { } mod || !SourceRepository.HoldsTreeFor(mod.Folder, plugin.Name))
+            return reads.DocumentFromText(formKey, plugin, loadOrderIndex, text);
+
+        try
+        {
+            return SourceRepository.Over(mod, snapshot.GameRelease).RecordFromText(plugin, formKey, text, RequireSchemas()) is { } record
+                ? reads.DocumentFromText(formKey, plugin, loadOrderIndex, record.Body)
+                : Unread(reads, formKey, plugin, loadOrderIndex, $"No document in {plugin.Name}'s source tree carries {formKey}.");
+        }
+        catch (Exception refused) when (refused is UnreadableSourceDocumentException or AmbiguousSourceUnitException)
+        {
+            return Unread(reads, formKey, plugin, loadOrderIndex, refused.Message);
+        }
+    }
+
+    private static RecordDocument? Unread(IRecordReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string why) =>
+        reads.DocumentFromText(formKey, plugin, loadOrderIndex, CallerText.NoBody) is { } unread ? unread with { ParseDiagnosis = why } : null;
 
     private static CompareOverride ToCompareOverride(
         RecordDetail o, ConflictThis? state, string? column, LoadOrderSnapshot snapshot, IRecordReads reads) =>
