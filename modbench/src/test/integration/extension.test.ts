@@ -87,6 +87,12 @@ const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
 const putLoadOrders: string[][] = [];
+const comparedTexts: unknown[] = [];
+
+function documentTextOf(body: string): unknown {
+  const parsed: unknown = JSON.parse(body);
+  return typeof parsed === 'object' && parsed !== null && 'documentText' in parsed ? parsed.documentText : undefined;
+}
 
 function pluginNamesOf(body: string): string[] {
   const parsed: unknown = JSON.parse(body);
@@ -223,7 +229,7 @@ function createMockBackend(): http.Server {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(formKey === UNTRACKED_FORM_KEY
         ? { fileName: UNTRACKED_FILE_NAME, text: untrackedText }
-        : { fileName: renderedName(formKey), text: '{}' }));
+        : { fileName: renderedName(formKey), text: JSON.stringify({ FormKey: formKey }) }));
       return;
     }
     if (url.startsWith('/plugin-source/record?')) {
@@ -242,7 +248,7 @@ function createMockBackend(): http.Server {
       return;
     }
     if (wonFormKey !== undefined) {
-      const winner = decodeURIComponent(wonFormKey) === TRACKED_FORM_KEY
+      const winner = [TRACKED_FORM_KEY, CHILD_FORM_KEY].includes(decodeURIComponent(wonFormKey))
         ? { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN } : { plugin: 'Fallout4.esm', origin: 'Data' };
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ formKey: decodeURIComponent(wonFormKey), ...winner }));
@@ -251,8 +257,20 @@ function createMockBackend(): http.Server {
     const comparedFormKey = /^\/records\/([^/?]+)\/compare$/.exec(url)?.[1];
     if (comparedFormKey !== undefined) {
       const answer = MOCK_COMPARISONS.get(decodeURIComponent(comparedFormKey));
-      res.writeHead(answer ? 200 : 404, { 'Content-Type': 'application/json' });
-      res.end(answer ? JSON.stringify(answer) : undefined);
+      const respond = () => {
+        res.writeHead(answer ? 200 : 404, { 'Content-Type': 'application/json' });
+        res.end(answer ? JSON.stringify(answer) : undefined);
+      };
+      if (method !== 'POST') {
+        respond();
+        return;
+      }
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        comparedTexts.push(documentTextOf(body));
+        respond();
+      });
       return;
     }
     if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.has('search')) {
@@ -270,13 +288,15 @@ function createMockBackend(): http.Server {
 const TRACKED_PLUGIN = 'Tracked.esp';
 const TRACKED_ORIGIN = 'TrackedMod';
 const TRACKED_FORM_KEY = '000801:Tracked.esp';
+const CHILD_FORM_KEY = '000802:Tracked.esp';
 const TRACKED_FILE = path.join(
   fs.mkdtempSync(path.join(os.tmpdir(), 'modbench-tracked-')), TRACKED_ORIGIN, 'plugin-source', TRACKED_PLUGIN, 'Weapons', 'TrackedGun.json');
 fs.mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
-fs.writeFileSync(TRACKED_FILE, JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun' }));
+fs.writeFileSync(TRACKED_FILE, JSON.stringify({
+  FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun', Placed: [{ FormKey: CHILD_FORM_KEY, EditorID: 'TrackedRef' }],
+}));
 const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
 
-const CHILD_FORM_KEY = '000802:Tracked.esp';
 
 const UNTRACKED_FORM_KEY = '000801:Untracked.esp';
 const UNTRACKED_FILE_NAME = 'UntrackedGun - 000801_Untracked.esp.json';
@@ -358,27 +378,27 @@ const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 const renderedName = (formKey: string) => `${formKey.replace(':', '_')}.json`;
 
 describe('modbench.record.open', () => {
-  const titled = (formKey: string) => openTabs().some(t => t.label === renderedName(formKey));
+  const hasRenderedTab = (formKey: string) => openTabs().some(t => t.label === renderedName(formKey));
 
   it('opens the winning copy\'s document, titled with its file\'s name', async () => {
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000001' });
 
-    await waitFor('the winning copy\'s tab', () => titled('Fallout4.esm:000001') || undefined);
+    await waitFor('the winning copy\'s tab', () => hasRenderedTab('Fallout4.esm:000001') || undefined);
   });
 
   it('a second click replaces the preview tab instead of adding one', async () => {
     const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000002' });
-    await waitFor('the second record\'s tab', () => titled('Fallout4.esm:000002') || undefined);
+    await waitFor('the second record\'s tab', () => hasRenderedTab('Fallout4.esm:000002') || undefined);
 
     assert.strictEqual(openTabs().length, tabsBefore, 'the next click replaces the preview editor');
-    assert.ok(!titled('Fallout4.esm:000001'), 'the first record\'s preview tab is gone');
+    assert.ok(!hasRenderedTab('Fallout4.esm:000001'), 'the first record\'s preview tab is gone');
   });
 
   it('shows a record already open in a tab of its own, and does not open it twice', async () => {
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000010', placement: 'beside' });
-    await waitFor('the pinned tab', () => titled('Fallout4.esm:000010') || undefined);
+    await waitFor('the pinned tab', () => hasRenderedTab('Fallout4.esm:000010') || undefined);
     const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000010' });
@@ -392,21 +412,21 @@ describe('modbench.record.open', () => {
     await vscode.commands.executeCommand('modbench.record.open', [
       { formKey: 'Fallout4.esm:000011' }, { formKey: 'Fallout4.esm:000012' },
     ]);
-    await waitFor('both tabs', () => (titled('Fallout4.esm:000011') && titled('Fallout4.esm:000012')) || undefined);
+    await waitFor('both tabs', () => (hasRenderedTab('Fallout4.esm:000011') && hasRenderedTab('Fallout4.esm:000012')) || undefined);
 
     assert.strictEqual(openTabs().length, tabsBefore + 2);
   });
 
   it('opens beside as a genuinely new tab, leaving the tab it was fired from alone', async () => {
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000020', placement: 'beside' });
-    await waitFor('the seed tab', () => titled('Fallout4.esm:000020') || undefined);
+    await waitFor('the seed tab', () => hasRenderedTab('Fallout4.esm:000020') || undefined);
     const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000021', placement: 'beside' });
-    await waitFor('the beside tab', () => titled('Fallout4.esm:000021') || undefined);
+    await waitFor('the beside tab', () => hasRenderedTab('Fallout4.esm:000021') || undefined);
 
     assert.strictEqual(openTabs().length, tabsBefore + 1);
-    assert.ok(titled('Fallout4.esm:000020'), 'the seed tab is untouched');
+    assert.ok(hasRenderedTab('Fallout4.esm:000020'), 'the seed tab is untouched');
   });
 
   it('reads a Plugins-tree RecordNode-shaped row from a menu to its own record', async () => {
@@ -414,7 +434,7 @@ describe('modbench.record.open', () => {
 
     await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 
-    await waitFor('the RecordNode\'s tab', () => titled('Fallout4.esm:000030') || undefined);
+    await waitFor('the RecordNode\'s tab', () => hasRenderedTab('Fallout4.esm:000030') || undefined);
   });
 
   it('reads a Plugins-tree ChildRecordNode-shaped row from a menu to its own record', async () => {
@@ -422,7 +442,7 @@ describe('modbench.record.open', () => {
 
     await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 
-    await waitFor('the ChildRecordNode\'s tab', () => titled('Fallout4.esm:000040') || undefined);
+    await waitFor('the ChildRecordNode\'s tab', () => hasRenderedTab('Fallout4.esm:000040') || undefined);
   });
 
   it('a menu\'s multi-selection opens one tab per record, all in a single new group beside the active one', async () => {
@@ -432,7 +452,7 @@ describe('modbench.record.open', () => {
     ];
 
     await vscode.commands.executeCommand('modbench.record.openToSide', selection[0], selection);
-    await waitFor('every selected tab', () => selection.every((s) => titled(s.formKey)) || undefined);
+    await waitFor('every selected tab', () => selection.every((s) => hasRenderedTab(s.formKey)) || undefined);
 
     const tabsByGroup = vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => t.label));
     assert.deepStrictEqual(tabsByGroup, [[], selection.map((s) => renderedName(s.formKey))]);
@@ -472,6 +492,27 @@ describe('a tracked copy of a record', () => {
 
     assert.strictEqual(tab?.label, 'TrackedGun.json');
     assert.deepStrictEqual(fileTabs().map((t) => t.label), ['TrackedGun.json']);
+  });
+
+  it('reads its own column from the file\'s unsaved text', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', trackedCopy);
+    await waitFor('the file\'s tab', () => fileTabs().length > 0);
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    const saved = document.getText();
+    const replaceAll = async (text: string) => {
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)), text);
+      await vscode.workspace.applyEdit(edit);
+    };
+    const unsaved = JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'Unsaved' });
+
+    try {
+      await replaceAll(unsaved);
+      await waitFor('a read of the unsaved text', () => comparedTexts.includes(unsaved));
+    } finally {
+      await replaceAll(saved);
+      await document.save();
+    }
   });
 
   it('opens as its file when it wins and the record is given without a plugin', async () => {
@@ -1036,13 +1077,26 @@ describe('A FormKey in plugin source', () => {
     assert.strictEqual(await definedText(definition), `"FormKey":"${TRACKED_FORM_KEY}"`);
   });
 
-  it('goes to the definition of a FormKey whose winning copy is untracked: mEdit\'s rendering of it, at its start where it states no FormKey member', async () => {
+  it('goes to the definition of a FormKey whose winning copy is untracked: mEdit\'s rendering of it, at the record\'s own FormKey member', async () => {
     await activated();
     const [definition, ...more] = await definitionsOf(HELD_FORM_KEY);
 
     assert.deepStrictEqual(more, []);
     assert.strictEqual(definition?.uri.toString(true), `modbench-rendered:/Data/Fallout4.esm/${renderedName(HELD_FORM_KEY)}?formKey=000801%3AHeld.esp&name=Fallout4.esm&origin=Data`);
-    assert.deepStrictEqual([definition.range.start, definition.range.end], [new vscode.Position(0, 0), new vscode.Position(0, 0)]);
+    assert.strictEqual(await definedText(definition), `"FormKey":"${HELD_FORM_KEY}"`);
+  });
+
+  it('goes to the definition of a FormKey whose winning copy is a child record: its own tab on its owner\'s file, at its own FormKey member', async () => {
+    await activated();
+    const childUri = `modbench-child-record:${vscode.Uri.file(TRACKED_FILE).path}?formKey=000802%3ATracked.esp&name=Tracked.esp&origin=TrackedMod`;
+    for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN, keys: [CHILD_FORM_KEY] });
+
+    const definition = await waitFor('the definition on the child\'s own member', async () => {
+      const [found, ...more] = await definitionsOf(CHILD_FORM_KEY);
+      return more.length === 0 && found?.uri.toString(true) === childUri && await definedText(found) === `"FormKey":"${CHILD_FORM_KEY}"` && found;
+    });
+
+    assert.strictEqual(definition.range.start.character, fs.readFileSync(TRACKED_FILE, 'utf8').indexOf(`"FormKey":"${CHILD_FORM_KEY}"`));
   });
 
   it('has no definition in JSON outside the plugin source folder', async () => {

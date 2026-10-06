@@ -102,14 +102,13 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         // type and name off that document's text.
         if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
         if (DocumentText.BytesOrNull(owner.FullPath) is not { } ownerBytes) return null;
-        if (new ContainerDocuments(_release, schemas).EmbeddedIdentity(owner.RecordType, ownerBytes, spelled)
-            is not { } child)
-        {
-            return null;
-        }
-
-        return new RecordIdentity(spelled, child.RecordType, child.EditorId);
+        return new ContainerDocuments(_release, schemas).EmbeddedChild(owner.RecordType, ownerBytes, spelled) is { } child
+            ? ChildIdentity(child, owner.FullPath)
+            : null;
     }
+
+    private RecordIdentity ChildIdentity(ContainerDocuments.ChildDocument child, string ownerFile) =>
+        new(child.FormKey, SourceTreeDocuments.TypeOf(_modFolder, child, ownerFile), child.EditorId);
 
     /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>
     /// rather than that document's file, which is only found. Null when nothing in the tree holds it.</summary>
@@ -139,10 +138,10 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
         if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
         var carrying = DeclaredIn(owner.FullPath, text, plugin.Name, schemas);
-        var child = new ContainerDocuments(_release, schemas).EmbeddedIdentity(owner.RecordType, Encoding.UTF8.GetBytes(text), spelled)
+        var child = new ContainerDocuments(_release, schemas).EmbeddedChild(owner.RecordType, Encoding.UTF8.GetBytes(text), spelled)
             ?? throw new UnreadableSourceDocumentException(
                 $"The text given for {Path.GetRelativePath(_modFolder, owner.FullPath)} does not carry {spelled}.");
-        return (new RecordIdentity(spelled, child.RecordType, child.EditorId), carrying);
+        return (ChildIdentity(child, owner.FullPath), carrying);
     }
 
     private SourceDocument DeclaredIn(
@@ -358,7 +357,8 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
         var worldspaceDocument = SourceRepositoryLayout.ContainerDocumentHeldBy(Path.Combine(_modFolder, path.WorldspaceDirectory));
         var worldspace = DocumentText.FormKeyDeclaredBy(worldspaceDocument, plugin.Name)
-            ?? throw new UnreadableSourceDocumentException(worldspaceDocument, "it declares no FormKey, so the worldspace its exterior cells sit in is unknown");
+            ?? throw UnreadableSourceDocumentException.In(
+                _modFolder, worldspaceDocument, "it declares no FormKey, so the worldspace its exterior cells sit in is unknown");
 
         var (blockX, blockY) = Coordinates(path.BlockFolderName);
         var (subX, subY) = Coordinates(path.SubBlockFolderName);
@@ -385,7 +385,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             }
             catch (JsonException ex)
             {
-                throw new UnreadableSourceDocumentException(document, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
+                throw UnreadableSourceDocumentException.In(_modFolder, document, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
             }
             if (cell is JsonObject held && PlacedCell.Grid(held) == (x, y)) return DocumentText.FormKeyDeclaredIn(text, document, plugin.Name);
         }

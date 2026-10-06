@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   editorProviders: new Map<string, unknown>(),
   editorProviderDisposals: 0,
   treeViews: [] as FakeTreeView[],
+  documentChanges: new Set<(event: { document: unknown; contentChanges: unknown[] }) => void>(),
 }));
 
 vi.mock('vscode', () => ({
@@ -39,6 +40,10 @@ vi.mock('vscode', () => ({
     registerTextDocumentContentProvider: () => ({ dispose: () => undefined }),
     textDocuments: [],
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
+    onDidChangeTextDocument: (listener: (event: { document: unknown; contentChanges: unknown[] }) => void) => {
+      h.documentChanges.add(listener);
+      return { dispose: () => h.documentChanges.delete(listener) };
+    },
   },
   window: {
     registerCustomEditorProvider: (viewType: string, provider: unknown) => {
@@ -137,12 +142,12 @@ function makeEditor(client = new InMemoryMEditClient(), viewSelections = new Map
     void provider.resolveCustomTextEditor({ uri: renderedDocumentUri({ formKey, plugin: COPY_PLUGIN }, `${formKey}.json`) }, panel);
     return panel;
   };
-  const openDocument = async (uri: unknown): Promise<FakePanel> => {
+  const openDocument = async (uri: unknown, document: object = {}): Promise<FakePanel> => {
     const panel = fakePanel();
-    await provider.resolveCustomTextEditor({ uri }, panel);
+    await provider.resolveCustomTextEditor(Object.assign(document, { uri }), panel);
     return panel;
   };
-  const openFile = (fsPath: string): Promise<FakePanel> => openDocument({ scheme: 'file', fsPath });
+  const openFile = (fsPath: string, document?: object): Promise<FakePanel> => openDocument({ scheme: 'file', fsPath }, document);
   return { editor, open, openFile, openDocument, referencedBy, focusedView, outputChannel };
 }
 
@@ -164,6 +169,13 @@ const recordOf = async (referencedBy: FakeTreeView) => {
 const pageGlobal = (panel: FakePanel, name: string): unknown => {
   const assigned = new RegExp(`window\\.${name} = ("(?:[^"\\\\]|\\\\.)*");`).exec(panel.webview.html ?? '')?.[1];
   return assigned === undefined ? undefined : JSON.parse(assigned);
+};
+
+const comparisonsAsked = (client: InMemoryMEditClient) =>
+  client.calls.filter(({ method }) => method === 'getComparison').map(({ args }) => args);
+
+const changeDocument = (change: { document: unknown; contentChanges: unknown[] }) => {
+  h.documentChanges.forEach((listener) => { listener(change); });
 };
 
 const opened = () => h.executed.filter(([id]) => id === 'vscode.openWith').map(([, uri]) => uri);
@@ -376,27 +388,83 @@ describe('a record file\'s tab', () => {
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
     expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
   });
+
+  describe('and its document', () => {
+    const fileDocument = (text: string, isDirty: boolean) => ({ text, isDirty, getText() { return this.text; } });
+    const typed = { range: {}, text: 'x' };
+    function holdingClient(): InMemoryMEditClient {
+      const client = fileClient();
+      client.setQueryAnswer('getRecordOfFile', holding(GUN));
+      return client;
+    }
+    async function readOf(document: object): Promise<unknown[][]> {
+      const client = holdingClient();
+      const { openFile } = makeEditor(client);
+      const tab = await openFile(FILE, document);
+      Object.assign(document, { text: '{ "EditorID": "Typed" }' });
+      tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN });
+      await settle();
+      return comparisonsAsked(client);
+    }
+
+    it('reads the file\'s column from the unsaved text as it is when the read is asked', async () => {
+      expect(await readOf(fileDocument('{ "EditorID": "Gun" }', true)))
+        .toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Typed" }' }]]);
+    });
+
+    it('reads the file\'s column from mEdit once the document is saved, as mEdit reads the file VS Code may not have', async () => {
+      expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false))).toEqual([[GUN, undefined]]);
+    });
+
+    it('reads again when its text changes, and not when another document\'s does or a save leaves its text as it was', async () => {
+      const { openFile } = makeEditor(holdingClient());
+      const document = fileDocument('{}', true);
+      const tab = await openFile(FILE, document);
+
+      changeDocument({ document: fileDocument('{}', true), contentChanges: [typed] });
+      changeDocument({ document, contentChanges: [] });
+      changeDocument({ document, contentChanges: [typed] });
+
+      expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
+    });
+  });
 });
 
 describe('an untracked copy\'s tab', () => {
+  const GUN = '000801:A.esp';
+  const RENDERED = renderedDocumentUri({ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' } }, 'Gun.json');
+
   it('shows the copy\'s record, followed by Referenced By, with no file for mEdit to name it by', async () => {
-    const GUN = '000801:A.esp';
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]));
     const { openDocument, referencedBy } = makeEditor(client);
 
-    const tab = await openDocument(renderedDocumentUri({ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' } }, 'Gun.json'));
+    const tab = await openDocument(RENDERED);
 
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
     expect((await recordOf(referencedBy)).description).toBe('Gun');
     expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
   });
+
+  it('reads every column from mEdit, its document being mEdit\'s own copy', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getComparison', null);
+    const { openDocument } = makeEditor(client);
+    const tab = await openDocument(RENDERED, { getText: () => '{}' });
+
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN });
+    await settle();
+
+    expect(comparisonsAsked(client)).toEqual([[GUN, undefined]]);
+  });
 });
 
 describe('a child record\'s tab', () => {
+  const PLACED = '000803:A.esp';
+  const CHILD = { scheme: 'modbench-child-record', path: '/mods/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000803%3AA.esp&name=A.esp&origin=ModA' };
+
   it('shows the child\'s record, not its container\'s, titled with the opened copy\'s name once its read is answered', async () => {
-    const PLACED = '000803:A.esp';
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', comparisonOf(PLACED, [
@@ -405,9 +473,8 @@ describe('a child record\'s tab', () => {
     ]));
     client.setQueryAnswer('getPlugins', []);
     const { openDocument } = makeEditor(client);
-    const uri = { scheme: 'modbench-child-record', path: '/mods/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000803%3AA.esp&name=A.esp&origin=ModA' };
 
-    const tab = await openDocument(uri);
+    const tab = await openDocument(CHILD);
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(PLACED);
     expect(tab.title).toBe(PLACED);
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED });
@@ -415,6 +482,18 @@ describe('a child record\'s tab', () => {
 
     expect(tab.title).toBe('SharedRef');
     expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
+  });
+
+  it('reads every column from mEdit, its document being its container\'s, which mEdit does not read as the child\'s', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getComparison', null);
+    const { openDocument } = makeEditor(client);
+    const tab = await openDocument(CHILD, { isDirty: true, getText: () => '{ "EditorID": "Cell" }' });
+
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED });
+    await settle();
+
+    expect(comparisonsAsked(client)).toEqual([[PLACED, undefined]]);
   });
 });
 

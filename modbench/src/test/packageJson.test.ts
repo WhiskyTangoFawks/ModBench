@@ -41,6 +41,7 @@ interface KeybindingEntry { command: string; key: string; when: string; mac?: st
 interface ViewsContainerEntry { id: string; }
 interface SettingEntry { description?: string; type?: unknown; default?: unknown; enum?: unknown; }
 interface ColorEntry { id: string; }
+interface CustomEditorEntry { viewType: string; }
 
 interface PackageManifest {
   activationEvents: string[];
@@ -53,6 +54,7 @@ interface PackageManifest {
     keybindings: KeybindingEntry[];
     configuration: { properties: Record<string, SettingEntry> };
     colors: ColorEntry[];
+    customEditors: CustomEditorEntry[];
   };
 }
 
@@ -96,6 +98,9 @@ function isSettingEntry(v: unknown): v is SettingEntry {
 function isColorEntry(v: unknown): v is ColorEntry {
   return isRecord(v) && isString(v.id);
 }
+function isCustomEditorEntry(v: unknown): v is CustomEditorEntry {
+  return isRecord(v) && isString(v.viewType);
+}
 
 function parsePackageManifest(raw: unknown): PackageManifest {
   if (!isRecord(raw) || !isArrayOf(raw.activationEvents, isString)) {
@@ -103,7 +108,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   }
   const { contributes } = raw;
   if (!isRecord(contributes)) throw new Error('Expected package.json to have a contributes object.');
-  const { viewsWelcome, views, viewsContainers, menus, commands, keybindings, configuration, colors } = contributes;
+  const { viewsWelcome, views, viewsContainers, menus, commands, keybindings, configuration, colors, customEditors } = contributes;
   if (!isArrayOf(viewsWelcome, isViewsWelcomeEntry)) {
     throw new Error('Expected contributes.viewsWelcome to be an array of { view, contents, when? }.');
   }
@@ -126,12 +131,13 @@ function parsePackageManifest(raw: unknown): PackageManifest {
     throw new Error('Expected contributes.configuration.properties to be a map of { description? }.');
   }
   if (!isArrayOf(colors, isColorEntry)) throw new Error('Expected contributes.colors to be an array of { id }.');
+  if (!isArrayOf(customEditors, isCustomEditorEntry)) throw new Error('Expected contributes.customEditors to be an array of { viewType }.');
   const { properties } = configuration;
   return {
     activationEvents: raw.activationEvents,
     contributes: {
       viewsWelcome, views, viewsContainers: { panel: viewsContainers.panel }, menus, commands, keybindings,
-      configuration: { properties }, colors,
+      configuration: { properties }, colors, customEditors,
     },
   };
 }
@@ -993,15 +999,11 @@ describe('package.json conflict table menus follow mods-conflicts.md', () => {
 });
 
 describe('package.json menus and keys on an editor tab', () => {
-  it('name only an editor the extension contributes, so each is offered on that editor\'s tabs', () => {
-    const raw = fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8');
-    const manifest: unknown = JSON.parse(raw);
-    const editors: unknown = isRecord(manifest) && isRecord(manifest.contributes) ? manifest.contributes.customEditors : undefined;
-    const viewTypes = new Set(Array.isArray(editors) ? editors.flatMap((e) => (isRecord(e) && isString(e.viewType) ? [e.viewType] : [])) : []);
-    const named = [...raw.matchAll(/(?:activeCustomEditorId|webviewId) == '([^']+)'/g)].map(([, viewType]) => viewType);
+  it('name each editor the extension contributes, and no other, so each is offered on that editor\'s tabs', () => {
+    const whens = [...Object.values(pkg.contributes.menus).flat(), ...pkg.contributes.keybindings].map((entry) => entry.when);
+    const named = new Set(whens.flatMap((when) => [...when.matchAll(/(?:activeCustomEditorId|webviewId) == '([^']+)'/g)].map(([, viewType]) => viewType)));
 
-    expect(named.length).toBeGreaterThan(0);
-    expect([...new Set(named)].filter((viewType) => viewType === undefined || !viewTypes.has(viewType))).toEqual([]);
+    expect([...named].sort()).toEqual(pkg.contributes.customEditors.map((editor) => editor.viewType).sort());
   });
 });
 

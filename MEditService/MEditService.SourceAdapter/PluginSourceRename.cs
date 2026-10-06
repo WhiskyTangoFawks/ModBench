@@ -56,7 +56,8 @@ internal static class PluginSourceRename
         }
         catch (JsonException ex)
         {
-            throw new UnreadableSourceDocumentException(relativePath, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
+            throw new UnreadableSourceDocumentException(new UnreadableFile(
+                relativePath, $"'{relativePath}' in this plugin's source tree is no JSON document: {ex.Message.TrimEnd('.')}."));
         }
 
         return [.. bom, .. Spliced(text, splices)];

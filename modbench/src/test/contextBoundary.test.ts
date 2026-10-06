@@ -44,27 +44,32 @@ function importsFromDir(imports: string[], dir: string): string[] {
   return imports.filter((s) => s.split('/').includes(dir));
 }
 
-const EDITING_VIEW_DIRS = [PLUGINS_VIEW_DIR, EDITOR_DIR, SOURCE_LANGUAGE_DIR];
 const DRIVING_LIB_DIR = 'drivingLib';
 
-function boxesImportingLibFiles(root: string): Map<string, string[]> {
-  const boxes = new Map<string, string[]>();
+const inDrivingLib = (relativePath: string): boolean => relativePath.split(sep)[0] === DRIVING_LIB_DIR;
+
+function importersOfLibFiles(root: string): Map<string, string[]> {
+  const importers = new Map<string, string[]>();
   for (const path of tsFiles(root)) {
     const text = readFileSync(path, 'utf8');
-    if (isTestSupport(relative(root, path)) || !text.includes(DRIVING_LIB_DIR)) continue;
+    if (isTestSupport(relative(root, path)) || !(inDrivingLib(relative(root, path)) || text.includes(DRIVING_LIB_DIR))) continue;
     for (const imported of importsOf(text).filter((s) => s.startsWith('.')).map((s) => `${join(dirname(path), s)}.ts`)) {
-      boxes.set(imported, [...(boxes.get(imported) ?? []), relative(root, path).split(sep)[0] ?? '']);
+      importers.set(imported, [...(importers.get(imported) ?? []), path]);
     }
   }
-  return boxes;
+  return importers;
 }
 
 function findOffenders(root: string): Offense[] {
   const offenses: Offense[] = [];
-  const importingBoxes = boxesImportingLibFiles(root);
-  const speaksForEditingAlone = (libFile: string) => {
-    const boxes = importingBoxes.get(libFile) ?? [];
-    return boxes.length > 0 && boxes.every((box) => EDITING_VIEW_DIRS.includes(box));
+  const importersOf = importersOfLibFiles(root);
+  const speaksForEditingAlone = (libFile: string, judging: ReadonlySet<string>): boolean => {
+    const importers = importersOf.get(libFile) ?? [];
+    return importers.length > 0 && importers.every((importer) => {
+      const relImporter = relative(root, importer);
+      if (!inDrivingLib(relImporter)) return isExcluded(relImporter);
+      return judging.has(importer) || speaksForEditingAlone(importer, new Set([...judging, libFile]));
+    });
   };
   for (const path of tsFiles(root)) {
     const relPath = relative(root, path);
@@ -72,7 +77,7 @@ function findOffenders(root: string): Offense[] {
     const text = readFileSync(path, 'utf8');
     const imports = importsOf(text);
     const clientImports = CLIENT_CALLERS.includes(relPath.split(sep)[0] ?? '') ? [] : importsFromDir(imports, CLIENT_DIR);
-    const isEditingLibFile = relPath.split(sep)[0] === DRIVING_LIB_DIR && speaksForEditingAlone(path);
+    const isEditingLibFile = inDrivingLib(relPath) && speaksForEditingAlone(path, new Set());
     const vocab = isEditingLibFile ? [] : domainVocabIn(text);
     if (clientImports.length > 0 || vocab.length > 0) offenses.push({ path: relPath, clientImports, vocab });
   }
@@ -181,7 +186,7 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     });
 
     const LIB_FILE = join('drivingLib', 'recordDocument.ts');
-    const importingTheLibFile = "import { recordDocumentUri } from '../drivingLib/recordDocument';\n";
+    const importingTheLibFile = "import { recordDocument } from '../drivingLib/recordDocument';\n";
     const plantLibFileImportedFrom = (root: string, ...dirs: string[]) => {
       mkdirSync(join(root, 'drivingLib'), { recursive: true });
       writeFileSync(join(root, LIB_FILE), 'export const formKey = 1;\n');
@@ -209,6 +214,26 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       withPlantedTree((root) => {
         plantLibFileImportedFrom(root);
         expect(findOffenders(root).map((o) => o.path)).toEqual([LIB_FILE]);
+      });
+    });
+
+    it('FormKey vocabulary in a driving lib file a Mods-shaped file reaches through another lib file is caught', () => {
+      withPlantedTree((root) => {
+        plantLibFileImportedFrom(root, 'editor');
+        writeFileSync(join(root, 'drivingLib', 'between.ts'), "export { recordDocument } from './recordDocument';\n");
+        mkdirSync(join(root, 'mods'), { recursive: true });
+        writeFileSync(join(root, 'mods', 'importer.ts'), "import { recordDocument } from '../drivingLib/between';\n");
+        expect(findOffenders(root).map((o) => o.path)).toEqual([LIB_FILE]);
+      });
+    });
+
+    it('FormKey vocabulary in a driving lib file the Editing views alone reach through another lib file is not caught', () => {
+      withPlantedTree((root) => {
+        plantLibFileImportedFrom(root);
+        writeFileSync(join(root, 'drivingLib', 'between.ts'), "export { recordDocument } from './recordDocument';\n");
+        mkdirSync(join(root, 'editor'), { recursive: true });
+        writeFileSync(join(root, 'editor', 'importer.ts'), "import { recordDocument } from '../drivingLib/between';\n");
+        expect(findOffenders(root)).toEqual([]);
       });
     });
 

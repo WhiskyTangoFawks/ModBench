@@ -36,8 +36,6 @@ internal sealed class RecordEdit(WriteTargets targets, RecordTextCodec codec, Sc
         if (!TryCarrying(plugin, formKey, given, out var editTarget, out var document, out var blocked)) return blocked;
         var (release, identity, repository) = editTarget;
         var schemas = schemaReflector.GetSchemas(release);
-        var relativePath = repository.RelativePathOf(plugin, identity);
-
         if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, document, envelope.Value);
         var isEmbedded = !document.FormKey.Equals(identity.FormKey, StringComparison.Ordinal);
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
@@ -58,6 +56,8 @@ internal sealed class RecordEdit(WriteTargets targets, RecordTextCodec codec, Sc
         string? cellToLookUp = null;
         if (isEmbedded)
         {
+            var relativePath = repository.RelativePathOf(plugin, identity)
+                ?? throw new InvalidOperationException($"Expected the document carrying {formKey} to have been located.");
             var parentType = RecordTypeDispatch.For(release).ConcreteFor(target.RecordType);
             var root = JsonNode.Parse(text) as JsonObject
                 ?? throw new InvalidOperationException($"Expected '{relativePath}' to hold a JSON object.");
@@ -155,8 +155,8 @@ internal sealed class RecordEdit(WriteTargets targets, RecordTextCodec codec, Sc
 
         refused = RecordEditResult.Refused(
             RecordEditRefusal.SourceUnitNotFound,
-            $"{repository.RelativePathOf(plugin, identity) ?? $"{plugin.Name}'s source tree"} does not hold {formKey} — it was moved or removed outside " +
-            "Modbench. Check the Source Control panel.");
+            $"{repository.RelativePathOf(plugin, identity) ?? $"{plugin.Name}'s source tree"} does not hold {formKey}. " +
+            SourceUnitNotFoundException.MovedOrRemovedOutside);
         return false;
     }
 

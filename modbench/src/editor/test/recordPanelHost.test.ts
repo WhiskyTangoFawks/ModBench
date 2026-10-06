@@ -50,16 +50,22 @@ function isPanel(candidate: unknown): candidate is vscode.WebviewPanel {
   return typeof candidate === 'object' && candidate !== null && 'webview' in candidate;
 }
 
-function register(
-  focusedViewSelection: () => readonly unknown[] = () => [],
-  panels: { recordPanels: Set<vscode.WebviewPanel>; tracker: ActiveRecordTracker<vscode.WebviewPanel>; meditClient: InMemoryMEditClient }
-    = { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient: new InMemoryMEditClient() },
-  override: {
-    meditClient?: InMemoryMEditClient;
-  } = {},
-): void {
-  const { recordPanels, tracker } = panels;
-  const meditClient = override.meditClient ?? panels.meditClient;
+function fakePanel(postMessage: () => Promise<boolean> = vi.fn(() => Promise.resolve(true)), title = ''): vscode.WebviewPanel {
+  const panel = { title, webview: { postMessage } };
+  if (!isPanel(panel)) throw new Error('not a panel');
+  return panel;
+}
+
+interface Registered {
+  selection?: () => readonly unknown[];
+  recordPanels?: Set<vscode.WebviewPanel>;
+  tracker?: ActiveRecordTracker<vscode.WebviewPanel>;
+  meditClient?: InMemoryMEditClient;
+}
+
+function register({
+  selection = () => [], recordPanels = new Set(), tracker = new ActiveRecordTracker(), meditClient = new InMemoryMEditClient(),
+}: Registered = {}): void {
   registerEditorCommands({
     context: { extensionUri: vscode.Uri.from({ scheme: 'file' }) },
     recordPanels,
@@ -67,7 +73,7 @@ function register(
     editsInFlight: new EditsInFlight(tracker),
     focusedCells: new FocusedCells(() => tracker.activePanel(), () => undefined, () => undefined),
     meditClient,
-    focusedViewSelection,
+    focusedViewSelection: selection,
     viewSelections: new Map(),
     recordWrite: (command) => command(),
     refreshSourceControlFor: () => undefined,
@@ -107,7 +113,7 @@ describe('a record panel and the notifications', () => {
   it('subscribes to rows-changed reports and to reconnects as soon as it is registered', () => {
     const meditClient = new InMemoryMEditClient();
     const onReconnected = vi.spyOn(meditClient, 'onReconnected');
-    register(undefined, { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient });
+    register({ meditClient });
 
     expect(meditClient.calls).toContainEqual({ method: 'onNotification', args: ['rows-changed'] });
     expect(onReconnected).toHaveBeenCalled();
@@ -126,7 +132,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
   };
 
   it('opens the records selected in the focused view, each in a tab of its own', async () => {
-    register(() => [{ formKey: '000801:A.esp', kind: 'placed' }, { kind: 'record', record: { formKey: '000802:A.esp' } }], undefined, renderingTheWinner());
+    register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }, { kind: 'record', record: { formKey: '000802:A.esp' } }], ...renderingTheWinner() });
 
     await open();
 
@@ -138,7 +144,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
   it('asks for a record when the focused view has none selected, and opens the one picked as a preview', async () => {
     pickRecord.mockResolvedValue('000801:A.esp');
-    register(() => [{ kind: 'recordType' }], undefined, renderingTheWinner());
+    register({ selection: () => [{ kind: 'recordType' }], ...renderingTheWinner() });
 
     await open();
 
@@ -171,7 +177,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
   it('reports a record VS Code could not open, and still opens the rest', async () => {
     reporter.report.mockClear();
     executeCommand.mockRejectedValueOnce(new Error('no editor'));
-    register(() => [{ formKey: '000801:A.esp', kind: 'placed' }, { formKey: '000802:A.esp', kind: 'placed' }], undefined, renderingTheWinner());
+    register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }, { formKey: '000802:A.esp', kind: 'placed' }], ...renderingTheWinner() });
 
     await open();
 
@@ -180,7 +186,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
   });
 
   it('does not ask when the selection holds a record', async () => {
-    register(() => [{ formKey: '000801:A.esp', kind: 'placed' }]);
+    register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }] });
 
     await open();
 
@@ -199,7 +205,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     meditClient.setQueryAnswer('getRecordFile', file);
     meditClient.setQueryAnswer('getRenderedDocument', { fileName: renderedName, text: '{}' });
     meditClient.setQueryAnswer('getRecordOfFile', { formKey: holds, plugin: plugin.name, origin: plugin.origin });
-    register(() => [], { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient });
+    register({ meditClient });
   }
 
   it('opens a tracked copy\'s file in the record grid, as a preview', async () => {
@@ -251,7 +257,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     meditClient.setQueryAnswer('getRecordOwner', winner);
     meditClient.setQueryAnswer('getRecordFile', { path: null });
     meditClient.setQueryAnswer('getRenderedDocument', { fileName: 'Gun.json', text: '{}' });
-    register(() => [], { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient });
+    register({ meditClient });
 
     await commandHandlers.get('modbench.record.open')?.({ formKey: GUN });
 
@@ -262,7 +268,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     reporter.report.mockClear();
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getRecordOwner', undefined);
-    register(() => [], { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient });
+    register({ meditClient });
 
     await commandHandlers.get('modbench.record.open')?.({ formKey: GUN });
 
@@ -283,28 +289,21 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
 describe('modbench.record.editField, fired with only the record, the plugin and the field path', () => {
   const MOVED = '000900:Mod.esp';
-  const isPanel = (value: object): value is vscode.WebviewPanel => 'webview' in value;
-  const posting = () => vi.fn(() => Promise.resolve(true));
-  const fakePanel = (postMessage = posting()): vscode.WebviewPanel => {
-    const panel = { title: '000800:Mod.esp', webview: { postMessage } };
-    if (!isPanel(panel)) throw new Error('not a panel');
-    return panel;
-  };
 
   it('moves every tab showing the record to its new FormKey, as an agent fires it with no panel', async () => {
     const tracker = new ActiveRecordTracker<vscode.WebviewPanel>();
     const meditClient = new InMemoryMEditClient();
     meditClient.setCommandResult('editRecord', { applied: true, newFormKey: MOVED });
-    const shown = [fakePanel(), fakePanel()];
-    const elsewhere = fakePanel();
-    for (const panel of shown) tracker.setFormKey(panel, '000800:Mod.esp');
+    const [one, other, elsewhere] = [fakePanel(undefined, '000800:Mod.esp'), fakePanel(undefined, '000800:Mod.esp'), fakePanel()];
+    tracker.setFormKey(one, '000800:Mod.esp');
+    tracker.setFormKey(other, '000800:Mod.esp');
     tracker.setFormKey(elsewhere, '000801:Mod.esp');
-    register(() => [], { recordPanels: new Set([...shown, elsewhere]), tracker, meditClient });
+    register({ recordPanels: new Set([one, other, elsewhere]), tracker, meditClient });
 
     await commandHandlers.get('modbench.record.editField')?.(
       { formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'FormID' }], value: 'x' });
 
-    expect(shown.map(panel => tracker.formKeyOf(panel))).toEqual([MOVED, MOVED]);
+    expect([tracker.formKeyOf(one), tracker.formKeyOf(other)]).toEqual([MOVED, MOVED]);
     expect(tracker.formKeyOf(elsewhere)).toBe('000801:Mod.esp');
     expect(meditClient.calls.filter(c => c.method === 'editRecord')).toHaveLength(1);
   });
@@ -313,16 +312,10 @@ describe('modbench.record.editField, fired with only the record, the plugin and 
 describe('the record grid\'s F2', () => {
   it('opens the editor of the focused cell of the record tab in focus, and of no other tab', async () => {
     const [behind, inFocus] = [vi.fn(() => Promise.resolve(true)), vi.fn(() => Promise.resolve(true))];
-    const isPanel = (value: object): value is vscode.WebviewPanel => 'webview' in value;
-    const panel = (postMessage: () => Promise<boolean>): vscode.WebviewPanel => {
-      const fake = { webview: { postMessage } };
-      if (!isPanel(fake)) throw new Error('not a panel');
-      return fake;
-    };
     const tracker = new ActiveRecordTracker<vscode.WebviewPanel>();
-    tracker.setActivePanel(panel(behind));
-    tracker.setActivePanel(panel(inFocus));
-    register(() => [], { recordPanels: new Set(), tracker, meditClient: new InMemoryMEditClient() });
+    tracker.setActivePanel(fakePanel(behind));
+    tracker.setActivePanel(fakePanel(inFocus));
+    register({ tracker });
 
     await commandHandlers.get('modbench.recordGrid.editHere')?.();
 
@@ -355,12 +348,11 @@ describe('a record panel open while mEdit reports a plugin it cannot read', () =
 
   it('has the panels refreshed on a failure arriving and on it clearing, and not on an identical tick', () => {
     const meditClient = new InMemoryMEditClient();
-    const postMessage = vi.fn();
-    const panel: unknown = { webview: { postMessage } };
-    if (!isPanel(panel)) throw new Error('not a panel');
+    const postMessage = vi.fn(() => Promise.resolve(true));
+    const panel = fakePanel(postMessage);
     const tracker = new ActiveRecordTracker<vscode.WebviewPanel>();
     tracker.setFormKey(panel, '000801:A.esp');
-    register(() => [], { recordPanels: new Set([panel]), tracker, meditClient });
+    register({ recordPanels: new Set([panel]), tracker, meditClient });
 
     meditClient.emit(tick([bad]));
     meditClient.emit(tick([bad]));

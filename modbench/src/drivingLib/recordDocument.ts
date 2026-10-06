@@ -1,18 +1,20 @@
 import * as vscode from 'vscode';
 
-// The members read of mEdit's answers, named here because not every box using this lib
-// references the client or the wire (target-architecture.md, Maintaining).
-interface PluginAddress { name: string; origin: string }
+// What this lib reads of mEdit's answers, by shape: a lib references only boxes every box using it
+// references (target-architecture.md, The rule is the reference list).
+interface CopyPlugin { name: string; origin: string }
 
 export interface RecordDocumentClient {
-  getRecordOwner(formKey: string): Promise<PluginAddress | undefined>;
-  getRecordFile(plugin: PluginAddress, formKey: string): Promise<{ path?: string | null } | null>;
+  getRecordOwner(formKey: string): Promise<CopyPlugin | undefined>;
+  getRecordFile(plugin: CopyPlugin, formKey: string): Promise<{ path?: string | null } | null>;
   getRecordOfFile(path: string): Promise<{ formKey: string }>;
-  getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<{ fileName: string } | null>;
+  getRenderedDocument(plugin: CopyPlugin, formKey: string): Promise<{ fileName: string } | null>;
 }
 
 /** A plugin's copy of a record, as a document of that one copy states it. */
-export interface RecordCopy { formKey: string; plugin: PluginAddress }
+export interface RecordCopy { formKey: string; plugin: CopyPlugin }
+
+export type RecordDocument = { uri: vscode.Uri } | { refused: string };
 
 export const RENDERED_DOCUMENT_SCHEME = 'modbench-rendered';
 export const CHILD_RECORD_SCHEME = 'modbench-child-record';
@@ -31,8 +33,8 @@ export function copyOf(uri: vscode.Uri): RecordCopy {
   return { formKey: stated('formKey'), plugin: { name: stated('name'), origin: stated('origin') } };
 }
 
-export const holdsNoCopy = ({ formKey, plugin }: RecordCopy): Error =>
-  new Error(`${plugin.name} (${plugin.origin}) holds no ${formKey}.`);
+export const holdsNoCopy = ({ formKey, plugin }: RecordCopy): string =>
+  `${plugin.name} (${plugin.origin}) holds no ${formKey}.`;
 
 // The path is what VS Code shows: its last segment titles the tab, and the plugin's segments
 // before it tell apart two copies of one name.
@@ -47,20 +49,20 @@ export function renderedDocumentUri(copy: RecordCopy, fileName: string): vscode.
 export const childRecordUri = (copy: RecordCopy, containerFile: string): vscode.Uri =>
   vscode.Uri.file(containerFile).with({ scheme: CHILD_RECORD_SCHEME, query: copyQuery(copy) });
 
-/** The document a record opens as (editor.md, Opening, stories 8 to 10); undefined when it names
- *  no plugin and no active plugin holds it. */
-export async function recordDocumentUri(
-  client: RecordDocumentClient, { formKey, plugin: given }: { formKey: string; plugin?: PluginAddress },
-): Promise<vscode.Uri | undefined> {
+/** The document a record opens as (editor.md, Opening, stories 8 to 10); undefined when no active
+ *  plugin holds it. */
+export async function recordDocument(
+  client: RecordDocumentClient, { formKey, plugin: given }: Pick<RecordCopy, 'formKey'> & Partial<RecordCopy>,
+): Promise<RecordDocument | undefined> {
   const plugin = given ?? await client.getRecordOwner(formKey);
   if (!plugin) return undefined;
   const file = await client.getRecordFile(plugin, formKey);
-  if (file === null) throw holdsNoCopy({ formKey, plugin });
+  if (file === null) return { refused: holdsNoCopy({ formKey, plugin }) };
   if (!file.path) {
     const rendered = await client.getRenderedDocument(plugin, formKey);
-    if (rendered === null) throw holdsNoCopy({ formKey, plugin });
-    return renderedDocumentUri({ formKey, plugin }, rendered.fileName);
+    if (rendered === null) return { refused: holdsNoCopy({ formKey, plugin }) };
+    return { uri: renderedDocumentUri({ formKey, plugin }, rendered.fileName) };
   }
-  if ((await client.getRecordOfFile(file.path)).formKey === formKey) return vscode.Uri.file(file.path);
-  return childRecordUri({ formKey, plugin }, file.path);
+  if ((await client.getRecordOfFile(file.path)).formKey === formKey) return { uri: vscode.Uri.file(file.path) };
+  return { uri: childRecordUri({ formKey, plugin }, file.path) };
 }
