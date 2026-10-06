@@ -80,7 +80,7 @@ internal static class TreeTampering
 
     /// <summary>The plugin header's document, relative to its mod folder.</summary>
     internal static string HeaderDocumentOf(string pluginFileName) =>
-        Path.Combine(PluginSourceRoot.For(pluginFileName), "RecordData.json");
+        PluginSourceRoot.HeaderDocument(pluginFileName);
 
     /// <summary>The block and sub-block folders the exterior cell's document sits in, as the whole-mod
     /// serializer names them.</summary>
