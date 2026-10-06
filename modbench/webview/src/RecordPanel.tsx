@@ -247,8 +247,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const severalRecords = overrides.some(o => o.column != null);
   const incompleteMessage = severalRecords ? undefined : recordPanelIncompleteMessage(conflictsComputed);
 
-  // editor.md, Columns, story 8: one record's tab opens on its active copies again, and several
-  // records' on the same records, the opened one first as the file.
   function openColumn(opened: CompareOverride) {
     const copyOf = (o: CompareOverride): ColumnCopy => ({ formKey: o.formKey, plugin: pluginAddressOf(o) });
     openInPlace([opened, ...(severalRecords ? overrides.filter(o => o !== opened) : [])].map(copyOf));

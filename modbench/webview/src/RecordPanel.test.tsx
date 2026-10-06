@@ -360,12 +360,29 @@ describe('RecordPanel — the file\'s column', () => {
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  it('is marked in its header, and no other column is', async () => {
+  it('is marked in its header, to the eye and to a screen reader, and no other column is', async () => {
     renderPanel(twoTracked, { plugins: bothTracked, fileColumn: 'MyMod.esp|ModA' });
     await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
 
     expect(headerOf('MyMod.esp')).toHaveAttribute('aria-current', 'true');
+    expect(headerOf('MyMod.esp').querySelector('.codicon.codicon-edit')).not.toBeNull();
     expect(headerOf('Other.esp')).not.toHaveAttribute('aria-current');
+    expect(headerOf('Other.esp').querySelector('.codicon')).toBeNull();
+  });
+
+  it('opens another column\'s copy on Enter or Space on its focused header, and nothing on another key or on its own header', async () => {
+    renderPanel(twoTracked, { plugins: bothTracked, fileColumn: 'MyMod.esp|ModA' });
+    await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
+    vi.mocked(vscode.postMessage).mockClear();
+
+    expect(headerOf('Other.esp')).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(headerOf('MyMod.esp'), { key: 'Enter' });
+    fireEvent.keyDown(headerOf('Other.esp'), { key: 'ArrowDown' });
+    fireEvent.keyDown(within(headerOf('Other.esp')).getByRole('button'), { key: 'Enter' });
+    fireEvent.keyDown(headerOf('Other.esp'), { key: 'Enter' });
+    fireEvent.keyDown(headerOf('Other.esp'), { key: ' ' });
+
+    expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE)).toHaveLength(2);
   });
 
   it('opens another column\'s copy in this tab on a click on its header, and nothing on a click on its own or on a collapse control', async () => {
@@ -789,6 +806,16 @@ describe('RecordPanel — struct sub-rows', () => {
     await waitFor(() => expect(screen.getByText('X')).toBeInTheDocument());
     expect(screen.getByText('Y')).toBeInTheDocument();
     expect(within(required(screen.getByText('Bounds').closest('tr'), 'the Bounds row')).getByText('▼')).toBeInTheDocument();
+  });
+
+  it('a click on a row\'s arrow focuses its label as it collapses the row, as a tree\'s twistie selects its row', async () => {
+    renderPanel(structCompareResult);
+    await waitFor(() => screen.getByText('X'));
+
+    fireEvent.click(within(required(screen.getByText('Bounds').closest('tr'), 'the Bounds row')).getByText('▼'));
+
+    expect(screen.queryByText('X')).not.toBeInTheDocument();
+    expect(screen.getByText('Bounds').closest('td')).toHaveAttribute('data-focused-cell');
   });
 
   it('double clicking the label collapses an expanded row and expands it again', async () => {

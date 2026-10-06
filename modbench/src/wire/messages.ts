@@ -191,7 +191,6 @@ export type RecordLoadAnswer =
       conflictsComputed: boolean;
       // The plugins mEdit cannot read, as the Plugins tree is told them.
       loadFailures: components['schemas']['PluginLoadFailure'][];
-      // The plugin whose copy the tab's document holds.
       documentPlugin: PluginAddress;
     }
   | { ok: false; error: string };

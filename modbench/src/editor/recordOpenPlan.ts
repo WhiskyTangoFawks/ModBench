@@ -5,7 +5,6 @@ import type { PluginAddress } from '../wire/pluginAddress';
 /** A record to open: a copy when it names its plugin, else its winning copy. */
 export interface RecordToOpen { formKey: string; plugin?: PluginAddress }
 
-/** A record tab, by its document and its group, whose place an open takes (editor.md, Columns, story 8). */
 export interface TabPlace { document: string; viewColumn: ViewColumn }
 
 export type Placement = 'active' | 'beside' | TabPlace;

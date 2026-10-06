@@ -51,11 +51,19 @@ export function PluginHeader({
       style={{ ...headerCell, position: 'relative', textAlign: 'left', ...style }}
       data-vscode-context={vscodeContext}
       aria-current={isFile || undefined}
+      tabIndex={isFile ? undefined : 0}
       onClick={isFile ? undefined : onOpen}
+      onKeyDown={e => {
+        if (!isFile && e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
       title={`${o.plugin}\n${o.origin}\n${status.reason}`}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span onClick={e => e.stopPropagation()}><ExpandArrow expanded={!collapsed} onToggle={onToggleCollapse} /></span>
+        {isFile && <span className="codicon codicon-edit" aria-hidden />}
         <div>[{o.loadIndex}] <span>{o.plugin}</span></div>
       </div>
       {!collapsed && (
