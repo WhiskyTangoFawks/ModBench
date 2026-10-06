@@ -12,7 +12,7 @@ namespace MEditService.SourceAdapter;
 
 /// <summary>The file holding a record: found on disk for a container or embedded child, computed for
 /// a flat record. A null <see cref="SourceUnit.OwnerRecordType"/> means the document names its own
-/// type. <c>IsDirectoryPerRecord</c> is a container's own document, not a flat file.</summary>
+/// type.</summary>
 internal readonly record struct SourceUnit(
     string FullPath, string RelativePath, string OwnerFormKey, string? OwnerRecordType, bool IsEmbedded, bool IsDirectoryPerRecord);
 
