@@ -55,27 +55,43 @@ internal sealed class SourceRepositoryWrites(
         return SourceRemoval.Removed;
     }
 
-    /// <summary>What putting a document changes. A held one: its text, inside its owner's when embedded, and the
-    /// move to its leaf name. A new one: its document and each block level the tree lacks above it.</summary>
-    internal SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document, CellPlacement? placement = null)
+    /// <summary>What putting a document changes: a held one's as <see cref="ChangesToRewrite"/> says, a new one's
+    /// document and each block level the tree lacks above it.</summary>
+    internal SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document) =>
+        locator.LocateToPlace(plugin, document.Identity) is { } unit
+            ? ChangesToHeld(unit, document)
+            : ChangesToPlace(plugin, document, placement: null);
+
+    /// <summary>What putting an exterior cell changes: a held cell's as <see cref="ChangesToRewrite"/> says, a new
+    /// one's at the block its grid falls in.</summary>
+    internal SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
+        locator.LocateToPlace(plugin, cell.Identity) is { } unit
+            ? ChangesToHeld(unit, cell)
+            : ChangesToPlace(plugin, cell, PlacementIn(worldspace, cell));
+
+    /// <summary>What rewriting a document the tree holds changes: its text, inside its owner's when embedded, and
+    /// the move to its leaf name. One no document holds throws, since an edit never creates.</summary>
+    internal SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) =>
+        locator.LocateToPlace(plugin, document.Identity) is { } unit && (unit.IsEmbedded || File.Exists(unit.FullPath))
+            ? ChangesToHeld(unit, document)
+            : throw new InvalidOperationException(
+                $"No document in {plugin.Name}'s tree holds {document.FormKey}, so there is none to rewrite.");
+
+    private SourceChanges ChangesToPlace(PluginAddress plugin, SourceDocument document, CellPlacement? placement)
     {
-        if (locator.LocateToPlace(plugin, document.Identity) is not { } unit)
-        {
-            var (levels, placed) = layout.PlaceNewDocument(plugin, document.Identity, placement)
-                ?? throw NoPlaceInTheTree(plugin, document.Identity);
-            return new SourceChanges(
-                [], [.. levels.Select(level => Document(level.Path, level.Text)), Document(placed.FullPath, document.Body)]);
-        }
+        var (levels, placed) = layout.PlaceNewDocument(plugin, document.Identity, placement)
+            ?? throw NoPlaceInTheTree(plugin, document.Identity);
+        return new SourceChanges([], [.. levels, Document(placed.FullPath, document.Body)]);
+    }
 
-        if (unit.IsEmbedded)
-        {
-            var ownerBytes = OwnerBytes(unit);
-            if (DocumentText.EmbeddedChildIn(ownerBytes, unit, document.FormKey, _release) is not { } span)
-                throw NoLongerCarried(unit, document.FormKey);
-            return Written(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, document.Body));
-        }
+    private SourceChanges ChangesToHeld(SourceUnit unit, SourceDocument document)
+    {
+        if (!unit.IsEmbedded) return Planned(LeafPlan(unit, document), document.Body);
 
-        return Planned(LeafPlan(unit, document), document.Body);
+        var ownerBytes = OwnerBytes(unit);
+        if (DocumentText.EmbeddedChildIn(ownerBytes, unit, document.FormKey, _release) is not { } span)
+            throw NoLongerCarried(unit, document.FormKey);
+        return Written(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, document.Body));
     }
 
     // A file whose text is not a document is something else's, and writing over it drops what it wrote.
@@ -88,13 +104,6 @@ internal sealed class SourceRepositoryWrites(
         if (SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
             throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
     }
-
-    /// <summary>What putting an exterior cell changes: a held cell's as <see cref="ChangesToPut"/> says, a new one
-    /// at the block its grid falls in.</summary>
-    internal SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
-        locator.LocateToPlace(plugin, cell.Identity) is null
-            ? ChangesToPut(plugin, cell, PlacementIn(worldspace, cell))
-            : ChangesToPut(plugin, cell);
 
     /// <summary>What changing <paramref name="identity"/>'s FormKey changes, read from the text of the document
     /// <paramref name="carrying"/> it: its own file or folder moves to the new leaf name, or its owner's text changes.</summary>

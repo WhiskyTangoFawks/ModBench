@@ -81,7 +81,8 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         Directory.CreateDirectory(Path.Combine(_modFolder, cellDocument) + ".tmp");
         var before = TreeSnapshot.Of(_modFolder);
 
-        Assert.Throws<UnauthorizedAccessException>(() => Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace));
+        var fault = Record.Exception(() => Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace));
+        Assert.True(fault is IOException or UnauthorizedAccessException, $"Expected a file-system fault, got {fault}");
 
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }

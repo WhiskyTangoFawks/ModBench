@@ -235,7 +235,6 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
         var (repository, plugin) = destination;
         SourceTransaction.Atomically(repository, transaction =>
         {
-            // The cell's changes are read off a tree that already holds its worldspace.
             if (worldspaceCopy is not null) transaction.Apply(repository, repository.ChangesToPut(plugin, worldspaceCopy));
             transaction.Apply(repository, repository.ChangesToPutInWorldspace(plugin, landing, worldspaceFormKey));
         });

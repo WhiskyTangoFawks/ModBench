@@ -244,6 +244,10 @@ public sealed class SourceRepository
     /// <summary>What <see cref="Put"/> changes, written nowhere.</summary>
     public SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document) => Writes.ChangesToPut(plugin, document);
 
+    /// <summary>What rewriting a document the tree holds changes, written nowhere. One no document holds
+    /// throws: an edit never creates.</summary>
+    public SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) => Writes.ChangesToRewrite(plugin, document);
+
     /// <summary>What <see cref="PutInWorldspace"/> changes, written nowhere.</summary>
     public SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
         Writes.ChangesToPutInWorldspace(plugin, cell, worldspace);

@@ -20,13 +20,13 @@ public sealed class ExteriorCellCopyRollbackTests
         TreeTampering.BlockWriteAsPlacedIn(
             fixture.SourceModFolder, fixture.SourcePlugin, cell, fixture.DestinationModFolder, fixture.DestinationPlugin);
         var destinationTree = PluginSourceRoot.In(fixture.DestinationModFolder, fixture.DestinationPlugin.Name);
-        var before = TreeTampering.FilesUnder(destinationTree);
+        var before = TreeSnapshot.Of(destinationTree);
 
         var copied = ofAPlacedReference ? fixture.ExteriorPersistentRef : fixture.ExteriorCell;
         var result = fixture.CopyHandler.CopySync(
             [new RecordAt(fixture.SourcePlugin, copied.ToString())], mode, [fixture.DestinationPlugin], replace: false);
 
         Assert.Equal(RecordEditRefusal.SourceWriteFailed, Assert.Single(result.Refused).Refusal);
-        Assert.Equal(before, TreeTampering.FilesUnder(destinationTree));
+        Assert.Equal(before, TreeSnapshot.Of(destinationTree));
     }
 }

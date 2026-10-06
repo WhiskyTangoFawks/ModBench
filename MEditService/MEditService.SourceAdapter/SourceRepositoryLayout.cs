@@ -347,14 +347,14 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
     // Removes the directories this call minted when write throws: an empty record directory is
     // invisible to git and fails the next ingest, since the reader opens every one unconditionally.
-    internal static T InMintedDirectory<T>(string directory, Func<T> write)
+    internal static void InMintedDirectory(string directory, Action write)
     {
         var minted = LevelsMintedBy(directory);
 
         try
         {
             Directory.CreateDirectory(directory);
-            return write();
+            write();
         }
         catch
         {
@@ -363,12 +363,9 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         }
     }
 
-    internal static void InMintedDirectory(string directory, Action write) =>
-        InMintedDirectory(directory, () => { write(); return true; });
-
     /// <summary>Where a new document lands, and the block level documents the tree lacks above it, outermost
     /// first. Null for a record with no group folder, which lands inside its container's document.</summary>
-    internal (IReadOnlyList<(string Path, string Text)> Levels, SourceUnit Unit)? PlaceNewDocument(
+    internal (IReadOnlyList<DocumentChange> Levels, SourceUnit Unit)? PlaceNewDocument(
         PluginAddress plugin, RecordIdentity identity, CellPlacement? placement)
     {
         var dispatch = RecordTypeDispatch.For(_release);
@@ -395,7 +392,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
     /// <summary>The block level documents an exterior cell at <paramref name="placement"/> needs and the tree
     /// lacks, outermost first, and the path of the cell's own document.</summary>
-    internal (IReadOnlyList<(string Path, string Text)> Levels, string Cell) ExteriorCellDocuments(
+    private (IReadOnlyList<DocumentChange> Levels, string Cell) ExteriorCellDocuments(
         PluginAddress plugin, RecordIdentity identity, CellPlacement placement)
     {
         var levels = RecordTypeDispatch.For(_release).ExteriorCellBlockLevels;
@@ -416,7 +413,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
             [.. needed
                 .Select(level => (Path: Path.Combine(level.Directory, GroupRecordDataFileName), level.Level, level.X, level.Y))
                 .Where(level => !File.Exists(level.Path))
-                .Select(level => (level.Path, BlockLevelDocument(level.Level, level.X, level.Y)))],
+                .Select(level => LevelDocument(level.Path, BlockLevelDocument(level.Level, level.X, level.Y)))],
             ContainerDocumentIn(cell));
     }
 
@@ -431,8 +428,9 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
     private const int ExteriorBlockLevels = 2;
 
-    // A worldspace is a record and only the codec mints one, so a tree already holding it is this
-    // put's precondition.
+    // Found by the worldspace's FormKey, not composed from it, so an override the destination named itself
+    // is written into, never doubled by a bare-named sibling. Only the codec mints a worldspace, so the
+    // tree must hold it.
     private string WorldspaceDirectoryHolding(PluginAddress plugin, CellPlacement placement)
     {
         if (placement.ParentWorldspace is not { } worldspace)
@@ -458,8 +456,10 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
                 [RecordTypeDispatch.BlockNumberYMember] = y ?? 0,
             });
 
+    private DocumentChange LevelDocument(string fullPath, string text) => new(Path.GetRelativePath(_modFolder, fullPath), text);
+
     // Block = ID mod 10 and sub-block = ID / 10 mod 10: the formula of Mutagen's AddInteriorCell.
-    private (IReadOnlyList<(string Path, string Text)> Levels, List<string> BlockPath) InteriorCellBlocksIn(
+    private (IReadOnlyList<DocumentChange> Levels, List<string> BlockPath) InteriorCellBlocksIn(
         string groupDirectory, uint formId)
     {
         var levels = RecordTypeDispatch.For(_release).InteriorCellBlockLevels;
@@ -474,9 +474,9 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         // The group's own level has no blank document to ask the codec for: its class has a generated
         // serializer and no deserializer. The compile round-trip gate needs the file, so the empty
         // document stands in.
-        var documents = new List<(string Path, string Text)>();
+        var documents = new List<DocumentChange>();
         var groupDocument = Path.Combine(groupDirectory, GroupRecordDataFileName);
-        if (!File.Exists(groupDocument)) documents.Add((groupDocument, EmptyLevelDocument));
+        if (!File.Exists(groupDocument)) documents.Add(LevelDocument(groupDocument, EmptyLevelDocument));
 
         int[] numbers = [(int)(formId % 10), (int)(formId / 10 % 10)];
         var path = new List<string>();
@@ -487,7 +487,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
             path.Add(Path.GetFileName(parent));
             if (Directory.Exists(parent)) continue;
 
-            documents.Add((Path.Combine(parent, GroupRecordDataFileName), RecordTextCodec.BlankDocument(
+            documents.Add(LevelDocument(Path.Combine(parent, GroupRecordDataFileName), RecordTextCodec.BlankDocument(
                 levels[level], _release,
                 new JsonObject
                 {
