@@ -42,7 +42,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     reply: vi.fn(),
     titleFromRead: vi.fn(),
     plugin: { name: 'A.esp', origin: 'ModA' },
-    unsavedText: () => undefined,
+    documentText: () => Promise.resolve(undefined),
     readAnswered: vi.fn(),
     conflictsComputed: () => true,
     loadFailures: () => [],

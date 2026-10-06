@@ -130,7 +130,7 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     panel.onDidDispose(() => this.documentOf.delete(panel));
     if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
       const { formKey, plugin } = copyOf(document.uri);
-      showRecord(this.deps, panel, formKey, columns, { titleFromRead: () => undefined, plugin, unsavedText: () => undefined });
+      showRecord(this.deps, panel, formKey, columns, { titleFromRead: () => undefined, plugin, documentText: () => Promise.resolve(undefined) });
       return;
     }
     if (document.uri.scheme === CHILD_RECORD_SCHEME) {
@@ -163,15 +163,23 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     for (const read of this.unread.values()) void read();
   }
 
-  // The file's column follows its unsaved text, a child's its container's (editor.md, States, story 5).
-  // Saved, it reads mEdit's copy: VS Code misses a write to a file outside the workspace while the
-  // file's tab is hidden.
+  // The file's column follows its document, a child's its container's (editor.md, States, story 5),
+  // so it shows whatever its plugin's state: mEdit's own comparison holds the active plugins' copies
+  // alone. Saved, the text is the file's on disk, as VS Code misses a write to a file outside the
+  // workspace while its tab is hidden; a file gone from disk is mEdit's to answer for.
   private showFile(
     panel: vscode.WebviewPanel, document: vscode.TextDocument, { formKey, plugin }: RecordCopy, columns: readonly RecordCopy[],
     titleFromRead: TabDocument['titleFromRead'],
   ): void {
-    const unsavedText = () => (document.isDirty ? document.getText() : undefined);
-    showRecord(this.deps, panel, formKey, columns, { titleFromRead, plugin, unsavedText });
+    const documentText = async (): Promise<string | undefined> => {
+      if (document.isDirty) return document.getText();
+      try {
+        return new TextDecoder().decode(await vscode.workspace.fs.readFile(document.uri));
+      } catch {
+        return undefined;
+      }
+    };
+    showRecord(this.deps, panel, formKey, columns, { titleFromRead, plugin, documentText });
     const following = vscode.workspace.onDidChangeTextDocument((change) => {
       if (change.document === document && change.contentChanges.length > 0) this.deps.editsInFlight.refresh(panel);
     });

@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   editorProviderDisposals: 0,
   treeViews: [] as FakeTreeView[],
   documentChanges: new Set<(event: { document: unknown; contentChanges: unknown[] }) => void>(),
+  disk: new Map<string, string>(),
 }));
 
 vi.mock('vscode', () => ({
@@ -44,6 +45,12 @@ vi.mock('vscode', () => ({
     registerFileSystemProvider: () => ({ dispose: () => undefined }),
     registerTextDocumentContentProvider: () => ({ dispose: () => undefined }),
     textDocuments: [],
+    fs: {
+      readFile: ({ fsPath, path }: { fsPath?: string; path?: string }) => {
+        const text = h.disk.get(fsPath ?? path ?? '');
+        return text === undefined ? Promise.reject(new Error('no such file')) : Promise.resolve(new TextEncoder().encode(text));
+      },
+    },
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
     onDidChangeTextDocument: (listener: (event: { document: unknown; contentChanges: unknown[] }) => void) => {
       h.documentChanges.add(listener);
@@ -167,6 +174,7 @@ function makeEditor(client = new InMemoryMEditClient(), viewSelections = new Map
 }
 
 beforeEach(() => {
+  h.disk.clear();
   h.commands.clear();
   h.contextKeys.clear();
   h.executed.length = 0;
@@ -445,7 +453,13 @@ describe('a record file\'s tab', () => {
         .toEqual([[[{ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Typed" }' }, column]]]);
     });
 
-    it('reads the file\'s column from mEdit once the document is saved, as mEdit reads the file VS Code may not have', async () => {
+    it('reads the file\'s column from the file on disk once the document is saved, which VS Code may not have read, whatever its plugin\'s state', async () => {
+      h.disk.set(FILE, '{ "EditorID": "OnDisk" }');
+      expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false)))
+        .toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }' }]]);
+    });
+
+    it('reads the file\'s column from mEdit once the saved document is gone from disk', async () => {
       expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false))).toEqual([[GUN, undefined]]);
     });
 
@@ -555,8 +569,10 @@ describe('a child record\'s tab', () => {
       .toEqual([[PLACED, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Cell" }' }]]);
   });
 
-  it('reads the child\'s column from mEdit once its container is saved', async () => {
-    expect(await readOf({ isDirty: false, getText: () => '{ "EditorID": "Cell" }' })).toEqual([[PLACED, undefined]]);
+  it('reads the child\'s column from its container\'s file on disk once it is saved', async () => {
+    h.disk.set(CHILD.path, '{ "EditorID": "OnDisk" }');
+    expect(await readOf({ isDirty: false, getText: () => '{ "EditorID": "Cell" }' }))
+      .toEqual([[PLACED, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }' }]]);
   });
 
   it('reads again when its container\'s text changes, and not when another document\'s does', async () => {

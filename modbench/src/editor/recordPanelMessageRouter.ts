@@ -30,10 +30,10 @@ export interface RouteRecordPanelMessageDeps {
   reply: (msg: ExtensionToWebview) => void;
   // Titles the panel from the record its read answered (editor.md, Opening, story 5).
   titleFromRead: TitleFromRead;
-  // The plugin whose copy the tab's document holds, and the document's unsaved text, which that
-  // copy's column reads from.
+  // The plugin whose copy the tab's document holds, and the document's text, which that copy's
+  // column reads from; undefined reads mEdit's copy.
   plugin: PluginAddress;
-  unsavedText: () => string | undefined;
+  documentText: () => Promise<string | undefined>;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
   readAnswered: (formKey: string, columns: readonly string[]) => void;
   // The latest load-order status, read rather than fetched.
@@ -45,7 +45,7 @@ export interface RouteRecordPanelMessageDeps {
 export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'readAnswered'>;
 
 /** What a tab's document gives the reads of its panel. */
-export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'unsavedText'>;
+export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'documentText'>;
 
 /** The router's bundle for one panel's messages: the picker and the record load both reply to it.
  *  An answer can land after the panel closed, and then touches nothing of it. */
@@ -153,7 +153,7 @@ async function answerRecordLoad(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD }>,
 ): Promise<void> {
-  const documentText = deps.unsavedText();
+  const documentText = await deps.documentText();
   const [compare, plugins] = await Promise.allSettled([
     m.columns.length > 0
       ? deps.meditClient.getRecordsComparison([{ formKey: m.formKey, plugin: deps.plugin, documentText }, ...m.columns])

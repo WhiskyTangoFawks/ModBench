@@ -516,7 +516,7 @@ describe('a tracked copy of a record', () => {
   const trackedCopy = { formKey: TRACKED_FORM_KEY, plugin: { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN } };
   const fileTabs = () => openTabs().filter((t) =>
     t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath === TRACKED_FS_PATH && t.input.viewType === 'modbench.record');
-  const reads = () => requestLog.filter((line) => line === `GET /records/${encodeURIComponent(TRACKED_FORM_KEY)}/compare`).length;
+  const reads = () => requestLog.filter((line) => line === `POST /records/${encodeURIComponent(TRACKED_FORM_KEY)}/compare`).length;
 
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
@@ -531,6 +531,12 @@ describe('a tracked copy of a record', () => {
 
     assert.strictEqual(tab?.label, 'TrackedGun.json');
     assert.deepStrictEqual(fileTabs().map((t) => t.label), ['TrackedGun.json']);
+  });
+
+  it('reads its own column from the file on disk while it is saved, so it shows whatever its plugin\'s state', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', trackedCopy);
+
+    await waitFor('a read of the saved text', () => comparedTexts.includes(fs.readFileSync(TRACKED_FILE, 'utf8')));
   });
 
   it('reads its own column from the file\'s unsaved text', async () => {
@@ -579,7 +585,9 @@ describe('a tracked copy of a record', () => {
   it('shows the file already open in a tab, which reads beside its own the records opened with it, and none once its record is opened alone', async () => {
     await vscode.commands.executeCommand('modbench.record.open', trackedCopy);
     await waitFor('the file\'s tab', () => fileTabs().length > 0);
-    const copies = [trackedCopy, { formKey: 'Fallout4.esm:000070', plugin: { name: 'Fallout4.esm', origin: 'Data' } }];
+    const copies = [
+      { ...trackedCopy, documentText: fs.readFileSync(TRACKED_FILE, 'utf8') }, { formKey: 'Fallout4.esm:000070', plugin: { name: 'Fallout4.esm', origin: 'Data' } },
+    ];
 
     await vscode.commands.executeCommand('modbench.record.open', [trackedCopy, { formKey: 'Fallout4.esm:000070' }]);
     await waitFor('the records read side by side', () => comparedSideBySide.some((asked) => JSON.stringify(asked) === JSON.stringify(copies)));
