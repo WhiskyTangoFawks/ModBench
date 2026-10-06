@@ -133,10 +133,11 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
     {
         var existingDocument = DocumentOf(destination, existing);
 
+        var elsewhere = FindHeldElsewhere(destination, sourceBody, sourceRecordType, existingDocument, release);
         var withChildren = ContainerDocumentEdits.WithChildRecordsMerged(
-            codec, existingDocument.Body, existing.RecordType, sourceBody, sourceRecordType, release);
+            codec, existingDocument.Body, existing.RecordType, sourceBody, sourceRecordType, release, elsewhere.Carried);
 
-        RemoveChildrenHeldElsewhere(destination, sourceBody, sourceRecordType, existingDocument, release);
+        RemoveHeldElsewhere(destination, elsewhere);
         destination.Repository.Put(
             destination.Plugin, new SourceDocument(existing.FormKey, existing.RecordType, existing.EditorId, withChildren));
 
@@ -245,7 +246,7 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
 
         var overwritten = ContainerDocumentEdits.WithRecordOverwritten(
             codec, existingDocument.Body, existing.RecordType, sourceCell.Body, sourceCell.RecordType, release);
-        RemoveChildrenHeldElsewhere(destination, sourceCell.Body, sourceCell.RecordType, existingDocument, release);
+        RemoveHeldElsewhere(destination, FindHeldElsewhere(destination, sourceCell.Body, sourceCell.RecordType, existingDocument, release));
         destination.Repository.Put(
             destination.Plugin, new SourceDocument(sourceCell.FormKey, existing.RecordType, overwritten.EditorId, overwritten.Text));
     }
@@ -253,23 +254,43 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
     private static SourceDocument DocumentOf(Destination destination, RecordIdentity existing) =>
         destination.Repository.Get(destination.Plugin, existing) ?? throw NoDocumentCarries(destination.Plugin, existing.FormKey);
 
-    /// <summary>A child record the destination holds in another document leaves it, and the copy lands
-    /// it where the source has it. A record with children of its own stays.</summary>
-    internal void RemoveChildrenHeldElsewhere(
+    /// <summary>The child records the destination holds in another document leave it, and the copy
+    /// lands each where the source has it. <c>Carried</c> is the text of those with children.</summary>
+    internal sealed record HeldElsewhere(
+        IReadOnlyList<RecordIdentity> Records, IReadOnlyList<(string Text, string? RecordType)> Carried);
+
+    internal HeldElsewhere FindHeldElsewhere(
         Destination destination, string sourceBody, string sourceRecordType, SourceDocument? destinationUnit, GameRelease release)
     {
         var used = destination.Repository.FormKeysUsed(destination.Plugin);
-        var held = ContainerDocumentEdits.ChildFormKeys(codec, sourceBody, release, sourceRecordType).Where(used.Contains).ToList();
-        if (held.Count == 0) return;
-
         var inUnit = destinationUnit is null
             ? new HashSet<string>()
             : ContainerDocumentEdits.ChildFormKeys(codec, destinationUnit.Body, release, destinationUnit.RecordType).ToHashSet();
-        foreach (var key in held.Where(key => !inUnit.Contains(key)))
+        var schemas = schemaReflector.GetSchemas(release);
+        var records = new List<RecordIdentity>();
+        var carried = new List<(string Text, string? RecordType)>();
+        foreach (var key in ContainerDocumentEdits.ChildFormKeys(codec, sourceBody, release, sourceRecordType).Where(used.Contains))
         {
-            if (Identity(destination, key, release) is { } elsewhere && !ContainerChildFields.HasChildFields(elsewhere.RecordType, release))
-                destination.Repository.Remove(destination.Plugin, elsewhere);
+            if (inUnit.Contains(key) || Identity(destination, key, release) is not { } elsewhere) continue;
+            if (!ContainerChildFields.HasChildFields(elsewhere.RecordType, release)) records.Add(elsewhere);
+            else if (destination.Repository.ContainerOf(destination.Plugin, elsewhere, schemas) is not null)
+            {
+                records.Add(elsewhere);
+                carried.Add((DocumentOf(destination, elsewhere).Body, elsewhere.RecordType));
+            }
         }
+        return new HeldElsewhere(records, carried);
+    }
+
+    /// <summary><paramref name="body"/> with the records held elsewhere overwritten by its own.</summary>
+    internal string CarryingHeldElsewhere(HeldElsewhere elsewhere, string body, string recordType, GameRelease release) =>
+        elsewhere.Carried.Count == 0
+            ? body
+            : ContainerDocumentEdits.WithChildRecordsMerged(codec, body, recordType, body, recordType, release, elsewhere.Carried);
+
+    internal static void RemoveHeldElsewhere(Destination destination, HeldElsewhere elsewhere)
+    {
+        foreach (var record in elsewhere.Records) destination.Repository.Remove(destination.Plugin, record);
     }
 
     private static JsonNode RequireParsed(string text) =>

@@ -54,16 +54,21 @@ public static class ContainerDocumentEdits
         [.. DescendantsOf(codec.Deserialize(text, release, recordType)).Select(child => child.FormKey.ToString())];
 
     /// <summary>The destination's own fields, each source child record overwriting the one held anywhere
-    /// in its subtree, or added. Throws <see cref="ChildSlotHeldByAnotherRecordException"/> when a
-    /// single-valued slot holds another record.</summary>
+    /// in its subtree or in <paramref name="carriedTexts"/>, or added. Throws
+    /// <see cref="ChildSlotHeldByAnotherRecordException"/> when a single-valued slot holds another
+    /// record.</summary>
     public static string WithChildRecordsMerged(
         RecordTextCodec codec, string destinationText, string? destinationRecordType,
-        string sourceText, string? sourceRecordType, GameRelease release)
+        string sourceText, string? sourceRecordType, GameRelease release,
+        IReadOnlyList<(string Text, string? RecordType)>? carriedTexts = null)
     {
         var source = codec.Deserialize(sourceText, release, sourceRecordType);
         var destination = codec.Deserialize(destinationText, release, destinationRecordType);
+        var carried = (carriedTexts ?? [])
+            .Select(carriedText => (IMajorRecordGetter)codec.Deserialize(carriedText.Text, release, carriedText.RecordType))
+            .ToDictionary(record => record.FormKey);
         ContainerChildFields.MergeChildren(
-            destination, destination, [.. ContainerChildFields.EnumerateChildren(source).Select(c => (c.SlotName, c.Child))]);
+            destination, destination, [.. ContainerChildFields.EnumerateChildren(source).Select(c => (c.SlotName, c.Child))], carried);
         return codec.SerializeToText(destination, release);
     }
 

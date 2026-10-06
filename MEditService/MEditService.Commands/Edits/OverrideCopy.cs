@@ -141,7 +141,8 @@ internal sealed class OverrideCopy
                 if (held.Contains(cell)) _recordCopy.OverwriteHeldCell(document, destination, release);
                 else
                 {
-                    _recordCopy.RemoveChildrenHeldElsewhere(destination, document.Body, document.RecordType, null, release);
+                    RecordCopy.RemoveHeldElsewhere(
+                        destination, _recordCopy.FindHeldElsewhere(destination, document.Body, document.RecordType, null, release));
                     _recordCopy.PutExteriorCell(identity.FormKey, document, document.Body, destination, release);
                 }
                 landed.Add(cell);
@@ -185,7 +186,12 @@ internal sealed class OverrideCopy
             return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
         }
 
-        if (withChildren) _recordCopy.RemoveChildrenHeldElsewhere(destination, body, identity.RecordType, null, release);
+        if (withChildren)
+        {
+            var elsewhere = _recordCopy.FindHeldElsewhere(destination, body, identity.RecordType, null, release);
+            body = _recordCopy.CarryingHeldElsewhere(elsewhere, body, identity.RecordType, release);
+            RecordCopy.RemoveHeldElsewhere(destination, elsewhere);
+        }
 
         var isCell = RecordTypeDispatch.For(release).IsCell(identity.RecordType);
         if (isCell && source.WorldspaceOf(identity) is { } worldspace)

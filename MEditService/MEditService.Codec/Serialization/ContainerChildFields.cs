@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Serialization;
@@ -125,10 +126,11 @@ public static class ContainerChildFields
     }
 
     /// <summary>Each incoming child overwrites the one <paramref name="root"/> holds under its FormKey
-    /// anywhere in its subtree, landing in <paramref name="target"/>'s slot; with none held it is
-    /// added. What only the root holds stays.</summary>
+    /// anywhere in its subtree or in <paramref name="carried"/>, landing in <paramref name="target"/>'s
+    /// slot; with none held it is added. What only the held one holds stays.</summary>
     internal static void MergeChildren(
-        IMajorRecordGetter root, IMajorRecordGetter target, IReadOnlyList<(string SlotName, IMajorRecordGetter Child)> incoming)
+        IMajorRecordGetter root, IMajorRecordGetter target, IReadOnlyList<(string SlotName, IMajorRecordGetter Child)> incoming,
+        IReadOnlyDictionary<FormKey, IMajorRecordGetter> carried)
     {
         foreach (var (slotName, source) in incoming)
         {
@@ -138,6 +140,7 @@ public static class ContainerChildFields
 
             if (FindEmbeddedChild(root, child.FormKey.ToString()) is not { } held)
             {
+                if (carried.TryGetValue(child.FormKey, out var carriedHeld)) TransplantChildSlots(carriedHeld, child);
                 AddChildToSlot(target, slotName, child);
             }
             else
@@ -150,7 +153,7 @@ public static class ContainerChildFields
                     AddChildToSlot(target, slotName, child);
                 }
             }
-            MergeChildren(root, child, childrenToMerge);
+            MergeChildren(root, child, childrenToMerge, carried);
         }
     }
 
@@ -161,7 +164,7 @@ public static class ContainerChildFields
         var incomingChildren = EnumerateChildren(incoming).Select(c => (c.SlotName, c.Child)).ToList();
         ClearAllChildSlots(incoming);
         TransplantChildSlots(held, incoming);
-        MergeChildren(incoming, incoming, incomingChildren);
+        MergeChildren(incoming, incoming, incomingChildren, new Dictionary<FormKey, IMajorRecordGetter>());
         return (IMajorRecord)incoming;
     }
 
