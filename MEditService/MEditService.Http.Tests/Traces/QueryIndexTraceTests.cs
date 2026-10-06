@@ -27,9 +27,9 @@ public sealed class QueryIndexTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task AQuestionAboutLightPluginsSupported_BeforeAnyLoadOrder_IsRefusedAsUnavailable()
+    public async Task AQuestionAboutCreatablePluginExtensions_BeforeAnyLoadOrder_IsRefusedAsUnavailable()
     {
-        var response = await Client.GetAsync(new Uri("/plugins/light-plugins-supported", UriKind.Relative));
+        var response = await Client.GetAsync(new Uri("/plugins/creatable-extensions", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }

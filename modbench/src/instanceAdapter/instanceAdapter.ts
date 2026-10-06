@@ -6,7 +6,7 @@ import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
-export { isPluginFile } from './pluginFile';
+export { fileExtension, isPluginFile } from './pluginFile';
 export { fileInFolder, isPluginSourcePath } from './layout';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
