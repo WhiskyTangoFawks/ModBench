@@ -12,6 +12,7 @@ const importsOf = (source: string): string[] => importSpecifiers(source, 'source
 const CLIENT_DIR = 'client';
 const PLUGINS_VIEW_DIR = 'plugins';
 const EDITOR_DIR = 'editor';
+const SOURCE_LANGUAGE_DIR = 'sourceLanguage';
 const GENERATED_DIR = 'generated';
 const WIRE_DIR = 'wire';
 
@@ -26,6 +27,7 @@ function isExcluded(relativePath: string): boolean {
   if (segments[0] === PLUGINS_VIEW_DIR) return true;
   if (segments[0] === CLIENT_DIR) return true;
   if (segments[0] === EDITOR_DIR) return true;
+  if (segments[0] === SOURCE_LANGUAGE_DIR) return true;
   if (COMPOSITION_ROOT.includes(relativePath)) return true;
   if (isTestSupport(relativePath)) return true;
   return false;

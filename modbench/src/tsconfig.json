@@ -24,7 +24,8 @@
     { "path": "./mods" },
     { "path": "./downloads" },
     { "path": "./plugins" },
-    { "path": "./editor" }
+    { "path": "./editor" },
+    { "path": "./sourceLanguage" }
   ],
   "include": ["*.ts"],
   "exclude": ["**/*.test.ts"]
