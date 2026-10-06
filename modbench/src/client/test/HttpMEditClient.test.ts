@@ -1005,11 +1005,14 @@ describe('HttpMEditClient — the problems in each tracked plugin\'s source', ()
       plugin: { name: 'Refers.esp', origin: 'ReferringMod' },
       problems: [{ formKey: '000800:Refers.esp', sourceRelativePath: 'Refers.esp/Npcs/Npc.json', message: 'Race: 000ABC:Absent.esp is held by no active plugin' }],
     }];
-    const request = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, answer)));
-    const client = makeClient(request);
+    let asked: Request | undefined;
+    const client = makeClient(vi.fn((req: Request) => {
+      asked = req;
+      return Promise.resolve(jsonResponse(200, answer));
+    }));
 
     await expect(client.getPluginProblems()).resolves.toEqual(answer);
-    expect(new URL(request.mock.calls[0][0].url).pathname).toBe('/plugins/problems');
+    expect(new URL(asked?.url ?? '').pathname).toBe('/plugins/problems');
   });
 
   it('rejects a response with no body, so no plugin reads as clean on no answer', async () => {
