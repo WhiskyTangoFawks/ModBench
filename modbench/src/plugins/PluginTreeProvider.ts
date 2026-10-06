@@ -52,13 +52,14 @@ const NOT_EDITABLE: PluginConditions = { tracked: false, editable: false };
 
 // The contextValues state, on the row, refusals the backend would otherwise reach only after
 // walking the whole gesture (plugins.md, Menus and keys, story 4).
-function conditionedContextValue(kind: string, conditions: PluginConditions): string {
-  return `${kind} ${conditions.tracked ? 'tracked' : 'untracked'}${conditions.editable ? ' editable' : ''}`;
+function conditionedContextValue(kind: string, conditions: PluginConditions, isContainer = false): string {
+  return `${kind} ${conditions.tracked ? 'tracked' : 'untracked'}${conditions.editable ? ' editable' : ''}${isContainer ? ' container' : ''}`;
 }
 
 export class RecordTypeNode extends vscode.TreeItem {
   readonly kind = 'recordType' as const;
   readonly recordType: string;
+  readonly isContainer: boolean;
   constructor(
     public readonly plugin: string,
     group: PluginRecordTypeCount,
@@ -70,6 +71,7 @@ export class RecordTypeNode extends vscode.TreeItem {
     // 4-char signature, e.g. "acti") stays the internal id — cache key, contextValue, commands.
     super(group.displayName, collapsibleWhen(group.count > 0));
     this.recordType = group.type;
+    this.isContainer = group.isContainer;
     this.description = group.count.toLocaleString();
     this.contextValue = conditionedContextValue('recordType', conditions) + (group.isCreatable ? ' creatable' : '');
     if (group.hasParseFailure) markFailure(this, failureNote(group.displayName, null));
@@ -84,18 +86,13 @@ export class RecordNode extends vscode.TreeItem {
     public readonly record: RecordSummary,
     public readonly origin: string,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
-    // Set for a Quest or Dialog Topic — this same row type expands into their children, so a
-    // container's own row stays a fully-affordanced record row.
-    public readonly containerChildType?: 'qust' | 'dial',
-    // A qust/dial row shows an expand chevron only when this is true — a Quest with zero
-    // children is a leaf. From the same bulk listing `record` came from, never a per-row
-    // follow-up call.
+    public readonly isContainer = false,
+    // From the same bulk listing `record` came from, never a per-row follow-up call.
     public readonly hasContainerChildren = false,
   ) {
     const label = record.editorId ?? record.formKey;
-    const collapsible = containerChildType && hasContainerChildren;
-    super(label, collapsible ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
-    this.contextValue = conditionedContextValue('record', conditions);
+    super(label, collapsibleWhen(isContainer && hasContainerChildren));
+    this.contextValue = conditionedContextValue('record', conditions, isContainer);
     this.command = {
       command: 'modbench.record.open',
       title: 'Open Record',
@@ -124,7 +121,7 @@ export class WorldspaceNode extends vscode.TreeItem {
     super(label, collapsibleWhen(worldspace.hasChildren));
     this.formKey = worldspace.formKey;
     this.editorId = worldspace.editorId ?? undefined;
-    this.contextValue = conditionedContextValue('worldspace', conditions);
+    this.contextValue = conditionedContextValue('worldspace', conditions, true);
     this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: worldspace.formKey }] };
     describeRecordRow(this, worldspace);
   }
@@ -193,7 +190,7 @@ export class CellNode extends vscode.TreeItem {
     super(label, collapsibleWhen(cell.hasChildren));
     this.formKey = cell.formKey;
     this.editorId = cell.editorId ?? undefined;
-    this.contextValue = conditionedContextValue('cell', conditions);
+    this.contextValue = conditionedContextValue('cell', conditions, true);
     this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: cell.formKey }] };
     describeRecordRow(this, cell);
   }
@@ -256,12 +253,8 @@ export type PluginTreeNode =
   | ChildRecordGroupNode | ChildRecordNode | InteriorBlockNode | InteriorSubBlockNode
   | ErrorNode | IndexingNode;
 
-// Which raw record-type signature gets RecordNode's own containerChildType flag (Collapsed,
-// expands via fetchContainerChildren) — a Quest's dialog topics/branches/scenes, a Dialog Topic's
-// responses. Deliberately narrow: every other record type's RecordNode stays a plain leaf.
-function containerChildTypeOf(recordType: string): 'qust' | 'dial' | undefined {
-  return recordType === 'qust' || recordType === 'dial' ? recordType : undefined;
-}
+export const CELL_RECORD_TYPE = 'cell';
+const WORLDSPACE_RECORD_TYPE = 'wrld';
 
 type RecordPage = { items: RecordSummary[]; total: number };
 type PageCache = Map<string, RecordPage>;
@@ -327,9 +320,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     // vscode.TreeDataProvider<T>'s own optional-parameter contract.
     if (!element) return [];
     if (element instanceof RecordTypeNode) return this.fetchGroup(element);
-    // A Quest/DialogTopic row expanding into its own container children — not spatial, so
-    // dispatched here rather than folded into getSpatialChildren below.
-    if (element instanceof RecordNode && element.containerChildType) return this.fetchContainerChildren(element);
+    if (element instanceof RecordNode && element.isContainer) return this.fetchContainerChildren(element);
     return this.getSpatialChildren(element);
   }
 
@@ -399,8 +390,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   private fetchGroup(node: RecordTypeNode): Promise<PluginTreeNode[]> {
-    if (node.recordType === 'wrld') return this.fetchWorldspaces(node);
-    if (node.recordType === 'cell') return this.fetchInteriorCells(node);
+    if (node.recordType === WORLDSPACE_RECORD_TYPE) return this.fetchWorldspaces(node);
+    if (node.recordType === CELL_RECORD_TYPE) return this.fetchInteriorCells(node);
     return this.fetchRecords(node);
   }
 
@@ -432,14 +423,12 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     });
   }
 
-  // A returned "dial" child is itself expandable to its Responses; every other type is a leaf.
   private fetchContainerChildren(node: RecordNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchContainerChildren(${node.record.formKey})`, async () => {
       const cacheKey = `${pluginAddressKey({ name: node.record.plugin, origin: node.origin })}::${node.record.formKey}`;
       const children = await this.getOrLoad(this.containerChildCache, cacheKey,
         () => this.repository.getContainerChildren({ name: node.record.plugin, origin: node.origin }, node.record.formKey));
-      return children.map(c => new RecordNode(
-        c, node.origin, node.conditions, containerChildTypeOf(c.recordType), c.hasContainerChildren));
+      return children.map(c => new RecordNode(c, node.origin, node.conditions, c.isContainer, c.hasContainerChildren));
     });
   }
 
@@ -462,11 +451,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       const cached = await this.getOrLoad(this.pageCache, key,
         () => this.repository.getRecords(pluginAddressOf(node), node.recordType, 0, UNLIMITED_RECORDS));
       const read = !wasCached && this.pageCache.get(key) === cached;
-      // qust/dial rows are collapsible here too — a Quest reached from its flat record-type
-      // listing still expands into its container children, the same mechanism
-      // fetchContainerChildren uses.
-      const rows = cached.items.map(r => new RecordNode(
-        r, node.origin, node.conditions, containerChildTypeOf(node.recordType), r.hasContainerChildren));
+      const rows = cached.items.map(r => new RecordNode(r, node.origin, node.conditions, node.isContainer, r.hasContainerChildren));
       if (read) this._onDidReadRecords.fire(rows.map((row) => recordResourceUri({ name: row.record.plugin, origin: node.origin }, row.record.formKey)));
       return rows;
     });

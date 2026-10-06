@@ -260,7 +260,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     facts: { trackedMods: () => instance.value.trackedMods, modDirs: () => instance.value.paths.modDirs, refresh: () => instance.refresh() },
     plugins: {
       selection: pluginsSelection, progress: plugins.progress,
-      recordRow: (group, formKey) => pluginsTree.recordRow(group, formKey),
+      recordRow: (place, formKey) => pluginsTree.recordRow(place, formKey),
       reveal: (row, options) => pluginListView.reveal(row, options),
       refreshFacts: () => pluginsTree.refreshFacts(),
       showRecordFilter: (filter) => plugins.showRecordFilter(filter),
@@ -426,7 +426,7 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       client, reporter: makeReporter(outputChannel, 'record.create'),
       write: deps.recordWrite,
       createdRecords: createdRecordSelection({
-        client, reporter: makeReporter(outputChannel, 'record.create'),
+        client,
         rowOf: deps.plugins.recordRow,
         view: { reveal: deps.plugins.reveal },
       }),

@@ -77,8 +77,7 @@ internal sealed class DuckDbRecordIndex : IDisposable
         var schemas = _store.Schemas;
 
         // One transaction for the whole reindex so a throw partway leaves the read model intact
-        // rather than a partial snapshot. DuckDB appenders enroll in the active transaction, so
-        // deletes and appender flushes roll back together on Dispose-without-Commit.
+        // rather than a partial snapshot.
         using var tx = Connection.BeginTransaction();
 
         // The `registrations` row lands in the same transaction as the rows, which answer nothing
@@ -88,13 +87,7 @@ internal sealed class DuckDbRecordIndex : IDisposable
         // with them rather than beside them.
         _store.StampPluginFacts(plugin, origin, filePath, derivedFrom);
 
-        // Must run before the appender is created.
-        _pluginIngest.DeletePriorDocuments(plugin, origin);
-
-        // The appender's `using` stays here so its disposal keeps the required ordering relative to
-        // tx.Commit() below: tx declared first, appender second, both disposed LIFO after the commit.
-        using var documentAppender = Connection.CreateAppender("mirror", "records");
-        var timing = _pluginIngest.IndexPlugin(documents, plugin, origin, schemas, documentAppender);
+        var timing = _pluginIngest.IndexPlugin(documents, plugin, origin, schemas);
         _store.BumpSequence();
 
         var commitTimer = Stopwatch.StartNew();
