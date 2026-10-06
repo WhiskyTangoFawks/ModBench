@@ -25,7 +25,8 @@
     { "path": "./src/mods" },
     { "path": "./src/downloads" },
     { "path": "./src/plugins" },
-    { "path": "./src/editor" }
+    { "path": "./src/editor" },
+    { "path": "./src/sourceLanguage" }
   ],
   "include": ["src/**/*.test.ts", "src/**/test/**/*.ts"],
   "exclude": ["src/test/integration"]

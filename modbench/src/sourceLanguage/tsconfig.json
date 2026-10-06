@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/sourceLanguage",
+    // A driving adapter registers its providers with VS Code's own language API.
+    "types": ["node", "vscode"]
+  },
+  "references": [
+    { "path": "../client" },
+    { "path": "../instanceAdapter" },
+    { "path": "../instanceLoader" },
+    { "path": "../wire" }
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}
