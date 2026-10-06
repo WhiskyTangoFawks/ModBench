@@ -82,7 +82,6 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
   Oblivion: { gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'], scriptExtenderFolder: 'obse', pluginCompanions: NO_STRINGS_COMPANIONS },
 };
 
-/** Mutagen's release names the table holds a row for. */
 export const GAME_RELEASES: readonly string[] = Object.keys(GAME_PATHS);
 
 /** Every script-extender folder name, lowercased. */
