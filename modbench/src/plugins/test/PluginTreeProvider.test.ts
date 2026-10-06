@@ -242,14 +242,14 @@ describe('RecordTypeNode', () => {
 });
 
 describe('RecordNode', () => {
-  it('wires .command to modbench.record.open with its formKey alone', () => {
+  it('wires .command to modbench.record.open with its own copy: its record\'s plugin in the row\'s origin', () => {
     const record = makeRecord(0);
-    const node = new RecordNode(record, 'Data');
+    const node = new RecordNode(record, 'ModA');
 
     expect(node.command).toEqual({
       command: 'modbench.record.open',
       title: 'Open Record',
-      arguments: [{ formKey: record.formKey }],
+      arguments: [{ formKey: record.formKey, plugin: { name: 'Plugin0.esp', origin: 'ModA' } }],
     });
   });
 
@@ -377,6 +377,10 @@ describe('worldspace, cell and placed rows state their record', () => {
   ])('a %s row', (_kind, node) => {
     expect({ formKey: node.formKey, editorId: node.editorId, plugin: node.plugin, origin: node.origin })
       .toEqual({ formKey: '000801:A.esp', editorId: 'World', plugin: 'A.esp', origin: 'ModA' });
+    expect(node.command).toEqual({
+      command: 'modbench.record.open', title: 'Open Record',
+      arguments: [{ formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } }],
+    });
   });
 
   it('states no EditorID for a record that has none', () => {

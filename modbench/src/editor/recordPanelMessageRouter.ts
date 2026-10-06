@@ -43,13 +43,14 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
   panel: Panel,
   focusedCells: FocusedCells<Panel>,
   editsInFlight: Pick<EditsInFlight<Panel>, 'answered'>,
+  setTitle: (title: string) => void,
 ): RouteRecordPanelMessageDeps {
   return {
     ...shared,
     formKeyPicker: { meditClient: shared.meditClient, reporter: shared.reporter, reply: (m) => { void panel.webview.postMessage(m); } },
     focusCell: (context, userFocus) => { focusedCells.setCell(panel, context, userFocus); },
     reply: (m) => { void panel.webview.postMessage(m); },
-    setTitle: (title) => { panel.title = title; },
+    setTitle,
     readAnswered: (formKey) => { editsInFlight.answered(panel, formKey); },
   };
 }
