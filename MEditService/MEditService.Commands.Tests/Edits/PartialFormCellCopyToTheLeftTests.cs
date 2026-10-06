@@ -29,13 +29,13 @@ public sealed class PartialFormCellCopyToTheLeftTests : IDisposable
 
         var master = new Fallout4Mod(ModKey.FromFileName("Fallout4.esm"), Fallout4Release.Fallout4);
         var masterCell = new Cell(master) { EditorID = "Inside", Flags = Cell.Flag.IsInteriorCell };
-        master.Cells.Records.Add(InteriorBlockHolding(masterCell));
+        master.Cells.Records.Add(CellBlocks.Interior(masterCell));
         var masterPath = Path.Combine(masterFolder, "Fallout4.esm");
         master.WriteToBinary(masterPath);
 
         var copy = new Fallout4Mod(ModKey.FromFileName(_override.Name), Fallout4Release.Fallout4);
         copy.ModHeader.MasterReferences.Add(new MasterReference { Master = master.ModKey });
-        copy.Cells.Records.Add(InteriorBlockHolding(new Cell(masterCell.FormKey, Fallout4Release.Fallout4) { EditorID = "Inside" }));
+        copy.Cells.Records.Add(CellBlocks.Interior(new Cell(masterCell.FormKey, Fallout4Release.Fallout4) { EditorID = "Inside" }));
         var overridePath = Path.Combine(overrideFolder, _override.Name);
         copy.WriteToBinary(overridePath);
         _cell = masterCell.FormKey;
@@ -53,15 +53,6 @@ public sealed class PartialFormCellCopyToTheLeftTests : IDisposable
     }
 
     public void Dispose() => _root.Dispose();
-
-    private static CellBlock InteriorBlockHolding(Cell cell)
-    {
-        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        return block;
-    }
 
     [Fact]
     public void SettingPartialForm_OnACopyThatSaysNotWhereItSits_TakesItsPlaceFromTheCopyToItsLeft()

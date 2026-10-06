@@ -5,11 +5,12 @@ using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda;
 
 namespace MEditService.Commands;
 
-/// <summary>The Create gesture's handler (ADR-0014): mints a bare record (plugins.md, Create record, story 2) and
-/// writes it as a new source file under the next free FormKey of <see cref="FormKeyAllocator"/>.</summary>
+/// <summary>The Create gesture's handler (ADR-0014): mints a bare record (plugins.md, Create record, story 2)
+/// under the next free FormKey, as a new source file or at the end of its container's slot.</summary>
 public sealed class CreateRecordHandler
 {
     private readonly WriteTargets _targets;
@@ -36,22 +37,6 @@ public sealed class CreateRecordHandler
         WriteFailure.Refused(
             () => MintRecord(plugin, recordType, container, position),
             $"Could not write the source file for the new {recordType}", _logger);
-
-    private RecordEditResult? RouteByContainer(PluginAddress plugin, string? container, GridPosition? position)
-    {
-        if (container is null) return position is null ? null : MalformedPosition("names no container");
-
-        if (_targets.ResolveEditTarget(plugin, container, out var target) is { } unresolved) return unresolved;
-        var kind = target.Identity.RecordType;
-        if (position is not null && kind != "wrld") return MalformedPosition($"names {container}, which is not a worldspace");
-
-        return kind switch
-        {
-            "wrld" => NotYetSupported($"a record in the worldspace {container}"),
-            "cell" => NotYetSupported($"a record in the cell {container}"),
-            _ => NotYetSupported($"a child of the container {container}"),
-        };
-    }
 
     private static RecordEditResult MalformedPosition(string why) =>
         RecordEditResult.Refused(RecordEditRefusal.InvalidEnvelope, $"A grid position is for a cell in a worldspace, and the request {why}.");
@@ -81,7 +66,8 @@ public sealed class CreateRecordHandler
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");
         }
-        if (RouteByContainer(plugin, container, position) is { } routed) return routed;
+        if (container is not null) return MintChild(repository, plugin, recordType, schema, release, container, position);
+        if (position is not null) return MalformedPosition("names no container");
         if (!CreatableRecordTypes.Includes(recordType, release))
         {
             return RecordEditResult.Refused(
@@ -104,5 +90,67 @@ public sealed class CreateRecordHandler
                 recordType, targetFormKey, plugin.Name, plugin.Origin);
         }
         return RecordEditResult.Success(targetFormKey);
+    }
+
+    private RecordEditResult MintChild(
+        SourceRepository repository, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
+        string container, GridPosition? position)
+    {
+        if (!_targets.TryResolveEditTarget(plugin, container, out var target, out var containerDocument, out var unresolved))
+            return unresolved;
+        var containerType = target.Identity.RecordType;
+        var isWorldspace = RecordTypeDispatch.For(release).IsWorldspace(containerType);
+        if (position is not null && !isWorldspace) return MalformedPosition($"names {container}, which is not a worldspace");
+        if (isWorldspace) return NotYetSupported($"a record in the worldspace {container}");
+
+        var schemas = _schemaReflector.GetSchemas(release);
+        CellPlace? place;
+        try
+        {
+            place = RecordTypeDispatch.For(release).IsCell(containerType)
+                ? repository.CellStructureOf(plugin, target.Identity)?.Place
+                : null;
+        }
+        catch (UnreadableSourceDocumentException ex)
+        {
+            return WriteTargets.RefuseUnreadable(container, ex.Message);
+        }
+
+        switch (ChildRecordTypes.SlotFor(containerType, containerDocument.Body, place, recordType, schemas, release))
+        {
+            case ChildSlot.Open(var slot):
+                return AppendChild(repository, plugin, recordType, schema, release, containerDocument, slot);
+            case ChildSlot.Filled(var slot, var held):
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.ChildSlotHeldByAnotherRecord,
+                    $"{container} already holds {held} as its {slot}, and holds one at most. Delete it to create another.");
+            case ChildSlot.Several:
+                return NotYetSupported($"a {recordType} in {container}");
+            default:
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.ContainerCannotHoldType, $"{container} cannot hold a new '{recordType}' where it sits.");
+        }
+    }
+
+    private RecordEditResult AppendChild(
+        SourceRepository repository, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
+        SourceDocument container, string slot)
+    {
+        if (FormKeyAllocator.Over(repository, plugin, release).Next(out var formKey) is { } refusedTarget) return refusedTarget;
+        var child = RecordMint.BareDocument(_codec, schema, release, formKey, editorId: null);
+        var withChild = ContainerDocumentEdits.WithChildAppended(
+                _codec, container.Body, release, container.RecordType, container.FormKey, slot, child, recordType)
+            ?? throw new InvalidOperationException($"{container.FormKey} was found, but its own text does not carry it.");
+
+        SourceTransaction.Atomically(repository, transaction =>
+            transaction.Apply(repository, repository.ChangesToRewrite(plugin, container with { Body = withChild })));
+
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — at the end of {Container}'s {Slot}",
+                recordType, formKey, plugin.Name, plugin.Origin, container.FormKey, slot);
+        }
+        return RecordEditResult.Success(formKey);
     }
 }
