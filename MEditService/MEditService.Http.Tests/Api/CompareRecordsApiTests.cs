@@ -105,7 +105,7 @@ public sealed class CompareRecordsApiTests : HostedTests
         Assert.False(string.IsNullOrWhiteSpace(column.GetProperty("parseDiagnosis").GetString()));
     }
 
-    private async Task<(string Cell, string PlacedRef, string CellText)> LoadedACell()
+    private async Task<(string PlacedRef, string CellText)> TrackedACell()
     {
         var fx = Owned(new PluginFixtureBuilder("compare-child")
             .WithPlugin(WithNpc, mod =>
@@ -120,11 +120,14 @@ public sealed class CompareRecordsApiTests : HostedTests
             }, origin: WithNpcMod)
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(WithNpcMod)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
+        await Client.PluginReportsTracked(WithNpc);
         var cell = await Client.FormKeyNamed(WithNpc, WithNpcMod, "cell", "Room");
         var rendered = await Client.GetAsync(new Uri(
             $"/plugins/{WithNpc}/records/{Uri.EscapeDataString(cell)}/rendered-document?origin={WithNpcMod}", UriKind.Relative));
         rendered.EnsureSuccessStatusCode();
-        return (cell, await Client.FormKeyNamed(WithNpc, WithNpcMod, "refr", "PlacedRef"),
+        return (await Client.FormKeyNamed(WithNpc, WithNpcMod, "refr", "PlacedRef"),
             (await rendered.Body()).GetProperty("text").GetString().Require());
     }
 
@@ -140,25 +143,23 @@ public sealed class CompareRecordsApiTests : HostedTests
     [Fact]
     public async Task AChildWithItsContainersText_IsTheChildReadFromIt()
     {
-        var (_, placedRef, cellText) = await LoadedACell();
+        var (placedRef, cellText) = await TrackedACell();
 
         var column = await ColumnReadFrom(placedRef, cellText.Replace("\"PlacedRef\"", "\"EditedRef\"", StringComparison.Ordinal));
 
         Assert.Equal(placedRef, column.GetProperty("formKey").GetString());
         Assert.Equal("EditedRef", column.GetProperty("editorId").GetString());
-        Assert.False(column.TryGetProperty("parseDiagnosis", out var diagnosis) && diagnosis.ValueKind != JsonValueKind.Null);
+        Assert.Null(column.GetProperty("parseDiagnosis").GetString());
     }
 
     [Fact]
     public async Task AChildWithAContainersTextThatDoesNotCarryIt_IsAColumnSayingSo()
     {
-        var (cell, placedRef, cellText) = await LoadedACell();
+        var (placedRef, cellText) = await TrackedACell();
 
         var column = await ColumnReadFrom(placedRef, cellText.Replace(placedRef, "000FFF:WithNpc.esp", StringComparison.Ordinal));
 
-        var diagnosis = column.GetProperty("parseDiagnosis").GetString().Require();
-        Assert.Contains(cell, diagnosis, StringComparison.Ordinal);
-        Assert.Contains(placedRef, diagnosis, StringComparison.Ordinal);
+        Assert.Contains($"does not carry {placedRef}", column.GetProperty("parseDiagnosis").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]

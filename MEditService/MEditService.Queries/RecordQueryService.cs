@@ -1,6 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index;
@@ -9,7 +7,6 @@ using MEditService.Ports;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Queries;
 
@@ -149,47 +146,27 @@ public sealed class RecordQueryService(
         return new CompareResult(overrides, diffs, ConflictAll.NoConflict, RequireSchemas().DisplayNameFor(documents[0].RecordType));
     }
 
-    // The text is the document carrying the record: its own, or the container's an embedded child sits
-    // in, found there as an edit finds it.
+    // The text is the document carrying the record. A plugin's source tree says which document that is, as it
+    // does for an edit; where no tree holds the record, the text is its own.
     private RecordDocument? CopyFromText(
         IRecordReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string text)
     {
-        if (DeclaredFormKey(text) is not { } declared || SameFormKey(declared, formKey))
+        var snapshot = _loadOrder.Require();
+        if (SourceRepository.TrackedModOf(snapshot, plugin) is not { } mod || !SourceRepository.HoldsTreeFor(mod.Folder, plugin.Name))
             return reads.DocumentFromText(formKey, plugin, loadOrderIndex, text);
 
-        if (reads.DocumentFromText(declared, plugin, loadOrderIndex, text) is { } container
-            && new ContainerDocuments(_loadOrder.Require().GameRelease, RequireSchemas())
-                .EmbeddedChild(container.RecordType, Encoding.UTF8.GetBytes(text), formKey) is { } child)
-        {
-            return reads.DocumentFromText(formKey, plugin, loadOrderIndex, child.Node.GetRawText());
-        }
-
-        return reads.DocumentFromText(formKey, plugin, loadOrderIndex, NoFields) is { } unread
-            ? unread with { ParseDiagnosis = $"The text is the document of {declared}, which carries no {formKey}." }
-            : null;
-    }
-
-    private const string NoFields = "{}";
-
-    private static string? DeclaredFormKey(string text)
-    {
         try
         {
-            using var parsed = JsonDocument.Parse(text);
-            return parsed.RootElement.ValueKind == JsonValueKind.Object
-                   && parsed.RootElement.TryGetProperty(RecordMembers.FormKey, out var declared)
-                   && declared.ValueKind == JsonValueKind.String
-                ? declared.GetString()
+            var record = SourceRepository.Over(mod, snapshot.GameRelease).RecordFromText(plugin, formKey, text, RequireSchemas());
+            return reads.DocumentFromText(formKey, plugin, loadOrderIndex, record?.Body ?? text);
+        }
+        catch (Exception refused) when (refused is UnreadableSourceDocumentException or AmbiguousSourceUnitException)
+        {
+            return reads.DocumentFromText(formKey, plugin, loadOrderIndex, CallerText.NoBody) is { } unread
+                ? unread with { ParseDiagnosis = refused.Message }
                 : null;
         }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
-
-    private static bool SameFormKey(string a, string b) =>
-        FormKey.TryFactory(a, out var left) && FormKey.TryFactory(b, out var right) ? left == right : a == b;
 
     private static CompareOverride ToCompareOverride(
         RecordDetail o, ConflictThis? state, string? column, LoadOrderSnapshot snapshot, IRecordReads reads) =>
