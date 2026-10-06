@@ -4,7 +4,7 @@ import {
   type ExtensionToWebview, type WebviewToExtension,
 } from '../wire/messages';
 import type { MEditClient, PluginLoadFailure } from '../client';
-import type { PluginAddress } from '../wire/pluginAddress';
+import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
 import { pickRecord, type RecordPickerDeps } from './recordPicker';
 import type { EditsInFlight, FollowedPanel } from './followRecord';
@@ -33,7 +33,7 @@ export interface RouteRecordPanelMessageDeps {
   // The plugin whose copy the tab's document holds, and the document's text, which that copy's
   // column reads from; undefined reads mEdit's copy.
   plugin: PluginAddress;
-  documentText: () => Promise<string | undefined>;
+  documentText: (pluginActive: boolean) => Promise<string | undefined>;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
   readAnswered: (formKey: string, columns: readonly string[]) => void;
   // The latest load-order status, read rather than fetched.
@@ -148,18 +148,21 @@ async function editField(
   );
 }
 
-// A failed comparison fails the whole load; a failed plugin list degrades to null.
+// A failed comparison fails the whole load; a failed plugin list degrades to null, and reads the
+// tab's plugin as inactive, so its own column shows either way.
 async function answerRecordLoad(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD }>,
 ): Promise<void> {
-  const documentText = await deps.documentText();
-  const [compare, plugins] = await Promise.allSettled([
-    m.columns.length > 0
+  const [plugins] = await Promise.allSettled([deps.meditClient.getPlugins()]);
+  const listed = plugins.status === 'fulfilled' ? plugins.value : null;
+  const pluginActive = listed?.some((p) => p.inLoadOrder && samePluginAddress(p, deps.plugin)) ?? false;
+  const [compare] = await Promise.allSettled([(async () => {
+    const documentText = await deps.documentText(pluginActive);
+    return m.columns.length > 0
       ? deps.meditClient.getRecordsComparison([{ formKey: m.formKey, plugin: deps.plugin, documentText }, ...m.columns])
-      : deps.meditClient.getComparison(m.formKey, documentText === undefined ? undefined : { plugin: deps.plugin, documentText }),
-    deps.meditClient.getPlugins(),
-  ]);
+      : deps.meditClient.getComparison(m.formKey, documentText === undefined ? undefined : { plugin: deps.plugin, documentText });
+  })()]);
   if (compare.status === 'rejected') {
     deps.channel.warn(`Failed to read ${m.formKey}: ${errorMessage(compare.reason)}`);
     deps.reply({
@@ -172,7 +175,7 @@ async function answerRecordLoad(
   deps.readAnswered(m.formKey, m.columns.map(({ formKey }) => formKey));
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
-    compare: compare.value, plugins: plugins.status === 'fulfilled' ? plugins.value : null,
+    compare: compare.value, plugins: listed,
     conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
   });
 }

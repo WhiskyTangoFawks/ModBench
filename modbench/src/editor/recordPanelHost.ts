@@ -25,6 +25,7 @@ import type { AskQuestion } from '../ports/dialog';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
 import { inActiveTabsPlace } from './inTabsPlace';
+import { fileText } from './fileText';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from './childRecordDocument';
 import {
@@ -130,7 +131,8 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     panel.onDidDispose(() => this.documentOf.delete(panel));
     if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
       const { formKey, plugin } = copyOf(document.uri);
-      showRecord(this.deps, panel, formKey, columns, { titleFromRead: () => undefined, plugin, documentText: () => Promise.resolve(undefined) });
+      const documentText = (pluginActive: boolean) => Promise.resolve(pluginActive ? undefined : document.getText());
+      showRecord(this.deps, panel, formKey, columns, { titleFromRead: () => undefined, plugin, documentText });
       return;
     }
     if (document.uri.scheme === CHILD_RECORD_SCHEME) {
@@ -163,13 +165,15 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     for (const read of this.unread.values()) void read();
   }
 
-  // The file's column follows its document, a child's its container's (editor.md, States, story 5),
-  // whatever its plugin's state: mEdit compares only the active plugins' copies of its own.
+  // The file's column follows its document, a child's its container's, until it is saved (editor.md,
+  // States, story 5; commands.md, Principles). Saved, the read model's value wins, but mEdit compares
+  // no copy of an inactive plugin, so the file's own column reads the file then.
   private showFile(
     panel: vscode.WebviewPanel, document: vscode.TextDocument, { formKey, plugin }: RecordCopy, columns: readonly RecordCopy[],
     titleFromRead: TabDocument['titleFromRead'],
   ): void {
-    const documentText = async () => (document.isDirty ? document.getText() : savedText(document.uri));
+    const documentText = async (pluginActive: boolean) =>
+      (document.isDirty ? document.getText() : pluginActive ? undefined : savedText(document.uri));
     showRecord(this.deps, panel, formKey, columns, { titleFromRead, plugin, documentText });
     const following = vscode.workspace.onDidChangeTextDocument((change) => {
       if (change.document === document && change.contentChanges.length > 0) this.deps.editsInFlight.refresh(panel);
@@ -182,9 +186,10 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
 // hidden. A document's text has no byte order mark. A file gone is mEdit's to answer.
 async function savedText(uri: vscode.Uri): Promise<string | undefined> {
   try {
-    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await vscode.workspace.fs.readFile(uri)).replace(/^\uFEFF/, '');
-  } catch {
-    return undefined;
+    return (await fileText(uri)).replace(/^\uFEFF/, '');
+  } catch (err) {
+    if (err instanceof vscode.FileSystemError && err.code === 'FileNotFound') return undefined;
+    throw err;
   }
 }
 

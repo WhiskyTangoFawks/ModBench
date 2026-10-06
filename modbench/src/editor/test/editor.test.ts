@@ -14,11 +14,12 @@ const h = vi.hoisted(() => ({
   editorProviderDisposals: 0,
   treeViews: [] as FakeTreeView[],
   documentChanges: new Set<(event: { document: unknown; contentChanges: unknown[] }) => void>(),
-  disk: new Map<string, string>(),
+  disk: new Map<string, string | Uint8Array>(),
+  FileSystemError: class extends Error { code = ''; },
 }));
 
 vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon,
+  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, FileSystemError: h.FileSystemError,
   Disposable: class {
     constructor(public dispose: () => void) {}
     static from(...parts: { dispose(): void }[]) { return { dispose: () => parts.forEach((part) => part.dispose()) }; }
@@ -47,8 +48,9 @@ vi.mock('vscode', () => ({
     textDocuments: [],
     fs: {
       readFile: ({ fsPath, path }: { fsPath?: string; path?: string }) => {
-        const text = h.disk.get(fsPath ?? path ?? '');
-        return text === undefined ? Promise.reject(new Error('no such file')) : Promise.resolve(new TextEncoder().encode(text));
+        const held = h.disk.get(fsPath ?? path ?? '');
+        if (held === undefined) return Promise.reject(Object.assign(new h.FileSystemError('no such file'), { code: 'FileNotFound' }));
+        return Promise.resolve(typeof held === 'string' ? new TextEncoder().encode(held) : held);
       },
     },
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
@@ -90,6 +92,7 @@ import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { ReferencedByTreeProvider } from '../ReferencedByTreeProvider';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { comparisonOf } from '../../test/comparison';
+import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 const COPY_PLUGIN = { name: 'A.esp', origin: 'ModA' };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -205,6 +208,9 @@ const changeDocument = (change: { document: unknown; contentChanges: unknown[] }
   h.documentChanges.forEach((listener) => { listener(change); });
 };
 
+const activeA = [pluginMetadataFixture({ name: 'A.esp', origin: 'ModA', inLoadOrder: true })];
+const inactiveA = [pluginMetadataFixture({ name: 'A.esp', origin: 'ModA', loadOrderIndex: null, inLoadOrder: false })];
+
 const opened = () => h.executed.filter(([id]) => id === 'vscode.openWith').map(([, uri]) => uri);
 
 describe('Referenced By follows the record tab in focus', () => {
@@ -310,7 +316,7 @@ describe('a record tab whose record an edit of its FormID moved', () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
-    client.setQueryAnswer('getPlugins', []);
+    client.setQueryAnswer('getPlugins', activeA);
     const { open } = makeEditor(client);
     const tab = open(OLD);
     client.setCommandResult('editRecord', { applied: true, newFormKey: MOVED });
@@ -424,8 +430,9 @@ describe('a record file\'s tab', () => {
       client.setQueryAnswer('getRecordOfFile', holding(GUN));
       return client;
     }
-    async function readOf(document: object): Promise<unknown[][]> {
+    async function readOf(document: object, plugins = inactiveA): Promise<unknown[][]> {
       const client = holdingClient();
+      client.setQueryAnswer('getPlugins', plugins);
       const { openFile } = makeEditor(client);
       const tab = await openFile(FILE, document);
       Object.assign(document, { text: '{ "EditorID": "Typed" }' });
@@ -434,9 +441,15 @@ describe('a record file\'s tab', () => {
       return comparisonsAsked(client);
     }
 
-    it('reads the file\'s column from the unsaved text as it is when the read is asked', async () => {
-      expect(await readOf(fileDocument('{ "EditorID": "Gun" }', true)))
-        .toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Typed" }' }]]);
+    it('reads the file\'s column from the unsaved text as it is when the read is asked, its plugin active or not', async () => {
+      const typedCopy = { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Typed" }' };
+      expect(await readOf(fileDocument('{ "EditorID": "Gun" }', true), activeA)).toEqual([[GUN, typedCopy]]);
+      expect(await readOf(fileDocument('{ "EditorID": "Gun" }', true), inactiveA)).toEqual([[GUN, typedCopy]]);
+    });
+
+    it('reads the file\'s column from mEdit once the document is saved and its plugin is active, as the read model\'s value wins', async () => {
+      h.disk.set(FILE, '{ "EditorID": "OnDisk" }');
+      expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false), activeA)).toEqual([[GUN, undefined]]);
     });
 
     it('reads the file\'s column from the unsaved text beside the other records the tab shows', async () => {
@@ -453,7 +466,7 @@ describe('a record file\'s tab', () => {
         .toEqual([[[{ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Typed" }' }, column]]]);
     });
 
-    it('reads the file\'s column from the file on disk once the document is saved, which VS Code may not have read, whatever its plugin\'s state', async () => {
+    it('reads the file\'s column from the file on disk once the document is saved and its plugin is not active, as mEdit compares no copy of it', async () => {
       h.disk.set(FILE, '{ "EditorID": "OnDisk" }');
       expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false)))
         .toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }' }]]);
@@ -467,6 +480,33 @@ describe('a record file\'s tab', () => {
 
     it('reads the file\'s column from mEdit once the saved document is gone from disk', async () => {
       expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false))).toEqual([[GUN, undefined]]);
+    });
+
+    it('fails the read, saying why, when the saved file on disk is not text', async () => {
+      h.disk.set(FILE, new Uint8Array([0xff, 0xfe, 0xfd]));
+      const client = holdingClient();
+      client.setQueryAnswer('getPlugins', inactiveA);
+      const { openFile } = makeEditor(client);
+      const tab = await openFile(FILE, fileDocument('{}', false));
+
+      tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
+      await settle();
+
+      expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'recordLoadAnswered', ok: false }));
+      expect(comparisonsAsked(client)).toEqual([]);
+    });
+
+    it('reads the file\'s column from the file on disk when mEdit cannot say whether its plugin is active, so it shows either way', async () => {
+      h.disk.set(FILE, '{ "EditorID": "OnDisk" }');
+      const client = holdingClient();
+      client.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
+      const { openFile } = makeEditor(client);
+      const tab = await openFile(FILE, fileDocument('{}', false));
+
+      tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
+      await settle();
+
+      expect(comparisonsAsked(client)).toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }' }]]);
     });
 
     it('reads again when its text changes, and not when another document\'s does or a save leaves its text as it was', async () => {
@@ -522,16 +562,24 @@ describe('an untracked copy\'s tab', () => {
     expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
   });
 
-  it('reads every column from mEdit, its document being mEdit\'s own copy', async () => {
+  async function readOf(plugins: typeof activeA): Promise<unknown[][]> {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getComparison', null);
+    client.setQueryAnswer('getPlugins', plugins);
     const { openDocument } = makeEditor(client);
-    const tab = await openDocument(RENDERED, { getText: () => '{}' });
+    const tab = await openDocument(RENDERED, { isDirty: false, getText: () => '{ "EditorID": "Rendered" }' });
 
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
     await settle();
+    return comparisonsAsked(client);
+  }
 
-    expect(comparisonsAsked(client)).toEqual([[GUN, undefined]]);
+  it('reads every column from mEdit while the copy\'s plugin is active, its document being mEdit\'s own copy', async () => {
+    expect(await readOf(activeA)).toEqual([[GUN, undefined]]);
+  });
+
+  it('reads the copy\'s column from its document while its plugin is not active, as mEdit compares no copy of it', async () => {
+    expect(await readOf(inactiveA)).toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Rendered" }' }]]);
   });
 });
 
@@ -559,9 +607,10 @@ describe('a child record\'s tab', () => {
     expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
   });
 
-  async function readOf(document: object): Promise<unknown[][]> {
+  async function readOf(document: object, plugins = inactiveA): Promise<unknown[][]> {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getComparison', null);
+    client.setQueryAnswer('getPlugins', plugins);
     const { openDocument } = makeEditor(client);
     const tab = await openDocument(CHILD, document);
 
@@ -571,11 +620,16 @@ describe('a child record\'s tab', () => {
   }
 
   it('reads the child\'s column from its container\'s unsaved text, out of which mEdit reads the child', async () => {
-    expect(await readOf({ isDirty: true, getText: () => '{ "EditorID": "Cell" }' }))
+    expect(await readOf({ isDirty: true, getText: () => '{ "EditorID": "Cell" }' }, activeA))
       .toEqual([[PLACED, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Cell" }' }]]);
   });
 
-  it('reads the child\'s column from its container\'s file on disk once it is saved', async () => {
+  it('reads the child\'s column from mEdit once its container is saved and its plugin is active', async () => {
+    h.disk.set(CHILD.path, '{ "EditorID": "OnDisk" }');
+    expect(await readOf({ isDirty: false, getText: () => '{ "EditorID": "Cell" }' }, activeA)).toEqual([[PLACED, undefined]]);
+  });
+
+  it('reads the child\'s column from its container\'s file on disk once it is saved and its plugin is not active', async () => {
     h.disk.set(CHILD.path, '{ "EditorID": "OnDisk" }');
     expect(await readOf({ isDirty: false, getText: () => '{ "EditorID": "Cell" }' }))
       .toEqual([[PLACED, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }' }]]);
@@ -607,7 +661,7 @@ describe('several records opened at once', () => {
     client.setQueryAnswer('getRecordOwner', winner);
     client.setQueryAnswer('getRecordFile', { path: null });
     client.setQueryAnswer('getRenderedDocument', { fileName: 'Gun.json', text: '{}' });
-    client.setQueryAnswer('getPlugins', []);
+    client.setQueryAnswer('getPlugins', activeA);
     return client;
   }
 
