@@ -117,10 +117,11 @@ public sealed class CreateRecordHandler
 
         using var parsed = JsonDocument.Parse(containerDocument.Body);
         var childSlot = ChildRecordTypes.SlotFor(containerType, parsed.RootElement, place, recordType, schemas, release);
-        if (exteriorCell && childSlot is not ChildSlot.NotHeld)
+        var containerHoldsIt = childSlot is not ChildSlot.NotHeld;
+        if (exteriorCell && containerHoldsIt)
         {
             return position is { X: int x, Y: int y }
-                ? CreateCellAt(repository, plugin, recordType, schema, release, container, (x, y))
+                ? CreateCellAt(repository, plugin, recordType, schemas, release, container, (x, y))
                 : RecordEditResult.Refused(
                     RecordEditRefusal.InvalidEnvelope, $"A cell created in the worldspace {container} takes a grid position, both x and y.");
         }
@@ -141,40 +142,25 @@ public sealed class CreateRecordHandler
     }
 
     private RecordEditResult CreateCellAt(
-        SourceRepository repository, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
-        string worldspace, (int X, int Y) grid)
+        SourceRepository repository, PluginAddress plugin, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        GameRelease release, string worldspace, (int X, int Y) grid)
     {
-        var schemas = _schemaReflector.GetSchemas(release);
         var at = $"at {grid.X}, {grid.Y} of {worldspace}";
-        SourceDocument? held;
-        try
+        switch (GridCells.At(_targets, repository, plugin, schemas, worldspace, grid, worldspace, $"whether a cell sits {at}"))
         {
-            held = repository.GetCellAt(plugin, worldspace, grid.X, grid.Y, schemas);
-        }
-        catch (UnreadableSourceDocumentException ex)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.RecordParseFailed, $"Whether {plugin.Name} already holds a cell {at} cannot be read: {ex.Message}");
-        }
-        if (held is not null)
-            return RecordEditResult.Refused(RecordEditRefusal.ChildSlotHeldByAnotherRecord, $"{plugin.Name} already holds the cell {held.FormKey} {at}.");
-
-        if (WriteTargets.MastersOf(repository, plugin, schemas, worldspace, $"whether a cell sits {at}", out var masters) is { } unreadable)
-            return unreadable;
-        switch (_targets.NearestCellToTheLeft(plugin, worldspace, grid.X, grid.Y, masters))
-        {
-            case LeftCopy.Unreadable left:
-                return left.Refusal(worldspace, $"whether a master of {plugin.Name} holds a cell {at} is read from it");
-            case LeftCopy.Found(var copy, var master):
-                var masterCell = ObjectOf(copy, $"{master.Name}'s cell")[RecordMembers.FormKey]?.GetValue<string>();
+            case GridCells.Holder.Unreadable(var why):
+                return why;
+            case GridCells.Holder.Plugins(var held):
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.ChildSlotHeldByAnotherRecord, $"{plugin.Name} already holds the cell {held.FormKey} {at}.");
+            case GridCells.Holder.Masters(var copy, var masterCell):
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ChildSlotHeldByAnotherRecord,
-                    $"{master.Name} holds the cell {masterCell} {at}. Copy Record… as an override brings it into {plugin.Name}.");
+                    $"{copy.Plugin.Name} holds the cell {masterCell} {at}. \"{WriteTargets.CopyCommandTitle}\" as an override brings it into {plugin.Name}.");
         }
 
-        if (FormKeyAllocator.Over(repository, plugin, release).Next(out var formKey) is { } refusedTarget) return refusedTarget;
-        var cell = ObjectOf(RecordMint.BareDocument(_codec, schema, release, formKey, editorId: null), "a minted cell");
-        cell[RecordTypeDispatch.CellGridMember] = PlacedCell.GridAt(grid.X, grid.Y);
+        if (GridCells.Mint(repository, plugin, _codec, schemas[recordType], release, grid, out var cell) is { } exhausted) return exhausted;
+        var formKey = GridCells.FormKeyOf(cell);
         var text = _codec.RoundTrip(cell.ToJsonString(), release, recordType);
         repository.PutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace);
 

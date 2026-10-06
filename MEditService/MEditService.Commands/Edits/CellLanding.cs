@@ -120,27 +120,26 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
 
     private Step<Landed> IntoGridCell(Move move, AnotherCell.GridCell grid, JsonNode record)
     {
-        if (move.Repository.GetCellAt(move.Plugin, move.Worldspace, grid.X, grid.Y, schemaReflector.GetSchemas(move.Release)) is { } held)
-            return new Step<Landed>.Done(IntoHeldCell(move, held, record));
-
-        return MastersOf(move).Then(masters =>
+        var holder = GridCells.At(
+            targets, move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release), move.Worldspace, (grid.X, grid.Y),
+            move.Spelled, $"the cell {move.Moved.FormKey} moves into");
+        return holder switch
         {
-            var left = targets.NearestCellToTheLeft(move.Plugin, move.Worldspace, grid.X, grid.Y, masters);
-            if (left.FoundText is { } copy && FormKeyOf(Parsed(copy, move.Worldspace)) is var copied
-                && move.Repository.Get(move.Plugin, copied, schemaReflector.GetSchemas(move.Release)) is { } heldCopy)
-            {
-                return new Step<Landed>.Done(IntoHeldCell(move, heldCopy, record));
-            }
+            GridCells.Holder.Plugins(var held) => new Step<Landed>.Done(IntoHeldCell(move, held, record)),
+            GridCells.Holder.Unreadable(var why) => new Step<Landed>.Refused(why),
+            GridCells.Holder.Masters(var copy, _) => New(copy),
+            _ => New(new LeftCopy.None()),
+        };
 
-            return CopiedOrNew(move, left, copy => JsonNode.Parse(copy), 0, (grid.X, grid.Y)).Then<Landed>(cell =>
+        Step<Landed> New(LeftCopy left) =>
+            CopiedOrNew(move, left, copy => JsonNode.Parse(copy), 0, (grid.X, grid.Y)).Then<Landed>(cell =>
             {
                 TakeIn(cell, PersistentFlag.TemporaryGroup, record);
                 var text = codec.RoundTrip(cell.ToJsonString(), move.Release, move.CellType);
                 return new Step<Landed>.Done(new(
-                    new SourceDocument(FormKeyOf(cell), move.CellType, WriteTargets.EditorIdOf(text), text),
+                    new SourceDocument(GridCells.FormKeyOf(cell), move.CellType, WriteTargets.EditorIdOf(text), text),
                     move.Worldspace));
             });
-        });
     }
 
     private Landed IntoHeldCell(Move move, SourceDocument held, JsonNode record)
@@ -173,13 +172,11 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
                     Parsed(ContainerDocumentEdits.WithoutChildren(codec, copy, move.Release, move.CellType), move.Worldspace));
         }
 
-        if (FormKeyAllocator.Over(move.Repository, move.Plugin, move.Release).Next(out var formKey) is { } exhausted)
+        if (GridCells.Mint(
+                move.Repository, move.Plugin, codec, schemaReflector.GetSchemas(move.Release)[move.CellType], move.Release, grid,
+                out var cell) is { } exhausted)
             return new Step<JsonObject>.Refused(exhausted with { Path = move.Spelled });
-        var cell = Parsed(
-            RecordMint.BareDocument(codec, schemaReflector.GetSchemas(move.Release)[move.CellType], move.Release, formKey, editorId: null),
-            formKey);
         if (flags != 0) cell[RecordHeaderFlags.Member] = flags;
-        cell[RecordTypeDispatch.CellGridMember] = PlacedCell.GridAt(grid.X, grid.Y);
         return new Step<JsonObject>.Done(cell);
     }
 
@@ -188,11 +185,6 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         if (cell[group] is not JsonArray members) cell[group] = members = [];
         members.Add(record);
     }
-
-    private static string FormKeyOf(JsonObject cell) =>
-        cell[RecordMembers.FormKey] is JsonValue key && key.TryGetValue<string>(out var formKey)
-            ? formKey
-            : throw new InvalidDataException("A cell's document names no FormKey.");
 
     private static JsonObject Parsed(string text, string formKey) =>
         JsonNode.Parse(text) as JsonObject ?? throw new InvalidOperationException($"Expected {formKey}'s document to hold a JSON object.");
