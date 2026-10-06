@@ -30,6 +30,26 @@ public sealed record UnrestoredPath(
 /// A failed gesture writes nothing; ADR-0003).</summary>
 public sealed class SourceTransaction
 {
+    /// <summary>Runs <paramref name="write"/> on a new transaction. A throw puts back what it applied and is
+    /// rethrown, or names each path the rollback left standing.</summary>
+    public static void Atomically(SourceRepository repository, Action<SourceTransaction> write)
+    {
+        var transaction = new SourceTransaction();
+        try
+        {
+            write(transaction);
+        }
+        catch (Exception cause) when (cause is not OutOfMemoryException)
+        {
+            var (unrestored, relativeError) = transaction.Rollback(cause, repository);
+            if (unrestored.Count == 0) throw;
+            throw new IOException(
+                $"{relativeError} Everything it wrote is back as it was except: " +
+                string.Join(", ", unrestored.Select(path => $"{path.RelativePath} ({path.Reason})")) + ".",
+                cause);
+        }
+    }
+
     /// <summary>Makes each move of <paramref name="changes"/> and then writes each document, holding what
     /// each act replaced so a later failure in this batch puts it back.</summary>
     public void Apply(SourceRepository repository, SourceChanges changes)

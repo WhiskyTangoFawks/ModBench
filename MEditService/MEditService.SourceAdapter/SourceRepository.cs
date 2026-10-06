@@ -226,15 +226,17 @@ public sealed class SourceRepository
 
     /// <summary>Creates or replaces the record's document, placing an absent one from its identity
     /// alone and minting the levels above it. A record another document carries is replaced at its
-    /// own slot, every other byte untouched.</summary>
-    public void Put(PluginAddress plugin, SourceDocument document) => Writes.Put(plugin, document, placement: null);
+    /// own slot, every other byte untouched. A failure puts back what it wrote.</summary>
+    public void Put(PluginAddress plugin, SourceDocument document) =>
+        SourceTransaction.Atomically(this, transaction => transaction.Apply(this, ChangesToPut(plugin, document)));
 
     /// <summary>The put of an exterior cell, which lands in the block its own grid falls in inside
-    /// <paramref name="worldspace"/>'s directory. A cell the plugin already holds is replaced where it is.</summary>
+    /// <paramref name="worldspace"/>'s directory. A held cell is replaced where it is. A failure puts back
+    /// what it wrote.</summary>
     public void PutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
-        Writes.Put(plugin, cell, SourceRepositoryWrites.PlacementIn(worldspace, cell));
+        SourceTransaction.Atomically(this, transaction => transaction.Apply(this, ChangesToPutInWorldspace(plugin, cell, worldspace)));
 
-    /// <summary>What <see cref="Put"/> of a document the tree holds whole changes, written nowhere.</summary>
+    /// <summary>What <see cref="Put"/> changes, written nowhere.</summary>
     public SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document) => Writes.ChangesToPut(plugin, document);
 
     /// <summary>What <see cref="PutInWorldspace"/> changes, written nowhere.</summary>

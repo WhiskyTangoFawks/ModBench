@@ -13,37 +13,13 @@ namespace MEditService.SourceAdapter;
 public sealed record DocumentRekey(
     Func<SourceDocument, string, string> Own, Func<SourceDocument, string, string, string?> ChildOfOwner);
 
-/// <summary>The writes a transaction is made of: put, remove and move, each by identity, and the
-/// whole-plugin replacement. Every write forgets what the locator remembered of the tree.</summary>
+/// <summary>The changes a transaction is made of, put and rekey, each by identity; and the writes made
+/// directly, remove and the whole-plugin replacement. Every write forgets what the locator remembered of the tree.</summary>
 internal sealed class SourceRepositoryWrites(
     string modFolder, GameRelease release, SourceRepositoryLocator locator, SourceRepositoryLayout layout, SourceRepositoryGit git)
 {
     private readonly string _modFolder = modFolder;
     private readonly GameRelease _release = release;
-
-    internal void Put(PluginAddress plugin, SourceDocument document, CellPlacement? placement)
-    {
-        var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
-        if (locator.LocateToPlace(plugin, identity) is { } held) MoveToItsLeafName(held, document);
-        var unit = locator.LocateToPlace(plugin, identity)
-                   ?? layout.PlaceNewDocument(plugin, identity, placement)
-                   ?? throw NoPlaceInTheTree(plugin, identity);
-
-        if (unit.IsEmbedded)
-        {
-            var ownerBytes = OwnerBytes(unit);
-            if (DocumentText.EmbeddedChildIn(ownerBytes, unit, document.FormKey, _release) is not { } span)
-                throw NoLongerCarried(unit, document.FormKey);
-
-            SourceRepositoryLayout.WriteTextAtomic(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, document.Body));
-            locator.Forget();
-            return;
-        }
-
-        SourceRepositoryLayout.InMintedDirectory(
-            PathShape.DirectoryOf(unit.FullPath), () => SourceRepositoryLayout.WriteTextAtomic(unit.FullPath, document.Body));
-        locator.Forget();
-    }
 
     internal static CellPlacement PlacementIn(string worldspace, SourceDocument cell) =>
         JsonNode.Parse(cell.Body) is JsonObject document && PlacedCell.Grid(document) is var (x, y)
@@ -79,25 +55,40 @@ internal sealed class SourceRepositoryWrites(
         return SourceRemoval.Removed;
     }
 
-    /// <summary>What putting a document the tree holds whole changes: its text, and the move of its file
-    /// or folder when its EditorID gives it another leaf name.</summary>
-    internal SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document)
+    /// <summary>What putting a document changes. A held one: its text, inside its owner's when embedded, and the
+    /// move to its leaf name. A new one: its document and each block level the tree lacks above it.</summary>
+    internal SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document, CellPlacement? placement = null)
     {
-        if (locator.LocateToPlace(plugin, document.Identity) is not { IsEmbedded: false } unit)
-            throw NoPlaceInTheTree(plugin, document.Identity);
+        if (locator.LocateToPlace(plugin, document.Identity) is not { } unit)
+        {
+            var (levels, placed) = layout.PlaceNewDocument(plugin, document.Identity, placement)
+                ?? throw NoPlaceInTheTree(plugin, document.Identity);
+            return new SourceChanges(
+                [], [.. levels.Select(level => Document(level.Path, level.Text)), Document(placed.FullPath, document.Body)]);
+        }
+
+        if (unit.IsEmbedded)
+        {
+            var ownerBytes = OwnerBytes(unit);
+            if (DocumentText.EmbeddedChildIn(ownerBytes, unit, document.FormKey, _release) is not { } span)
+                throw NoLongerCarried(unit, document.FormKey);
+            return Written(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, document.Body));
+        }
+
+        // A file whose text is not a document is something else's, and writing over it drops what it wrote.
+        if (document.RecordType != PluginHeader.RecordType && File.Exists(unit.FullPath)
+            && SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
+            throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
 
         return Planned(LeafPlan(unit, document), document.Body);
     }
 
-    /// <summary>What putting an exterior cell at its grid changes: a held cell as <see cref="ChangesToPut"/>
-    /// says, else its document and each block level the tree lacks.</summary>
-    internal SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace)
-    {
-        if (locator.LocateToPlace(plugin, cell.Identity) is not null) return ChangesToPut(plugin, cell);
-
-        var (levels, cellPath) = layout.ExteriorCellDocuments(plugin, cell.Identity, PlacementIn(worldspace, cell));
-        return new SourceChanges([], [.. levels.Select(level => Document(level.Path, level.Text)), Document(cellPath, cell.Body)]);
-    }
+    /// <summary>What putting an exterior cell changes: a held cell's as <see cref="ChangesToPut"/> says, a new one
+    /// at the block its grid falls in.</summary>
+    internal SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
+        locator.LocateToPlace(plugin, cell.Identity) is null
+            ? ChangesToPut(plugin, cell, PlacementIn(worldspace, cell))
+            : ChangesToPut(plugin, cell);
 
     /// <summary>What changing <paramref name="identity"/>'s FormKey changes, read from the text of the document
     /// <paramref name="carrying"/> it: its own file or folder moves to the new leaf name, or its owner's text changes.</summary>
@@ -128,7 +119,7 @@ internal sealed class SourceRepositoryWrites(
             return Planned(ContainerPlan(unit, to), text);
         }
 
-        var placed = layout.PlaceNewDocument(plugin, identity with { FormKey = newFormKey }, placement: null)
+        var placed = layout.PlaceNewDocument(plugin, identity with { FormKey = newFormKey }, placement: null)?.Unit
             ?? throw NoPlaceInTheTree(plugin, identity);
         return new SourceChanges([Moved(unit.FullPath, placed.FullPath)], [Document(placed.FullPath, text)]);
     }
@@ -290,21 +281,6 @@ internal sealed class SourceRepositoryWrites(
         {
             unrestored.Add($"{Path.GetRelativePath(_modFolder, path)} could not be put back: {ex.Message}");
         }
-    }
-
-    // Move before write: a crash between leaves the record at its new name with old content, still
-    // found by FormKey.
-    private void MoveToItsLeafName(SourceUnit unit, SourceDocument document)
-    {
-        // A file whose text is not a document is something else's, and writing over it drops what it wrote.
-        if (document.RecordType != PluginHeader.RecordType && !unit.IsEmbedded && File.Exists(unit.FullPath)
-            && SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
-            throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
-
-        var plan = LeafPlan(unit, document);
-        if (plan.Moves.Count == 0) return;
-        foreach (var (from, to) in plan.Moves) SourceRepositoryLayout.MoveEntry(from, to);
-        locator.Forget();
     }
 
     private readonly record struct LeafMoves(IReadOnlyList<(string From, string To)> Moves, string Written);
