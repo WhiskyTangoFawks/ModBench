@@ -205,9 +205,8 @@ internal sealed class Projector(
         index.Announce(() => notifications?.Publish(new RowsChangedNotification(key, formKeys, index.Sequence)));
 
     /// <summary>ADR-0015: compares <paramref name="key"/>'s rows against the system of record they
-    /// came from (source documents when <paramref name="provider"/>'s mod holds its tree, the binary
-    /// otherwise) and refreshes what differs. A tree is validated against <paramref name="read"/>'s
-    /// stamps.</summary>
+    /// came from, the tree <paramref name="read"/> stamps or else the binary, and refreshes what
+    /// differs.</summary>
     internal ValidationReport Validate(PluginAddress key, PluginProvider provider, ReadState read) =>
         read switch
         {

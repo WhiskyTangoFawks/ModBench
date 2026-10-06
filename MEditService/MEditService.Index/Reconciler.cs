@@ -587,9 +587,8 @@ internal sealed class Reconciler(
 
     // ADR-0007; HeldPlugins still reads a tracked plugin's metadata off its binary.
 
-    // A failed source read degrades to the binary, but records a real PluginLoadFailure: a silent
-    // fallback would leave the user reading pre-Track binary content believing it was their source.
-    // False when the binary served in place of the tree that failed.
+    // A failed source read degrades to the binary and answers false, with a real PluginLoadFailure: a
+    // silent fallback would leave the user reading pre-Track binary content believing it was their source.
     private bool IndexOnePlugin(OpenScope scope, PluginMetadata plugin, bool holdsTree, CancellationToken token)
     {
         // One advance for the whole plugin, whichever door it came through (ADR-0015).
