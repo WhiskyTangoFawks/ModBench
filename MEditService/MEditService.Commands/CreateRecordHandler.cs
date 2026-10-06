@@ -107,7 +107,9 @@ public sealed class CreateRecordHandler
         CellPlace? place;
         try
         {
-            place = PlaceOf(repository, plugin, target.Identity, schemas, release);
+            place = RecordTypeDispatch.For(release).IsCell(containerType)
+                ? repository.CellStructureOf(plugin, target.Identity)?.Place
+                : null;
         }
         catch (UnreadableSourceDocumentException ex)
         {
@@ -150,15 +152,5 @@ public sealed class CreateRecordHandler
                 recordType, formKey, plugin.Name, plugin.Origin, container.FormKey, slot);
         }
         return RecordEditResult.Success(formKey);
-    }
-
-    // The tree carries a worldspace's persistent cell inside the worldspace's document.
-    private static CellPlace? PlaceOf(
-        SourceRepository repository, PluginAddress plugin, RecordIdentity container,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
-    {
-        if (!RecordTypeDispatch.For(release).IsCell(container.RecordType)) return null;
-        if (repository.WorldspaceOf(plugin, container) is null) return CellPlace.Interior;
-        return repository.ContainerOf(plugin, container, schemas) is null ? CellPlace.Exterior : CellPlace.PersistentWorldspaceCell;
     }
 }
