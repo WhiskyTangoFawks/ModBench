@@ -3,7 +3,6 @@ using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -34,52 +33,6 @@ public sealed class EditRecordChangesTests : IDisposable
     private static RecordEditChanges Changes(TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
         instance.EditChangesHandler.Changes(plugin, formKey, envelope, TextOf(instance, plugin, formKey));
 
-    private static void AssertTheWriteLeavesWhatItsAnswerAppliedByHandLeaves(
-        TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
-    {
-        var modFolder = instance.ModFolderOf(plugin);
-        var before = TreeSnapshot.Of(modFolder);
-        using var byHand = new ScratchDirectory("medit-edit-answer-");
-        CopyTree(modFolder, byHand);
-
-        var answer = Changes(instance, plugin, formKey, envelope);
-
-        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        Assert.Equal(before, TreeSnapshot.Of(modFolder));
-        Apply(answer.Changes, byHand);
-
-        var written = instance.EditHandler.Edit(plugin, formKey, envelope);
-
-        Assert.True(written.Applied, written.Message);
-        Assert.NotEqual(before, TreeSnapshot.Of(modFolder));
-        Assert.Equal(written.NewFormKey, answer.Outcome.NewFormKey);
-        Assert.Equal(TreeSnapshot.Of(byHand), TreeSnapshot.Of(modFolder));
-    }
-
-    private static void Apply(SourceChanges changes, string root)
-    {
-        foreach (var move in changes.Moves)
-        {
-            var (from, to) = (Path.Combine(root, move.From), Path.Combine(root, move.To));
-            if (Directory.Exists(from)) Directory.Move(from, to);
-            else File.Move(from, to);
-        }
-        foreach (var document in changes.Documents)
-        {
-            var path = Path.Combine(root, document.Path);
-            Directory.CreateDirectory(Path.GetDirectoryName(path).Require());
-            File.WriteAllText(path, document.Text);
-        }
-    }
-
-    private static void CopyTree(string from, string to)
-    {
-        foreach (var directory in Directory.EnumerateDirectories(from, "*", SearchOption.AllDirectories))
-            Directory.CreateDirectory(Path.Combine(to, Path.GetRelativePath(from, directory)));
-        foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
-            File.Copy(file, Path.Combine(to, Path.GetRelativePath(from, file)));
-    }
-
     [Fact]
     public void AFieldEdit_AnswersTheRecordsDocumentWithTheNewValue_AndWritesNothing()
     {
@@ -90,7 +43,7 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         Assert.Empty(answer.Changes.Moves);
         var document = Assert.Single(answer.Changes.Documents);
-        Assert.Equal(_mod.DocumentFile(_mod.Npc.ToString()), document.Path);
+        Assert.Equal(Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require()), document.Path);
         Assert.Contains("0.75", document.Text, StringComparison.Ordinal);
         Assert.Equal(before, TreeSnapshot.Of(_mod.ModFolder));
     }
@@ -120,7 +73,7 @@ public sealed class EditRecordChangesTests : IDisposable
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         var document = Assert.Single(answer.Changes.Documents);
-        Assert.Equal(Path.GetRelativePath(_mod.ModFolder, file), document.Path);
+        Assert.Equal(file, document.Path);
         Assert.Contains("0.75", document.Text, StringComparison.Ordinal);
         Assert.Equal("not a document", File.ReadAllText(file));
     }
@@ -159,7 +112,7 @@ public sealed class EditRecordChangesTests : IDisposable
     public void APlacedRecordCrossingIntoAnotherCell_BuildsOnTheTextItIsGivenForTheCellItLeaves()
     {
         using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
-        var leaving = TrackedTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require();
+        var leaving = Path.Combine(world.ModFolder, TrackedTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require());
         var unsaved = TextOf(world, world.Plugin, keys["Mover"].ToString())
             .Replace("\"Wanderer\"", "\"TypedButUnsaved\"", StringComparison.Ordinal);
         Assert.Contains("TypedButUnsaved", unsaved, StringComparison.Ordinal);
@@ -183,13 +136,11 @@ public sealed class EditRecordChangesTests : IDisposable
     }
 
     [Fact]
-    public void ARefusedEdit_AnswersTheRefusalTheWriteGives()
+    public void ARefusedEdit_AnswersItsRefusal_AndNoChanges()
     {
         var answer = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("NoSuchField", "1"));
-        var written = _mod.EditHandler.Edit(_mod.Plugin, _mod.Npc.ToString(), Set("NoSuchField", "1"));
 
         Assert.Equal(RecordEditRefusal.FieldNotFound, answer.Outcome.Refusal);
-        Assert.Equal(written, answer.Outcome);
         Assert.Empty(answer.Changes.Documents);
     }
 
@@ -199,60 +150,20 @@ public sealed class EditRecordChangesTests : IDisposable
         var answer = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("EditorID", "\"RenamedNpc\""));
 
         var move = Assert.Single(answer.Changes.Moves);
-        Assert.Equal(_mod.DocumentFile(_mod.Npc.ToString()), move.From);
+        Assert.Equal(Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require()), move.From);
         Assert.Contains("RenamedNpc", move.To, StringComparison.Ordinal);
         Assert.Equal(move.To, Assert.Single(answer.Changes.Documents).Path);
     }
 
     [Fact]
-    public void AFieldEdit_WritesExactlyItsAnswer() =>
-        AssertTheWriteLeavesWhatItsAnswerAppliedByHandLeaves(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"));
-
-    [Fact]
-    public void AnEditorIdEdit_WritesExactlyItsAnswer() =>
-        AssertTheWriteLeavesWhatItsAnswerAppliedByHandLeaves(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("EditorID", "\"RenamedNpc\""));
-
-    [Fact]
-    public void AFormIdEdit_WritesExactlyItsAnswer() =>
-        AssertTheWriteLeavesWhatItsAnswerAppliedByHandLeaves(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("FormKey", "\"000F00:Fixture.esp\""));
-
-    [Fact]
-    public void AContainersFormIdEdit_WritesExactlyItsAnswer() =>
-        AssertTheWriteLeavesWhatItsAnswerAppliedByHandLeaves(_mod, _mod.Plugin, _mod.Worldspace.ToString(), Set("FormKey", "\"000F00:Fixture.esp\""));
-
-    [Fact]
-    public void AChildRecordsFormIdEdit_WritesExactlyItsAnswer()
-    {
-        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
-
-        AssertTheWriteLeavesWhatItsAnswerAppliedByHandLeaves(world, world.Plugin, keys["Mover"].ToString(), Set("FormKey", "\"000F00:World.esp\""));
-    }
-
-    [Fact]
-    public void AnEditOfAChildRecord_WritesExactlyItsAnswer()
-    {
-        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
-
-        AssertTheWriteLeavesWhatItsAnswerAppliedByHandLeaves(world, world.Plugin, keys["Mover"].ToString(), Set("Scale", "3"));
-    }
-
-    [Fact]
-    public void APlacedRecordCrossingIntoAPersistentCellThePluginLacks_WritesExactlyItsAnswer()
-    {
-        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
-
-        AssertTheWriteLeavesWhatItsAnswerAppliedByHandLeaves(world, world.Plugin, keys["Mover"].ToString(), Flags(Persistent));
-    }
-
-    [Fact]
-    public void APlacedRecordCrossingIntoAGridCellThePluginLacks_AnswersTheCellsDocumentAndItsNewSubBlocks_AndWritesExactlyThat()
+    public void APlacedRecordCrossingIntoAGridCellThePluginLacks_AnswersTheCellsDocumentAndItsNewSubBlocks()
     {
         using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
 
         var answer = Changes(world, world.Plugin, keys["Wanderer"].ToString(), Flags(0));
 
+        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         Assert.Equal(3, answer.Changes.Documents.Count);
-        AssertTheWriteLeavesWhatItsAnswerAppliedByHandLeaves(world, world.Plugin, keys["Wanderer"].ToString(), Flags(0));
     }
 
     private static SourceModFixture WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out Dictionary<string, FormKey> keys)

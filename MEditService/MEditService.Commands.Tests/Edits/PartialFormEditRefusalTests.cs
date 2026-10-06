@@ -20,7 +20,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
 
     public PluginAddress Plugin { get; } = new(PluginName, Origin);
     public LoadOrderSnapshot LoadOrder { get; }
-    public EditRecordHandler EditHandler { get; }
+    public TestEditor EditHandler { get; }
     public FormKey PartialCell { get; }
     public FormKey OrdinaryNpc { get; }
     public FormKey ChildRef { get; }
@@ -61,7 +61,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
         _gameDirectory.Dispose();
     }
 
-    private EditRecordHandler Service() => EditHandler;
+    private TestEditor Service() => EditHandler;
 
     [Fact]
     public void EditField_NonHeaderFieldOnPartialFormRecord_IsRefused()

@@ -28,35 +28,34 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
 
         internal abstract Step<TNext> Then<TNext>(Func<T, Step<TNext>> next);
 
-        internal abstract EditPlan Finish(Func<T, EditPlan> last);
+        internal abstract RecordEditChanges Finish(Func<T, RecordEditChanges> last);
 
         internal sealed record Refused(RecordEditResult Why) : Step<T>
         {
             internal override Step<TNext> Then<TNext>(Func<T, Step<TNext>> next) => new Step<TNext>.Refused(Why);
 
-            internal override EditPlan Finish(Func<T, EditPlan> last) => Why;
+            internal override RecordEditChanges Finish(Func<T, RecordEditChanges> last) => Why;
         }
 
         internal sealed record Done(T Value) : Step<T>
         {
             internal override Step<TNext> Then<TNext>(Func<T, Step<TNext>> next) => next(Value);
 
-            internal override EditPlan Finish(Func<T, EditPlan> last) => last(Value);
+            internal override RecordEditChanges Finish(Func<T, RecordEditChanges> last) => last(Value);
         }
     }
 
     /// <summary>Lands the record that <paramref name="written"/>, <paramref name="holder"/>'s new text,
     /// still carries at the crossing's prefix. A tree it cannot read refuses, with nothing written.</summary>
-    internal EditPlan Land(
+    internal RecordEditChanges Land(
         PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder, string written, CellCrossing crossing, string spelled)
     {
         var failed = $"Moving {edit.Identity.FormKey} into another cell failed.";
-        return SourceCommit.Plan(edit.Repository, logger, failed, () => Cross(plugin, edit, holder, written, crossing, spelled, failed));
+        return PlanFailure.Refused(logger, failed, () => Cross(plugin, edit, holder, written, crossing, spelled));
     }
 
-    private EditPlan Cross(
-        PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder, string written, CellCrossing crossing, string spelled,
-        string failed)
+    private RecordEditChanges Cross(
+        PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder, string written, CellCrossing crossing, string spelled)
     {
         var (release, moved, repository) = edit;
         var root = Parsed(written, holder.FormKey);
@@ -77,12 +76,11 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
             plugin, repository, release, moved, worldspace,
             schemaReflector.GetSchemas(release).Keys.Single(RecordTypeDispatch.For(release).IsCell), spelled);
         var landing = crossing.Into is AnotherCell.GridCell grid ? IntoGridCell(move, grid, record) : IntoPersistentCell(move, record);
-        return landing.Finish(landed => new EditPlan(
+        return landing.Finish(landed => new RecordEditChanges(
             RecordEditResult.Success(),
             repository.ChangesToRewrite(plugin, given).Then(landed.NewInWorldspace is { } into
                 ? repository.ChangesToPutInWorldspace(plugin, landed.Cell, into)
-                : repository.ChangesToRewrite(plugin, landed.Cell)),
-            repository, failed));
+                : repository.ChangesToRewrite(plugin, landed.Cell))));
     }
 
     private Step<Landed> IntoPersistentCell(Move move, JsonNode record)

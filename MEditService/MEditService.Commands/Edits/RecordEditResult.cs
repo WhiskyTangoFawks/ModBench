@@ -157,4 +157,7 @@ public sealed record RecordEditResult(
 
 /// <summary>An edit answered without writing: its outcome, and the changes it makes to plugin source when
 /// it applies.</summary>
-public sealed record RecordEditChanges(RecordEditResult Outcome, SourceChanges Changes);
+public sealed record RecordEditChanges(RecordEditResult Outcome, SourceChanges Changes)
+{
+    public static implicit operator RecordEditChanges(RecordEditResult outcome) => new(outcome, SourceChanges.None);
+}

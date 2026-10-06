@@ -10,7 +10,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class EditRecordHandlerTests : IDisposable
+public sealed class RecordEditTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
@@ -52,19 +52,6 @@ public sealed class EditRecordHandlerTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal([_mod.Npc.ToString()], _mod.ChangedFormKeys());
-    }
-
-    [Fact]
-    public void EditField_WhenTheFileSystemRefusesTheWrite_RefusesWithItsWords_AndLeavesTheTreeAsItWas()
-    {
-        TreeTampering.BlockWrite(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
-        var before = TrackedTree.Records(_mod.ModFolder, _mod.Plugin);
-
-        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
-
-        Assert.Equal(RecordEditRefusal.SourceWriteFailed, result.Refusal);
-        Assert.Contains(_mod.Npc.ToString(), result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TrackedTree.Records(_mod.ModFolder, _mod.Plugin));
     }
 
     [Fact]

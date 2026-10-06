@@ -183,7 +183,7 @@ public sealed class AbstractUnionEditTests : IDisposable
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
-        public EditRecordHandler EditHandler { get; }
+        public TestEditor EditHandler { get; }
         public FormKey Npc { get; }
         public FormKey Quest { get; }
 
@@ -219,7 +219,7 @@ public sealed class AbstractUnionEditTests : IDisposable
             EditHandler = TestEditService.EditHandler(holder);
         }
 
-        public EditRecordHandler Service() => EditHandler;
+        public TestEditor Service() => EditHandler;
 
         public string NpcBody() => TrackedTree.Body(_modFolder, Plugin, Npc.ToString());
         public string QuestBody() => TrackedTree.Body(_modFolder, Plugin, Quest.ToString());

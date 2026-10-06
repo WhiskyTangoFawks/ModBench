@@ -16,7 +16,7 @@ public sealed class HeaderFlagEditTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private EditRecordHandler Service() => _fixture.EditHandler;
+    private TestEditor Service() => _fixture.EditHandler;
 
     private static string HeaderFormKey => FormKey.Factory($"000000:{SourceEditFixture.PluginName}").ToString();
 

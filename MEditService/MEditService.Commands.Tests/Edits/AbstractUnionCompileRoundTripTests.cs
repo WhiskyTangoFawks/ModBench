@@ -16,7 +16,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private EditRecordHandler EditService() => _fixture.EditHandler;
+    private TestEditor EditService() => _fixture.EditHandler;
 
     private CompilePluginHandler CompileService() => CompileServices.Over(_fixture.LoadOrder);
 

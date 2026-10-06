@@ -7,6 +7,11 @@ public sealed record SourceChanges(IReadOnlyList<SourceMove> Moves, IReadOnlyLis
     public static SourceChanges None { get; } = new([], []);
 
     public SourceChanges Then(SourceChanges next) => new([.. Moves, .. next.Moves], [.. Documents, .. next.Documents]);
+
+    /// <summary>These changes with every path made absolute under <paramref name="modFolder"/>.</summary>
+    public SourceChanges Under(string modFolder) => new(
+        [.. Moves.Select(move => new SourceMove(Path.Combine(modFolder, move.From), Path.Combine(modFolder, move.To)))],
+        [.. Documents.Select(document => document with { Path = Path.Combine(modFolder, document.Path) })]);
 }
 
 public sealed record SourceMove(string From, string To);

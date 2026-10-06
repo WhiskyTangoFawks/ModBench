@@ -21,7 +21,7 @@ internal sealed class FormKeyChange(RecordTextCodec codec, ILogger logger)
 
     /// <summary>The record's file or folder moved to its new key, or its owner's text, read from
     /// <paramref name="carrying"/>.</summary>
-    internal EditPlan Change(
+    internal RecordEditChanges Change(
         PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, SourceDocument carrying, JsonElement? value)
     {
         var (release, identity, repository) = editTarget;
@@ -57,12 +57,11 @@ internal sealed class FormKeyChange(RecordTextCodec codec, ILogger logger)
             is { } refusedTarget) return refusedTarget with { Path = Member };
 
         var failed = $"Changing the FormID of {formKey} to {targetFormKey} failed.";
-        return SourceCommit.Plan(repository, logger, failed, () => new EditPlan(
+        return PlanFailure.Refused(logger, failed, () => new RecordEditChanges(
             RecordEditResult.Success(targetFormKey),
             repository.ChangesToRekey(plugin, carrying, identity, targetFormKey, new DocumentRekey(
                 (document, newKey) => RecordDocumentEdits.WithFormKey(codec, document.Body, release, document.RecordType, newKey),
                 (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
-                    codec, owner.Body, release, owner.RecordType, oldKey, newKey))),
-            repository, failed));
+                    codec, owner.Body, release, owner.RecordType, oldKey, newKey)))));
     }
 }

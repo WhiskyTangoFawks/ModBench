@@ -435,7 +435,7 @@ public sealed class VmadEditTests : IDisposable
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
-        public EditRecordHandler EditHandler { get; }
+        public TestEditor EditHandler { get; }
         public FormKey Npc { get; }
         public FormKey Quest { get; }
         public FormKey Perk { get; }
@@ -539,7 +539,7 @@ public sealed class VmadEditTests : IDisposable
             return script;
         }
 
-        public EditRecordHandler Service() => EditHandler;
+        public TestEditor Service() => EditHandler;
 
         public string Body(FormKey formKey) =>
             TrackedTree.Body(_modFolder, Plugin, formKey.ToString());

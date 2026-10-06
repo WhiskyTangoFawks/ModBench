@@ -92,7 +92,7 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
-        public EditRecordHandler EditHandler { get; }
+        public TestEditor EditHandler { get; }
         public FormKey Faction { get; }
 
         public FactionFixture()
@@ -124,7 +124,7 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
             EditHandler = TestEditService.EditHandler(holder);
         }
 
-        public EditRecordHandler Service() => EditHandler;
+        public TestEditor Service() => EditHandler;
 
         public string Body() => TrackedTree.Body(_modFolder, Plugin, Faction.ToString());
 

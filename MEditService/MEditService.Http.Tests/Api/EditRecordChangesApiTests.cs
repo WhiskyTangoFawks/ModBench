@@ -33,7 +33,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
         Directory.EnumerateFiles(ModFolderOf(fx), $"{Npc} - *.json", SearchOption.AllDirectories).Single();
 
     [Fact]
-    public async Task AnEdit_IsAnsweredWithTheNewTextOfTheRecordsDocument_AndWritesNothing()
+    public async Task AnEdit_IsAnsweredWithTheNewTextOfTheRecordsDocument_AtItsPath_AndWritesNothing()
     {
         var (fx, formKey) = await Loaded(tracked: true);
         var file = NpcFile(fx);
@@ -45,7 +45,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
         var answer = await response.Body();
         Assert.Empty(answer.GetProperty("moves").EnumerateArray());
         var document = Assert.Single(answer.GetProperty("documents").EnumerateArray());
-        Assert.Equal(Path.GetRelativePath(ModFolderOf(fx), file), document.GetProperty("path").GetString());
+        Assert.Equal(file, document.GetProperty("path").GetString());
         Assert.Contains("0.75", document.GetProperty("text").GetString().Require(), StringComparison.Ordinal);
         Assert.Equal(JsonValueKind.Null, answer.GetProperty("newFormKey").ValueKind);
         Assert.Equal(before, TreeSnapshot.Of(ModFolderOf(fx)));

@@ -261,7 +261,7 @@ public sealed class PrimitiveListEditTests : IDisposable
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
-        public EditRecordHandler EditHandler { get; }
+        public TestEditor EditHandler { get; }
         public FormKey Race { get; }
         public FormKey MaterialObject { get; }
         public FormKey MiscItem { get; }
@@ -312,7 +312,7 @@ public sealed class PrimitiveListEditTests : IDisposable
             EditHandler = TestEditService.EditHandler(holder);
         }
 
-        public EditRecordHandler Service() => EditHandler;
+        public TestEditor Service() => EditHandler;
 
         public string RaceBody() => Body(Race);
 

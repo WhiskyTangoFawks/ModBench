@@ -11,7 +11,6 @@ public sealed class WriteRouteHandlerTests
 {
     internal static readonly (string Method, string Pattern, Type Handler)[] Routes =
     [
-        ("POST", "/records/{formKey}/edit", typeof(EditRecordHandler)),
         ("POST", "/records/{formKey}/edit-changes", typeof(EditRecordChangesHandler)),
         ("POST", "/records/delete", typeof(DeleteRecordHandler)),
         ("POST", "/records/copy", typeof(CopyRecordHandler)),
@@ -93,7 +92,7 @@ public sealed class WriteRouteHandlerTests
     [Fact]
     public void EveryGestureHandler_IsTheHandlerOfExactlyOneWriteRoute()
     {
-        var gestures = typeof(EditRecordHandler).Assembly.GetExportedTypes()
+        var gestures = typeof(EditRecordChangesHandler).Assembly.GetExportedTypes()
             .Where(IsHandler)
             .OrderBy(type => type.Name, StringComparer.Ordinal);
 

@@ -14,7 +14,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private EditRecordHandler Service() => _mod.EditHandler;
+    private TestEditor Service() => _mod.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

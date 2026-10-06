@@ -127,8 +127,13 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             return (header.Identity, header);
         }
 
-        var named = DocumentsNaming(sourceRoot, spelled).Where(File.Exists).ToList();
-        if (TheOneHolding(named.Count > 0 ? named : DocumentsDeclaring(sourceRoot, spelled), spelled) is { } own)
+        var holding = DocumentsNaming(sourceRoot, spelled).Where(File.Exists).ToList();
+        if (holding.Count == 0)
+        {
+            holding = DocumentsDeclaring(sourceRoot, spelled);
+            RememberFoundByText(plugin.Name, spelled, holding);
+        }
+        if (TheOneHolding(holding, spelled) is { } own)
         {
             var document = DeclaredIn(own, text, plugin.Name, schemas);
             if (!FormKey.TryFactory(document.FormKey, out var declared) || declared != parsed)
@@ -152,6 +157,8 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             throw new UnreadableSourceDocumentException($"The text given for {relativePath} is not a readable document: {why}");
         var document = ReadableDocumentAt(relativePath, text, pluginFileName)
             ?? throw new UnreadableSourceDocumentException($"The text given for {relativePath} names no record.");
+        if (!FormKey.TryFactory(document.FormKey, out _))
+            throw new UnreadableSourceDocumentException($"The text given for {relativePath} declares {document.FormKey}, which is no FormKey.");
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
             ?? new ContainerDocuments(_release, schemas).RecordTypeNamed(document.RecordType)
             ?? throw new UnreadableSourceDocumentException($"The text given for {relativePath} names no record type.");

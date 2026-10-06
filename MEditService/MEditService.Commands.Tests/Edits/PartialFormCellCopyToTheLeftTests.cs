@@ -19,7 +19,7 @@ public sealed class PartialFormCellCopyToTheLeftTests : IDisposable
     private readonly ScratchDirectory _root = new("medit-partial-left-");
     private readonly PluginAddress _override = new("Override.esp", OverrideOrigin);
     private readonly FormKey _cell;
-    private readonly EditRecordHandler _handler;
+    private readonly TestEditor _handler;
 
     public PartialFormCellCopyToTheLeftTests()
     {

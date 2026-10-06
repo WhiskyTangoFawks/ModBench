@@ -52,16 +52,12 @@ public record RecordEditRequest(
     IReadOnlyList<PathHop> Path,
     [property: JsonConverter(typeof(KeepsJsonNullConverter))] JsonElement? Value = null);
 
-/// <summary>An applied edit; <see cref="NewFormKey"/> is set by an edit of the FormID. A refusal is
-/// ProblemDetails with refusal and path extensions, so a plain success check is correct (ADR-0019).</summary>
-public record RecordEditResponse(bool Applied, string FormKey, string Path, string? NewFormKey = null);
-
 /// <summary>An edit asked for the changes it makes, given <see cref="Text"/>, the current text of the
 /// document carrying the record.</summary>
 public record RecordEditChangesRequest(RecordEditRequest Edit, string Text);
 
 /// <summary>The changes an edit makes to plugin source, written nowhere: each move, then each document's
-/// new text at its path once moved, relative to the mod folder. A refusal is ProblemDetails, as the edit's is.</summary>
+/// new text at its absolute path once moved. A refusal is ProblemDetails, as the edit's is.</summary>
 public record RecordEditChangesResponse(
     string FormKey, string Path, IReadOnlyList<SourceMove> Moves, IReadOnlyList<DocumentChange> Documents, string? NewFormKey = null);
 

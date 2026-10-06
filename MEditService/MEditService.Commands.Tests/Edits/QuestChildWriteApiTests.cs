@@ -17,7 +17,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private EditRecordHandler EditService() => _fixture.EditHandler;
+    private TestEditor EditService() => _fixture.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
