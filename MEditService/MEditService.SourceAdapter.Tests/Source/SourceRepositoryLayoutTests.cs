@@ -70,7 +70,7 @@ public sealed class SourceRepositoryLayoutTests
              new TreeFile(Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json"), [2])]);
 
         Assert.Equal(
-            [Path.Combine("plugin-source", "Mixed.ESP", "000000_Mixed.ESP.json"),
+            [Path.Combine("plugin-source", "Mixed.ESP", "000000_Mixed.esp.json"),
              Path.Combine("plugin-source", "Mixed.ESP", "npc_", "SomeNpc - 000800_Mixed.ESP.json")],
             pristine.Select(file => file.RelativePath));
         Assert.Equal([1], pristine[0].Content);

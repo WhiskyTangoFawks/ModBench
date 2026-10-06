@@ -96,9 +96,7 @@ public enum RecordEditRefusal
     /// then supplies the replace Option; the way out is confirming the replacement.</summary>
     DestinationHoldsRecord,
 
-    /// <summary>Deleting the header would remove the root <c>RecordData.json</c> the whole-mod door needs;
-    /// its FormKey is synthetic. Refused before the adapter's container test, whose filename-only
-    /// test would delete the whole source root.</summary>
+    /// <summary>A plugin cannot lose its header: the whole-mod door needs it, and its FormKey is synthetic.</summary>
     HeaderDeleteNotSupported,
 
     /// <summary>The envelope itself is malformed: an unknown operation, a hop naming nothing, a value

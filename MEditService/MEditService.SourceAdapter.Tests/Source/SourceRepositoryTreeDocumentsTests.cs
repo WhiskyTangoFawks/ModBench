@@ -69,18 +69,6 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     }
 
     [Fact]
-    public void ATreeWithTheHeaderUnderTheDoorsName_HoldsNoHeader()
-    {
-        PluginBaselines.Track(
-            _modFolder,
-            [new TreeFile(Path.Combine(PluginSourceRoot.For(PluginName), "RecordData.json"), Encoding.UTF8.GetBytes(HeaderBody))]);
-        var repository = SourceRepository.Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
-
-        Assert.DoesNotContain(TreeDocuments.Of(repository, Plugin), d => d.FormKey == HeaderFormKey);
-    }
-
-    [Fact]
     public void TheTreesDocuments_AreEveryDocumentPut()
     {
         var repository = Tracked();

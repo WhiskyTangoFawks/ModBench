@@ -1,6 +1,8 @@
 using System.Text;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -111,6 +113,20 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
                     """),
             ],
             TreeOf("New.esm"));
+    }
+
+    [Fact]
+    public void RenameSource_ToANameWithAnUppercaseExtension_LeavesTheHeaderWhereTheLayoutLooksForIt()
+    {
+        var renamed = Old with { Name = "New.ESM" };
+
+        Repository.RenameSource(Old, renamed.Name);
+
+        var documents = TreeDocuments.Of(Repository, renamed);
+        Assert.Contains(documents, d => d.RecordType == PluginHeader.RecordType);
+        Assert.Contains(
+            SourceRepository.DoorFilesOf(renamed.Name, Repository.FilesOf(renamed).Files),
+            file => file.RelativePath == Path.Combine(PluginSourceRoot.For(renamed.Name), "RecordData.json"));
     }
 
     [Fact]

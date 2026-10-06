@@ -91,7 +91,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         var sourceRoot = Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name));
         if (!Directory.Exists(sourceRoot)) return null;
 
-        // The header's document is the fixed root RecordData.json, and it declares a ModKey rather
+        // The header's document declares a ModKey rather
         // than the FormKey the index files it under, so no name or text in the tree carries that key.
         if (spelled.Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), StringComparison.OrdinalIgnoreCase))
         {

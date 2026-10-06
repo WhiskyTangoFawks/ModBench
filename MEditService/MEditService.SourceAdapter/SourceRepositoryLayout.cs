@@ -30,7 +30,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal const string RootFolderName = "plugin-source";
 
     /// <summary>The whole-mod door's own name for a container's field file, and for the header's
-    /// document at the plugin tree's root. The layout names the header's file for its FormKey instead.</summary>
+    /// document at the plugin tree's root.</summary>
     internal const string RecordDataFileName = "RecordData.json";
 
     /// <summary>The whole-mod door's own name for a group or block level's metadata file, written for
@@ -65,9 +65,17 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
     /// <summary>The files of <see cref="PristineFilesOf"/> as the whole-mod door names them.</summary>
     internal static IReadOnlyList<TreeFile> DoorFilesOf(string pluginFileName, IEnumerable<TreeFile> files) =>
-        [.. files.Select(file => file.RelativePath == HeaderDocumentFor(pluginFileName)
-            ? new TreeFile(Path.Combine(RootFor(pluginFileName), RecordDataFileName), file.Content)
+        [.. files.Select(file => IsHeaderDocumentPath(file.RelativePath, pluginFileName)
+            ? new TreeFile(DoorHeaderDocumentFor(pluginFileName), file.Content)
             : file)];
+
+    /// <summary><paramref name="doorText"/>, the door's words about <paramref name="pluginFileName"/>'s tree,
+    /// with the header's file named as the layout names it.</summary>
+    internal static string SourceTextOf(string pluginFileName, string doorText) =>
+        doorText.Replace(DoorHeaderDocumentFor(pluginFileName), HeaderDocumentFor(pluginFileName), StringComparison.Ordinal);
+
+    private static string DoorHeaderDocumentFor(string pluginFileName) =>
+        Path.Combine(RootFor(pluginFileName), RecordDataFileName);
 
     /// <summary>The plugin header's own document, named for its FormKey: a header has no EditorID.</summary>
     internal static string HeaderDocumentIn(string modFolder, string pluginFileName) =>
@@ -77,9 +85,8 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal static string HeaderDocumentFor(string pluginFileName) =>
         Path.Combine(RootFor(pluginFileName), HeaderDocumentLeaf(pluginFileName));
 
-    // The plugin's name verbatim, as the root folder spells it: a ModKey would lowercase the extension.
     internal static string HeaderDocumentLeaf(string pluginFileName) =>
-        $"{FormKey.Factory(HeaderFormKeyOf(pluginFileName)).ID:X6}_{pluginFileName}{JsonSuffix}";
+        LeafNameFor(FormKey.Factory(HeaderFormKeyOf(pluginFileName)), editorId: null, isDirectory: false);
 
     // The flat record's own file. The origin ModKey, never the plugin written into, keeps two
     // masters' records from colliding on one path; a directory-per-record type refuses.
