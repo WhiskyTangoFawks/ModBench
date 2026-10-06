@@ -210,6 +210,21 @@ function createMockBackend(): http.Server {
       res.end(loadOrderHeld ? JSON.stringify(MOCK_RECORD_TYPES) : 'No load order has been received.');
       return;
     }
+    const copyFile = /^\/plugins\/([^/?]+)\/records\/[^/?]+\/file\?/.exec(url)?.[1];
+    if (copyFile !== undefined) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ path: decodeURIComponent(copyFile) === TRACKED_PLUGIN ? TRACKED_FILE : null }));
+      return;
+    }
+    if (url.startsWith('/plugin-source/record?')) {
+      const filePath = new URL(url, 'http://x').searchParams.get('path');
+      const holds = filePath === TRACKED_FILE;
+      res.writeHead(holds ? 200 : 422, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(holds
+        ? { formKey: TRACKED_FORM_KEY, plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN }
+        : { detail: `${filePath} declares no FormKey, so it is no record's document.` }));
+      return;
+    }
     const comparedFormKey = /^\/records\/([^/?]+)\/compare$/.exec(url)?.[1];
     if (comparedFormKey !== undefined) {
       const answer = MOCK_COMPARISONS.get(decodeURIComponent(comparedFormKey));
@@ -229,8 +244,18 @@ function createMockBackend(): http.Server {
   });
 }
 
+const TRACKED_PLUGIN = 'Tracked.esp';
+const TRACKED_ORIGIN = 'TrackedMod';
+const TRACKED_FORM_KEY = '000801:Tracked.esp';
+const TRACKED_FILE = path.join(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'modbench-tracked-')), TRACKED_ORIGIN, 'plugin-source', TRACKED_PLUGIN, 'Weapons', 'TrackedGun.json');
+fs.mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
+fs.writeFileSync(TRACKED_FILE, JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun' }));
+
 const HELD_FORM_KEY = '000801:Held.esp';
-const MOCK_COMPARISONS = new Map<string, CompareResult>([[HELD_FORM_KEY, comparisonOf(HELD_FORM_KEY, [
+const MOCK_COMPARISONS = new Map<string, CompareResult>([[TRACKED_FORM_KEY, comparisonOf(TRACKED_FORM_KEY, [
+  { plugin: TRACKED_PLUGIN, isWinner: true, editorId: 'TrackedGun' },
+])], [HELD_FORM_KEY, comparisonOf(HELD_FORM_KEY, [
   { plugin: 'Held.esp', isWinner: false, editorId: 'OldGun' },
   { plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun', fields: [
     fieldOf({ name: 'Armor', type: 'formKey', validFormKeyTypes: ['WEAP'] }),
@@ -393,6 +418,51 @@ describe('modbench.record.open', () => {
 
 const PROBE_SPACING_MS = 1000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+describe('a tracked copy of a record', () => {
+  const trackedCopy = { formKey: TRACKED_FORM_KEY, plugin: { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN } };
+  const fileTabs = () => openTabs().filter((t) =>
+    t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath === TRACKED_FILE && t.input.viewType === 'modbench.recordFile');
+  const reads = () => requestLog.filter((line) => line === `GET /records/${encodeURIComponent(TRACKED_FORM_KEY)}/compare`).length;
+
+  before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
+  afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
+
+  it('opens as its file in the record grid, titled with the file\'s name after its read lands', async () => {
+    const readsBefore = reads();
+
+    await vscode.commands.executeCommand('modbench.record.open', trackedCopy);
+    const [tab] = await waitFor('the file\'s tab', () => fileTabs().length > 0 && fileTabs());
+    await waitFor('the record\'s read', () => reads() > readsBefore);
+    await sleep(500);
+
+    assert.strictEqual(tab?.label, 'TrackedGun.json');
+    assert.deepStrictEqual(fileTabs().map((t) => t.label), ['TrackedGun.json']);
+  });
+
+  it('shows the file already open in a tab, and does not open it twice', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', [trackedCopy, { formKey: 'Fallout4.esm:000070' }]);
+    await waitFor('both tabs', () => (fileTabs().length > 0 && openTabs().length === 2) || undefined);
+
+    await vscode.commands.executeCommand('modbench.record.open', trackedCopy);
+
+    await waitFor('the file\'s tab active', () => {
+      const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+      return input instanceof vscode.TabInputCustom && input.uri.fsPath === TRACKED_FILE;
+    });
+    assert.strictEqual(openTabs().length, 2);
+  });
+
+  it('opens in the record grid by the route VS Code opens any file by, reading the record mEdit says it holds', async () => {
+    const asked = `GET /plugin-source/record?path=${encodeURIComponent(TRACKED_FILE)}`;
+    const readsBefore = requestLog.filter((line) => line === asked).length;
+
+    await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(TRACKED_FILE));
+
+    await waitFor('the file\'s tab in the record grid', () => fileTabs().length === 1);
+    await waitFor('mEdit asked which record the file holds', () => requestLog.filter((line) => line === asked).length > readsBefore);
+  });
+});
 
 async function downloadsRows(): Promise<string[]> {
   await vscode.env.clipboard.writeText('');

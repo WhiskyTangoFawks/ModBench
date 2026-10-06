@@ -3,6 +3,7 @@ import { headerFormKeyOf } from '../wire/headerFormKey';
 import type { PluginAddress } from '../wire/pluginAddress';
 
 export const RECORD_EDITOR_VIEW_TYPE = 'modbench.record';
+export const RECORD_FILE_VIEW_TYPE = 'modbench.recordFile';
 
 const SCHEME = 'modbench-record';
 const SUFFIX = '.modbench-record';

@@ -10,7 +10,7 @@ const h = vi.hoisted(() => ({
   commands: new Map<string, (...args: unknown[]) => unknown>(),
   contextKeys: new Map<string, unknown>(),
   executed: [] as unknown[][],
-  editorProviders: [] as unknown[],
+  editorProviders: new Map<string, unknown>(),
   editorProviderDisposals: 0,
   treeViews: [] as FakeTreeView[],
 }));
@@ -39,8 +39,8 @@ vi.mock('vscode', () => ({
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
   },
   window: {
-    registerCustomEditorProvider: (_viewType: string, provider: unknown) => {
-      h.editorProviders.push(provider);
+    registerCustomEditorProvider: (viewType: string, provider: unknown) => {
+      h.editorProviders.set(viewType, provider);
       return { dispose: () => { h.editorProviderDisposals++; } };
     },
     createTreeView: (_id: string, options: unknown) => {
@@ -70,6 +70,7 @@ import { recordUri } from '../recordUri';
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { ReferencedByTreeProvider } from '../ReferencedByTreeProvider';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
+import { comparisonOf } from '../../test/comparison';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -111,12 +112,20 @@ interface RecordEditorProvider {
 const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =>
   typeof value === 'object' && value !== null && 'openCustomDocument' in value && 'resolveCustomEditor' in value;
 
+interface RecordFileEditorProvider {
+  resolveCustomTextEditor(document: unknown, panel: unknown): Promise<void>;
+}
+
+const isRecordFileEditorProvider = (value: unknown): value is RecordFileEditorProvider =>
+  typeof value === 'object' && value !== null && 'resolveCustomTextEditor' in value;
+
 function makeEditor(client = new InMemoryMEditClient(), viewSelections = new Map<string, () => readonly unknown[]>()) {
   const focusedView = createFocusedView();
+  const outputChannel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn() };
   const editor = createEditor({
     context: { extensionUri: fakeUri('/ext') },
     meditClient: client,
-    outputChannel: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+    outputChannel,
     reporterFor: () => ({ report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() }),
     ask: vi.fn(),
     focusedView,
@@ -124,7 +133,7 @@ function makeEditor(client = new InMemoryMEditClient(), viewSelections = new Map
     recordWrite: (command) => command(),
     refreshSourceControlFor: () => undefined,
   });
-  const provider = h.editorProviders.at(-1);
+  const provider = h.editorProviders.get('modbench.record');
   if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
   const referencedBy = h.treeViews.at(-1);
   if (!referencedBy) throw new Error('no Referenced By view');
@@ -133,7 +142,14 @@ function makeEditor(client = new InMemoryMEditClient(), viewSelections = new Map
     provider.resolveCustomEditor(provider.openCustomDocument(recordUri({ formKey })), panel);
     return panel;
   };
-  return { editor, open, referencedBy, focusedView };
+  const fileProvider = h.editorProviders.get('modbench.recordFile');
+  if (!isRecordFileEditorProvider(fileProvider)) throw new Error('no record file editor registered');
+  const openFile = async (fsPath: string): Promise<FakePanel> => {
+    const panel = fakePanel();
+    await fileProvider.resolveCustomTextEditor({ uri: { fsPath } }, panel);
+    return panel;
+  };
+  return { editor, open, openFile, referencedBy, focusedView, outputChannel };
 }
 
 beforeEach(() => {
@@ -287,6 +303,82 @@ describe('a record gesture from the palette', () => {
   });
 });
 
+describe('a record file\'s tab', () => {
+  const GUN = '000801:A.esp';
+  const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+  const holding = (formKey: string) => ({ formKey, plugin: 'A.esp', origin: 'ModA' });
+  const pageGlobal = (panel: FakePanel, name: string): unknown => {
+    const assigned = new RegExp(`window\\.${name} = ("(?:[^"\\\\]|\\\\.)*");`).exec(panel.webview.html ?? '')?.[1];
+    return assigned === undefined ? undefined : JSON.parse(assigned);
+  };
+  function fileClient(): InMemoryMEditClient {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]));
+    client.setQueryAnswer('getPlugins', []);
+    return client;
+  }
+
+  it('shows the record mEdit says the file holds, followed by Referenced By and read again as any record tab is', async () => {
+    const client = fileClient();
+    client.setQueryAnswer('getRecordOfFile', holding(GUN));
+    const { editor, openFile, referencedBy } = makeEditor(client);
+
+    const tab = await openFile(FILE);
+
+    expect(client.calls).toContainEqual({ method: 'getRecordOfFile', args: [FILE] });
+    expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
+    expect((await recordOf(referencedBy)).description).toBe('Gun');
+    editor.announceConflictsComputed();
+    expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
+  });
+
+  it('keeps the file\'s name as its title once its read is answered', async () => {
+    const client = fileClient();
+    client.setQueryAnswer('getRecordOfFile', holding(GUN));
+    const { openFile } = makeEditor(client);
+    const tab = await openFile(FILE);
+    tab.title = 'Gun.json';
+
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN });
+    await settle();
+
+    expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'recordLoadAnswered', ok: true }));
+    expect(tab.title).toBe('Gun.json');
+  });
+
+  it('shows "Failed to load:" and mEdit\'s reason when the file holds no record, with a line in the Output', async () => {
+    const client = fileClient();
+    const why = `${FILE} declares no FormKey, so it is no record's document.`;
+    client.setQueryFailure('getRecordOfFile', new Error(why));
+    const { openFile, outputChannel } = makeEditor(client);
+
+    const tab = await openFile(FILE);
+
+    expect(pageGlobal(tab, 'mEditLoadError')).toBe(why);
+    expect(pageGlobal(tab, 'mEditFormKey')).toBeUndefined();
+    expect(outputChannel.warn).toHaveBeenCalledWith(`Failed to read ${FILE}: ${why}`);
+  });
+
+  it('asks again on mEdit\'s next load-order status, and shows the record once mEdit answers', async () => {
+    const client = fileClient();
+    client.setQueryFailureOnce('getRecordOfFile', new Error('mEdit has not started'));
+    client.setQueryAnswer('getRecordOfFile', holding(GUN));
+    const { openFile } = makeEditor(client);
+    const tab = await openFile(FILE);
+    expect(pageGlobal(tab, 'mEditLoadError')).toBe('mEdit has not started');
+
+    client.emit({
+      kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
+      loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1 },
+    });
+    await settle();
+
+    expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
+    expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
+  });
+});
+
 describe('the Editor disposed', () => {
   it('lets go of what it registered once, however often it is disposed', () => {
     const { editor } = makeEditor();
@@ -295,6 +387,6 @@ describe('the Editor disposed', () => {
     editor.dispose();
     editor.dispose();
 
-    expect(h.editorProviderDisposals).toBe(1);
+    expect(h.editorProviderDisposals).toBe(h.editorProviders.size);
   });
 });

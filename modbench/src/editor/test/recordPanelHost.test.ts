@@ -13,7 +13,7 @@ vi.mock('vscode', async () => ({
   TreeItem: (await import('../../test/vscodeMock')).TreeItem,
   TreeItemCollapsibleState: (await import('../../test/vscodeMock')).TreeItemCollapsibleState,
   EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { return undefined; } dispose() { return undefined; } },
-  Uri: { from: (parts: { path: string }) => parts.path, joinPath: vi.fn() },
+  Uri: { from: (parts: { path: string }) => parts.path, file: (path: string) => `file://${path}`, joinPath: vi.fn() },
   Disposable: class { constructor(public dispose: () => void) {} },
   ViewColumn: { Active: -1, One: 1, Beside: -2 },
   commands: {
@@ -172,6 +172,64 @@ describe('modbench.record.open from the palette, with no Argument', () => {
     await open();
 
     expect(pickRecord).not.toHaveBeenCalled();
+  });
+});
+
+describe('modbench.record.open on a copy, a record and the plugin it is in', () => {
+  const GUN = '000801:A.esp';
+  const plugin = { name: 'A.esp', origin: 'ModA' };
+  const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+  const opened = () => executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith').map(([, uri, viewType]) => [uri, viewType]);
+
+  function registerAnswering(file: { path: string | null } | null, holds = GUN): void {
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setQueryAnswer('getRecordFile', file);
+    meditClient.setQueryAnswer('getRecordOfFile', { formKey: holds, plugin: plugin.name, origin: plugin.origin });
+    register(() => [], { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient });
+  }
+
+  it('opens a tracked copy\'s file in the record grid, as a preview', async () => {
+    registerAnswering({ path: FILE });
+
+    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
+
+    expect(executeCommand.mock.calls).toEqual([
+      ['vscode.openWith', `file://${FILE}`, 'modbench.recordFile', { viewColumn: -1, preview: true }],
+    ]);
+  });
+
+  it('opens an untracked copy, whose record has no file, in the record\'s own tab', async () => {
+    registerAnswering({ path: null });
+
+    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
+
+    expect(opened()).toEqual([[`/${encodeURIComponent(GUN)}.modbench-record`, 'modbench.record']]);
+  });
+
+  it('opens an untracked plugin\'s header in the header\'s own tab', async () => {
+    registerAnswering({ path: null });
+
+    await commandHandlers.get('modbench.record.open')?.({ header: plugin });
+
+    expect(opened()).toEqual([['/A.esp.modbench-record', 'modbench.record']]);
+  });
+
+  it('opens a copy carried in another record\'s file, as a placed reference is in its cell\'s, in its own tab', async () => {
+    registerAnswering({ path: FILE }, '000700:A.esp');
+
+    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
+
+    expect(opened()).toEqual([[`/${encodeURIComponent(GUN)}.modbench-record`, 'modbench.record']]);
+  });
+
+  it('refuses a copy the plugin does not hold, naming it, and opens nothing', async () => {
+    reporter.report.mockClear();
+    registerAnswering(null);
+
+    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
+
+    expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, `A.esp (ModA) holds no ${GUN}.`]]);
+    expect(opened()).toEqual([]);
   });
 });
 

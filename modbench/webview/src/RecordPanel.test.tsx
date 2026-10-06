@@ -987,6 +987,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
+  afterEach(() => vi.unstubAllGlobals());
 
   it('re-loads data when LOAD_RECORD arrives with the same formKey', async () => {
     const { client } = renderPanel(compareResult);
@@ -1022,9 +1023,18 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
     await waitFor(() => expect(screen.queryByText(/Failed to load/)).not.toBeInTheDocument());
     await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
   });
+
+  it('shows "Failed to load:" and the reason the page was given when no record could be read for its tab, and reads nothing', () => {
+    vi.stubGlobal('mEditFormKey', undefined);
+    vi.stubGlobal('mEditLoadError', 'Gun.json declares no FormKey.');
+    const { client } = renderPanel(compareResult);
+
+    expect(screen.getByText('Failed to load: Gun.json declares no FormKey.')).toBeInTheDocument();
+    expect(client.load).not.toHaveBeenCalled();
+  });
 });
 
-const loaded = (result: CompareResult | null, conflictsComputed = true) => ({
+const loaded =(result: CompareResult | null, conflictsComputed = true) => ({
   ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), conflictsComputed, loadFailures: [],
 });
 
