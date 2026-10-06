@@ -52,7 +52,7 @@ internal sealed class PluginIngest
 
         var phaseTimer = Stopwatch.StartNew();
         var counters = new PhaseCounters();
-        foreach (var batch in Indexable(documents, schemas).Chunk(PrepareBatchSize))
+        foreach (var batch in documents.Records.Chunk(PrepareBatchSize))
         {
             AppendBatch(
                 batch, schemas, plugin, origin, documentAppender, counters,
@@ -133,12 +133,6 @@ internal sealed class PluginIngest
     // Large enough to keep eight cores busy on cheap records; small enough that a batch of the
     // largest cell documents stays inside a few hundred MB.
     private const int PrepareBatchSize = 2048;
-
-    // A document whose record type the schema does not publish has no table to land in, exactly as
-    // it had no enumeration to reach it before.
-    private static IEnumerable<PluginDocument> Indexable(
-        IPluginDocuments documents, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        documents.Records.Where(d => schemas.ContainsKey(d.RecordType));
 
     private void AppendBatch(
         PluginDocument[] batch, IReadOnlyDictionary<string, RecordTableSchema> schemas,

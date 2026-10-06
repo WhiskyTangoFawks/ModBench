@@ -50,7 +50,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
             {
               "FormKey": "000804:Old.esp",
               "Temporary": [
-                { "FormKey": "000805:Old.esp", "Base": "000800:DLC.esm" }
+                { "MutagenObjectType": "PlacedObject", "FormKey": "000805:Old.esp", "Base": "000800:DLC.esm" }
               ]
             }
             """),
@@ -86,7 +86,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
                     {
                       "FormKey": "000804:New.esm",
                       "Temporary": [
-                        { "FormKey": "000805:New.esm", "Base": "000800:DLC.esm" }
+                        { "MutagenObjectType": "PlacedObject", "FormKey": "000805:New.esm", "Base": "000800:DLC.esm" }
                       ]
                     }
                     """),

@@ -60,7 +60,8 @@ internal static class LastCommitComparison
             : [];
     }
 
-    // A file a racing write took away is gone; one that exists and cannot be read is a failure.
+    // A file a racing write took away is gone. One another process holds throws as it is, so the
+    // read is retried rather than remembered as a document that does not parse (ADR-0003).
     private static string? ReadWorkingText(string path)
     {
         try
@@ -70,10 +71,6 @@ internal static class LastCommitComparison
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
             return null;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            throw new UnreadableSourceDocumentException(path, $"it cannot be read ({ex.Message})");
         }
     }
 
