@@ -78,14 +78,21 @@ describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story
   });
 
   it('searches the active tracked plugins alone (ADR-0012)', async () => {
-    const untracked = { name: 'C.esp', origin: 'ModC' };
+    const untracked = { name: 'A.esp', origin: 'ModC' };
     const inactive = { name: 'D.esp', origin: 'ModD' };
     const { client, symbolsFor } = symbols(
-      [plugin(modA), plugin(untracked, { isTracked: false }), plugin(inactive, { inLoadOrder: false })], [], {});
+      [plugin(untracked, { isTracked: false }), plugin(modA), plugin(inactive, { inLoadOrder: false })], [], {});
 
     await symbolsFor('Rusty');
 
-    expect(vi.mocked(client.searchRecords).mock.calls.map(([, , scope]) => scope?.name)).toEqual(['A.esp']);
+    expect(vi.mocked(client.searchRecords).mock.calls.map(([, , scope]) => [scope?.name, scope?.origin])).toEqual([['A.esp', 'ModA']]);
+  });
+
+  it('lists nothing for an empty query, without asking mEdit', async () => {
+    const { client, symbolsFor } = symbols([plugin(modA)], [summary(GUN, modA, 'RustyGun')], {});
+
+    expect(await symbolsFor(' ')).toEqual([]);
+    expect(client.searchRecords).not.toHaveBeenCalled();
   });
 
   it('lists what it found and tells, once, each plugin it could not search and each copy it could not open', async () => {
@@ -102,9 +109,47 @@ describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story
     expect(listed(await symbolsFor('Rusty'))).toEqual([{ name: `RustyGun [${GUN}]`, plugin: 'A.esp', uri: `file:${GUN_FILE}` }]);
     expect(reporter.reports).toEqual([{
       severity: 'warning',
-      message: 'Go to Symbol in Workspace on "Rusty" left out what it could not search or open.',
+      message: 'Go to Symbol in Workspace left out what it could not search or open.',
       detail: `E.esp (ModE): mEdit is down. B.esp (ModB) holds no ${STAND}.`,
     }]);
+  });
+
+  it('tells each reason once, until it changes or a search leaves nothing out', async () => {
+    let down = true;
+    const { reporter, symbolsFor } = symbols([plugin(modA)], [], {}, {
+      searchRecords: () => down ? Promise.reject(new Error('mEdit is down.')) : Promise.resolve({ items: [], total: 0 }),
+    });
+    const told = () => reporter.reports.map(({ detail }) => detail);
+
+    await symbolsFor('Rus');
+    await symbolsFor('Rusty');
+    expect(told()).toEqual(['A.esp (ModA): mEdit is down.']);
+
+    down = false;
+    await symbolsFor('Rusty');
+    down = true;
+    await symbolsFor('Rusty');
+    expect(told()).toEqual(['A.esp (ModA): mEdit is down.', 'A.esp (ModA): mEdit is down.']);
+  });
+
+  it('tells a changed reason again', async () => {
+    let why = 'mEdit is down.';
+    const { reporter, symbolsFor } = symbols([plugin(modA)], [], {}, { searchRecords: () => Promise.reject(new Error(why)) });
+
+    await symbolsFor('Rusty');
+    why = 'mEdit is indexing.';
+    await symbolsFor('Rusty');
+
+    expect(reporter.reports.map(({ detail }) => detail)).toEqual(['A.esp (ModA): mEdit is down.', 'A.esp (ModA): mEdit is indexing.']);
+  });
+
+  it('tells once while it cannot list the plugins', async () => {
+    const { reporter, symbolsFor } = symbols([], [], {}, { getPlugins: () => Promise.reject(new Error('mEdit is down.')) });
+
+    await symbolsFor('Rus');
+    await symbolsFor('Rusty');
+
+    expect(reporter.reports).toHaveLength(1);
   });
 
   it('opens a symbol at its own record\'s FormKey member, a child record\'s in its owner\'s file', async () => {

@@ -3,9 +3,10 @@ import type { MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressOf } from '../wire/pluginAddress';
-import { copyDocument, type RecordCopy } from '../drivingLib/recordDocument';
+import type { RecordCopy } from '../drivingLib/recordDocument';
 import { formKeyAt } from './formKeyHover';
-import { ownFormKey, recordObject, type RecordLocation, type RecordLocationDeps, type TextSpan } from './recordLocation';
+import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
+import { ownFormKey, recordObject, type TextSpan } from './recordText';
 
 const valuesOf = (node: Node): Node[] => (node.type === 'property' ? node.children?.slice(1) : node.children) ?? [];
 
@@ -37,16 +38,6 @@ export interface ReferencesDeps<Document> extends RecordLocationDeps<Document> {
 export function referencesOf<Document extends { getText(): string }>(
   { client, reporter, open }: ReferencesDeps<Document>,
 ): (text: string, offset: number) => Promise<RecordLocation<Document>[]> {
-  const located = async (copy: RecordCopy, formKey: string): Promise<RecordLocation<Document> | string> => {
-    try {
-      const opened = await copyDocument(client, copy);
-      if ('refused' in opened) return opened.refused;
-      const document = await open(opened.uri);
-      return { uri: opened.uri, document, ...referenceSpan(document.getText(), copy.formKey, formKey) };
-    } catch (error) {
-      return `${copy.formKey} in ${copy.plugin.name} (${copy.plugin.origin}): ${errorMessage(error)}`;
-    }
-  };
   return async (text, offset) => {
     const found = formKeyAt(text, offset);
     if (!found) return [];
@@ -57,11 +48,13 @@ export function referencesOf<Document extends { getText(): string }>(
     });
     const copies = new Map(rows.map((row): [string, RecordCopy] =>
       [JSON.stringify([row.formKey, row.origin, row.plugin]), { formKey: row.formKey, plugin: pluginAddressOf(row) }]));
-    const results = await Promise.all([...copies.values()].map((copy) => located(copy, formKey)));
-    const leftOut = results.filter((result) => typeof result === 'string');
+    const { found: located, leftOut } = await locateCopies(client, [...copies.values()], async (copy, uri) => {
+      const document = await open(uri);
+      return { uri, document, ...referenceSpan(document.getText(), copy.formKey, formKey) };
+    });
     if (leftOut.length > 0) {
       reporter.report('warning', `Find All References on ${formKey} left out the copies it could not open.`, leftOut.join(' '));
     }
-    return results.filter((result) => typeof result !== 'string');
+    return located;
   };
 }

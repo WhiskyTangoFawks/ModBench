@@ -1,16 +1,9 @@
-import { parseTree } from 'jsonc-parser';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { recordDocument } from '../drivingLib/recordDocument';
 import { formKeyAt } from './formKeyHover';
-import { ownFormKey, recordObject, type RecordLocation, type RecordLocationDeps, type TextSpan } from './recordLocation';
-
-export function formKeyMember(text: string, formKey: string): TextSpan | undefined {
-  const root = parseTree(text);
-  const record = root && recordObject(root, formKey);
-  const member = record && ownFormKey(record)?.parent;
-  return member && { start: member.offset, end: member.offset + member.length };
-}
+import type { RecordLocation, RecordLocationDeps } from './recordLocation';
+import { formKeyMember } from './recordText';
 
 export interface DefinitionDeps<Document> extends RecordLocationDeps<Document> {
   reporter: Pick<Reporter, 'shownOnSurface'>;

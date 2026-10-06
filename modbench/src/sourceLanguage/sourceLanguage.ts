@@ -23,7 +23,7 @@ const diagnosticOf = ({ message, start, end }: ProblemOnFile): vscode.Diagnostic
 // Located at its document's start until VS Code resolves it, when it is opened.
 class RecordSymbolInformation extends vscode.SymbolInformation {
   constructor(readonly record: RecordSymbol) {
-    super(record.name, vscode.SymbolKind.Object, record.plugin.name, new vscode.Location(record.uri, new vscode.Position(0, 0)));
+    super(record.name, vscode.SymbolKind.Object, `${record.plugin.name} (${record.plugin.origin})`, new vscode.Location(record.uri, new vscode.Position(0, 0)));
   }
 }
 

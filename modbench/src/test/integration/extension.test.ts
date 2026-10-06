@@ -1216,8 +1216,8 @@ describe('A FormKey in plugin source', () => {
     const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', 'Tracked');
 
     assert.deepStrictEqual(found.map((symbol) => [symbol.name, symbol.containerName, symbol.location.uri.toString(true)]).sort(), [
-      [`TrackedGun [${TRACKED_FORM_KEY}]`, TRACKED_PLUGIN, vscode.Uri.file(TRACKED_FILE).toString(true)],
-      [`TrackedRef [${CHILD_FORM_KEY}]`, TRACKED_PLUGIN, trackedChildUri],
+      [`TrackedGun [${TRACKED_FORM_KEY}]`, `${TRACKED_PLUGIN} (${TRACKED_ORIGIN})`, vscode.Uri.file(TRACKED_FILE).toString(true)],
+      [`TrackedRef [${CHILD_FORM_KEY}]`, `${TRACKED_PLUGIN} (${TRACKED_ORIGIN})`, trackedChildUri],
     ].sort());
     assert.deepStrictEqual(requestLog.slice(asked).filter((line) => line.startsWith('GET /records?')).map((line) => {
       const query = new URL(line.slice('GET '.length), 'http://x').searchParams;
