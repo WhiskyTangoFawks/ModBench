@@ -32,7 +32,7 @@ import {
   CHILD_RECORD_SCHEME, RENDERED_DOCUMENT_SCHEME, copyDocument, copyOf, recordDocument, type RecordCopy, type RecordDocument,
 } from '../drivingLib/recordDocument';
 import { errorMessage } from '../ports/errorMessage';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
+import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ViewState } from '../wire/messages';
 
 export interface EditorCommandDeps {
   context: Pick<vscode.ExtensionContext, 'extensionUri'>;
@@ -81,8 +81,11 @@ interface RecordEditorProviderDeps extends ShowRecordDeps {
   channel: Pick<vscode.LogOutputChannel, 'warn'>;
 }
 
-// The record a file's tab shows once an edit moves the file, and the record it moved from.
-interface MovedTab extends RecordCopy { from?: string; columns: readonly RecordCopy[] }
+// What a tab's page opens on: the record, the records beside it, and the place of the tab it stands in for.
+interface GridPage { formKey: string; columns: readonly RecordCopy[]; place?: ViewState }
+
+// The record a file's tab shows once an edit moves the file, the record it moved from, and the tab's place.
+interface MovedTab extends RecordCopy { from?: string; columns: readonly RecordCopy[]; place: ViewState | undefined }
 
 // Where `uri` stands once each move is made in order, each against the tree the one before it left.
 const movedTo = (uri: vscode.Uri, moves: readonly SourceMove[]): vscode.Uri => moves.reduce((at, { from, to }) => {
@@ -99,6 +102,7 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   private readonly documentOf = new Map<vscode.WebviewPanel, string>();
   // The copy each tab's document holds, once it is shown.
   private readonly shown = new Map<vscode.WebviewPanel, { uri: vscode.Uri; plugin: PluginAddress }>();
+  private readonly places = new Map<vscode.WebviewPanel, ViewState>();
   private readonly moved = new Map<string, MovedTab>();
 
   constructor(private readonly deps: RecordEditorProviderDeps) {}
@@ -136,16 +140,19 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   }
 
   /** Each file's tab a move takes along shows, where it lands, the record it showed, or the one the
-   *  edit moved it to, with the same columns. */
-  moving(moves: readonly SourceMove[], edited: EditAddress, newFormKey: string | undefined): void {
+   *  edit moved it to, with the same columns and place. Answers what undoes that for a move not made. */
+  moving(moves: readonly SourceMove[], edited: EditAddress, newFormKey: string | undefined): () => void {
+    const landings: string[] = [];
     for (const [panel, { uri, plugin }] of this.shown) {
       const to = movedTo(uri, moves);
       const formKey = this.deps.activeRecordTracker.formKeyOf(panel);
       if (uri.scheme !== 'file' || to === uri || !formKey) continue;
-      const columns = this.deps.editsInFlight.columnsOf(panel);
+      const kept = { plugin, columns: this.deps.editsInFlight.columnsOf(panel), place: this.places.get(panel) };
       const rekeyed = newFormKey !== undefined && formKey === edited.formKey && samePluginAddress(plugin, edited.plugin);
-      this.moved.set(to.toString(), rekeyed ? { formKey: newFormKey, plugin, from: formKey, columns } : { formKey, plugin, columns });
+      this.moved.set(to.toString(), rekeyed ? { ...kept, formKey: newFormKey, from: formKey } : { ...kept, formKey });
+      landings.push(to.toString());
     }
+    return () => { for (const landing of landings) this.moved.delete(landing); };
   }
 
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
@@ -157,7 +164,7 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
       const { formKey, plugin } = copyOf(document.uri);
       const documentText = (pluginActive: boolean) => Promise.resolve(pluginActive ? undefined : document.getText());
-      this.show(panel, document.uri, formKey, columns, { titleFromRead: () => undefined, plugin, documentText });
+      this.show(panel, document.uri, { formKey, columns }, { titleFromRead: () => undefined, plugin, documentText });
       return;
     }
     if (document.uri.scheme === CHILD_RECORD_SCHEME) {
@@ -170,7 +177,7 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     const moved = this.moved.get(key);
     if (moved) {
       this.moved.delete(key);
-      this.showFile(panel, document, moved, moved.columns, () => undefined);
+      this.showFile(panel, document, moved, moved.columns, () => undefined, moved.place);
       if (moved.from) this.deps.editsInFlight.moved(panel, moved.plugin, moved.from, moved.formKey);
       return;
     }
@@ -201,23 +208,23 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   // copy, nor a record an edit moved before mEdit reports it, so the file's column reads the document then.
   private showFile(
     panel: vscode.WebviewPanel, document: vscode.TextDocument, { formKey, plugin }: RecordCopy, columns: readonly RecordCopy[],
-    titleFromRead: TabDocument['titleFromRead'],
+    titleFromRead: TabDocument['titleFromRead'], place?: ViewState,
   ): void {
     const documentText = async (pluginActive: boolean) => {
       if (document.isDirty || this.deps.editsInFlight.waitingFor(panel)) return document.getText();
       return pluginActive ? undefined : savedText(document.uri);
     };
-    this.show(panel, document.uri, formKey, columns, { titleFromRead, plugin, documentText });
+    this.show(panel, document.uri, { formKey, columns, place }, { titleFromRead, plugin, documentText });
     const following = vscode.workspace.onDidChangeTextDocument((change) => {
       if (change.document === document && change.contentChanges.length > 0) this.deps.editsInFlight.refresh(panel);
     });
     panel.onDidDispose(() => { following.dispose(); });
   }
 
-  private show(panel: vscode.WebviewPanel, uri: vscode.Uri, formKey: string, columns: readonly RecordCopy[], tab: TabDocument): void {
+  private show(panel: vscode.WebviewPanel, uri: vscode.Uri, page: GridPage, tab: Omit<TabDocument, 'keepViewState'>): void {
     this.shown.set(panel, { uri, plugin: tab.plugin });
-    panel.onDidDispose(() => this.shown.delete(panel));
-    showRecord(this.deps, panel, uri, formKey, columns, tab);
+    panel.onDidDispose(() => { this.shown.delete(panel); this.places.delete(panel); });
+    showRecord(this.deps, panel, uri, page, { ...tab, keepViewState: (place) => { this.places.set(panel, place); } });
   }
 }
 
@@ -233,7 +240,7 @@ async function savedText(uri: vscode.Uri): Promise<string | undefined> {
 }
 
 function showRecord(
-  deps: ShowRecordDeps, panel: vscode.WebviewPanel, document: vscode.Uri, formKey: string, columns: readonly RecordCopy[], tab: TabDocument,
+  deps: ShowRecordDeps, panel: vscode.WebviewPanel, document: vscode.Uri, { formKey, columns, place }: GridPage, tab: TabDocument,
 ): void {
   const {
     context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps,
@@ -263,7 +270,7 @@ function showRecord(
   panel.webview.onDidReceiveMessage((msg: unknown) => { void routeRecordPanelMessage(msg, panelRouterDeps); });
 
   showWebviewPage(panel.webview, context.extensionUri, {
-    script: 'main.js', globals: { mEditFormKey: formKey, mEditColumns: columns },
+    script: 'main.js', globals: { mEditFormKey: formKey, mEditColumns: columns, ...(place && { mEditViewState: place }) },
   });
 }
 
@@ -285,7 +292,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   const writeDeps: RecordWriteDeps = {
     meditClient,
     documentOf: (address) => recordEditorProvider.documentCarrying(address),
-    moving: (moves, edited, newFormKey) => { recordEditorProvider.moving(moves, edited, newFormKey); },
+    moving: (moves, edited, newFormKey) => recordEditorProvider.moving(moves, edited, newFormKey),
     oneAtATime: oneAtATime(),
     refreshSourceControlFor: (plugin) => { deps.refreshSourceControlFor(plugin); },
     // Surfaces a refused edit (ADR-0019).

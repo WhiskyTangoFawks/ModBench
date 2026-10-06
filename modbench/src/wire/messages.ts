@@ -1,5 +1,6 @@
 import type { components } from './generated/api';
 import type { PluginAddress } from './pluginAddress';
+import type { ColumnKey } from './columnKey';
 
 export const EXTENSION_TO_WEBVIEW = {
   LOAD_RECORD: 'loadRecord',
@@ -35,6 +36,9 @@ export const WEBVIEW_TO_EXTENSION = {
   // A click on a column's header (editor.md, Columns, story 8): the records the tab opens on in its
   // own place, the first as the file.
   OPEN_IN_PLACE: 'openInPlace',
+  // The grid's place, which the tab an edit's move of its file opens shows again (editor.md, States,
+  // story 5).
+  VIEW_STATE: 'viewState',
 } as const;
 
 export type ConflictThis = components['schemas']['ConflictThis'];
@@ -54,10 +58,39 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null; entered: boolean }
   | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string; columns: ColumnCopy[] }
-  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE; records: ColumnCopy[] };
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE; records: ColumnCopy[] }
+  | { type: typeof WEBVIEW_TO_EXTENSION.VIEW_STATE; state: ViewState };
 
 /** A record's copy the grid shows beside its document's own (editor.md, Columns, story 7). */
 export type ColumnCopy = Omit<components['schemas']['RecordCopy'], 'documentText'>;
+
+/** The rows collapsed, the columns collapsed, the focused cell and the scroll of a grid. */
+export interface ViewState {
+  collapsedRows: string[];
+  collapsedColumns: ColumnKey[];
+  focusedCell: { rowKey: string; plugin: ColumnKey | null } | null;
+  scroll: { top: number; left: number };
+}
+
+const isStrings = (value: unknown): value is string[] => Array.isArray(value) && value.every(isString);
+
+function isFocusedCell(value: unknown): value is ViewState['focusedCell'] {
+  return value === null || (typeof value === 'object' && 'rowKey' in value && isString(value.rowKey)
+    && 'plugin' in value && (value.plugin === null || isString(value.plugin)));
+}
+
+function isScroll(value: unknown): value is ViewState['scroll'] {
+  return typeof value === 'object' && value !== null
+    && 'top' in value && typeof value.top === 'number' && 'left' in value && typeof value.left === 'number';
+}
+
+export function isViewState(value: unknown): value is ViewState {
+  return typeof value === 'object' && value !== null
+    && 'collapsedRows' in value && isStrings(value.collapsedRows)
+    && 'collapsedColumns' in value && isStrings(value.collapsedColumns)
+    && 'focusedCell' in value && isFocusedCell(value.focusedCell)
+    && 'scroll' in value && isScroll(value.scroll);
+}
 
 function isPluginAddress(value: unknown): value is PluginAddress {
   return typeof value === 'object' && value !== null
@@ -220,7 +253,7 @@ type WebviewToExtensionWitness = {
   type?: unknown; formKey?: unknown; level?: unknown; message?: unknown; value?: unknown;
   plugin?: unknown; origin?: unknown; envelope?: unknown;
   requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown; entered?: unknown; columns?: unknown;
-  records?: unknown;
+  records?: unknown; state?: unknown;
 };
 
 function parseEditField(w: WebviewToExtensionWitness): WebviewToExtension {
@@ -270,6 +303,11 @@ function parseOpenInPlace(w: WebviewToExtensionWitness): WebviewToExtension {
   return { type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: w.records };
 }
 
+function parseViewState(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isViewState(w.state)) throw new Error('Expected "viewState" to carry the grid\'s collapsed rows and columns, focused cell and scroll.');
+  return { type: WEBVIEW_TO_EXTENSION.VIEW_STATE, state: w.state };
+}
+
 /** The webview message router's one entry point for data crossing `postMessage`: every
  *  `WEBVIEW_TO_EXTENSION` site parses through this rather than asserting the shape itself.
  *  Throws when the discriminant or a required field doesn't match what the type demands. */
@@ -285,6 +323,7 @@ export function parseWebviewToExtension(value: unknown): WebviewToExtension {
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return parseFocusCell(w);
     case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return parseRequestRecordLoad(w);
     case WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE: return parseOpenInPlace(w);
+    case WEBVIEW_TO_EXTENSION.VIEW_STATE: return parseViewState(w);
     default:
       throw new Error(`Unknown webview-to-extension message type: ${String(w.type)}.`);
   }

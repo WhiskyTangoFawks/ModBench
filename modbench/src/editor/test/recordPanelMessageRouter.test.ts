@@ -45,6 +45,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     documentText: () => Promise.resolve(undefined),
     tabPlace: () => undefined,
     readAnswered: vi.fn(),
+    keepViewState: vi.fn(),
     conflictsComputed: () => true,
     loadFailures: () => [],
     ...overrides,

@@ -6,14 +6,18 @@ const commandHandlers = new Map<string, (...args: unknown[]) => unknown>();
 const registerFileSystemProvider = vi.fn<(...args: unknown[]) => { dispose(): void }>(() => ({ dispose: () => undefined }));
 const executeCommand = vi.fn<(...args: unknown[]) => unknown>();
 const pickRecord = vi.fn<(...args: unknown[]) => Promise<string | null>>();
+const applyEdit = vi.fn<() => Promise<boolean>>(() => Promise.resolve(true));
 
 vi.mock('../recordPicker', () => ({ pickRecord: (...args: unknown[]) => pickRecord(...args) }));
 
 vi.mock('vscode', async () => ({
   TreeItem: (await import('../../test/vscodeMock')).TreeItem,
   TreeItemCollapsibleState: (await import('../../test/vscodeMock')).TreeItemCollapsibleState,
+  Range: (await import('../../test/vscodeMock')).Range,
+  WorkspaceEdit: class { renameFile() { return undefined; } createFile() { return undefined; } replace() { return undefined; } },
   EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { return undefined; } dispose() { return undefined; } },
   Uri: { from: ({ path, query }: { path: string; query?: string }) => (query ? `${path}?${query}` : path), file: (path: string) => ({
+    scheme: 'file', path, fsPath: path,
     toString: () => `file://${path}`, with: ({ scheme, query }: { scheme: string; query: string }) => `${scheme}:${path}?${query}`,
   }), joinPath: vi.fn() },
   Disposable: class { constructor(public dispose: () => void) {} },
@@ -29,7 +33,9 @@ vi.mock('vscode', async () => ({
     registerFileSystemProvider: (...args: unknown[]) => registerFileSystemProvider(...args),
     registerTextDocumentContentProvider: () => ({ dispose: () => undefined }),
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
-    openTextDocument: (uri: unknown) => Promise.resolve({ uri, getText: () => '{}' }),
+    onDidChangeTextDocument: () => ({ dispose: () => undefined }),
+    openTextDocument: (uri: unknown) => Promise.resolve({ uri, getText: () => '{}', isDirty: false }),
+    applyEdit: () => applyEdit(),
   },
   window: {
     registerFileDecorationProvider: () => ({ dispose: () => undefined }),
@@ -377,5 +383,80 @@ describe('a record panel open while mEdit reports a plugin it cannot read', () =
       [{ type: 'loadRecord', formKey: '000801:A.esp' }],
       [{ type: 'loadRecord', formKey: '000801:A.esp' }],
     ]);
+  });
+});
+
+describe('a file\'s tab an edit moves the file of', () => {
+  const plugin = { name: 'A.esp', origin: 'ModA' };
+  const NPC = '000800:A.esp';
+  const FILE = '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json';
+  const MOVED = '/mods/ModA/plugin-source/A.esp/Npcs/Renamed.json';
+  const place = { collapsedRows: ['Bounds'], collapsedColumns: ['A.esp|ModA'], focusedCell: { rowKey: 'Bounds', plugin: null }, scroll: { top: 40, left: 12 } };
+
+  function isDocument(candidate: unknown): candidate is vscode.TextDocument {
+    return typeof candidate === 'object' && candidate !== null && 'uri' in candidate;
+  }
+  function isProvider(candidate: unknown): candidate is vscode.CustomTextEditorProvider {
+    return typeof candidate === 'object' && candidate !== null && 'resolveCustomTextEditor' in candidate;
+  }
+
+  function webviewPanel() {
+    const listeners: ((message: unknown) => void)[] = [];
+    const panel = {
+      title: '', active: true, viewColumn: 1,
+      webview: {
+        html: '', options: {}, cspSource: '', asWebviewUri: () => ({ toString: () => '' }),
+        postMessage: () => Promise.resolve(true),
+        onDidReceiveMessage: (listener: (message: unknown) => void) => { listeners.push(listener); return { dispose: () => undefined }; },
+      },
+      onDidDispose: () => ({ dispose: () => undefined }),
+      onDidChangeViewState: () => ({ dispose: () => undefined }),
+    };
+    if (!isPanel(panel)) throw new Error('not a panel');
+    return { panel, tell: (message: unknown) => { for (const listener of listeners) listener(message); } };
+  }
+
+  async function shownOn(provider: vscode.CustomTextEditorProvider, path: string) {
+    const tab = webviewPanel();
+    const document = { uri: vscode.Uri.file(path), getText: () => '{}', isDirty: false };
+    if (!isDocument(document)) throw new Error('not a document');
+    await provider.resolveCustomTextEditor(document, tab.panel, { isCancellationRequested: false, onCancellationRequested: vi.fn() });
+    return tab;
+  }
+
+  async function editMovingTheFile() {
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setQueryAnswer('getRecordOfFile', { formKey: NPC, plugin: plugin.name, origin: plugin.origin });
+    meditClient.setQueryAnswer('getEditChanges', { applied: true, moves: [{ from: FILE, to: MOVED }], documents: [{ path: MOVED, text: '{}' }] });
+    register({ meditClient });
+    const provider = registerCustomEditorProvider.mock.calls.at(-1)?.[1];
+    if (!isProvider(provider)) throw new Error('no record grid registered');
+    const before = await shownOn(provider, FILE);
+    before.tell({ type: 'viewState', state: place });
+
+    await commandHandlers.get('modbench.record.editField')?.(
+      { formKey: NPC, plugin: plugin.name, origin: plugin.origin }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' });
+
+    return { provider, meditClient };
+  }
+
+  beforeEach(() => { applyEdit.mockReset(); applyEdit.mockResolvedValue(true); });
+
+  it('shows, where the file lands, the rows and columns collapsed, the focused cell and the scroll it had', async () => {
+    const { provider } = await editMovingTheFile();
+
+    const after = await shownOn(provider, MOVED);
+
+    expect(after.panel.webview.html).toContain(`window.mEditViewState = ${JSON.stringify(place)};`);
+  });
+
+  it('hands nothing to a tab opened later on the path a move VS Code did not make would have taken it to', async () => {
+    applyEdit.mockResolvedValue(false);
+    const { provider, meditClient } = await editMovingTheFile();
+
+    const later = await shownOn(provider, MOVED);
+
+    expect(later.panel.webview.html).not.toContain('mEditViewState');
+    expect(meditClient.calls.filter(({ method, args }) => method === 'getRecordOfFile' && args[0] === MOVED)).toHaveLength(1);
   });
 });

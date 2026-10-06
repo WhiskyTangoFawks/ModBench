@@ -1,7 +1,8 @@
 import { vscode } from './vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseExtensionToWebview,
-  type ArrayParentContext, type ColumnCopy, type ExtensionToWebview, type RecordEditEnvelope, type RecordLoadAnswer, type WebviewToExtension,
+  type ArrayParentContext, type ColumnCopy, type ExtensionToWebview, type RecordEditEnvelope, type RecordLoadAnswer, type ViewState,
+  type WebviewToExtension,
 } from '../../src/wire/messages';
 
 // The webview's bridge to native VS Code surfaces: a new native-surface gesture extends the
@@ -92,4 +93,8 @@ export function addElement(context: ArrayParentContext, value: unknown): void {
 // a re-read.
 export function focusCell(context: Record<string, unknown> | null, entered: boolean): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context, entered });
+}
+
+export function keepViewState(state: ViewState): void {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.VIEW_STATE, state });
 }

@@ -1321,6 +1321,52 @@ describe('RecordPanel — column collapse', () => {
   });
 });
 
+describe('RecordPanel — the place a tab keeps, carried to the tab a move of its file opens', () => {
+  beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); vi.mocked(vscode.postMessage).mockClear(); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const scroller = (container: HTMLElement) => required(container.querySelector<HTMLElement>('div[style*="overflow: auto"]'), 'the grid’s scroller');
+  const toldPlaces = () => vi.mocked(vscode.postMessage).mock.calls.map(([message]) => message)
+    .filter(message => message.type === WEBVIEW_TO_EXTENSION.VIEW_STATE);
+  const place = { collapsedRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
+
+  it('opens with the columns collapsed, the focused cell and the scroll the tab had', async () => {
+    vi.stubGlobal('mEditViewState', {
+      ...place, collapsedColumns: ['MyMod.esp'], focusedCell: { rowKey: 'Name', plugin: null }, scroll: { top: 40, left: 12 },
+    });
+    const { container } = renderPanel(compareResult);
+    await waitFor(() => screen.getByText('Original Name'));
+
+    expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
+    expect(screen.getByText('Name').closest('td')).toHaveAttribute('data-focused-cell');
+    expect([scroller(container).scrollTop, scroller(container).scrollLeft]).toEqual([40, 12]);
+  });
+
+  it('opens with the rows collapsed that the tab had collapsed', async () => {
+    vi.stubGlobal('mEditViewState', { ...place, collapsedRows: ['Bounds'] });
+    renderPanel(structCompareResult);
+    await waitFor(() => screen.getByText('Bounds'));
+
+    expect(screen.queryByText('X')).not.toBeInTheDocument();
+  });
+
+  it('tells the host its place each time it changes, and not before', async () => {
+    const { container } = renderPanel(structCompareResult);
+    await waitFor(() => screen.getByText('X'));
+    expect(toldPlaces()).toEqual([]);
+
+    fireEvent.click(screen.getByText('Bounds'));
+    fireEvent.doubleClick(screen.getByText('Bounds'));
+    scroller(container).scrollTop = 30;
+    fireEvent(scroller(container), new Event('scrollend'));
+
+    expect(toldPlaces().at(-1)).toEqual({
+      type: WEBVIEW_TO_EXTENSION.VIEW_STATE,
+      state: { ...place, collapsedRows: ['Bounds'], focusedCell: { rowKey: 'Bounds', plugin: null }, scroll: { top: 30, left: 0 } },
+    });
+  });
+});
+
 describe('RecordPanel — column widths: a column\'s header and every cell under it share one width', () => {
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
