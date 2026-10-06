@@ -3,6 +3,7 @@ using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index;
@@ -261,6 +262,51 @@ internal sealed class RelationReads(
     {
         using var connection = store.OpenReadConnection();
         return LinkResolution.ForLinksOf(connection, formKey, Resolve);
+    }
+
+    public IReadOnlyList<MissingReference> GetReferencesToMissingRecords()
+    {
+        using var connection = store.OpenReadConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT fr.source_plugin, fr.source_origin, fr.source_form_key, fr.record_type, fr.editor_id,
+                   fr.target_form_key, fr.field_path
+            FROM form_references fr
+            WHERE NOT EXISTS (SELECT 1 FROM form_lookup l WHERE l.form_key = fr.target_form_key)
+            ORDER BY fr.source_plugin, fr.source_origin, fr.source_form_key, fr.field_path
+            """;
+
+        var release = store.Release;
+        var missing = new List<MissingReference>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var target = reader.GetString(5);
+            if (FormKeyResolution.From(target, null, [], release).State != FormKeyResolutionState.Unresolved) continue;
+            missing.Add(new MissingReference(
+                new PluginAddress(reader.GetString(0), reader.GetString(1)), reader.GetString(2), reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4), target, reader.GetString(6)));
+        }
+        return missing;
+    }
+
+    public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(
+        Func<PluginAddress, PluginProvider.FromMod?> modOf)
+    {
+        var repositories = new Dictionary<PluginAddress, SourceRepository?>(PluginAddress.Comparer);
+        return
+        [
+            .. GetReferencesToMissingRecords().Select(reference =>
+            {
+                var mod = modOf(reference.Plugin);
+                if (!repositories.TryGetValue(reference.Plugin, out var repository))
+                {
+                    repository = mod is null ? null : SourceRepository.Over(mod, store.Release);
+                    repositories[reference.Plugin] = repository;
+                }
+                return SourceFilePlacement.Place(reference, repository, mod?.Folder ?? "");
+            }),
+        ];
     }
 
     public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)
