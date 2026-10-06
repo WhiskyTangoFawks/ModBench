@@ -53,7 +53,6 @@ public sealed class CreateChildRecordTests : IDisposable
     {
         { "npc_", nameof(ContainerModFixture.Quest) },
         { "land", nameof(ContainerModFixture.Cell) },
-        { "navm", nameof(ContainerModFixture.TopCell) },
         { "land", nameof(ContainerModFixture.EmbedCell) },
     };
 
@@ -156,21 +155,21 @@ public sealed class CreateChildRecordTests : IDisposable
         Assert.Equal(before, TrackedTree.Records(_fixture.ModFolder, _fixture.Plugin));
     }
 
-    public static TheoryData<bool, string> EachCellShape => new()
+    public static TheoryData<bool, CellPlace> EachCellShape => new()
     {
-        { false, nameof(InteriorCell) },
-        { true, nameof(InteriorCell) },
-        { false, nameof(ExteriorCell) },
-        { true, nameof(ExteriorCell) },
-        { false, nameof(WorldspacePersistentCell) },
-        { true, nameof(WorldspacePersistentCell) },
+        { false, CellPlace.Interior },
+        { true, CellPlace.Interior },
+        { false, CellPlace.Exterior },
+        { true, CellPlace.Exterior },
+        { false, CellPlace.PersistentWorldspaceCell },
+        { true, CellPlace.PersistentWorldspaceCell },
     };
 
     [Theory]
     [MemberData(nameof(EachCellShape))]
-    public void APlacedRecordCreatedOnACell_LandsInTheGroupItsPersistentFlagNames_PersistentAsItsGroup(bool persistent, string shape)
+    public void APlacedRecordCreatedOnACell_LandsInTheGroupItsPersistentFlagNames_PersistentAsItsGroup(bool persistent, CellPlace place)
     {
-        using var mod = CellShaped(shape, cell => cell.MajorRecordFlagsRaw = persistent ? PersistentFlag.Bit : 0, out var cell);
+        using var mod = CellShaped(place, cell => cell.MajorRecordFlagsRaw = persistent ? PersistentFlag.Bit : 0, out var cell);
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", cell.ToString());
 
@@ -198,34 +197,33 @@ public sealed class CreateChildRecordTests : IDisposable
         Assert.Equal(result.NewFormKey, created.Require()["FormKey"].Require().GetValue<string>());
     }
 
-    [Fact]
-    public void APlacedRecordCreatedOnAnExteriorCell_StartsAtTheCentreOfItsGrid()
+    [Theory]
+    [InlineData("refr", CellPlace.Exterior)]
+    [InlineData("phzd", CellPlace.Exterior)]
+    [InlineData("refr", CellPlace.Interior)]
+    public void APlacedRecordCreatedOnACellWithAGrid_LandsInItsTemporaryGroup_AtTheCentreOfTheGridCell(string recordType, CellPlace place)
     {
-        using var mod = ExteriorCell(out var cell, (_, exterior) => exterior.Grid = new CellGrid { Point = new P2Int(3, -2) });
+        using var mod = CellShaped(place, cell => cell.Grid = new CellGrid { Point = new P2Int(3, -2) }, out var cell);
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", cell.ToString());
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType, cell.ToString());
 
         Assert.True(result.Applied, result.Message);
         var created = Assert.Single(JsonNode.Parse(mod.Body(cell)).Require()[PersistentFlag.TemporaryGroup].Require().AsArray()).Require();
+        Assert.Equal(result.NewFormKey, created["FormKey"].Require().GetValue<string>());
         Assert.Equal("14336, -6144, 0", created["Position"].Require().GetValue<string>());
     }
 
-    public static TheoryData<bool, string> CellsWhoseReferencesKeepTheBarePosition => new()
-    {
-        { false, nameof(InteriorCell) },
-        { true, nameof(ExteriorCell) },
-        { true, nameof(WorldspacePersistentCell) },
-    };
-
     [Theory]
-    [MemberData(nameof(CellsWhoseReferencesKeepTheBarePosition))]
-    public void APlacedRecordCreatedOnAnInteriorOrPersistentCell_KeepsTheBarePosition(bool persistent, string shape)
+    [InlineData(CellPlace.Interior)]
+    [InlineData(CellPlace.Exterior)]
+    [InlineData(CellPlace.PersistentWorldspaceCell)]
+    public void APlacedRecordCreatedOnAPersistentCellWithAGrid_KeepsTheBarePosition_WhereverTheCellSits(CellPlace place)
     {
         using var mod = CellShaped(
-            shape,
+            place,
             cell =>
             {
-                cell.MajorRecordFlagsRaw = persistent ? PersistentFlag.Bit : 0;
+                cell.MajorRecordFlagsRaw = PersistentFlag.Bit;
                 cell.Grid = new CellGrid { Point = new P2Int(3, -2) };
             },
             out var cell);
@@ -233,16 +231,40 @@ public sealed class CreateChildRecordTests : IDisposable
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", cell.ToString());
 
         Assert.True(result.Applied, result.Message);
-        var group = persistent ? PersistentFlag.PersistentGroup : PersistentFlag.TemporaryGroup;
-        var created = Assert.Single(JsonNode.Parse(mod.Body(cell)).Require()[group].Require().AsArray()).Require();
+        var created = Assert.Single(JsonNode.Parse(mod.Body(cell)).Require()[PersistentFlag.PersistentGroup].Require().AsArray()).Require();
         Assert.Null(created["Position"]);
     }
 
-    private static SourceModFixture CellShaped(string shape, Action<Cell> flag, out FormKey cell) => shape switch
+    [Fact]
+    public void APlacedRecordCreatedOnACellWithNoGrid_KeepsTheBarePosition()
     {
-        nameof(InteriorCell) => InteriorCell(out cell, flag),
-        nameof(ExteriorCell) => ExteriorCell(out cell, (_, exterior) => flag(exterior)),
-        _ => WorldspacePersistentCell(out cell, flag),
+        using var mod = InteriorCell(out var cell, _ => { });
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", cell.ToString());
+
+        Assert.True(result.Applied, result.Message);
+        var created = Assert.Single(JsonNode.Parse(mod.Body(cell)).Require()[PersistentFlag.TemporaryGroup].Require().AsArray()).Require();
+        Assert.Null(created["Position"]);
+    }
+
+    [Fact]
+    public void ANavmeshCreatedOnAnInteriorCellCarryingThePersistentFlag_IsRefused_AndTheTreeIsAsItWas()
+    {
+        using var mod = InteriorCell(out var cell, interior => interior.MajorRecordFlagsRaw = PersistentFlag.Bit);
+        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "navm", cell.ToString());
+
+        Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
+        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+    }
+
+    private static SourceModFixture CellShaped(CellPlace place, Action<Cell> shape, out FormKey cell) => place switch
+    {
+        CellPlace.Interior => InteriorCell(out cell, shape),
+        CellPlace.Exterior => ExteriorCell(out cell, (_, exterior) => shape(exterior)),
+        CellPlace.PersistentWorldspaceCell => WorldspacePersistentCell(out cell, shape),
+        _ => throw new ArgumentOutOfRangeException(nameof(place), place, "No fixture builds a cell there."),
     };
 
     private static SourceModFixture InteriorCell(out FormKey cell, Action<Cell> shape)

@@ -72,10 +72,19 @@ public sealed class ChildRecordTypesTests
         Assert.Equal(Holding("navm"), Of(new Cell(Mod) { Landscape = new Landscape(Mod) }, CellPlace.Exterior));
     }
 
-    [Fact]
-    public void AWorldspacesPersistentCell_HoldsOnlyPlacedRecords()
+    [Theory]
+    [InlineData(CellPlace.Interior)]
+    [InlineData(CellPlace.Exterior)]
+    [InlineData(CellPlace.PersistentWorldspaceCell)]
+    public void ACellCarryingThePersistentFlag_HoldsOnlyPlacedRecords(CellPlace place)
     {
-        Assert.Equal(Holding(), Of(new Cell(Mod), CellPlace.PersistentWorldspaceCell));
+        Assert.Equal(Holding(), Of(new Cell(Mod) { MajorRecordFlagsRaw = PersistentFlag.Bit }, place));
+    }
+
+    [Fact]
+    public void AWorldspacesPersistentCell_WithoutThePersistentFlag_HoldsNavmeshesToo()
+    {
+        Assert.Equal(Holding("navm"), Of(new Cell(Mod), CellPlace.PersistentWorldspaceCell));
     }
 
     [Fact]

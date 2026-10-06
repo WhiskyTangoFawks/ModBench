@@ -55,21 +55,19 @@ public static class PlacedCell
             ? ((int)Math.Floor(x / width), (int)Math.Floor(y / width))
             : null;
 
-    /// <summary>A placed record xEdit creates in <paramref name="group"/> of <paramref name="cell"/>: persistent
-    /// in the persistent group, and at its grid cell's centre in an exterior cell's temporary group.</summary>
-    public static void AsCreatedIn(JsonObject placed, string group, JsonObject cell, CellPlace? place, GameRelease release)
+    /// <summary>What xEdit creates in <paramref name="group"/>: persistent in the persistent group, and in the
+    /// temporary group of a cell with a grid, at its centre. False, changing nothing, where the game's cell width is unknown.</summary>
+    public static bool TryAsCreatedIn(JsonObject placed, string group, JsonObject cell, GameRelease release)
     {
-        if (group == PersistentFlag.PersistentGroup) placed[RecordHeaderFlags.Member] = PersistentFlag.Bit;
-        else if (group == PersistentFlag.TemporaryGroup && place is CellPlace.Exterior && Grid(cell) is var (x, y))
-            placed[PositionMember] = CentreOf(x, y, release);
-    }
-
-    // The inverse of GridHolding.
-    private static string CentreOf(int x, int y, GameRelease release)
-    {
-        var width = SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth
-            ?? throw new InvalidOperationException($"{release} names no exterior cell width to find a cell's centre by.");
-        return ReflectedTypes.VectorText(new { X = (x + 0.5f) * width, Y = (y + 0.5f) * width, Z = 0f });
+        if (group == PersistentFlag.PersistentGroup)
+        {
+            placed[RecordHeaderFlags.Member] = PersistentFlag.Bit;
+            return true;
+        }
+        if (group != PersistentFlag.TemporaryGroup || Grid(cell) is not (int x, int y)) return true;
+        if (SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth is not { } width) return false;
+        placed[PositionMember] = ReflectedTypes.VectorText(new { X = (x + 0.5f) * width, Y = (y + 0.5f) * width, Z = 0f });
+        return true;
     }
 
     // The codec writes a vector as its components in English, comma-separated (ReflectedTypes.VectorText).

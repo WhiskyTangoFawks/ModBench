@@ -11,7 +11,7 @@ public enum CellPlace { Interior, Exterior, PersistentWorldspaceCell }
 /// in the game. A type with no schema is left out: no row would show the new record.</summary>
 public static class ChildRecordTypes
 {
-    private enum Narrowing { None, NotPersistent, Exterior }
+    private enum Narrowing { None, NotPersistent, NotPersistentExterior }
 
     // TwbMainRecord.GetAddList (wbImplementation.pas), keyed by the container's signature.
     private static readonly Dictionary<string, (string Type, Narrowing Narrowing)[]> XEditAddList =
@@ -24,7 +24,7 @@ public static class ChildRecordTypes
             [
                 .. new[] { "achr", "acre", "refr", "pgre", "pmis", "parw", "pbea", "pfla", "pcon", "pbar", "phzd" }
                     .Select(type => (type, Narrowing.None)),
-                ("land", Narrowing.Exterior), ("pgrd", Narrowing.NotPersistent), ("navm", Narrowing.NotPersistent),
+                ("land", Narrowing.NotPersistentExterior), ("pgrd", Narrowing.NotPersistent), ("navm", Narrowing.NotPersistent),
             ],
         };
 
@@ -36,7 +36,8 @@ public static class ChildRecordTypes
         IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
         if (!XEditAddList.TryGetValue(containerType, out var adds)) return [];
-        var container = Read(containerType, containerText, schemas, release);
+        using var document = JsonDocument.Parse(containerText);
+        var container = Read(containerType, document.RootElement, schemas, release);
         return [.. adds
             .Where(add => SlotFor(add, place, container, schemas, release) is ChildSlot.Open or ChildSlot.Several)
             .Select(add => add.Type)];
@@ -45,20 +46,20 @@ public static class ChildRecordTypes
     /// <summary>Where a new <paramref name="recordType"/> lands in the container, as Of reads it;
     /// <see cref="ChildSlot.Filled"/> only when a held single-record member is all that stands in the way.</summary>
     public static ChildSlot SlotFor(
-        string containerType, string containerText, CellPlace? place, string recordType,
+        string containerType, JsonElement container, CellPlace? place, string recordType,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
         if (!XEditAddList.TryGetValue(containerType, out var adds)
             || adds.Where(add => add.Type.Equals(recordType, StringComparison.OrdinalIgnoreCase)).ToList() is not [var offered])
             return new ChildSlot.NotHeld();
-        return SlotFor(offered, place, Read(containerType, containerText, schemas, release), schemas, release);
+        return SlotFor(offered, place, Read(containerType, container, schemas, release), schemas, release);
     }
 
     private static ChildSlot SlotFor(
         (string Type, Narrowing Narrowing) add, CellPlace? place, Container container,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
-        if (!Allows(add.Narrowing, place) || !schemas.ContainsKey(add.Type)
+        if (!Allows(add.Narrowing, place, container.Persistent) || !schemas.ContainsKey(add.Type)
             || RecordTypeDispatch.For(release).ConcreteFor(add.Type) is not { } held) return new ChildSlot.NotHeld();
 
         var takers = container.Members.Where(member => member.Holds.Any(type => type.IsAssignableFrom(held))).ToList();
@@ -85,22 +86,18 @@ public static class ChildRecordTypes
 
     private sealed record Container(IReadOnlyList<Member> Members, bool Persistent);
 
-    // No members for a deleted container: it holds nothing.
     private static Container Read(
-        string containerType, string containerText, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
-    {
-        using var document = JsonDocument.Parse(containerText);
-        var persistent = PersistentFlag.IsSet(document.RootElement);
-        return new(MembersOf(containerType, document, schemas, release), persistent);
-    }
+        string containerType, JsonElement root, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release) =>
+        new(MembersOf(containerType, root, schemas, release), PersistentFlag.IsSet(root));
 
+    // None for a deleted container: it holds nothing.
     private static List<Member> MembersOf(
-        string containerType, JsonDocument document, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+        string containerType, JsonElement root, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
         if (RecordTypeDispatch.For(release).ConcreteFor(containerType) is not { } container) return [];
-        if (DeletedFlag.IsSet(document.RootElement)) return [];
+        if (DeletedFlag.IsSet(root)) return [];
 
-        var held = new ContainerDocuments(release, schemas).ChildrenOf(containerType, document.RootElement)
+        var held = new ContainerDocuments(release, schemas).ChildrenOf(containerType, root)
             .GroupBy(child => child.SlotName, StringComparer.Ordinal)
             .ToDictionary(slot => slot.Key, slot => slot.First().FormKey, StringComparer.Ordinal);
         var category = release.ToCategory();
@@ -110,10 +107,10 @@ public static class ChildRecordTypes
                 slot.Key.Slot, slot.Value, HoldsAList(container, slot.Key.Slot) ? null : held.GetValueOrDefault(slot.Key.Slot)))];
     }
 
-    private static bool Allows(Narrowing narrowing, CellPlace? place) => narrowing switch
+    private static bool Allows(Narrowing narrowing, CellPlace? place, bool persistent) => narrowing switch
     {
-        Narrowing.NotPersistent => place is not CellPlace.PersistentWorldspaceCell,
-        Narrowing.Exterior => place is CellPlace.Exterior,
+        Narrowing.NotPersistent => !persistent,
+        Narrowing.NotPersistentExterior => !persistent && place is CellPlace.Exterior,
         _ => true,
     };
 

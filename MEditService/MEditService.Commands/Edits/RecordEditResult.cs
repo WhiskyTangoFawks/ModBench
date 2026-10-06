@@ -50,8 +50,8 @@ public enum RecordEditRefusal
     FormKeySpaceExhausted,
 
     /// <summary>The record is held inside another record's document — a type the game holds nowhere
-    /// else, a placed reference created in a cell, or a record created in a worldspace — and the
-    /// gesture does not reach it yet.</summary>
+    /// else, a placed reference created in a grid cell of a game whose cell width mEdit does not know,
+    /// or a record created in a worldspace — and the gesture does not reach it yet.</summary>
     HeldInAnotherRecordNotYetSupported,
 
     /// <summary>The index and the working tree disagree (a file moved outside Modbench). Not recreated at
