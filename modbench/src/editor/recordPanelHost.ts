@@ -179,7 +179,7 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
 }
 
 // The file on disk, as VS Code misses a write to a file outside the workspace while its tab is
-// hidden. Its byte order mark goes, as a document's text has none. A file gone is mEdit's to answer.
+// hidden. A document's text has no byte order mark. A file gone is mEdit's to answer.
 async function savedText(uri: vscode.Uri): Promise<string | undefined> {
   try {
     return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await vscode.workspace.fs.readFile(uri)).replace(/^\uFEFF/, '');
