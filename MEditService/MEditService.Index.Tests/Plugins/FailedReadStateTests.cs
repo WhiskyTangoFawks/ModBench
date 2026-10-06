@@ -117,11 +117,15 @@ public sealed class FailedReadStateTests : IDisposable
     public void ATreeWhoseFormKeyTwoDocumentsClaimWhenFirstRead_NamesEachOfThem_WhileItsBinaryStandsIn()
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        var original = NpcDocument;
         ClaimedTwice();
 
         using var index = Reconciled();
 
-        Assert.Equal(2, index.SourceFileFailures.Count);
+        var copy = Path.Combine(Path.GetDirectoryName(original).Require(), "Backup", Path.GetFileName(original));
+        Assert.Equivalent(new[] { Relative(original), Relative(copy) }, index.SourceFileFailures.Select(f => f.SourceRelativePath), strict: true);
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1,4 +1,4 @@
-import { parseTree, type Node } from 'jsonc-parser';
+import { findNodeAtLocation, parseTree, type Node } from 'jsonc-parser';
 import type { MEditClient, PluginProblems } from '../client';
 import type { OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { errorMessage } from '../ports/errorMessage';
@@ -30,8 +30,13 @@ function positionAt(text: string, offset: number): Position {
 
 const isPropertyName = (node: Node): boolean => node.parent?.type === 'property' && node.parent.children?.[0] === node;
 
-function findAll(node: Node, matches: (candidate: Node) => boolean): Node[] {
-  return [...(matches(node) ? [node] : []), ...(node.children ?? []).flatMap((child) => findAll(child, matches))];
+function find(node: Node, matches: (candidate: Node) => boolean): Node | undefined {
+  if (matches(node)) return node;
+  for (const child of node.children ?? []) {
+    const found = find(child, matches);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 const isString = (value: string) => (node: Node): boolean => node.type === 'string' && node.value === value && !isPropertyName(node);
@@ -39,19 +44,24 @@ const isString = (value: string) => (node: Node): boolean => node.type === 'stri
 const isRecord = (formKey: string) => (node: Node): boolean =>
   node.type === 'object' && (node.children ?? []).some((member) => member.children?.[0]?.value === 'FormKey' && member.children[1]?.value === formKey);
 
-function onText(text: string, problems: SourceProblem[]): ProblemOnFile[] {
+// mEdit's field path is the document's own member names, an element's index in brackets.
+const locationOf = (fieldPath: string): (string | number)[] =>
+  fieldPath.split('.').flatMap((member) => [member.split('[')[0] ?? member, ...[...member.matchAll(/\[(\d+)\]/g)].map((index) => Number(index[1]))]);
+
+function spanOf(scope: Node, { formKey, targetFormKey, fieldPath }: SourceProblem): Node | undefined {
+  const spanned = targetFormKey ?? formKey;
+  if (!spanned) return undefined;
+  const atPath = fieldPath ? findNodeAtLocation(scope, locationOf(fieldPath)) : undefined;
+  return atPath && isString(spanned)(atPath) ? atPath : find(scope, isString(spanned));
+}
+
+function onText(text: string, problem: SourceProblem): ProblemOnFile {
   const root = parseTree(text);
-  const spelled = new Map<string, number>();
-  return problems.map(({ formKey, targetFormKey, message }) => {
-    const scope = root && formKey ? (findAll(root, isRecord(formKey))[0] ?? root) : root;
-    const spanned = targetFormKey ?? formKey;
-    const nth = spelled.get(`${formKey} ${spanned}`) ?? 0;
-    spelled.set(`${formKey} ${spanned}`, nth + 1);
-    const target = scope && spanned ? findAll(scope, isString(spanned))[nth] : undefined;
-    return target
-      ? { message, start: positionAt(text, target.offset), end: positionAt(text, target.offset + target.length) }
-      : { message, start: FIRST_LINE, end: FIRST_LINE };
-  });
+  const scope = root && problem.formKey ? (find(root, isRecord(problem.formKey)) ?? root) : root;
+  const target = scope && spanOf(scope, problem);
+  return target
+    ? { message: problem.message, start: positionAt(text, target.offset), end: positionAt(text, target.offset + target.length) }
+    : { message: problem.message, start: FIRST_LINE, end: FIRST_LINE };
 }
 
 interface Told { key: string; message: string; why: string }
@@ -71,9 +81,9 @@ async function placed(answer: PluginProblems[], { originFiles, readText }: Sourc
   for (const { plugin, problems, failure } of answer) {
     const files = originFiles(plugin.origin);
     const key = pluginAddressKey(plugin);
-    if (failure != null) unplaced.push({ key, message: cannotShow(plugin.name), why: failure });
-    else if (files === undefined) unplaced.push({ key, message: cannotShow(plugin.name), why: `The instance holds no folder for ${plugin.origin}.` });
-    else for (const problem of problems) {
+    const why = files === undefined ? `The instance holds no folder for ${plugin.origin}.` : failure;
+    if (why != null) unplaced.push({ key, message: cannotShow(plugin.name), why });
+    if (files !== undefined) for (const problem of problems) {
       const path = files.file(problem.sourceRelativePath);
       byPath.set(path, [...(byPath.get(path) ?? []), problem]);
     }
@@ -84,7 +94,7 @@ async function placed(answer: PluginProblems[], { originFiles, readText }: Sourc
       unread.push({ key: path, message: `The Problems panel shows the problems of "${path}" on its first line.`, why: errorMessage(error) });
       return '';
     });
-    return [path, onText(text, onPath)] as const;
+    return [path, onPath.map((problem) => onText(text, problem))] as const;
   })));
   return { byFile, unplaced, unread };
 }
@@ -102,12 +112,15 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     if (why !== unanswered) reporter.shownOnSurface('warning', 'The Problems panel shows mEdit\'s last answer.', why);
     unanswered = why;
   };
+  // Unknown until a load-order-status says, or mEdit answers the ask made at subscribe.
+  let ready: boolean | undefined;
   let latest = 0;
   let shown = 0;
-  const ask = async () => {
+  const ask = async (atSubscribe = false) => {
     const mine = ++latest;
     try {
       const { byFile, unplaced, unread } = await placed(await client.getPluginProblems(), deps);
+      if (atSubscribe) ready ??= true;
       if (mine < shown) return;
       shown = mine;
       unanswered = undefined;
@@ -115,10 +128,9 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
       tellUnplaced(unplaced);
       tellUnread(unread);
     } catch (error) {
-      if (mine === latest) keepLastAnswer(error);
+      if (mine === latest && !atSubscribe) keepLastAnswer(error);
     }
   };
-  let ready = false;
   const reask = () => { void ask(); };
   const reaskWhenReady = () => { if (ready) reask(); };
   const unsubscribe = [
@@ -127,5 +139,6 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     client.onNotification('plugin-changed', reaskWhenReady),
     client.onReconnected(reask),
   ];
+  void ask(true);
   return () => { for (const off of unsubscribe) off(); };
 }

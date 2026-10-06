@@ -70,7 +70,19 @@ public sealed class PluginProblemQueryServiceTests
     }
 
     [Fact]
-    public void GetProblems_APluginWhoseReadStopsAtAFile_IsAnsweredWithThatFileAlone_NotTheLinksItsLastReadLeft()
+    public void GetProblems_APluginWhoseReadStopsAtAFile_IsAnsweredWithThatFile_AndTheLinksItsLastGoodReadLeft()
+    {
+        var plugin = Plugin("Broken.esp");
+
+        var answer = Assert.Single(Failing(
+            [plugin], [OnFile(plugin)], [new(plugin.Key, "Npcs/Stray.json", null, "Unreadable.")], plugin));
+
+        Assert.Equal(["Npcs/Stray.json", "Npcs/Referrer.json"], answer.Problems.Select(p => p.SourceRelativePath));
+        Assert.Null(answer.Failure);
+    }
+
+    [Fact]
+    public void GetProblems_APluginWhoseReadStopsAtAFile_AndWhoseLinksTheTreeCannotPlace_IsAnsweredWithThatFile_AndTheFailure()
     {
         var plugin = Plugin("Broken.esp");
 
@@ -78,7 +90,7 @@ public sealed class PluginProblemQueryServiceTests
             [plugin], [OnFile(plugin), Unplaced(plugin)], [new(plugin.Key, "Npcs/Stray.json", null, "Unreadable.")], plugin));
 
         Assert.Equal("Npcs/Stray.json", Assert.Single(answer.Problems).SourceRelativePath);
-        Assert.Null(answer.Failure);
+        Assert.Contains("Broken.esp", answer.Failure, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -86,10 +98,11 @@ public sealed class PluginProblemQueryServiceTests
     {
         var plugin = Plugin("FellBack.esp");
 
-        var answer = Assert.Single(Failing([], [], [new(plugin.Key, "Npcs/Stray.json", null, "Unreadable.")], plugin));
+        var answer = Assert.Single(Failing([], [], [new(plugin.Key, "Npcs/Stray.json", null, "'Npcs/Stray.json' declares no FormKey.")], plugin));
 
         Assert.Equal(plugin.Key, answer.Plugin);
-        Assert.Single(answer.Problems);
+        var problem = Assert.Single(answer.Problems);
+        Assert.Equal(("Npcs/Stray.json", "'Npcs/Stray.json' declares no FormKey."), (problem.SourceRelativePath, problem.Message));
     }
 
     [Fact]
@@ -97,12 +110,12 @@ public sealed class PluginProblemQueryServiceTests
     {
         var plugin = Plugin("Refers.esp");
 
-        var answer = Assert.Single(Ready([plugin], [OnFile(plugin, "Race", "000ABC:Absent.esp")], plugin));
+        var answer = Assert.Single(Ready([plugin], [OnFile(plugin, "Items[10].Item", "000ABC:Absent.esp")], plugin));
 
         var problem = Assert.Single(answer.Problems);
         Assert.Equal(
-            ("000800:Refers.esp", "000ABC:Absent.esp", "Npcs/Referrer.json", "Race: [000ABC:Absent.esp] <Error: Could not be resolved>"),
-            (problem.FormKey, problem.TargetFormKey, problem.SourceRelativePath, problem.Message));
+            ("000800:Refers.esp", "000ABC:Absent.esp", "Items[10].Item", "Npcs/Referrer.json", "Items[10].Item: [000ABC:Absent.esp] <Error: Could not be resolved>"),
+            (problem.FormKey, problem.TargetFormKey, problem.FieldPath, problem.SourceRelativePath, problem.Message));
         Assert.Null(answer.Failure);
     }
 

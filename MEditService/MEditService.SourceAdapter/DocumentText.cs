@@ -62,6 +62,21 @@ internal static class DocumentText
         }
     }
 
+    /// <summary>What the JSON reader says is wrong with <paramref name="text"/>, where it stopped; null
+    /// for valid JSON.</summary>
+    internal static string? JsonErrorIn(string text)
+    {
+        try
+        {
+            using var _ = JsonDocument.Parse(text);
+            return null;
+        }
+        catch (JsonException ex)
+        {
+            return ex.Message;
+        }
+    }
+
     /// <summary>The record's own text out of the bytes <paramref name="unit"/>'s file holds: itself for
     /// a flat record, or spliced back out of its owner's text for an embedded child.</summary>
     internal static string? RecordBodyFromOwnerBytes(

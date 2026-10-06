@@ -15,7 +15,6 @@ internal sealed record ReadState(string? Binary, RecordStamps? Stamps)
     public IEnumerable<SourceFileFailure> FileFailuresOf(PluginAddress plugin) =>
         Stamps is not { } stamps
             ? []
-            : stamps.Unreadable.Select(file => new SourceFileFailure(plugin, file.SourceRelativePath, null, file.Message))
-                .Concat(stamps.Claimed.SelectMany(claim => claim.Documents.Select(document =>
-                    new SourceFileFailure(plugin, document, claim.FormKey, claim.Message))));
+            : stamps.Unreadable.Select(file => SourceFileFailure.Of(plugin, file))
+                .Concat(stamps.Claimed.SelectMany(claim => SourceFileFailure.Of(plugin, claim)));
 }

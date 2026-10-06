@@ -426,7 +426,7 @@ internal sealed class Reconciler(
             ReadOne(scope, plugin, state =>
             {
                 metadata = held.Open(plugin, snapshot.RegistrationOf(plugin.Key));
-                return metadata is not null && RegisterOrIndex(scope, metadata, state, token);
+                return metadata is not null ? RegisterOrIndex(scope, metadata, state, token) : ReadOutcome.Unread;
             });
             if (metadata is null) continue;
             // A plugin is browsable the moment it lands, so the rows the filter matches in it must
@@ -483,7 +483,7 @@ internal sealed class Reconciler(
 
     // plugins.md, A row, Plugin: one plugin that cannot be read is that row's "Failed to read", never
     // the whole index's failure.
-    private void ReadOne(OpenScope scope, RegisteredPlugin plugin, Func<ReadState, bool> read)
+    private void ReadOne(OpenScope scope, RegisteredPlugin plugin, Func<ReadState, ReadOutcome> read)
     {
         try
         {
@@ -539,9 +539,8 @@ internal sealed class Reconciler(
     }
 
     // ADR-0010: a plugin the store has seen, still matching the disk, is registered, not
-    // indexed; ADR-0015 validates a tracked plugin by content on that same warm path. False when
-    // the plugin's own truth did not serve.
-    private bool RegisterOrIndex(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
+    // indexed; ADR-0015 validates a tracked plugin by content on that same warm path.
+    private ReadOutcome RegisterOrIndex(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
         var key = plugin.Key;
         var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Provider);
@@ -557,7 +556,7 @@ internal sealed class Reconciler(
             // wholly queryable, and a registered one is.
             lock (_lock) _indexed.Add(new PluginAddress(plugin.Name, plugin.Origin));
             PublishStatus();
-            return true;
+            return ReadOutcome.Read;
         }
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -565,7 +564,7 @@ internal sealed class Reconciler(
             logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
         }
         var indexTimer = Stopwatch.StartNew();
-        var ownTruthServed = IndexOnePlugin(scope, plugin, holdsTree, token);
+        var outcome = IndexOnePlugin(scope, plugin, holdsTree, token);
         if (logger.IsEnabled(LogLevel.Debug))
         {
             logger.LogDebug("Indexed {Plugin} in {ElapsedMs} ms", plugin.Name, indexTimer.ElapsedMilliseconds);
@@ -576,14 +575,15 @@ internal sealed class Reconciler(
         // different form.
         lock (_lock) _indexed.Add(new PluginAddress(plugin.Name, plugin.Origin));
         PublishStatus();
-        return ownTruthServed;
+        return outcome;
     }
 
     // ADR-0007; HeldPlugins still reads a tracked plugin's metadata off its binary.
 
-    // A tree that fails to parse degrades to the binary and answers false, saying so: a silent fallback
-    // would show pre-Track binary content as the user's source. A tree that cannot be read throws.
-    private bool IndexOnePlugin(OpenScope scope, PluginMetadata plugin, bool holdsTree, CancellationToken token)
+    // A tree that fails to parse degrades to the binary and answers what stopped it, saying so: a
+    // silent fallback would show pre-Track binary content as the user's source. A tree that cannot be
+    // read throws.
+    private ReadOutcome IndexOnePlugin(OpenScope scope, PluginMetadata plugin, bool holdsTree, CancellationToken token)
     {
         // One advance for the whole plugin, whichever door it came through (ADR-0015).
         using var _ = scope.Index.BeginProjection();
@@ -591,8 +591,10 @@ internal sealed class Reconciler(
         if (!holdsTree)
         {
             IndexFromBinary(scope, plugin);
-            return true;
+            return ReadOutcome.Read;
         }
+
+        Exception stoppedBy;
 
         try
         {
@@ -601,7 +603,7 @@ internal sealed class Reconciler(
                 logger.LogInformation("Ingesting {Plugin} from its source tree", plugin.Name);
             }
             scope.Projector.Ingest(plugin, ModHoldingTree(plugin), token);
-            return true;
+            return ReadOutcome.Read;
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException or IOException
             or UnauthorizedAccessException))
@@ -611,10 +613,11 @@ internal sealed class Reconciler(
             logger.LogWarning(ex,
                 "Could not ingest {Plugin} from its source tree; falling back to the binary", plugin.Name);
             scope.Held.SetFailure(plugin.Key, ReadFailure("this plugin's source tree", ex, DerivedFrom.Binary));
+            stoppedBy = ex;
         }
 
         IndexFromBinary(scope, plugin);
-        return false;
+        return new ReadOutcome(false, stoppedBy);
     }
 
     private static PluginProvider.FromMod ModHoldingTree(PluginMetadata plugin) =>
@@ -682,7 +685,7 @@ internal sealed class Reconciler(
             scope.Failed.Read(plugin.Registered, state =>
             {
                 validation = ValidateAgainst(scope, plugin, holdsTree, state);
-                return validation != Validation.Failed;
+                return validation != Validation.Failed ? ReadOutcome.Read : ReadOutcome.Unread;
             });
             if (validation == Validation.ReadWhole) ReindexHeldPlugin(key);
         }
@@ -831,7 +834,7 @@ internal sealed class Reconciler(
                 scope.Failed.Read(metadata.Registered, _ =>
                 {
                     scope.Projector.Ingest(metadata, ModHoldingTree(metadata));
-                    return true;
+                    return ReadOutcome.Read;
                 });
             }
             catch (Exception ex)
@@ -875,7 +878,7 @@ internal sealed class Reconciler(
                     index.UpdateWinners(Active());
                     filter.Reapply(index);
                 }
-                return true;
+                return ReadOutcome.Read;
             });
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

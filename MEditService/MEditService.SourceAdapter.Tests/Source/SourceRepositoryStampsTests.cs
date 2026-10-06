@@ -115,6 +115,17 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
+    public void StampsOf_AFileThatIsNotValidJson_SaysSo_WhereTheReaderStopped()
+    {
+        File.WriteAllText(NpcFile, "{\n  \"FormKey\": \"000800:Fixture.esp\",\n  \"EditorID\": }");
+
+        var unreadable = Assert.Single(_repository.StampsOf(Plugin).Unreadable);
+
+        Assert.Contains("is not valid JSON", unreadable.Message, StringComparison.Ordinal);
+        Assert.Contains("LineNumber: 2", unreadable.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void StampsOf_AFormKeyTwoDocumentsDeclare_NamesItWithBothDocuments()
     {
         var file = Path.GetRelativePath(_modFolder, NpcFile);

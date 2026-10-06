@@ -7,8 +7,8 @@ using MEditService.RepositoriesLib;
 namespace MEditService.SourceAdapter;
 
 /// <summary>A file of a plugin's tree, as the mod folder spells it, that could not be read as a
-/// document.</summary>
-public sealed record UnreadableFile(string SourceRelativePath, string Message);
+/// document, and the FormKey it was read for when one is known.</summary>
+public sealed record UnreadableFile(string SourceRelativePath, string Message, string? FormKey = null);
 
 /// <summary>A FormKey that more than one document of a plugin's tree declares, with those documents
 /// as the mod folder spells them.</summary>
@@ -61,7 +61,7 @@ internal static class TreeStamps
     internal static RecordStamps StampsOf(string modFolder, PluginAddress plugin)
     {
         var unreadable = new List<UnreadableFile>();
-        var filedAt = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var holders = new OneDocumentPerFormKey(modFolder);
         var stamps = new Dictionary<string, string>(StringComparer.Ordinal);
 
         var root = SourceRepositoryLayout.RootIn(modFolder, plugin.Name);
@@ -79,16 +79,13 @@ internal static class TreeStamps
 
                 var relativePath = Path.GetRelativePath(modFolder, file);
                 if (KnownOrRead(known, file, relativePath, plugin.Name, unreadable) is not { } document) continue;
-                filedAt.TryAdd(document.FormKey, []);
-                filedAt[document.FormKey].Add(relativePath);
+                holders.Hold(document.FormKey, file);
                 stamps[document.FormKey] = document.Content;
             }
         }
 
         foreach (var path in known.Keys.Where(path => !listed.Contains(path))) known.TryRemove(path, out _);
-        return new RecordStamps(
-            stamps, unreadable,
-            [.. filedAt.Where(held => held.Value.Count > 1).Select(held => new ClaimedFormKey(held.Key, held.Value))]);
+        return new RecordStamps(stamps, unreadable, holders.Claimed);
     }
 
     private static KnownDocument? KnownOrRead(
@@ -118,7 +115,10 @@ internal static class TreeStamps
         {
             known.TryRemove(file, out _);
             unreadable.Add(new UnreadableFile(
-                relativePath, $"'{relativePath}' declares no FormKey, so the records it holds could not be validated."));
+                relativePath,
+                DocumentText.JsonErrorIn(text) is { } error
+                    ? $"'{relativePath}' is not valid JSON: {error}"
+                    : $"'{relativePath}' declares no FormKey, so the records it holds could not be validated."));
             return null;
         }
 

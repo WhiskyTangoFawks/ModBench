@@ -1222,6 +1222,7 @@ export interface components {
         SourceProblem: {
             formKey?: string | null;
             targetFormKey?: string | null;
+            fieldPath?: string | null;
             sourceRelativePath: string;
             message: string;
         };
