@@ -87,6 +87,12 @@ const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
 const putLoadOrders: string[][] = [];
+const comparedTexts: unknown[] = [];
+
+function documentTextOf(body: string): unknown {
+  const parsed: unknown = JSON.parse(body);
+  return typeof parsed === 'object' && parsed !== null && 'documentText' in parsed ? parsed.documentText : undefined;
+}
 
 function pluginNamesOf(body: string): string[] {
   const parsed: unknown = JSON.parse(body);
@@ -246,8 +252,20 @@ function createMockBackend(): http.Server {
     const comparedFormKey = /^\/records\/([^/?]+)\/compare$/.exec(url)?.[1];
     if (comparedFormKey !== undefined) {
       const answer = MOCK_COMPARISONS.get(decodeURIComponent(comparedFormKey));
-      res.writeHead(answer ? 200 : 404, { 'Content-Type': 'application/json' });
-      res.end(answer ? JSON.stringify(answer) : undefined);
+      const respond = () => {
+        res.writeHead(answer ? 200 : 404, { 'Content-Type': 'application/json' });
+        res.end(answer ? JSON.stringify(answer) : undefined);
+      };
+      if (method !== 'POST') {
+        respond();
+        return;
+      }
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        comparedTexts.push(documentTextOf(body));
+        respond();
+      });
       return;
     }
     if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.has('search')) {
@@ -466,6 +484,25 @@ describe('a tracked copy of a record', () => {
 
     assert.strictEqual(tab?.label, 'TrackedGun.json');
     assert.deepStrictEqual(fileTabs().map((t) => t.label), ['TrackedGun.json']);
+  });
+
+  it('reads its own column from the file\'s unsaved text', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', trackedCopy);
+    await waitFor('the file\'s tab', () => fileTabs().length > 0);
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    const saved = document.getText();
+    const replaceAll = async (text: string) => {
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)), text);
+      await vscode.workspace.applyEdit(edit);
+    };
+    const unsaved = JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'Unsaved' });
+
+    await replaceAll(unsaved);
+    await waitFor('a read of the unsaved text', () => comparedTexts.includes(unsaved));
+
+    await replaceAll(saved);
+    await document.save();
   });
 
   it('opens as its file when it wins and the record is given without a plugin', async () => {

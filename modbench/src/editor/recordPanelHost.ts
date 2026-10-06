@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
-import type { PluginAddress } from '../wire/pluginAddress';
+import { pluginAddressOf, type PluginAddress } from '../wire/pluginAddress';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import type { EditAddress, EditsInFlight } from './followRecord';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { pickRecord } from './recordPicker';
 import {
-  routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps, type TitleFromRead,
+  routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps, type TabDocument,
 } from './recordPanelMessageRouter';
 import type { FocusedCells } from './focusedCells';
 import type { RecordWriteDeps } from './applyRecordEdit';
@@ -26,7 +26,7 @@ import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen 
 import { recordTitle } from './recordTitle';
 import { RENDERED_DOCUMENT_SCHEME, RenderedDocuments, renderedDocumentUri } from './renderedDocument';
 import { CHILD_RECORD_SCHEME, ChildRecordDocuments, childRecordUri } from './childRecordDocument';
-import { copyOf, holdsNoCopy } from './recordCopy';
+import { copyOf, holdsNoCopy, type RecordCopy } from './recordCopy';
 import { errorMessage } from '../ports/errorMessage';
 
 export interface EditorCommandDeps {
@@ -95,22 +95,22 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
 
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
     if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
-      showRecord(this.deps, panel, copyOf(document.uri).formKey, () => undefined);
+      showRecord(this.deps, panel, copyOf(document.uri).formKey, { titleFromRead: () => undefined });
       return;
     }
     if (document.uri.scheme === CHILD_RECORD_SCHEME) {
       // The file is the container's, so its name is not the child's.
       const { formKey, plugin } = copyOf(document.uri);
       panel.title = recordTitle(formKey, undefined);
-      showRecord(this.deps, panel, formKey, (read, columns) => { panel.title = recordTitle(read, columns, plugin); });
+      showRecord(this.deps, panel, formKey, { titleFromRead: (read, columns) => { panel.title = recordTitle(read, columns, plugin); } });
       return;
     }
     const { fsPath } = document.uri;
     let shownReason: string | undefined;
     const read = async (): Promise<void> => {
       try {
-        const { formKey } = await this.deps.client.getRecordOfFile(fsPath);
-        if (this.unread.delete(panel)) showRecord(this.deps, panel, formKey, () => undefined);
+        const { formKey, ...copy } = await this.deps.client.getRecordOfFile(fsPath);
+        if (this.unread.delete(panel)) this.showFile(panel, document, { formKey, plugin: pluginAddressOf(copy) });
       } catch (err) {
         const reason = errorMessage(err);
         if (reason === shownReason || !this.unread.has(panel)) return;
@@ -127,10 +127,21 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   readAgain(): void {
     for (const read of this.unread.values()) void read();
   }
+
+  // The file's column follows its unsaved text (editor.md, States, story 5). Saved, it reads mEdit's
+  // copy: VS Code misses a write to a file outside the workspace while the file's tab is hidden.
+  private showFile(panel: vscode.WebviewPanel, document: vscode.TextDocument, { formKey, plugin }: RecordCopy): void {
+    const copyText = () => (document.isDirty ? { plugin, documentText: document.getText() } : undefined);
+    showRecord(this.deps, panel, formKey, { titleFromRead: () => undefined, copyText });
+    const following = vscode.workspace.onDidChangeTextDocument((change) => {
+      if (change.document === document && change.contentChanges.length > 0) this.deps.editsInFlight.refresh(panel);
+    });
+    panel.onDidDispose(() => { following.dispose(); });
+  }
 }
 
 function showRecord(
-  deps: ShowRecordDeps, panel: vscode.WebviewPanel, formKey: string, titleFromRead: TitleFromRead,
+  deps: ShowRecordDeps, panel: vscode.WebviewPanel, formKey: string, tab: TabDocument,
 ): void {
   const {
     context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps,
@@ -158,7 +169,7 @@ function showRecord(
   panel.webview.onDidReceiveMessage((msg: unknown) => {
     // A reply and a follow reach the one panel that asked, never a broadcast; `routerDeps` is
     // shared across panels, so the per-panel fields are rebuilt with the panel this closure holds.
-    void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight, titleFromRead));
+    void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight, tab));
   });
 
   showWebviewPage(panel.webview, context.extensionUri, {

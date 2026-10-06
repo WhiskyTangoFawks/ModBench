@@ -240,7 +240,7 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdi
 
     await routeRecordPanelMessage(loadMessage, makeDeps({ reply: vi.fn() }));
 
-    expect(meditClient.calls).toContainEqual({ method: 'getComparison', args: ['000001:A.esp'] });
+    expect(meditClient.calls).toContainEqual({ method: 'getComparison', args: ['000001:A.esp', undefined] });
   });
 
   it('writes a failed comparison to the Output, naming the record', async () => {

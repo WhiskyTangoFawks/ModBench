@@ -3,7 +3,7 @@ import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
   type ExtensionToWebview, type WebviewToExtension,
 } from '../wire/messages';
-import type { MEditClient, PluginLoadFailure } from '../client';
+import type { CopyText, MEditClient, PluginLoadFailure } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { pickRecord, type RecordPickerDeps } from './recordPicker';
 import type { EditsInFlight, FollowedPanel } from './followRecord';
@@ -11,7 +11,7 @@ import type { FocusedCellContext, FocusedCells } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
 import type { TitledColumn } from './recordTitle';
 
-export type TitleFromRead = (formKey: string, columns: readonly TitledColumn[] | undefined) => void;
+type TitleFromRead = (formKey: string, columns: readonly TitledColumn[] | undefined) => void;
 
 export interface RouteRecordPanelMessageDeps {
   // The FormKey picker's search and the panel's own read — one client serves both, and the
@@ -29,6 +29,8 @@ export interface RouteRecordPanelMessageDeps {
   reply: (msg: ExtensionToWebview) => void;
   // Titles the panel from the record its read answered (editor.md, Opening, story 5).
   titleFromRead: TitleFromRead;
+  // The unsaved text of the copy the tab's document holds, which its column reads from.
+  copyText?: () => CopyText | undefined;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
   readAnswered: (formKey: string) => void;
   // The latest load-order status, read rather than fetched.
@@ -37,7 +39,10 @@ export interface RouteRecordPanelMessageDeps {
 }
 
 /** What every panel's messages share: the rest is the panel's own. */
-export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | 'titleFromRead' | 'readAnswered'>;
+export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'readAnswered'>;
+
+/** What a tab's document gives the reads of its panel. */
+export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'copyText'>;
 
 /** The router's bundle for one panel's messages: the picker and the record load both reply to it. */
 export function routerDepsForPanel<Panel extends FollowedPanel>(
@@ -45,14 +50,14 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
   panel: Panel,
   focusedCells: FocusedCells<Panel>,
   editsInFlight: Pick<EditsInFlight<Panel>, 'answered'>,
-  titleFromRead: TitleFromRead,
+  tab: TabDocument,
 ): RouteRecordPanelMessageDeps {
   return {
     ...shared,
     formKeyPicker: { meditClient: shared.meditClient, reporter: shared.reporter, reply: (m) => { void panel.webview.postMessage(m); } },
     focusCell: (context, userFocus) => { focusedCells.setCell(panel, context, userFocus); },
     reply: (m) => { void panel.webview.postMessage(m); },
-    titleFromRead,
+    ...tab,
     readAnswered: (formKey) => { editsInFlight.answered(panel, formKey); },
   };
 }
@@ -136,7 +141,7 @@ async function answerRecordLoad(
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD }>,
 ): Promise<void> {
   const [compare, plugins] = await Promise.allSettled([
-    deps.meditClient.getComparison(m.formKey),
+    deps.meditClient.getComparison(m.formKey, deps.copyText?.()),
     deps.meditClient.getPlugins(),
   ]);
   if (compare.status === 'rejected') {
