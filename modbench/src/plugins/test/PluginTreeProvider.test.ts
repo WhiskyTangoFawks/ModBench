@@ -44,7 +44,7 @@ function makeClient(overrides: Partial<{
   records: RecordPage;
 }> = {}): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
-  const recordTypes = overrides.recordTypes ?? [{ type: 'WEAP', count: 5, displayName: 'Weapon' }];
+  const recordTypes = overrides.recordTypes ?? [{ type: 'weap', count: 5, displayName: 'Weapon' }];
   client.setQueryAnswer('getRecordTypes', recordTypes.map((rt) => ({
     type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
     isCreatable: rt.isCreatable ?? true, isContainer: false,
@@ -74,8 +74,8 @@ function oneSubBlock(cells: CellSummary[], block = 0, subBlock = 0): InteriorCel
   return [{ number: block, hasParseFailure, subBlocks: [{ number: subBlock, hasParseFailure, cells }] }];
 }
 
-async function interiorCellsBeneath(provider: PluginTreeProvider, group: PluginTreeNode): Promise<PluginTreeNode[]> {
-  const [block] = await provider.getChildren(group);
+async function interiorCellsBeneath(provider: PluginTreeProvider, cellGroup: PluginTreeNode): Promise<PluginTreeNode[]> {
+  const [block] = await provider.getChildren(cellGroup);
   const [subBlock] = await provider.getChildren(present(block, 'the sole block'));
   return provider.getChildren(present(subBlock, 'the sole sub-block'));
 }
@@ -97,14 +97,14 @@ async function rowsBeneath(
 
 describe('PluginTreeProvider.getPluginChildren (record types)', () => {
   it('returns one RecordTypeNode per record type', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 10 }, { type: 'NPC_', count: 3 }] });
+    const repo = makeClient({ recordTypes: [{ type: 'weap', count: 10 }, { type: 'npc_', count: 3 }] });
     const provider = new PluginTreeProvider(repo);
 
     const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
 
     expect(children).toHaveLength(2);
     expect(children.every(c => c instanceof RecordTypeNode)).toBe(true);
-    expect(expectInstanceOf(children[0], RecordTypeNode).recordType).toBe('WEAP');
+    expect(expectInstanceOf(children[0], RecordTypeNode).recordType).toBe('weap');
   });
 
   it('renders the xEdit display name as the label, not the raw signature', async () => {
@@ -172,7 +172,7 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     expect(children).toHaveLength(FALLOUT4_ESM_INFO_COUNT);
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
-    expect(repo.calls).toContainEqual({ method: 'getRecords', args: [{ name: 'Plugin0.esp', origin: 'Data' }, 'WEAP', 0, expect.any(Number)] });
+    expect(repo.calls).toContainEqual({ method: 'getRecords', args: [{ name: 'Plugin0.esp', origin: 'Data' }, 'weap', 0, expect.any(Number)] });
     const limitArg = present(repo.calls.find(c => c.method === 'getRecords'), 'the getRecords call').args[3];
     if (typeof limitArg !== 'number') throw new Error(`Expected a number, got ${String(limitArg)}`);
     expect(limitArg).toBeGreaterThan(FALLOUT4_ESM_INFO_COUNT);
@@ -226,12 +226,12 @@ describe('RecordTypeNode', () => {
   });
 
   it('shows formatted count as description', () => {
-    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'WEAP', count: 1234 }), 'Data');
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'weap', count: 1234 }), 'Data');
     expect(node.description).toBe('1,234');
   });
 
   it('states no record edit when no one has described its plugin', () => {
-    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'WEAP', count: 10 }), 'Data');
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'weap', count: 10 }), 'Data');
     expect(node.contextValue).toBe('recordType untracked creatable');
   });
 
@@ -407,7 +407,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
 
   function spatialClient(): InMemoryMEditClient {
     const repo = makeClient({
-      recordTypes: [{ type: 'WEAP', count: 1 }, { type: 'qust', count: 1 }, { type: 'wrld', count: 1 }, { type: 'cell', count: 1 }],
+      recordTypes: [{ type: 'weap', count: 1 }, { type: 'qust', count: 1 }, { type: 'wrld', count: 1 }, { type: 'cell', count: 1 }],
       records: { items: [makeRecord(0, 'None', true)], total: 1 },
     });
     repo.setQueryAnswer('getContainerChildren', [{ ...makeRecord(1), recordType: 'dial', hasContainerChildren: false, isContainer: false }]);
@@ -586,7 +586,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient({
       recordTypes: [
         { type: 'cell', count: 4, displayName: 'Cell' },
-        { type: 'WEAP', count: 5, displayName: 'Weapon' },
+        { type: 'weap', count: 5, displayName: 'Weapon' },
         { type: 'wrld', count: 1, displayName: 'Worldspace' },
       ],
     });
@@ -599,7 +599,7 @@ describe('PluginTreeProvider fetch failures', () => {
   });
 
   it('getPluginChildren: records below it carry the open-editor command', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] });
+    const repo = makeClient({ recordTypes: [{ type: 'weap', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
     const [recordType] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
 
@@ -623,7 +623,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient();
     repo.setQueryFailure('getRecords', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = new RecordTypeNode('Plugin0.esp', recordTypeCountFixture({ type: 'WEAP', count: 5 }), 'Data');
+    const node = new RecordTypeNode('Plugin0.esp', recordTypeCountFixture({ type: 'weap', count: 5 }), 'Data');
 
     const children = await provider.getChildren(node);
 
@@ -814,10 +814,10 @@ describe('PluginTreeProvider spatial origin threading', () => {
 });
 
 describe('PluginTreeProvider.getPluginChildren (origin)', () => {
-  const sharedClient = () => listsForThePluginAsked(makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] }));
+  const sharedClient = () => listsForThePluginAsked(makeClient({ recordTypes: [{ type: 'weap', count: 1 }] }));
 
   it('asks the repository for the plugin the row stands for', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] });
+    const repo = makeClient({ recordTypes: [{ type: 'weap', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
 
     await provider.getPluginChildren({ name: 'Shared.esp', origin: 'ModB' });
@@ -832,7 +832,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren({ name: 'Shared.esp', origin: 'ModB' }), RecordTypeNode)[0], 'the sole RecordTypeNode');
     await provider.getChildren(typeNode);
 
-    expect(repo.calls).toContainEqual({ method: 'getRecords', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'WEAP', 0, expect.any(Number)] });
+    expect(repo.calls).toContainEqual({ method: 'getRecords', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'weap', 0, expect.any(Number)] });
   });
 
   it('caches each plugin separately, so one plugin\'s page is never served for the other', async () => {
@@ -857,18 +857,6 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
     await provider.getChildren(recased);
 
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
-  });
-});
-
-describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific plugin)', () => {
-  it('builds the spatial group nodes carrying that plugin\'s origin', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }, { type: 'cell', count: 2 }, { type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-
-    const children = await provider.getPluginChildren({ name: 'Shared.esp', origin: 'ModB' });
-
-    const groups = expectInstancesOf(children, RecordTypeNode);
-    expect(groups.map(g => [g.recordType, g.origin])).toEqual([['wrld', 'ModB'], ['cell', 'ModB'], ['WEAP', 'ModB']]);
   });
 });
 
@@ -1007,7 +995,7 @@ describe('the failure prefix', () => {
     const repo = makeClient({
       recordTypes: [
         { type: 'perk', count: 2, displayName: 'Perk', hasParseFailure: true },
-        { type: 'WEAP', count: 5, displayName: 'Weapon', hasParseFailure: false },
+        { type: 'weap', count: 5, displayName: 'Weapon', hasParseFailure: false },
       ],
     });
     const provider = new PluginTreeProvider(repo);

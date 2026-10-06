@@ -379,8 +379,12 @@ export class PluginsTreeProvider
   // record row ends the walk: what it holds belongs to another group.
   private async recordRowBeneath(parent: PluginsTreeNode, formKey: string): Promise<PluginsTreeNode | undefined> {
     for (const row of await this.getChildren(parent)) {
-      const found = isRecordRow(row) ? row : await this.recordRowBeneath(row, formKey);
-      if (found !== undefined && recordFormKeyOf(found) === formKey) return found;
+      if (isRecordRow(row)) {
+        if (recordFormKeyOf(row) === formKey) return row;
+        continue;
+      }
+      const found = await this.recordRowBeneath(row, formKey);
+      if (found !== undefined) return found;
     }
     return undefined;
   }
