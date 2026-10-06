@@ -752,6 +752,18 @@ describe('an edit in a tracked copy\'s grid', () => {
     assert.strictEqual(fs.readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1`);
   });
 
+  it('is undone by VS Code\'s Undo in the tab, over the document', async () => {
+    await openFileTab();
+    answerEdit = answeredIn(TRACKED_FILE);
+    await edit(TRACKED_FORM_KEY, 1);
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    await waitFor('the edit in the document', () => document.getText() === `${savedText}+1`);
+
+    await vscode.commands.executeCommand('undo');
+
+    await waitFor('the document as it was before the edit', () => document.getText() === savedText);
+  });
+
   it('builds each edit on the text the one before it left, the second fired before the first is saved', async () => {
     await openFileTab();
     answerEdit = answeredIn(TRACKED_FILE);
