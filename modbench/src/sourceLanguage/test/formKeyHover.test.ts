@@ -4,13 +4,14 @@ import type { CompareResult } from '../../client';
 
 const FORM_KEY = '000801:Mod.esp';
 
-function comparison(over: Partial<CompareResult> & { copies?: { plugin: string; isWinner: boolean; editorId?: string | null }[] } = {}): CompareResult {
-  const { copies = [{ plugin: 'Mod.esp', isWinner: true, editorId: 'Gun' }], ...rest } = over;
-  return {
-    overrides: copies.map((copy) => ({ formKey: FORM_KEY, ...copy })) as CompareResult['overrides'],
-    diffs: [], conflictAll: 'OnlyOne', recordTypeName: 'Weapon',
-    ...rest,
-  };
+interface Copy { plugin: string; isWinner: boolean; editorId?: string | null }
+
+const override = (copy: Copy): CompareResult['overrides'][number] => ({
+  formKey: FORM_KEY, fields: [], origin: 'Data', recordType: 'weap', isPartialForm: false, loadIndex: '00', isInOverwrite: false, ...copy,
+});
+
+function comparison(copies: Copy[] = [{ plugin: 'Mod.esp', isWinner: true, editorId: 'Gun' }]): CompareResult {
+  return { overrides: copies.map(override), diffs: [], conflictAll: 'OnlyOne', recordTypeName: 'Weapon' };
 }
 
 const askingFor = (answer: CompareResult | null) => ({ getComparison: vi.fn(() => Promise.resolve(answer)) });
@@ -29,17 +30,17 @@ describe('hoverAt (plugin-source.md, In the text editor, story 3)', () => {
   });
 
   it('names the winner among several copies, and takes its EditorID', async () => {
-    const answer = comparison({ copies: [
+    const answer = comparison([
       { plugin: 'Mod.esp', isWinner: false, editorId: 'Old' },
       { plugin: 'Patch.esp', isWinner: true, editorId: 'New' },
-    ] });
+    ]);
     const text = `"${FORM_KEY}"`;
     const hover = await hoverAt(askingFor(answer), text, 3);
     expect(hover?.markdown).toBe(`\`New [${FORM_KEY}]\`\n\nWeapon\n\nWinner: Patch.esp`);
   });
 
   it('shows the FormKey alone when the winner has no EditorID', async () => {
-    const answer = comparison({ copies: [{ plugin: 'Mod.esp', isWinner: true, editorId: null }] });
+    const answer = comparison([{ plugin: 'Mod.esp', isWinner: true, editorId: null }]);
     const hover = await hoverAt(askingFor(answer), `"${FORM_KEY}"`, 3);
     expect(hover?.markdown).toBe(`\`[${FORM_KEY}]\`\n\nWeapon\n\nWinner: Mod.esp`);
   });

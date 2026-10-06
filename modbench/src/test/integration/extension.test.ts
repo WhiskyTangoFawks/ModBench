@@ -218,9 +218,11 @@ function createMockBackend(): http.Server {
 const HELD_FORM_KEY = '000801:Held.esp';
 const MOCK_COMPARISONS = new Map<string, CompareResult>([[HELD_FORM_KEY, {
   overrides: [
-    { formKey: HELD_FORM_KEY, plugin: 'Held.esp', isWinner: false, editorId: 'OldGun' },
-    { formKey: HELD_FORM_KEY, plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun' },
-  ] as CompareResult['overrides'],
+    { plugin: 'Held.esp', isWinner: false, editorId: 'OldGun' },
+    { plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun' },
+  ].map((copy) => ({
+    formKey: HELD_FORM_KEY, fields: [], origin: 'Data', recordType: 'weap', isPartialForm: false, loadIndex: '00', isInOverwrite: false, ...copy,
+  })),
   diffs: [], conflictAll: 'Override', recordTypeName: 'Weapon',
 }]]);
 
@@ -721,6 +723,8 @@ describe('Refresh rebuilds the index, then re-reads the instance', () => {
   });
 });
 
+const markdownText = (content: vscode.Hover['contents'][number]): string => (content instanceof vscode.MarkdownString ? content.value : '');
+
 describe('A FormKey in plugin source', () => {
   const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
   let folder = '';
@@ -738,7 +742,7 @@ describe('A FormKey in plugin source', () => {
   const positionIn = (text: string) => document.positionAt(document.getText().indexOf(text) + 1);
   const hoverTexts = async (text: string): Promise<string[]> => {
     const hovers = await vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', document.uri, positionIn(text));
-    return hovers.flatMap((hover) => hover.contents.map((c) => (typeof c === 'string' ? c : c.value)));
+    return hovers.flatMap((hover) => hover.contents.map(markdownText));
   };
 
   it('shows its record on hover: EditorID, FormKey, record type and the winning plugin', async () => {
@@ -766,7 +770,7 @@ describe('A FormKey in plugin source', () => {
     const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
       'vscode.executeHoverProvider', other.uri, other.positionAt(other.getText().indexOf('000801')));
 
-    assert.deepStrictEqual(hovers.filter((hover) => hover.contents.some((c) => (typeof c === 'string' ? c : c.value).includes('Weapon'))), []);
+    assert.deepStrictEqual(hovers.filter((hover) => hover.contents.some((c) => markdownText(c).includes('Weapon'))), []);
   });
 
   it('shows no hover for text that is not a FormKey', async () => {
