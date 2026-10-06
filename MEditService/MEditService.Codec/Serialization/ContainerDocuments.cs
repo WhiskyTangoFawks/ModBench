@@ -9,9 +9,18 @@ namespace MEditService.Codec.Serialization;
 public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<string, RecordTableSchema> schemas)
 {
     /// <summary><c>Node</c> is the child's subtree of its owner's document, which spells an ambiguous
-    /// child's own type; <c>SlotIndex</c> is its GRUP position.</summary>
+    /// child's own type; <c>SlotIndex</c> is its GRUP position. <c>RecordType</c> is null when
+    /// neither the child's text nor its slot names a type this game has.</summary>
     public readonly record struct ChildDocument(
-        string SlotName, int SlotIndex, string FormKey, string RecordType, JsonElement Node);
+        string SlotName, int SlotIndex, string FormKey, string? RecordType, JsonElement Node)
+    {
+        /// <summary>Why no type resolves, for a child whose <c>RecordType</c> is null.</summary>
+        public string WhyUntyped =>
+            Node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var named) && named.ValueKind == JsonValueKind.String
+                ? $"its '{SlotName}' names '{FormKey}' a '{named.GetString()}', and this game has no record type of that name"
+                : $"its '{SlotName}' names '{FormKey}' with no '{LoquiUnions.UnionTypeDiscriminator}' naming its type, " +
+                  "and its slot holds more than one record type";
+    }
 
     private const string FormKeyMember = RecordMembers.FormKey;
 
@@ -98,8 +107,8 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
 
     // The child's own spelling where the document carries it, else the slot's declared element type:
     // a slot whose member type is concrete writes no discriminator.
-    private string RecordTypeOf(Type owner, string slotName, JsonElement node) =>
-        TableFor(DeclaredType(node) ?? SlotElementType(owner, slotName));
+    private string? RecordTypeOf(Type owner, string slotName, JsonElement node) =>
+        (DeclaredType(node) ?? SlotElementType(owner, slotName)) is { } concrete ? TableFor(concrete) : null;
 
     private Type? DeclaredType(JsonElement node) =>
         node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var named) && named.ValueKind == JsonValueKind.String
@@ -120,7 +129,8 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
         {
             if (!_slots.IsEmbeddedSlot(ownerType, child.SlotName)) continue;
             yield return child;
-            foreach (var deeper in EmbeddedDescendantsOf(child.RecordType, child.Node)) yield return deeper;
+            if (child.RecordType is not { } childType) continue;
+            foreach (var deeper in EmbeddedDescendantsOf(childType, child.Node)) yield return deeper;
         }
     }
 
@@ -142,8 +152,8 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
             if (string.Equals(child.FormKey, formKey, StringComparison.Ordinal))
                 return new DocumentContainment(DocumentNodes.StringValueOf(ownKey), ownerRecordType, child.SlotName);
 
-            if (!_slots.IsEmbeddedSlot(ownerType, child.SlotName)) continue;
-            if (ContainmentOf(child.RecordType, child.Node, formKey) is { } deeper) return deeper;
+            if (!_slots.IsEmbeddedSlot(ownerType, child.SlotName) || child.RecordType is not { } childType) continue;
+            if (ContainmentOf(childType, child.Node, formKey) is { } deeper) return deeper;
         }
         return null;
     }

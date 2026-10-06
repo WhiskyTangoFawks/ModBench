@@ -185,18 +185,44 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
     private const string MutagenObjectTypeMember = "MutagenObjectType";
 
-    /// <summary>One document already in hand, plus every child it embeds, whether its text came from
-    /// the working tree or from the last commit.</summary>
-    internal IEnumerable<PluginDocument> Expand(string recordType, string formKey, string text)
+    /// <summary>The text of one document in hand and of every child it embeds, by FormKey. An untyped
+    /// child is carried too: history may hold a state that does not build (ADR-0007).</summary>
+    internal IEnumerable<(string FormKey, string Text)> Expand(string recordType, string formKey, string text)
     {
+        yield return (formKey, text);
         var table = _containers.RecordTypeNamed(recordType) ?? recordType;
-        yield return new PluginDocument(table, formKey, text, null, null, ContentsOf(table, text));
-        foreach (var child in Embedded(table, formKey, text, formKey)) yield return child;
+        foreach (var embedded in EmbeddedTexts(table, formKey, text, formKey))
+            yield return (embedded.Child.FormKey, embedded.Text);
+    }
+
+    /// <summary>Throws, naming <paramref name="file"/>, when <paramref name="text"/> embeds a child
+    /// no record type resolves, as the whole read does.</summary>
+    internal void RefuseUntypedChildren(string recordType, string formKey, string text, string file)
+    {
+        foreach (var embedded in EmbeddedTexts(recordType, formKey, text, file)) TypeOf(embedded.Child, file);
+    }
+
+    private static string TypeOf(ContainerDocuments.ChildDocument child, string ownerDocument) =>
+        child.RecordType ?? throw new UnreadableSourceDocumentException(ownerDocument, child.WhyUntyped);
+
+    private IEnumerable<PluginDocument> Embedded(
+        string ownerRecordType, string ownerFormKey, string ownerText, string ownerDocument)
+    {
+        foreach (var (child, text, directOwner) in EmbeddedTexts(ownerRecordType, ownerFormKey, ownerText, ownerDocument))
+        {
+            var childType = TypeOf(child, ownerDocument);
+            // The one embedded cell: a worldspace's top cell, outside every exterior block grid.
+            var cell = _containers.IsCell(childType)
+                ? CellPlacement.TopCellOf(directOwner).Structure
+                : (CellStructure?)null;
+            yield return new PluginDocument(childType, child.FormKey, text, null, cell, ContentsOf(childType, text));
+        }
     }
 
     // A container's own document is the system of record for every child it embeds, at every depth: a
-    // worldspace embeds its top cell, which embeds its placed references.
-    private IEnumerable<PluginDocument> Embedded(
+    // worldspace embeds its top cell, which embeds its placed references. An untyped child has no
+    // slots to read.
+    private IEnumerable<(ContainerDocuments.ChildDocument Child, string Text, string DirectOwner)> EmbeddedTexts(
         string ownerRecordType, string ownerFormKey, string ownerText, string ownerDocument)
     {
         List<ContainerDocuments.ChildDocument> children;
@@ -208,8 +234,6 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         foreach (var child in children)
         {
             if (!ContainerChildFields.EmbeddedSlotsFor(_release.ToCategory()).Contains((containerType, child.SlotName))) continue;
-            if (child.RecordType.Length == 0)
-                throw new UnreadableSourceDocumentException(ownerDocument, $"its '{child.SlotName}' names '{child.FormKey}' {TypeNotResolved(child.Node)}");
 
             // The index holds the file's own bytes (ADR-0005), so a hand edit the codec would respell
             // reaches it as the file spells it.
@@ -218,21 +242,11 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
                     ownerDocument,
                     $"its '{child.SlotName}' names '{child.FormKey}', and a child an embedded slot " +
                     "names has a span of its owner's text that nothing here carries");
-            // The one embedded cell: a worldspace's top cell, outside every exterior block grid.
-            var cell = _containers.IsCell(child.RecordType)
-                ? CellPlacement.TopCellOf(ownerFormKey).Structure
-                : (CellStructure?)null;
-
-            yield return new PluginDocument(
-                child.RecordType, child.FormKey, text, null, cell, ContentsOf(child.RecordType, text));
-            foreach (var deeper in Embedded(child.RecordType, child.FormKey, text, ownerDocument)) yield return deeper;
+            yield return (child, text, ownerFormKey);
+            if (child.RecordType is not { } childType) continue;
+            foreach (var deeper in EmbeddedTexts(childType, child.FormKey, text, ownerDocument)) yield return deeper;
         }
     }
-
-    private static string TypeNotResolved(JsonElement child) =>
-        child.TryGetProperty(MutagenObjectTypeMember, out var named) && named.ValueKind == JsonValueKind.String
-            ? $"a '{named.GetString()}', and this game has no record type of that name"
-            : $"with no '{MutagenObjectTypeMember}' naming its type, and its slot holds more than one record type";
 
     // "<x>, <y>" is the whole-mod door's own name for a block level's directory; an interior level is
     // a single number and contributes no coordinates.

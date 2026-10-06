@@ -102,19 +102,27 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.NotNull(reloaded.RequireReads().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
     }
 
-    [Fact]
-    public void AnEmbeddedChildNamingATypeTheGameLacks_FailsTheSourceRead_NamingTheChild()
+    [Theory]
+    [InlineData("\"PlacedObject\"", "\"PlacedObjekt\"", "a 'PlacedObjekt'")]
+    [InlineData("\"MutagenObjectType\"", "\"MutagenObjectTypo\"", "with no 'MutagenObjectType'")]
+    public void AnEmbeddedChildNoTypeResolves_FailsTheSourceRead_NamingTheChild_AndTheBinaryStillAnswersForIt(
+        string spelled, string handEdited, string why)
     {
         var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-        File.WriteAllText(file, WithTemporaryRefMisspelt(File.ReadAllText(file)));
+        File.WriteAllText(file, WithTemporaryRefEdited(File.ReadAllText(file), spelled, handEdited));
 
         using var reloaded = Reloaded();
 
+        var reads = reloaded.RequireReads();
+        var child = _fixture.TemporaryRef.ToString();
+        Assert.NotNull(reads.GetDocument(child, _fixture.Plugin));
+        Assert.NotNull(reads.StackEntry(child, _fixture.Plugin));
+        Assert.NotNull(reads.GetPlacement(child, _fixture.Plugin));
         var failure = Assert.Single(reloaded.Status.Failures);
         Assert.Equal(ContainerMod.PluginName, failure.Name);
         Assert.Contains("source tree", failure.Reason, StringComparison.Ordinal);
-        Assert.Contains(_fixture.TemporaryRef.ToString(), failure.Reason, StringComparison.Ordinal);
-        Assert.Contains("PlacedObjekt", failure.Reason, StringComparison.Ordinal);
+        Assert.Contains(child, failure.Reason, StringComparison.Ordinal);
+        Assert.Contains(why, failure.Reason, StringComparison.Ordinal);
         Assert.Contains(file, failure.Reason, StringComparison.Ordinal);
     }
 
@@ -129,21 +137,40 @@ public sealed class SourceIngestContainerTests : IDisposable
 
         var failure = Assert.Single(index.Status.Failures);
         Assert.Contains(_fixture.TemporaryRef.ToString(), failure.Reason, StringComparison.Ordinal);
+        Assert.Contains("a 'PlacedObjekt'", failure.Reason, StringComparison.Ordinal);
+        Assert.Contains(file, failure.Reason, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "PlacedObjekt",
             index.RequireReads().DocumentOf(_fixture.EmbedCell.ToString(), _fixture.Plugin).BodyOf(),
             StringComparison.Ordinal);
     }
 
-    private static string WithTemporaryRefMisspelt(string cellDocument)
+    [Fact]
+    public void AChildCommittedNamingATypeTheGameLacks_ThenFixedInTheWorkingTree_ReadsFine()
+    {
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
+        var fixedText = File.ReadAllText(file);
+        File.WriteAllText(file, WithTemporaryRefMisspelt(fixedText));
+        _fixture.Entry.Git("add", "-A");
+        _fixture.Entry.Git("commit", "-q", "-m", "a hand edit committed");
+        File.WriteAllText(file, fixedText);
+
+        using var reloaded = Reloaded();
+
+        Assert.Empty(reloaded.Status.Failures);
+        Assert.NotNull(reloaded.RequireReads().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
+    }
+
+    private static string WithTemporaryRefMisspelt(string cellDocument) =>
+        WithTemporaryRefEdited(cellDocument, "\"PlacedObject\"", "\"PlacedObjekt\"");
+
+    private static string WithTemporaryRefEdited(string cellDocument, string from, string to)
     {
         var temporaryChild = ObjectEnclosingTheLineNaming(cellDocument, ContainerModPlugin.TemporaryRefEditorId);
-        var misspelt = cellDocument.Replace(
-            temporaryChild,
-            temporaryChild.Replace("\"PlacedObject\"", "\"PlacedObjekt\"", StringComparison.Ordinal),
-            StringComparison.Ordinal);
-        Assert.NotEqual(cellDocument, misspelt);
-        return misspelt;
+        var edited = cellDocument.Replace(
+            temporaryChild, temporaryChild.Replace(from, to, StringComparison.Ordinal), StringComparison.Ordinal);
+        Assert.NotEqual(cellDocument, edited);
+        return edited;
     }
 
     private static string ObjectEnclosingTheLineNaming(string document, string editorId)
