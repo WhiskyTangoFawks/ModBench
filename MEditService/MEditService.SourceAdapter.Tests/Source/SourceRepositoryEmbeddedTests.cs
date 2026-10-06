@@ -344,6 +344,19 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
+    public void CarryingFromText_OfAChildWhoseOwnersTextDeclaresNoFormKey_RefusesNamingItsOwnersFileAndWhat_ItDeclares()
+    {
+        var text = File.ReadAllText(FullPath(InteriorCellPath))
+            .Replace($"\"FormKey\": \"{_interiorCell.FormKey}\"", "\"FormKey\": \"NotAFormKey\"", StringComparison.Ordinal);
+        Assert.Contains("NotAFormKey", text, StringComparison.Ordinal);
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.CarryingFromText(Plugin, _temporaryRef.FormKey.ToString(), text, Schemas));
+
+        Assert.Equal($"The text given for {InteriorCellPath} declares NotAFormKey, which is no FormKey.", refused.Message);
+    }
+
+    [Fact]
     public void Get_ByFormKey_OfAChildNamingARecordTypeItsListSlotCannotHold_RefusesNamingItsOwnersFileAndWhy()
     {
         File.WriteAllText(FullPath(InteriorCellPath), InteriorCellWithItsRefsTyped("Npc"));
