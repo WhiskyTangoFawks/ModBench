@@ -523,7 +523,7 @@ describe('PluginsTreeProvider — name filter', () => {
     expect(shown).not.toBe(held);
   });
 
-  it('finds no row for a plugin the instance no longer holds', async () => {
+  it('finds no row for a plugin the instance does not hold now', async () => {
     const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]));
     const { tree } = makeTree([], { instance });
     const [alpha] = expectInstancesOf(await tree.getChildren(), PluginNode);

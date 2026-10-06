@@ -4,8 +4,7 @@ interface SelectionView<T> {
 }
 
 /** VS Code reports no selection from a tree's change until the rebuilt tree hands its rows back, so
- *  the last selection the user made answers, as the rows `shown` finds for it now: a row that has gone
- *  or is hidden is no longer selected. */
+ *  the user's last selection answers as the rows `shown` finds for it: a gone or hidden row is out. */
 export function survivingSelection<T>(
   view: SelectionView<T>, shown: (row: T) => T | undefined,
 ): { rows: () => readonly T[]; dispose: () => void } {
