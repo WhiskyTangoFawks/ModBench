@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { samePluginAddress } from '../wire/pluginAddress';
-import { copyOf, copyQuery, holdsNoCopy, type RecordCopy } from './recordCopy';
+import { copyOf, copyQuery, followReportedCopies, holdsNoCopy, type CopyChanged, type RecordCopy } from './recordCopy';
 
 export const RENDERED_DOCUMENT_SCHEME = 'modbench-rendered';
 
@@ -21,18 +21,10 @@ export class RenderedDocuments implements vscode.TextDocumentContentProvider, vs
   private readonly registrations: vscode.Disposable[];
 
   constructor(private readonly client: Pick<MEditClient, 'getRenderedDocument' | 'onNotification' | 'onReconnected'>) {
-    const unsubscribes = [
-      client.onNotification('rows-changed', ({ plugin, keys }) => {
-        this.changedWhere((copy) => samePluginAddress(copy.plugin, plugin) && keys.includes(copy.formKey));
-      }),
-      client.onNotification('plugin-changed', ({ plugin }) => {
-        this.changedWhere((copy) => samePluginAddress(copy.plugin, plugin));
-      }),
-      client.onReconnected(() => { this.changedWhere(() => true); }),
-    ];
     this.registrations = [
       vscode.workspace.registerTextDocumentContentProvider(RENDERED_DOCUMENT_SCHEME, this),
-      new vscode.Disposable(() => { for (const unsubscribe of unsubscribes) unsubscribe(); }),
+      followReportedCopies(client, (affects) => { this.changedWhere(affects); },
+        ({ plugin, keys }) => (copy) => samePluginAddress(copy.plugin, plugin) && keys.includes(copy.formKey)),
       this.changes,
     ];
   }
@@ -48,7 +40,7 @@ export class RenderedDocuments implements vscode.TextDocumentContentProvider, vs
     for (const registration of this.registrations) registration.dispose();
   }
 
-  private changedWhere(affects: (copy: RecordCopy) => boolean): void {
+  private changedWhere(affects: CopyChanged): void {
     for (const { uri } of vscode.workspace.textDocuments) {
       if (uri.scheme === RENDERED_DOCUMENT_SCHEME && affects(copyOf(uri))) this.changes.fire(uri);
     }

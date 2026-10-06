@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { samePluginAddress } from '../wire/pluginAddress';
-import { copyOf, copyQuery, type RecordCopy } from './recordCopy';
+import { copyOf, copyQuery, followReportedCopies, type CopyChanged, type RecordCopy } from './recordCopy';
 
 export const CHILD_RECORD_SCHEME = 'modbench-child-record';
 
@@ -20,27 +20,22 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
   private readonly registrations: vscode.Disposable[];
 
   constructor(client: Pick<MEditClient, 'onNotification' | 'onReconnected'>) {
-    // mEdit's report names the records that changed, and a change to any of them can be in the file.
-    const ofItsPlugin = ({ plugin }: { plugin: RecordCopy['plugin'] }) => {
-      this.changedWhere((copy) => samePluginAddress(copy.plugin, plugin));
-    };
-    const unsubscribes = [
-      client.onNotification('rows-changed', ofItsPlugin),
-      client.onNotification('plugin-changed', ofItsPlugin),
-      client.onReconnected(() => { this.changedWhere(() => true); }),
-    ];
     this.registrations = [
       vscode.workspace.registerFileSystemProvider(CHILD_RECORD_SCHEME, this),
-      new vscode.Disposable(() => { for (const unsubscribe of unsubscribes) unsubscribe(); }),
+      // A report names the records that changed, and a change to any of them can be in the file.
+      followReportedCopies(client, (affects) => { this.changedWhere(affects); },
+        ({ plugin }) => (copy) => samePluginAddress(copy.plugin, plugin)),
       this.changes,
     ];
   }
 
   watch(): vscode.Disposable { return new vscode.Disposable(() => undefined); }
   stat(uri: vscode.Uri): Thenable<vscode.FileStat> { return vscode.workspace.fs.stat(containerFileOf(uri)); }
-  // Read as text, as every read of Modbench's is, so none yields a plugin's bytes (ADR-0004).
+  // Decoded, so it yields no plugin's bytes (ADR-0004); refusing what is not text and keeping a
+  // byte order mark, so a save writes back what it read.
   async readFile(uri: vscode.Uri): Promise<Uint8Array> {
-    return new TextEncoder().encode(new TextDecoder().decode(await vscode.workspace.fs.readFile(containerFileOf(uri))));
+    const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await vscode.workspace.fs.readFile(containerFileOf(uri)));
+    return new TextEncoder().encode(text);
   }
   writeFile(uri: vscode.Uri, content: Uint8Array): Thenable<void> { return vscode.workspace.fs.writeFile(containerFileOf(uri), content); }
   readDirectory(): [string, vscode.FileType][] { return []; }
@@ -52,7 +47,7 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
     for (const registration of this.registrations) registration.dispose();
   }
 
-  private changedWhere(affects: (copy: RecordCopy) => boolean): void {
+  private changedWhere(affects: CopyChanged): void {
     const changed = vscode.workspace.textDocuments
       .filter(({ uri }) => uri.scheme === CHILD_RECORD_SCHEME && affects(copyOf(uri)))
       .map(({ uri }) => ({ type: vscode.FileChangeType.Changed, uri }));

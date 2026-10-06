@@ -6,6 +6,7 @@ import type { PathHop, StringValueContext } from '../wire/messages';
 import { columnKey } from '../wire/columnKey';
 import { pluginAddressOf, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import type { EditAddress } from './followRecord';
+import { followReportedCopies, type CopyChanged } from './recordCopy';
 
 /** Where a cell's text lives: the plugin copy of the record, and the field's path. */
 export interface FieldAddress extends EditAddress { path: PathHop[] }
@@ -86,7 +87,7 @@ class FieldFileSystem implements vscode.FileSystemProvider {
 
   forget(uri: vscode.Uri): void { this.known.delete(uri.toString()); }
 
-  changedWhere(affects: (field: FieldAddress) => boolean): void {
+  changedWhere(affects: CopyChanged): void {
     const events: vscode.FileChangeEvent[] = [];
     for (const { uri, field } of this.known.values()) {
       if (!affects(field.address)) continue;
@@ -145,22 +146,12 @@ export class ExtendedFieldDocuments implements vscode.Disposable {
     this.editable = new FieldFileSystem(deps, false);
     this.readOnly = new FieldFileSystem(deps, true);
     const both = [this.editable, this.readOnly];
-    const unsubscribes = [
-      deps.client.onNotification('rows-changed', event => {
-        for (const files of both) files.changedWhere(field => event.keys.includes(field.formKey));
-      }),
-      deps.client.onNotification('plugin-changed', event => {
-        for (const files of both) files.changedWhere(field => samePluginAddress(field.plugin, event.plugin));
-      }),
-      deps.client.onReconnected(() => {
-        for (const files of both) files.changedWhere(() => true);
-      }),
-    ];
     this.registrations = [
       vscode.workspace.registerFileSystemProvider(EDITABLE_FIELD_SCHEME, this.editable),
       vscode.workspace.registerFileSystemProvider(READONLY_FIELD_SCHEME, this.readOnly, { isReadonly: true }),
       vscode.workspace.onDidCloseTextDocument(doc => { for (const files of both) files.forget(doc.uri); }),
-      new vscode.Disposable(() => { for (const unsubscribe of unsubscribes) unsubscribe(); }),
+      followReportedCopies(deps.client, (affects) => { for (const files of both) files.changedWhere(affects); },
+        ({ keys }) => (field) => keys.includes(field.formKey)),
       this.editable,
       this.readOnly,
     ];

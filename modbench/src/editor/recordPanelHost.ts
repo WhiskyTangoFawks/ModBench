@@ -6,7 +6,9 @@ import type { EditAddress, EditsInFlight } from './followRecord';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { pickRecord } from './recordPicker';
-import { routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps } from './recordPanelMessageRouter';
+import {
+  routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps, type TitleFromRead,
+} from './recordPanelMessageRouter';
 import type { FocusedCells } from './focusedCells';
 import type { RecordWriteDeps } from './applyRecordEdit';
 import { ExtendedFieldDocuments } from './extendedFieldEditor';
@@ -96,7 +98,7 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
 
   resolveCustomEditor(document: RecordDocument, panel: vscode.WebviewPanel): void {
     panel.title = recordTitle(document.formKey, undefined);
-    showRecord(this.deps, panel, document.formKey, (title) => { panel.title = title; });
+    showRecord(this.deps, panel, document.formKey, (formKey, columns) => { panel.title = recordTitle(formKey, columns); });
   }
 }
 
@@ -119,9 +121,9 @@ class RecordFileEditorProvider implements vscode.CustomTextEditorProvider {
     }
     if (document.uri.scheme === CHILD_RECORD_SCHEME) {
       // The file is the container's, so its name is not the child's.
-      const { formKey } = copyOf(document.uri);
+      const { formKey, plugin } = copyOf(document.uri);
       panel.title = recordTitle(formKey, undefined);
-      showRecord(this.deps, panel, formKey, (title) => { panel.title = title; });
+      showRecord(this.deps, panel, formKey, (read, columns) => { panel.title = recordTitle(read, columns, plugin); });
       return;
     }
     const { fsPath } = document.uri;
@@ -149,7 +151,7 @@ class RecordFileEditorProvider implements vscode.CustomTextEditorProvider {
 }
 
 function showRecord(
-  deps: RecordEditorProviderDeps, panel: vscode.WebviewPanel, formKey: string, setTitle: (title: string) => void,
+  deps: RecordEditorProviderDeps, panel: vscode.WebviewPanel, formKey: string, titleFromRead: TitleFromRead,
 ): void {
   const {
     context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps,
@@ -177,7 +179,7 @@ function showRecord(
   panel.webview.onDidReceiveMessage((msg: unknown) => {
     // A reply and a follow reach the one panel that asked, never a broadcast; `routerDeps` is
     // shared across panels, so the per-panel fields are rebuilt with the panel this closure holds.
-    void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight, setTitle));
+    void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight, titleFromRead));
   });
 
   showWebviewPage(panel.webview, context.extensionUri, {

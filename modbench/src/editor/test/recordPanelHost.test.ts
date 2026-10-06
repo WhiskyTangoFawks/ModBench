@@ -94,11 +94,12 @@ describe('registerEditorCommands', () => {
   });
 });
 
-describe('the extended-field documents', () => {
-  it('are registered under a writable and a read-only scheme as soon as the Editor is', () => {
+describe('the Editor\'s file systems', () => {
+  it('are registered as soon as the Editor is: a field\'s, writable and read-only, and a child record\'s', () => {
     register();
 
-    expect(registerFileSystemProvider.mock.calls.map(([scheme]) => scheme)).toEqual(expect.arrayContaining(['modbench-field', 'modbench-field-readonly']));
+    expect(registerFileSystemProvider.mock.calls.map(([scheme]) => scheme))
+      .toEqual(['modbench-field', 'modbench-field-readonly', 'modbench-child-record']);
   });
 });
 

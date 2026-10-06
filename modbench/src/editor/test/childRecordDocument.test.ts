@@ -10,7 +10,7 @@ const h = vi.hoisted(() => {
     uri,
     providers: new Map<string, unknown>(),
     textDocuments: [] as { uri: TestUri }[],
-    files: new Map<string, string>(),
+    files: new Map<string, Uint8Array>(),
   };
 });
 
@@ -27,9 +27,9 @@ vi.mock('vscode', () => ({
     },
     get textDocuments() { return h.textDocuments; },
     fs: {
-      readFile: (uri: TestUri) => Promise.resolve(new TextEncoder().encode(h.files.get(`${uri.scheme}:${uri.path}?${uri.query}`))),
+      readFile: (uri: TestUri) => Promise.resolve(h.files.get(`${uri.scheme}:${uri.path}?${uri.query}`)),
       writeFile: (uri: TestUri, content: Uint8Array) => {
-        h.files.set(`${uri.scheme}:${uri.path}?${uri.query}`, new TextDecoder().decode(content));
+        h.files.set(`${uri.scheme}:${uri.path}?${uri.query}`, content);
         return Promise.resolve();
       },
     },
@@ -69,7 +69,7 @@ beforeEach(() => {
 
 describe('a child record\'s document', () => {
   it('is its container\'s file, read through to it', async () => {
-    h.files.set(`file:${CELL_FILE}?`, '{ "EditorID": "Cell" }');
+    h.files.set(`file:${CELL_FILE}?`, new TextEncoder().encode('{ "EditorID": "Cell" }'));
     const { files } = childDocuments();
 
     const text = new TextDecoder().decode(await files.readFile(childRecordUri(placed, CELL_FILE)));
@@ -77,12 +77,27 @@ describe('a child record\'s document', () => {
     expect(text).toBe('{ "EditorID": "Cell" }');
   });
 
+  it('reads its container\'s file byte for byte, a byte order mark included', async () => {
+    const withBom = Uint8Array.from([0xef, 0xbb, 0xbf, 0x7b, 0x7d]);
+    h.files.set(`file:${CELL_FILE}?`, withBom);
+    const { files } = childDocuments();
+
+    expect([...await files.readFile(childRecordUri(placed, CELL_FILE))]).toEqual([0xef, 0xbb, 0xbf, 0x7b, 0x7d]);
+  });
+
+  it('refuses a container\'s file that is not UTF-8 text, so no save writes it back altered', async () => {
+    h.files.set(`file:${CELL_FILE}?`, Uint8Array.from([0x7b, 0xff, 0x7d]));
+    const { files } = childDocuments();
+
+    await expect(files.readFile(childRecordUri(placed, CELL_FILE))).rejects.toThrow(TypeError);
+  });
+
   it('saves to its container\'s file', async () => {
     const { files } = childDocuments();
 
     await files.writeFile(childRecordUri(placed, CELL_FILE), new TextEncoder().encode('{ "EditorID": "Saved" }'), { create: true, overwrite: true });
 
-    expect(h.files.get(`file:${CELL_FILE}?`)).toBe('{ "EditorID": "Saved" }');
+    expect(new TextDecoder().decode(h.files.get(`file:${CELL_FILE}?`))).toBe('{ "EditorID": "Saved" }');
   });
 
   it('is addressed apart from its sibling\'s, which shares its file', () => {

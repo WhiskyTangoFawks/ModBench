@@ -401,11 +401,14 @@ describe('an untracked copy\'s tab', () => {
 });
 
 describe('a child record\'s tab', () => {
-  it('shows the child\'s record, not its container\'s, titled with the child\'s name once its read is answered', async () => {
+  it('shows the child\'s record, not its container\'s, titled with the opened copy\'s name once its read is answered', async () => {
     const PLACED = '000803:A.esp';
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
-    client.setQueryAnswer('getComparison', comparisonOf(PLACED, [{ plugin: 'A.esp', isWinner: true, editorId: 'SharedRef' }]));
+    client.setQueryAnswer('getComparison', comparisonOf(PLACED, [
+      { plugin: 'A.esp', origin: 'ModA', isWinner: false, editorId: 'SharedRef' },
+      { plugin: 'B.esp', origin: 'ModB', isWinner: true, editorId: 'RenamedRef' },
+    ]));
     client.setQueryAnswer('getPlugins', []);
     const { openDocument } = makeEditor(client);
     const uri = { scheme: 'modbench-child-record', path: '/mods/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000803%3AA.esp&name=A.esp&origin=ModA' };
