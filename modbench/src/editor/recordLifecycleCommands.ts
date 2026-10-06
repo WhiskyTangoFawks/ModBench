@@ -184,7 +184,7 @@ function askToReplace(
   const named = ({ record, destination }: CopyItem) =>
     `${recordName(record.formKey, editorIds.get(record.formKey))} in ${destination.name} (${destination.origin})`;
   const question = heldChildRecords.length > 0
-    ? 'Replace what the destinations already hold?'
+    ? 'Replace what the destinations already hold? Each destination keeps its own copy of a record that has child records.'
     : held.length === 1
       ? 'Replace the copy a destination already holds?'
       : `Replace the ${held.length} copies the destinations already hold?`;
@@ -201,25 +201,34 @@ interface Replacement {
   readonly replace: boolean;
 }
 
-// Asked once for the whole selection. A decline drops the destinations that hold something in a
-// deep copy, and ends an override. Undefined when nothing is to be copied.
+interface CopySelection {
+  readonly mode: CopyMode;
+  readonly records: readonly RecordAddress[];
+  readonly withChildren: readonly RecordAddress[];
+}
+
 async function confirmReplacement(
-  client: RecordCopyClient, deepOf: readonly RecordAddress[] | undefined, asked: readonly RecordAddress[],
-  destinations: readonly PluginAddress[],
+  client: RecordCopyClient, { mode, records, withChildren }: CopySelection, destinations: readonly PluginAddress[],
   editorIds: ReadonlyMap<string, string | undefined>, ask: AskQuestion, reporter: Reporter,
 ): Promise<Replacement | undefined> {
+  const deep = mode === 'DeepOverride';
   let held: CopyItem[];
-  let heldChildRecords: CopyItem[];
+  let heldChildRecords: CopyItem[] = [];
   try {
-    held = await copiesAnOverrideReplaces(client, asked, destinations);
-    heldChildRecords = deepOf ? await childrenADeepCopyReplaces(client, deepOf, destinations) : [];
+    held = await copiesAnOverrideReplaces(client, recordsAskedToReplace(mode, records, withChildren), destinations);
   } catch (error) {
     reporter.report('error', 'Could not check which plugins already hold a copy.', errorMessage(error));
     return undefined;
   }
+  try {
+    if (deep) heldChildRecords = await childrenADeepCopyReplaces(client, withChildren, destinations);
+  } catch (error) {
+    reporter.report('error', 'Could not check which plugins already hold child records.', errorMessage(error));
+    return undefined;
+  }
   if (held.length + heldChildRecords.length === 0) return { destinations, replace: false };
   if (await askToReplace(held, heldChildRecords, editorIds, ask) === 'Replace') return { destinations, replace: true };
-  if (!deepOf) return undefined;
+  if (!deep) return undefined;
   const kept = withoutDestinations(destinations, [...held, ...heldChildRecords]);
   return kept.length > 0 ? { destinations: kept, replace: false } : undefined;
 }
@@ -233,8 +242,8 @@ function landedMessage(landed: readonly CopyItem[], editorIds: ReadonlyMap<strin
   return `Made ${landed.length} copies.`;
 }
 
-/** plugins.md, Pickers, Copy: the mode, then the destinations, then one question when an override
- *  would replace copies the destinations already hold (commands.md, Confirm what destroys). */
+/** plugins.md, Pickers, Copy: the mode, then the destinations, then one question when the copy
+ *  would replace what the destinations already hold (commands.md, Confirm what destroys). */
 export function registerRecordCopyCommands(
   client: RecordCopyClient, reporter: Reporter, ask: AskQuestion,
   // The palette hands no row, so it takes the selection of the view last selected in.
@@ -258,9 +267,7 @@ export function registerRecordCopyCommands(
       if (!destinations) return;
 
       const confirmed = isOverride(mode)
-        ? await confirmReplacement(
-          client, mode === 'DeepOverride' ? withChildren : undefined, recordsAskedToReplace(mode, records, withChildren),
-          destinations, editorIds, ask, reporter)
+        ? await confirmReplacement(client, { mode, records, withChildren }, destinations, editorIds, ask, reporter)
         : { destinations, replace: false };
       if (!confirmed) return;
 

@@ -773,16 +773,6 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
         return invoked;
       }
 
-      it('asks of mEdit for the records with child records and the picked destinations', async () => {
-        const client = new InMemoryMEditClient();
-        deepInto(client, [PATCH, OTHER], 'Replace');
-
-        await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
-
-        expect(client.calls.filter((c) => c.method === 'getChildrenInDestinations').map((c) => c.args))
-          .toEqual([[[SOURCE], [PATCH, OTHER]]]);
-      });
-
       it('asks once to replace them, and copies with replace when confirmed', async () => {
         const client = new InMemoryMEditClient();
         const { ask } = deepInto(client, [PATCH, OTHER], 'Replace');
@@ -790,7 +780,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
         await copy(RECORD_NODE);
 
         expect(ask.asked).toHaveLength(1);
-        expect(present(ask.asked[0], 'the replace question').detail).toContain('Patch.esp (PatchMod)');
+        expect(present(ask.asked[0], 'the replace question').detail).toBe('000801:MyPatch.esp in Patch.esp (PatchMod), child records');
         expect(copyCalls(client)).toEqual([[[SOURCE], 'DeepOverride', [PATCH, OTHER], true]]);
       });
 
@@ -821,7 +811,19 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
         await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
 
         expect(ask.asked).toHaveLength(1);
-        expect(present(ask.asked[0], 'the replace question').detail).toContain('Second [000802:MyPatch.esp] in Other.esp (OtherMod)');
+        expect(present(ask.asked[0], 'the replace question').detail).toBe(
+          'Second [000802:MyPatch.esp] in Other.esp (OtherMod)\n000801:MyPatch.esp in Patch.esp (PatchMod), child records');
+      });
+
+      it('does not ask about a destination that is the record\'s own plugin, nor drop it from a decline', async () => {
+        const client = new InMemoryMEditClient();
+        const { ask } = deepInto(client, [PATCH, OTHER], undefined);
+        client.setQueryAnswer('getChildrenInDestinations', [{ record: SOURCE, destinations: [{ name: 'MyPatch.esp', origin: 'ModA' }] }]);
+
+        await copy(RECORD_NODE);
+
+        expect(ask.asked).toEqual([]);
+        expect(copyCalls(client)).toEqual([[[SOURCE], 'DeepOverride', [PATCH, OTHER], false]]);
       });
 
       it('says why it could not look up the destinations holding child records, and copies nothing', async () => {
@@ -832,7 +834,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
         await copy(RECORD_NODE);
 
         expect(reporter.reports).toEqual([{
-          severity: 'error', message: 'Could not check which plugins already hold a copy.', detail: 'The index is not ready.',
+          severity: 'error', message: 'Could not check which plugins already hold child records.', detail: 'The index is not ready.',
         }]);
         expect(copyCalls(client)).toEqual([]);
       });

@@ -80,9 +80,11 @@ export function heldCopies(
 }
 
 /** Each record and destination where the destination holds any of the record's child records:
- *  what a deep copy's replace would overwrite. */
+ *  what a deep copy's replace would overwrite. A record's own plugin holds them as the source. */
 export const heldChildren = (childHolders: readonly RecordChildHolders[]): CopyItem[] =>
-  childHolders.flatMap(({ record, destinations }) => destinations.map((destination) => ({ record, destination })));
+  childHolders
+    .flatMap(({ record, destinations }) => destinations.map((destination) => ({ record, destination })))
+    .filter((item) => !intoItsOwnPlugin(item));
 
 export function withoutDestinations(
   destinations: readonly PluginAddress[], dropped: readonly CopyItem[],
