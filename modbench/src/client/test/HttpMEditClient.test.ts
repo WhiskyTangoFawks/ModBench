@@ -753,19 +753,6 @@ describe('HttpMEditClient — the record filter', () => {
   });
 });
 
-describe('HttpMEditClient — a group\'s records', () => {
-  it('asks for what the record filter hides too, only when told to', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { items: [], total: 0 })));
-    const client = makeClient(fetch);
-
-    await client.getRecords({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_', 0, 10);
-    await client.getRecords({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_', 0, 10, { unfiltered: true });
-
-    const queries = fetch.mock.calls.map((call) => new URL(call[0].url).searchParams.get('unfiltered'));
-    expect(queries).toEqual([null, 'true']);
-  });
-});
-
 describe('HttpMEditClient — searchRecords', () => {
   it('searches among every record type the field allows', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { items: [], total: 0 })));

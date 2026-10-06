@@ -54,7 +54,7 @@ public sealed class RecordQueryService(
     // GetCompare resolve it by FormKey, but both browse paths below exclude it.
 
     public PagedResult<RecordSummary> GetRecords(
-        IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset, bool unfiltered = false)
+        IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset)
     {
         var reads = RequireReads();
         var schemas = RequireSchemas();
@@ -69,7 +69,7 @@ public sealed class RecordQueryService(
         var query = new RecordQuery(
             RecordTypes: recordTypes, Plugin: pluginFilter, Origin: plugin?.Origin, Search: search,
             SearchFormKey: FormKeyOfFormId(search, reads), Limit: limit, Offset: offset,
-            GroupOnly: search is null, Unfiltered: unfiltered);
+            GroupOnly: search is null);
         return reads.Search(query).ToQuery();
     }
 

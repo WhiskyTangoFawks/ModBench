@@ -214,10 +214,7 @@ export interface MEditClient {
   /** The types the plugin's copy of a container record can hold, in name order. */
   getChildRecordTypes(plugin: PluginAddress, formKey: string): Promise<RecordTypeChoice[]>;
   getCreatablePluginExtensions(): Promise<string[]>;
-  // `unfiltered` lists what the record filter hides too.
-  getRecords(
-    plugin: PluginAddress, type: string, offset: number, limit: number, options?: { unfiltered: boolean },
-  ): Promise<RecordPage>;
+  getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage>;
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
   getRecordOwner(formKey: string): Promise<PluginAddress | undefined>;
   /** Every plugin that holds a copy of the record, its own included. */

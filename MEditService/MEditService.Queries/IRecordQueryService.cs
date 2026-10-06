@@ -9,7 +9,7 @@ public interface IRecordQueryService
     IReadOnlyList<PluginRow> GetPlugins();
     // A null plugin browses every plugin.
     PagedResult<RecordSummary> GetRecords(
-        IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset, bool unfiltered = false);
+        IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset);
     RecordDetail? GetRecord(string formKey);
 
     CompareResult? GetCompare(string formKey, CopyText? text = null);
