@@ -187,6 +187,19 @@ describe('the extended-field documents', () => {
     expect(changes).toHaveLength(1);
   });
 
+  it('when the stream of mEdit\'s reports opens again, every open document in either scheme tells VS Code it changed', async () => {
+    await documents.open(deacon);
+    await documents.open({ ...deacon, readOnly: true });
+    const [editable, readOnly] = [shownUri(0), shownUri(1)];
+    await textOf(editable);
+    await textOf(readOnly, READONLY_FIELD_SCHEME);
+    const changes = [recordChanges(), recordChanges(READONLY_FIELD_SCHEME)];
+
+    client.reconnected();
+
+    expect(changes).toEqual([[[{ type: 1, uri: editable }]], [[{ type: 1, uri: readOnly }]]]);
+  });
+
   it('a closed tab is told of nothing', async () => {
     await documents.open(deacon);
     await textOf(shownUri());

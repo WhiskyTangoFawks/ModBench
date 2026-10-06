@@ -216,6 +216,15 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify({ path: decodeURIComponent(copyFile) === TRACKED_PLUGIN ? TRACKED_FILE : null }));
       return;
     }
+    const rendered = /^\/plugins\/[^/?]+\/records\/([^/?]+)\/rendered-document\?/.exec(url)?.[1];
+    if (rendered !== undefined) {
+      const formKey = decodeURIComponent(rendered);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(formKey === UNTRACKED_FORM_KEY
+        ? { fileName: UNTRACKED_FILE_NAME, text: untrackedText }
+        : { fileName: `${formKey.replace(':', '_')}.json`, text: '{}' }));
+      return;
+    }
     if (url.startsWith('/plugin-source/record?')) {
       const filePath = new URL(url, 'http://x').searchParams.get('path');
       const holds = filePath !== null && vscode.Uri.file(filePath).fsPath === TRACKED_FS_PATH;
@@ -252,6 +261,10 @@ const TRACKED_FILE = path.join(
 fs.mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
 fs.writeFileSync(TRACKED_FILE, JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun' }));
 const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
+
+const UNTRACKED_FORM_KEY = '000801:Untracked.esp';
+const UNTRACKED_FILE_NAME = 'UntrackedGun - 000801_Untracked.esp.json';
+let untrackedText = '{ "EditorID": "UntrackedGun" }';
 
 const HELD_FORM_KEY = '000801:Held.esp';
 const MOCK_COMPARISONS = new Map<string, CompareResult>([[TRACKED_FORM_KEY, comparisonOf(TRACKED_FORM_KEY, [
@@ -405,13 +418,13 @@ describe('modbench.record.open', () => {
     assert.deepStrictEqual(tabsByGroup, [[], selection.map((s) => s.formKey)]);
   });
 
-  it('opens the headers of two plugins of one file name from different origins as two tabs', async () => {
+  it('opens the headers of two untracked plugins of one file name from different origins as two tabs', async () => {
     const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.record.open', [
       { header: { name: 'Twin.esp', origin: 'ModA' } }, { header: { name: 'Twin.esp', origin: 'ModB' } },
     ]);
-    await waitFor('both Twin.esp tabs', () => openTabs().filter(t => t.label === 'Twin.esp').length === 2 || undefined);
+    await waitFor('both Twin.esp tabs', () => openTabs().filter(t => t.label === '000000_Twin.esp.json').length === 2 || undefined);
 
     assert.strictEqual(openTabs().length, tabsBefore + 2);
   });
@@ -462,6 +475,50 @@ describe('a tracked copy of a record', () => {
 
     await waitFor('the file\'s tab in the record grid', () => fileTabs().length === 1);
     await waitFor('mEdit asked which record the file holds', () => requestLog.filter((line) => line === asked).length > readsBefore);
+  });
+});
+
+describe('an untracked copy of a record', () => {
+  const untrackedCopy = { formKey: UNTRACKED_FORM_KEY, plugin: { name: 'Untracked.esp', origin: 'UntrackedMod' } };
+  const renderedTabs = () => openTabs().filter((t) =>
+    t.input instanceof vscode.TabInputCustom && t.input.uri.scheme === 'modbench-rendered' && t.input.viewType === 'modbench.recordFile');
+  const renderedDocument = async () => {
+    const [tab] = await waitFor('the copy\'s tab', () => renderedTabs().length > 0 && renderedTabs());
+    if (!(tab?.input instanceof vscode.TabInputCustom)) throw new Error('expected a custom editor tab');
+    return vscode.workspace.openTextDocument(tab.input.uri);
+  };
+
+  before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
+  afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
+
+  it('opens in the record grid as the document mEdit renders, titled with the name its file would have', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', untrackedCopy);
+
+    const document = await renderedDocument();
+    assert.deepStrictEqual(renderedTabs().map((t) => t.label), [UNTRACKED_FILE_NAME]);
+    assert.strictEqual(document.getText(), untrackedText);
+  });
+
+  it('opens in the record grid by the route VS Code opens any document by', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', untrackedCopy);
+    const { uri } = await renderedDocument();
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+
+    await vscode.commands.executeCommand('vscode.open', uri);
+
+    await waitFor('the copy\'s tab in the record grid', () => renderedTabs().length === 1);
+  });
+
+  it('reads mEdit\'s rendering again when mEdit reports the copy changed', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', untrackedCopy);
+    const document = await renderedDocument();
+
+    untrackedText = '{ "EditorID": "UntrackedGun", "Name": "Changed" }';
+    for (const res of sseClients) {
+      writeSseFrame(res, 'rows-changed', { plugin: untrackedCopy.plugin.name, origin: untrackedCopy.plugin.origin, keys: [UNTRACKED_FORM_KEY] });
+    }
+
+    await waitFor('the document to change', () => document.getText() === untrackedText);
   });
 });
 
