@@ -354,6 +354,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
     client.setQueryAnswer('getRecordsWithChildren', []);
+    client.setQueryAnswer('getChildrenInDestinations', []);
     registerRecordCopyCommands(client, reporter, ask, () => viewSelection, write);
     return { reporter, ask, writing, viewsAskedFor };
   }
@@ -758,6 +759,85 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       expect(ask.asked).toHaveLength(1);
       expect(present(ask.asked[0], 'the replace question').detail).toBe('Second [000802:MyPatch.esp] in Patch.esp (PatchMod)');
       expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'DeepOverride', [PATCH], true]]);
+    });
+
+    describe('a destination that holds child records', () => {
+      function deepInto(client: InMemoryMEditClient, picked: readonly { name: string; origin: string }[], ...answers: readonly (string | undefined)[]) {
+        destinations(client);
+        client.setQueryAnswer('getRecordHolders', []);
+        client.setCommandResult('copyRecords', { landed: [], refused: [] });
+        pick('DeepOverride', picked);
+        const invoked = invoke(client, ...answers);
+        client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
+        client.setQueryAnswer('getChildrenInDestinations', [{ record: SOURCE, destinations: [PATCH] }]);
+        return invoked;
+      }
+
+      it('asks once to replace them, and copies with replace when confirmed', async () => {
+        const client = new InMemoryMEditClient();
+        const { ask } = deepInto(client, [PATCH, OTHER], 'Replace');
+
+        await copy(RECORD_NODE);
+
+        expect(ask.asked).toHaveLength(1);
+        expect(present(ask.asked[0], 'the replace question').detail).toBe('000801:MyPatch.esp in Patch.esp (PatchMod), child records');
+        expect(copyCalls(client)).toEqual([[[SOURCE], 'DeepOverride', [PATCH, OTHER], true]]);
+      });
+
+      it('on a decline copies into the destinations that hold none, without replace', async () => {
+        const client = new InMemoryMEditClient();
+        deepInto(client, [PATCH, OTHER], undefined);
+
+        await copy(RECORD_NODE);
+
+        expect(copyCalls(client)).toEqual([[[SOURCE], 'DeepOverride', [OTHER], false]]);
+      });
+
+      it('on a decline copies nothing when every destination holds some', async () => {
+        const client = new InMemoryMEditClient();
+        const { writing } = deepInto(client, [PATCH], undefined);
+
+        await copy(RECORD_NODE);
+
+        expect(copyCalls(client)).toEqual([]);
+        expect(writing).toEqual([]);
+      });
+
+      it('asks once for the held copies of records without child records as well', async () => {
+        const client = new InMemoryMEditClient();
+        const { ask } = deepInto(client, [PATCH, OTHER], 'Replace');
+        client.setQueryAnswer('getRecordHolders', [OTHER]);
+
+        await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
+
+        expect(ask.asked).toHaveLength(1);
+        expect(present(ask.asked[0], 'the replace question').detail).toBe(
+          'Second [000802:MyPatch.esp] in Other.esp (OtherMod)\n000801:MyPatch.esp in Patch.esp (PatchMod), child records');
+      });
+
+      it('does not ask about a destination that is the record\'s own plugin, nor drop it from a decline', async () => {
+        const client = new InMemoryMEditClient();
+        const { ask } = deepInto(client, [PATCH, OTHER], undefined);
+        client.setQueryAnswer('getChildrenInDestinations', [{ record: SOURCE, destinations: [{ name: 'MyPatch.esp', origin: 'ModA' }] }]);
+
+        await copy(RECORD_NODE);
+
+        expect(ask.asked).toEqual([]);
+        expect(copyCalls(client)).toEqual([[[SOURCE], 'DeepOverride', [PATCH, OTHER], false]]);
+      });
+
+      it('says why it could not look up the destinations holding child records, and copies nothing', async () => {
+        const client = new InMemoryMEditClient();
+        const { reporter } = deepInto(client, [PATCH]);
+        client.setQueryFailureOnce('getChildrenInDestinations', new Error('The index is not ready.'));
+
+        await copy(RECORD_NODE);
+
+        expect(reporter.reports).toEqual([{
+          severity: 'error', message: 'Could not check which plugins already hold child records.', detail: 'The index is not ready.',
+        }]);
+        expect(copyCalls(client)).toEqual([]);
+      });
     });
 
     it('says nothing of a deep copy into the record\'s own plugin, which wrote nothing', async () => {

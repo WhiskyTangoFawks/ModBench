@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
-import type { CopyItem, CopyMode, PluginAddress, PluginMetadata, RecordAddress } from '../client';
+import type { CopyItem, CopyMode, PluginAddress, PluginMetadata, RecordAddress, RecordChildHolders } from '../client';
 
 export interface CopyModeItem extends vscode.QuickPickItem {
   readonly mode: CopyMode;
@@ -77,4 +77,17 @@ export function heldCopies(
     .filter((destination) => (holders.get(record.formKey) ?? []).some((holder) => samePluginAddress(holder, destination)))
     .map((destination) => ({ record, destination })))
     .filter((item) => !intoItsOwnPlugin(item));
+}
+
+/** Each record and destination where the destination holds any of the record's child records:
+ *  what a deep copy's replace would overwrite. A record's own plugin holds them as the source. */
+export const heldChildren = (childHolders: readonly RecordChildHolders[]): CopyItem[] =>
+  childHolders
+    .flatMap(({ record, destinations }) => destinations.map((destination) => ({ record, destination })))
+    .filter((item) => !intoItsOwnPlugin(item));
+
+export function withoutDestinations(
+  destinations: readonly PluginAddress[], dropped: readonly CopyItem[],
+): PluginAddress[] {
+  return destinations.filter((d) => !dropped.some((item) => samePluginAddress(item.destination, d)));
 }
