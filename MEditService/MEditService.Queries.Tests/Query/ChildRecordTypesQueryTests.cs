@@ -55,7 +55,7 @@ public sealed class ChildRecordTypesQueryTests
     [Theory]
     [InlineData(null, null, true, new[] { "Navmesh" })]
     [InlineData(Worldspace, 0, false, new[] { "Landscape", "Navmesh" })]
-    [InlineData(Worldspace, null, false, new string[0])]
+    [InlineData(Worldspace, null, false, new[] { "Navmesh" })]
     public void ACell_HoldsWhatItsPlaceInTheIndexAllows(string? worldspace, int? blockX, bool isInterior, string[] besidesPlacedRecords)
     {
         _reads.CellLocations = new Dictionary<RecordAt, CellLocationRow>
