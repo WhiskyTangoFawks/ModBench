@@ -291,6 +291,50 @@ public sealed class CopyAsDeepOverrideTests
     }
 
     [Fact]
+    public void AReplacingDeepCopyOfAQuestTheDestinationLacks_MovesATopicItHoldsUnderAnotherQuest_WithItsOwnResponses()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.BareQuest.ToString(), fixture.DestinationPlugin).Applied);
+        var ownResponse = FormKey.Factory($"0ABCDE:{ContainerCopyFixture.DestinationPluginName}");
+        SourceEdits.Rewrite<Quest>(
+            TrackedTree.Repository(fixture.DestinationModFolder), fixture.DestinationPlugin,
+            new RecordIdentity(fixture.BareQuest.ToString(), "qust", ContainerCopyFixture.BareQuestEditorId),
+            GameRelease.Fallout4,
+            quest => quest.DialogTopics.Add(new DialogTopic(fixture.DialogTopic, Fallout4Release.Fallout4)
+            {
+                EditorID = "HeldTopic",
+                Responses = { new DialogResponses(ownResponse, Fallout4Release.Fallout4) { EditorID = "OwnResponse" } },
+            }));
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin, replace: true);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.DoesNotContain(fixture.DialogTopic.ToString(), fixture.Document(fixture.DestinationPlugin, fixture.BareQuest).Require().Body, StringComparison.Ordinal);
+        var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest).Require().Body;
+        Assert.All(
+            new[] { fixture.DialogTopic.ToString(), fixture.Response1.ToString(), fixture.Response2.ToString(), ownResponse.ToString() },
+            key => Assert.Contains(key, quest, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AReplacingDeepCopyOfAPersistentCell_MovesARefTheDestinationHoldsInANumberedCell()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin).Applied);
+        SourceEdits.Rewrite<Cell>(
+            TrackedTree.Repository(fixture.DestinationModFolder), fixture.DestinationPlugin,
+            new RecordIdentity(fixture.ExteriorCell.ToString(), "cell", ContainerCopyFixture.ExteriorCellEditorId),
+            GameRelease.Fallout4,
+            cell => cell.Temporary.Add(new PlacedObject(fixture.TopCellRef, Fallout4Release.Fallout4) { EditorID = "EditedInCell" }));
+
+        var result = fixture.CopyHandler.CopyAsDeepOverride(fixture.SourcePlugin, fixture.TopCell.ToString(), fixture.DestinationPlugin, replace: true);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.DoesNotContain(fixture.TopCellRef.ToString(), fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell).Require().Body, StringComparison.Ordinal);
+        Assert.Equal(ContainerCopyFixture.TopCellRefEditorId, fixture.Document(fixture.DestinationPlugin, fixture.TopCellRef).Require().EditorId);
+    }
+
+    [Fact]
     public void AReplacingDeepCopyOfAnInteriorCell_HoldsARefOnceWhenTheDestinationHasItInTheOtherGroup()
     {
         using var fixture = ContainerCopyFixture.Create();

@@ -141,9 +141,12 @@ internal sealed class OverrideCopy
                 if (held.Contains(cell)) _recordCopy.OverwriteHeldCell(document, destination, release);
                 else
                 {
-                    RecordCopy.RemoveHeldElsewhere(
-                        destination, _recordCopy.FindHeldElsewhere(destination, document.Body, document.RecordType, null, release));
-                    _recordCopy.PutExteriorCell(identity.FormKey, document, document.Body, destination, release);
+                    var elsewhere = _recordCopy.FindHeldElsewhere(destination, document.Body, document.RecordType, null, release);
+                    RecordCopy.LandWithoutHeldElsewhere(destination, elsewhere, () =>
+                    {
+                        _recordCopy.PutExteriorCell(identity.FormKey, document, document.Body, destination, release);
+                        return RecordEditResult.Success();
+                    });
                 }
                 landed.Add(cell);
             }
@@ -186,13 +189,19 @@ internal sealed class OverrideCopy
             return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
         }
 
-        if (withChildren)
-        {
-            var elsewhere = _recordCopy.FindHeldElsewhere(destination, body, identity.RecordType, null, release);
-            body = _recordCopy.CarryingHeldElsewhere(elsewhere, body, identity.RecordType, release);
-            RecordCopy.RemoveHeldElsewhere(destination, elsewhere);
-        }
+        var elsewhere = withChildren
+            ? _recordCopy.FindHeldElsewhere(destination, body, identity.RecordType, null, release)
+            : RecordCopy.HeldElsewhere.None;
+        var carrying = _recordCopy.CarryingHeldElsewhere(elsewhere, body, identity.RecordType, release);
+        return RecordCopy.LandWithoutHeldElsewhere(
+            destination, elsewhere, () => LandNewRecord(copy, carrying, destinationPlugin, withChildren));
+    }
 
+    private RecordEditResult LandNewRecord(
+        WriteTargets.CopyTarget copy, string body, PluginAddress destinationPlugin, bool withChildren)
+    {
+        var (source, identity, destination, release, _) = copy;
+        var formKey = identity.FormKey;
         var isCell = RecordTypeDispatch.For(release).IsCell(identity.RecordType);
         if (isCell && source.WorldspaceOf(identity) is { } worldspace)
         {

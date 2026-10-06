@@ -38,7 +38,12 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
             return ReplaceEmbeddedChildInPlace(source.Plugin, existing, landing, destination, release);
         }
 
-        var appended = AppendEmbeddedChild(source, container, landing, destination, release);
+        var elsewhere = withChildren
+            ? FindHeldElsewhere(destination, child.Body, child.RecordType, null, release)
+            : HeldElsewhere.None;
+        landing = landing with { Body = CarryingHeldElsewhere(elsewhere, landing.Body, landing.RecordType, release) };
+        var appended = LandWithoutHeldElsewhere(
+            destination, elsewhere, () => AppendEmbeddedChild(source, container, landing, destination, release));
 
         if (appended.Applied && logger.IsEnabled(LogLevel.Information))
         {
@@ -137,9 +142,12 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
         var withChildren = ContainerDocumentEdits.WithChildRecordsMerged(
             codec, existingDocument.Body, existing.RecordType, sourceBody, sourceRecordType, release, elsewhere.Carried);
 
-        RemoveHeldElsewhere(destination, elsewhere);
-        destination.Repository.Put(
-            destination.Plugin, new SourceDocument(existing.FormKey, existing.RecordType, existing.EditorId, withChildren));
+        LandWithoutHeldElsewhere(destination, elsewhere, () =>
+        {
+            destination.Repository.Put(
+                destination.Plugin, new SourceDocument(existing.FormKey, existing.RecordType, existing.EditorId, withChildren));
+            return RecordEditResult.Success();
+        });
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -246,9 +254,13 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
 
         var overwritten = ContainerDocumentEdits.WithRecordOverwritten(
             codec, existingDocument.Body, existing.RecordType, sourceCell.Body, sourceCell.RecordType, release);
-        RemoveHeldElsewhere(destination, FindHeldElsewhere(destination, sourceCell.Body, sourceCell.RecordType, existingDocument, release));
-        destination.Repository.Put(
-            destination.Plugin, new SourceDocument(sourceCell.FormKey, existing.RecordType, overwritten.EditorId, overwritten.Text));
+        var elsewhere = FindHeldElsewhere(destination, sourceCell.Body, sourceCell.RecordType, existingDocument, release);
+        LandWithoutHeldElsewhere(destination, elsewhere, () =>
+        {
+            destination.Repository.Put(
+                destination.Plugin, new SourceDocument(sourceCell.FormKey, existing.RecordType, overwritten.EditorId, overwritten.Text));
+            return RecordEditResult.Success();
+        });
     }
 
     private static SourceDocument DocumentOf(Destination destination, RecordIdentity existing) =>
@@ -257,7 +269,11 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
     /// <summary>The child records the destination holds in another document leave it, and the copy
     /// lands each where the source has it. <c>Carried</c> is the text of those with children.</summary>
     internal sealed record HeldElsewhere(
-        IReadOnlyList<RecordIdentity> Records, IReadOnlyList<(string Text, string? RecordType)> Carried);
+        IReadOnlyList<RecordIdentity> Records, IReadOnlyList<(string Text, string? RecordType)> Carried,
+        IReadOnlyList<SourceDocument> Owners)
+    {
+        internal static readonly HeldElsewhere None = new([], [], []);
+    }
 
     internal HeldElsewhere FindHeldElsewhere(
         Destination destination, string sourceBody, string sourceRecordType, SourceDocument? destinationUnit, GameRelease release)
@@ -279,18 +295,52 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
                 carried.Add((DocumentOf(destination, elsewhere).Body, elsewhere.RecordType));
             }
         }
-        return new HeldElsewhere(records, carried);
+        var owners = records
+            .Select(record => destination.Repository.ContainerDocument(destination.Plugin, record, schemas))
+            .OfType<SourceDocument>()
+            .DistinctBy(owner => owner.FormKey)
+            .ToList();
+        return new HeldElsewhere(records, carried, owners);
     }
 
     /// <summary><paramref name="body"/> with the records held elsewhere overwritten by its own.</summary>
     internal string CarryingHeldElsewhere(HeldElsewhere elsewhere, string body, string recordType, GameRelease release) =>
         elsewhere.Carried.Count == 0
             ? body
-            : ContainerDocumentEdits.WithChildRecordsMerged(codec, body, recordType, body, recordType, release, elsewhere.Carried);
+            : ContainerDocumentEdits.WithChildRecordsMerged(
+                codec, ContainerDocumentEdits.WithoutChildren(codec, body, release, recordType), recordType, body, recordType, release,
+                elsewhere.Carried);
 
-    internal static void RemoveHeldElsewhere(Destination destination, HeldElsewhere elsewhere)
+    /// <summary>The records held elsewhere leave their documents first, since the tree refuses a key two
+    /// documents hold. A landing that refuses or fails puts those documents back.</summary>
+    internal static RecordEditResult LandWithoutHeldElsewhere(
+        Destination destination, HeldElsewhere elsewhere, Func<RecordEditResult> land)
     {
-        foreach (var record in elsewhere.Records) destination.Repository.Remove(destination.Plugin, record);
+        foreach (var record in elsewhere.Records)
+        {
+            if (destination.Repository.Remove(destination.Plugin, record) == SourceRemoval.OwnerDoesNotCarryIt)
+            {
+                throw new InvalidOperationException(
+                    $"{destination.Plugin.Name}'s document holding {record.FormKey} does not carry it.");
+            }
+        }
+
+        try
+        {
+            var landed = land();
+            if (!landed.Applied) PutBack(destination, elsewhere);
+            return landed;
+        }
+        catch
+        {
+            PutBack(destination, elsewhere);
+            throw;
+        }
+    }
+
+    private static void PutBack(Destination destination, HeldElsewhere elsewhere)
+    {
+        foreach (var owner in elsewhere.Owners) destination.Repository.Put(destination.Plugin, owner);
     }
 
     private static JsonNode RequireParsed(string text) =>
