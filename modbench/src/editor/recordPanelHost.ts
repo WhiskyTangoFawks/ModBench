@@ -24,7 +24,7 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen, type TabPlace } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
-import { inTabsPlace } from './inTabsPlace';
+import { inTabsPlace, inTabsStead, type TabShowOptions } from './inTabsPlace';
 import { followReportedCopies, type CopyChanged } from './recordCopy';
 import { fileText } from './fileText';
 import { RenderedDocuments } from './renderedDocument';
@@ -82,10 +82,9 @@ interface RecordEditorProviderDeps extends ShowRecordDeps {
   channel: Pick<vscode.LogOutputChannel, 'warn'>;
 }
 
-// What a tab's page opens on: the record, the records beside it, and the place of the tab it stands in for.
 interface GridPage { formKey: string; columns: readonly RecordCopy[]; place?: ViewState }
 
-// The record a file's tab shows once an edit moves the file, the record it moved from, and the tab's place.
+// What a file's tab shows once an edit moves the file.
 interface MovedTab extends RecordCopy { from?: string; columns: readonly RecordCopy[]; place: ViewState | undefined }
 
 // Where `uri` stands once each move is made in order, each against the tree the one before it left.
@@ -105,14 +104,15 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   private readonly shown = new Map<vscode.WebviewPanel, { uri: vscode.Uri; plugin: PluginAddress }>();
   private readonly places = new Map<vscode.WebviewPanel, ViewState>();
   private readonly moved = new Map<string, MovedTab>();
-  // The child records' tabs on their way to the document that carries their record now.
-  private readonly following = new Set<vscode.WebviewPanel>();
+  // The copies mEdit reported changed while the child records' tabs were following theirs.
+  private toFollow: CopyChanged | undefined;
+  private following = false;
 
   constructor(private readonly deps: RecordEditorProviderDeps) {}
 
   /** Opens the grid on `uri`, with `columns` beside the document's own copy, and none when there
    *  are none, so a tab shown again shows every active plugin's copy. */
-  async open(uri: vscode.Uri, columns: readonly RecordCopy[], options: vscode.TextDocumentShowOptions, place?: ViewState): Promise<void> {
+  async open(uri: vscode.Uri, columns: readonly RecordCopy[], options: TabShowOptions, place?: ViewState): Promise<void> {
     const key = uri.toString();
     this.toShow.set(key, { columns, place });
     let untaken: readonly RecordCopy[] | undefined;
@@ -134,23 +134,52 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
 
   /** Each child record's tab whose record mEdit reports changed follows it to the document that carries
    *  it now, as a file's tab follows its file (editor.md, Opening, story 10). */
-  async followCarried(affects: CopyChanged): Promise<void> {
-    await Promise.all([...this.shown].map(async ([panel, { uri, plugin }]) => {
-      const formKey = this.deps.activeRecordTracker.formKeyOf(panel);
-      if (uri.scheme !== CHILD_RECORD_SCHEME || !formKey || !affects({ formKey, plugin }) || this.following.has(panel)) return;
-      this.following.add(panel);
-      try {
-        const carrying = await copyDocument(this.deps.client, { formKey, plugin });
-        const tab = panel.viewColumn === undefined ? undefined : recordTabAt({ document: uri.toString(), viewColumn: panel.viewColumn });
-        if ('refused' in carrying || carrying.uri.toString() === uri.toString() || !tab) return;
-        const [columns, place] = [this.deps.editsInFlight.columnsOf(panel), this.places.get(panel)];
-        await inTabsPlace(tab, (options) => this.open(carrying.uri, columns, options, place));
-      } catch (err) {
-        this.deps.channel.warn(`Failed to follow ${formKey} to the document that carries it: ${errorMessage(err)}`);
-      } finally {
-        this.following.delete(panel);
+  followCarried(affects: CopyChanged): Promise<void> {
+    const queued = this.toFollow;
+    this.toFollow = queued ? (copy) => queued(copy) || affects(copy) : affects;
+    return this.following ? Promise.resolve() : this.followQueued();
+  }
+
+  private async followQueued(): Promise<void> {
+    this.following = true;
+    try {
+      for (let changed = this.takeQueued(); changed; changed = this.takeQueued()) {
+        // One tab at a time, as each opens and closes tabs in its group.
+        for (const [panel, { uri, plugin }] of [...this.shown]) {
+          const formKey = this.deps.activeRecordTracker.formKeyOf(panel);
+          if (uri.scheme === CHILD_RECORD_SCHEME && formKey && changed({ formKey, plugin })) await this.follow(panel, uri, { formKey, plugin });
+        }
       }
-    }));
+    } finally {
+      this.following = false;
+    }
+  }
+
+  private takeQueued(): CopyChanged | undefined {
+    const queued = this.toFollow;
+    this.toFollow = undefined;
+    return queued;
+  }
+
+  private async follow(panel: vscode.WebviewPanel, uri: vscode.Uri, copy: RecordCopy): Promise<void> {
+    const staying = `${copy.formKey}'s tab stays on ${uri.toString(true)}`;
+    try {
+      const carrying = await copyDocument(this.deps.client, copy);
+      if ('refused' in carrying) {
+        this.deps.channel.warn(`${staying}: ${carrying.refused}`);
+        return;
+      }
+      if (carrying.uri.toString() === uri.toString()) return;
+      const tab = panel.viewColumn === undefined ? undefined : recordTabAt({ document: uri.toString(), viewColumn: panel.viewColumn });
+      if (!tab) {
+        this.deps.channel.warn(`${staying}: VS Code shows the tab in no group.`);
+        return;
+      }
+      const [columns, place] = [this.deps.editsInFlight.columnsOf(panel), this.places.get(panel)];
+      await inTabsStead(tab, (options) => this.open(carrying.uri, columns, options, place));
+    } catch (err) {
+      this.deps.channel.warn(`${staying}: ${errorMessage(err)}`);
+    }
   }
 
   /** The document carrying the record: the tab's that shows it, or the one it opens as. */

@@ -350,6 +350,7 @@ function createMockBackend(): http.Server {
 
 const TRACKED_FORM_KEY = '000801:Tracked.esp';
 const CHILD_FORM_KEY = '000802:Tracked.esp';
+const SECOND_CHILD_FORM_KEY = '000804:Tracked.esp';
 const HELD_FORM_KEY = '000801:Held.esp';
 const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
 const RENDERED_REFERRER_FORM_KEY = '000803:Fallout4.esm';
@@ -357,7 +358,9 @@ const TRACKED_FILE = path.join(
   fs.mkdtempSync(path.join(os.tmpdir(), 'modbench-tracked-')), TRACKED_ORIGIN, 'plugin-source', TRACKED_PLUGIN, 'Weapons', 'TrackedGun.json');
 fs.mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
 fs.writeFileSync(TRACKED_FILE, JSON.stringify({
-  FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun', Model: HELD_FORM_KEY, Placed: [{ FormKey: CHILD_FORM_KEY, EditorID: 'TrackedRef', Base: HELD_FORM_KEY }],
+  FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun', Model: HELD_FORM_KEY, Placed: [
+    { FormKey: CHILD_FORM_KEY, EditorID: 'TrackedRef', Base: HELD_FORM_KEY }, { FormKey: SECOND_CHILD_FORM_KEY, EditorID: 'SecondRef', Base: HELD_FORM_KEY },
+  ],
 }));
 const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
 const copyQuery = (formKey: string, plugin: string, origin: string) => `formKey=${encodeURIComponent(formKey)}&name=${plugin}&origin=${origin}`;
@@ -697,6 +700,32 @@ describe('a child record of a tracked plugin', () => {
 
     await waitFor('the child\'s tab on the file that carries it now', () => childUri()?.path === vscode.Uri.file(OTHER_CELL).path);
     assert.strictEqual(recordTabs().length, 1);
+  });
+
+  it('follows, in each child\'s tab of a moved container, its own record, the tab in the background staying there and the focus where it was', async () => {
+    fs.writeFileSync(OTHER_CELL, containerText);
+    heldIn.set(vscode.Uri.file(OTHER_CELL).fsPath, '000803:Tracked.esp');
+    for (const formKey of [CHILD_FORM_KEY, SECOND_CHILD_FORM_KEY]) {
+      await vscode.commands.executeCommand('modbench.record.open', { formKey, plugin });
+      await waitFor('the child\'s tab', () => recordTabs().some((t) => t.input instanceof vscode.TabInputCustom
+        && new URLSearchParams(t.input.uri.query).get('formKey') === formKey));
+      await vscode.commands.executeCommand('workbench.action.keepEditor');
+    }
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: TRACKED_FORM_KEY, plugin, placement: 'beside' });
+    await waitFor('the container\'s tab in focus beside them', () => vscode.window.tabGroups.activeTabGroup.viewColumn === vscode.ViewColumn.Two);
+    carriedIn.set(CHILD_FORM_KEY, OTHER_CELL);
+    carriedIn.set(SECOND_CHILD_FORM_KEY, OTHER_CELL);
+
+    reportChanged(CHILD_FORM_KEY);
+
+    const childGroup = () => present(vscode.window.tabGroups.all.find((group) => group.viewColumn === vscode.ViewColumn.One), 'the children\'s group');
+    const shows = (tab: vscode.Tab | undefined) =>
+      tab?.input instanceof vscode.TabInputCustom ? [tab.input.uri.path, new URLSearchParams(tab.input.uri.query).get('formKey')] : [];
+    await waitFor('both children\'s tabs on the file that carries them now', () =>
+      childGroup().tabs.length === 2 && childGroup().tabs.every((tab) => shows(tab)[0] === vscode.Uri.file(OTHER_CELL).path));
+    assert.deepStrictEqual(childGroup().tabs.map((tab) => shows(tab)[1]).sort(), [CHILD_FORM_KEY, SECOND_CHILD_FORM_KEY]);
+    assert.deepStrictEqual(shows(childGroup().activeTab), [vscode.Uri.file(OTHER_CELL).path, SECOND_CHILD_FORM_KEY]);
+    assert.strictEqual(vscode.window.tabGroups.activeTabGroup.viewColumn, vscode.ViewColumn.Two);
   });
 
   it('follows its record to the FormKey an edit of its FormID gives it', async () => {

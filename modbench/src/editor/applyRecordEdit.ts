@@ -80,10 +80,13 @@ async function editDocuments(
     return uri;
   });
   const notMoving = deps.moving(moves, address, outcome.newFormKey);
-  if (!await vscode.workspace.applyEdit(changes)) {
-    notMoving();
-    throw new Error('VS Code did not apply the changes mEdit answered.');
+  let applied = false;
+  try {
+    applied = await vscode.workspace.applyEdit(changes);
+  } finally {
+    if (!applied) notMoving();
   }
+  if (!applied) throw new Error('VS Code did not apply the changes mEdit answered.');
   const unsaved = await Promise.all(changed.map(async (uri) => {
     const saved = await vscode.workspace.openTextDocument(uri);
     return saved.isDirty && !await saved.save() ? [uri.fsPath] : [];
