@@ -19,6 +19,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
+import * as vscode from 'vscode';
 import { RenderedDocuments, renderedCopyOf, renderedDocumentUri } from '../renderedDocument';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
@@ -64,7 +65,7 @@ describe('a rendered document\'s address', () => {
   });
 
   it('refuses an address that states no plugin name, naming what it lacks', () => {
-    const uri = { scheme: 'modbench-rendered', path: '/ModA/A.esp/Gun.json', query: 'formKey=000801%3AA.esp&origin=ModA' };
+    const uri = vscode.Uri.from({ scheme: 'modbench-rendered', path: '/ModA/A.esp/Gun.json', query: 'formKey=000801%3AA.esp&origin=ModA' });
 
     expect(() => renderedCopyOf(uri)).toThrow('The rendered document /ModA/A.esp/Gun.json states no name.');
   });

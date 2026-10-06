@@ -105,9 +105,9 @@ interface RecordFileEditorProviderDeps extends RecordEditorProviderDeps {
   channel: Pick<vscode.LogOutputChannel, 'warn'>;
 }
 
-// The grid as VS Code's editor for a record's file, or for an untracked copy's rendered document,
-// so the tab carries the document's name. A file's tab restored before mEdit holds the load order
-// asks again on each load-order status.
+// The grid as VS Code's editor for a record's file or an untracked copy's rendered document, so
+// the tab carries its name. A file's tab restored before mEdit holds the load order asks again on
+// each load-order status.
 class RecordFileEditorProvider implements vscode.CustomTextEditorProvider {
   private readonly unread = new Map<vscode.WebviewPanel, () => Promise<void>>();
 
