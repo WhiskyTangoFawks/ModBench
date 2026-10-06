@@ -27,7 +27,7 @@ internal sealed class LayoutPath(string relativePath)
 
     internal bool IsHeaderDocument =>
         _segments.Length == HeaderDocumentDepth && UnderTheSourceRoot && NamesAPlugin
-        && Leaf.Equals(SourceRepositoryLayout.RecordDataFileName, StringComparison.Ordinal);
+        && Leaf.Equals(SourceRepositoryLayout.HeaderDocumentLeaf(PluginFileName), StringComparison.Ordinal);
 
     internal bool IsFlatDocument =>
         _segments.Length >= FlatDocumentDepth && UnderTheSourceRoot && NamesAPlugin

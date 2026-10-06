@@ -16,12 +16,9 @@ namespace MEditService.SourceAdapter;
 internal readonly record struct SourceUnit(
     string FullPath, string RelativePath, string OwnerFormKey, string? OwnerRecordType, bool IsEmbedded)
 {
-    /// <summary>A container's own field file, not a flat file. The header's root RecordData.json shares
-    /// the filename, so <see cref="OwnerRecordType"/> distinguishes them, or a header delete would
-    /// remove the whole source root.</summary>
+    /// <summary>A container's own field file, not a flat file.</summary>
     internal bool IsDirectoryPerRecord =>
-        OwnerRecordType != PluginHeader.RecordType
-        && Path.GetFileName(FullPath).Equals(SourceRepositoryLayout.RecordDataFileName, StringComparison.Ordinal);
+        Path.GetFileName(FullPath).Equals(SourceRepositoryLayout.RecordDataFileName, StringComparison.Ordinal);
 }
 
 /// <summary>Which document in the tree holds a record, and what that document says. The listing memo
@@ -94,7 +91,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         var sourceRoot = Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name));
         if (!Directory.Exists(sourceRoot)) return null;
 
-        // The header's document is the fixed root RecordData.json, and it declares a ModKey rather
+        // The header's document declares a ModKey rather
         // than the FormKey the index files it under, so no name or text in the tree carries that key.
         if (spelled.Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), StringComparison.OrdinalIgnoreCase))
         {

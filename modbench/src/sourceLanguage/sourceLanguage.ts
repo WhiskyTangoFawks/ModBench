@@ -3,13 +3,14 @@ import type { MEditClient } from '../client';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import type { OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { hoverAt } from './formKeyHover';
-import { completionsAt } from './referenceCompletion';
+import { completionsAt } from './completion';
 
 export interface SourceLanguageDeps {
   client: Pick<MEditClient, 'getComparison' | 'searchRecords'>;
   originFiles: OriginFilesOf;
 }
 
+const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
 const pluginSource: vscode.DocumentSelector = { language: 'json' };
 
 export function createSourceLanguage({ client }: SourceLanguageDeps): vscode.Disposable {
@@ -28,14 +29,14 @@ export function createSourceLanguage({ client }: SourceLanguageDeps): vscode.Dis
       const found = await completionsAt(client, document.getText(), document.offsetAt(position));
       if (found === undefined) return undefined;
       const range = new vscode.Range(document.positionAt(found.start), document.positionAt(found.end));
-      const items = found.items.map(({ label, detail, formKey }) => {
-        const item = new vscode.CompletionItem({ label, description: detail }, vscode.CompletionItemKind.Reference);
-        item.insertText = formKey;
-        item.filterText = `${label} ${formKey}`;
+      const items = found.items.map(({ label, detail, insertText }) => {
+        const item = new vscode.CompletionItem({ label, description: detail }, kinds[found.kind]);
+        item.insertText = insertText;
+        item.filterText = `${label} ${insertText}`;
         item.range = range;
         return item;
       });
-      return new vscode.CompletionList(items, true);
+      return new vscode.CompletionList(items, found.isIncomplete);
     },
   });
   return vscode.Disposable.from(hover, completion);

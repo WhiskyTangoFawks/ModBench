@@ -47,7 +47,7 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
         PluginBaselines.Track(
             _modFolder,
             [
-                new TreeFile(Path.Combine(PluginSourceRoot.For(PluginName), "RecordData.json"), HeaderDocument.Write(_mod)),
+                new TreeFile(PluginSourceRoot.HeaderDocument(PluginName), HeaderDocument.Write(_mod)),
                 new TreeFile(_questPath, _codec.SerializeToBytes(_quest, Release)),
             ]);
     }
@@ -127,6 +127,11 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
 
     private async Task<IReadOnlyList<string>> ReadBack(string list)
     {
+        var header = new TreeFile(
+            PluginSourceRoot.HeaderDocument(PluginName),
+            File.ReadAllBytes(Path.Combine(_modFolder, PluginSourceRoot.HeaderDocument(PluginName))));
+        File.WriteAllBytes(
+            Path.Combine(_modFolder, SourceRepository.DoorFilesOf(PluginName, [header]).Single().RelativePath), header.Content);
         var mod = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(
             SourceRoot, InlineWorkDropoff.Instance, CancellationToken.None);
         var quests = ((IFallout4ModGetter)mod).Quests;

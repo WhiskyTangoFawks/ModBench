@@ -54,6 +54,9 @@ public static class CutDownPluginFixture
         RecordTextCodecGeneratorSeed
             .SerializeWholeMod((IFallout4ModGetter)mod, root, InlineWorkDropoff.Instance, CancellationToken.None)
             .GetAwaiter().GetResult();
+        File.Move(
+            Path.Combine(root, "RecordData.json"),
+            Path.Combine(scratch, PluginSourceRoot.HeaderDocument(PluginFileName)));
 
         return DocumentsOf(SourceRepository.Over(TestMod.In(scratch), GameRelease.Fallout4))
             .ToDictionary(document => document.Key, document => StripCarriageReturns(document.Value));
