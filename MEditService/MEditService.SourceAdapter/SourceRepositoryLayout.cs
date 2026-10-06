@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -19,7 +20,7 @@ internal readonly record struct SourcePlacement(string RelativePath);
 
 /// <summary>The source tree's layout: the only type spelling the root folder, the door's file names
 /// and the JSON suffix. The instance places a new document and mints the levels above it.</summary>
-internal sealed class SourceRepositoryLayout(string modFolder, GameRelease release, SourceRepositoryLocator locator)
+internal sealed partial class SourceRepositoryLayout(string modFolder, GameRelease release, SourceRepositoryLocator locator)
 {
     private readonly string _modFolder = modFolder;
     private readonly GameRelease _release = release;
@@ -29,7 +30,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     /// shares it still deploys.</summary>
     internal const string RootFolderName = "plugin-source";
 
-    /// <summary>The whole-mod door's own name for a container's field file, and for the header's
+    /// <summary>The whole-mod door's own name for a container's document, and for the header's
     /// document at the plugin tree's root.</summary>
     internal const string RecordDataFileName = "RecordData.json";
 
@@ -60,19 +61,55 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         [.. treeFiles.Select(file => new TreeFile(
             file.RelativePath == RecordDataFileName
                 ? HeaderDocumentFor(pluginFileName)
-                : Path.Combine(RootFor(pluginFileName), file.RelativePath),
+                : Path.Combine(RootFor(pluginFileName), SourceNameOf(file.RelativePath)),
             file.Content))];
 
     /// <summary>The files of <see cref="PristineFilesOf"/> as the whole-mod door names them.</summary>
-    internal static IReadOnlyList<TreeFile> DoorFilesOf(string pluginFileName, IEnumerable<TreeFile> files) =>
+    internal static IReadOnlyList<TreeFile> DoorFilesOf(
+        string pluginFileName, IEnumerable<TreeFile> files, GameRelease gameRelease) =>
         [.. files.Select(file => IsHeaderDocumentPath(file.RelativePath, pluginFileName)
             ? new TreeFile(DoorHeaderDocumentFor(pluginFileName), file.Content)
-            : file)];
+            : new TreeFile(DoorNameOf(file.RelativePath, gameRelease), file.Content))];
 
     /// <summary><paramref name="doorText"/>, the door's words about <paramref name="pluginFileName"/>'s tree,
-    /// with the header's file named as the layout names it.</summary>
+    /// with each document's file named as the layout names it.</summary>
     internal static string SourceTextOf(string pluginFileName, string doorText) =>
-        doorText.Replace(DoorHeaderDocumentFor(pluginFileName), HeaderDocumentFor(pluginFileName), StringComparison.Ordinal);
+        DoorContainerDocument().Replace(
+            doorText.Replace(DoorHeaderDocumentFor(pluginFileName), HeaderDocumentFor(pluginFileName), StringComparison.Ordinal),
+            "$1$2$1" + JsonSuffix);
+
+    [GeneratedRegex(@"([^/\\]+)([/\\])RecordData\.json")]
+    private static partial Regex DoorContainerDocument();
+
+    private static string SourceNameOf(string doorPath) =>
+        Path.GetFileName(doorPath).Equals(RecordDataFileName, StringComparison.Ordinal)
+            ? ContainerDocumentIn(PathShape.DirectoryOf(doorPath))
+            : doorPath;
+
+    // Whatever file a container's directory holds is its document, so a directory or file renamed outside
+    // Modbench still reaches the door as the record it holds.
+    private static string DoorNameOf(string sourcePath, GameRelease gameRelease)
+    {
+        var path = new LayoutPath(sourcePath);
+        return path.IsContainerDocument && RecordTypeDispatch.For(gameRelease).DirectoryPerRecordFolderNames.Contains(path.GroupFolderName)
+            ? Path.Combine(PathShape.DirectoryOf(sourcePath), RecordDataFileName)
+            : sourcePath;
+    }
+
+    /// <summary>The file a container's directory is written with: the one its leaf names.</summary>
+    internal static string ContainerDocumentIn(string directory) =>
+        Path.Combine(directory, Path.GetFileName(directory) + JsonSuffix);
+
+    /// <summary>The file a container's directory holds as its document: the one its leaf names, else the only
+    /// other document in it, so a directory or file renamed outside Modbench still reads.</summary>
+    internal static string ContainerDocumentHeldBy(string directory)
+    {
+        var named = ContainerDocumentIn(directory);
+        if (File.Exists(named) || !Directory.Exists(directory)) return named;
+
+        var documents = Directory.EnumerateFiles(directory, "*" + JsonSuffix).Where(file => !CarriesNoRecord(file)).ToList();
+        return documents.Count == 1 ? documents[0] : named;
+    }
 
     private static string DoorHeaderDocumentFor(string pluginFileName) =>
         Path.Combine(RootFor(pluginFileName), RecordDataFileName);
@@ -128,8 +165,8 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
         var leaf = LeafNameFor(FormKey.Factory(formKeyString), editorId, isDirectory: true);
 
-        return new SourcePlacement(Path.Combine(
-            [RootFor(pluginFileName), groupFolder, .. blockPath ?? [], leaf, RecordDataFileName]));
+        return new SourcePlacement(ContainerDocumentIn(Path.Combine(
+            [RootFor(pluginFileName), groupFolder, .. blockPath ?? [], leaf])));
     }
 
     // "<x>, <y>", the whole-mod door's own name for a block level's directory, and the spelling
@@ -310,7 +347,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         if (dispatch.IsCell(identity.RecordType) && placement is { IsInterior: false } exterior)
         {
             return locator.Unit(
-                Path.Combine(ExteriorCellDirectory(plugin, identity, exterior), RecordDataFileName),
+                ExteriorCellDocument(plugin, identity, exterior),
                 identity.FormKey, identity.RecordType, isEmbedded: false);
         }
 
@@ -328,12 +365,12 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
     // The worldspace's directory is found by its FormKey rather than composed from it: an override
     // the destination named itself is written into, never doubled by a bare-named sibling.
-    private string ExteriorCellDirectory(PluginAddress plugin, RecordIdentity identity, CellPlacement placement)
+    private string ExteriorCellDocument(PluginAddress plugin, RecordIdentity identity, CellPlacement placement)
     {
         var (levels, cell) = ExteriorCellDocuments(plugin, identity, placement);
         foreach (var (path, text) in levels)
             InMintedDirectory(PathShape.DirectoryOf(path), () => WriteTextAtomic(path, text));
-        return PathShape.DirectoryOf(cell);
+        return cell;
     }
 
     /// <summary>The block level documents an exterior cell at <paramref name="placement"/> needs and the tree
@@ -360,7 +397,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
                 .Select(level => (Path: Path.Combine(level.Directory, GroupRecordDataFileName), level.Level, level.X, level.Y))
                 .Where(level => !File.Exists(level.Path))
                 .Select(level => (level.Path, BlockLevelDocument(level.Level, level.X, level.Y)))],
-            Path.Combine(cell, RecordDataFileName));
+            ContainerDocumentIn(cell));
     }
 
     // The directories an exterior cell's put lands in, none of them minted.

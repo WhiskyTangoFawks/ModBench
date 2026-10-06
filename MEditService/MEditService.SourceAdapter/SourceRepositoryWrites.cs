@@ -88,8 +88,9 @@ internal sealed class SourceRepositoryWrites(
 
         if (LeafMove(unit, document) is not var (from, to)) return Written(unit.FullPath, document.Body);
 
-        var written = unit.IsDirectoryPerRecord ? Path.Combine(to, Path.GetFileName(unit.FullPath)) : to;
-        return new SourceChanges([Moved(from, to)], [Document(written, document.Body)]);
+        return unit.IsDirectoryPerRecord
+            ? ContainerMoved(unit, to, document.Body)
+            : new SourceChanges([Moved(from, to)], [Document(to, document.Body)]);
     }
 
     /// <summary>What putting an exterior cell at its grid changes: a held cell as <see cref="ChangesToPut"/>
@@ -128,12 +129,21 @@ internal sealed class SourceRepositoryWrites(
                     $"{Path.GetFileName(to)} already exists in {Path.GetDirectoryName(to)}, so the container whose FormID changed " +
                     "has nowhere to move to.");
             }
-            return new SourceChanges([Moved(from, to)], [Document(Path.Combine(to, Path.GetFileName(unit.FullPath)), text)]);
+            return ContainerMoved(unit, to, text);
         }
 
         var placed = layout.PlaceNewDocument(plugin, identity with { FormKey = newFormKey }, placement: null)
             ?? throw NoPlaceInTheTree(plugin, identity);
         return new SourceChanges([Moved(unit.FullPath, placed.FullPath)], [Document(placed.FullPath, text)]);
+    }
+
+    // The container's directory moves, and its document takes the new leaf's name inside it.
+    private SourceChanges ContainerMoved(SourceUnit unit, string toDirectory, string text)
+    {
+        var document = SourceRepositoryLayout.ContainerDocumentIn(toDirectory);
+        return new SourceChanges(
+            [Moved(PathShape.DirectoryOf(unit.FullPath), toDirectory), Moved(Path.Combine(toDirectory, Path.GetFileName(unit.FullPath)), document)],
+            [Document(document, text)]);
     }
 
     private SourceChanges Written(string fullPath, string text) => new([], [Document(fullPath, text)]);
@@ -303,6 +313,8 @@ internal sealed class SourceRepositoryWrites(
 
         if (LeafMove(unit, document) is not var (from, to)) return;
         SourceRepositoryLayout.MoveEntry(from, to);
+        if (unit.IsDirectoryPerRecord)
+            File.Move(Path.Combine(to, Path.GetFileName(unit.FullPath)), SourceRepositoryLayout.ContainerDocumentIn(to));
         locator.Forget();
     }
 

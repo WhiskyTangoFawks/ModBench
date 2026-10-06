@@ -236,7 +236,8 @@ public sealed class CompilePluginContainerTests : IDisposable
         var diagnostic = Assert.Single(result.Diagnostics, d => d.Message.Contains("belongs at", StringComparison.Ordinal));
         Assert.Equal(cell.FormKey, diagnostic.FormKey);
         Assert.Equal(
-            Path.Combine(Path.GetRelativePath(_modFolder, renamed), "RecordData.json"), diagnostic.SourceRelativePath);
+            Path.Combine(Path.GetRelativePath(_modFolder, renamed), Path.GetFileName(PluginSourceRoot.ContainerDocument(directory))),
+            diagnostic.SourceRelativePath);
         Assert.Contains(belongsAt, diagnostic.Message, StringComparison.Ordinal);
     }
 

@@ -71,8 +71,9 @@ public sealed class SourceRepository
         SourceRepositoryLayout.PristineFilesOf(pluginFileName, treeFiles);
 
     /// <summary>Files of <see cref="PristineFilesOf"/> as the whole-mod door reads them.</summary>
-    public static IReadOnlyList<TreeFile> DoorFilesOf(string pluginFileName, IEnumerable<TreeFile> files) =>
-        SourceRepositoryLayout.DoorFilesOf(pluginFileName, files);
+    public static IReadOnlyList<TreeFile> DoorFilesOf(
+        string pluginFileName, IEnumerable<TreeFile> files, GameRelease gameRelease) =>
+        SourceRepositoryLayout.DoorFilesOf(pluginFileName, files, gameRelease);
 
     /// <summary><paramref name="doorText"/>, the door's words about <paramref name="pluginFileName"/>'s tree,
     /// with the header's file named as the layout names it.</summary>

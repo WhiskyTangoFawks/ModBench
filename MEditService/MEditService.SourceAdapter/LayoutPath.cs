@@ -1,7 +1,7 @@
 namespace MEditService.SourceAdapter;
 
 // A relative path read as the layout's own segments: the one place a segment index means anything.
-// plugin-source / <plugin> / <group folder> / [block levels] / <record directory> / RecordData.json.
+// plugin-source / <plugin> / <group folder> / [block levels] / <record directory> / <record directory>.json.
 internal sealed class LayoutPath(string relativePath)
 {
     private const int RootSegment = 0;
@@ -32,13 +32,13 @@ internal sealed class LayoutPath(string relativePath)
     internal bool IsFlatDocument =>
         _segments.Length >= FlatDocumentDepth && UnderTheSourceRoot && NamesAPlugin
         && Leaf.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.Ordinal)
-        && !Leaf.Equals(SourceRepositoryLayout.RecordDataFileName, StringComparison.Ordinal)
         && !Leaf.Equals(SourceRepositoryLayout.GroupRecordDataFileName, StringComparison.Ordinal);
 
-    // A container's own field file, at its group's own level or deeper.
+    // A container's own document, at its group's own level or deeper. Any name: a directory renamed by
+    // hand keeps the document it held.
     internal bool IsContainerDocument =>
         _segments.Length >= ShallowestContainerDocument
-        && Leaf.Equals(SourceRepositoryLayout.RecordDataFileName, StringComparison.Ordinal);
+        && !SourceRepositoryLayout.CarriesNoRecord(Leaf);
 
     // Below its group's own directory level: an interior cell in a block, an exterior cell in its
     // worldspace's blocks.

@@ -47,8 +47,8 @@ public sealed class SourceRepositoryCellsInTests : IDisposable
         PluginBaselines.Track(
             _modFolder,
             [
-                new TreeFile(Path.Combine(PluginSourceRoot.For(PluginName), "Worldspaces", Leaf(world), "RecordData.json"), _codec.SerializeToBytes(world, Release)),
-                new TreeFile(Path.Combine(PluginSourceRoot.For(PluginName), "Worldspaces", Leaf(other), "RecordData.json"), _codec.SerializeToBytes(other, Release)),
+                new TreeFile(PluginSourceRoot.ContainerDocument(Path.Combine(PluginSourceRoot.For(PluginName), "Worldspaces", Leaf(world))), _codec.SerializeToBytes(world, Release)),
+                new TreeFile(PluginSourceRoot.ContainerDocument(Path.Combine(PluginSourceRoot.For(PluginName), "Worldspaces", Leaf(other))), _codec.SerializeToBytes(other, Release)),
                 File([.. worldFolder, "0, -1", "0, -1"], near),
                 File([.. worldFolder, "5, 1", "21, 5"], far),
                 File([.. otherFolder, "0, 0", "0, 0"], elsewhere),

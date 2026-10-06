@@ -239,7 +239,8 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
             Directory.GetDirectories(blockFolder));
         Assert.Equal(
             CellBody("NewCell"),
-            File.ReadAllText(Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}", "RecordData.json")));
+            File.ReadAllText(PluginSourceRoot.ContainerDocument(Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}"))));
+        Assert.Single(Directory.GetFiles(Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}")));
     }
 
     [Fact]

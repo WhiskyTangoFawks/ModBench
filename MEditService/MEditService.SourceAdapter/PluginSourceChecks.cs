@@ -114,15 +114,17 @@ internal static class PluginSourceChecks
             System.Text.Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(content)), relativePath, pluginFileName);
 
     // One name per entry under the tree's own root: every file, and every directory once however many
-    // files it holds. A directory counted twice would read as a collision.
+    // files it holds, and a container's document is its directory's. A directory counted twice would read
+    // as a collision.
     private static IEnumerable<string> EntryNamesIn(IReadOnlyList<TreeFile> files, string treeRoot)
     {
         var directories = new HashSet<string>(StringComparer.Ordinal);
         foreach (var relativePath in files.Select(file => file.RelativePath))
         {
-            yield return Path.GetFileName(relativePath);
-
             var directory = Path.GetDirectoryName(relativePath);
+            if (!Path.GetFileName(relativePath).Equals(Path.GetFileName(directory) + SourceRepositoryLayout.JsonSuffix, StringComparison.Ordinal))
+                yield return Path.GetFileName(relativePath);
+
             while (!string.IsNullOrEmpty(directory)
                    && !directory.Equals(treeRoot, StringComparison.Ordinal)
                    && directories.Add(directory))
