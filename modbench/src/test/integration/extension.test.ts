@@ -229,7 +229,7 @@ function createMockBackend(): http.Server {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(formKey === UNTRACKED_FORM_KEY
         ? { fileName: UNTRACKED_FILE_NAME, text: untrackedText }
-        : { fileName: renderedName(formKey), text: JSON.stringify({ FormKey: formKey }) }));
+        : { fileName: renderedName(formKey), text: renderedText(formKey) }));
       return;
     }
     if (url.startsWith('/plugin-source/record?')) {
@@ -273,6 +273,17 @@ function createMockBackend(): http.Server {
       });
       return;
     }
+    const referenced = /^\/records\/([^/?]+)\/references$/.exec(url)?.[1];
+    if (referenced !== undefined) {
+      const row = (formKey: string, plugin: string, origin: string, fieldPath: string) =>
+        ({ formKey, plugin, origin, fieldPath, recordType: 'WEAP', recordTypeName: 'Weapon' });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(decodeURIComponent(referenced) === HELD_FORM_KEY ? [
+        row(TRACKED_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Model'), row(TRACKED_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Template'),
+        row(CHILD_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Base'), row(RENDERED_REFERRER_FORM_KEY, 'Fallout4.esm', 'Data', 'Base'),
+      ] : []));
+      return;
+    }
     if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.has('search')) {
       const items = [{ formKey: HELD_FORM_KEY, plugin: 'Patch.esp', loadOrderIndex: 1, isWinner: true, editorId: 'NewGun', origin: 'Data',
         workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false }];
@@ -289,11 +300,14 @@ const TRACKED_PLUGIN = 'Tracked.esp';
 const TRACKED_ORIGIN = 'TrackedMod';
 const TRACKED_FORM_KEY = '000801:Tracked.esp';
 const CHILD_FORM_KEY = '000802:Tracked.esp';
+const HELD_FORM_KEY = '000801:Held.esp';
+const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
+const RENDERED_REFERRER_FORM_KEY = '000803:Fallout4.esm';
 const TRACKED_FILE = path.join(
   fs.mkdtempSync(path.join(os.tmpdir(), 'modbench-tracked-')), TRACKED_ORIGIN, 'plugin-source', TRACKED_PLUGIN, 'Weapons', 'TrackedGun.json');
 fs.mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
 fs.writeFileSync(TRACKED_FILE, JSON.stringify({
-  FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun', Placed: [{ FormKey: CHILD_FORM_KEY, EditorID: 'TrackedRef' }],
+  FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun', Model: HELD_FORM_KEY, Placed: [{ FormKey: CHILD_FORM_KEY, EditorID: 'TrackedRef', Base: HELD_FORM_KEY }],
 }));
 const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
 
@@ -302,8 +316,6 @@ const UNTRACKED_FORM_KEY = '000801:Untracked.esp';
 const UNTRACKED_FILE_NAME = 'UntrackedGun - 000801_Untracked.esp.json';
 let untrackedText = '{ "EditorID": "UntrackedGun" }';
 
-const HELD_FORM_KEY = '000801:Held.esp';
-const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
 const MOCK_COMPARISONS = new Map<string, CompareResult>([[TRACKED_FORM_KEY, comparisonOf(TRACKED_FORM_KEY, [
   { plugin: TRACKED_PLUGIN, isWinner: true, editorId: 'TrackedGun' },
 ])], [CHILD_FORM_KEY, comparisonOf(CHILD_FORM_KEY, [
@@ -376,6 +388,9 @@ describe('Mod sync', () => {
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 const renderedName = (formKey: string) => `${formKey.replace(':', '_')}.json`;
+function renderedText(formKey: string): string {
+  return JSON.stringify({ FormKey: formKey, ...(formKey === RENDERED_REFERRER_FORM_KEY && { Base: HELD_FORM_KEY }) });
+}
 
 describe('modbench.record.open', () => {
   const hasRenderedTab = (formKey: string) => openTabs().some(t => t.label === renderedName(formKey));
@@ -1097,6 +1112,31 @@ describe('A FormKey in plugin source', () => {
     });
 
     assert.strictEqual(definition.range.start.character, fs.readFileSync(TRACKED_FILE, 'utf8').indexOf(`"FormKey":"${CHILD_FORM_KEY}"`));
+  });
+
+  it('lists every record that references it, one entry for each plugin\'s copy at its reference, and never its own declaration', async () => {
+    await activated();
+    const found = await vscode.commands.executeCommand<vscode.Location[]>('vscode.executeReferenceProvider', document.uri, positionIn(HELD_FORM_KEY));
+    const entries = await Promise.all(found.map(async ({ uri, range }) =>
+      [uri.toString(true), (await vscode.workspace.openTextDocument(uri)).offsetAt(range.start)]));
+    const tracked = fs.readFileSync(TRACKED_FILE, 'utf8');
+    const quoted = `"${HELD_FORM_KEY}"`;
+
+    assert.deepStrictEqual(entries.sort(), [
+      [vscode.Uri.file(TRACKED_FILE).toString(true), tracked.indexOf(quoted)],
+      [`modbench-child-record:${vscode.Uri.file(TRACKED_FILE).path}?formKey=000802%3ATracked.esp&name=Tracked.esp&origin=TrackedMod`, tracked.lastIndexOf(quoted)],
+      [`modbench-rendered:/Data/Fallout4.esm/${renderedName(RENDERED_REFERRER_FORM_KEY)}?formKey=000803%3AFallout4.esm&name=Fallout4.esm&origin=Data`,
+        renderedText(RENDERED_REFERRER_FORM_KEY).indexOf(quoted)],
+    ].sort());
+  });
+
+  it('lists no references in JSON outside the plugin source folder', async () => {
+    await activated();
+    const other = await documentAt('Other.json');
+    const found = await vscode.commands.executeCommand<vscode.Location[]>(
+      'vscode.executeReferenceProvider', other.uri, other.positionAt(other.getText().indexOf(HELD_FORM_KEY) + 1));
+
+    assert.deepStrictEqual(found, []);
   });
 
   it('has no definition in JSON outside the plugin source folder', async () => {
