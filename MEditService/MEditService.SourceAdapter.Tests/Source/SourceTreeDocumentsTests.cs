@@ -56,8 +56,8 @@ public sealed class SourceTreeDocumentsTests : IDisposable
         _quest = new Quest(_mod) { EditorID = "Quest" };
         _quest.DialogTopics.Add(_topic);
 
-        _interiorCellPath = Path.Combine(Root, "Cells", "0", "0", Leaf(_interiorCell), "RecordData.json");
-        _worldspacePath = Path.Combine(Root, "Worldspaces", Leaf(_worldspace), "RecordData.json");
+        _interiorCellPath = PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", Leaf(_interiorCell)));
+        _worldspacePath = PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Worldspaces", Leaf(_worldspace)));
 
         PluginBaselines.Track(
             _modFolder,
@@ -171,7 +171,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
         var room = new Cell(_mod) { EditorID = "NumberedRoom" };
         var directory = Path.Combine(_modFolder, Root, "Cells", "3", "7", Leaf(room));
         Directory.CreateDirectory(directory);
-        File.WriteAllBytes(Path.Combine(directory, "RecordData.json"), Serialize(room));
+        File.WriteAllBytes(PluginSourceRoot.ContainerDocument(directory), Serialize(room));
 
         Assert.Equal(CellStructure.Interior(3, 7), Documents()[room.FormKey.ToString()].Cell);
     }

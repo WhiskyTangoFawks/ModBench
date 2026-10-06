@@ -39,7 +39,8 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         new(formKey, "cell", EditorId: null, Body(formKey, grid));
 
     private IReadOnlyList<string> Documents() =>
-        Directory.EnumerateFiles(_modFolder, "RecordData.json", SearchOption.AllDirectories)
+        Directory.EnumerateFiles(_modFolder, "*.json", SearchOption.AllDirectories)
+            .Where(file => !file.EndsWith("GroupRecordData.json", StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(_modFolder, file))
             .Order(StringComparer.Ordinal)
             .ToList();
@@ -52,9 +53,9 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
 
         Assert.Contains(
-            Path.Combine(
+            PluginSourceRoot.ContainerDocument(Path.Combine(
                 "plugin-source", PluginName, "Worldspaces", "000800_Vendor.esp", "0, -1", "1, -2",
-                "000801_Vendor.esp", "RecordData.json"),
+                "000801_Vendor.esp")),
             Documents());
     }
 
