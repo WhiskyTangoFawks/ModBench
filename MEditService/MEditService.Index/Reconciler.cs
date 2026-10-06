@@ -477,8 +477,7 @@ internal sealed class Reconciler(
             var readFrom = scope.Failed.StateOf(plugin);
             try
             {
-                IndexOnePlugin(scope, metadata, holdsTree, readFrom, token);
-                scope.Failed.Forget(plugin.Key);
+                if (IndexOnePlugin(scope, metadata, holdsTree, readFrom, token)) scope.Failed.Forget(plugin.Key);
             }
             catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
             {
@@ -592,7 +591,8 @@ internal sealed class Reconciler(
 
     // A failed source read degrades to the binary, but records a real PluginLoadFailure: a silent
     // fallback would leave the user reading pre-Track binary content believing it was their source.
-    private void IndexOnePlugin(
+    // False when the binary served in place of the tree that failed.
+    private bool IndexOnePlugin(
         OpenScope scope, PluginMetadata plugin, bool holdsTree, FailedReads.ReadFrom? readFrom, CancellationToken token)
     {
         // One advance for the whole plugin, whichever door it came through (ADR-0015).
@@ -601,7 +601,7 @@ internal sealed class Reconciler(
         if (!holdsTree)
         {
             IndexFromBinary(scope, plugin);
-            return;
+            return true;
         }
 
         try
@@ -611,7 +611,7 @@ internal sealed class Reconciler(
                 logger.LogInformation("Ingesting {Plugin} from its source tree", plugin.Name);
             }
             scope.Projector.Ingest(plugin, ModHoldingTree(plugin), token);
-            return;
+            return true;
         }
         catch (OperationCanceledException)
         {
@@ -633,6 +633,7 @@ internal sealed class Reconciler(
         }
 
         IndexFromBinary(scope, plugin);
+        return false;
     }
 
     private static PluginProvider.FromMod ModHoldingTree(PluginMetadata plugin) =>
