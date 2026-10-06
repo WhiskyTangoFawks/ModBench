@@ -1003,7 +1003,7 @@ describe('HttpMEditClient — the problems in each tracked plugin\'s source', ()
   it('answers each plugin with its problems, on the file that holds the record', async () => {
     const answer = [{
       plugin: { name: 'Refers.esp', origin: 'ReferringMod' },
-      problems: [{ formKey: '000800:Refers.esp', sourceRelativePath: 'Refers.esp/Npcs/Npc.json', message: 'Race: 000ABC:Absent.esp is held by no active plugin' }],
+      problems: [{ formKey: '000800:Refers.esp', targetFormKey: '000ABC:Absent.esp', sourceRelativePath: 'Refers.esp/Npcs/Npc.json', message: 'Race: 000ABC:Absent.esp is held by no active plugin' }],
     }];
     let asked: Request | undefined;
     const client = makeClient(vi.fn((req: Request) => {

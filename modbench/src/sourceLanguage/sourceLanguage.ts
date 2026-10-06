@@ -4,16 +4,34 @@ import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import type { OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { hoverAt } from './formKeyHover';
 import { completionsAt } from './completion';
+import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile } from './sourceProblems';
+import type { Reporter } from '../ports/reporter';
 
 export interface SourceLanguageDeps {
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords'>;
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getPluginProblems' | 'onNotification' | 'onReconnected'>;
   originFiles: OriginFilesOf;
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
 }
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
 const pluginSource: vscode.DocumentSelector = { language: 'json' };
 
-export function createSourceLanguage({ client }: SourceLanguageDeps): vscode.Disposable {
+const diagnosticOf = ({ message, start, end }: ProblemOnFile): vscode.Diagnostic =>
+  new vscode.Diagnostic(new vscode.Range(start.line, start.character, end.line, end.character), message, vscode.DiagnosticSeverity.Warning);
+
+function sourceProblems(deps: SourceLanguageDeps): vscode.Disposable {
+  const collection = vscode.languages.createDiagnosticCollection('modbench-source');
+  const publish = (problems: ProblemsByFile) => {
+    collection.clear();
+    collection.set([...problems].map(([file, onFile]) => [vscode.Uri.file(file), onFile.map(diagnosticOf)]));
+  };
+  const readFile = async (file: string) => new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.file(file)));
+  const unsubscribe = feedSourceProblems({ ...deps, readFile, publish });
+  return new vscode.Disposable(() => { unsubscribe(); collection.dispose(); });
+}
+
+export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposable {
+  const { client } = deps;
   const hover = vscode.languages.registerHoverProvider(pluginSource, {
     async provideHover(document, position) {
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
@@ -39,5 +57,5 @@ export function createSourceLanguage({ client }: SourceLanguageDeps): vscode.Dis
       return new vscode.CompletionList(items, found.isIncomplete);
     },
   });
-  return vscode.Disposable.from(hover, completion);
+  return vscode.Disposable.from(hover, completion, sourceProblems(deps));
 }

@@ -8,8 +8,9 @@ using Mutagen.Bethesda;
 namespace MEditService.Queries;
 
 /// <summary>What is wrong in a record of a plugin's source, on the file that holds it: a reference to a
-/// record no active plugin holds. <paramref name="FormKey"/> is the referring record's.</summary>
-public sealed record SourceProblem(string FormKey, string SourceRelativePath, string Message);
+/// record no active plugin holds. <paramref name="FormKey"/> is the referring record's,
+/// <paramref name="TargetFormKey"/> the one no active plugin holds.</summary>
+public sealed record SourceProblem(string FormKey, string TargetFormKey, string SourceRelativePath, string Message);
 
 /// <summary><paramref name="Failure"/> is set when the plugin's problems could not be placed on files,
 /// so its empty <paramref name="Problems"/> is not a clean bill (ADR-0019).</summary>
@@ -48,6 +49,7 @@ public sealed class PluginProblemQueryService(IQueryIndex index, LoadOrderHolder
 
     private static SourceProblem Problem(MissingReferenceOnFile row, GameRelease release) =>
         new(row.Reference.FormKey,
+            row.Reference.TargetFormKey,
             row.SourceRelativePath ?? throw new InvalidOperationException($"Expected {row.Reference.FormKey} to be placed."),
             $"{row.Reference.FieldPath}: {Unresolved(row.Reference.TargetFormKey, release)}");
 

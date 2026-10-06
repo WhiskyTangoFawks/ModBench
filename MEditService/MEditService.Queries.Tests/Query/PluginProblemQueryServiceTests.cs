@@ -37,7 +37,7 @@ public sealed class PluginProblemQueryServiceTests
         Ask(LoadOrderState.Ready, tracked, missing, plugins) ?? throw new InvalidOperationException("The index was ready.");
 
     [Fact]
-    public void GetProblems_AMissingReferenceOfATrackedPlugin_IsAProblemOnTheReferrersFile_WordedAsTheGridWordsIt()
+    public void GetProblems_AMissingReferenceOfATrackedPlugin_IsAProblemOnTheReferrersFile_NamingItsTarget_WordedAsTheGridWordsIt()
     {
         var plugin = Plugin("Refers.esp");
 
@@ -45,8 +45,8 @@ public sealed class PluginProblemQueryServiceTests
 
         var problem = Assert.Single(answer.Problems);
         Assert.Equal(
-            ("000800:Refers.esp", "Npcs/Referrer.json", "Race: [000ABC:Absent.esp] <Error: Could not be resolved>"),
-            (problem.FormKey, problem.SourceRelativePath, problem.Message));
+            ("000800:Refers.esp", "000ABC:Absent.esp", "Npcs/Referrer.json", "Race: [000ABC:Absent.esp] <Error: Could not be resolved>"),
+            (problem.FormKey, problem.TargetFormKey, problem.SourceRelativePath, problem.Message));
         Assert.Null(answer.Failure);
     }
 
