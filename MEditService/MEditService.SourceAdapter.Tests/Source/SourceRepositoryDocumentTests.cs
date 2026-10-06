@@ -332,7 +332,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         var repository = Opened();
         File.Delete(Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json"));
 
-        var refusal = Assert.Throws<InvalidOperationException>(() => repository.ChangesToRewrite(
+        var refusal = Assert.Throws<SourceUnitNotFoundException>(() => repository.ChangesToRewrite(
             Plugin, new SourceDocument(formKey, recordType, editorId, $"{{\n  \"FormKey\": \"{formKey}\"\n}}")));
 
         Assert.Contains(formKey, refusal.Message, StringComparison.Ordinal);

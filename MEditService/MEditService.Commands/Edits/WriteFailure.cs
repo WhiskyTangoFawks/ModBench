@@ -23,6 +23,12 @@ internal static class WriteFailure
         {
             return refused(RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, ex.Message));
         }
+        catch (SourceUnitNotFoundException ex)
+        {
+            return refused(RecordEditResult.Refused(
+                RecordEditRefusal.SourceUnitNotFound,
+                $"{ex.Message} It was moved or removed outside Modbench. Check the Source Control panel."));
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogError(ex, "{Failure}", failure);

@@ -74,7 +74,7 @@ internal sealed class SourceRepositoryWrites(
     internal SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) =>
         locator.LocateToPlace(plugin, document.Identity) is { } unit && (unit.IsEmbedded || File.Exists(unit.FullPath))
             ? ChangesToHeld(unit, document)
-            : throw new InvalidOperationException(
+            : throw new SourceUnitNotFoundException(
                 $"No document in {plugin.Name}'s tree holds {document.FormKey}, so there is none to rewrite.");
 
     private SourceChanges ChangesToPlace(PluginAddress plugin, SourceDocument document, CellPlacement? placement)
@@ -341,4 +341,20 @@ internal sealed class SourceRepositoryWrites(
 
     private static InvalidOperationException NoLongerCarried(SourceUnit unit, string formKey) =>
         new($"{unit.RelativePath} was found holding {formKey}, but its own text does not carry it.");
+}
+
+/// <summary>A write that rewrites a record finds no document holding it: the tree changed under the gesture.</summary>
+public sealed class SourceUnitNotFoundException : InvalidOperationException
+{
+    public SourceUnitNotFoundException() : base("No document holds the record.")
+    {
+    }
+
+    public SourceUnitNotFoundException(string message) : base(message)
+    {
+    }
+
+    public SourceUnitNotFoundException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
 }
