@@ -198,18 +198,19 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     /// no record type resolves, as the whole read does.</summary>
     internal void RefuseUntypedChildren(string recordType, string formKey, string text, string file)
     {
-        foreach (var embedded in EmbeddedTexts(recordType, formKey, text)) TypeOf(embedded.Child, file);
+        foreach (var embedded in EmbeddedTexts(recordType, formKey, text)) TypeOf(_modFolder, embedded.Child, file);
     }
 
-    private string TypeOf(ContainerDocuments.ChildDocument child, string ownerFile) =>
-        child.RecordType ?? throw Unreadable(ownerFile, child.WhyUntyped, child.FormKey);
+    /// <summary>The child's record type, refusing a child none resolves for as the file holding it.</summary>
+    internal static string TypeOf(string modFolder, ContainerDocuments.ChildDocument child, string ownerFile) =>
+        child.RecordType ?? throw UnreadableSourceDocumentException.In(modFolder, ownerFile, child.WhyUntyped, child.FormKey);
 
     private IEnumerable<PluginDocument> Embedded(
         string ownerRecordType, string ownerFormKey, string ownerText, string ownerFile)
     {
         foreach (var (child, text, directOwner) in EmbeddedTexts(ownerRecordType, ownerFormKey, ownerText))
         {
-            var childType = TypeOf(child, ownerFile);
+            var childType = TypeOf(_modFolder, child, ownerFile);
             // The one embedded cell: a worldspace's top cell, outside every exterior block grid.
             var cell = _containers.IsCell(childType)
                 ? CellPlacement.TopCellOf(directOwner).Structure

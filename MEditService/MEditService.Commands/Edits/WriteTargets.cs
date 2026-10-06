@@ -247,10 +247,7 @@ internal sealed class WriteTargets(
     internal static string? EditorIdOf(string text)
     {
         using var document = JsonDocument.Parse(text);
-        return document.RootElement.TryGetProperty(RecordMembers.EditorId, out var editorId)
-            && editorId.ValueKind == JsonValueKind.String
-            ? editorId.GetString()
-            : null;
+        return DocumentNodes.EditorIdOf(document.RootElement);
     }
 
     // The codec's own words are the reason (ADR-0015).

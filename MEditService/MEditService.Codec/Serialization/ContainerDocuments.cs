@@ -20,10 +20,7 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
                 : $"its '{SlotName}' names '{FormKey}' with no '{LoquiUnions.UnionTypeDiscriminator}' naming its type, " +
                   "and its slot holds more than one record type";
 
-        public string? EditorId =>
-            Node.TryGetProperty(RecordMembers.EditorId, out var editorId) && editorId.ValueKind == JsonValueKind.String
-                ? DocumentNodes.StringValueOf(editorId)
-                : null;
+        public string? EditorId => DocumentNodes.EditorIdOf(Node);
     }
 
     private const string FormKeyMember = RecordMembers.FormKey;
@@ -163,12 +160,11 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
     }
 
     /// <summary>The child <paramref name="formKey"/> names anywhere inside <paramref name="ownerBytes"/>;
-    /// null when no embedded slot of the owner carries it.</summary>
+    /// null when no embedded slot of the owner carries it, when the text is no JSON, and when neither
+    /// <paramref name="ownerRecordType"/> nor the text's own discriminator names a type that resolves.</summary>
     public ChildDocument? EmbeddedChild(string? ownerRecordType, byte[] ownerBytes, string formKey)
     {
-        var ownerType = EmbeddedChildLocator.ContainerTypeName(ownerRecordType, ownerBytes, release)
-            ?? EmbeddedChildLocator.RootDiscriminator(ownerBytes);
-        if (ownerType is null) return null;
+        if (EmbeddedChildLocator.ContainerTypeName(ownerRecordType, ownerBytes, release) is not { } ownerType) return null;
 
         try
         {

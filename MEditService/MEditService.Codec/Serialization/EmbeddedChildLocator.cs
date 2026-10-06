@@ -25,11 +25,10 @@ public static class EmbeddedChildLocator
     public const string DiscriminatorMember = "MutagenObjectType";
 
     /// <summary>The class name the owner's slots are keyed by: from the record type its path decides,
-    /// or from the document's own discriminator when the path cannot name one.</summary>
+    /// or from the document's own discriminator when the path names none that resolves.</summary>
     public static string? ContainerTypeName(string? ownerRecordType, byte[] ownerBytes, GameRelease release) =>
-        ownerRecordType is { } recordType
-            ? RecordTypeDispatch.For(release).ConcreteFor(recordType)?.Name
-            : RootDiscriminator(ownerBytes);
+        (ownerRecordType is { } recordType ? RecordTypeDispatch.For(release).ConcreteFor(recordType)?.Name : null)
+            ?? RootDiscriminator(ownerBytes);
 
     /// <summary>Where <paramref name="formKey"/> sits inside <paramref name="ownerBytes"/>, or null
     /// when no child slot of the owner carries it. Malformed text carries nothing.</summary>
@@ -51,7 +50,7 @@ public static class EmbeddedChildLocator
     }
 
     /// <summary>The type the document at its root declares, for a path that cannot name one.</summary>
-    internal static string? RootDiscriminator(byte[] ownerBytes)
+    private static string? RootDiscriminator(byte[] ownerBytes)
     {
         try
         {

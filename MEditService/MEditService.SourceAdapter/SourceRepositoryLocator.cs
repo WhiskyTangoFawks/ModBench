@@ -108,9 +108,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     }
 
     private RecordIdentity ChildIdentity(ContainerDocuments.ChildDocument child, string ownerFile) =>
-        new(child.FormKey,
-            child.RecordType ?? throw UnreadableSourceDocumentException.In(_modFolder, ownerFile, child.WhyUntyped, child.FormKey),
-            child.EditorId);
+        new(child.FormKey, SourceTreeDocuments.TypeOf(_modFolder, child, ownerFile), child.EditorId);
 
     /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>
     /// rather than that document's file, which is only found. Null when nothing in the tree holds it.</summary>
