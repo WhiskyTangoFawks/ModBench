@@ -79,6 +79,69 @@ public sealed class FailedReadStateTests : IDisposable
 
     private static string Reason(OpenedIndex index) => index.Status.Failures.Single(f => f.Name == PluginName).Reason;
 
+    private string Relative(string path) => Path.GetRelativePath(Plugin.ModFolderOf(), path);
+
+    [Fact]
+    public void ATreeWithADocumentDeclaringNoFormKey_NamesThatFile_WhileItFails()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        using var index = Reconciled();
+        File.WriteAllText(StrayDocument, "{}");
+
+        index.NextSnapshotUntil(() => Failed(index), "the validation's failure");
+
+        var failure = Assert.Single(index.SourceFileFailures);
+        Assert.Equal((Plugin.KeyOf(), Relative(StrayDocument), (string?)null), (failure.Plugin, failure.SourceRelativePath, failure.FormKey));
+        Assert.Contains("declares no FormKey", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATreeWhoseFormKeyTwoDocumentsClaim_NamesEachOfThem_WithTheFormKey()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        using var index = Reconciled();
+        var formKey = TheNpc(index).FormKey;
+        var original = NpcDocument;
+        ClaimedTwice();
+
+        index.NextSnapshotUntil(() => Failed(index), "the validation's failure");
+
+        var copy = Path.Combine(Path.GetDirectoryName(original).Require(), "Backup", Path.GetFileName(original));
+        Assert.Equivalent(
+            new[] { (Relative(original), formKey), (Relative(copy), formKey) },
+            index.SourceFileFailures.Select(f => (f.SourceRelativePath, f.FormKey)), strict: true);
+        Assert.All(index.SourceFileFailures, f => Assert.Contains(Relative(copy), f.Message, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ATreeWhoseFormKeyTwoDocumentsClaimWhenFirstRead_NamesEachOfThem_WhileItsBinaryStandsIn()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        var original = NpcDocument;
+        ClaimedTwice();
+
+        using var index = Reconciled();
+
+        var copy = Path.Combine(Path.GetDirectoryName(original).Require(), "Backup", Path.GetFileName(original));
+        Assert.Equivalent(new[] { Relative(original), Relative(copy) }, index.SourceFileFailures.Select(f => f.SourceRelativePath), strict: true);
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATreeMended_NamesNoFile()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        using var index = Reconciled();
+        ClaimedTwice();
+        index.NextSnapshotUntil(() => Failed(index), "the validation's failure");
+        Mend();
+
+        index.NextSnapshotUntil(() => !Failed(index), "the mended tree read again");
+
+        Assert.Empty(index.SourceFileFailures);
+    }
+
     [Fact]
     public void ABinaryRewrittenDuringAFailedRead_IsReadAgain()
     {

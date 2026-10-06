@@ -2,15 +2,29 @@ namespace MEditService.SourceAdapter;
 
 /// <summary>A FormKey two documents hold, as their own record or as an embedded child, is neither's
 /// (ADR-0006).</summary>
-internal static class OneDocumentPerFormKey
+internal sealed class OneDocumentPerFormKey(string modFolder)
 {
-    /// <summary>Records that <paramref name="document"/> holds <paramref name="formKey"/>, throwing
-    /// when another document already does.</summary>
-    internal static void Claim(Dictionary<string, string> holders, string formKey, string document, string modFolder)
+    private readonly Dictionary<string, List<string>> _holders = new(StringComparer.Ordinal);
+
+    /// <summary>Every FormKey more than one document holds.</summary>
+    internal IReadOnlyList<ClaimedFormKey> Claimed =>
+        [.. _holders.Where(held => held.Value.Count > 1).Select(held => new ClaimedFormKey(held.Key, [.. held.Value]))];
+
+    /// <summary>Records that <paramref name="document"/> holds <paramref name="formKey"/>.</summary>
+    internal void Hold(string formKey, string document)
     {
-        if (holders.TryGetValue(formKey, out var earlier) && !string.Equals(earlier, document, StringComparison.Ordinal))
-            throw HeldTwice(formKey, [earlier, document], modFolder);
-        holders[formKey] = document;
+        var relativePath = Path.GetRelativePath(modFolder, document);
+        if (!_holders.TryGetValue(formKey, out var holders)) _holders[formKey] = holders = [];
+        if (!holders.Contains(relativePath, StringComparer.Ordinal)) holders.Add(relativePath);
+    }
+
+    /// <summary><see cref="Hold"/>, throwing when another document already holds
+    /// <paramref name="formKey"/>.</summary>
+    internal void Claim(string formKey, string document)
+    {
+        Hold(formKey, document);
+        if (_holders[formKey] is { Count: > 1 } holders)
+            throw new AmbiguousSourceUnitException(new ClaimedFormKey(formKey, [.. holders]));
     }
 
     /// <summary>The one document of <paramref name="documents"/>, null for none, and a throw for
@@ -20,12 +34,7 @@ internal static class OneDocumentPerFormKey
         {
             0 => null,
             1 => documents[0],
-            _ => throw HeldTwice(formKey, documents, modFolder),
+            _ => throw new AmbiguousSourceUnitException(
+                new ClaimedFormKey(formKey, [.. documents.Select(d => Path.GetRelativePath(modFolder, d))])),
         };
-
-    private static AmbiguousSourceUnitException HeldTwice(string formKey, IEnumerable<string> documents, string modFolder) =>
-        new($"More than one document in this plugin's source tree holds {formKey}: " +
-            $"{string.Join(", ", documents.Select(d => $"'{Path.GetRelativePath(modFolder, d)}'"))}. A FormKey " +
-            "is unique within a plugin, so the tree is corrupt — most likely a copy or an interrupted " +
-            "rename. Remove the duplicate by hand.");
 }

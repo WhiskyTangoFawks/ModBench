@@ -262,8 +262,7 @@ public sealed class SourceRepository
         PluginSourceChecks.Compare(plugin.Name, Locator.FilesOf(plugin), serialized);
 
     /// <summary>One listing of the plugin's tree. A file whose file-system stamp is unchanged and
-    /// settled is not read again. A FormKey two documents declare throws
-    /// <see cref="AmbiguousSourceUnitException"/>.</summary>
+    /// settled is not read again.</summary>
     public RecordStamps StampsOf(PluginAddress plugin) => TreeStamps.StampsOf(_modFolder, plugin);
 
     /// <summary>Every record the tree holds whose text differs from the last commit's, an embedded

@@ -18,6 +18,8 @@ internal sealed class ReconcilingIndex : IQueryIndex
 
     public IRecordReads RequireReads() => throw new InvalidOperationException("Nothing is read while reconciling.");
 
+    public IReadOnlyList<SourceFileFailure> SourceFileFailures => [];
+
     public void SetFilter(string sql, string source) => throw new NotSupportedException();
 
     public void ClearFilter() => throw new NotSupportedException();

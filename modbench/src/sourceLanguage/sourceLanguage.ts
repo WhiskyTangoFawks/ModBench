@@ -1,16 +1,12 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
-import type { OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { hoverAt } from './formKeyHover';
 import { completionsAt } from './completion';
-import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile } from './sourceProblems';
-import type { Reporter } from '../ports/reporter';
+import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
 
-export interface SourceLanguageDeps {
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getPluginProblems' | 'onNotification' | 'onReconnected'>;
-  originFiles: OriginFilesOf;
-  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
+export interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles' | 'reporter'> {
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords'> & SourceProblemsDeps['client'];
 }
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };

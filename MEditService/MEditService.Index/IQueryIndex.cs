@@ -30,6 +30,10 @@ public interface IQueryIndex
     /// Index has no store to read.</summary>
     IRecordReads RequireReads();
 
+    /// <summary>The source files each plugin's last failed read stopped at, while it fails. Empty with
+    /// no load order held.</summary>
+    IReadOnlyList<SourceFileFailure> SourceFileFailures { get; }
+
     void SetFilter(string sql, string source);
 
     void ClearFilter();

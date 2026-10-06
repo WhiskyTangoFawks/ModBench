@@ -1220,8 +1220,9 @@ export interface components {
             to: string;
         };
         SourceProblem: {
-            formKey: string;
-            targetFormKey: string;
+            formKey?: string | null;
+            targetFormKey?: string | null;
+            fieldPath?: string | null;
             sourceRelativePath: string;
             message: string;
         };

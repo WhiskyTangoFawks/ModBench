@@ -10,7 +10,7 @@ const REFERRER = '000800:Refers.esp';
 const PLUGIN = { name: 'Refers.esp', origin: 'ReferringMod' };
 
 const problem = (over: Partial<PluginProblems['problems'][number]> = {}): PluginProblems['problems'][number] => ({
-  formKey: REFERRER, targetFormKey: MISSING, sourceRelativePath: 'Refers.esp/Npc.json', message: `Race: [${MISSING}] <Error: Could not be resolved>`, ...over,
+  formKey: REFERRER, targetFormKey: MISSING, fieldPath: 'Race', sourceRelativePath: 'Refers.esp/Npc.json', message: `Race: [${MISSING}] <Error: Could not be resolved>`, ...over,
 });
 
 const loadOrderStatus = (conflictsComputed: boolean): NotificationEvent => ({
@@ -21,8 +21,9 @@ const ready = loadOrderStatus(true);
 
 const modFolders: OriginFilesOf = (origin) => ({ file: (relativePath) => `/mods/${origin}/${relativePath}` });
 
-function feed(files: Record<string, string>, originFiles = modFolders) {
+function feed(files: Record<string, string>, originFiles = modFolders, answeredAtSubscribe?: PluginProblems[] | PromiseLike<PluginProblems[]>) {
   const client = new InMemoryMEditClient();
+  if (answeredAtSubscribe) client.setQueryAnswerOnce('getPluginProblems', answeredAtSubscribe);
   const published: ProblemsByFile[] = [];
   const reporter = { report: vi.fn(), shownOnSurface: vi.fn() };
   feedSourceProblems({
@@ -80,6 +81,42 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     ]);
   });
 
+  it('spans the FormKey a file declares when another file claims it too', async () => {
+    const text = `{\n  "FormKey": "${REFERRER}",\n  "Race": "${MISSING}"\n}`;
+    const { answered } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': text });
+
+    const shown = await answered([{ plugin: PLUGIN, problems: [problem({ targetFormKey: null, message: 'claimed twice' })] }]);
+
+    expect(shown.get('/mods/ReferringMod/Refers.esp/Npc.json')?.map(({ start, end }) => [start, end])).toEqual([
+      [{ line: 1, character: 13 }, { line: 1, character: 13 + REFERRER.length + 2 }],
+    ]);
+  });
+
+  it('spans each link at its own field path when one record names the same missing record in many', async () => {
+    const items = Array.from({ length: 11 }, () => `    { "Item": "${MISSING}" }`);
+    const text = ['{', `  "FormKey": "${REFERRER}",`, `  "Voice": "${MISSING}",`, '  "Items": [', items.join(',\n'), '  ]', '}'].join('\n');
+    const { answered } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': text });
+    const at = (fieldPath: string) => problem({ fieldPath, message: fieldPath });
+
+    const shown = await answered([{ plugin: PLUGIN, problems: [at('Items[10].Item'), at('Items[2].Item'), at('Voice')] }]);
+
+    expect(shown.get('/mods/ReferringMod/Refers.esp/Npc.json')?.map(({ message, start }) => [message, start.line])).toEqual([
+      ['Items[10].Item', 14], ['Items[2].Item', 6], ['Voice', 2],
+    ]);
+  });
+
+  it('keeps a problem whose file it cannot read at the first line, saying why in the Output once', async () => {
+    const { answered, reporter } = feed({});
+
+    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+    const shown = await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+
+    expect(shown.get('/mods/ReferringMod/Refers.esp/Npc.json')?.map(({ start }) => start)).toEqual([{ line: 0, character: 0 }]);
+    expect(reporter.shownOnSurface.mock.calls).toEqual([
+      ['warning', 'The Problems panel shows the problems of "/mods/ReferringMod/Refers.esp/Npc.json" on its first line.', 'no /mods/ReferringMod/Refers.esp/Npc.json'],
+    ]);
+  });
+
   it.each([
     ['a save re-derives its rows', 'rows-changed'],
     ['mEdit re-reads its plugin', 'plugin-changed'],
@@ -108,7 +145,52 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
 
     await answered([]);
 
-    expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(1);
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
+  });
+
+  it('shows mEdit\'s answer at subscribe, and asks again on a save before any load-order-status', async () => {
+    const { client, published } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` }, modFolders, [{ plugin: PLUGIN, problems: [problem()] }]);
+    await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1]); });
+
+    client.setQueryAnswer('getPluginProblems', [{ plugin: PLUGIN, problems: [] }]);
+    client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
+
+    await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1, 0]); });
+  });
+
+  it('says nothing when mEdit cannot answer at subscribe, and asks nothing on a save until the index is ready', async () => {
+    const { client, reporter, answered } = feed({});
+    await new Promise((settled) => { setTimeout(settled, 0); });
+    client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
+
+    await answered([]);
+
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
+    expect(reporter.shownOnSurface).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing on a save when the index began reconciling while the ask at subscribe was in flight', async () => {
+    let answer!: (problems: PluginProblems[]) => void;
+    const { client, published, answered } = feed({}, modFolders, new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
+    client.emit(loadOrderStatus(false));
+    answer([]);
+    await vi.waitFor(() => { expect(published).toHaveLength(1); });
+    client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
+
+    await answered([]);
+
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
+  });
+
+  it.each(['rows-changed', 'plugin-changed'])('asks nothing on %s while the index reconciles', async (kind) => {
+    const { client, answered } = feed({});
+    await answered([]);
+    client.emit(loadOrderStatus(false));
+    client.emit({ kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
+
+    await answered([]);
+
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3);
   });
 
   it('tells of a plugin whose problems mEdit could not place, once while the reason stands and again when it changes', async () => {
@@ -122,6 +204,18 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     expect(reporter.report.mock.calls).toEqual([
       ['warning', 'The Problems panel cannot show "Refers.esp"\'s problems.', 'Refers.esp\'s source holds no file for 000800:Refers.esp.'],
       ['warning', 'The Problems panel cannot show "Refers.esp"\'s problems.', 'Refers.esp is tracked but no mod folder provides it.'],
+    ]);
+  });
+
+  it('shows the problems mEdit placed for a plugin whose other problems it could not place', async () => {
+    const { answered, reporter } = feed({ '/mods/ReferringMod/Refers.esp/Stray.json': '{' });
+    const stray = problem({ formKey: null, targetFormKey: null, fieldPath: null, sourceRelativePath: 'Refers.esp/Stray.json', message: 'unreadable' });
+
+    const shown = await answered([{ plugin: PLUGIN, problems: [stray], failure: 'Refers.esp\'s source could not place 000800:Refers.esp.' }]);
+
+    expect([...shown.keys()]).toEqual(['/mods/ReferringMod/Refers.esp/Stray.json']);
+    expect(reporter.report.mock.calls).toEqual([
+      ['warning', 'The Problems panel cannot show "Refers.esp"\'s problems.', 'Refers.esp\'s source could not place 000800:Refers.esp.'],
     ]);
   });
 
@@ -143,7 +237,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
 
     client.emit(ready);
     client.emit(ready);
-    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
+    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(4); });
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
     expect(published).toHaveLength(2);
@@ -163,5 +257,32 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await answered([]);
 
     expect(published.map((problems) => problems.size)).toEqual([0, 0]);
+  });
+
+  it('says nothing of a failed ask that a later one overtook', async () => {
+    const { client, answered, reporter } = feed({});
+    let overtaken!: (error: Error) => void;
+    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((_, reject) => { overtaken = reject; }));
+    client.emit(ready);
+
+    await answered([]);
+    overtaken(new Error('getPluginProblems timed out after 30000ms'));
+    await answered([]);
+
+    expect(reporter.shownOnSurface).not.toHaveBeenCalled();
+  });
+
+  it('publishes an older answer when the ask that overtook it fails', async () => {
+    const { client, published } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    let older!: (answer: PluginProblems[]) => void;
+    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
+    client.setQueryFailureOnce('getPluginProblems', new Error('getPluginProblems timed out after 30000ms'));
+    client.emit(ready);
+    client.emit(ready);
+    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
+
+    older([{ plugin: PLUGIN, problems: [problem()] }]);
+
+    await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1]); });
   });
 });
