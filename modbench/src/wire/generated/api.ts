@@ -165,6 +165,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/{plugin}/dependants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The plugins that list the plugin's file name as a master, and the plugins whose masters mEdit could not read. Answers only once the index is ready. */
+        get: operations["GetPluginDependants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/{plugin}/record-types": {
         parameters: {
             query?: never;
@@ -880,6 +897,10 @@ export interface components {
             refusal: components["schemas"]["DecompileRefusal"];
             message: string;
         };
+        PluginDependantsResponse: {
+            dependants: components["schemas"]["PluginAddress"][];
+            unreadable: components["schemas"]["PluginAddress"][];
+        };
         PluginDiagnosisReport: {
             plugin: string;
             origin: string;
@@ -1497,6 +1518,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginDiagnosisReport"][];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetPluginDependants: {
+        parameters: {
+            query?: {
+                origin?: string;
+            };
+            header?: never;
+            path: {
+                plugin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginDependantsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Service Unavailable */

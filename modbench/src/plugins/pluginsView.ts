@@ -16,6 +16,7 @@ import { registerPluginSortCommands, registerRevealInExplorerCommand } from './p
 import { registerPluginEnableCommands } from './pluginParticipationCommands';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
 import { makeShowRecordFilter } from './recordFilterCommands';
+import { survivingSelection } from './survivingSelection';
 import { subscribeTreeToNotifications } from './treeNotifications';
 import { followIndexStatus } from './indexStatus';
 import type { PluginsViewProgress } from './pluginRowCommands';
@@ -48,6 +49,7 @@ export interface PluginsViewDeps {
 export interface PluginsView extends vscode.Disposable {
   tree: PluginsTreeProvider;
   view: vscode.TreeView<PluginsTreeNode>;
+  selection: () => readonly PluginsTreeNode[];
   nameFilter: NameFilter;
   pluginSync: PluginSync;
   /** The load order Editing could not put: its refusal is this view's message line too. */
@@ -83,8 +85,9 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     // one is hierarchical — plugin → record type → record.
     showCollapseAll: true,
   });
+  const selected = survivingSelection(view, (row) => tree.shownRow(row));
   const showKeyContext = () => {
-    for (const [name, value] of Object.entries(pluginsKeyContext(view.selection, (row) => tree.isEnabled(row)))) {
+    for (const [name, value] of Object.entries(pluginsKeyContext(selected.rows(), (row) => tree.isEnabled(row)))) {
       void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
     }
     void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', tree.anyCompilable());
@@ -109,9 +112,9 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     { dispose: unsubscribe },
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, lens),
     ...registerPluginEnableCommands(
-      access, instance, () => view.selection, reporterFor('pluginListTree.enableDisable')),
+      access, instance, selected.rows, reporterFor('pluginListTree.enableDisable')),
     ...registerPluginSortCommands(tree),
-    registerRevealInExplorerCommand(tree, reporterFor('pluginListTree.revealInExplorer'), () => view.selection),
+    registerRevealInExplorerCommand(tree, reporterFor('pluginListTree.revealInExplorer'), selected.rows),
     view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
       e, access, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), instance)),
     // Grays an implicit master's row the way the reference tool grays COL_NAME for a forceLoaded
@@ -119,10 +122,10 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     vscode.window.registerFileDecorationProvider(new ImplicitMasterDecorationProvider(() => tree.lockedRowUris())),
     nameFilter,
     ...keyContextSubscriptions,
-    view, tree, changedOutsideDiagnostics, loadDiagnostics,
+    selected, view, tree, changedOutsideDiagnostics, loadDiagnostics,
   );
   return {
-    tree, view, nameFilter, pluginSync, loadOrderPut, showRecordFilter, progress, narrator: indexStatus.narrator,
+    tree, view, selection: selected.rows, nameFilter, pluginSync, loadOrderPut, showRecordFilter, progress, narrator: indexStatus.narrator,
     dispose: () => { disposable.dispose(); },
   };
 }
