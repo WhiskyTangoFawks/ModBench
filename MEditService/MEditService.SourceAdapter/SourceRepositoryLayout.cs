@@ -310,6 +310,17 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     // the destination named itself is written into, never doubled by a bare-named sibling.
     private string ExteriorCellDirectory(PluginAddress plugin, RecordIdentity identity, CellPlacement placement)
     {
+        var (levels, cell) = ExteriorCellDocuments(plugin, identity, placement);
+        foreach (var (path, text) in levels)
+            InMintedDirectory(PathShape.DirectoryOf(path), () => WriteTextAtomic(path, text));
+        return PathShape.DirectoryOf(cell);
+    }
+
+    /// <summary>The block level documents an exterior cell at <paramref name="placement"/> needs and the tree
+    /// lacks, outermost first, and the path of the cell's own document.</summary>
+    internal (IReadOnlyList<(string Path, string Text)> Levels, string Cell) ExteriorCellDocuments(
+        PluginAddress plugin, RecordIdentity identity, CellPlacement placement)
+    {
         var levels = RecordTypeDispatch.For(_release).ExteriorCellBlockLevels;
         if (levels.Count != ExteriorBlockLevels)
         {
@@ -319,9 +330,17 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         }
 
         var (block, subBlock, cell) = ExteriorCellLevels(plugin, identity, placement);
-        MintBlockLevel(block, levels[0], placement.BlockX, placement.BlockY);
-        MintBlockLevel(subBlock, levels[1], placement.SubX, placement.SubY);
-        return cell;
+        (string Directory, Type Level, int? X, int? Y)[] needed =
+        [
+            (block, levels[0], placement.BlockX, placement.BlockY),
+            (subBlock, levels[1], placement.SubX, placement.SubY),
+        ];
+        return (
+            [.. needed
+                .Select(level => (Path: Path.Combine(level.Directory, GroupRecordDataFileName), level.Level, level.X, level.Y))
+                .Where(level => !File.Exists(level.Path))
+                .Select(level => (level.Path, BlockLevelDocument(level.Level, level.X, level.Y)))],
+            Path.Combine(cell, RecordDataFileName));
     }
 
     // The directories an exterior cell's put lands in, none of them minted.
@@ -351,22 +370,16 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         return PathShape.DirectoryOf(document);
     }
 
-    // Track writes a level's document with whatever metadata the source mod carried, and a cell
-    // landing in the level is no reason to respell it.
-    private void MintBlockLevel(string directory, Type level, int? x, int? y)
-    {
-        if (File.Exists(Path.Combine(directory, GroupRecordDataFileName))) return;
-
-        var document = RecordTextCodec.BlankDocument(
+    // Only a level the tree lacks gets one: Track writes a level's document with whatever metadata the
+    // source mod carried, and a cell landing in the level is no reason to respell it.
+    private string BlockLevelDocument(Type level, int? x, int? y) =>
+        RecordTextCodec.BlankDocument(
             level, _release,
             new JsonObject
             {
                 [RecordTypeDispatch.BlockNumberXMember] = x ?? 0,
                 [RecordTypeDispatch.BlockNumberYMember] = y ?? 0,
             });
-        InMintedDirectory(
-            directory, () => WriteTextAtomic(Path.Combine(directory, GroupRecordDataFileName), document));
-    }
 
     // Block = ID mod 10 and sub-block = ID / 10 mod 10: the formula of Mutagen's AddInteriorCell.
     private List<string> InteriorCellBlockPathIn(string groupDirectory, uint formId)
