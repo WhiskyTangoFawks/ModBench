@@ -59,7 +59,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     public void ADirectoryPerRecordContainer_LandsAsADirectoryInItsGroupFolder()
     {
         Assert.Equal(
-            [SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp", "RecordData.json")],
+            [PluginSourceRoot.ContainerDocument(SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp"))],
             TreeAfterPutting("wrld", "SomeWorld"));
     }
 
@@ -69,7 +69,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
         Assert.Equal(
             [
                 SpelledOutPathUnder("Cells", "8", "4", "GroupRecordData.json"),
-                SpelledOutPathUnder("Cells", "8", "4", "SomeCell - 000800_Vendor.esp", "RecordData.json"),
+                PluginSourceRoot.ContainerDocument(SpelledOutPathUnder("Cells", "8", "4", "SomeCell - 000800_Vendor.esp")),
                 SpelledOutPathUnder("Cells", "8", "GroupRecordData.json"),
                 SpelledOutPathUnder("Cells", "GroupRecordData.json"),
             ],
@@ -86,11 +86,11 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
 
         var tree = TreeAfterPutting("cell", "SameBlockCell", formKey: "000864:Vendor.esp");
         Assert.Contains(
-            SpelledOutPathUnder("Cells", "8", "4", "SameBlockCell - 000864_Vendor.esp", "RecordData.json"), tree);
+            PluginSourceRoot.ContainerDocument(SpelledOutPathUnder("Cells", "8", "4", "SameBlockCell - 000864_Vendor.esp")), tree);
 
         tree = TreeAfterPutting("cell", "OtherCell", formKey: "000808:Vendor.esp");
         Assert.Contains(
-            SpelledOutPathUnder("Cells", "6", "5", "OtherCell - 000808_Vendor.esp", "RecordData.json"), tree);
+            PluginSourceRoot.ContainerDocument(SpelledOutPathUnder("Cells", "6", "5", "OtherCell - 000808_Vendor.esp")), tree);
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
         var tree = TreeAfterPutting("cell", "OtherCell", formKey: "00080A:Vendor.esp");
 
         Assert.Contains(
-            SpelledOutPathUnder("Cells", "8", "5", "OtherCell - 00080A_Vendor.esp", "RecordData.json"), tree);
+            PluginSourceRoot.ContainerDocument(SpelledOutPathUnder("Cells", "8", "5", "OtherCell - 00080A_Vendor.esp")), tree);
         Assert.Contains("\"BlockNumber\": 5", Text(SpelledOutPathUnder("Cells", "8", "5", "GroupRecordData.json")));
         Assert.Equal(standing, Text(SpelledOutPathUnder("Cells", "8", "GroupRecordData.json")));
     }
@@ -143,10 +143,10 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
         Assert.Equal(
             new[]
             {
-                Path.Combine(worldspace, "RecordData.json"),
+                PluginSourceRoot.ContainerDocument(worldspace),
                 Path.Combine(worldspace, "0, -1", "GroupRecordData.json"),
                 Path.Combine(worldspace, "0, -1", "1, -2", "GroupRecordData.json"),
-                Path.Combine(worldspace, "0, -1", "1, -2", "SomeCell - 000801_Vendor.esp", "RecordData.json"),
+                PluginSourceRoot.ContainerDocument(Path.Combine(worldspace, "0, -1", "1, -2", "SomeCell - 000801_Vendor.esp")),
             }.Order(StringComparer.Ordinal),
             TreeAfterPuttingExteriorCell(Somewhere));
     }
@@ -172,9 +172,9 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
         TreeAfterPutting("wrld", "SomeWorld");
 
         Assert.Contains(
-            SpelledOutPathUnder(
+            PluginSourceRoot.ContainerDocument(SpelledOutPathUnder(
                 "Worldspaces", "SomeWorld - 000800_Vendor.esp", "1, -1", "4, -3",
-                "SomeCell - 000801_Vendor.esp", "RecordData.json"),
+                "SomeCell - 000801_Vendor.esp")),
             TreeAfterPuttingExteriorCell("33, -20"));
     }
 
@@ -199,17 +199,17 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     {
         TreeAfterPutting("wrld", "SomeWorld");
         var worldspace = SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp");
-        var before = Text(Path.Combine(worldspace, "RecordData.json"));
+        var before = Text(PluginSourceRoot.ContainerDocument(worldspace));
 
         TreeAfterPuttingExteriorCell(Somewhere);
         var tree = TreeAfterPuttingExteriorCell(Somewhere, "OtherCell", "000802:Vendor.esp");
 
-        Assert.Equal(before, Text(Path.Combine(worldspace, "RecordData.json")));
+        Assert.Equal(before, Text(PluginSourceRoot.ContainerDocument(worldspace)));
         Assert.Single(Directory.EnumerateDirectories(Path.Combine(_modFolder, SpelledOutPathUnder("Worldspaces"))));
         Assert.Contains(
-            Path.Combine(worldspace, "0, -1", "1, -2", "OtherCell - 000802_Vendor.esp", "RecordData.json"), tree);
+            PluginSourceRoot.ContainerDocument(Path.Combine(worldspace, "0, -1", "1, -2", "OtherCell - 000802_Vendor.esp")), tree);
         Assert.Contains(
-            Path.Combine(worldspace, "0, -1", "1, -2", "SomeCell - 000801_Vendor.esp", "RecordData.json"), tree);
+            PluginSourceRoot.ContainerDocument(Path.Combine(worldspace, "0, -1", "1, -2", "SomeCell - 000801_Vendor.esp")), tree);
     }
 
     [Fact]

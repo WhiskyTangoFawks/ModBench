@@ -86,10 +86,7 @@ internal sealed class SourceRepositoryWrites(
         if (locator.LocateToPlace(plugin, document.Identity) is not { IsEmbedded: false } unit)
             throw NoPlaceInTheTree(plugin, document.Identity);
 
-        if (LeafMove(unit, document) is not var (from, to)) return Written(unit.FullPath, document.Body);
-
-        var written = unit.IsDirectoryPerRecord ? Path.Combine(to, Path.GetFileName(unit.FullPath)) : to;
-        return new SourceChanges([Moved(from, to)], [Document(written, document.Body)]);
+        return Planned(LeafPlan(unit, document), document.Body);
     }
 
     /// <summary>What putting an exterior cell at its grid changes: a held cell as <see cref="ChangesToPut"/>
@@ -128,13 +125,16 @@ internal sealed class SourceRepositoryWrites(
                     $"{Path.GetFileName(to)} already exists in {Path.GetDirectoryName(to)}, so the container whose FormID changed " +
                     "has nowhere to move to.");
             }
-            return new SourceChanges([Moved(from, to)], [Document(Path.Combine(to, Path.GetFileName(unit.FullPath)), text)]);
+            return Planned(ContainerPlan(unit, to), text);
         }
 
         var placed = layout.PlaceNewDocument(plugin, identity with { FormKey = newFormKey }, placement: null)
             ?? throw NoPlaceInTheTree(plugin, identity);
         return new SourceChanges([Moved(unit.FullPath, placed.FullPath)], [Document(placed.FullPath, text)]);
     }
+
+    private SourceChanges Planned(LeafMoves plan, string text) =>
+        new([.. plan.Moves.Select(move => Moved(move.From, move.To))], [Document(plan.Written, text)]);
 
     private SourceChanges Written(string fullPath, string text) => new([], [Document(fullPath, text)]);
 
@@ -301,23 +301,42 @@ internal sealed class SourceRepositoryWrites(
             && SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
             throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
 
-        if (LeafMove(unit, document) is not var (from, to)) return;
-        SourceRepositoryLayout.MoveEntry(from, to);
+        var plan = LeafPlan(unit, document);
+        if (plan.Moves.Count == 0) return;
+        foreach (var (from, to) in plan.Moves) SourceRepositoryLayout.MoveEntry(from, to);
         locator.Forget();
     }
 
-    // The file or folder that holds the document, and where its layout leaf name puts it; null when it
-    // is already there.
-    private static (string From, string To)? LeafMove(SourceUnit unit, SourceDocument document)
-    {
-        if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !File.Exists(unit.FullPath)) return null;
+    private readonly record struct LeafMoves(IReadOnlyList<(string From, string To)> Moves, string Written);
 
-        var from = unit.IsDirectoryPerRecord ? PathShape.DirectoryOf(unit.FullPath) : unit.FullPath;
-        var to = Path.Combine(
-            PathShape.DirectoryOf(from),
-            SourceRepositoryLayout.LeafNameFor(FormKey.Factory(document.FormKey), document.EditorId, unit.IsDirectoryPerRecord));
-        return string.Equals(from, to, StringComparison.Ordinal) ? null : (from, to);
+    // The moves, in order, that put the document where its layout leaf name does, and where it is written
+    // then; none when it is already there.
+    private static LeafMoves LeafPlan(SourceUnit unit, SourceDocument document)
+    {
+        if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !File.Exists(unit.FullPath))
+            return new LeafMoves([], unit.FullPath);
+
+        var leaf = SourceRepositoryLayout.LeafNameFor(
+            FormKey.Factory(document.FormKey), document.EditorId, unit.IsDirectoryPerRecord);
+        if (unit.IsDirectoryPerRecord) return ContainerPlan(unit, Path.Combine(PathShape.DirectoryOf(PathShape.DirectoryOf(unit.FullPath)), leaf));
+
+        var to = Path.Combine(PathShape.DirectoryOf(unit.FullPath), leaf);
+        return new LeafMoves(Differing([(unit.FullPath, to)]), to);
     }
+
+    // The directory moves to where its leaf name puts it, then the document in it takes the leaf's name.
+    private static LeafMoves ContainerPlan(SourceUnit unit, string toDirectory)
+    {
+        var written = SourceRepositoryLayout.ContainerDocumentIn(toDirectory);
+        return new LeafMoves(
+            Differing([
+                (PathShape.DirectoryOf(unit.FullPath), toDirectory),
+                (Path.Combine(toDirectory, Path.GetFileName(unit.FullPath)), written)]),
+            written);
+    }
+
+    private static List<(string From, string To)> Differing(IEnumerable<(string From, string To)> moves) =>
+        [.. moves.Where(move => !string.Equals(move.From, move.To, StringComparison.Ordinal))];
 
     private static byte[] OwnerBytes(SourceUnit unit) => DocumentText.StripUtf8Bom(File.ReadAllBytes(unit.FullPath));
 

@@ -60,9 +60,9 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         return (
         [
             new TreeFile(
-                Path.Combine(root, "Worldspaces", Leaf(worldspace), "RecordData.json"), Serialize(worldspace)),
+                PluginSourceRoot.ContainerDocument(Path.Combine(root, "Worldspaces", Leaf(worldspace))), Serialize(worldspace)),
             new TreeFile(
-                Path.Combine(root, "Worldspaces", Leaf(worldspace), "0, 0", "0, 0", Leaf(cell), "RecordData.json"),
+                PluginSourceRoot.ContainerDocument(Path.Combine(root, "Worldspaces", Leaf(worldspace), "0, 0", "0, 0", Leaf(cell))),
                 Serialize(cell)),
         ], cell.FormKey);
     }

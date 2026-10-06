@@ -81,7 +81,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
         {
             var originalMasters = adapter.MastersOf(pluginName, originalPluginPath, gameRelease, strings);
             await adapter.WriteFromTreeAsync(
-                SourceRepository.DoorFilesOf(pluginName, pristineFilesForThisPlugin), recompiledPath, originalMasters, cancel);
+                SourceRepository.DoorFilesOf(pluginName, pristineFilesForThisPlugin, gameRelease), recompiledPath, originalMasters, cancel);
         }
         catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
         {

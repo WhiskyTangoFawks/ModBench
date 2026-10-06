@@ -10,7 +10,7 @@ vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleS
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import { wireModSync, wirePluginSync } from './syncWiring';
-import { syncPlugins, setPluginsEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
+import { pluginSyncOver, syncPlugins, setPluginsEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
@@ -90,7 +90,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   const loadedWithNoLine: (readonly string[] | undefined)[] = [];
   wirePluginSync(instance, (args) => {
     loadedWithNoLine.push(args.loadedWithNoLine);
-    const run = syncPlugins(accessTo(root), args.profile, args.provided, args.inData, args.loadedWithNoLine);
+    const run = syncPlugins(accessTo(root), args);
     syncs.push(run);
     return run;
   }, { error: () => {}, info: () => {} });
@@ -170,6 +170,24 @@ describe('plugin sync and the Instance close a loop that settles', () => {
   });
 });
 
+describe('plugin sync keeps another tool\'s plugins.txt write', () => {
+  it('keeps the line the mod manager wrote after the value was read, in its place and state, through the next value\'s sync', async () => {
+    const { root, instance, syncs, plugins } = await wiredInstance();
+    const readBefore = instance.value;
+    await mkdir(join(root, 'mods', 'Extra'), { recursive: true });
+    await writeFile(join(root, 'mods', 'Extra', 'Extra.esp'), 'plugin');
+    await writeFile(join(root, 'profiles', PROFILE, 'modlist.txt'), '+Extra\r\n+Provider\r\n');
+    await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Extra.esp\r\n*Base.esp\r\n');
+
+    await pluginSyncOver(accessTo(root))(readBefore.pluginSyncArguments);
+    watcherFor('profiles/*/plugins.txt').fireChange();
+    const { writes, quiescent } = await driveToQuiescence(instance, syncs, 8);
+
+    expect({ writes, quiescent }).toEqual({ writes: 0, quiescent: true });
+    expect(await plugins()).toBe('*Extra.esp\r\n*Base.esp\r\n');
+  });
+});
+
 describe('the game folder not found, across the whole instance', () => {
   it('is exactly one Output line from every Instance-driven writer, however many values land', async () => {
     const root = await mkdtemp(join(tmpdir(), 'game-not-found-'));
@@ -189,9 +207,7 @@ describe('the game folder not found, across the whole instance', () => {
     });
     instances.push(instance);
     toolboxes.push(new ToolboxProvider({ instance, channel }));
-    const pluginSync = wirePluginSync(instance, ({ profile, provided, inData, loadedWithNoLine }) => {
-      return syncPlugins(accessTo(root), profile, provided, inData, loadedWithNoLine);
-    }, channel);
+    const pluginSync = wirePluginSync(instance, pluginSyncOver(accessTo(root)), channel);
     const modSync = wireModSync(instance, modSyncOver(accessTo(root)), channel);
 
     await instance.refresh();
