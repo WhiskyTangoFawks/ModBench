@@ -133,16 +133,15 @@ internal static class Wire
     internal static async Task<JsonElement> Plugin(this HttpClient client, string name) =>
         (await client.Plugins()).Single(p => p.GetProperty("name").GetString() == name);
 
-    /// <summary>Track's write reaches the answers at the next snapshot (ADR-0015), on the
-    /// service's own thread, so the answer is polled until it reports the plugin tracked.</summary>
+    /// <summary>Track's write reaches the answers at the next snapshot (ADR-0015), whose reconcile
+    /// reports the plugin tracked before it validates every plugin, so its end is awaited too.</summary>
     internal static async Task PluginReportsTracked(this HttpClient client, string name)
     {
-        var elapsed = System.Diagnostics.Stopwatch.StartNew();
-        while (!(await client.Plugin(name)).GetProperty("isTracked").GetBoolean())
-        {
-            Assert.True(elapsed.Elapsed < Patience, $"{name} was never reported tracked after Track");
-            await Task.Delay(50);
-        }
+        await Eventually(
+            async () => (await client.Plugin(name)).GetProperty("isTracked").GetBoolean(),
+            $"{name} reported tracked after Track");
+        var status = await client.GetFromJsonAsync<JsonElement>("/load-order/status");
+        await client.AwaitTerminalLoadOrderStatus(status.GetProperty("version").GetInt64());
     }
 
     internal static Task<long> Sequence(this HttpClient client) =>
