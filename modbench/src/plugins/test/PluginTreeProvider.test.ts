@@ -40,14 +40,14 @@ function makeRecord(
 }
 
 function makeClient(overrides: Partial<{
-  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean; isCreatable?: boolean }[];
+  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean; isCreatable?: boolean; isContainer?: boolean }[];
   records: RecordPage;
 }> = {}): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   const recordTypes = overrides.recordTypes ?? [{ type: 'weap', count: 5, displayName: 'Weapon' }];
   client.setQueryAnswer('getRecordTypes', recordTypes.map((rt) => ({
     type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
-    isCreatable: rt.isCreatable ?? true, isContainer: CONTAINER_TYPES.has(rt.type),
+    isCreatable: rt.isCreatable ?? true, isContainer: rt.isContainer ?? CONTAINER_TYPES.has(rt.type),
   })));
   client.setQueryAnswer('getRecords', overrides.records ?? { items: [makeRecord(0)], total: 1 });
   client.setQueryAnswer('getWorldspaces', []);
@@ -427,12 +427,12 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
 
     expect(states).toEqual([
       'recordType tracked editable creatable', 'record tracked editable',
-      'recordType tracked editable creatable', 'record tracked editable', 'record tracked editable',
-      'recordType tracked editable creatable', 'worldspace tracked editable',
-      'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
-      'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
+      'recordType tracked editable creatable', 'record tracked editable container', 'record tracked editable container',
+      'recordType tracked editable creatable', 'worldspace tracked editable container',
+      'cell tracked editable container', 'placed tracked editable', 'placed tracked editable',
+      'cell tracked editable container', 'placed tracked editable', 'placed tracked editable',
       'recordType tracked editable creatable',
-      'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
+      'cell tracked editable container', 'placed tracked editable', 'placed tracked editable',
     ]);
   });
 
@@ -801,11 +801,11 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const cellB = cellOf(fromB);
     const placedB = placedOf(fromB);
 
-    expect(cellA.contextValue).toBe('cell tracked editable');
+    expect(cellA.contextValue).toBe('cell tracked editable container');
     expect(cellA.origin).toBe('ModA');
     expect(placedA.contextValue).toBe('placed tracked editable');
     expect(placedA.origin).toBe('ModA');
-    expect(cellB.contextValue).toBe('cell untracked');
+    expect(cellB.contextValue).toBe('cell untracked container');
     expect(cellB.origin).toBe('ModB');
     expect(placedB.contextValue).toBe('placed untracked');
     expect(placedB.origin).toBe('ModB');
@@ -871,29 +871,61 @@ function makeContainerChild(
 }
 
 describe('RecordNode collapsibility for container types', () => {
-  it('is Collapsed when built as a "qust" row that actually has container children', () => {
-    const node = new RecordNode(makeRecord(0), 'Data', undefined, 'qust', true);
+  it('is Collapsed when built as a container that has children', () => {
+    const node = new RecordNode(makeRecord(0), 'Data', undefined, true, true);
     expect(node.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
   });
 
-  it('is Collapsed when built as a "dial" row that actually has container children', () => {
-    const node = new RecordNode(makeRecord(0), 'Data', undefined, 'dial', true);
-    expect(node.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
-  });
-
-  it('stays None (a leaf) when built as a "qust" row with no container children', () => {
-    const node = new RecordNode(makeRecord(0), 'Data', undefined, 'qust', false);
+  it('stays None (a leaf) when built as a container with no children', () => {
+    const node = new RecordNode(makeRecord(0), 'Data', undefined, true, false);
     expect(node.collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 
-  it('stays None (a leaf) when built as a "dial" row with no container children', () => {
-    const node = new RecordNode(makeRecord(0), 'Data', undefined, 'dial', false);
+  it('stays None (a leaf) when built as no container, as every other record does', () => {
+    const node = new RecordNode(makeRecord(0, 'None', true), 'Data');
     expect(node.collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
+});
 
-  it('stays None (a leaf) when no containerChildType is given, as every other record type does', () => {
-    const node = new RecordNode(makeRecord(0), 'Data');
-    expect(node.collapsibleState).toBe(TreeItemCollapsibleState.None);
+describe('which record rows are containers is mEdit\'s answer', () => {
+  it('a group mEdit calls a container lists container rows that expand into their children, whatever the type', async () => {
+    const repo = makeClient({ recordTypes: [{ type: 'xxxx', count: 1, isContainer: true }], records: { items: [makeRecord(0, 'None', true)], total: 1 } });
+    repo.setQueryAnswer('getContainerChildren', [makeContainerChild('child1:Fallout4.esm', 'yyyy')]);
+    const provider = new PluginTreeProvider(repo);
+    const [typeNode] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
+    const [row] = await provider.getChildren(present(typeNode, 'the sole group'));
+
+    const children = await provider.getChildren(present(row, 'the sole record row'));
+
+    expect(present(row, 'the sole record row').contextValue).toBe('record untracked container');
+    expect(children.map((c) => expectInstanceOf(c, RecordNode).record.formKey)).toEqual(['child1:Fallout4.esm']);
+  });
+
+  it('a group mEdit calls no container lists leaves, whatever the type', async () => {
+    const repo = makeClient({ recordTypes: [{ type: 'qust', count: 1, isContainer: false }], records: { items: [makeRecord(0, 'None', true)], total: 1 } });
+    const provider = new PluginTreeProvider(repo);
+    const [typeNode] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
+
+    const [row] = await provider.getChildren(present(typeNode, 'the sole group'));
+
+    expect(present(row, 'the sole record row').contextValue).toBe('record untracked');
+    expect(present(row, 'the sole record row').collapsibleState).toBe(TreeItemCollapsibleState.None);
+  });
+
+  it('a container\'s child is a container as mEdit answers for it, whatever its type', async () => {
+    const repo = makeClient();
+    repo.setQueryAnswer('getContainerChildren', [
+      { ...makeContainerChild('child1:Fallout4.esm', 'xxxx', null, true), isContainer: true },
+      { ...makeContainerChild('child2:Fallout4.esm', 'dial', null, true), isContainer: false },
+    ]);
+    const provider = new PluginTreeProvider(repo);
+
+    const children = expectInstancesOf(await provider.getChildren(new RecordNode(makeRecord(0), 'Data', undefined, true, true)), RecordNode);
+
+    expect(children.map((c) => [c.contextValue, c.collapsibleState])).toEqual([
+      ['record untracked container', TreeItemCollapsibleState.Collapsed],
+      ['record untracked', TreeItemCollapsibleState.None],
+    ]);
   });
 });
 
@@ -906,7 +938,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     ]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, 'Data', undefined, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, 'Data', undefined, true);
 
     const children = await provider.getChildren(questNode);
 
@@ -926,7 +958,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     ]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, 'Data', undefined, 'qust', true);
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, 'Data', undefined, true, true);
 
     const children = expectInstancesOf(await provider.getChildren(questNode), RecordNode);
 
@@ -945,7 +977,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     ]);
     const provider = new PluginTreeProvider(repo);
     const topicNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'dial1:Fallout4.esm' }, 'Data', undefined, 'dial');
+      { ...makeRecord(0), formKey: 'dial1:Fallout4.esm' }, 'Data', undefined, true);
 
     const children = await provider.getChildren(topicNode);
 
@@ -959,9 +991,9 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     repo.setQueryAnswerOnce('getContainerChildren', [makeContainerChild('dial-b:Shared.esp', 'dial', 'TopicModB')]);
     const provider = new PluginTreeProvider(repo);
     const questA = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModA', undefined, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModA', undefined, true);
     const questB = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModB', undefined, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModB', undefined, true);
 
     const childrenA = expectInstancesOf(await provider.getChildren(questA), RecordNode);
     const childrenB = expectInstancesOf(await provider.getChildren(questB), RecordNode);

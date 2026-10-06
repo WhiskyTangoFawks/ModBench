@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
-import { UNLIMITED_RECORDS, type MEditClient, type PluginAddress } from '../client';
-import type { Reporter } from '../ports/reporter';
-import { errorMessage } from '../ports/errorMessage';
-import { pluginAddressKey } from '../wire/pluginAddress';
+import type { MEditClient, PluginAddress } from '../client';
+import { samePluginAddress } from '../wire/pluginAddress';
 
 /** A plugin's group of one record type. */
 export interface RecordGroup {
@@ -10,69 +8,75 @@ export interface RecordGroup {
   recordType: string;
 }
 
+/** Where a new record's row is: in its plugin's group of its type, or beneath its container's row. */
+export type RecordPlace<Row> = RecordGroup | { container: Row };
+
 export interface CreatedRecordSelectionDeps<Row> {
-  client: Pick<MEditClient, 'onNotification' | 'getRecords'>;
-  reporter: Reporter;
-  rowOf(group: RecordGroup, formKey: string): Promise<Row | undefined>;
+  client: Pick<MEditClient, 'onNotification'>;
+  rowOf(place: RecordPlace<Row>, formKey: string): Promise<Row | undefined>;
   view: { reveal(row: Row, options: { select: boolean; focus: boolean }): PromiseLike<void> };
 }
 
-/** rows-changed names no type and no addition, so the new record is the one its group newly
- *  lists. The listing is unfiltered: a record the filter hides is never taken for the new one. */
+export interface CreatedRecordWatch<Row> {
+  /** The record mEdit created, selected and opened once a change to its plugin names it, or
+   *  mEdit re-derives the whole plugin. */
+  select(place: RecordPlace<Row>, formKey: string): void;
+  forget(): void;
+}
+
+/** Watched from before the create, since the change landing the new record can precede mEdit's
+ *  answer, so the keys named until then are kept. It settles once, and the next watch settles
+ *  it. */
 export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row>): {
-  selectWhenListed(group: RecordGroup): Promise<() => void>;
+  watch(plugin: PluginAddress): CreatedRecordWatch<Row>;
 } {
   let forgetLatest: (() => void) | undefined;
 
-  const listing = async ({ plugin, recordType }: RecordGroup): Promise<string[]> =>
-    (await deps.client.getRecords(plugin, recordType, 0, UNLIMITED_RECORDS, { unfiltered: true }))
-      .items.map((r) => r.formKey);
-
-  const reportUnselected = (group: RecordGroup, error: unknown): void => {
-    deps.reporter.report(
-      'warning', `Could not select and open the new ${group.recordType} record in "${group.plugin.name}".`, errorMessage(error));
-  };
-
-  const selectAndOpen = async (group: RecordGroup, formKey: string): Promise<void> => {
-    const row = await deps.rowOf(group, formKey);
+  const selectAndOpen = async (place: RecordPlace<Row>, formKey: string): Promise<void> => {
+    const row = await deps.rowOf(place, formKey);
     if (row !== undefined) await deps.view.reveal(row, { select: true, focus: true });
     void vscode.commands.executeCommand('modbench.record.open', { formKey });
   };
 
   return {
-    async selectWhenListed(group) {
+    watch(plugin) {
       forgetLatest?.();
-      let before: ReadonlySet<string>;
-      try {
-        before = new Set(await listing(group));
-      } catch (error) {
-        reportUnselected(group, error);
-        return () => {};
-      }
-      const address = pluginAddressKey(group.plugin);
-      const settle = async (): Promise<void> => {
-        let created: string | undefined;
-        try {
-          created = (await listing(group)).find((formKey) => !before.has(formKey));
-        } catch (error) {
-          if (forgetLatest !== forget) return;
-          forget();
-          reportUnselected(group, error);
-          return;
-        }
-        if (created === undefined || forgetLatest !== forget) return;
+      let landed = false;
+      let namedBeforeAnswer: Set<string> | undefined = new Set();
+      let created: { place: RecordPlace<Row>; formKey: string } | undefined;
+      const settle = (): void => {
+        if (created === undefined || !landed || forgetLatest !== forget) return;
         forget();
-        await selectAndOpen(group, created);
+        void selectAndOpen(created.place, created.formKey);
       };
-      const unsubscribe = deps.client.onNotification('rows-changed', (event) => {
-        if (pluginAddressKey(event.plugin) === address) void settle();
-      });
+      const unsubscribes = [
+        deps.client.onNotification('rows-changed', (event) => {
+          if (!samePluginAddress(event.plugin, plugin)) return;
+          if (created === undefined) for (const key of event.keys) namedBeforeAnswer?.add(key);
+          else landed ||= event.keys.includes(created.formKey);
+          settle();
+        }),
+        // A plugin re-derived whole is announced with no keys (ADR-0015).
+        deps.client.onNotification('plugin-changed', (event) => {
+          if (!samePluginAddress(event.plugin, plugin)) return;
+          landed = true;
+          settle();
+        }),
+      ];
       const forget = () => {
-        unsubscribe();
+        for (const unsubscribe of unsubscribes) unsubscribe();
         if (forgetLatest === forget) forgetLatest = undefined;
       };
       forgetLatest = forget;
-      return forget;
+      return {
+        select(place, formKey) {
+          created = { place, formKey };
+          landed ||= namedBeforeAnswer?.has(formKey) ?? false;
+          namedBeforeAnswer = undefined;
+          settle();
+        },
+        forget,
+      };
     },
   };
 }

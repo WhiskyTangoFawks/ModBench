@@ -4,40 +4,32 @@ const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn() }));
 vi.mock('vscode', () => ({ commands: { executeCommand } }));
 
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { UNLIMITED_RECORDS, type MEditClient } from '../../client';
-import { recordSummaryFixture } from '../../client/test/fixtures';
-import { recordingReporter } from '../../test/surfacingDoubles';
-import { createdRecordSelection } from '../createdRecordSelection';
+import { createdRecordSelection, type RecordPlace } from '../createdRecordSelection';
 
-const NPCS = { plugin: { name: 'MyPatch.esp', origin: 'ModA' }, recordType: 'npc_' };
-const OLD = '000800:MyPatch.esp';
-const HIDDEN = '000801:MyPatch.esp';
+const PLUGIN = { name: 'MyPatch.esp', origin: 'ModA' };
+const NPCS: RecordPlace<string> = { plugin: PLUGIN, recordType: 'npc_' };
+const QUEST: RecordPlace<string> = { container: 'quest row' };
+const OTHER = '000800:MyPatch.esp';
 const NEW = '000900:MyPatch.esp';
-const OTHER_TYPE = '000901:MyPatch.esp';
 
-function rowsChanged(keys: string[], origin = NPCS.plugin.origin) {
-  return { kind: 'rows-changed', plugin: NPCS.plugin.name, origin, keys, sequence: 1 };
+function rowsChanged(keys: string[], origin = PLUGIN.origin) {
+  return { kind: 'rows-changed', plugin: PLUGIN.name, origin, keys, sequence: 1 };
 }
 
-const page = (formKeys: readonly string[]) => ({
-  items: formKeys.map((formKey) => recordSummaryFixture({ formKey, plugin: NPCS.plugin.name })), total: formKeys.length,
-});
+function pluginChanged(origin = PLUGIN.origin) {
+  return { kind: 'plugin-changed', plugin: PLUGIN.name, origin, keys: [], sequence: 1 };
+}
 
 function harness(shown: (formKey: string) => boolean = () => true) {
   const stream = new InMemoryMEditClient();
-  const group = { records: [OLD] as string[], failure: undefined as Error | undefined };
-  const reads: unknown[][] = [];
-  const getRecords: MEditClient['getRecords'] = (...args) => {
-    reads.push(args);
-    if (group.failure) return Promise.reject(group.failure);
-    return Promise.resolve(page(args[4]?.unfiltered === true ? group.records : group.records.filter(shown)));
-  };
-  const reporter = recordingReporter();
+  const asked: string[] = [];
   const revealed: string[] = [];
   const selection = createdRecordSelection<string>({
-    client: { onNotification: (kind, listener) => stream.onNotification(kind, listener), getRecords },
-    reporter,
-    rowOf: (address, formKey) => Promise.resolve(address.recordType === NPCS.recordType && shown(formKey) ? `row ${formKey}` : undefined),
+    client: { onNotification: (kind, listener) => stream.onNotification(kind, listener) },
+    rowOf: (place, formKey) => {
+      asked.push(`${'container' in place ? place.container : place.recordType} ${formKey}`);
+      return Promise.resolve(shown(formKey) ? `row ${formKey}` : undefined);
+    },
     view: {
       reveal: (row, options) => {
         revealed.push(`${row} ${JSON.stringify(options)}`);
@@ -47,7 +39,7 @@ function harness(shown: (formKey: string) => boolean = () => true) {
   });
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
   const opened = () => executeCommand.mock.calls;
-  return { stream, group, reads, reporter, selection, revealed, settle, opened };
+  return { stream, asked, selection, revealed, settle, opened };
 }
 
 const OPEN_NEW = ['modbench.record.open', { formKey: NEW }];
@@ -55,30 +47,59 @@ const OPEN_NEW = ['modbench.record.open', { formKey: NEW }];
 beforeEach(() => { executeCommand.mockReset(); });
 
 describe('createdRecordSelection', () => {
-  it('selects the record its group newly lists at the plugin\'s next change, then opens it as a click does', async () => {
-    const { stream, group, selection, revealed, settle, opened } = harness();
-    await selection.selectWhenListed(NPCS);
+  it('selects the new record\'s row once a change to its plugin names it, then opens it as a click does', async () => {
+    const { stream, asked, selection, revealed, settle, opened } = harness();
+    selection.watch(PLUGIN).select(NPCS, NEW);
 
-    group.records.push(NEW);
     stream.emit(rowsChanged([NEW]));
+    await settle();
+
+    expect(asked).toEqual([`npc_ ${NEW}`]);
+    expect(revealed).toEqual([`row ${NEW} {"select":true,"focus":true}`]);
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
+  it('selects at once when the change named the record before mEdit answered the create', async () => {
+    const { stream, selection, revealed, settle, opened } = harness();
+    const watch = selection.watch(PLUGIN);
+    stream.emit(rowsChanged([NEW]));
+    await settle();
+
+    watch.select(NPCS, NEW);
     await settle();
 
     expect(revealed).toEqual([`row ${NEW} {"select":true,"focus":true}`]);
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  it('reads the whole group it waits on, by (origin, filename), what the record filter hides too', async () => {
-    const { reads, selection } = harness();
+  it('waits past a change before mEdit answered the create that does not name the record', async () => {
+    const { stream, asked, selection, settle, opened } = harness();
+    const watch = selection.watch(PLUGIN);
+    stream.emit(rowsChanged([OTHER]));
+    await settle();
 
-    await selection.selectWhenListed(NPCS);
+    watch.select(NPCS, NEW);
+    await settle();
+    expect([asked, opened()]).toEqual([[], []]);
 
-    expect(reads).toEqual([[{ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_', 0, UNLIMITED_RECORDS, { unfiltered: true }]]);
+    stream.emit(rowsChanged([NEW]));
+    await settle();
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
+  it('finds the row beneath the container the record landed in', async () => {
+    const { stream, asked, selection, settle } = harness();
+    selection.watch(PLUGIN).select(QUEST, NEW);
+
+    stream.emit(rowsChanged([NEW]));
+    await settle();
+
+    expect(asked).toEqual([`quest row ${NEW}`]);
   });
 
   it('waits past a change to a plugin of the same name from another origin', async () => {
-    const { stream, group, selection, settle, opened } = harness();
-    await selection.selectWhenListed(NPCS);
-    group.records.push(NEW);
+    const { stream, selection, settle, opened } = harness();
+    selection.watch(PLUGIN).select(NPCS, NEW);
 
     stream.emit(rowsChanged([NEW], 'ModB'));
     await settle();
@@ -89,40 +110,65 @@ describe('createdRecordSelection', () => {
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  it('waits past a change after which the group lists nothing new', async () => {
-    const { stream, group, selection, settle, opened } = harness();
-    await selection.selectWhenListed(NPCS);
+  it('waits past a change that does not name the new record', async () => {
+    const { stream, selection, settle, opened } = harness();
+    selection.watch(PLUGIN).select(NPCS, NEW);
 
-    stream.emit(rowsChanged([OLD, OTHER_TYPE]));
+    stream.emit(rowsChanged([OTHER]));
     await settle();
     expect(opened()).toEqual([]);
 
-    group.records.push(NEW);
     stream.emit(rowsChanged([NEW]));
     await settle();
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  it.each([['of another type', OTHER_TYPE], ['of this type that the filter hides', HIDDEN]])(
-    'opens nothing for a changed record %s while a record filter is in force', async (_what, changed) => {
-      const { stream, group, selection, settle, opened } = harness((formKey) => formKey === OLD);
-      group.records.push(HIDDEN);
-      await selection.selectWhenListed(NPCS);
+  it('selects the new record\'s row by its FormKey once mEdit re-derives its whole plugin, which names no record', async () => {
+    const { stream, asked, selection, revealed, settle, opened } = harness();
+    selection.watch(PLUGIN).select(QUEST, NEW);
 
-      stream.emit(rowsChanged([changed]));
-      await settle();
-      group.records.push(NEW);
-      stream.emit(rowsChanged([NEW]));
-      await settle();
+    stream.emit(pluginChanged('ModB'));
+    await settle();
+    expect(opened()).toEqual([]);
 
-      expect(opened()).toEqual([OPEN_NEW]);
-    });
+    stream.emit(pluginChanged());
+    await settle();
 
-  it('opens a new record the record filter hides, selecting nothing', async () => {
-    const { stream, group, selection, revealed, settle, opened } = harness((formKey) => formKey === OLD);
-    await selection.selectWhenListed(NPCS);
+    expect(asked).toEqual([`quest row ${NEW}`]);
+    expect(revealed).toEqual([`row ${NEW} {"select":true,"focus":true}`]);
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
 
-    group.records.push(NEW);
+  it('selects at once when mEdit re-derived the plugin before it answered the create', async () => {
+    const { stream, selection, settle, opened } = harness();
+    const watch = selection.watch(PLUGIN);
+    stream.emit(pluginChanged());
+    await settle();
+
+    watch.select(NPCS, NEW);
+    await settle();
+
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
+  it('selects nothing at a later change naming the record, once a re-derived plugin settled the watch', async () => {
+    const { stream, asked, selection, settle, opened } = harness(() => false);
+    selection.watch(PLUGIN).select(NPCS, NEW);
+    stream.emit(pluginChanged());
+    await settle();
+
+    stream.emit(rowsChanged([NEW]));
+    stream.emit(pluginChanged());
+    await settle();
+
+    expect(asked).toHaveLength(1);
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
+  it('opens a new record no row shows, as when the record filter hides it, selecting nothing', async () => {
+    const { stream, selection, revealed, settle, opened } = harness(() => false);
+    selection.watch(PLUGIN).select(NPCS, NEW);
+
     stream.emit(rowsChanged([NEW]));
     await settle();
 
@@ -131,9 +177,8 @@ describe('createdRecordSelection', () => {
   });
 
   it('opens once, though the watch names the record again', async () => {
-    const { stream, group, selection, settle, opened } = harness();
-    await selection.selectWhenListed(NPCS);
-    group.records.push(NEW);
+    const { stream, selection, settle, opened } = harness();
+    selection.watch(PLUGIN).select(NPCS, NEW);
 
     stream.emit(rowsChanged([NEW]));
     stream.emit(rowsChanged([NEW]));
@@ -145,61 +190,27 @@ describe('createdRecordSelection', () => {
   });
 
   it('waits only for the latest create', async () => {
-    const { stream, group, selection, settle, opened } = harness();
-    await selection.selectWhenListed({ ...NPCS, recordType: 'acti' });
-    await selection.selectWhenListed(NPCS);
+    const { stream, selection, settle, opened } = harness();
+    const first = selection.watch(PLUGIN);
+    selection.watch(PLUGIN).select(NPCS, NEW);
+    first.select(NPCS, OTHER);
 
-    group.records.push(NEW);
-    stream.emit(rowsChanged([NEW]));
+    stream.emit(rowsChanged([OTHER, NEW]));
     await settle();
 
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  it('says it will not select the new record when mEdit cannot list its group, and lets create go on', async () => {
-    const { stream, group, reporter, selection, settle, opened } = harness();
-    group.failure = new Error('mEdit is not running');
-
-    await selection.selectWhenListed(NPCS);
-    group.failure = undefined;
-    group.records.push(NEW);
-    stream.emit(rowsChanged([NEW]));
-    await settle();
-
-    expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Could not select and open the new npc_ record in "MyPatch.esp".', detail: 'mEdit is not running',
-    }]);
-    expect(opened()).toEqual([]);
-  });
-
-  it('says it did not select the new record when mEdit cannot list its group after the change, and stops waiting', async () => {
-    const { stream, group, reporter, selection, settle, opened } = harness();
-    await selection.selectWhenListed(NPCS);
-
-    group.failure = new Error('mEdit is not running');
-    stream.emit(rowsChanged([NEW]));
-    await settle();
-    group.failure = undefined;
-    group.records.push(NEW);
-    stream.emit(rowsChanged([NEW]));
-    await settle();
-
-    expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Could not select and open the new npc_ record in "MyPatch.esp".', detail: 'mEdit is not running',
-    }]);
-    expect(opened()).toEqual([]);
-  });
-
   it('stops listening once forgotten', async () => {
-    const { stream, group, reads, selection, settle, opened } = harness();
-    const forget = await selection.selectWhenListed(NPCS);
-    forget();
+    const { stream, asked, selection, settle, opened } = harness();
+    const watch = selection.watch(PLUGIN);
+    watch.forget();
+    watch.select(NPCS, NEW);
 
-    group.records.push(NEW);
     stream.emit(rowsChanged([NEW]));
     await settle();
 
-    expect(reads).toHaveLength(1);
+    expect(asked).toEqual([]);
     expect(opened()).toEqual([]);
   });
 });

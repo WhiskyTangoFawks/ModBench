@@ -702,6 +702,21 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       ]);
     });
 
+  it.each(['record', 'worldspace', 'cell'])(
+    'record menu on a %s row that is a container: create record between open and copy', (kind) => {
+      expect(menuOf(`${kind} tracked editable container`)).toEqual([
+        [OPEN_TO_THE_SIDE, '1_open'],
+        ['modbench.record.create', '3_create'],
+        ['modbench.record.copy', '5_copy'],
+        ['modbench.copyValue', '5_copy'],
+        ['modbench.record.delete', '6_destroy'],
+      ]);
+    });
+
+  it.each([['untracked', 'untracked editable'], ['read-only', 'tracked']])('record menu on a container whose plugin is %s: no create record', (_what, conditions) => {
+    expect(menuOf(`record ${conditions} container`).map(([command]) => command)).not.toContain('modbench.record.create');
+  });
+
   it.each([['untracked', 'untracked editable'], ['read-only', 'tracked']])('record menu on a record whose plugin is %s: no delete', (_what, conditions) => {
     expect(menuOf(`record ${conditions}`)).toEqual([
       [OPEN_TO_THE_SIDE, '1_open'],

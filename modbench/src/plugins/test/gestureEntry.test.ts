@@ -110,6 +110,17 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([quests]).singleCreatable).toBe(false);
   });
 
+  it('create sees exactly one selected container whose plugin is tracked and editable, a cell included', () => {
+    const quest = new RecordNode(recordSummaryFixture({ formKey: '000804:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: true }, true);
+    const readOnlyQuest = new RecordNode(recordSummaryFixture({ formKey: '000805:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: false }, true);
+
+    expect(context([quest]).singleCreatable).toBe(true);
+    expect(context([cell]).singleCreatable).toBe(true);
+    expect(context([readOnlyQuest]).singleCreatable).toBe(false);
+    expect(context([own]).singleCreatable).toBe(false);
+    expect(context([quest, cell]).singleCreatable).toBe(false);
+  });
+
   it('delete sees a selection of records, cells included, their plugins all let it remove', () => {
     expect(context([own, cell]).allDeletableRecords).toBe(true);
     expect(context([own, immutable]).allDeletableRecords).toBe(false);
