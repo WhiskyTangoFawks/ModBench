@@ -42,8 +42,8 @@ public static class ChildRecordTypes
             .Select(add => add.Type)];
     }
 
-    /// <summary>Where a new <paramref name="recordType"/> lands in the container, as <see cref="Of"/> reads
-    /// it; <see cref="ChildSlot.Filled"/> only when a held single-record member is all that stands in the way.</summary>
+    /// <summary>Where a new <paramref name="recordType"/> lands in the container, as Of reads it;
+    /// <see cref="ChildSlot.Filled"/> only when a held single-record member is all that stands in the way.</summary>
     public static ChildSlot SlotFor(
         string containerType, string containerText, CellPlace? place, string recordType,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
