@@ -147,6 +147,42 @@ describe('pickRecord', () => {
     await dispatchPromise;
   });
 
+  it('drops the count when the query is emptied', async () => {
+    const { deps } = fakeDeps(vi.fn().mockResolvedValue({ items: [makeRecord(1)], total: 5 }));
+    const { qp, typeValue } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const dispatchPromise = openPicker('Record', [], deps);
+    await vi.waitFor(() => expect(qp.title).toBe('1 of 5'));
+    typeValue('');
+
+    expect(qp.title).toBeUndefined();
+
+    qp.hide();
+    await dispatchPromise;
+  });
+
+  it('drops the count when a later search fails', async () => {
+    vi.useFakeTimers();
+    const searchRecords = vi.fn()
+      .mockResolvedValueOnce({ items: [makeRecord(1)], total: 5 })
+      .mockRejectedValueOnce(new Error('mEdit is down'));
+    const { deps } = fakeDeps(searchRecords);
+    const { qp, typeValue } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const dispatchPromise = openPicker('Record', [], deps);
+    await vi.waitFor(() => expect(qp.title).toBe('1 of 5'));
+    typeValue('Record1');
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(qp.items).toEqual([expect.objectContaining({ label: '$(error) The search failed' })]);
+    expect(qp.title).toBeUndefined();
+
+    qp.hide();
+    await dispatchPromise;
+  });
+
   it('pre-selects the seeded record when the seed is a whole "EditorID [FormKey]" composite', async () => {
     const record = makeRecord(1, 'Seeded');
     const { deps, searchRecords } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
