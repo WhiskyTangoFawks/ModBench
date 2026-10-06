@@ -40,7 +40,7 @@ export interface EditorCommandDeps {
   meditClient: Pick<MEditClient,
     | 'editRecord' | 'searchRecords'
     | 'deleteRecords' | 'copyRecords'
-    | 'getPlugins' | 'getRecordHolders' | 'getRecordsWithChildren'
+    | 'getPlugins' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations'
     | 'getComparison' | 'onNotification' | 'onStatusChanged' | 'onReconnected' | 'getRecordOwner'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];

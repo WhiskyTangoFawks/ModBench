@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
-import { copyModeItems, copiesWritten, copyDestinationItems, heldCopies, isOverride, recordsAskedToReplace, runsUnderPluginsBar, type CopyDestinationItem } from './copyPicks';
+import { copyModeItems, copiesWritten, copyDestinationItems, heldChildren, heldCopies, isOverride, recordsAskedToReplace, runsUnderPluginsBar, withoutDestinations, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { AskQuestion } from '../ports/dialog';
@@ -119,7 +119,7 @@ export function registerDeleteHereCommands(
     }));
 }
 
-type RecordCopyClient = Pick<MEditClient, 'copyRecords' | 'getPlugins' | 'getRecordHolders' | 'getRecordsWithChildren'>;
+type RecordCopyClient = Pick<MEditClient, 'copyRecords' | 'getPlugins' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations'>;
 
 async function recordsWithChildren(
   client: RecordCopyClient, records: readonly RecordAddress[], reporter: Reporter,
@@ -167,40 +167,70 @@ async function copiesAnOverrideReplaces(
   return heldCopies(records, destinations, holders);
 }
 
+async function childrenADeepCopyReplaces(
+  client: RecordCopyClient, withChildren: readonly RecordAddress[], destinations: readonly PluginAddress[],
+): Promise<CopyItem[]> {
+  return withChildren.length === 0 ? [] : heldChildren(await client.getChildrenInDestinations(withChildren, destinations));
+}
+
 function addressLabel(record: RecordArgument, editorIds: ReadonlyMap<string, string | undefined>): string {
   return recordLabel({ ...record, editorId: editorIds.get(record.formKey) });
 }
 
 function askToReplace(
-  held: readonly CopyItem[], editorIds: ReadonlyMap<string, string | undefined>, ask: AskQuestion,
+  held: readonly CopyItem[], heldChildRecords: readonly CopyItem[],
+  editorIds: ReadonlyMap<string, string | undefined>, ask: AskQuestion,
 ): PromiseLike<string | undefined> {
   const named = ({ record, destination }: CopyItem) =>
     `${recordName(record.formKey, editorIds.get(record.formKey))} in ${destination.name} (${destination.origin})`;
-  const question = held.length === 1
-    ? 'Replace the copy a destination already holds?'
-    : `Replace the ${held.length} copies the destinations already hold?`;
+  const question = heldChildRecords.length > 0
+    ? 'Replace what the destinations already hold? Each destination keeps its own copy of a record that has child records.'
+    : held.length === 1
+      ? 'Replace the copy a destination already holds?'
+      : `Replace the ${held.length} copies the destinations already hold?`;
+  const detail = [...held.map(named), ...heldChildRecords.map((item) => `${named(item)}, child records`)].join('\n');
   return ask(
     `${question} The replacement is a working-tree change you can review.`,
-    { modal: true, detail: held.map(named).join('\n') },
+    { modal: true, detail },
     'Replace',
   );
 }
 
-// The copies an override replaces: none when no destination holds a copy, those held once the
-// replacement is confirmed, and undefined when nothing is to be copied.
+interface Replacement {
+  readonly destinations: readonly PluginAddress[];
+  readonly replace: boolean;
+}
+
+interface CopySelection {
+  readonly mode: CopyMode;
+  readonly records: readonly RecordAddress[];
+  readonly withChildren: readonly RecordAddress[];
+}
+
 async function confirmReplacement(
-  client: RecordCopyClient, records: readonly RecordAddress[], destinations: readonly PluginAddress[],
+  client: RecordCopyClient, { mode, records, withChildren }: CopySelection, destinations: readonly PluginAddress[],
   editorIds: ReadonlyMap<string, string | undefined>, ask: AskQuestion, reporter: Reporter,
-): Promise<CopyItem[] | undefined> {
+): Promise<Replacement | undefined> {
+  const deep = mode === 'DeepOverride';
   let held: CopyItem[];
+  let heldChildRecords: CopyItem[] = [];
   try {
-    held = await copiesAnOverrideReplaces(client, records, destinations);
+    held = await copiesAnOverrideReplaces(client, recordsAskedToReplace(mode, records, withChildren), destinations);
   } catch (error) {
     reporter.report('error', 'Could not check which plugins already hold a copy.', errorMessage(error));
     return undefined;
   }
-  if (held.length === 0) return held;
-  return await askToReplace(held, editorIds, ask) === 'Replace' ? held : undefined;
+  try {
+    if (deep) heldChildRecords = await childrenADeepCopyReplaces(client, withChildren, destinations);
+  } catch (error) {
+    reporter.report('error', 'Could not check which plugins already hold child records.', errorMessage(error));
+    return undefined;
+  }
+  if (held.length + heldChildRecords.length === 0) return { destinations, replace: false };
+  if (await askToReplace(held, heldChildRecords, editorIds, ask) === 'Replace') return { destinations, replace: true };
+  if (!deep) return undefined;
+  const kept = withoutDestinations(destinations, [...held, ...heldChildRecords]);
+  return kept.length > 0 ? { destinations: kept, replace: false } : undefined;
 }
 
 function landedMessage(landed: readonly CopyItem[], editorIds: ReadonlyMap<string, string | undefined>): string {
@@ -212,8 +242,8 @@ function landedMessage(landed: readonly CopyItem[], editorIds: ReadonlyMap<strin
   return `Made ${landed.length} copies.`;
 }
 
-/** plugins.md, Pickers, Copy: the mode, then the destinations, then one question when an override
- *  would replace copies the destinations already hold (commands.md, Confirm what destroys). */
+/** plugins.md, Pickers, Copy: the mode, then the destinations, then one question when the copy
+ *  would replace what the destinations already hold (commands.md, Confirm what destroys). */
 export function registerRecordCopyCommands(
   client: RecordCopyClient, reporter: Reporter, ask: AskQuestion,
   // The palette hands no row, so it takes the selection of the view last selected in.
@@ -236,14 +266,13 @@ export function registerRecordCopyCommands(
       const destinations = await pickCopyDestinations(client, mode, records, reporter);
       if (!destinations) return;
 
-      const replacing = isOverride(mode)
-        ? await confirmReplacement(
-          client, recordsAskedToReplace(mode, records, withChildren), destinations, editorIds, ask, reporter)
-        : [];
-      if (replacing === undefined) return;
+      const confirmed = isOverride(mode)
+        ? await confirmReplacement(client, { mode, records, withChildren }, destinations, editorIds, ask, reporter)
+        : { destinations, replace: false };
+      if (!confirmed) return;
 
       await write(async () => {
-        const answer = await client.copyRecords(records, mode, destinations, replacing.length > 0);
+        const answer = await client.copyRecords(records, mode, confirmed.destinations, confirmed.replace);
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
         const written = copiesWritten(answer.landed, mode);
         if (written.length > 0) reporter.landed(landedMessage(written, editorIds));
