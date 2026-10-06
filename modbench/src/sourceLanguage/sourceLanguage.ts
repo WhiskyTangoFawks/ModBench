@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
-import { PLUGIN_SOURCE_FOLDER } from '../instanceAdapter/layout';
+import { PLUGIN_SOURCE_FOLDER } from '../instanceAdapter/instanceAdapter';
 import { hoverAt } from './formKeyHover';
 
 export interface SourceLanguageDeps {
