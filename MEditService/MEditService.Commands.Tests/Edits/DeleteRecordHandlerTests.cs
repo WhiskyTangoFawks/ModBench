@@ -131,8 +131,9 @@ public sealed class DeleteRecordHandlerTests
         {
             npcKey = plugin.Npcs.AddNew("FirstNpc").FormKey;
             var world = plugin.Worldspaces.AddNew("LockedWorld");
-            world.SubCells.Add(BlockHolding(new Cell(plugin) { EditorID = "LockedCell" }, x: 0, y: 0));
-            world.SubCells.Add(BlockHolding(new Cell(plugin) { EditorID = "FreeCell" }, x: 1, y: 1));
+            world.SubCells.Add(CellBlocks.Exterior(new Cell(plugin) { EditorID = "LockedCell", Grid = new CellGrid() }));
+            world.SubCells.Add(CellBlocks.Exterior(
+                new Cell(plugin) { EditorID = "FreeCell", Grid = new CellGrid { Point = new P2Int(32, 32) } }));
             worldKey = world.FormKey;
             otherNpcKey = plugin.Npcs.AddNew("SecondNpc").FormKey;
         });
@@ -153,16 +154,6 @@ public sealed class DeleteRecordHandlerTests
         {
             FileModes.Set(directory, "700");
         }
-    }
-
-    private static WorldspaceBlock BlockHolding(Cell cell, short x, short y)
-    {
-        cell.Grid = new CellGrid { Point = new P2Int(x * 32, y * 32) };
-        var subBlock = new WorldspaceSubBlock { BlockNumberX = (short)(x * 4), BlockNumberY = (short)(y * 4) };
-        subBlock.Items.Add(cell);
-        var block = new WorldspaceBlock { BlockNumberX = x, BlockNumberY = y };
-        block.Items.Add(subBlock);
-        return block;
     }
 
     private static RecordIdentity IdentityCarrying(SourceModFixture mod, string text)

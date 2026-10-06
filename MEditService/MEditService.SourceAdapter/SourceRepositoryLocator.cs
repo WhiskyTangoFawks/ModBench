@@ -349,7 +349,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
         // A worldspace's own top cell is inlined in the worldspace's document, so it has a worldspace
         // above it and no numbered block to be at.
-        if (unit.IsEmbedded) return new CellPlacement(unit.OwnerFormKey, null, null, null, null, IsInterior: false);
+        if (unit.IsEmbedded) return CellPlacement.TopCellOf(unit.OwnerFormKey);
 
         var path = new LayoutPath(unit.RelativePath);
         if (path.UnderGroupBlockLevels) return new CellPlacement(null, null, null, null, null, IsInterior: true);

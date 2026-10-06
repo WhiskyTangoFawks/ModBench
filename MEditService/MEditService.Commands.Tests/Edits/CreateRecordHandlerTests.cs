@@ -114,7 +114,7 @@ public sealed class CreateRecordHandlerTests
     }
 
     [Fact]
-    public void CreateRecord_NamingACell_RefusesAsNotYetSupported()
+    public void CreateRecord_OfAPlacedReferenceInACell_RefusesAsNotYetSupported()
     {
         using var mod = SourceEditFixture.Tracked();
 
@@ -125,24 +125,15 @@ public sealed class CreateRecordHandlerTests
     }
 
     [Fact]
-    public void CreateRecord_NamingAQuest_RefusesAsNotYetSupported()
+    public void CreateRecord_NamingAContainerThePluginLacks_RefusesRecordNotFound_NamingIt()
     {
         using var mod = SourceEditFixture.Tracked();
+        const string gone = "000FFF:" + SourceEditFixture.PluginName;
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "dial", mod.Quest.ToString());
-
-        Assert.Equal(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, result.Refusal);
-        Assert.Contains(mod.Quest.ToString(), result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void CreateRecord_NamingAContainerThePluginLacks_RefusesRecordNotFound()
-    {
-        using var mod = SourceEditFixture.Tracked();
-
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", "000FFF:" + SourceEditFixture.PluginName);
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", gone);
 
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
+        Assert.Contains(gone, result.Message, StringComparison.Ordinal);
     }
 
     [Theory]
