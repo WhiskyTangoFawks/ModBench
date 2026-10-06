@@ -147,7 +147,7 @@ public sealed class RecordQueryService(
     }
 
     // The text is the document carrying the record. A plugin's source tree says which document that is, as it
-    // does for an edit; where no tree holds the record, the text is its own.
+    // does for an edit; a plugin with no tree has only the record's own.
     private RecordDocument? CopyFromText(
         IRecordReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string text)
     {
@@ -157,16 +157,18 @@ public sealed class RecordQueryService(
 
         try
         {
-            var record = SourceRepository.Over(mod, snapshot.GameRelease).RecordFromText(plugin, formKey, text, RequireSchemas());
-            return reads.DocumentFromText(formKey, plugin, loadOrderIndex, record?.Body ?? text);
+            return SourceRepository.Over(mod, snapshot.GameRelease).RecordFromText(plugin, formKey, text, RequireSchemas()) is { } record
+                ? reads.DocumentFromText(formKey, plugin, loadOrderIndex, record.Body)
+                : Unread(reads, formKey, plugin, loadOrderIndex, $"No document in {plugin.Name}'s source tree carries {formKey}.");
         }
         catch (Exception refused) when (refused is UnreadableSourceDocumentException or AmbiguousSourceUnitException)
         {
-            return reads.DocumentFromText(formKey, plugin, loadOrderIndex, CallerText.NoBody) is { } unread
-                ? unread with { ParseDiagnosis = refused.Message }
-                : null;
+            return Unread(reads, formKey, plugin, loadOrderIndex, refused.Message);
         }
     }
+
+    private static RecordDocument? Unread(IRecordReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string why) =>
+        reads.DocumentFromText(formKey, plugin, loadOrderIndex, CallerText.NoBody) is { } unread ? unread with { ParseDiagnosis = why } : null;
 
     private static CompareOverride ToCompareOverride(
         RecordDetail o, ConflictThis? state, string? column, LoadOrderSnapshot snapshot, IRecordReads reads) =>

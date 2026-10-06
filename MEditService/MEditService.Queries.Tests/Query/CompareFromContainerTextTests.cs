@@ -125,6 +125,18 @@ public sealed class CompareFromContainerTextTests : IDisposable
     }
 
     [Fact]
+    public void AChildNoDocumentInTheTreeCarries_IsAColumnSayingSo_NotItsContainerReadAsIt()
+    {
+        File.Delete(Path.Combine(
+            _modFolder, PluginSourceRoot.ContainerDocument(Path.Combine(PluginSourceRoot.For(Plugin.Name), "Cells", "0", "0", Leaf(_room)))));
+
+        var column = ColumnReadFrom(_placed, RealDocuments.BodyOf(_room, Release));
+
+        Assert.Equal((_placed.FormKey.ToString(), (string?)null), (column.FormKey, column.EditorId));
+        Assert.Contains(_placed.FormKey.ToString(), column.ParseDiagnosis, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AChildTwoDocumentsCarry_IsAColumnWithTheEditsRefusal()
     {
         var otherRoom = new Cell(_mod) { EditorID = "OtherRoom" };
