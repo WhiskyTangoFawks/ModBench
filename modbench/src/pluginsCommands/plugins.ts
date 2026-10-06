@@ -112,13 +112,13 @@ function pluginLinesDelta(
   return { added, dropped };
 }
 
-const sameNames = (a: readonly PluginEntry[], b: readonly PluginEntry[]): boolean =>
-  a.length === b.length && a.every((line, i) => line.name === b[i]?.name);
+const changedSinceRead = (order: readonly PluginEntry[], read: readonly PluginEntry[]): boolean =>
+  order.length !== read.length || order.some((line, i) => line.name !== read[i]?.name);
 
 /** `modbench.plugin.sync`: plugins.txt is the inventory the Plugins tree reads, so when disk
  *  disagrees the file is updated. Every input is the value's, handed in; this walks nothing. */
 export async function syncPlugins(
-  access: PluginsAccess, { profile, lines, provided, inData, loadedWithNoLine }: PluginSyncInputs,
+  access: PluginsAccess, { profile, pluginOrder, provided, inData, loadedWithNoLine }: PluginSyncInputs,
 ): Promise<PluginSyncResult> {
   // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder
   // not found is told once, as the instance's state (common.md, States, story 5).
@@ -134,11 +134,7 @@ export async function syncPlugins(
 
   let delta: PluginLinesDelta = { added: [], dropped: [] };
   const result = await changePluginOrder(access, profile, (order) => {
-    // Lines another tool wrote since the value was read are a newer generation than the value's
-    // other inputs, so they are left as they are, for the value that reads them (ADR-0003).
-    if (!sameNames(order, lines)) return [];
-    // The delta is decided from the order the change lands on, so two overlapping runs can
-    // neither add a line twice nor drop one the other just wrote.
+    if (changedSinceRead(order, pluginOrder)) return [];
     delta = pluginLinesDelta(order.map((e) => e.name), addable, inDataNames);
     return [
       ...delta.dropped.map((plugin): PluginOrderChange => ({ kind: 'drop', plugin })),
@@ -151,7 +147,7 @@ export async function syncPlugins(
 /** Plugin sync's inputs, which the instance value carries. */
 export interface PluginSyncInputs {
   readonly profile: string;
-  readonly lines: readonly PluginEntry[];
+  readonly pluginOrder: readonly PluginEntry[];
   readonly provided: ReadonlyMap<string, string>;
   readonly inData: DataFolderPlugins;
   readonly loadedWithNoLine: readonly string[] | undefined;

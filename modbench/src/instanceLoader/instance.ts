@@ -177,7 +177,7 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   overwriteFolders: [],
   paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() },
   modSyncArguments: { profile: '', modFolders: [] },
-  pluginSyncArguments: { profile: '', lines: [], provided: new Map(), inData: { kind: 'unresolved' }, loadedWithNoLine: undefined },
+  pluginSyncArguments: { profile: '', pluginOrder: [], provided: new Map(), inData: { kind: 'unresolved' }, loadedWithNoLine: undefined },
 });
 
 export class Instance implements Subscription {
@@ -437,7 +437,7 @@ export class Instance implements Subscription {
     const modFolderList = modFolders?.all;
     const syncSource = {
       activeProfile: profile, modFolders: modFolderList, files: index.files, dataFolderPlugins, pluginsLoadedWithNoLine,
-      pluginLines: pluginOrder,
+      pluginOrder,
     };
     return {
       mods: entries,

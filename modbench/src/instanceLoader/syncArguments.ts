@@ -8,11 +8,11 @@ export interface ModSyncArguments {
   readonly modFolders: readonly ModFolder[] | undefined;
 }
 
-/** Plugin sync's inputs: the profile it writes, the plugins.txt lines it was read from, the plugins
- *  the instance provides, what the Data folder holds and the plugins the game loads with no line. */
+/** Plugin sync's inputs: the profile it writes, the plugin order the value read, the plugins the
+ *  instance provides, what the Data folder holds and the plugins the game loads with no line. */
 export interface PluginSyncArguments {
   readonly profile: string;
-  readonly lines: readonly PluginEntry[];
+  readonly pluginOrder: readonly PluginEntry[];
   readonly provided: ReadonlyMap<string, string>;
   readonly inData: DataFolderPlugins;
   readonly loadedWithNoLine: readonly string[] | undefined;
@@ -23,12 +23,12 @@ export function modSyncArgumentsOf(source: Pick<InstanceValue, 'activeProfile' |
 }
 
 type PluginSyncSource = Pick<InstanceValue, 'activeProfile' | 'files' | 'dataFolderPlugins' | 'pluginsLoadedWithNoLine'>
-  & { readonly pluginLines: readonly PluginEntry[] };
+  & { readonly pluginOrder: readonly PluginEntry[] };
 
 export function pluginSyncArgumentsOf(source: PluginSyncSource): PluginSyncArguments {
   return {
     profile: source.activeProfile,
-    lines: source.pluginLines,
+    pluginOrder: source.pluginOrder,
     provided: providedPluginsOf(source.files),
     inData: source.dataFolderPlugins,
     loadedWithNoLine: source.pluginsLoadedWithNoLine?.map((plugin) => plugin.name),

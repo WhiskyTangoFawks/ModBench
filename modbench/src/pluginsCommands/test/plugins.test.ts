@@ -152,7 +152,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
   };
 
   const readNow = async (profile: string, inData: DataFolderPlugins, loadedWithNoLine: readonly string[] | undefined) => ({
-    profile, lines: await readPluginLines(dir, profile), provided: await providedPluginsIn(dir, profile), inData, loadedWithNoLine,
+    profile, pluginOrder: await readPluginLines(dir, profile), provided: await providedPluginsIn(dir, profile), inData, loadedWithNoLine,
   });
 
   const run = async (inDataOrTheFolderOnDiskWhenUndefined?: DataFolderPlugins, loadedWithNoLine: readonly string[] = []) => syncPlugins(
@@ -322,7 +322,7 @@ describe('plugins commands hand the Instance adapter the change, decided on the 
   it('plugin sync drops each line nothing provides and adds each provided plugin with none', async () => {
     const { access, handed } = adapterRecordingChanges();
     await syncPlugins(access, {
-      profile: PROFILE, lines: ORDER, provided: new Map([['base.esp', 'Base.esp'], ['new.esp', 'New.esp']]),
+      profile: PROFILE, pluginOrder: ORDER, provided: new Map([['base.esp', 'Base.esp'], ['new.esp', 'New.esp']]),
       inData: { kind: 'listed', names: new Set() }, loadedWithNoLine: [],
     });
     expect(handed).toEqual([[{ kind: 'drop', plugin: 'Gone.esp' }, { kind: 'add', plugin: 'New.esp' }]]);

@@ -171,17 +171,20 @@ describe('plugin sync and the Instance close a loop that settles', () => {
 });
 
 describe('plugin sync keeps another tool\'s plugins.txt write', () => {
-  it('a value read before the mod manager enabled a mod and listed its plugin drops none of its line', async () => {
-    const { root, instance, plugins } = await wiredInstance();
+  it('keeps the line the mod manager wrote after the value was read, in its place and state, through the next value\'s sync', async () => {
+    const { root, instance, syncs, plugins } = await wiredInstance();
     const readBefore = instance.value;
     await mkdir(join(root, 'mods', 'Extra'), { recursive: true });
     await writeFile(join(root, 'mods', 'Extra', 'Extra.esp'), 'plugin');
     await writeFile(join(root, 'profiles', PROFILE, 'modlist.txt'), '+Extra\r\n+Provider\r\n');
-    await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n*Extra.esp\r\n');
+    await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Extra.esp\r\n*Base.esp\r\n');
 
     await pluginSyncOver(accessTo(root))(readBefore.pluginSyncArguments);
+    watcherFor('profiles/*/plugins.txt').fireChange();
+    const { writes, quiescent } = await driveToQuiescence(instance, syncs, 8);
 
-    expect(await plugins()).toBe('*Base.esp\r\n*Extra.esp\r\n');
+    expect({ writes, quiescent }).toEqual({ writes: 0, quiescent: true });
+    expect(await plugins()).toBe('*Extra.esp\r\n*Base.esp\r\n');
   });
 });
 
