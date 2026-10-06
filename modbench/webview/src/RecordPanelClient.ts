@@ -1,5 +1,6 @@
 import type { ColumnKey, CompareResult, PluginLoadFailure } from './types';
-import { columnKey } from '../../src/wire/columnKey';
+import { columnKey, copyColumnKey } from '../../src/wire/columnKey';
+import { pluginAddressOf, samePluginAddress } from '../../src/wire/pluginAddress';
 import { parseCompareResult } from './parseCompareResult';
 import { requestRecordLoad } from './nativeBridge';
 import { tabState } from './vscode';
@@ -20,6 +21,8 @@ export type LoadResult =
       // settled-looking grid over a comparison nothing checked.
       conflictsComputed: boolean;
       loadFailures: PluginLoadFailure[];
+      // The column of the copy the tab's document holds; undefined when the read holds no such copy.
+      fileColumn: ColumnKey | undefined;
     }
   | { ok: false; error: string };
 
@@ -55,13 +58,18 @@ export function createRecordPanelClient(): RecordPanelClient {
       // Keyed by compound identity (ADR-0012), so one origin's mutability never wins for another
       // origin's plugin of the same filename.
       const pluginList = answer.plugins;
+      const result = answer.compare && parseCompareResult(answer.compare);
+      // Several records compared put the document's copy first, so the first match is it.
+      const fileCopy = result?.overrides.find(o =>
+        o.formKey === formKey && samePluginAddress(pluginAddressOf(o), answer.documentPlugin));
       return {
         ok: true,
-        result: answer.compare && parseCompareResult(answer.compare),
+        result,
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p))) : null,
         trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p))) : null,
         conflictsComputed: answer.conflictsComputed,
         loadFailures: answer.loadFailures,
+        fileColumn: fileCopy && copyColumnKey(fileCopy),
       };
     },
   };

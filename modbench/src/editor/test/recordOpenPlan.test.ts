@@ -6,21 +6,27 @@ const B = { formKey: '000802:A.esp' };
 
 describe('recordOpenPlan', () => {
   it('a click on one record opens it as a preview', () => {
-    expect(recordOpenPlan(A, [])).toEqual({ addresses: [A], beside: false, preview: true });
+    expect(recordOpenPlan(A, [])).toEqual({ addresses: [A], placement: 'active', preview: true });
   });
 
   it('placement: beside opens pinned and beside', () => {
     expect(recordOpenPlan({ ...A, placement: 'beside' }, []))
-      .toEqual({ addresses: [A], beside: true, preview: false });
+      .toEqual({ addresses: [A], placement: 'beside', preview: false });
   });
 
   it('records that each ask beside open beside, each record on its own', () => {
     expect(recordOpenPlan([{ ...A, placement: 'beside' }, { ...B, placement: 'beside' }], []))
-      .toEqual({ addresses: [A, B], beside: true, preview: false });
+      .toEqual({ addresses: [A, B], placement: 'beside', preview: false });
+  });
+
+  it('records that each name a tab\'s place open in it', () => {
+    const place = { document: 'modbench-rendered:/Data/A.esp/Gun.json', viewColumn: 2 };
+    expect(recordOpenPlan([{ ...A, placement: place }, { ...B, placement: place }], []))
+      .toEqual({ addresses: [A, B], placement: place, preview: false });
   });
 
   it('several records without a placement each open pinned', () => {
-    expect(recordOpenPlan([A, B], [])).toEqual({ addresses: [A, B], beside: false, preview: false });
+    expect(recordOpenPlan([A, B], [])).toEqual({ addresses: [A, B], placement: 'active', preview: false });
   });
 
   it('reads a Plugins record row as its own copy: its record\'s plugin, in the row\'s origin', () => {
@@ -35,7 +41,7 @@ describe('recordOpenPlan', () => {
 
   it('keeps the copy an Argument names', () => {
     const copy = { ...A, plugin: { name: 'A.esp', origin: 'ModA' } };
-    expect(recordOpenPlan({ ...copy, placement: 'beside' }, [])).toEqual({ addresses: [copy], beside: true, preview: false });
+    expect(recordOpenPlan({ ...copy, placement: 'beside' }, [])).toEqual({ addresses: [copy], placement: 'beside', preview: false });
   });
 
   it('reads a Plugin Header row as its plugin\'s copy of the header record', () => {
@@ -54,7 +60,7 @@ describe('recordOpenPlan', () => {
 
   it('with no Argument, opens the records selected in the focused view, each pinned in a tab of its own', () => {
     const rows = [{ kind: 'record', record: { formKey: A.formKey } }, { formKey: B.formKey }];
-    expect(recordOpenPlan(undefined, rows)).toEqual({ addresses: [A, B], beside: false, preview: false });
+    expect(recordOpenPlan(undefined, rows)).toEqual({ addresses: [A, B], placement: 'active', preview: false });
   });
 
   it('with no Argument and no record selected, opens nothing', () => {

@@ -7,7 +7,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection } from '../../src/wire/messages';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
@@ -329,6 +329,74 @@ describe('RecordPanel — a column header', () => {
     renderPanel(compareResult);
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
     expect(screen.queryByText(/MyMod\.esp \(/)).not.toBeInTheDocument();
+  });
+});
+
+describe('RecordPanel — the file\'s column', () => {
+  const twoTracked: CompareResult = compareResultFixture({
+    overrides: [
+      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'File Name' }] }),
+      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Other.esp', origin: 'ModB', isWinner: true, editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Other Name' }] }),
+    ],
+    diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp|ModA': 'File Name', 'Other.esp|ModB': 'Other Name' }, winnerColumn: 'Other.esp|ModB' })],
+  });
+  const bothTracked = [{ name: 'MyMod.esp', origin: 'ModA', isTracked: true }, { name: 'Other.esp', origin: 'ModB', isTracked: true }];
+  const headerOf = (plugin: string) => required(screen.getByText(plugin).closest('th'), `${plugin}'s header`);
+
+  beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is the one column a cell edits in: a cell of another tracked column opens no editor and tells no edit', async () => {
+    renderPanel(twoTracked, { plugins: bothTracked, fileColumn: 'MyMod.esp|ModA' });
+    await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Other Name'));
+    fireEvent.doubleClick(screen.getByText('Other Name'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(lastToldCell(vscode.postMessage)).toMatchObject({ plugin: 'Other.esp' });
+    expect(hasSection(lastToldCell(vscode.postMessage), 'editableCell')).toBe(false);
+
+    fireEvent.doubleClick(screen.getByText('File Name'));
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  it('is marked in its header, to the eye and to a screen reader, and no other column is', async () => {
+    renderPanel(twoTracked, { plugins: bothTracked, fileColumn: 'MyMod.esp|ModA' });
+    await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
+
+    expect(headerOf('MyMod.esp')).toHaveAttribute('aria-current', 'true');
+    expect(headerOf('MyMod.esp').querySelector('.codicon.codicon-edit')).not.toBeNull();
+    expect(headerOf('Other.esp')).not.toHaveAttribute('aria-current');
+    expect(headerOf('Other.esp').querySelector('.codicon')).toBeNull();
+  });
+
+  it('opens another column\'s copy on Enter or Space on its focused header, and nothing on another key or on its own header', async () => {
+    renderPanel(twoTracked, { plugins: bothTracked, fileColumn: 'MyMod.esp|ModA' });
+    await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
+    vi.mocked(vscode.postMessage).mockClear();
+
+    expect(headerOf('Other.esp')).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(headerOf('MyMod.esp'), { key: 'Enter' });
+    fireEvent.keyDown(headerOf('Other.esp'), { key: 'ArrowDown' });
+    fireEvent.keyDown(within(headerOf('Other.esp')).getByRole('button'), { key: 'Enter' });
+    fireEvent.keyDown(headerOf('Other.esp'), { key: 'Enter' });
+    fireEvent.keyDown(headerOf('Other.esp'), { key: ' ' });
+
+    expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE)).toHaveLength(2);
+  });
+
+  it('opens another column\'s copy in this tab on a click on its header, and nothing on a click on its own or on a collapse control', async () => {
+    renderPanel(twoTracked, { plugins: bothTracked, fileColumn: 'MyMod.esp|ModA' });
+    await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
+    vi.mocked(vscode.postMessage).mockClear();
+
+    fireEvent.click(headerOf('MyMod.esp'));
+    fireEvent.click(within(headerOf('Other.esp')).getByRole('button'));
+    fireEvent.click(headerOf('Other.esp'));
+
+    expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE)).toEqual([[{
+      type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: [{ formKey: '000001:Fallout4.esm', plugin: { name: 'Other.esp', origin: 'ModB' } }],
+    }]]);
   });
 });
 
@@ -738,6 +806,16 @@ describe('RecordPanel — struct sub-rows', () => {
     await waitFor(() => expect(screen.getByText('X')).toBeInTheDocument());
     expect(screen.getByText('Y')).toBeInTheDocument();
     expect(within(required(screen.getByText('Bounds').closest('tr'), 'the Bounds row')).getByText('▼')).toBeInTheDocument();
+  });
+
+  it('a click on a row\'s arrow focuses its label as it collapses the row, as a tree\'s twistie selects its row', async () => {
+    renderPanel(structCompareResult);
+    await waitFor(() => screen.getByText('X'));
+
+    fireEvent.click(within(required(screen.getByText('Bounds').closest('tr'), 'the Bounds row')).getByText('▼'));
+
+    expect(screen.queryByText('X')).not.toBeInTheDocument();
+    expect(screen.getByText('Bounds').closest('td')).toHaveAttribute('data-focused-cell');
   });
 
   it('double clicking the label collapses an expanded row and expands it again', async () => {
@@ -2333,6 +2411,26 @@ describe('RecordPanel — several records side by side', () => {
     expect(screen.getAllByText('(tracked)')).toHaveLength(2);
   });
 
+  it('opens another record\'s copy in this tab on a click on its header, with the same records as its columns, that one first as the file', async () => {
+    const KNIFE = '000803:B.esp';
+    const threeRecords = structuredClone(sideBySide);
+    threeRecords.overrides.push(compareOverride({
+      formKey: KNIFE, plugin: 'B.esp', origin: 'ModB', isWinner: true, editorId: 'Knife', fields: [{ metadata: strMeta, value: 'Knife Name' }], conflictThis: null, column: '2#B.esp|ModB',
+    }));
+    required(threeRecords.diffs[0], 'the Name row').values['2#B.esp|ModB'] = 'Knife Name';
+    renderPanel(threeRecords, { plugins: tracked, fileColumn: '0#A.esp' });
+    await waitFor(() => expect(screen.getByText('Knife Name')).toBeInTheDocument());
+    vi.mocked(vscode.postMessage).mockClear();
+
+    fireEvent.click(required(screen.getByText('B.esp').closest('th'), 'the Knife column\'s header'));
+
+    const A = { name: 'A.esp', origin: 'Data' };
+    expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE)).toEqual([[{
+      type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE,
+      records: [{ formKey: KNIFE, plugin: { name: 'B.esp', origin: 'ModB' } }, { formKey: GUN, plugin: A }, { formKey: AMMO, plugin: A }],
+    }]]);
+  });
+
   it('names the first record, the file\'s, in its header, though another record\'s copy is a winner', async () => {
     const firstLoses = structuredClone(sideBySide);
     required(firstLoses.overrides[0], 'the first copy').isWinner = false;
@@ -2357,18 +2455,19 @@ describe('RecordPanel — several records side by side', () => {
     expect(screen.queryByText(required(recordPanelIncompleteMessage(false), 'the message'))).not.toBeInTheDocument();
   });
 
-  it('writes an edit in a column to that column\'s own record', async () => {
-    renderPanel(sideBySide, { plugins: tracked });
+  it('edits in the first record\'s column alone, the file\'s, though another record\'s copy is in the same tracked plugin', async () => {
+    renderPanel(sideBySide, { plugins: tracked, fileColumn: '0#A.esp' });
     await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
-    vi.mocked(vscode.postMessage).mockClear();
 
     fireEvent.doubleClick(screen.getByText('Ammo Name'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    fireEvent.doubleClick(screen.getByText('Gun Name'));
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'New name' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
-      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: AMMO, plugin: 'A.esp',
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: GUN, plugin: 'A.esp',
     }));
   });
 

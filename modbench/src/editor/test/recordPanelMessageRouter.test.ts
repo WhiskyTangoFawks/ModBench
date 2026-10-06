@@ -42,7 +42,8 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     reply: vi.fn(),
     titleFromRead: vi.fn(),
     plugin: { name: 'A.esp', origin: 'ModA' },
-    unsavedText: () => undefined,
+    documentText: () => Promise.resolve(undefined),
+    tabPlace: () => undefined,
     readAnswered: vi.fn(),
     conflictsComputed: () => true,
     loadFailures: () => [],
@@ -126,6 +127,29 @@ describe('routeRecordPanelMessage — ADD_ELEMENT', () => {
   });
 });
 
+describe('routeRecordPanelMessage — OPEN_IN_PLACE', () => {
+  beforeEach(() => { executeCommand.mockReset(); });
+
+  const knife = { formKey: '000803:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
+  const gun = { formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } };
+
+  it('fires open with the records a column\'s header names, each placed in the asking tab\'s place', async () => {
+    const place = { document: 'file:///mods/ModA/Gun.json', viewColumn: 2 };
+
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: [knife, gun] }, makeDeps({ tabPlace: () => place }));
+
+    expect(executeCommand.mock.calls).toEqual([
+      ['modbench.record.open', [{ ...knife, placement: place }, { ...gun, placement: place }]],
+    ]);
+  });
+
+  it('opens nothing for a tab that has no place, as one VS Code has not shown', async () => {
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: [knife] }, makeDeps({ tabPlace: () => undefined }));
+
+    expect(executeCommand).not.toHaveBeenCalled();
+  });
+});
+
 describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER', () => {
   const message = { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] };
 
@@ -167,7 +191,7 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdi
   const plugins = [pluginMetadataFixture({ name: 'A.esp', isImmutable: true })];
   const loadMessage = { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp', columns: [] };
 
-  it('answers with the comparison, the plugin list and the settled conflictsComputed', async () => {
+  it('answers with the comparison, the plugin list, the settled conflictsComputed and the plugin whose copy the tab\'s document holds', async () => {
     meditClient.setQueryAnswer('getComparison', compare);
     meditClient.setQueryAnswer('getPlugins', plugins);
     const reply = vi.fn();
@@ -176,6 +200,7 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdi
 
     expect(reply).toHaveBeenCalledWith({
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [],
+      documentPlugin: { name: 'A.esp', origin: 'ModA' },
     });
   });
 
@@ -199,6 +224,7 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdi
 
     expect(reply).toHaveBeenCalledWith({
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, plugins, conflictsComputed: true, loadFailures: [],
+      documentPlugin: { name: 'A.esp', origin: 'ModA' },
     });
   });
 
@@ -276,6 +302,7 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdi
 
     expect(reply).toHaveBeenCalledWith({
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [],
+      documentPlugin: { name: 'A.esp', origin: 'ModA' },
     });
   });
 });

@@ -530,6 +530,7 @@ describe('a tracked copy of a record', () => {
   const fileTabs = () => openTabs().filter((t) =>
     t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath === TRACKED_FS_PATH && t.input.viewType === 'modbench.record');
   const reads = () => requestLog.filter((line) => line === `GET /records/${encodeURIComponent(TRACKED_FORM_KEY)}/compare`).length;
+  const trackedPlugin = present(MOCK_PLUGINS.find((p) => p.name === TRACKED_PLUGIN), 'the tracked plugin\'s row');
 
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
@@ -544,6 +545,17 @@ describe('a tracked copy of a record', () => {
 
     assert.strictEqual(tab?.label, 'TrackedGun.json');
     assert.deepStrictEqual(fileTabs().map((t) => t.label), ['TrackedGun.json']);
+  });
+
+  it('reads its own column from the file on disk while it is saved and its plugin is not active, so it shows', async () => {
+    Object.assign(trackedPlugin, { inLoadOrder: false });
+    try {
+      await vscode.commands.executeCommand('modbench.record.open', trackedCopy);
+
+      await waitFor('a read of the saved text', () => comparedTexts.includes(fs.readFileSync(TRACKED_FILE, 'utf8')));
+    } finally {
+      Object.assign(trackedPlugin, { inLoadOrder: true });
+    }
   });
 
   it('reads its own column from the file\'s unsaved text', async () => {
@@ -673,6 +685,78 @@ describe('a child record of a tracked plugin', () => {
     await replaceAll(container, fromContainer);
     for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: plugin.name, origin: plugin.origin, keys: [TRACKED_FORM_KEY] });
     await waitFor('the child\'s document to show the container\'s save', () => child.getText() === fromContainer);
+  });
+});
+
+describe('a record opened from a column\'s header, in its tab\'s place', () => {
+  const copyOf = (formKey: string) => ({ formKey, plugin: { name: 'Fallout4.esm', origin: 'Data' } });
+  const shown = () => vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => `${t.label}${t.isPreview ? ' (preview)' : ''}`));
+  const openTab = async (formKey: string) => {
+    await vscode.commands.executeCommand('modbench.record.open', copyOf(formKey));
+    await waitFor(`${formKey}'s tab active`, () => vscode.window.tabGroups.activeTabGroup.activeTab?.label === renderedName(formKey));
+  };
+  const openPinned = async (formKey: string) => {
+    await openTab(formKey);
+    await vscode.commands.executeCommand('workbench.action.keepEditor');
+  };
+  const placeOf = (formKey: string) => {
+    const group = vscode.window.tabGroups.all.find((g) => g.tabs.some((t) => t.label === renderedName(formKey)));
+    const input = group?.tabs.find((t) => t.label === renderedName(formKey))?.input;
+    if (!group || !(input instanceof vscode.TabInputCustom)) throw new Error(`expected ${formKey}'s record tab`);
+    return { document: input.uri.toString(), viewColumn: group.viewColumn };
+  };
+  const openInPlaceOf = (replaced: string, formKey: string) =>
+    vscode.commands.executeCommand('modbench.record.open', [{ ...copyOf(formKey), placement: placeOf(replaced) }]);
+  const openInPlace = (formKey: string) => {
+    const active = vscode.window.tabGroups.activeTabGroup.activeTab?.label;
+    const replaced = ['80', '81', '82', '83', '84'].map((n) => `Fallout4.esm:0000${n}`).find((f) => renderedName(f) === active);
+    if (!replaced) throw new Error('expected a record tab active');
+    return openInPlaceOf(replaced, formKey);
+  };
+  const tabsAre = (labels: string[]) => waitFor(`the tabs ${labels.join(', ')}`, () => JSON.stringify(shown()) === JSON.stringify([labels]));
+
+  before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
+  afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
+
+  it('takes a pinned tab\'s place, pinned, whichever side of the active tab VS Code opens a new one on', async () => {
+    const positioning = vscode.workspace.getConfiguration('workbench.editor');
+    await positioning.update('openPositioning', 'last', vscode.ConfigurationTarget.Workspace);
+    try {
+      for (const formKey of ['Fallout4.esm:000080', 'Fallout4.esm:000081', 'Fallout4.esm:000082']) await openPinned(formKey);
+      await openTab('Fallout4.esm:000081');
+
+      await openInPlace('Fallout4.esm:000083');
+
+      await tabsAre(['Fallout4.esm:000080', 'Fallout4.esm:000083', 'Fallout4.esm:000082'].map(renderedName));
+    } finally {
+      await positioning.update('openPositioning', undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+
+  it('takes a preview tab\'s place, as a preview', async () => {
+    await openPinned('Fallout4.esm:000080');
+    await openTab('Fallout4.esm:000081');
+
+    await openInPlace('Fallout4.esm:000083');
+
+    await tabsAre([renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000083')} (preview)`]);
+  });
+
+  it('takes the tab\'s place with a record already open in a tab left of it, which moves there', async () => {
+    for (const n of ['80', '81', '82', '83', '84']) await openPinned(`Fallout4.esm:0000${n}`);
+    await openTab('Fallout4.esm:000083');
+
+    await openInPlace('Fallout4.esm:000081');
+
+    await tabsAre(['80', '82', '81', '84'].map((n) => renderedName(`Fallout4.esm:0000${n}`)));
+  });
+
+  it('takes the place of the tab it was asked from, though another tab is active by the time it opens', async () => {
+    for (const n of ['80', '81', '82']) await openPinned(`Fallout4.esm:0000${n}`);
+
+    await openInPlaceOf('Fallout4.esm:000081', 'Fallout4.esm:000083');
+
+    await tabsAre(['80', '83', '82'].map((n) => renderedName(`Fallout4.esm:0000${n}`)));
   });
 });
 
