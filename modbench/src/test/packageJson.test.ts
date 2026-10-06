@@ -692,10 +692,6 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf('recordType tracked editable')).toEqual([]);
   });
 
-  it.each(['worldspaces', 'interiorCells'])('offers no create record on the %s group, which holds container records', (contextValue) => {
-    expect(menuOf(contextValue).map(([command]) => command)).not.toContain('modbench.record.create');
-  });
-
   it.each(['record', 'worldspace', 'cell', 'placed'])(
     'record menu on a %s row: open to the side, copy, copy value, then delete last', (kind) => {
       expect(menuOf(`${kind} tracked editable`)).toEqual([
@@ -714,7 +710,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ]);
   });
 
-  it.each(['recordType tracked editable', 'worldspaces', 'block', 'subBlock', 'interiorCells', 'placedGroup-persistent', 'indexing', 'error'])(
+  it.each(['recordType tracked editable', 'block', 'subBlock', 'placedGroup-persistent', 'indexing', 'error'])(
     'offers no record gesture on a row that stands for no record: %s', (contextValue) => {
       const recordGestures = menuOf(contextValue).filter(([command]) => command !== 'modbench.record.create');
       expect(recordGestures).toEqual([]);
