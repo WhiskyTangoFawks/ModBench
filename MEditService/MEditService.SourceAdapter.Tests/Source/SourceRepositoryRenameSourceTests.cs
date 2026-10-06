@@ -176,6 +176,18 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old));
     }
 
+    [Fact]
+    public void RenameSource_OfATreeWhoseGroupMetadataIsNoJson_RefusesNamingIt_WithoutCallingItARecord()
+    {
+        var broken = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Cells", "0", "0", "GroupRecordData.json");
+        File.WriteAllText(broken, "{");
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.RenameSource(Old, "New.esp"));
+
+        Assert.Equal(Path.GetRelativePath(_modFolder, broken), refused.File?.SourceRelativePath);
+        Assert.DoesNotContain("filed as a record", refused.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("""{ "FormKey": "000801:Old.esp", """)]
     [InlineData("""{ "FormKey": "000801:Old.esp" } // a comment no document reader takes""")]
@@ -187,7 +199,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
 
         var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.RenameSource(Old, "New.esp"));
 
-        Assert.Contains("SelfNpc - 000801_Old.esp.json", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(Path.GetRelativePath(_modFolder, broken), refused.File?.SourceRelativePath);
         Assert.Equal(before, TreeOf(Old.Name));
         Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
     }

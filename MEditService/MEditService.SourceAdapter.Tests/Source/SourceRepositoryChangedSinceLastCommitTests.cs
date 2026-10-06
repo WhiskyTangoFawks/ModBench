@@ -144,7 +144,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         var repository = Tracked();
         File.WriteAllText(Path.Combine(_modFolder, ".git", "index"), "not an index");
 
-        Assert.Throws<UnreadableSourceDocumentException>(() => ChangesIn(repository));
+        Assert.Throws<GitCommandFailedException>(() => ChangesIn(repository));
     }
 
     [Fact]

@@ -11,9 +11,7 @@ public readonly record struct EmbeddedChildSpan(
     int SlotNameStart,
     int SlotValueEnd,
     bool SlotIsList,
-    string? Discriminator,
-    string SlotName,
-    string? EditorId);
+    string? Discriminator);
 
 /// <summary>The byte span a child occupies in its owner's document, keyed on the schema's slot
 /// facts and reading nothing back as a live object. The splice and the document reads ask
@@ -22,18 +20,15 @@ public static class EmbeddedChildLocator
 {
     private const string FormKeyMember = RecordMembers.FormKey;
 
-    private const string EditorIdMember = RecordMembers.EditorId;
-
     /// <summary>Written ahead of the fields for a slot whose element type is abstract, and the member
     /// a standalone document of an unambiguous type omits.</summary>
     public const string DiscriminatorMember = "MutagenObjectType";
 
     /// <summary>The class name the owner's slots are keyed by: from the record type its path decides,
-    /// or from the document's own discriminator when the path cannot name one.</summary>
+    /// or from the document's own discriminator when the path names none that resolves.</summary>
     public static string? ContainerTypeName(string? ownerRecordType, byte[] ownerBytes, GameRelease release) =>
-        ownerRecordType is { } recordType
-            ? RecordTypeDispatch.For(release).ConcreteFor(recordType)?.Name
-            : RootDiscriminator(ownerBytes);
+        (ownerRecordType is { } recordType ? RecordTypeDispatch.For(release).ConcreteFor(recordType)?.Name : null)
+            ?? RootDiscriminator(ownerBytes);
 
     /// <summary>Where <paramref name="formKey"/> sits inside <paramref name="ownerBytes"/>, or null
     /// when no child slot of the owner carries it. Malformed text carries nothing.</summary>
@@ -54,8 +49,7 @@ public static class EmbeddedChildLocator
         }
     }
 
-    /// <summary>The type the document at its root declares, for a path that cannot name one.</summary>
-    internal static string? RootDiscriminator(byte[] ownerBytes)
+    private static string? RootDiscriminator(byte[] ownerBytes)
     {
         try
         {
@@ -72,7 +66,7 @@ public static class EmbeddedChildLocator
         }
     }
 
-    private readonly record struct ObjectScan(string? FormKey, string? Discriminator, string? EditorId, EmbeddedChildSpan? Deeper);
+    private readonly record struct ObjectScan(string? FormKey, string? Discriminator, EmbeddedChildSpan? Deeper);
 
     // Enters on the object's '{' and leaves on its '}'.
     private static ObjectScan ScanObject(
@@ -80,7 +74,6 @@ public static class EmbeddedChildLocator
     {
         string? ownFormKey = null;
         string? discriminator = null;
-        string? editorId = null;
         EmbeddedChildSpan? found = null;
 
         while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
@@ -93,11 +86,6 @@ public static class EmbeddedChildLocator
             if (reader.TokenType == JsonTokenType.String && member.Equals(FormKeyMember, StringComparison.Ordinal))
             {
                 ownFormKey = reader.GetString();
-                continue;
-            }
-            if (reader.TokenType == JsonTokenType.String && member.Equals(EditorIdMember, StringComparison.Ordinal))
-            {
-                editorId = reader.GetString();
                 continue;
             }
             if (reader.TokenType == JsonTokenType.String && member.Equals(DiscriminatorMember, StringComparison.Ordinal))
@@ -114,18 +102,18 @@ public static class EmbeddedChildLocator
 
             found = reader.TokenType switch
             {
-                JsonTokenType.StartObject => InSingleSlot(ref reader, formKey, memberStart, member, slots),
-                JsonTokenType.StartArray => InListSlot(ref reader, formKey, memberStart, member, slots),
+                JsonTokenType.StartObject => InSingleSlot(ref reader, formKey, memberStart, slots),
+                JsonTokenType.StartArray => InListSlot(ref reader, formKey, memberStart, slots),
                 _ => null,
             };
         }
 
-        return new ObjectScan(ownFormKey, discriminator, editorId, found);
+        return new ObjectScan(ownFormKey, discriminator, found);
     }
 
     // Enters on the slot value's '{' and leaves on its '}'.
     private static EmbeddedChildSpan? InSingleSlot(
-        ref Utf8JsonReader reader, string formKey, int memberStart, string slotName, ContainerSlots slots)
+        ref Utf8JsonReader reader, string formKey, int memberStart, ContainerSlots slots)
     {
         var start = (int)reader.TokenStartIndex;
         var scan = ScanObject(ref reader, null, formKey, slots);
@@ -134,7 +122,7 @@ public static class EmbeddedChildLocator
         if (scan.Deeper is { } deeper) return deeper;
 
         return string.Equals(scan.FormKey, formKey, StringComparison.Ordinal)
-            ? new EmbeddedChildSpan(start, end, memberStart, end, SlotIsList: false, scan.Discriminator, slotName, scan.EditorId)
+            ? new EmbeddedChildSpan(start, end, memberStart, end, SlotIsList: false, scan.Discriminator)
             : null;
     }
 
@@ -142,7 +130,7 @@ public static class EmbeddedChildLocator
 
     // Every element is walked even after a hit, so the reader leaves this slot on its ']'.
     private static EmbeddedChildSpan? InListSlot(
-        ref Utf8JsonReader reader, string formKey, int memberStart, string slotName, ContainerSlots slots)
+        ref Utf8JsonReader reader, string formKey, int memberStart, ContainerSlots slots)
     {
         EmbeddedChildSpan? found = null;
 
@@ -161,8 +149,7 @@ public static class EmbeddedChildLocator
 
             found = scan.Deeper
                 ?? (string.Equals(scan.FormKey, formKey, StringComparison.Ordinal)
-                    ? new EmbeddedChildSpan(
-                        start, end, memberStart, PendingSlotEnd, SlotIsList: true, scan.Discriminator, slotName, scan.EditorId)
+                    ? new EmbeddedChildSpan(start, end, memberStart, PendingSlotEnd, SlotIsList: true, scan.Discriminator)
                     : null);
         }
 

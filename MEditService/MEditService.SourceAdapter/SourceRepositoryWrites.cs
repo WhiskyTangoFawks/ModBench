@@ -75,8 +75,8 @@ internal sealed class SourceRepositoryWrites(
         locator.LocateToPlace(plugin, document.Identity) is { } unit && (unit.IsEmbedded || File.Exists(unit.FullPath))
             ? ChangesToHeld(unit, document)
             : throw new SourceUnitNotFoundException(
-                $"No document in {plugin.Name}'s tree holds {document.FormKey}, so there is none to rewrite. It was moved or " +
-                "removed outside Modbench. Check the Source Control panel.");
+                $"No document in {plugin.Name}'s tree holds {document.FormKey}, so there is none to rewrite. " +
+                SourceUnitNotFoundException.MovedOrRemovedOutside);
 
     private SourceChanges ChangesToPlace(PluginAddress plugin, SourceDocument document, CellPlacement? placement)
     {
@@ -353,7 +353,9 @@ public sealed class SourceUnitNotFoundException : InvalidOperationException
         "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit " +
         "so the index re-reads the tree.";
 
-    public static string NotCarried(string? relativePath, string formKey) =>
+    public const string MovedOrRemovedOutside = "It was moved or removed outside Modbench. Check the Source Control panel.";
+
+    public static string NotCarried(string relativePath, string formKey) =>
         $"{relativePath} was found holding {formKey}, but its own text does not carry it. {DefectOrOutsideChange}";
 
     public SourceUnitNotFoundException() : base("No document holds the record.")

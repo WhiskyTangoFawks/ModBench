@@ -120,6 +120,38 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         Assert.Null(Repository.GetCellAt(Plugin, Worldspace, 10, -9, Schemas));
     }
 
+    private static string WorldspaceDocument =>
+        PluginSourceRoot.ContainerDocument(Path.Combine("plugin-source", PluginName, "Worldspaces", "000800_Vendor.esp"));
+
+    private static string CellDocumentAtNineMinusNine =>
+        PluginSourceRoot.ContainerDocument(Path.Combine(
+            "plugin-source", PluginName, "Worldspaces", "000800_Vendor.esp", "0, -1", "1, -2", "000801_Vendor.esp"));
+
+    [Fact]
+    public void GetCellAt_AGridWhoseCellDocumentIsNoJson_RefusesNamingThatFile()
+    {
+        InTheTree(Worldspace, "wrld");
+        Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
+        File.WriteAllText(Path.Combine(_modFolder, CellDocumentAtNineMinusNine), "{");
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.GetCellAt(Plugin, Worldspace, 9, -9, Schemas));
+
+        Assert.Equal(CellDocumentAtNineMinusNine, refused.File?.SourceRelativePath);
+    }
+
+    [Fact]
+    public void WorldspaceOf_AnExteriorCellWhoseWorldspaceDeclaresNoFormKey_RefusesNamingTheWorldspacesFile()
+    {
+        InTheTree(Worldspace, "wrld");
+        var cell = ACellAt("9, -9");
+        Repository.PutInWorldspace(Plugin, cell, Worldspace);
+        File.WriteAllText(Path.Combine(_modFolder, WorldspaceDocument), "{}");
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.WorldspaceOf(Plugin, cell.Identity));
+
+        Assert.Equal(WorldspaceDocument, refused.File?.SourceRelativePath);
+    }
+
     [Fact]
     public void WorldspaceOf_AnExteriorCell_IsTheWorldspaceItSitsIn()
     {
