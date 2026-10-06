@@ -103,17 +103,6 @@ public sealed class CreateRecordHandlerTests
     }
 
     [Fact]
-    public void CreateRecord_NamingAWorldspace_RefusesAsNotYetSupported()
-    {
-        using var mod = SourceEditFixture.Tracked();
-
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "cell", mod.Worldspace.ToString(), new GridPosition(1, -2));
-
-        Assert.Equal(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, result.Refusal);
-        Assert.Contains(mod.Worldspace.ToString(), result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void CreateRecord_NamingAContainerThePluginLacks_RefusesRecordNotFound_NamingIt()
     {
         using var mod = SourceEditFixture.Tracked();

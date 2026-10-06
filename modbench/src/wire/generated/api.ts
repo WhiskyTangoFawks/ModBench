@@ -898,9 +898,9 @@ export interface components {
         FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
         GridPosition: {
             /** Format: int32 */
-            x: number;
+            x?: number | null;
             /** Format: int32 */
-            y: number;
+            y?: number | null;
         };
         InteriorCellBlock: {
             /** Format: int32 */
