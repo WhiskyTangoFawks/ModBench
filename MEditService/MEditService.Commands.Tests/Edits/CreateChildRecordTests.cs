@@ -53,6 +53,7 @@ public sealed class CreateChildRecordTests : IDisposable
         { "npc_", nameof(ContainerModFixture.Quest) },
         { "land", nameof(ContainerModFixture.Cell) },
         { "navm", nameof(ContainerModFixture.TopCell) },
+        { "land", nameof(ContainerModFixture.EmbedCell) },
     };
 
     [Theory]
@@ -64,7 +65,7 @@ public sealed class CreateChildRecordTests : IDisposable
 
         var result = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, recordType, containerKey);
 
-        Assert.Equal(RecordEditRefusal.RecordTypeNotFound, result.Refusal);
+        Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
         Assert.Contains(containerKey, result.Message, StringComparison.Ordinal);
         Assert.Equal(before, TrackedTree.Records(_fixture.ModFolder, _fixture.Plugin));
     }
@@ -79,6 +80,18 @@ public sealed class CreateChildRecordTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var landscape = JsonNode.Parse(mod.Body(cell)).Require()["Landscape"].Require();
         Assert.Equal(result.NewFormKey, landscape["FormKey"].Require().GetValue<string>());
+    }
+
+    [Fact]
+    public void ANavmeshCreatedOnAnExteriorCell_LandsInItsNavmeshes()
+    {
+        using var mod = ExteriorCell(out var cell);
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "navm", cell.ToString());
+
+        Assert.True(result.Applied, result.Message);
+        var navmeshes = JsonNode.Parse(mod.Body(cell)).Require()["NavigationMeshes"].Require().AsArray();
+        Assert.Equal(result.NewFormKey, Assert.Single(navmeshes).Require()["FormKey"].Require().GetValue<string>());
     }
 
     [Fact]
@@ -109,8 +122,22 @@ public sealed class CreateChildRecordTests : IDisposable
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "dial", questKey.ToString());
 
-        Assert.Equal(RecordEditRefusal.RecordTypeNotFound, result.Refusal);
+        Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
         Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+    }
+
+    [Fact]
+    public void ALandscapeCreatedOnADeletedExteriorCellHoldingOne_IsRefusedAsOneItCannotHold()
+    {
+        using var mod = ExteriorCell(out var cell, (plugin, cell) =>
+        {
+            cell.Landscape = new Landscape(plugin);
+            cell.MajorRecordFlagsRaw = DeletedFlag.Bit;
+        });
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "land", cell.ToString());
+
+        Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
     }
 
     [Fact]
@@ -128,17 +155,14 @@ public sealed class CreateChildRecordTests : IDisposable
         Assert.Equal(before, TrackedTree.Records(_fixture.ModFolder, _fixture.Plugin));
     }
 
-    private static SourceModFixture ExteriorCell(out FormKey cell)
+    private static SourceModFixture ExteriorCell(out FormKey cell, Action<Fallout4Mod, Cell>? shape = null)
     {
         var cellKey = FormKey.Null;
         var mod = SourceModFixture.Tracked("Exterior.esp", "ExteriorMod", plugin =>
         {
             var exterior = new Cell(plugin) { EditorID = "ExteriorCell", Grid = new CellGrid() };
-            var subBlock = new WorldspaceSubBlock();
-            subBlock.Items.Add(exterior);
-            var block = new WorldspaceBlock();
-            block.Items.Add(subBlock);
-            plugin.Worldspaces.AddNew("World").SubCells.Add(block);
+            shape?.Invoke(plugin, exterior);
+            plugin.Worldspaces.AddNew("World").SubCells.Add(CellBlocks.Exterior(exterior));
             cellKey = exterior.FormKey;
         });
         cell = cellKey;

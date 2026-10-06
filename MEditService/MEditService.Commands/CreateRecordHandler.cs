@@ -96,32 +96,13 @@ public sealed class CreateRecordHandler
         SourceRepository repository, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
         string container, GridPosition? position)
     {
-        if (_targets.ResolveEditTarget(plugin, container, out var target) is { } unresolved) return unresolved;
+        if (!_targets.TryResolveEditTarget(plugin, container, out var target, out var containerDocument, out var unresolved))
+            return unresolved;
         var containerType = target.Identity.RecordType;
-        if (position is not null && containerType != "wrld") return MalformedPosition($"names {container}, which is not a worldspace");
-        if (containerType == "wrld") return NotYetSupported($"a record in the worldspace {container}");
+        var isWorldspace = RecordTypeDispatch.For(release).IsWorldspace(containerType);
+        if (position is not null && !isWorldspace) return MalformedPosition($"names {container}, which is not a worldspace");
+        if (isWorldspace) return NotYetSupported($"a record in the worldspace {container}");
 
-        var slots = ChildRecordTypes.SlotsFor(containerType, recordType, release);
-        if (slots.Count > 1) return NotYetSupported($"a {recordType} in {container}");
-        if (slots is not [var slot]) return CannotHold(container, recordType);
-        if (repository.Get(plugin, target.Identity) is not { } containerDocument) return WriteTargets.RecordNotFound(plugin, container);
-
-        if (FormKeyAllocator.Over(repository, plugin, release).Next(out var formKey) is { } refusedTarget) return refusedTarget;
-        var child = RecordMint.BareDocument(_codec, schema, release, formKey, editorId: null);
-        // Before the cannot-hold gate, which counts a held single slot as closed and so cannot name what holds it.
-        string withChild;
-        try
-        {
-            withChild = ContainerDocumentEdits.WithChildAppended(
-                    _codec, containerDocument.Body, release, containerType, container, slot, child, recordType)
-                ?? throw new InvalidOperationException($"{container} was found, but its own text does not carry it.");
-        }
-        catch (ChildSlotHeldByAnotherRecordException ex)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ChildSlotHeldByAnotherRecord,
-                $"{container} already holds {ex.HeldFormKey} as its {slot}, and holds one at most. Delete it to create another.");
-        }
         var schemas = _schemaReflector.GetSchemas(release);
         CellPlace? place;
         try
@@ -132,17 +113,41 @@ public sealed class CreateRecordHandler
         {
             return WriteTargets.RefuseUnreadable(container, ex.Message);
         }
-        if (!ChildRecordTypes.Of(containerType, containerDocument.Body, place, schemas, release).Contains(recordType))
-            return CannotHold(container, recordType);
+
+        switch (ChildRecordTypes.SlotFor(containerType, containerDocument.Body, place, recordType, schemas, release))
+        {
+            case ChildSlot.Open(var slot):
+                return AppendChild(repository, plugin, recordType, schema, release, containerDocument, slot);
+            case ChildSlot.Filled(var slot, var held):
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.ChildSlotHeldByAnotherRecord,
+                    $"{container} already holds {held} as its {slot}, and holds one at most. Delete it to create another.");
+            case ChildSlot.Several:
+                return NotYetSupported($"a {recordType} in {container}");
+            default:
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.ContainerCannotHoldType, $"{container} cannot hold a new '{recordType}' where it sits.");
+        }
+    }
+
+    private RecordEditResult AppendChild(
+        SourceRepository repository, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
+        SourceDocument container, string slot)
+    {
+        if (FormKeyAllocator.Over(repository, plugin, release).Next(out var formKey) is { } refusedTarget) return refusedTarget;
+        var child = RecordMint.BareDocument(_codec, schema, release, formKey, editorId: null);
+        var withChild = ContainerDocumentEdits.WithChildAppended(
+                _codec, container.Body, release, container.RecordType, container.FormKey, slot, child, recordType)
+            ?? throw new InvalidOperationException($"{container.FormKey} was found, but its own text does not carry it.");
 
         SourceTransaction.Atomically(repository, transaction =>
-            transaction.Apply(repository, repository.ChangesToRewrite(plugin, containerDocument with { Body = withChild })));
+            transaction.Apply(repository, repository.ChangesToRewrite(plugin, container with { Body = withChild })));
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(
                 "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — at the end of {Container}'s {Slot}",
-                recordType, formKey, plugin.Name, plugin.Origin, container, slot);
+                recordType, formKey, plugin.Name, plugin.Origin, container.FormKey, slot);
         }
         return RecordEditResult.Success(formKey);
     }
@@ -156,7 +161,4 @@ public sealed class CreateRecordHandler
         if (repository.WorldspaceOf(plugin, container) is null) return CellPlace.Interior;
         return repository.ContainerOf(plugin, container, schemas) is null ? CellPlace.Exterior : CellPlace.PersistentWorldspaceCell;
     }
-
-    private static RecordEditResult CannotHold(string container, string recordType) =>
-        RecordEditResult.Refused(RecordEditRefusal.RecordTypeNotFound, $"{container} cannot hold a new '{recordType}'.");
 }

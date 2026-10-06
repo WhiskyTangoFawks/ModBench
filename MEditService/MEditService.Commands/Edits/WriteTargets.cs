@@ -26,23 +26,31 @@ internal sealed class WriteTargets(
 
     // The working tree is the only thing asked (ADR-0015), so a second edit builds on
     // the first. The copy gestures read the source instead.
-    internal RecordEditResult? ResolveEditTarget(PluginAddress plugin, string formKey, out EditTarget target)
-    {
-        target = default;
+    internal RecordEditResult? ResolveEditTarget(PluginAddress plugin, string formKey, out EditTarget target) =>
+        TryResolveEditTarget(plugin, formKey, out target, out _, out var refused) ? null : refused;
 
-        if (RefuseUnlessTrackedAndLoaded(plugin, out var openedRepository) is { } blocked) return blocked;
+    /// <summary>The edit target and the record's own text in one read of the tree.</summary>
+    internal bool TryResolveEditTarget(
+        PluginAddress plugin, string formKey, out EditTarget target,
+        [NotNullWhen(true)] out SourceDocument? document, [NotNullWhen(false)] out RecordEditResult? refused)
+    {
+        (target, document) = (default, null);
+
+        refused = RefuseUnlessTrackedAndLoaded(plugin, out var openedRepository);
+        if (refused is not null) return false;
         var repository = openedRepository
             ?? throw new InvalidOperationException("Expected RefuseUnlessTrackedAndLoaded to open a repository when it does not refuse.");
 
         var release = loadOrder.Current.GameRelease;
         try
         {
-            return ResolveInTheTree(plugin, formKey, repository, release, out target);
+            refused = ResolveInTheTree(plugin, formKey, repository, release, out target, out document);
         }
         catch (AmbiguousSourceUnitException ex)
         {
-            return RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, ex.Message);
+            refused = RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, ex.Message);
         }
+        return refused is null && document is not null;
     }
 
     /// <summary>The edit target with <paramref name="text"/> standing in for the file of the document carrying
@@ -79,16 +87,17 @@ internal sealed class WriteTargets(
         return false;
     }
 
-    internal static RecordEditResult RecordNotFound(PluginAddress plugin, string formKey) =>
+    private static RecordEditResult RecordNotFound(PluginAddress plugin, string formKey) =>
         RecordEditResult.Refused(
             RecordEditRefusal.RecordNotFound,
             $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document carries it.");
 
     private RecordEditResult? ResolveInTheTree(
-        PluginAddress plugin, string formKey, SourceRepository repository, GameRelease release, out EditTarget target)
+        PluginAddress plugin, string formKey, SourceRepository repository, GameRelease release, out EditTarget target,
+        out SourceDocument? found)
     {
         target = default;
-        SourceDocument? found;
+        found = null;
         try
         {
             found = repository.Get(plugin, formKey, schemaReflector.GetSchemas(release));

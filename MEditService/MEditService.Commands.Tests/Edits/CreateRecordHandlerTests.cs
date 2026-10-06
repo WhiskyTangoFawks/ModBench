@@ -125,13 +125,15 @@ public sealed class CreateRecordHandlerTests
     }
 
     [Fact]
-    public void CreateRecord_NamingAContainerThePluginLacks_RefusesRecordNotFound()
+    public void CreateRecord_NamingAContainerThePluginLacks_RefusesRecordNotFound_NamingIt()
     {
         using var mod = SourceEditFixture.Tracked();
+        const string gone = "000FFF:" + SourceEditFixture.PluginName;
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", "000FFF:" + SourceEditFixture.PluginName);
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", gone);
 
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
+        Assert.Contains(gone, result.Message, StringComparison.Ordinal);
     }
 
     [Theory]

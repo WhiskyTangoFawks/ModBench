@@ -33,9 +33,12 @@ public enum RecordEditRefusal
 
     InvalidFormLink,
 
-    /// <summary>Create: no schema table of that name, the header, which cannot be created this way, or a
-    /// type the named container cannot hold.</summary>
+    /// <summary>Create: no schema table of that name, or the header, which cannot be created this way.</summary>
     RecordTypeNotFound,
+
+    /// <summary>Create: the named container holds no new record of that type where it sits, as xEdit's Add
+    /// offers none; a deleted container holds nothing.</summary>
+    ContainerCannotHoldType,
 
     /// <summary>Held at either ref; checked server-side even for an allocator-suggested value, since a caller can type its own.</summary>
     FormKeyCollision,
