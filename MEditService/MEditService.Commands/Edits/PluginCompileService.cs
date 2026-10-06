@@ -143,8 +143,7 @@ internal sealed class PluginCompileService(
     private Content ContentFacts(CompiledTree tree, PluginAddress plugin, LoadOrderSnapshot loadOrder)
     {
         // One walk, and the record type is the one RecordTableName gives, so what compile files a
-        // record under and what the tree calls it cannot differ. A type no schema claims has no
-        // document, so nothing is derived from it.
+        // record under and what the tree calls it cannot differ.
         var schemas = schemaReflector.GetSchemas(loadOrder.GameRelease);
         var records = new List<SourceRecord>();
         var required = new RequiredMasters(plugin);
