@@ -464,21 +464,24 @@ describe('a record file\'s tab', () => {
 });
 
 describe('a record tab closed while its read is in flight', () => {
-  it('is told nothing when the read lands', async () => {
-    const GUN = '000801:A.esp';
+  it('is told nothing and keeps its title when the read lands', async () => {
+    const PLACED = '000803:A.esp';
     const client = new InMemoryMEditClient();
-    let land: (answer: null) => void = () => undefined;
-    client.setQueryAnswerOnce('getComparison', new Promise<null>((resolve) => { land = resolve; }));
+    let land: (answer: ReturnType<typeof comparisonOf>) => void = () => undefined;
+    client.setQueryAnswerOnce('getComparison', new Promise((resolve) => { land = resolve; }));
     client.setQueryAnswer('getPlugins', []);
     const { openDocument } = makeEditor(client);
-    const tab = await openDocument(renderedDocumentUri({ formKey: GUN, plugin: COPY_PLUGIN }, 'Gun.json'));
-    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
+    const tab = await openDocument({
+      scheme: 'modbench-child-record', path: '/mods/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000803%3AA.esp&name=A.esp&origin=ModA',
+    });
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED, columns: [] });
 
     tab.close();
-    land(null);
+    land(comparisonOf(PLACED, [{ plugin: 'A.esp', origin: 'ModA', isWinner: true, editorId: 'SharedRef' }]));
     await settle();
 
     expect(tab.webview.postMessage).not.toHaveBeenCalled();
+    expect(tab.title).toBe(PLACED);
   });
 });
 
