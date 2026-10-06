@@ -1,12 +1,10 @@
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
@@ -24,25 +22,6 @@ internal sealed class Projector(
             : null;
 
     internal static bool HoldsTree(PluginAddress key, PluginProvider provider) => TreeModOf(key, provider) is not null;
-
-    /// <summary>What the tree's documents stamp, or the doubly claimed FormKey it named instead.</summary>
-    internal static bool TryTreeStamps(
-        PluginProvider.FromMod mod, GameRelease release, PluginAddress key,
-        [NotNullWhen(true)] out RecordStamps? stamps, [NotNullWhen(false)] out string? ambiguity)
-    {
-        try
-        {
-            stamps = SourceRepository.Over(mod, release).StampsOf(key);
-            ambiguity = null;
-            return true;
-        }
-        catch (AmbiguousSourceUnitException ex)
-        {
-            stamps = null;
-            ambiguity = ex.Message;
-            return false;
-        }
-    }
 
     /// <summary>Indexes the whole tree as the plugin. Throws whatever the tree throws: "quietly served
     /// the binary instead" is a silent lie. The plugin's binary path only stamps the rows.</summary>
@@ -211,7 +190,8 @@ internal sealed class Projector(
         state switch
         {
             // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
-            { Ambiguity: { } ambiguity } => new ValidationReport([], NeedsRebuild: true, [ambiguity]),
+            { Stamps.Claimed: { Count: > 0 } claimed } =>
+                new ValidationReport([], NeedsRebuild: true, [.. claimed.Select(claim => claim.Message)]),
             { Stamps: { } stamps } when provider is PluginProvider.FromMod mod => ValidateAgainstTree(key, mod, stamps),
             _ => ValidateAgainstBinary(key),
         };
@@ -249,7 +229,7 @@ internal sealed class Projector(
     // A plugin's rows against the source documents they came from, by content stamp (ADR-0003).
     private ValidationReport ValidateAgainstTree(PluginAddress key, PluginProvider.FromMod mod, RecordStamps stamps)
     {
-        List<string> failures = [.. stamps.Unreadable];
+        List<string> failures = [.. stamps.Unreadable.Select(file => file.Message)];
         // A file that could not be read is no evidence that a record is gone.
         var treeFullyRead = stamps.Unreadable.Count == 0;
         return Reconcile(key, mod, stamps.ByFormKey, index.HeldDocumentStamps(key), treeFullyRead, failures);

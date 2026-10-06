@@ -6,16 +6,39 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>Every document of a plugin's tree by the FormKey it declares, each with its content stamp,
-/// and a line for each file that could not be read as one.</summary>
-public sealed record RecordStamps(IReadOnlyDictionary<string, string> ByFormKey, IReadOnlyList<string> Unreadable)
+/// <summary>A file of a plugin's tree, as the mod folder spells it, that could not be read as a
+/// document.</summary>
+public sealed record UnreadableFile(string SourceRelativePath, string Message);
+
+/// <summary>A FormKey that more than one document of a plugin's tree declares, with those documents
+/// as the mod folder spells them.</summary>
+public sealed record ClaimedFormKey(string FormKey, IReadOnlyList<string> Documents)
 {
-    /// <summary>Equal when the same documents carry the same stamps and the same files could not be read.</summary>
+    public string Message =>
+        $"More than one document in this plugin's source tree holds {FormKey}: " +
+        $"{string.Join(", ", Documents.Select(d => $"'{d}'"))}. A FormKey is unique within a plugin, so the tree " +
+        "is corrupt — most likely a copy or an interrupted rename. Remove the duplicate by hand.";
+
+    public bool Equals(ClaimedFormKey? other) =>
+        other is not null && FormKey == other.FormKey && Documents.SequenceEqual(other.Documents);
+
+    public override int GetHashCode() => FormKey.GetHashCode(StringComparison.Ordinal);
+}
+
+/// <summary>Every document of a plugin's tree by the FormKey it declares, each with its content stamp,
+/// each file that could not be read as one, and each FormKey more than one document declares.</summary>
+public sealed record RecordStamps(
+    IReadOnlyDictionary<string, string> ByFormKey, IReadOnlyList<UnreadableFile> Unreadable,
+    IReadOnlyList<ClaimedFormKey> Claimed)
+{
+    /// <summary>Equal when the same documents carry the same stamps, and the same files could not be
+    /// read or claim one FormKey.</summary>
     public bool Equals(RecordStamps? other) =>
         other is not null
         && ByFormKey.Count == other.ByFormKey.Count
         && ByFormKey.All(stamp => other.ByFormKey.TryGetValue(stamp.Key, out var theirs) && theirs == stamp.Value)
-        && Unreadable.SequenceEqual(other.Unreadable);
+        && Unreadable.SequenceEqual(other.Unreadable)
+        && Claimed.SequenceEqual(other.Claimed);
 
     public override int GetHashCode() => ByFormKey.Count;
 }
@@ -37,8 +60,8 @@ internal static class TreeStamps
 
     internal static RecordStamps StampsOf(string modFolder, PluginAddress plugin)
     {
-        var unreadable = new List<string>();
-        var filedAt = new Dictionary<string, string>(StringComparer.Ordinal);
+        var unreadable = new List<UnreadableFile>();
+        var filedAt = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var stamps = new Dictionary<string, string>(StringComparer.Ordinal);
 
         var root = SourceRepositoryLayout.RootIn(modFolder, plugin.Name);
@@ -54,18 +77,23 @@ internal static class TreeStamps
                 if (SourceRepositoryLayout.CarriesNoRecord(file)) continue;
                 listed.Add(file);
 
-                if (KnownOrRead(known, file, plugin.Name, unreadable) is not { } document) continue;
-                OneDocumentPerFormKey.Claim(filedAt, document.FormKey, file, modFolder);
+                var relativePath = Path.GetRelativePath(modFolder, file);
+                if (KnownOrRead(known, file, relativePath, plugin.Name, unreadable) is not { } document) continue;
+                filedAt.TryAdd(document.FormKey, []);
+                filedAt[document.FormKey].Add(relativePath);
                 stamps[document.FormKey] = document.Content;
             }
         }
 
         foreach (var path in known.Keys.Where(path => !listed.Contains(path))) known.TryRemove(path, out _);
-        return new RecordStamps(stamps, unreadable);
+        return new RecordStamps(
+            stamps, unreadable,
+            [.. filedAt.Where(held => held.Value.Count > 1).Select(held => new ClaimedFormKey(held.Key, held.Value))]);
     }
 
     private static KnownDocument? KnownOrRead(
-        ConcurrentDictionary<string, KnownDocument> known, string file, string pluginName, List<string> unreadable)
+        ConcurrentDictionary<string, KnownDocument> known, string file, string relativePath, string pluginName,
+        List<UnreadableFile> unreadable)
     {
         var current = FileStamp.Of(file);
         if (current is { } now && known.TryGetValue(file, out var remembered) && remembered.Stamp == now) return remembered;
@@ -81,7 +109,7 @@ internal static class TreeStamps
             // Never exclusive owners of a file: it may vanish or lock between the listing and the
             // read. A skip and a line, and the tree stops counting as evidence a record is gone.
             known.TryRemove(file, out _);
-            unreadable.Add($"Could not read '{file}': {ex.Message}");
+            unreadable.Add(new UnreadableFile(relativePath, $"Could not read '{relativePath}': {ex.Message}"));
             return null;
         }
 
@@ -89,7 +117,8 @@ internal static class TreeStamps
         if (DocumentText.FormKeyDeclaredIn(text, file, pluginName) is not { } formKey)
         {
             known.TryRemove(file, out _);
-            unreadable.Add($"'{file}' declares no FormKey, so the records it holds could not be validated.");
+            unreadable.Add(new UnreadableFile(
+                relativePath, $"'{relativePath}' declares no FormKey, so the records it holds could not be validated."));
             return null;
         }
 

@@ -20,6 +20,8 @@ internal sealed class OpenedIndex(IQueryIndex index, LoadOrderHolder holder, IDi
 
     public IRecordReads RequireReads() => index.RequireReads();
 
+    public IReadOnlyList<SourceFileFailure> SourceFileFailures => index.SourceFileFailures;
+
     public void SetFilter(string sql, string source) => index.SetFilter(sql, source);
 
     public void ClearFilter() => index.ClearFilter();

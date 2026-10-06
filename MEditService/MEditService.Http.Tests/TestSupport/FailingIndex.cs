@@ -19,6 +19,8 @@ internal sealed class FailingIndex(string? rebuildRefusal = null) : IQueryIndex
 
     public IRecordReads RequireReads() => throw Failed();
 
+    public IReadOnlyList<SourceFileFailure> SourceFileFailures => throw Failed();
+
     public void SetFilter(string sql, string source) => throw Failed();
 
     public void ClearFilter() => throw Failed();

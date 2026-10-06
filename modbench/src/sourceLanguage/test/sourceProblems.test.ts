@@ -80,6 +80,40 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     ]);
   });
 
+  it('spans the FormKey a file declares when another file claims it too', async () => {
+    const text = `{\n  "FormKey": "${REFERRER}",\n  "Race": "${MISSING}"\n}`;
+    const { answered } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': text });
+
+    const shown = await answered([{ plugin: PLUGIN, problems: [problem({ targetFormKey: null, message: 'claimed twice' })] }]);
+
+    expect(shown.get('/mods/ReferringMod/Refers.esp/Npc.json')?.map(({ start, end }) => [start, end])).toEqual([
+      [{ line: 1, character: 13 }, { line: 1, character: 13 + REFERRER.length + 2 }],
+    ]);
+  });
+
+  it('spans each occurrence when one record names the same missing record in two fields', async () => {
+    const text = `{\n  "FormKey": "${REFERRER}",\n  "Race": "${MISSING}",\n  "Voice": "${MISSING}"\n}`;
+    const { answered } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': text });
+
+    const shown = await answered([{ plugin: PLUGIN, problems: [problem({ message: 'Race' }), problem({ message: 'Voice' })] }]);
+
+    expect(shown.get('/mods/ReferringMod/Refers.esp/Npc.json')?.map(({ message, start }) => [message, start.line])).toEqual([
+      ['Race', 2], ['Voice', 3],
+    ]);
+  });
+
+  it('keeps a problem whose file it cannot read at the first line, saying why in the Output once', async () => {
+    const { answered, reporter } = feed({});
+
+    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+    const shown = await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+
+    expect(shown.get('/mods/ReferringMod/Refers.esp/Npc.json')?.map(({ start }) => start)).toEqual([{ line: 0, character: 0 }]);
+    expect(reporter.shownOnSurface.mock.calls).toEqual([
+      ['warning', 'The Problems panel shows the problems of "/mods/ReferringMod/Refers.esp/Npc.json" on its first line.', 'no /mods/ReferringMod/Refers.esp/Npc.json'],
+    ]);
+  });
+
   it.each([
     ['a save re-derives its rows', 'rows-changed'],
     ['mEdit re-reads its plugin', 'plugin-changed'],
@@ -109,6 +143,17 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await answered([]);
 
     expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(1);
+  });
+
+  it.each(['rows-changed', 'plugin-changed'])('asks nothing on %s while the index reconciles', async (kind) => {
+    const { client, answered } = feed({});
+    await answered([]);
+    client.emit(loadOrderStatus(false));
+    client.emit({ kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
+
+    await answered([]);
+
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
   });
 
   it('tells of a plugin whose problems mEdit could not place, once while the reason stands and again when it changes', async () => {
@@ -163,5 +208,32 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await answered([]);
 
     expect(published.map((problems) => problems.size)).toEqual([0, 0]);
+  });
+
+  it('says nothing of a failed ask that a later one overtook', async () => {
+    const { client, answered, reporter } = feed({});
+    let overtaken!: (error: Error) => void;
+    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((_, reject) => { overtaken = reject; }));
+    client.emit(ready);
+
+    await answered([]);
+    overtaken(new Error('getPluginProblems timed out after 30000ms'));
+    await answered([]);
+
+    expect(reporter.shownOnSurface).not.toHaveBeenCalled();
+  });
+
+  it('publishes an older answer when the ask that overtook it fails', async () => {
+    const { client, published } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    let older!: (answer: PluginProblems[]) => void;
+    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
+    client.setQueryFailureOnce('getPluginProblems', new Error('getPluginProblems timed out after 30000ms'));
+    client.emit(ready);
+    client.emit(ready);
+    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2); });
+
+    older([{ plugin: PLUGIN, problems: [problem()] }]);
+
+    await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1]); });
   });
 });

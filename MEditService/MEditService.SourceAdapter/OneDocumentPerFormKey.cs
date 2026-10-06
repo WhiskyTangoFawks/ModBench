@@ -24,8 +24,5 @@ internal static class OneDocumentPerFormKey
         };
 
     private static AmbiguousSourceUnitException HeldTwice(string formKey, IEnumerable<string> documents, string modFolder) =>
-        new($"More than one document in this plugin's source tree holds {formKey}: " +
-            $"{string.Join(", ", documents.Select(d => $"'{Path.GetRelativePath(modFolder, d)}'"))}. A FormKey " +
-            "is unique within a plugin, so the tree is corrupt — most likely a copy or an interrupted " +
-            "rename. Remove the duplicate by hand.");
+        new(new ClaimedFormKey(formKey, [.. documents.Select(d => Path.GetRelativePath(modFolder, d))]).Message);
 }

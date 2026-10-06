@@ -48,6 +48,46 @@ public sealed class PluginProblemsApiTests : HostedTests
         Assert.Contains(JsonSerializer.Serialize(AbsentRecord.ToString()), file, StringComparison.Ordinal);
     }
 
+    private async Task<JsonElement[]> ProblemsOnceTheyAre(Func<JsonElement[], bool> answered, string what)
+    {
+        var problems = Array.Empty<JsonElement>();
+        await Wire.Eventually(async () =>
+        {
+            var response = await Client.GetAsync(new Uri("/plugins/problems", UriKind.Relative));
+            if (response.StatusCode != HttpStatusCode.OK) return false;
+            var plugin = (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray()
+                .Single(p => p.GetProperty("plugin").GetProperty("name").GetString() == Plugin);
+            problems = [.. plugin.GetProperty("problems").EnumerateArray()];
+            return answered(problems);
+        }, what);
+        return problems;
+    }
+
+    private static string PathOf(JsonElement problem) => problem.GetProperty("sourceRelativePath").GetString().Require();
+
+    [Fact]
+    public async Task GetProblems_AFileSavedThatCompileCannotRead_IsTheProblemOnThatFile_UntilItIsMended()
+    {
+        var fx = await TrackedLoad();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var stray = OtherTool.Beside(OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc), "Stray.json");
+
+        OtherTool.WritesTheFile(stray, "{");
+        await Client.NextSnapshot(fx);
+
+        var problem = Assert.Single(await ProblemsOnceTheyAre(
+            problems => problems.Any(p => PathOf(p) == Path.GetRelativePath(modFolder, stray)), "the unreadable file"));
+        Assert.Equal(JsonValueKind.Null, problem.GetProperty("formKey").ValueKind);
+        Assert.Equal(JsonValueKind.Null, problem.GetProperty("targetFormKey").ValueKind);
+
+        OtherTool.DeletesTheFile(stray);
+        await Client.NextSnapshot(fx);
+
+        await ProblemsOnceTheyAre(
+            problems => problems.Select(p => p.GetProperty("targetFormKey").GetString()).SequenceEqual([AbsentRecord.ToString()]),
+            "the missing record's link alone");
+    }
+
     [Fact]
     public async Task GetProblems_WithNoLoadOrder_Is503()
     {

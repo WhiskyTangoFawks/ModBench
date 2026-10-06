@@ -3,7 +3,7 @@ import type { MEditClient, PluginProblems } from '../client';
 import type { OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
+import { pluginAddressKey } from '../wire/pluginAddress';
 
 type SourceProblem = PluginProblems['problems'][number];
 
@@ -30,13 +30,8 @@ function positionAt(text: string, offset: number): Position {
 
 const isPropertyName = (node: Node): boolean => node.parent?.type === 'property' && node.parent.children?.[0] === node;
 
-function find(node: Node, matches: (candidate: Node) => boolean): Node | undefined {
-  if (matches(node)) return node;
-  for (const child of node.children ?? []) {
-    const found = find(child, matches);
-    if (found) return found;
-  }
-  return undefined;
+function findAll(node: Node, matches: (candidate: Node) => boolean): Node[] {
+  return [...(matches(node) ? [node] : []), ...(node.children ?? []).flatMap((child) => findAll(child, matches))];
 }
 
 const isString = (value: string) => (node: Node): boolean => node.type === 'string' && node.value === value && !isPropertyName(node);
@@ -44,34 +39,54 @@ const isString = (value: string) => (node: Node): boolean => node.type === 'stri
 const isRecord = (formKey: string) => (node: Node): boolean =>
   node.type === 'object' && (node.children ?? []).some((member) => member.children?.[0]?.value === 'FormKey' && member.children[1]?.value === formKey);
 
-function onText(text: string, problem: SourceProblem): ProblemOnFile {
+function onText(text: string, problems: SourceProblem[]): ProblemOnFile[] {
   const root = parseTree(text);
-  const scope = root && (find(root, isRecord(problem.formKey)) ?? root);
-  const target = scope && find(scope, isString(problem.targetFormKey));
-  return target
-    ? { message: problem.message, start: positionAt(text, target.offset), end: positionAt(text, target.offset + target.length) }
-    : { message: problem.message, start: FIRST_LINE, end: FIRST_LINE };
+  const spelled = new Map<string, number>();
+  return problems.map(({ formKey, targetFormKey, message }) => {
+    const scope = root && formKey ? (findAll(root, isRecord(formKey))[0] ?? root) : root;
+    const spanned = targetFormKey ?? formKey;
+    const nth = spelled.get(`${formKey} ${spanned}`) ?? 0;
+    spelled.set(`${formKey} ${spanned}`, nth + 1);
+    const target = scope && spanned ? findAll(scope, isString(spanned))[nth] : undefined;
+    return target
+      ? { message, start: positionAt(text, target.offset), end: positionAt(text, target.offset + target.length) }
+      : { message, start: FIRST_LINE, end: FIRST_LINE };
+  });
 }
 
-interface Unplaced { plugin: PluginAddress; why: string }
+interface Told { key: string; message: string; why: string }
 
-async function placed(answer: PluginProblems[], { originFiles, readText }: SourceProblemsDeps): Promise<{ byFile: ProblemsByFile; unplaced: Unplaced[] }> {
-  const unplaced: Unplaced[] = [];
+function tellingOnce(say: (message: string, why: string) => void): (standing: Told[]) => void {
+  let told = new Map<string, string>();
+  return (standing) => {
+    for (const { key, message, why } of standing) if (told.get(key) !== why) say(message, why);
+    told = new Map(standing.map(({ key, why }) => [key, why]));
+  };
+}
+
+async function placed(answer: PluginProblems[], { originFiles, readText }: SourceProblemsDeps): Promise<{ byFile: ProblemsByFile; unplaced: Told[]; unread: Told[] }> {
+  const unplaced: Told[] = [];
+  const cannotShow = (name: string) => `The Problems panel cannot show "${name}"'s problems.`;
   const byPath = new Map<string, SourceProblem[]>();
   for (const { plugin, problems, failure } of answer) {
     const files = originFiles(plugin.origin);
-    if (failure != null) unplaced.push({ plugin, why: failure });
-    else if (files === undefined) unplaced.push({ plugin, why: `The instance holds no folder for ${plugin.origin}.` });
+    const key = pluginAddressKey(plugin);
+    if (failure != null) unplaced.push({ key, message: cannotShow(plugin.name), why: failure });
+    else if (files === undefined) unplaced.push({ key, message: cannotShow(plugin.name), why: `The instance holds no folder for ${plugin.origin}.` });
     else for (const problem of problems) {
       const path = files.file(problem.sourceRelativePath);
       byPath.set(path, [...(byPath.get(path) ?? []), problem]);
     }
   }
+  const unread: Told[] = [];
   const byFile = new Map(await Promise.all([...byPath].map(async ([path, onPath]) => {
-    const text = await readText(path).catch(() => '');
-    return [path, onPath.map((problem) => onText(text, problem))] as const;
+    const text = await readText(path).catch((error: unknown) => {
+      unread.push({ key: path, message: `The Problems panel shows the problems of "${path}" on its first line.`, why: errorMessage(error) });
+      return '';
+    });
+    return [path, onText(text, onPath)] as const;
   })));
-  return { byFile, unplaced };
+  return { byFile, unplaced, unread };
 }
 
 /** Publishes what mEdit answers is wrong in each tracked active plugin's source whenever a save,
@@ -79,13 +94,8 @@ async function placed(answer: PluginProblems[], { originFiles, readText }: Sourc
  *  reason (common.md, Reporting). */
 export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const { client, reporter, publish } = deps;
-  let told = new Map<string, string>();
-  const tell = (unplaced: Unplaced[]) => {
-    for (const { plugin, why } of unplaced) {
-      if (told.get(pluginAddressKey(plugin)) !== why) reporter.report('warning', `The Problems panel cannot show "${plugin.name}"'s problems.`, why);
-    }
-    told = new Map(unplaced.map(({ plugin, why }) => [pluginAddressKey(plugin), why]));
-  };
+  const tellUnplaced = tellingOnce((message, why) => { reporter.report('warning', message, why); });
+  const tellUnread = tellingOnce((message, why) => { reporter.shownOnSurface('warning', message, why); });
   let unanswered: string | undefined;
   const keepLastAnswer = (error: unknown) => {
     const why = errorMessage(error);
@@ -93,23 +103,28 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     unanswered = why;
   };
   let latest = 0;
+  let shown = 0;
   const ask = async () => {
     const mine = ++latest;
     try {
-      const { byFile, unplaced } = await placed(await client.getPluginProblems(), deps);
-      if (mine !== latest) return;
+      const { byFile, unplaced, unread } = await placed(await client.getPluginProblems(), deps);
+      if (mine < shown) return;
+      shown = mine;
       unanswered = undefined;
       publish(byFile);
-      tell(unplaced);
+      tellUnplaced(unplaced);
+      tellUnread(unread);
     } catch (error) {
-      keepLastAnswer(error);
+      if (mine === latest) keepLastAnswer(error);
     }
   };
+  let ready = false;
   const reask = () => { void ask(); };
+  const reaskWhenReady = () => { if (ready) reask(); };
   const unsubscribe = [
-    client.onNotification('load-order-status', (status) => { if (status.conflictsComputed) reask(); }),
-    client.onNotification('rows-changed', reask),
-    client.onNotification('plugin-changed', reask),
+    client.onNotification('load-order-status', (status) => { ready = status.conflictsComputed; reaskWhenReady(); }),
+    client.onNotification('rows-changed', reaskWhenReady),
+    client.onNotification('plugin-changed', reaskWhenReady),
     client.onReconnected(reask),
   ];
   return () => { for (const off of unsubscribe) off(); };

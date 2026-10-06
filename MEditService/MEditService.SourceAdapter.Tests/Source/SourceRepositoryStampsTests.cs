@@ -29,6 +29,8 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     private string NpcFile =>
         SourceDocumentPath.Of(_modFolder, PluginName, "npc_", NpcFormKey, "FixtureNpc", GameRelease.Fallout4);
 
+    private string RelativeNpcFolder => Path.GetDirectoryName(Path.GetRelativePath(_modFolder, NpcFile)).Require();
+
     private static string StampOf(string text) => SourceRepository.ContentStamp(text);
 
     [Fact]
@@ -108,17 +110,21 @@ public sealed class SourceRepositoryStampsTests : IDisposable
 
         var stamps = _repository.StampsOf(Plugin);
 
-        Assert.Single(stamps.Unreadable);
-        Assert.Contains("Stray", stamps.Unreadable[0], StringComparison.Ordinal);
+        var unreadable = Assert.Single(stamps.Unreadable);
+        Assert.Equal(Path.Combine(RelativeNpcFolder, "Stray - 000A00_Fixture.esp.json"), unreadable.SourceRelativePath);
     }
 
     [Fact]
-    public void StampsOf_AFormKeyTwoDocumentsDeclare_Throws()
+    public void StampsOf_AFormKeyTwoDocumentsDeclare_NamesItWithBothDocuments()
     {
-        var file = NpcFile;
-        File.Copy(file, Path.Combine(Path.GetDirectoryName(file).Require(), "Twin - 000800_Fixture.esp.json"));
+        var file = Path.GetRelativePath(_modFolder, NpcFile);
+        var twin = Path.Combine(Path.GetDirectoryName(file).Require(), "Twin - 000800_Fixture.esp.json");
+        File.Copy(Path.Combine(_modFolder, file), Path.Combine(_modFolder, twin));
 
-        Assert.Throws<AmbiguousSourceUnitException>(() => _repository.StampsOf(Plugin));
+        var claim = Assert.Single(_repository.StampsOf(Plugin).Claimed);
+
+        Assert.Equal(NpcFormKey, claim.FormKey);
+        Assert.Equal([file, twin], claim.Documents.Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -128,5 +134,6 @@ public sealed class SourceRepositoryStampsTests : IDisposable
 
         Assert.Empty(stamps.ByFormKey);
         Assert.Empty(stamps.Unreadable);
+        Assert.Empty(stamps.Claimed);
     }
 }

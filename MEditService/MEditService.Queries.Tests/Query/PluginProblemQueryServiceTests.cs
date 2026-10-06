@@ -20,7 +20,7 @@ public sealed class PluginProblemQueryServiceTests
 
     private static IReadOnlyList<PluginProblems>? Ask(
         LoadOrderState state, IReadOnlyList<LoadOrderEntry> tracked, IReadOnlyList<MissingReferenceOnFile> missing,
-        params LoadOrderEntry[] plugins)
+        IReadOnlyList<SourceFileFailure> failures, params LoadOrderEntry[] plugins)
     {
         var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent>(), [])
         {
@@ -28,13 +28,69 @@ public sealed class PluginProblemQueryServiceTests
             MissingReferences = missing,
         };
         var status = new LoadOrderStatus(state, plugins.Length, plugins.Length, [], ConflictsComputed: false, []);
-        return new PluginProblemQueryService(new FakeIndex(reads, status), FakeLoadOrder.Of(GameRelease.Fallout4, plugins))
-            .GetProblems();
+        var index = new FakeIndex(reads, status) { SourceFileFailures = failures };
+        return new PluginProblemQueryService(index, FakeLoadOrder.Of(GameRelease.Fallout4, plugins)).GetProblems();
     }
 
     private static IReadOnlyList<PluginProblems> Ready(
         IReadOnlyList<LoadOrderEntry> tracked, IReadOnlyList<MissingReferenceOnFile> missing, params LoadOrderEntry[] plugins) =>
-        Ask(LoadOrderState.Ready, tracked, missing, plugins) ?? throw new InvalidOperationException("The index was ready.");
+        Failing(tracked, missing, [], plugins);
+
+    private static IReadOnlyList<PluginProblems> Failing(
+        IReadOnlyList<LoadOrderEntry> tracked, IReadOnlyList<MissingReferenceOnFile> missing,
+        IReadOnlyList<SourceFileFailure> failures, params LoadOrderEntry[] plugins) =>
+        Ask(LoadOrderState.Ready, tracked, missing, failures, plugins) ?? throw new InvalidOperationException("The index was ready.");
+
+    [Fact]
+    public void GetProblems_AFileThePluginsReadStoppedAt_IsAProblemOnThatFile_SayingWhy()
+    {
+        var plugin = Plugin("Broken.esp");
+        var stray = new SourceFileFailure(plugin.Key, "Npcs/Stray.json", null, "'Npcs/Stray.json' declares no FormKey.");
+
+        var answer = Assert.Single(Failing([plugin], [], [stray], plugin));
+
+        var problem = Assert.Single(answer.Problems);
+        Assert.Equal(
+            ((string?)null, (string?)null, "Npcs/Stray.json", "'Npcs/Stray.json' declares no FormKey."),
+            (problem.FormKey, problem.TargetFormKey, problem.SourceRelativePath, problem.Message));
+        Assert.Null(answer.Failure);
+    }
+
+    [Fact]
+    public void GetProblems_FilesThatClaimOneFormKey_AreAProblemOnEach_NamingIt()
+    {
+        var plugin = Plugin("Twice.esp");
+        SourceFileFailure Claiming(string file) => new(plugin.Key, file, "000800:Twice.esp", "Both hold 000800:Twice.esp.");
+
+        var answer = Assert.Single(Failing([plugin], [], [Claiming("Npcs/A.json"), Claiming("Npcs/Backup/A.json")], plugin));
+
+        Assert.Equal(
+            [("000800:Twice.esp", "Npcs/A.json"), ("000800:Twice.esp", "Npcs/Backup/A.json")],
+            answer.Problems.Select(p => (p.FormKey, p.SourceRelativePath)));
+    }
+
+    [Fact]
+    public void GetProblems_APluginWhoseReadStopsAtAFile_IsAnsweredWithThatFileAlone_NotTheLinksItsLastReadLeft()
+    {
+        var plugin = Plugin("Broken.esp");
+
+        var answer = Assert.Single(Failing(
+            [plugin], [OnFile(plugin), Unplaced(plugin)], [new(plugin.Key, "Npcs/Stray.json", null, "Unreadable.")], plugin));
+
+        Assert.Equal("Npcs/Stray.json", Assert.Single(answer.Problems).SourceRelativePath);
+        Assert.Null(answer.Failure);
+    }
+
+    [Fact]
+    public void GetProblems_APluginItsBinaryStandsInFor_IsAnsweredWithTheFilesItsTreeStopsAt()
+    {
+        var plugin = Plugin("FellBack.esp");
+
+        var answer = Assert.Single(Failing([], [], [new(plugin.Key, "Npcs/Stray.json", null, "Unreadable.")], plugin));
+
+        Assert.Equal(plugin.Key, answer.Plugin);
+        Assert.Single(answer.Problems);
+    }
 
     [Fact]
     public void GetProblems_AMissingReferenceOfATrackedPlugin_IsAProblemOnTheReferrersFile_NamingItsTarget_WordedAsTheGridWordsIt()
@@ -97,6 +153,6 @@ public sealed class PluginProblemQueryServiceTests
     {
         var plugin = Plugin("Clean.esp");
 
-        Assert.Null(Ask(state, [plugin], [], plugin));
+        Assert.Null(Ask(state, [plugin], [], [], plugin));
     }
 }

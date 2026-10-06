@@ -126,6 +126,8 @@ internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null)
     public string? LastRebuildInstanceRoot { get; private set; }
     public IRecordReads RequireReads() => reads;
 
+    public IReadOnlyList<SourceFileFailure> SourceFileFailures { get; set; } = [];
+
     public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => Task.FromResult(Sequence >= atLeast);
 
     public void SetFilter(string sql, string source) => ActiveFilter = (sql, source);
@@ -157,6 +159,8 @@ internal sealed class StubIndex(IRecordReads? reads) : IQueryIndex
     public (string Sql, string Source)? ActiveFilter => null;
     public long Sequence => 0;
     public IRecordReads RequireReads() => reads ?? throw new NoLoadOrderException();
+
+    public IReadOnlyList<SourceFileFailure> SourceFileFailures => [];
 
     public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw ReadsOnly();
     public void SetFilter(string sql, string source) => throw ReadsOnly();
