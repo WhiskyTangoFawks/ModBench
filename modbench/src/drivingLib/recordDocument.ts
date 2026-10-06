@@ -55,7 +55,10 @@ export async function recordDocument(
   client: RecordDocumentClient, { formKey, plugin: given }: Pick<RecordCopy, 'formKey'> & Partial<RecordCopy>,
 ): Promise<RecordDocument | undefined> {
   const plugin = given ?? await client.getRecordOwner(formKey);
-  if (!plugin) return undefined;
+  return plugin && copyDocument(client, { formKey, plugin });
+}
+
+export async function copyDocument(client: RecordDocumentClient, { formKey, plugin }: RecordCopy): Promise<RecordDocument> {
   const file = await client.getRecordFile(plugin, formKey);
   if (file === null) return { refused: holdsNoCopy({ formKey, plugin }) };
   if (!file.path) {
