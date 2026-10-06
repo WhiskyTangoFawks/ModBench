@@ -32,7 +32,7 @@ public class IndexAtomicityTests
     }
 
     [Fact]
-    public void Index_ReadWhenItLogsItsCommittedTimings_SeesEveryRecord()
+    public void APluginsRecords_AreThereWhenItsIndexCommits()
     {
         using var fixture = new PluginFixtureBuilder("index-commit-visibility")
             .WithPlugin("Atomic.esp", mod =>
@@ -47,7 +47,11 @@ public class IndexAtomicityTests
         using var loggerFactory = LoggerFactory.Create(b =>
         {
             b.SetMinimumLevel(LogLevel.Debug);
-            b.AddProvider(new OnMessage("Index Atomic.esp:", () => npcsAtCommit = opened?.RequireReads().CountOf(key, "npc_")));
+            b.AddProvider(new CollectingLoggerProvider([], logged: entry =>
+            {
+                if (entry.Message.StartsWith("Index Atomic.esp:", StringComparison.Ordinal))
+                    npcsAtCommit = opened?.RequireReads().CountOf(key, "npc_");
+            }));
         });
         var holder = new LoadOrderHolder();
         using var index = opened = Indexes.Open(holder, loggerFactory: loggerFactory);
@@ -55,18 +59,5 @@ public class IndexAtomicityTests
         index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(2, npcsAtCommit);
-    }
-
-    private sealed class OnMessage(string prefix, Action action) : ILoggerProvider, ILogger
-    {
-        public ILogger CreateLogger(string categoryName) => this;
-        public void Dispose() { }
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
-            Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            if (formatter(state, exception).StartsWith(prefix, StringComparison.Ordinal)) action();
-        }
     }
 }

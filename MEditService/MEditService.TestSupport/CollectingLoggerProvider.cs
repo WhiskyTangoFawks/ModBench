@@ -6,16 +6,17 @@ namespace MEditService.TestSupport;
 /// this exception", not just that the message text appeared.</summary>
 public sealed record LogEntry(LogLevel Level, string Message, Exception? Exception = null);
 
-/// <summary>Asserts on log output without standing up the full Serilog/host pipeline.</summary>
-public sealed class CollectingLoggerProvider(List<LogEntry> entries) : ILoggerProvider
+/// <summary>Asserts on log output without standing up the full Serilog/host pipeline.
+/// <paramref name="logged"/> runs on the logging thread at the moment each entry is logged.</summary>
+public sealed class CollectingLoggerProvider(List<LogEntry> entries, Action<LogEntry>? logged = null) : ILoggerProvider
 {
-    public ILogger CreateLogger(string categoryName) => new CollectingLogger(entries);
+    public ILogger CreateLogger(string categoryName) => new CollectingLogger(entries, logged);
     public void Dispose() { }
 }
 
 /// <summary>Appends under the list's own lock: a reconcile or timer thread logs while the test thread
 /// reads, so a reader takes the same lock.</summary>
-public sealed class CollectingLogger(List<LogEntry> entries) : ILogger
+public sealed class CollectingLogger(List<LogEntry> entries, Action<LogEntry>? logged = null) : ILogger
 {
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
     public bool IsEnabled(LogLevel logLevel) => true;
@@ -24,5 +25,6 @@ public sealed class CollectingLogger(List<LogEntry> entries) : ILogger
     {
         var entry = new LogEntry(logLevel, formatter(state, exception), exception);
         lock (entries) entries.Add(entry);
+        logged?.Invoke(entry);
     }
 }

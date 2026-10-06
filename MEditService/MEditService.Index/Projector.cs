@@ -206,11 +206,16 @@ internal sealed class Projector(
 
     /// <summary>ADR-0015: compares <paramref name="key"/>'s rows against the system of record they
     /// came from (source documents when <paramref name="provider"/>'s mod holds its tree, the binary
-    /// otherwise) and refreshes what differs.</summary>
-    internal ValidationReport Validate(PluginAddress key, PluginProvider provider) =>
-        TreeModOf(key, provider) is { } mod
-            ? ValidateAgainstTree(key, mod)
-            : ValidateAgainstBinary(key);
+    /// otherwise) and refreshes what differs. A tree is validated against <paramref name="read"/>'s
+    /// stamps.</summary>
+    internal ValidationReport Validate(PluginAddress key, PluginProvider provider, ReadState read) =>
+        read switch
+        {
+            // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
+            { Ambiguity: { } ambiguity } => new ValidationReport([], NeedsRebuild: true, [ambiguity]),
+            { Stamps: { } stamps } when provider is PluginProvider.FromMod mod => ValidateAgainstTree(key, mod, stamps),
+            _ => ValidateAgainstBinary(key),
+        };
 
     // ADR-0003, asked of one plugin. A binary has no smaller unit, so a mismatch is a
     // rebuild the caller owns.
@@ -243,17 +248,9 @@ internal sealed class Projector(
     }
 
     // A plugin's rows against the source documents they came from, by content stamp (ADR-0003).
-    private ValidationReport ValidateAgainstTree(PluginAddress key, PluginProvider.FromMod mod)
+    private ValidationReport ValidateAgainstTree(PluginAddress key, PluginProvider.FromMod mod, RecordStamps stamps)
     {
-        var failures = new List<string>();
-        if (!TryTreeStamps(mod, index.Release, key, out var stamps, out var ambiguity))
-        {
-            // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
-            failures.Add(ambiguity);
-            return new ValidationReport([], NeedsRebuild: true, failures);
-        }
-
-        failures.AddRange(stamps.Unreadable);
+        List<string> failures = [.. stamps.Unreadable];
         // A file that could not be read is no evidence that a record is gone.
         var treeFullyRead = stamps.Unreadable.Count == 0;
         return Reconcile(key, mod, stamps.ByFormKey, index.HeldDocumentStamps(key), treeFullyRead, failures);
