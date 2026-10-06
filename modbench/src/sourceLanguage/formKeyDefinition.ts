@@ -1,20 +1,18 @@
-import { parseTree } from 'jsonc-parser';
 import { errorMessage } from '../ports/errorMessage';
+import type { Reporter } from '../ports/reporter';
 import { recordDocument } from '../drivingLib/recordDocument';
 import { formKeyAt } from './formKeyHover';
-import { ownFormKey, recordObject, type RecordLocation, type RecordLocationDeps, type TextSpan } from './recordLocation';
+import type { RecordLocation, RecordLocationDeps } from './recordLocation';
+import { formKeyMember } from './recordText';
 
-export function formKeyMember(text: string, formKey: string): TextSpan | undefined {
-  const root = parseTree(text);
-  const record = root && recordObject(root, formKey);
-  const member = record && ownFormKey(record)?.parent;
-  return member && { start: member.offset, end: member.offset + member.length };
+export interface DefinitionDeps<Document> extends RecordLocationDeps<Document> {
+  reporter: Pick<Reporter, 'shownOnSurface'>;
 }
 
 /** A refusal or a failure offers no definition, and is written to the Output once for each reason
  *  (common.md, Reporting). */
 export function definitionsOf<Document extends { getText(): string }>(
-  { client, reporter, open }: RecordLocationDeps<Document>,
+  { client, reporter, open }: DefinitionDeps<Document>,
 ): (text: string, offset: number) => Promise<RecordLocation<Document> | undefined> {
   const told = new Set<string>();
   const tell = (formKey: string, why: string) => {

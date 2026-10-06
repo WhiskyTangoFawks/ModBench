@@ -1,5 +1,6 @@
 import { findNodeAtOffset, parseTree, type Node } from 'jsonc-parser';
 import type { CompareResult, MEditClient } from '../client';
+import { recordLabel } from './recordText';
 
 const FORM_KEY = /^[0-9A-F]{6}:.+$/i;
 
@@ -24,7 +25,7 @@ export function formKeyAt(text: string, offset: number): FormKeyString | undefin
 function markdownOf(formKey: string, comparison: CompareResult): string {
   const winner = comparison.overrides.find((copy) => copy.isWinner);
   return [
-    '`' + [winner?.editorId, '[' + formKey + ']'].filter(Boolean).join(' ') + '`',
+    '`' + recordLabel(winner?.editorId, formKey) + '`',
     comparison.recordTypeName,
     ...(winner ? [`Winner: ${winner.plugin}`] : []),
   ].join('\n\n');

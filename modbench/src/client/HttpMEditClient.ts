@@ -546,9 +546,12 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async searchRecords(query: string, validTypes: string[]): Promise<RecordPage> {
+  async searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage> {
     const { data, error, response } = await this.apiClient.GET('/records', {
-      params: { query: { search: query, ...(validTypes.length > 0 ? { type: validTypes } : {}), limit: 20 } },
+      params: { query: {
+        search: query, ...(validTypes.length > 0 ? { type: validTypes } : {}), limit: 20,
+        ...(plugin && { plugin: plugin.name, origin: plugin.origin }),
+      } },
     });
     this.ensureOk(`searchRecords(${query})`, response, error);
     return data ?? { items: [], total: 0 };

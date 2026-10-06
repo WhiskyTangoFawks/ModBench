@@ -763,6 +763,17 @@ describe('HttpMEditClient — searchRecords', () => {
     const [request] = fetch.mock.calls.map((call) => call[0]);
     expect(new URL(request?.url ?? '').searchParams.getAll('type')).toEqual(['acti', 'furn']);
   });
+
+  it('searches one plugin, named whole', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { items: [], total: 0 })));
+    const client = makeClient(fetch);
+
+    await client.searchRecords('Lever', [], { name: 'A.esp', origin: 'ModA' });
+
+    const [request] = fetch.mock.calls.map((call) => call[0]);
+    const params = new URL(request?.url ?? '').searchParams;
+    expect([params.get('search'), params.get('plugin'), params.get('origin')]).toEqual(['Lever', 'A.esp', 'ModA']);
+  });
 });
 
 describe('HttpMEditClient — putLoadOrder', () => {
