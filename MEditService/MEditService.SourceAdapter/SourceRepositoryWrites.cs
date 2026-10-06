@@ -339,7 +339,7 @@ internal sealed class SourceRepositoryWrites(
         new($"No document in {plugin.Name}'s tree holds {identity.FormKey}, and its type has no file of " +
             "its own, so there is nowhere to write it.");
 
-    private static InvalidOperationException NoLongerCarried(SourceUnit unit, string formKey) =>
+    private static SourceUnitNotFoundException NoLongerCarried(SourceUnit unit, string formKey) =>
         new($"{unit.RelativePath} was found holding {formKey}, but its own text does not carry it.");
 }
 
