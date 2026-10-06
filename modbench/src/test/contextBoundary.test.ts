@@ -20,14 +20,15 @@ const CLIENT_CALLERS = ['instanceCommands', 'pluginsCommands'];
 
 const COMPOSITION_ROOT = rootFiles().map((path) => relative(SRC, path));
 
+const isEditingView = (relativePath: string): boolean =>
+  [PLUGINS_VIEW_DIR, EDITOR_DIR, SOURCE_LANGUAGE_DIR].includes(relativePath.split(sep)[0] ?? '');
+
 function isExcluded(relativePath: string): boolean {
   const segments = relativePath.split(sep);
   if (segments.includes(GENERATED_DIR)) return true;
   if (segments[0] === WIRE_DIR) return true;
-  if (segments[0] === PLUGINS_VIEW_DIR) return true;
   if (segments[0] === CLIENT_DIR) return true;
-  if (segments[0] === EDITOR_DIR) return true;
-  if (segments[0] === SOURCE_LANGUAGE_DIR) return true;
+  if (isEditingView(relativePath)) return true;
   if (COMPOSITION_ROOT.includes(relativePath)) return true;
   if (isTestSupport(relativePath)) return true;
   return false;
@@ -63,13 +64,20 @@ function importersOfLibFiles(root: string): Map<string, string[]> {
 function findOffenders(root: string): Offense[] {
   const offenses: Offense[] = [];
   const importersOf = importersOfLibFiles(root);
-  const speaksForEditingAlone = (libFile: string, judging: ReadonlySet<string>): boolean => {
-    const importers = importersOf.get(libFile) ?? [];
-    return importers.length > 0 && importers.every((importer) => {
-      const relImporter = relative(root, importer);
-      if (!inDrivingLib(relImporter)) return isExcluded(relImporter);
-      return judging.has(importer) || speaksForEditingAlone(importer, new Set([...judging, libFile]));
-    });
+  const filesReaching = (libFile: string): string[] => {
+    const libFiles = new Set([libFile]);
+    const reaching = new Set<string>();
+    for (const file of libFiles) {
+      for (const importer of importersOf.get(file) ?? []) {
+        const relImporter = relative(root, importer);
+        if (inDrivingLib(relImporter)) libFiles.add(importer); else reaching.add(relImporter);
+      }
+    }
+    return [...reaching];
+  };
+  const speaksForEditingAlone = (libFile: string): boolean => {
+    const reaching = filesReaching(libFile);
+    return reaching.some(isEditingView) && reaching.every(isExcluded);
   };
   for (const path of tsFiles(root)) {
     const relPath = relative(root, path);
@@ -77,7 +85,7 @@ function findOffenders(root: string): Offense[] {
     const text = readFileSync(path, 'utf8');
     const imports = importsOf(text);
     const clientImports = CLIENT_CALLERS.includes(relPath.split(sep)[0] ?? '') ? [] : importsFromDir(imports, CLIENT_DIR);
-    const isEditingLibFile = inDrivingLib(relPath) && speaksForEditingAlone(path, new Set());
+    const isEditingLibFile = inDrivingLib(relPath) && speaksForEditingAlone(path);
     const vocab = isEditingLibFile ? [] : domainVocabIn(text);
     if (clientImports.length > 0 || vocab.length > 0) offenses.push({ path: relPath, clientImports, vocab });
   }
@@ -213,6 +221,23 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     it('FormKey vocabulary in a driving lib file no view imports is caught', () => {
       withPlantedTree((root) => {
         plantLibFileImportedFrom(root);
+        expect(findOffenders(root).map((o) => o.path)).toEqual([LIB_FILE]);
+      });
+    });
+
+    it('FormKey vocabulary in a driving lib file the composition root alone imports is caught', () => {
+      withPlantedTree((root) => {
+        plantLibFileImportedFrom(root);
+        writeFileSync(join(root, 'extension.ts'), "import { recordDocument } from './drivingLib/recordDocument';\n");
+        expect(findOffenders(root).map((o) => o.path)).toEqual([LIB_FILE]);
+      });
+    });
+
+    it('FormKey vocabulary in driving lib files that import each other and no view reaches is caught', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'drivingLib'), { recursive: true });
+        writeFileSync(join(root, LIB_FILE), "import { between } from './between';\nexport const formKey = between;\n");
+        writeFileSync(join(root, 'drivingLib', 'between.ts'), "import * as document from './recordDocument';\nexport const between = document;\n");
         expect(findOffenders(root).map((o) => o.path)).toEqual([LIB_FILE]);
       });
     });
