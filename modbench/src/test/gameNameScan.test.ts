@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
-import { gamePathInfoForRelease } from '../tables/gamePaths';
+import { GAME_RELEASES, gamePathInfoForRelease, SCRIPT_EXTENDER_FOLDERS } from '../tables/gamePaths';
 import { isTestSupport, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
@@ -11,13 +11,9 @@ const THIS_FILE_QUOTING_THE_LITERALS = 'gameNameScan.test.ts';
 
 const TABLE_FILES = [join('tables', 'gamePaths.ts')];
 
-const KNOWN_RELEASES = [
-  'Fallout4', 'Fallout4VR', 'Fallout3', 'FalloutNV', 'SkyrimLE', 'SkyrimSE', 'SkyrimVR', 'EnderalLE', 'Oblivion',
-];
-
 function knownGameNameLiterals(): string[] {
   const literals = new Set<string>();
-  for (const release of KNOWN_RELEASES) {
+  for (const release of GAME_RELEASES) {
     literals.add(release);
     const info = gamePathInfoForRelease(release);
     if (info) {
@@ -60,8 +56,8 @@ const allFiles = (roots: readonly string[]): string[] =>
   roots.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
 
 describe('no extension file names a game outside the table, in a literal a static scan reads', () => {
-  it('holds only releases the table has a row for', () => {
-    expect(KNOWN_RELEASES.filter((release) => gamePathInfoForRelease(release) === undefined)).toEqual([]);
+  it('enumerates the releases from the table', () => {
+    expect(GAME_RELEASES.length).toBeGreaterThan(0);
   });
 
   it('covers the whole extension source tree', () => {
@@ -95,8 +91,9 @@ describe('no extension file names a game outside the table, in a literal a stati
   });
 
   it('forbids every script-extender folder the table names', () => {
-    expect(gameNameLiteralsIn("const dir = 'f4se';\n")).toContain('f4se');
-    expect(gameNameLiteralsIn("const dir = 'obse';\n")).toContain('obse');
+    for (const folder of SCRIPT_EXTENDER_FOLDERS) {
+      expect(gameNameLiteralsIn(`const dir = '${folder}';\n`)).toContain(folder);
+    }
   });
 
   it('does not flag ordinary generic-folder vocabulary', () => {

@@ -64,7 +64,7 @@ import { installNameRefusal } from './install/install';
 import { warnIfFomod } from './install/fomodWarning';
 import { refresh } from './instanceCommands/loadOrder';
 import { editingFlow, exitEditing } from './instanceCommands/editing';
-import { loadOrderPutOnEachValue, modSyncOnEachValue, pluginSyncOnEachValue } from './syncWiring';
+import { loadOrderPutHandler, loadOrderPutOnEachValue, modSyncOnEachValue, pluginSyncOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
@@ -199,8 +199,9 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     client, sender, instanceRoot, exitEditing: () => exitEditing(session, client),
     around: view.around, tell: view.tell, log: (message) => outputChannel.error(message),
   }));
-  own(loadOrderPutOnEachValue(instance, editing));
-  own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', (value: InstanceValue) => editing.put(value)));
+  const putLoadOrder = loadOrderPutHandler(editing);
+  own(loadOrderPutOnEachValue(instance, putLoadOrder));
+  own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor }));
   ownAll(own, registerModContextCommands({
