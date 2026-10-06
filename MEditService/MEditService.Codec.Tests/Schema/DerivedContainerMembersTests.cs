@@ -30,13 +30,13 @@ public sealed class DerivedContainerMembersTests
     }
 
     [Fact]
-    public void EveryRecordTypeInTheGameAssembly_IsSwept_IncludingTheOnesTheSchemaExcludes_BecauseADerivedMemberOnATypeOutsideTheSweepIsOneTheOtherTestsNeverReach()
+    public void EveryRecordTypeInTheGameAssembly_IsSwept_IncludingTheSiblingsOfATablesBoundType_BecauseADerivedMemberOnATypeOutsideTheSweepIsOneTheOtherTestsNeverReach()
     {
         var swept = RecordTypes().Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
         var tabled = SchemaMajorRecordTypeNamesWithoutTheModHeaderWhichHasATableOfItsOwnAndIsNoRecord();
 
         Assert.True(swept.Count > tabled.Count,
-            "the sweep is no broader than the schema's record types, so it asserts nothing about the placed variants the schema collapses into refr.");
+            "the sweep is no broader than the types the schema's tables are bound to, so it asserts nothing about their siblings, such as GMST's.");
         Assert.Empty(tabled.Except(swept, StringComparer.Ordinal));
 
         Assert.Empty(DerivedChildFields().Select(row => row.Parent).Distinct().Except(swept, StringComparer.Ordinal));

@@ -74,7 +74,9 @@ internal sealed class MutagenModDocuments(
         var records = new List<IMajorRecordGetter>();
         try
         {
-            foreach (var record in mod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false))
+            var ofTable = mod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false)
+                .Where(record => IsOf(tableName, schema, record));
+            foreach (var record in ofTable)
                 records.Add(record);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -100,6 +102,11 @@ internal sealed class MutagenModDocuments(
             foreach (var document in documents) yield return document;
         }
     }
+
+    // Mutagen's enumeration by one placed-trap variant (a placed arrow, hazard, missile...) yields
+    // every variant a cell holds.
+    private bool IsOf(string tableName, RecordTableSchema schema, IMajorRecordGetter record) =>
+        schema.RecordType.IsInstanceOfType(record) || RecordTableName.Of(record, schemas) == tableName;
 
     private PluginDocument Document(string tableName, RecordTableSchema schema, IMajorRecordGetter record)
     {

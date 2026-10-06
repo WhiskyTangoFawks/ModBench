@@ -90,7 +90,7 @@
       "CheckErrors": {
         "ActivateParents": "Parents[0].Reference: [1A6C7C:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "Base": "[084912:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "LinkedReferences": "[0].KeywordOrReference: [02C967:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].KeywordOrReference: Found a NULL reference, expected: ACHR, KYWD, REFR; [2].KeywordOrReference: [05D5E6:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "LinkedReferences": "[0].KeywordOrReference: [02C967:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].KeywordOrReference: Found a NULL reference, expected: ACHR, KYWD, PARW, PBAR, PBEA, PCON, PFLA, PGRE, PHZD, PMIS, REFR; [2].KeywordOrReference: [05D5E6:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "VirtualMachineAdapter": "Scripts[0].Properties[0].Object: [05D5E6:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": null,

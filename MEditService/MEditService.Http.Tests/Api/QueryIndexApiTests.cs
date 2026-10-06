@@ -186,8 +186,8 @@ public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> l
         var exterior = blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require();
         var interior = interiors[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require();
 
-        Assert.Equal(["Landscape", "Navmesh", "Placed NPC", "Placed Object"], await ChildRecordTypeNames(exterior));
-        Assert.Equal(["Navmesh", "Placed NPC", "Placed Object"], await ChildRecordTypeNames(interior));
+        Assert.Equal(["Landscape", "Navmesh", .. PlacedRecordTables.DisplayNames], await ChildRecordTypeNames(exterior));
+        Assert.Equal(["Navmesh", .. PlacedRecordTables.DisplayNames], await ChildRecordTypeNames(interior));
     }
 
     private async Task<IEnumerable<string?>> ChildRecordTypeNames(string formKey)
