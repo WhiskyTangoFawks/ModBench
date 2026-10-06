@@ -359,7 +359,8 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
         var worldspaceDocument = SourceRepositoryLayout.ContainerDocumentHeldBy(Path.Combine(_modFolder, path.WorldspaceDirectory));
         var worldspace = DocumentText.FormKeyDeclaredBy(worldspaceDocument, plugin.Name)
-            ?? throw new UnreadableSourceDocumentException(worldspaceDocument, "it declares no FormKey, so the worldspace its exterior cells sit in is unknown");
+            ?? throw UnreadableSourceDocumentException.In(
+                _modFolder, worldspaceDocument, "it declares no FormKey, so the worldspace its exterior cells sit in is unknown");
 
         var (blockX, blockY) = Coordinates(path.BlockFolderName);
         var (subX, subY) = Coordinates(path.SubBlockFolderName);
@@ -386,7 +387,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             }
             catch (JsonException ex)
             {
-                throw new UnreadableSourceDocumentException(document, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
+                throw UnreadableSourceDocumentException.In(_modFolder, document, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
             }
             if (cell is JsonObject held && PlacedCell.Grid(held) == (x, y)) return DocumentText.FormKeyDeclaredIn(text, document, plugin.Name);
         }

@@ -278,8 +278,8 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         UnreadableSourceDocumentException.In(_modFolder, file, because, formKey);
 }
 
-/// <summary>A file a plugin's source tree files as a record that this reader cannot turn into a
-/// document. Never swallowed: the caller degrades to the binary and records the reason.</summary>
+/// <summary>A file of a plugin's source tree that this reader cannot turn into a document. Never
+/// swallowed: the caller degrades to the binary and records the reason.</summary>
 public sealed class UnreadableSourceDocumentException : InvalidOperationException
 {
     public UnreadableSourceDocumentException() : base("A source document could not be read.")
@@ -292,10 +292,6 @@ public sealed class UnreadableSourceDocumentException : InvalidOperationExceptio
 
     public UnreadableSourceDocumentException(string message, Exception innerException)
         : base(message, innerException)
-    {
-    }
-
-    internal UnreadableSourceDocumentException(string filePath, string because) : base(Because(filePath, because))
     {
     }
 
