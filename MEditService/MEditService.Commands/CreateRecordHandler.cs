@@ -11,7 +11,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands;
 
 /// <summary>The Create gesture's handler (ADR-0014): mints a bare record (plugins.md, Create record, story 2)
-/// under the next free FormKey, as a new source file, at the end of its container's slot, or as a worldspace's cell at its grid.</summary>
+/// under the next free FormKey: a new source file, the end of its container's slot, or a worldspace's grid.</summary>
 public sealed class CreateRecordHandler
 {
     private readonly WriteTargets _targets;
