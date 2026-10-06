@@ -13,7 +13,9 @@ namespace MEditService.Index.Tests.TestSupport;
 /// subscribed to its holder and reconciled over a fixture's plugins.</summary>
 internal static class Indexes
 {
-    /// <summary>The registration over the real adapter, before anything has resolved the index.</summary>
+    /// <summary>The registration over the real adapter, before anything has resolved the index. The
+    /// fixtures' schema is discovered first, as the put-load-order handler does, so no reconcile a
+    /// test waits on pays the discovery.</summary>
     internal static ServiceProvider Container(
         LoadOrderHolder holder,
         IPluginAdapter? adapter = null,
@@ -21,6 +23,7 @@ internal static class Indexes
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null)
     {
+        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         var services = new ServiceCollection();
         services.AddSingleton(holder);
         services.AddSingleton(adapter ?? TestAdapters.Mutagen());
