@@ -65,14 +65,8 @@ public sealed class ChildRecordTypesQueryTests
 
         var types = _svc.GetChildRecordTypes(Plugin, _cell.ToString());
 
-        Assert.Equal([.. besidesPlacedRecords, .. PlacedRecords], types?.Select(t => t.DisplayName));
+        Assert.Equal([.. besidesPlacedRecords, .. PlacedRecordTables.DisplayNames], types?.Select(t => t.DisplayName));
     }
-
-    private static readonly string[] PlacedRecords =
-    [
-        "Placed Arrow", "Placed Barrier", "Placed Beam", "Placed Cone/Voice", "Placed Flame", "Placed Hazard",
-        "Placed Missile", "Placed NPC", "Placed Object", "Placed Projectile",
-    ];
 
     [Fact]
     public void ACell_TakesItsPlaceFromThePluginAsked_NotAnotherOfTheSameName()

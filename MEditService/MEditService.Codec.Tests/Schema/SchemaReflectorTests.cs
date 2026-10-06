@@ -18,7 +18,7 @@ public class SchemaReflectorTests
     [InlineData("pgre", typeof(IPlacedTrapGetter), "Placed Projectile")]
     [InlineData("phzd", typeof(IPlacedHazardGetter), "Placed Hazard")]
     [InlineData("pmis", typeof(IPlacedMissileGetter), "Placed Missile")]
-    public void GetSchemas_GivesEachPlacedVariantItsOwnTable_UnderXEditsName(string table, Type getter, string displayName)
+    public void APlacedVariant_IsATableOfItsOwnType_UnderXEditsName(string table, Type getter, string displayName)
     {
         var schema = _reflector.GetSchemas(GameRelease.Fallout4)[table];
 

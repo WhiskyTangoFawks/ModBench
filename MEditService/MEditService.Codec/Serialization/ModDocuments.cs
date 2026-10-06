@@ -75,7 +75,7 @@ internal sealed class MutagenModDocuments(
         try
         {
             var ofTable = mod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false)
-                .Where(record => IsOf(schema, record));
+                .Where(record => IsOf(tableName, schema, record));
             foreach (var record in ofTable)
                 records.Add(record);
         }
@@ -103,12 +103,10 @@ internal sealed class MutagenModDocuments(
         }
     }
 
-    // Mutagen's enumeration by one subclass yields its siblings too: every other subclass of a GRUP
-    // several share (GMST), which belong here, and every placed-trap variant a cell holds (a placed
-    // arrow, hazard, missile...), which another table claims.
-    private bool IsOf(RecordTableSchema schema, IMajorRecordGetter record) =>
-        schema.RecordType.IsInstanceOfType(record)
-        || !schemas.Values.Any(other => other.RecordType.IsInstanceOfType(record));
+    // Mutagen's enumeration by one placed-trap variant (a placed arrow, hazard, missile...) yields
+    // every variant a cell holds.
+    private bool IsOf(string tableName, RecordTableSchema schema, IMajorRecordGetter record) =>
+        schema.RecordType.IsInstanceOfType(record) || RecordTableName.Of(record, schemas) == tableName;
 
     private PluginDocument Document(string tableName, RecordTableSchema schema, IMajorRecordGetter record)
     {

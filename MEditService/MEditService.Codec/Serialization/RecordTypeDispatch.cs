@@ -191,34 +191,27 @@ public sealed class RecordTypeDispatch
         // The store's record-type dictionary is keyed by that spelling only and throws on "Npc".
         var typesByFolder = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var directoryPerRecordTypeByFolder = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var type in modType.Assembly.GetTypes())
+        foreach (var (type, table) in RecordTableName.GrupRecordClassesIn(modType.Assembly))
         {
-            if (type.IsAbstract || type.IsInterface) continue;
-            if (!typeof(IMajorRecordGetter).IsAssignableFrom(type)) continue;
-            if (type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static) is not { } grup) continue;
-
             byName[type.Name] = type;
 
-            var grupRecordType = grup.GetValue(null)
-                ?? throw new InvalidOperationException($"Expected '{type.Name}.GrupRecordType' to hold a value.");
-            var signature = ((RecordType)grupRecordType).Type;
             // A shared signature resolves to whichever type was discovered first, safe only while they
             // are all ambiguous together; if they disagree, null it so the document names itself.
-            if (byName.TryGetValue(signature, out var existing) && existing != type)
+            if (byName.TryGetValue(table, out var existing) && existing != type)
             {
                 if (existing is not null && IsAmbiguous(existing, abstractElements) != IsAmbiguous(type, abstractElements))
-                    byName[signature] = null;
+                    byName[table] = null;
             }
             else
             {
-                byName[signature] = type;
+                byName[table] = type;
             }
 
             // Every concrete type maps to its owning top-level group, unless it is directory-per-record
             // or has no top-level group at all (a placed ref, a landscape).
             if (DirectoryPerRecordFolders.TryGetValue(type.Name, out var ownFolder))
             {
-                directoryPerRecordTypeByFolder[ownFolder] = signature.ToLowerInvariant();
+                directoryPerRecordTypeByFolder[ownFolder] = table;
                 continue;
             }
             var owningFolder = groupProperties.FirstOrDefault(gp => gp.ElementType.IsAssignableFrom(type)).Property?.Name;
@@ -227,7 +220,7 @@ public sealed class RecordTypeDispatch
             folderByType[type] = owningFolder;
             if (!typesByFolder.TryGetValue(owningFolder, out var schemaNamesHere))
                 typesByFolder[owningFolder] = schemaNamesHere = [];
-            schemaNamesHere.Add(signature.ToLowerInvariant());
+            schemaNamesHere.Add(table);
         }
 
         var ambiguous = byName.Values

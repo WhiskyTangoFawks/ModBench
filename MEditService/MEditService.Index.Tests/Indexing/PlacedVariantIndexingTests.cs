@@ -8,81 +8,144 @@ using Noggog;
 
 namespace MEditService.Index.Tests.Indexing;
 
-public sealed class PlacedVariantIndexingTests : IDisposable
+public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built built) : IClassFixture<PlacedVariantIndexingTests.Built>
 {
+    private static readonly string[] VariantTables = ["parw", "pbar", "pbea", "pcon", "pfla", "pgre", "phzd", "pmis"];
+
+    public static TheoryData<string> Variants { get; } = [.. VariantTables];
+
     private static readonly PluginAddress Key = new("PlacedVariants.esp", "Data");
 
-    private readonly PluginFixtureData _fixture;
-    private readonly OpenedIndex _index;
-    private readonly FormKey _cell, _arrow, _hazard, _projectile, _hazardBase;
+    internal sealed record Placed(FormKey FormKey, string EditorId, FormKey Base, string Group, float X);
 
-    public PlacedVariantIndexingTests()
+    public sealed class Built : IDisposable
     {
-        FormKey cell = default, arrow = default, hazard = default, projectile = default, hazardBase = default;
-        _fixture = new PluginFixtureBuilder("placed-variants")
-            .WithPlugin(Key.Name, mod =>
+        private readonly PluginFixtureData _fixture;
+        private readonly OpenedIndex _index;
+
+        public Built()
+        {
+            var placed = new Dictionary<string, Placed>(StringComparer.Ordinal);
+            FormKey cell = default, linker = default;
+            _fixture = new PluginFixtureBuilder("placed-variants")
+                .WithPlugin(Key.Name, mod =>
+                {
+                    var projectile = mod.Projectiles.AddNew("VariantProjectile");
+                    var hazard = mod.Hazards.AddNew("VariantHazard");
+                    var interior = new Cell(mod) { EditorID = "VariantCell" };
+                    var linking = new PlacedObject(mod) { EditorID = "linkingRef" };
+                    interior.Persistent.Add(linking);
+                    foreach (var (table, index) in VariantTables.Select((table, index) => (table, index)))
+                    {
+                        var (record, baseRecord) = Variant(mod, table, projectile, hazard);
+                        record.EditorID = $"{table}Ref";
+                        ((IPositionRotation)record).Position = new P3Float(index + 1, 0, 0);
+                        var persistent = index % 2 == 0;
+                        (persistent ? interior.Persistent : interior.Temporary).Add(record);
+                        linking.LinkedReferences.Add(new LinkedReferences { Reference = new FormLink<IPlacedGetter>(record.FormKey) });
+                        placed[table] = new Placed(
+                            record.FormKey, $"{table}Ref", baseRecord, persistent ? "persistent" : "temporary", index + 1);
+                    }
+                    var sub = new CellSubBlock { BlockNumber = 0 };
+                    sub.Cells.Add(interior);
+                    var block = new CellBlock { BlockNumber = 0 };
+                    block.SubBlocks.Add(sub);
+                    mod.Cells.Records.Add(block);
+                    (cell, linker) = (interior.FormKey, linking.FormKey);
+                })
+                .Build();
+            _index = Indexes.Reconciled(_fixture);
+            (Cell, Linker, PlacedByTable) = (cell, linker, placed);
+        }
+
+        public FormKey Cell { get; }
+        public FormKey Linker { get; }
+        internal IReadOnlyDictionary<string, Placed> PlacedByTable { get; }
+        public IRecordReads Reads => _index.RequireReads();
+
+        public void Dispose()
+        {
+            _index.Dispose();
+            _fixture.Dispose();
+        }
+
+        private static (APlacedTrap Record, FormKey Base) Variant(Fallout4Mod mod, string table, Projectile projectile, Hazard hazard)
+        {
+            if (table == "phzd")
             {
-                var projectileRecord = mod.Projectiles.AddNew("ArrowProjectile");
-                var hazardRecord = mod.Hazards.AddNew("FireHazard");
-                var interior = new Cell(mod) { EditorID = "VariantCell" };
-                var arrowRef = new PlacedArrow(mod) { EditorID = "arrowRef", Position = new P3Float(1f, 2f, 3f) };
-                arrowRef.Projectile.SetTo(projectileRecord);
-                var hazardRef = new PlacedHazard(mod) { EditorID = "hazardRef" };
-                hazardRef.Hazard.SetTo(hazardRecord);
-                interior.Temporary.Add(arrowRef);
-                interior.Persistent.Add(hazardRef);
-                var sub = new CellSubBlock { BlockNumber = 0 };
-                sub.Cells.Add(interior);
-                var block = new CellBlock { BlockNumber = 0 };
-                block.SubBlocks.Add(sub);
-                mod.Cells.Records.Add(block);
-                (cell, arrow, hazard, projectile, hazardBase) =
-                    (interior.FormKey, arrowRef.FormKey, hazardRef.FormKey, projectileRecord.FormKey, hazardRecord.FormKey);
-            })
-            .Build();
-        _index = Indexes.Reconciled(_fixture);
-        (_cell, _arrow, _hazard, _projectile, _hazardBase) = (cell, arrow, hazard, projectile, hazardBase);
+                var placedHazard = new PlacedHazard(mod);
+                placedHazard.Hazard.SetTo(hazard);
+                return (placedHazard, hazard.FormKey);
+            }
+
+            APlacedTrap record = table switch
+            {
+                "parw" => new PlacedArrow(mod) { Projectile = projectile.ToLink() },
+                "pbar" => new PlacedBarrier(mod) { Projectile = projectile.ToLink() },
+                "pbea" => new PlacedBeam(mod) { Projectile = projectile.ToLink() },
+                "pcon" => new PlacedCone(mod) { Projectile = projectile.ToLink() },
+                "pfla" => new PlacedFlame(mod) { Projectile = projectile.ToLink() },
+                "pgre" => new PlacedTrap(mod) { Projectile = projectile.ToLink() },
+                "pmis" => new PlacedMissile(mod) { Projectile = projectile.ToLink() },
+                _ => throw new ArgumentOutOfRangeException(nameof(table), table, "no placed variant"),
+            };
+            return (record, projectile.FormKey);
+        }
     }
 
-    private IRecordReads Reads => _index.RequireReads();
+    private Placed Of(string table) => built.PlacedByTable[table];
 
-    [Fact]
-    public void EachVariant_ResolvesUnderItsOwnSignature()
+    [Theory]
+    [MemberData(nameof(Variants))]
+    public void AVariant_ResolvesUnderItsOwnSignature(string table)
     {
-        Assert.Equal(new RecordLookupEntry("parw", "arrowRef"), Reads.Resolve(_arrow.ToString()));
-        Assert.Equal(new RecordLookupEntry("phzd", "hazardRef"), Reads.Resolve(_hazard.ToString()));
+        Assert.Equal(new RecordLookupEntry(table, Of(table).EditorId), built.Reads.Resolve(Of(table).FormKey.ToString()));
     }
 
-    [Fact]
-    public void EachVariant_IsAChildOfItsCell_InItsPlacementGroup()
+    [Theory]
+    [MemberData(nameof(Variants))]
+    public void AVariant_IsAChildOfItsCell_InItsPlacementGroup(string table)
     {
-        var children = Reads.GetCellChildRecords(Key, _cell.ToString());
+        var children = built.Reads.GetCellChildRecords(Key, built.Cell.ToString());
+        var group = Of(table).Group == "persistent" ? children.Persistent : children.Temporary;
 
-        Assert.Equal([_arrow.ToString()], children.Temporary.Select(c => c.FormKey));
-        Assert.Equal([_hazard.ToString()], children.Persistent.Select(c => c.FormKey));
+        var child = Assert.Single(group, c => c.FormKey == Of(table).FormKey.ToString());
+        Assert.Equal(table, child.RecordType);
     }
 
-    [Fact]
-    public void EachVariant_HasAPlacementInItsCell()
+    [Theory]
+    [MemberData(nameof(Variants))]
+    public void AVariant_IsPlacedInItsCell_AtItsPosition(string table)
     {
-        var arrow = Reads.GetPlacement(_arrow.ToString(), Key);
+        var placement = built.Reads.GetPlacement(Of(table).FormKey.ToString(), Key);
 
-        Assert.NotNull(arrow);
-        Assert.Equal(_cell.ToString(), arrow.Value.ParentCell);
-        Assert.Equal(1f, arrow.Value.PosX);
-        Assert.Equal("persistent", Reads.GetPlacement(_hazard.ToString(), Key)?.PlacementGroup);
+        Assert.NotNull(placement);
+        Assert.Equal(built.Cell.ToString(), placement.Value.ParentCell);
+        Assert.Equal(Of(table).X, placement.Value.PosX);
     }
 
-    [Fact]
-    public void EachVariant_ReferencesTheRecordItPlaces()
+    [Theory]
+    [MemberData(nameof(Variants))]
+    public void AVariant_IsPlacedInThePlacementGroupItsCellHoldsItIn(string table)
     {
-        Assert.Contains(Reads.GetReferencedBy(_projectile.ToString()), r => r.FormKey == _arrow.ToString() && r.RecordType == "parw");
-        Assert.Contains(Reads.GetReferencedBy(_hazardBase.ToString()), r => r.FormKey == _hazard.ToString() && r.RecordType == "phzd");
+        Assert.Equal(Of(table).Group, built.Reads.GetPlacement(Of(table).FormKey.ToString(), Key)?.PlacementGroup);
     }
 
-    public void Dispose()
+    [Theory]
+    [MemberData(nameof(Variants))]
+    public void AVariant_ReferencesTheRecordItPlaces(string table)
     {
-        _index.Dispose();
-        _fixture.Dispose();
+        Assert.Contains(
+            built.Reads.GetReferencedBy(Of(table).Base.ToString()),
+            r => r.FormKey == Of(table).FormKey.ToString() && r.RecordType == table);
+    }
+
+    [Theory]
+    [MemberData(nameof(Variants))]
+    public void AVariant_IsReferencedByAPlacedObjectLinkingToIt(string table)
+    {
+        Assert.Contains(
+            built.Reads.GetReferencedBy(Of(table).FormKey.ToString()),
+            r => r.FormKey == built.Linker.ToString() && r.RecordType == "refr");
     }
 }

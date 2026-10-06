@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using MEditService.Codec.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Schema;
@@ -89,10 +89,7 @@ public sealed class SchemaReflector
     private static GameSchemaCache BuildForCategory(
         GameCategory category, Assembly assembly, SchemaAnnotations annotations, ILogger logger)
     {
-        var majorRecordGetterTypeName = $"Mutagen.Bethesda.{category}.I{category}MajorRecordGetter";
-        var majorRecordGetterType = assembly.GetType(majorRecordGetterTypeName)
-            ?? throw new InvalidOperationException($"Expected '{assembly.FullName}' to declare '{majorRecordGetterTypeName}'.");
-        var grups = GrupRecordTypes(assembly, majorRecordGetterType, category).ToList();
+        var grups = GrupRecordTypes(assembly).ToList();
 
         annotations.Validate(category, assembly);
 
@@ -140,26 +137,13 @@ public sealed class SchemaReflector
 
     // Every concrete record class the assembly registers under a GRUP, paired with its own getter
     // interface.
-    private static IEnumerable<(string TableName, Type GetterInterface)> GrupRecordTypes(
-        Assembly assembly, Type majorRecordGetterType, GameCategory category)
-    {
-        foreach (var type in assembly.GetTypes())
+    private static IEnumerable<(string TableName, Type GetterInterface)> GrupRecordTypes(Assembly assembly) =>
+        RecordTableName.GrupRecordClassesIn(assembly).Select(grup =>
         {
-            if (type.IsAbstract || type.IsInterface) continue;
-            if (!majorRecordGetterType.IsAssignableFrom(type)) continue;
-
-            var grupField = type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static);
-            if (grupField == null) continue;
-
-            var grupRecordType = grupField.GetValue(null)
-                ?? throw new InvalidOperationException($"Expected '{type.Name}.GrupRecordType' to hold a value.");
-            var getterTypeName = $"Mutagen.Bethesda.{category}.I{type.Name}Getter";
-            yield return (
-                ((RecordType)grupRecordType).Type.ToLowerInvariant(),
-                assembly.GetType(getterTypeName)
-                    ?? throw new InvalidOperationException($"Expected '{assembly.FullName}' to declare '{getterTypeName}'."));
-        }
-    }
+            var getterTypeName = $"{grup.RecordClass.Namespace}.I{grup.RecordClass.Name}Getter";
+            return (grup.Table, assembly.GetType(getterTypeName)
+                ?? throw new InvalidOperationException($"Expected '{assembly.FullName}' to declare '{getterTypeName}'."));
+        });
 
     // RecordType stays bound to the discovery winner even though the columns are unioned: Mutagen's
     // EnumerateMajorRecords falls back to the abstract group base and returns every sibling's records

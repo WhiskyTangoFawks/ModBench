@@ -18,10 +18,8 @@ public sealed class ChildRecordTypesTests
 
     private static readonly Fallout4Mod Mod = new(ModKey.FromFileName("Holds.esp"), Fallout4Release.Fallout4);
 
-    private static readonly string[] PlacedRecords =
-        ["achr", "parw", "pbar", "pbea", "pcon", "pfla", "pgre", "phzd", "pmis", "refr"];
-
-    private static string[] Holding(params string[] others) => [.. PlacedRecords.Concat(others).Order(StringComparer.Ordinal)];
+    private static string[] Holding(params string[] others) =>
+        [.. PlacedRecordTables.Names.Concat(others).Order(StringComparer.Ordinal)];
 
     private static string[] Of(IMajorRecordGetter container, CellPlace? place = null) =>
         [.. ChildRecordTypes.Of(

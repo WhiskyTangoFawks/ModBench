@@ -26,15 +26,36 @@ public static class RecordTableName
         // A table built from several concrete classes (Globals) binds its RecordType to whichever
         // was discovered first, so a sibling matches nothing above — and the GRUP signature the
         // schema names that table after is on the record's own class.
-        return GrupSignatureOf(concrete) ?? concrete.Name.ToLowerInvariant();
+        return GrupSignatureOf(RecordClassOf(concrete)) ?? concrete.Name.ToLowerInvariant();
     }
 
     /// <summary>The record signature a table is named after: the table is its lowercase.</summary>
     public static string SignatureOf(string table) => table.ToUpperInvariant();
 
+    private const string OverlaySuffix = "BinaryOverlay";
+
+    // Mutagen names the class of a record read lazily from a plugin after the record's own class,
+    // which alone declares the GRUP signature.
+    private static Type RecordClassOf(Type type) =>
+        type.Name.EndsWith(OverlaySuffix, StringComparison.Ordinal)
+        && type.Assembly.GetType($"{type.Namespace}.{type.Name[..^OverlaySuffix.Length]}") is { } recordClass
+            ? recordClass
+            : type;
+
+    /// <summary>Every concrete record class <paramref name="gameAssembly"/> registers under a GRUP,
+    /// with the table its GRUP signature names.</summary>
+    internal static IEnumerable<(Type RecordClass, string Table)> GrupRecordClassesIn(Assembly gameAssembly)
+    {
+        foreach (var type in gameAssembly.GetTypes())
+        {
+            if (type.IsAbstract || type.IsInterface || !typeof(IMajorRecordGetter).IsAssignableFrom(type)) continue;
+            if (GrupSignatureOf(type) is { } table) yield return (type, table);
+        }
+    }
+
     private static string? GrupSignatureOf(Type type) =>
-        type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
-            is RecordType grup
-            ? grup.Type.ToLowerInvariant()
+        type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static) is { } grup
+            ? ((RecordType)(grup.GetValue(null)
+                ?? throw new InvalidOperationException($"Expected '{type.Name}.GrupRecordType' to hold a value."))).Type.ToLowerInvariant()
             : null;
 }
