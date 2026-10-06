@@ -326,15 +326,4 @@ internal sealed class WriteTargets(
                 RecordEditRefusal.HeaderDeleteNotSupported,
                 "The plugin header cannot be deleted — it is not an ordinary record.")
             : null;
-
-    internal const string SourceHoldsNoContainer = "no readable container document in the source plugin carries it";
-
-    internal static RecordEditResult? RefuseIfHeldInsideAnotherRecord(string recordType, GameRelease release, string because)
-    {
-        if (CreatableRecordTypes.Includes(recordType, release)) return null;
-
-        return RecordEditResult.Refused(
-            RecordEditRefusal.HeldInAnotherRecordNotYetSupported,
-            $"'{recordType}' is held inside another record's document, and {because}.");
-    }
 }

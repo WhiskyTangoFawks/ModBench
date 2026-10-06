@@ -82,7 +82,12 @@ public sealed class CreateRecordHandler
                 RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");
         }
         if (RouteByContainer(plugin, container, position) is { } routed) return routed;
-        if (WriteTargets.RefuseIfHeldInsideAnotherRecord(recordType, release, "creating one is not supported yet") is { } held) return held;
+        if (!CreatableRecordTypes.Includes(recordType, release))
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.HeldInAnotherRecordNotYetSupported,
+                $"'{recordType}' is held inside another record's document, and creating one is not supported yet.");
+        }
 
         if (FormKeyAllocator.Over(repository, plugin, release).Next(out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
