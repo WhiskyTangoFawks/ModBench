@@ -78,9 +78,12 @@ internal sealed class FakeReads(
     public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey) =>
         ReferencedBy.GetValueOrDefault(targetFormKey, []);
 
-    public IReadOnlyList<MissingReference> MissingReferences { get; set; } = [];
+    public IReadOnlyList<MissingReferenceOnFile> MissingReferences { get; set; } = [];
 
-    public IReadOnlyList<MissingReference> GetReferencesToMissingRecords() => MissingReferences;
+    public IReadOnlyList<MissingReference> GetReferencesToMissingRecords() => [.. MissingReferences.Select(m => m.Reference)];
+
+    public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(Func<PluginAddress, PluginProvider.FromMod?> modOf) =>
+        MissingReferences;
 
     public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) => MatchingPlugins;
 

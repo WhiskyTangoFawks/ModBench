@@ -3,6 +3,7 @@ using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index;
@@ -287,6 +288,25 @@ internal sealed class RelationReads(
                 reader.IsDBNull(4) ? null : reader.GetString(4), target, reader.GetString(6)));
         }
         return missing;
+    }
+
+    public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(
+        Func<PluginAddress, PluginProvider.FromMod?> modOf)
+    {
+        var repositories = new Dictionary<PluginAddress, SourceRepository?>(PluginAddress.Comparer);
+        return
+        [
+            .. GetReferencesToMissingRecords().Select(reference =>
+            {
+                var mod = modOf(reference.Plugin);
+                if (!repositories.TryGetValue(reference.Plugin, out var repository))
+                {
+                    repository = mod is null ? null : SourceRepository.Over(mod, store.Release);
+                    repositories[reference.Plugin] = repository;
+                }
+                return SourceFilePlacement.Place(reference, repository, mod?.Folder ?? "");
+            }),
+        ];
     }
 
     public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)

@@ -33,7 +33,6 @@
          MEditService.Queries's own ProjectReference list. -->
     <ProjectReference Include="..\MEditService.Queries\MEditService.Queries.csproj" />
     <ProjectReference Include="..\MEditService.Index\MEditService.Index.csproj" />
-    <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
     <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />

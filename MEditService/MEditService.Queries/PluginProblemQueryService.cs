@@ -1,10 +1,8 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
-using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
@@ -31,45 +29,27 @@ public sealed class PluginProblemQueryService(IQueryIndex index, LoadOrderHolder
 
         var reads = index.RequireReads();
         var tracked = reads.GetTrackedPlugins();
-        var missing = reads.GetReferencesToMissingRecords().ToLookup(row => row.Plugin, PluginAddress.Comparer);
+        var held = snapshot.Active.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
+        var missing = reads
+            .GetReferencesToMissingRecordsOnFiles(plugin => held.GetValueOrDefault(plugin)?.Provider as PluginProvider.FromMod)
+            .ToLookup(row => row.Reference.Plugin, PluginAddress.Comparer);
         return
         [
             .. snapshot.Active
                 .Where(plugin => tracked.Contains(plugin.Key))
-                .Select(plugin => ProblemsOf(plugin, snapshot.GameRelease, missing[plugin.Key].ToList())),
+                .Select(plugin => ProblemsOf(plugin.Key, snapshot.GameRelease, missing[plugin.Key].ToList())),
         ];
     }
 
-    // The index and the tree on disk are two reads: a file changed outside Modbench shows up in the
-    // tree before the index re-reads it, so a row the tree cannot place fails its plugin, never the answer.
-    private static PluginProblems ProblemsOf(RegisteredPlugin plugin, GameRelease release, List<MissingReference> rows)
-    {
-        if (rows.Count == 0) return new(plugin.Key, []);
-        if (plugin.Provider is not PluginProvider.FromMod mod)
-            return Failed(plugin, $"{plugin.Name} is tracked but no mod folder provides it.");
+    private static PluginProblems ProblemsOf(PluginAddress plugin, GameRelease release, List<MissingReferenceOnFile> rows) =>
+        rows.FirstOrDefault(row => row.Failure is not null) is { } failed
+            ? new(plugin, [], failed.Failure)
+            : new(plugin, [.. rows.Select(row => Problem(row, release))]);
 
-        var repository = SourceRepository.Over(mod, release);
-        var problems = new List<SourceProblem>();
-        foreach (var row in rows)
-        {
-            string? path;
-            try
-            {
-                path = repository.RelativePathOf(plugin.Key, new RecordIdentity(row.FormKey, row.RecordType, row.EditorId));
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Failed(plugin, $"{plugin.Name}'s source could not place {row.FormKey}: {ex.Message}");
-            }
-            // RelativePathOf answers a flat record's would-be path when its file is gone.
-            if (path is null || !File.Exists(Path.Combine(mod.Folder, path))) return Failed(plugin, $"{plugin.Name}'s source holds no file for {row.FormKey}.");
-
-            problems.Add(new SourceProblem(row.FormKey, path, $"{row.FieldPath}: {Unresolved(row.TargetFormKey, release)}"));
-        }
-        return new(plugin.Key, problems);
-    }
-
-    private static PluginProblems Failed(RegisteredPlugin plugin, string failure) => new(plugin.Key, [], failure);
+    private static SourceProblem Problem(MissingReferenceOnFile row, GameRelease release) =>
+        new(row.Reference.FormKey,
+            row.SourceRelativePath ?? throw new InvalidOperationException($"Expected {row.Reference.FormKey} to be placed."),
+            $"{row.Reference.FieldPath}: {Unresolved(row.Reference.TargetFormKey, release)}");
 
     // The grid's and compile's own wording for a link no record answers, from the same builder.
     private static string Unresolved(string target, GameRelease release)
