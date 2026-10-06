@@ -292,7 +292,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         File.Move(PluginSourceRoot.ContainerDocument(directory), Path.Combine(directory, "One.json"));
         File.WriteAllText(Path.Combine(directory, "Two.json"), body);
 
-        Assert.Throws<AmbiguousSourceUnitException>(() => TreeDocuments.Of(repository, Plugin));
+        Assert.Throws<AmbiguousSourceUnitException>(() => repository.Put(Plugin, new SourceDocument(cellKey, "cell", "Cell", body)));
     }
 
     [Fact]
