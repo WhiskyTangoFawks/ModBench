@@ -45,7 +45,16 @@ internal sealed class OverrideCopy
         {
             return WriteTargets.RefuseUnreadableSourceTree(formKey, ex.Message);
         }
+        catch (ChildSlotHeldByAnotherRecordException ex)
+        {
+            return RefuseSlotHeldByAnotherRecord(destinationPlugin, ex);
+        }
     }
+
+    private static RecordEditResult RefuseSlotHeldByAnotherRecord(PluginAddress destinationPlugin, ChildSlotHeldByAnotherRecordException ex) =>
+        RecordEditResult.Refused(
+            RecordEditRefusal.ChildSlotHeldByAnotherRecord,
+            $"{destinationPlugin.Name} ({destinationPlugin.Origin}) holds another record where the copy puts one: {ex.Message}");
 
     private RecordEditResult CopyAsOverride(
         WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace, bool deep)
@@ -60,7 +69,7 @@ internal sealed class OverrideCopy
         if (withChildren)
         {
             if (RefuseIfAnyChildIsAnUnderride(childKeys, destinationPlugin) is { } childUnderride) return childUnderride;
-            if (RecordCopy.RefuseIfHoldsChildRecords(destination, formKey, childKeys) is { } held) return held;
+            if (!replace && RecordCopy.RefuseIfHoldsChildRecords(destination, formKey, childKeys) is { } held) return held;
         }
 
         // A record a container's document carries, a worldspace's persistent cell among them, lands
@@ -118,21 +127,31 @@ internal sealed class OverrideCopy
     }
 
     // A failure leaves the cells before it in the working tree, and the answer names them. Only a
-    // fault of the tree or the file system is that answer; anything else is a bug.
+    // fault of the tree, the file system or a slot another record holds is that answer.
     private RecordEditResult LandCells(WriteTargets.CopyTarget copy, WorldspaceCells cells)
     {
         var (source, identity, destination, release, _) = copy;
         var landed = new List<string>(cells.Persistent);
+        var held = destination.Repository.FormKeysUsed(destination.Plugin);
         foreach (var cell in cells.Numbered)
         {
             try
             {
                 var document = source.Document(CellIdentity(source, cell));
-                _recordCopy.PutExteriorCell(identity.FormKey, document, document.Body, destination, release);
+                if (held.Contains(cell)) _recordCopy.OverwriteHeldCell(document, destination, release);
+                else
+                {
+                    var elsewhere = _recordCopy.FindHeldElsewhere(destination, document.Body, document.RecordType, null, release);
+                    RecordCopy.LandWithoutHeldElsewhere(destination, elsewhere, () =>
+                    {
+                        _recordCopy.PutExteriorCell(identity.FormKey, document, document.Body, destination, release);
+                        return RecordEditResult.Success();
+                    });
+                }
                 landed.Add(cell);
             }
             catch (Exception ex) when (ex is AmbiguousSourceUnitException or UnreadableSourceDocumentException
-                                           or IOException or UnauthorizedAccessException)
+                                           or ChildSlotHeldByAnotherRecordException or IOException or UnauthorizedAccessException)
             {
                 _logger.LogError(ex, "A deep copy of {FormKey} stopped at {Cell}", identity.FormKey, cell);
                 return RecordEditResult.Refused(
@@ -140,6 +159,7 @@ internal sealed class OverrideCopy
                     {
                         AmbiguousSourceUnitException => RecordEditRefusal.AmbiguousSourceUnit,
                         UnreadableSourceDocumentException => RecordEditRefusal.RecordParseFailed,
+                        ChildSlotHeldByAnotherRecordException => RecordEditRefusal.ChildSlotHeldByAnotherRecord,
                         _ => RecordEditRefusal.SourceWriteFailed,
                     },
                     $"{identity.FormKey} landed in {destination.Plugin.Name} ({destination.Plugin.Origin}) only in part, " +
@@ -161,7 +181,7 @@ internal sealed class OverrideCopy
             if (_recordCopy.Identity(destination, formKey, release) is not { } existingTarget)
                 return RecordCopy.RefuseKeyWithNoDocument(destination, formKey);
             if (withChildren)
-                return _recordCopy.AddChildrenToHeldCopy(source.Plugin, existingTarget, body, identity.RecordType, destination, release);
+                return _recordCopy.MergeChildrenIntoHeldCopy(source.Plugin, existingTarget, body, identity.RecordType, destination, release);
             if (!replace) return RecordCopy.RefuseHeldWithoutReplace(formKey, destinationPlugin);
 
             // Own fields only, as xEdit's copy-into does: the children the destination's copy
@@ -169,6 +189,19 @@ internal sealed class OverrideCopy
             return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
         }
 
+        var elsewhere = withChildren
+            ? _recordCopy.FindHeldElsewhere(destination, body, identity.RecordType, null, release)
+            : RecordCopy.HeldElsewhere.None;
+        var carrying = _recordCopy.CarryingHeldElsewhere(elsewhere, body, identity.RecordType, release);
+        return RecordCopy.LandWithoutHeldElsewhere(
+            destination, elsewhere, () => LandNewRecord(copy, carrying, destinationPlugin, withChildren));
+    }
+
+    private RecordEditResult LandNewRecord(
+        WriteTargets.CopyTarget copy, string body, PluginAddress destinationPlugin, bool withChildren)
+    {
+        var (source, identity, destination, release, _) = copy;
+        var formKey = identity.FormKey;
         var isCell = RecordTypeDispatch.For(release).IsCell(identity.RecordType);
         if (isCell && source.WorldspaceOf(identity) is { } worldspace)
         {
