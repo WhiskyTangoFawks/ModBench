@@ -674,10 +674,13 @@ internal sealed class Reconciler(
                 return;
             }
 
-            var readWhole = false;
-            scope.Failed.Read(plugin.Registered, state => ValidateAgainst(scope, plugin, holdsTree, state, out readWhole));
-            // A read of its own, so its failure is remembered against what it read from.
-            if (readWhole) ReindexHeldPlugin(key);
+            var validation = Validation.Failed;
+            scope.Failed.Read(plugin.Registered, state =>
+            {
+                validation = ValidateAgainst(scope, plugin, holdsTree, state);
+                return validation != Validation.Failed;
+            });
+            if (validation == Validation.ReadWhole) ReindexHeldPlugin(key);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
@@ -687,9 +690,16 @@ internal sealed class Reconciler(
         }
     }
 
-    // False when the validation could not read what the plugin reads from. Leaves the plugin to be
-    // read whole when its rows cannot be brought true here.
-    private bool ValidateAgainst(OpenScope scope, PluginMetadata plugin, bool holdsTree, ReadState state, out bool readWhole)
+    private enum Validation
+    {
+        Failed,
+        RowsTrue,
+        ReadWhole,
+    }
+
+    // Failed when the validation could not read what the plugin reads from; ReadWhole when its rows
+    // cannot be brought true here.
+    private Validation ValidateAgainst(OpenScope scope, PluginMetadata plugin, bool holdsTree, ReadState state)
     {
         var key = plugin.Key;
         var report = scope.Projector.Validate(key, plugin.Provider, state);
@@ -698,16 +708,15 @@ internal sealed class Reconciler(
             foreach (var failure in report.Failures)
                 logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
             FailRead(scope, key, ValidationFailure(holdsTree, string.Join("; ", report.Failures)));
-            readWhole = false;
-            return false;
+            return Validation.Failed;
         }
 
         // Gained records are refreshed by key so the rows that moved are named (ADR-0015).
-        readWhole = report.NeedsRebuild && report.ChangedKeys.Count > 0 && plugin.Provider is PluginProvider.FromMod mod
+        var readWhole = report.NeedsRebuild && report.ChangedKeys.Count > 0 && plugin.Provider is PluginProvider.FromMod mod
             ? !RefreshedByKeys(scope, key, mod, report.ChangedKeys)
             // An untracked plugin's rows went with its file, and the file is back.
             : report.NeedsRebuild || (!holdsTree && scope.Index.IndexedContentHash(key) is null);
-        return true;
+        return readWhole ? Validation.ReadWhole : Validation.RowsTrue;
     }
 
     // editor.md, States, story 6: the rows stay the last good read, and say why.

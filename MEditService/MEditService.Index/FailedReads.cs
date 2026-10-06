@@ -27,8 +27,8 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
     }
 
     /// <summary>Runs one read of <paramref name="plugin"/> over what it reads from, taken first, as a
-    /// file can change during the read. A failure is remembered against that state, unless a file
-    /// another process held stopped it.</summary>
+    /// file can change during the read. A failure is remembered against that state, but one where a
+    /// file could not be read or opened vouches for nothing.</summary>
     public void Read(RegisteredPlugin plugin, Func<ReadState, bool> read)
     {
         ReadState? state = null;
