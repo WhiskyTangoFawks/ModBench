@@ -13,7 +13,7 @@ vi.mock('vscode', async () => ({
   TreeItem: (await import('../../test/vscodeMock')).TreeItem,
   TreeItemCollapsibleState: (await import('../../test/vscodeMock')).TreeItemCollapsibleState,
   EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { return undefined; } dispose() { return undefined; } },
-  Uri: { from: (parts: { path: string }) => parts.path, file: (path: string) => `file://${path}`, joinPath: vi.fn() },
+  Uri: { from: ({ path, query }: { path: string; query?: string }) => (query ? `${path}?${query}` : path), file: (path: string) => `file://${path}`, joinPath: vi.fn() },
   Disposable: class { constructor(public dispose: () => void) {} },
   ViewColumn: { Active: -1, One: 1, Beside: -2 },
   commands: {
@@ -25,6 +25,7 @@ vi.mock('vscode', async () => ({
   },
   workspace: {
     registerFileSystemProvider: (...args: unknown[]) => registerFileSystemProvider(...args),
+    registerTextDocumentContentProvider: () => ({ dispose: () => undefined }),
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
   },
   window: {
@@ -39,6 +40,7 @@ import { ActiveRecordTracker } from '../ActiveRecordTracker';
 import { EditsInFlight } from '../followRecord';
 import { FocusedCells } from '../focusedCells';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { renderedDocumentUri } from '../renderedDocument';
 
 const reporter = { report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() };
 
@@ -181,9 +183,10 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
   const opened = () => executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith').map(([, uri, viewType]) => [uri, viewType]);
 
-  function registerAnswering(file: { path: string | null } | null, holds = GUN): void {
+  function registerAnswering(file: { path: string | null } | null, holds = GUN, renderedName = 'Gun.json'): void {
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getRecordFile', file);
+    meditClient.setQueryAnswer('getRenderedDocument', { fileName: renderedName, text: '{}' });
     meditClient.setQueryAnswer('getRecordOfFile', { formKey: holds, plugin: plugin.name, origin: plugin.origin });
     register(() => [], { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient });
   }
@@ -198,20 +201,29 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     ]);
   });
 
-  it('opens an untracked copy, whose record has no file, in the record\'s own tab', async () => {
+  it('opens an untracked copy, which has no file, as the document mEdit renders it as, in the record grid', async () => {
     registerAnswering({ path: null });
 
     await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
 
-    expect(opened()).toEqual([[`/${encodeURIComponent(GUN)}.modbench-record`, 'modbench.record']]);
+    expect(opened()).toEqual([[renderedDocumentUri({ formKey: GUN, plugin }, 'Gun.json'), 'modbench.recordFile']]);
   });
 
-  it('opens an untracked plugin\'s header in the header\'s own tab', async () => {
-    registerAnswering({ path: null });
+  it('opens an untracked plugin\'s header as the document mEdit renders it as', async () => {
+    registerAnswering({ path: null }, '000000:A.esp', 'A.esp.json');
 
     await commandHandlers.get('modbench.record.open')?.({ header: plugin });
 
-    expect(opened()).toEqual([['/A.esp.modbench-record', 'modbench.record']]);
+    expect(opened()).toEqual([[renderedDocumentUri({ formKey: '000000:A.esp', plugin }, 'A.esp.json'), 'modbench.recordFile']]);
+  });
+
+  it('opens an untracked placed reference as its own rendered document, named by its own EditorID', async () => {
+    const PLACED = '000803:A.esp';
+    registerAnswering({ path: null }, PLACED, 'SharedRef - 000803_A.esp.json');
+
+    await commandHandlers.get('modbench.record.open')?.({ kind: 'placed', formKey: PLACED, plugin: plugin.name, origin: plugin.origin });
+
+    expect(opened()).toEqual([[renderedDocumentUri({ formKey: PLACED, plugin }, 'SharedRef - 000803_A.esp.json'), 'modbench.recordFile']]);
   });
 
   it('opens a copy carried in another record\'s file, as a placed reference is in its cell\'s, in its own tab', async () => {
@@ -228,7 +240,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
     await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
 
-    expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, `A.esp (ModA) holds no ${GUN}, or its file is gone.`]]);
+    expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, `A.esp (ModA) holds no ${GUN}.`]]);
     expect(opened()).toEqual([]);
   });
 });
