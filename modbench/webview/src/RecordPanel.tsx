@@ -24,6 +24,7 @@ import { recordRows, shownCell, visibleRows, navRows, FORM_ID_PATH, type GridCel
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
+  mEditLoadError?: string;
 };
 
 // One sweep over the response's own overrides, keyed as the backend keys its dictionaries
@@ -58,7 +59,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // lands, so it can never read as a false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
   const [loadFailures, setLoadFailures] = useState<PluginLoadFailure[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(mEditWindow.mEditLoadError ?? null);
   const [collapsedRows, setCollapsedRows] = useState<Set<string>>(new Set());
   const toggleRow = (rowKey: string) => setCollapsedRows(prev => {
     const next = new Set(prev);
