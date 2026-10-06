@@ -241,9 +241,8 @@ async function openRecordTab(
   });
 }
 
-// A record given without a plugin opens its winning copy. A tracked copy opens as its own file and
-// an untracked one as mEdit's rendering of it. A copy carried in another record's file opens as a
-// child's document of that file.
+// A record given without a plugin opens its winning copy. A tracked copy opens as its own file, an
+// untracked one as mEdit's rendering, and one carried in another record's file as a child's tab.
 async function tabOf(client: OpenClient, { formKey, plugin: given }: RecordToOpen): Promise<[vscode.Uri, string]> {
   const plugin = given ?? await client.getRecordOwner(formKey);
   if (!plugin) throw new Error(`No active plugin holds ${formKey}.`);
