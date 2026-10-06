@@ -516,11 +516,11 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getLightPluginsSupported(): Promise<boolean> {
-    return this.withTimeout('getLightPluginsSupported', async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/light-plugins-supported', { signal });
-      this.ensureOk('getLightPluginsSupported', response, error);
-      return data ?? false;
+  async getCreatablePluginExtensions(): Promise<string[]> {
+    return this.withTimeout('getCreatablePluginExtensions', async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/creatable-extensions', { signal });
+      this.ensureOk('getCreatablePluginExtensions', response, error);
+      return data ?? [];
     });
   }
 

@@ -197,8 +197,6 @@ public sealed class RecordQueryService(
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
 
-    public bool GetLightPluginsSupported() => LightPluginSupport.Of(_loadOrder.Require().GameRelease);
-
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey)
     {
         var schemas = RequireSchemas();
