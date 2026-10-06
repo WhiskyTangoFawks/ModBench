@@ -276,6 +276,41 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
                 Plugin, _temporaryRef.FormKey.ToString(), InteriorCellWithItsRefsTyped("PlacedObjekt"), Schemas)));
     }
 
+    private string TopCellFormKey => _worldspace.TopCell.Require().FormKey.ToString();
+
+    private void MisspellTheTopCellsType()
+    {
+        var path = FullPath(WorldspacePath);
+        var text = File.ReadAllText(path);
+        var misspelt = text.Replace("\"TopCell\": {", "\"TopCell\": {\n    \"MutagenObjectType\": \"Cel\",", StringComparison.Ordinal);
+        Assert.NotEqual(text, misspelt);
+        File.WriteAllText(path, misspelt);
+    }
+
+    private void AssertNamesTheWorldspacesMisspeltTopCell(UnreadableSourceDocumentException refused)
+    {
+        Assert.Equal((WorldspacePath, TopCellFormKey), (refused.File?.SourceRelativePath, refused.File?.FormKey));
+        Assert.Contains("a 'Cel', and this game has no record type of that name", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Get_ByFormKey_OfAChildInASingleTypeSlotWhoseTypeIsMisspelt_RefusesNamingItsOwnersFileAndWhy()
+    {
+        MisspellTheTopCellsType();
+
+        AssertNamesTheWorldspacesMisspeltTopCell(Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.Get(Plugin, TopCellFormKey, Schemas)));
+    }
+
+    [Fact]
+    public void ReadingTheTree_WhenAChildInASingleTypeSlotHasItsTypeMisspelt_IsRefusedNamingItsOwnersFileAndWhy()
+    {
+        MisspellTheTopCellsType();
+        using var tree = Repository.OpenDocuments(Plugin, Schemas);
+
+        AssertNamesTheWorldspacesMisspeltTopCell(Assert.Throws<UnreadableSourceDocumentException>(() => tree.Records.ToList()));
+    }
+
     private void HoldTheTemporaryRefTwiceInItsCell()
     {
         _interiorCell.Temporary.Add(_temporaryRef);

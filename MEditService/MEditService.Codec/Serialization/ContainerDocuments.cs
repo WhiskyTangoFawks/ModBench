@@ -106,15 +106,16 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
             slotName, index, DocumentNodes.StringValueOf(formKey), RecordTypeOf(owner, slotName, node), node.Clone());
     }
 
-    // The child's own spelling where the document carries it, else the slot's declared element type:
-    // a slot whose member type is concrete writes no discriminator.
-    private string? RecordTypeOf(Type owner, string slotName, JsonElement node) =>
-        (DeclaredType(node) ?? SlotElementType(owner, slotName)) is { } concrete ? TableFor(concrete) : null;
-
-    private Type? DeclaredType(JsonElement node) =>
-        node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var named) && named.ValueKind == JsonValueKind.String
+    // The child's own spelling where the document carries one, else the slot's declared element type:
+    // a slot whose member type is concrete writes no discriminator. A spelling no type answers to is
+    // no type, whatever the slot holds.
+    private string? RecordTypeOf(Type owner, string slotName, JsonElement node)
+    {
+        var concrete = node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var named) && named.ValueKind == JsonValueKind.String
             ? _dispatch.ConcreteFor(DocumentNodes.StringValueOf(named))
-            : null;
+            : SlotElementType(owner, slotName);
+        return concrete is null ? null : TableFor(concrete);
+    }
 
     private Type? SlotElementType(Type owner, string slotName) =>
         _slots.ElementTypeOf(owner.Name, slotName) is { } element ? _dispatch.ConcreteFor(element) : null;
