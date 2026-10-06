@@ -161,7 +161,7 @@ internal sealed class PluginCompileService(
     private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(
         IReadOnlyList<TreeFile> files, string pluginName, GameRelease release)
     {
-        var read = await adapter.ReadTreeAsync(files, codec, release);
+        var read = await adapter.ReadTreeAsync(SourceRepository.DoorFilesOf(pluginName, files), codec, release);
         if (read.Tree is { } tree) return (tree, null);
 
         logger.LogWarning(read.Error, "{Plugin} could not be read from its source", pluginName);

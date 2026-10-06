@@ -42,7 +42,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
         (document.FormKey, document.RecordType, document.EditorId, document.Body);
 
     private static readonly string HeaderRelativePath =
-        Path.Combine("plugin-source", PluginName, "RecordData.json");
+        PluginSourceRoot.HeaderDocument(PluginName);
 
     private const string HeaderBody = "{\n  \"ModKey\": \"Fixture.esp\",\n  \"MutagenObjectType\": \"Fallout4Mod\"\n}";
 
@@ -66,6 +66,18 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
         Assert.NotNull(header);
         Assert.Equal(PluginHeader.RecordType, header.RecordType);
         Assert.Equal(HeaderBody, header.Body);
+    }
+
+    [Fact]
+    public void ATreeWithTheHeaderUnderTheDoorsName_HoldsNoHeader()
+    {
+        PluginBaselines.Track(
+            _modFolder,
+            [new TreeFile(Path.Combine(PluginSourceRoot.For(PluginName), "RecordData.json"), Encoding.UTF8.GetBytes(HeaderBody))]);
+        var repository = SourceRepository.Open(TestMod.In(_modFolder), Release)
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+
+        Assert.DoesNotContain(TreeDocuments.Of(repository, Plugin), d => d.FormKey == HeaderFormKey);
     }
 
     [Fact]

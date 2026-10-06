@@ -70,6 +70,10 @@ public sealed class SourceRepository
     public static IReadOnlyList<TreeFile> PristineFilesOf(string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
         SourceRepositoryLayout.PristineFilesOf(pluginFileName, treeFiles);
 
+    /// <summary>Files of <see cref="PristineFilesOf"/> as the whole-mod door reads them.</summary>
+    public static IReadOnlyList<TreeFile> DoorFilesOf(string pluginFileName, IEnumerable<TreeFile> files) =>
+        SourceRepositoryLayout.DoorFilesOf(pluginFileName, files);
+
     /// <summary>Throws <see cref="GitUnavailableException"/> when git cannot be run, so no repository
     /// can be made or written here.</summary>
     public static void EnsureTrackable() => GitCli.EnsureOnPath();
