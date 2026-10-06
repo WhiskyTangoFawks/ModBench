@@ -122,8 +122,8 @@ async function iniGamePath(iniText: string, detectors: GameDetectors): Promise<L
   return (await hasDataFolder(root)) ? { found: root } : noDataFolder(GAME_PATH_PLACE, root);
 }
 
-/** The setting, then MO2's `gamePath`, then autodetect. A folder either names with no Data folder
- *  refuses to fall through, because it names the folder the user chose. */
+/** The setting, then MO2's `gamePath`, then autodetect. A folder the setting or `gamePath` names
+ *  that has no Data folder refuses to fall through: the user chose that folder. */
 export function gameDirectoryResolver(
   overridesOf: () => GameDirectoryOverrides, detectors: GameDetectors = STEAM,
 ): GameDirectoryResolver {

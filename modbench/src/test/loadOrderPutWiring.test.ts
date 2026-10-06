@@ -3,7 +3,7 @@ import { createLoadOrderSender } from '../client';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { editingFlow, type Told } from '../instanceCommands/editing';
 import { loadOrderSnapshotOf } from '../instanceLoader/loadOrderSnapshot';
-import { loadOrderPutOnEachValue } from '../syncWiring';
+import { loadOrderPutHandler, loadOrderPutOnEachValue } from '../syncWiring';
 import { FakeInstance } from './mo2/fakeInstance';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 
@@ -33,7 +33,7 @@ describe('the Instance value puts the load order at each recompute', () => {
       exitEditing: () => undefined, around: (entry) => entry(), log: () => undefined,
       tell: (what) => { told.push(what); heard.splice(0).forEach((listener) => listener()); return Promise.resolve(); },
     });
-    const subscription = loadOrderPutOnEachValue(instance, flow);
+    const subscription = loadOrderPutOnEachValue(instance, loadOrderPutHandler(flow));
     await flow.enter(Promise.resolve(instance.value));
 
     instance.publish(valueWith('B.esp'));
@@ -44,5 +44,20 @@ describe('the Instance value puts the load order at each recompute', () => {
 
     const sent = client.calls.filter((c) => c.method === 'putLoadOrder').map((c) => JSON.stringify(c.args[0]));
     expect(sent.map((plugins) => /"name":"(\w\.esp)"/.exec(plugins)?.[1])).toEqual(['A.esp', 'B.esp', 'D.esp']);
+  });
+
+  it('the registered command, run while mEdit is not entered, puts nothing, as its trigger does', async () => {
+    const client = new InMemoryMEditClient();
+    client.setStatus('running');
+    const flow = editingFlow({
+      client, sender: createLoadOrderSender(client), instanceRoot: '/instance',
+      exitEditing: () => undefined, around: (entry) => entry(), log: () => undefined,
+      tell: () => Promise.resolve(),
+    });
+
+    loadOrderPutHandler(flow)(valueWith('A.esp'));
+    await Promise.resolve();
+
+    expect(client.calls.filter((c) => c.method === 'putLoadOrder')).toEqual([]);
   });
 });

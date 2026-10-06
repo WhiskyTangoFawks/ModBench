@@ -14,6 +14,12 @@ export function pluginSyncOnEachValue(instance: Pick<Instance, 'subscribe'>, plu
   return instance.subscribe((value) => { void pluginSync.run(value.pluginSyncArguments); });
 }
 
-export function loadOrderPutOnEachValue(instance: Pick<Instance, 'subscribe'>, editing: { onRecompute(value: InstanceValue): void }) {
-  return instance.subscribe((value) => { editing.onRecompute(value); });
+type LoadOrderPut = (value: InstanceValue) => void;
+
+export function loadOrderPutHandler(editing: { onRecompute: LoadOrderPut }): LoadOrderPut {
+  return (value) => { editing.onRecompute(value); };
+}
+
+export function loadOrderPutOnEachValue(instance: Pick<Instance, 'subscribe'>, put: LoadOrderPut) {
+  return instance.subscribe(put);
 }
