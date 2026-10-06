@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Schema;
@@ -6,4 +7,9 @@ namespace MEditService.Codec.Schema;
 public static class RecordHeaderFlags
 {
     public const string Member = nameof(IMajorRecordGetter.MajorRecordFlagsRaw);
+
+    public static bool Carry(JsonElement document, int bit) =>
+        document.TryGetProperty(Member, out var flags)
+        && flags.ValueKind == JsonValueKind.Number
+        && (flags.GetInt32() & bit) != 0;
 }

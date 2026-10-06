@@ -119,7 +119,7 @@ public sealed class CreateRecordHandler
         switch (ChildRecordTypes.SlotFor(containerType, containerDocument.Body, place, recordType, schemas, release))
         {
             case ChildSlot.Open(var slot):
-                return AppendChild(repository, plugin, recordType, schema, release, containerDocument, slot);
+                return AppendChild(repository, plugin, recordType, schema, release, containerDocument, slot, place);
             case ChildSlot.Filled(var slot, var held):
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ChildSlotHeldByAnotherRecord,
@@ -134,12 +134,16 @@ public sealed class CreateRecordHandler
 
     private RecordEditResult AppendChild(
         SourceRepository repository, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
-        SourceDocument container, string slot)
+        SourceDocument container, string slot, CellPlace? place)
     {
         if (FormKeyAllocator.Over(repository, plugin, release).Next(out var formKey) is { } refusedTarget) return refusedTarget;
-        var child = RecordMint.BareDocument(_codec, schema, release, formKey, editorId: null);
+        var child = JsonNode.Parse(RecordMint.BareDocument(_codec, schema, release, formKey, editorId: null)) as JsonObject
+            ?? throw new InvalidOperationException($"Expected the minted {recordType}'s document to hold a JSON object.");
+        var containerRoot = JsonNode.Parse(container.Body) as JsonObject
+            ?? throw new InvalidOperationException($"Expected {container.FormKey}'s document to hold a JSON object.");
+        PlacedCell.AsCreatedIn(child, slot, containerRoot, place, release);
         var withChild = ContainerDocumentEdits.WithChildAppended(
-                _codec, container.Body, release, container.RecordType, container.FormKey, slot, child, recordType)
+                _codec, container.Body, release, container.RecordType, container.FormKey, slot, child.ToJsonString(), recordType)
             ?? throw new InvalidOperationException($"{container.FormKey} was found, but its own text does not carry it.");
 
         SourceTransaction.Atomically(repository, transaction =>

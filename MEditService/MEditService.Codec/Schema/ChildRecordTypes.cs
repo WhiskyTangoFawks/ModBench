@@ -36,9 +36,9 @@ public static class ChildRecordTypes
         IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
         if (!XEditAddList.TryGetValue(containerType, out var adds)) return [];
-        var members = MembersOf(containerType, containerText, schemas, release);
+        var container = Read(containerType, containerText, schemas, release);
         return [.. adds
-            .Where(add => SlotFor(add, place, members, schemas, release) is ChildSlot.Open or ChildSlot.Several)
+            .Where(add => SlotFor(add, place, container, schemas, release) is ChildSlot.Open or ChildSlot.Several)
             .Select(add => add.Type)];
     }
 
@@ -51,34 +51,53 @@ public static class ChildRecordTypes
         if (!XEditAddList.TryGetValue(containerType, out var adds)
             || adds.Where(add => add.Type.Equals(recordType, StringComparison.OrdinalIgnoreCase)).ToList() is not [var offered])
             return new ChildSlot.NotHeld();
-        return SlotFor(offered, place, MembersOf(containerType, containerText, schemas, release), schemas, release);
+        return SlotFor(offered, place, Read(containerType, containerText, schemas, release), schemas, release);
     }
 
     private static ChildSlot SlotFor(
-        (string Type, Narrowing Narrowing) add, CellPlace? place, IReadOnlyList<Member> members,
+        (string Type, Narrowing Narrowing) add, CellPlace? place, Container container,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
         if (!Allows(add.Narrowing, place) || !schemas.ContainsKey(add.Type)
             || RecordTypeDispatch.For(release).ConcreteFor(add.Type) is not { } held) return new ChildSlot.NotHeld();
 
-        var takers = members.Where(member => member.Holds.Any(type => type.IsAssignableFrom(held))).ToList();
+        var takers = container.Members.Where(member => member.Holds.Any(type => type.IsAssignableFrom(held))).ToList();
         return takers.Where(member => member.HeldBy is null).ToList() switch
         {
             [var only] => new ChildSlot.Open(only.Slot),
             [] => takers is [{ HeldBy: { } heldBy } filled, ..] ? new ChildSlot.Filled(filled.Slot, heldBy) : new ChildSlot.NotHeld(),
+            var open when PlacedGroup(open, container.Persistent) is { } group => new ChildSlot.Open(group),
             var open => new ChildSlot.Several([.. open.Select(member => member.Slot)]),
         };
+    }
+
+    // TwbGroupRecord.Add (wbImplementation.pas) lands a cell's placed record in its persistent group when
+    // the cell carries the Persistent flag, and in its temporary group otherwise.
+    private static string? PlacedGroup(List<Member> open, bool persistent)
+    {
+        if (!open.Any(member => member.Slot == PersistentFlag.PersistentGroup)
+            || !open.Any(member => member.Slot == PersistentFlag.TemporaryGroup)) return null;
+        return persistent ? PersistentFlag.PersistentGroup : PersistentFlag.TemporaryGroup;
     }
 
     // HeldBy names what fills a single-record member, which is then closed; a list member stays open.
     private sealed record Member(string Slot, IReadOnlyList<Type> Holds, string? HeldBy);
 
-    // None for a deleted container: it holds nothing.
-    private static List<Member> MembersOf(
+    private sealed record Container(IReadOnlyList<Member> Members, bool Persistent);
+
+    // No members for a deleted container: it holds nothing.
+    private static Container Read(
         string containerType, string containerText, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
-        if (RecordTypeDispatch.For(release).ConcreteFor(containerType) is not { } container) return [];
         using var document = JsonDocument.Parse(containerText);
+        var persistent = PersistentFlag.IsSet(document.RootElement);
+        return new(MembersOf(containerType, document, schemas, release), persistent);
+    }
+
+    private static List<Member> MembersOf(
+        string containerType, JsonDocument document, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+    {
+        if (RecordTypeDispatch.For(release).ConcreteFor(containerType) is not { } container) return [];
         if (DeletedFlag.IsSet(document.RootElement)) return [];
 
         var held = new ContainerDocuments(release, schemas).ChildrenOf(containerType, document.RootElement)
@@ -116,7 +135,7 @@ public abstract record ChildSlot
     /// <summary>The single-record member that would take it already holds <paramref name="HeldFormKey"/>.</summary>
     public sealed record Filled(string Slot, string HeldFormKey) : ChildSlot;
 
-    /// <summary>More than one member takes it: a placed reference's persistent and temporary children.</summary>
+    /// <summary>More than one member takes it.</summary>
     public sealed record Several(IReadOnlyList<string> Slots) : ChildSlot;
 
     /// <summary>xEdit's Add offers no such record on the container where it sits.</summary>
