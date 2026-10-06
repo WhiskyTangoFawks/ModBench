@@ -30,7 +30,7 @@ public sealed class PluginProblemsApiTests : HostedTests
     }
 
     [Fact]
-    public async Task GetProblems_ATrackedPluginReferringToAMissingRecord_NamesTheReferrersFileInTheModFolder()
+    public async Task GetProblems_ATrackedPluginReferringToAMissingRecord_NamesTheReferrersFileInTheModFolder_WhichSpellsTheTargetAsAnswered()
     {
         var fx = await TrackedLoad();
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Name == Plugin).Path).Require();
@@ -41,8 +41,11 @@ public sealed class PluginProblemsApiTests : HostedTests
         Assert.Equal((Plugin, Origin), (plugin.GetProperty("plugin").GetProperty("name").GetString(), plugin.GetProperty("plugin").GetProperty("origin").GetString()));
         var problem = Assert.Single(plugin.GetProperty("problems").EnumerateArray());
         Assert.Equal(await Client.FirstFormKey(Plugin, Origin), problem.GetProperty("formKey").GetString());
+        Assert.Equal(AbsentRecord.ToString(), problem.GetProperty("targetFormKey").GetString());
         Assert.Contains(AbsentRecord.ToString(), problem.GetProperty("message").GetString().Require(), StringComparison.Ordinal);
-        Assert.Contains(Npc, File.ReadAllText(Path.Combine(modFolder, problem.GetProperty("sourceRelativePath").GetString().Require())), StringComparison.Ordinal);
+        var file = File.ReadAllText(Path.Combine(modFolder, problem.GetProperty("sourceRelativePath").GetString().Require()));
+        Assert.Contains(Npc, file, StringComparison.Ordinal);
+        Assert.Contains(JsonSerializer.Serialize(AbsentRecord.ToString()), file, StringComparison.Ordinal);
     }
 
     [Fact]

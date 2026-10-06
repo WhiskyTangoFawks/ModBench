@@ -10,6 +10,7 @@
     { "path": "../client" },
     { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
+    { "path": "../ports" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],

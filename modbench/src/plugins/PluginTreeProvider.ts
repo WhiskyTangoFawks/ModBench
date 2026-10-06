@@ -84,9 +84,8 @@ export class RecordNode extends vscode.TreeItem {
     public readonly record: RecordSummary,
     public readonly origin: string,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
-    // Set for a Quest or Dialog Topic — this same row type expands into their children rather
-    // than forking a wrapper node the way WorldspacesNode/CellNode do, so a container's own row
-    // stays a fully-affordanced record row.
+    // Set for a Quest or Dialog Topic — this same row type expands into their children, so a
+    // container's own row stays a fully-affordanced record row.
     public readonly containerChildType?: 'qust' | 'dial',
     // A qust/dial row shows an expand chevron only when this is true — a Quest with zero
     // children is a leaf. From the same bulk listing `record` came from, never a per-row
@@ -113,19 +112,6 @@ export class RecordNode extends vscode.TreeItem {
 
 // Every node in the spatial chain carries its plugin's `origin` (ADR-0012) and conditions down to
 // its leaves: each hop's repository call needs the one, each record row beneath the other.
-export class WorldspacesNode extends vscode.TreeItem {
-  readonly kind = 'worldspaces' as const;
-  constructor(
-    public readonly plugin: string, typeName: string, count: number, public readonly origin: string,
-    hasParseFailure = false, public readonly conditions: PluginConditions = NOT_EDITABLE,
-  ) {
-    super(typeName, collapsibleWhen(count > 0));
-    this.description = count.toLocaleString();
-    this.contextValue = 'worldspaces';
-    if (hasParseFailure) markFailure(this, failureNote(typeName, null));
-  }
-}
-
 export class WorldspaceNode extends vscode.TreeItem {
   readonly kind = 'worldspace' as const;
   readonly formKey: string;
@@ -252,19 +238,6 @@ export class ChildRecordNode extends vscode.TreeItem {
   }
 }
 
-export class InteriorCellsNode extends vscode.TreeItem {
-  readonly kind = 'interiorCells' as const;
-  constructor(
-    public readonly plugin: string, typeName: string, count: number, public readonly origin: string,
-    hasParseFailure = false, public readonly conditions: PluginConditions = NOT_EDITABLE,
-  ) {
-    super(typeName, collapsibleWhen(count > 0));
-    this.description = count.toLocaleString();
-    this.contextValue = 'interiorCells';
-    if (hasParseFailure) markFailure(this, failureNote(typeName, null));
-  }
-}
-
 /** Shown under a row the backend has not indexed yet. Distinct from `ErrorNode`: this state
  *  clears on its own as indexing catches up, an error does not (plugins.md, States, stories
  *  2 and 6). */
@@ -279,19 +252,9 @@ export class IndexingNode extends vscode.TreeItem {
 
 export type PluginTreeNode =
   | RecordTypeNode | RecordNode
-  | WorldspacesNode | WorldspaceNode | BlockNode | SubBlockNode | CellNode
-  | ChildRecordGroupNode | ChildRecordNode | InteriorCellsNode | InteriorBlockNode | InteriorSubBlockNode
+  | WorldspaceNode | BlockNode | SubBlockNode | CellNode
+  | ChildRecordGroupNode | ChildRecordNode | InteriorBlockNode | InteriorSubBlockNode
   | ErrorNode | IndexingNode;
-
-const SPATIAL_GROUP_FACTORIES: Record<
-  string,
-  (plugin: PluginAddress, group: PluginRecordTypeCount, conditions: PluginConditions) => PluginTreeNode
-> = {
-  wrld: (plugin, g, conditions) =>
-    new WorldspacesNode(plugin.name, g.displayName, g.count, plugin.origin, g.hasParseFailure, conditions),
-  cell: (plugin, g, conditions) =>
-    new InteriorCellsNode(plugin.name, g.displayName, g.count, plugin.origin, g.hasParseFailure, conditions),
-};
 
 // Which raw record-type signature gets RecordNode's own containerChildType flag (Collapsed,
 // expands via fetchContainerChildren) — a Quest's dialog topics/branches/scenes, a Dialog Topic's
@@ -363,10 +326,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     // defined element, and it owns the root rows. This case stays only to satisfy
     // vscode.TreeDataProvider<T>'s own optional-parameter contract.
     if (!element) return [];
-    if (element instanceof RecordTypeNode) return this.fetchRecords(element);
-    // A Quest/DialogTopic row expanding into its own container children — not spatial
-    // (WorldspacesNode/CellNode's own hierarchy), so dispatched here rather than folded into
-    // getSpatialChildren below.
+    if (element instanceof RecordTypeNode) return this.fetchGroup(element);
+    // A Quest/DialogTopic row expanding into its own container children — not spatial, so
+    // dispatched here rather than folded into getSpatialChildren below.
     if (element instanceof RecordNode && element.containerChildType) return this.fetchContainerChildren(element);
     return this.getSpatialChildren(element);
   }
@@ -374,7 +336,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // Dispatch for the worldspace / cell / block spatial hierarchy, split out of getChildren
   // so neither dispatch ladder exceeds the complexity budget.
   private getSpatialChildren(element: PluginTreeNode): Promise<PluginTreeNode[]> | PluginTreeNode[] {
-    if (element instanceof WorldspacesNode) return this.fetchWorldspaces(element);
     if (element instanceof WorldspaceNode) return this.fetchWorldspaceChildren(element);
     if (element instanceof BlockNode) {
       return element.block.subBlocks.map(s => new SubBlockNode(element.plugin, s, element.origin, element.conditions));
@@ -387,7 +348,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       return element.children.map(p =>
         new ChildRecordNode(element.plugin, p, element.origin, element.conditions));
     }
-    if (element instanceof InteriorCellsNode) return this.fetchInteriorCells(element);
     if (element instanceof InteriorBlockNode) {
       return element.block.subBlocks.map(s => new InteriorSubBlockNode(element.plugin, s, element.origin, element.conditions));
     }
@@ -434,13 +394,17 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   async getPluginChildren(plugin: PluginAddress, conditions: PluginConditions = NOT_EDITABLE): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`getPluginChildren(${plugin.name})`, async () => {
       const types = await this.repository.getRecordTypes(plugin);
-      return types
-        .map(t => SPATIAL_GROUP_FACTORIES[t.type]?.(plugin, t, conditions)
-          ?? new RecordTypeNode(plugin.name, t, plugin.origin, conditions));
+      return types.map(t => new RecordTypeNode(plugin.name, t, plugin.origin, conditions));
     });
   }
 
-  private fetchWorldspaces(node: WorldspacesNode): Promise<PluginTreeNode[]> {
+  private fetchGroup(node: RecordTypeNode): Promise<PluginTreeNode[]> {
+    if (node.recordType === 'wrld') return this.fetchWorldspaces(node);
+    if (node.recordType === 'cell') return this.fetchInteriorCells(node);
+    return this.fetchRecords(node);
+  }
+
+  private fetchWorldspaces(node: RecordTypeNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchWorldspaces(${node.plugin})`, async () => {
       const worldspaces = await this.repository.getWorldspaces(pluginAddressOf(node));
       return worldspaces.map(w => new WorldspaceNode(node.plugin, w, node.origin, node.conditions));
@@ -480,7 +444,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   // Every interior cell in one call (plugins.md, The tree, story 8).
-  private fetchInteriorCells(node: InteriorCellsNode): Promise<PluginTreeNode[]> {
+  private fetchInteriorCells(node: RecordTypeNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchInteriorCells(${node.plugin})`, async () => {
       const blocks = await this.getOrLoad(this.interiorCache, pluginAddressKey(pluginAddressOf(node)),
         () => this.repository.getInteriorCells(pluginAddressOf(node)));

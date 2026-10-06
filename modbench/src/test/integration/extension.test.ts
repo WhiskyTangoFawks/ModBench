@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, afterEach, describe, it } from 'mocha';
-import type { CompareResult, PluginMetadata } from '../../client';
+import type { CompareResult, PluginMetadata, PluginProblems } from '../../client';
 import { present } from '../../ports/present';
 import { comparisonOf, fieldOf } from '../comparison';
 import { isRecord, requires } from '../manifest';
@@ -111,6 +111,7 @@ let loadOrderStatus: MockLoadOrderStatus =
 let loadOrderVersion = 0;
 
 const sseClients: http.ServerResponse[] = [];
+let pluginProblems: PluginProblems[] = [];
 
 function writeSseFrame(res: http.ServerResponse, kind: string, payload: Record<string, unknown>): void {
   const data = JSON.stringify({ kind, plugin: '', origin: '', keys: [], sequence: 0, ...payload });
@@ -187,6 +188,11 @@ function createMockBackend(): http.Server {
         const i = sseClients.indexOf(res);
         if (i >= 0) sseClients.splice(i, 1);
       });
+      return;
+    }
+    if (url === '/plugins/problems') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(pluginProblems));
       return;
     }
     if (url === '/plugins') {
@@ -850,6 +856,40 @@ describe('A FormKey in plugin source', () => {
       (renamed) => renamed, () => undefined);
 
     assert.strictEqual(edit?.size ?? 0, 0);
+  });
+});
+
+describe('The Problems panel on plugin source', () => {
+  const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
+  const MESSAGE = `Armor: [${NOT_HELD_FORM_KEY}] <Error: Could not be resolved>`;
+  const SOURCE_FILE = path.join('plugin-source', 'Held.esp', 'Gun.json');
+  const file = path.join(FIXTURE_GAME_DIRECTORY, 'Data', SOURCE_FILE);
+  const plugin = { name: 'Held.esp', origin: 'Data' };
+
+  before(() => {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY }, null, 2));
+  });
+  after(() => {
+    pluginProblems = [];
+    fs.rmSync(path.join(FIXTURE_GAME_DIRECTORY, 'Data', 'plugin-source'), { recursive: true, force: true });
+  });
+
+  const saved = (problems: PluginProblems['problems']) => {
+    pluginProblems = [{ plugin, problems }];
+    for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: plugin.name, origin: plugin.origin, keys: [HELD_FORM_KEY] });
+  };
+  const shown = () => vscode.languages.getDiagnostics(vscode.Uri.file(file)).filter((diagnostic) => diagnostic.message === MESSAGE);
+
+  it('carries a reference to a record no active plugin holds on its file, spanning that FormKey, and clears it when a save answers none', async () => {
+    saved([{ formKey: HELD_FORM_KEY, targetFormKey: NOT_HELD_FORM_KEY, sourceRelativePath: SOURCE_FILE, message: MESSAGE }]);
+
+    const [problem] = await waitFor('the problem on its file', () => { const found = shown(); return found.length > 0 && found; });
+    const document = await vscode.workspace.openTextDocument(file);
+    assert.strictEqual(document.getText(problem?.range), `"${NOT_HELD_FORM_KEY}"`);
+
+    saved([]);
+    await waitFor('the problem to clear', () => shown().length === 0);
   });
 });
 

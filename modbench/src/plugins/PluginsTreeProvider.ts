@@ -372,7 +372,17 @@ export class PluginsTreeProvider
     if (pluginRow === undefined) return undefined;
     const group = (await this.getChildren(pluginRow)).find((row) => row.kind === 'recordType' && row.recordType === recordType);
     if (group === undefined) return undefined;
-    return (await this.getChildren(group)).find((row) => row.kind === 'record' && row.record.formKey === formKey);
+    return this.recordRowBeneath(group, formKey);
+  }
+
+  // A group's records sit in it directly, or in its blocks and sub-blocks as the Cell group's do. A
+  // record row ends the walk: what it holds belongs to another group.
+  private async recordRowBeneath(parent: PluginsTreeNode, formKey: string): Promise<PluginsTreeNode | undefined> {
+    for (const row of await this.getChildren(parent)) {
+      const found = isRecordRow(row) ? row : await this.recordRowBeneath(row, formKey);
+      if (found !== undefined && recordFormKeyOf(found) === formKey) return found;
+    }
+    return undefined;
   }
 
   private async expandPluginRow(element: PluginListNode): Promise<PluginsTreeNode[]> {

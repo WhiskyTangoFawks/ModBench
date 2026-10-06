@@ -11,8 +11,8 @@ vi.mock('vscode', () => ({
 
 import {
   PluginTreeProvider, RecordTypeNode, RecordNode,
-  CellNode, InteriorCellsNode, InteriorBlockNode, InteriorSubBlockNode,
-  WorldspacesNode, WorldspaceNode, SubBlockNode, ChildRecordGroupNode, ChildRecordNode,
+  CellNode, InteriorBlockNode, InteriorSubBlockNode,
+  WorldspaceNode, SubBlockNode, ChildRecordGroupNode, ChildRecordNode,
 } from '../PluginTreeProvider';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import type { PluginTreeNode } from '../PluginTreeProvider';
@@ -56,6 +56,10 @@ function makeClient(overrides: Partial<{
   client.setQueryAnswer('getContainerChildren', []);
   client.setQueryAnswer('getInteriorCells', []);
   return client;
+}
+
+function group(type: 'wrld' | 'cell', plugin: string, origin: string, count = 0): RecordTypeNode {
+  return new RecordTypeNode(plugin, recordTypeCountFixture({ type, count }), origin);
 }
 
 function interiorCell(formKey: string, editorId: string | null, overrides: Partial<CellSummary> = {}): CellSummary {
@@ -129,6 +133,18 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
     expect(present(npc, 'the npc_ group').contextValue).toContain('creatable');
     expect(present(qust, 'the qust group').contextValue).not.toContain('creatable');
   });
+
+  it('builds the Worldspace and Cell groups as record-type groups of their type, so they offer create as any group does', async () => {
+    const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }, { type: 'cell', count: 2 }] });
+    const provider = new PluginTreeProvider(repo);
+
+    const groups = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' }, { tracked: true, editable: true });
+
+    expect(groups.map(g => [g.kind, g instanceof RecordTypeNode && g.recordType, g.contextValue])).toEqual([
+      ['recordType', 'wrld', 'recordType tracked editable creatable'],
+      ['recordType', 'cell', 'recordType tracked editable creatable'],
+    ]);
+  });
 });
 
 describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
@@ -199,20 +215,6 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode) — no per-row fan-out 
     expect(children).toHaveLength(FALLOUT4_ESM_APPROXIMATE_QUST_COUNT);
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
     expect(repo.calls.some(c => c.method === 'getContainerChildren')).toBe(false);
-  });
-});
-
-describe('WorldspacesNode', () => {
-  it('has no icon, so it sorts alphabetically alongside icon-less record-type nodes', () => {
-    const node = new WorldspacesNode('M.esp', 'Worldspace', 0, 'Data');
-    expect(node.iconPath).toBeUndefined();
-  });
-});
-
-describe('InteriorCellsNode', () => {
-  it('has no icon, so it sorts alphabetically alongside icon-less record-type nodes', () => {
-    const node = new InteriorCellsNode('M.esp', 'Cell', 0, 'Data');
-    expect(node.iconPath).toBeUndefined();
   });
 });
 
@@ -426,9 +428,10 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
     expect(states).toEqual([
       'recordType tracked editable creatable', 'record tracked editable',
       'recordType tracked editable creatable', 'record tracked editable', 'record tracked editable',
-      'worldspace tracked editable',
+      'recordType tracked editable creatable', 'worldspace tracked editable',
       'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
       'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
+      'recordType tracked editable creatable',
       'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
     ]);
   });
@@ -550,7 +553,7 @@ describe('PluginTreeProvider worldspace tree', () => {
     repo.setQueryAnswer('getInteriorCells', oneSubBlock(Array.from({ length: 60 }, (_, i) => interiorCell(`${i}:M.esp`, `Room${i}`))));
     const provider = new PluginTreeProvider(repo);
 
-    const cells = await interiorCellsBeneath(provider, new InteriorCellsNode('M.esp', 'Cell', 60, 'Data'));
+    const cells = await interiorCellsBeneath(provider, group('cell', 'M.esp', 'Data', 60));
 
     expect(expectInstancesOf(cells, CellNode)).toHaveLength(60);
     expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(1);
@@ -575,8 +578,6 @@ describe('PluginTreeProvider worldspace tree', () => {
   it('gives a group an expander only when it holds a record', () => {
     expect(new RecordTypeNode('M.esp', recordTypeCountFixture({ type: 'weap', count: 1 }), 'Data').collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
     expect(new RecordTypeNode('M.esp', recordTypeCountFixture({ type: 'weap', count: 0 }), 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
-    expect(new WorldspacesNode('M.esp', 'Worldspace', 0, 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
-    expect(new InteriorCellsNode('M.esp', 'Cell', 0, 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 });
 
@@ -634,7 +635,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient();
     repo.setQueryFailure('getWorldspaces', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = new WorldspacesNode('Plugin0.esp', 'Worldspace', 0, 'Data');
+    const node = group('wrld', 'Plugin0.esp', 'Data');
 
     const children = await provider.getChildren(node);
 
@@ -670,7 +671,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient();
     repo.setQueryFailure('getInteriorCells', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('M.esp', 'Cell', 0, 'Data');
+    const node = group('cell', 'M.esp', 'Data');
 
     const children = await provider.getChildren(node);
 
@@ -684,7 +685,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const repo = makeClient();
     repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     const provider = new PluginTreeProvider(repo);
-    const node = new WorldspacesNode('Shared.esp', 'Worldspace', 0, 'ModB');
+    const node = group('wrld', 'Shared.esp', 'ModB');
 
     const wsNode = present(expectInstancesOf(await provider.getChildren(node), WorldspaceNode)[0], 'the sole WorldspaceNode');
 
@@ -735,7 +736,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const repo = makeClient();
     repo.setQueryAnswer('getInteriorCells', oneSubBlock([interiorCell('i:M.esp', 'IntCell')]));
     const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('Shared.esp', 'Cell', 1, 'ModB');
+    const node = group('cell', 'Shared.esp', 'ModB', 1);
 
     const [block] = expectInstancesOf(await provider.getChildren(node), InteriorBlockNode);
     const [subBlock] = expectInstancesOf(await provider.getChildren(present(block, 'the sole block')), InteriorSubBlockNode);
@@ -763,8 +764,8 @@ describe('PluginTreeProvider spatial origin threading', () => {
   it('interiorCache: caches each plugin\'s interior cells separately, so one plugin\'s cells are never served for the other', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    const fromA = new InteriorCellsNode('Shared.esp', 'Cell', 0, 'ModA');
-    const fromB = new InteriorCellsNode('Shared.esp', 'Cell', 0, 'ModB');
+    const fromA = group('cell', 'Shared.esp', 'ModA');
+    const fromB = group('cell', 'Shared.esp', 'ModB');
 
     await provider.getChildren(fromA);
     await provider.getChildren(fromB);
@@ -866,10 +867,8 @@ describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific plug
 
     const children = await provider.getPluginChildren({ name: 'Shared.esp', origin: 'ModB' });
 
-    const worldspaces = children.find(c => c instanceof WorldspacesNode);
-    const interiorCells = children.find(c => c instanceof InteriorCellsNode);
-    expect(worldspaces?.origin).toBe('ModB');
-    expect(interiorCells?.origin).toBe('ModB');
+    const groups = expectInstancesOf(children, RecordTypeNode);
+    expect(groups.map(g => [g.recordType, g.origin])).toEqual([['wrld', 'ModB'], ['cell', 'ModB'], ['WEAP', 'ModB']]);
   });
 });
 
