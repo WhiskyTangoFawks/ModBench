@@ -92,6 +92,19 @@ public sealed class RenameSourceHandlerTests : IDisposable
         Assert.Equal(before, TrackedTree.Records(_trackedMod, Old));
     }
 
+    [Theory]
+    [InlineData(GameRelease.Fallout4, "must be .esm, .esl or .esp.")]
+    [InlineData(GameRelease.Oblivion, "must be .esm or .esp.")]
+    public void RenameSource_ToANameThatIsNoPluginFile_IsRefusedNamingTheExtensionsTheReleaseTakes(GameRelease release, string expected)
+    {
+        var holder = new LoadOrderHolder();
+        holder.Apply(SnapshotPlugins.Snapshot(_game, _root, release, []));
+
+        var result = TestEditService.Over(holder).GetRequiredService<RenameSourceHandler>().RenameSource(Old, "New.txt");
+
+        Assert.EndsWith(expected, result.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void RenameSource_OfAPluginNotInTheLoadOrder_RefusesIt()
     {
