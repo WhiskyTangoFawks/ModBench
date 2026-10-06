@@ -37,6 +37,17 @@ public sealed class CompilePluginDiagnosisTests : IDisposable
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, file), result.RefusalReason, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Compile_WhenTheHeaderIsMalformed_NamesTheHeadersFileAsTheLayoutSpellsIt()
+    {
+        File.WriteAllText(Path.Combine(_mod.ModFolder, PluginSourceRoot.HeaderDocument(_mod.Plugin.Name)), "{ \"ModKey\": \"Compile.esp\", \"ModHeader\": { \"Stats\": { \"Version\": \"x\" } } }");
+
+        var result = await _mod.CompileService().CompileOneAsync(_mod.Plugin);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(PluginSourceRoot.HeaderDocument(_mod.Plugin.Name), result.RefusalReason, StringComparison.Ordinal);
+    }
+
     private void Corrupt() =>
         _mod.Overwrite(
             _mod.NpcIdentity,

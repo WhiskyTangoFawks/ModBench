@@ -333,7 +333,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     {
         Track(
             new TreeFile(
-                Path.Combine("plugin-source", PluginName, "RecordData.json"),
+                PluginSourceRoot.HeaderDocument(PluginName),
                 System.Text.Encoding.UTF8.GetBytes("{\"MasterReferences\": []}")));
         var repository = RequireOpened();
 

@@ -42,7 +42,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
         (document.FormKey, document.RecordType, document.EditorId, document.Body);
 
     private static readonly string HeaderRelativePath =
-        Path.Combine("plugin-source", PluginName, "RecordData.json");
+        PluginSourceRoot.HeaderDocument(PluginName);
 
     private const string HeaderBody = "{\n  \"ModKey\": \"Fixture.esp\",\n  \"MutagenObjectType\": \"Fallout4Mod\"\n}";
 

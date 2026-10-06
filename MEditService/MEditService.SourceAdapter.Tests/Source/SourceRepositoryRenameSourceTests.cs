@@ -1,6 +1,8 @@
 using System.Text;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -15,7 +17,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
 
     private static readonly (string Path, string Text)[] OldTree =
     [
-        ("RecordData.json", """
+        ("000000_Old.esp.json", """
             {
               "ModKey": "Old.esp",
               "ModHeader": {
@@ -59,7 +61,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
             _modFolder,
             [
                 (Files(Old.Name, OldTree), new DecompiledPlugin(Old.Name, LastWritten)),
-                (Files(Other.Name, [("RecordData.json", """{ "ModKey": "Other.esp" }""")]), new DecompiledPlugin(Other.Name, null)),
+                (Files(Other.Name, [("000000_Other.esp.json", """{ "ModKey": "Other.esp" }""")]), new DecompiledPlugin(Other.Name, null)),
             ]);
 
     public void Dispose() => _modFolder.Dispose();
@@ -72,6 +74,14 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         Assert.False(Directory.Exists(PluginSourceRoot.In(_modFolder, Old.Name)));
         Assert.Equal(
             [
+                ("000000_New.esm.json", """
+                    {
+                      "ModKey": "New.esm",
+                      "ModHeader": {
+                        "MasterReferences": [ { "Master": "DLC.esm" } ]
+                      }
+                    }
+                    """),
                 ("Cells/0/0/EmbedCell - 000804_New.esm/RecordData.json", """
                     {
                       "FormKey": "000804:New.esm",
@@ -101,16 +111,22 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
                       "Race": "000802:New.esm"
                     }
                     """),
-                ("RecordData.json", """
-                    {
-                      "ModKey": "New.esm",
-                      "ModHeader": {
-                        "MasterReferences": [ { "Master": "DLC.esm" } ]
-                      }
-                    }
-                    """),
             ],
             TreeOf("New.esm"));
+    }
+
+    [Fact]
+    public void RenameSource_ToANameWithAnUppercaseExtension_LeavesTheHeaderWhereTheLayoutLooksForIt()
+    {
+        var renamed = Old with { Name = "New.ESM" };
+
+        Repository.RenameSource(Old, renamed.Name);
+
+        var documents = TreeDocuments.Of(Repository, renamed);
+        Assert.Contains(documents, d => d.RecordType == PluginHeader.RecordType);
+        Assert.Contains(
+            SourceRepository.DoorFilesOf(renamed.Name, Repository.FilesOf(renamed).Files),
+            file => file.RelativePath == Path.Combine(PluginSourceRoot.For(renamed.Name), "RecordData.json"));
     }
 
     [Fact]

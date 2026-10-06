@@ -70,9 +70,35 @@ public sealed class SourceRepositoryLayoutTests
              new TreeFile(Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json"), [2])]);
 
         Assert.Equal(
-            [Path.Combine("plugin-source", "Mixed.ESP", "RecordData.json"),
+            [Path.Combine("plugin-source", "Mixed.ESP", "000000_Mixed.esp.json"),
              Path.Combine("plugin-source", "Mixed.ESP", "npc_", "SomeNpc - 000800_Mixed.ESP.json")],
             pristine.Select(file => file.RelativePath));
         Assert.Equal([1], pristine[0].Content);
+    }
+
+    [Fact]
+    public void PristineFilesOf_KeepsAContainersRecordData_UnderTheDoorsName()
+    {
+        var container = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP", "RecordData.json");
+
+        var pristine = SourceRepository.PristineFilesOf("Mixed.ESP", [new TreeFile(container, [1])]);
+
+        Assert.Equal(Path.Combine("plugin-source", "Mixed.ESP", container), pristine.Single().RelativePath);
+    }
+
+    [Fact]
+    public void DoorFilesOf_GivesTheHeaderTheDoorsName_AndNoOtherFileANewOne()
+    {
+        var pristine = SourceRepository.PristineFilesOf(
+            "Mixed.ESP",
+            [new TreeFile("RecordData.json", [1]),
+             new TreeFile(Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json"), [2])]);
+
+        var door = SourceRepository.DoorFilesOf("Mixed.ESP", pristine);
+
+        Assert.Equal(
+            [Path.Combine("plugin-source", "Mixed.ESP", "RecordData.json"),
+             Path.Combine("plugin-source", "Mixed.ESP", "npc_", "SomeNpc - 000800_Mixed.ESP.json")],
+            door.Select(file => file.RelativePath));
     }
 }
