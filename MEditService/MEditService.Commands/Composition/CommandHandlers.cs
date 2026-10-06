@@ -23,13 +23,11 @@ public static class CommandHandlers
             sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<SchemaReflector>()));
 
-        services.AddSingleton(sp => new RecordEdit(
+        services.AddSingleton(sp => new EditRecordChangesHandler(
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(RecordEdit))));
-
-        services.AddSingleton(sp => new EditRecordChangesHandler(sp.GetRequiredService<RecordEdit>(), sp.GetRequiredService<LoadOrderHolder>()));
+            sp.GetRequiredService<ILogger<EditRecordChangesHandler>>()));
 
         services.AddSingleton(sp => new DeleteRecordHandler(
             sp.GetRequiredService<WriteTargets>(),

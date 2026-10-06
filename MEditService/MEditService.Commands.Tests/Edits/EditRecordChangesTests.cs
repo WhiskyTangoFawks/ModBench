@@ -108,6 +108,21 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.Contains("000F00:Fixture.esp", document.Text, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("FormKey", "\"000F00:Fixture.esp\"")]
+    [InlineData("HeightMin", "0.75")]
+    public void AnEdit_GivenTextTheCodecCannotRead_IsRefusedAsUnreadable_AndChangesNothing(string member, string value)
+    {
+        var unreadable = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString())
+            .Replace($"\"{SourceEditFixture.NpcEditorId}\"", $"\"{SourceEditFixture.NpcEditorId}\", \"HeightMax\": {{ \"x\": 1 }}", StringComparison.Ordinal);
+
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set(member, value), unreadable);
+
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, answer.Outcome.Refusal);
+        Assert.Empty(answer.Changes.Moves);
+        Assert.Empty(answer.Changes.Documents);
+    }
+
     [Fact]
     public void APlacedRecordCrossingIntoAnotherCell_BuildsOnTheTextItIsGivenForTheCellItLeaves()
     {

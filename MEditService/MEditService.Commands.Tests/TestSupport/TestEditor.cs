@@ -12,16 +12,8 @@ public sealed class TestEditor(EditRecordChangesHandler edits, LoadOrderHolder l
     public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
         var (outcome, changes) = edits.Changes(plugin, formKey, envelope, TextCarrying(plugin, formKey));
-        foreach (var move in changes.Moves)
-        {
-            if (Directory.Exists(move.From)) Directory.Move(move.From, move.To);
-            else File.Move(move.From, move.To);
-        }
-        foreach (var document in changes.Documents)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(document.Path).Require());
-            File.WriteAllText(document.Path, document.Text);
-        }
+        EditSaving.Save(
+            changes.Moves.Select(move => (move.From, move.To)), changes.Documents.Select(document => (document.Path, document.Text)));
         return outcome;
     }
 

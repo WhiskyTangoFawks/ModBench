@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { PluginHeader } from './PluginHeader';
 import { ColumnEdge } from './ColumnEdge';
 import { DiffRow } from './DiffRow';
@@ -10,11 +10,11 @@ import type {
 import { LABEL_COLUMN } from './labelColumn';
 import { columnKey, copyColumnKey } from '../../src/wire/columnKey';
 import { pluginAddressOf } from '../../src/wire/pluginAddress';
-import { addElement, editField, focusCell, openInPlace } from './nativeBridge';
+import { addElement, editField, focusCell, keepViewState, openInPlace } from './nativeBridge';
 import { openEditor } from './DiskCell';
 import { EditorMounted } from './cellEditor';
 import { pastedValue } from './modelValue';
-import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview, type ColumnCopy } from '../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, isViewState, parseExtensionToWebview, type ColumnCopy, type ViewState } from '../../src/wire/messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
@@ -25,7 +25,13 @@ import { recordRows, shownCell, visibleRows, navRows, FORM_ID_PATH, type GridCel
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
   mEditLoadError?: string;
+  mEditViewState?: unknown;
 };
+
+// The place of the tab this one stands in for, which an edit's move of the file closed.
+const placeGiven = (): ViewState => (isViewState(mEditWindow.mEditViewState)
+  ? mEditWindow.mEditViewState
+  : { collapsedRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } });
 
 // One sweep over the response's own overrides, keyed as the backend keys its dictionaries
 // (ADR-0012), so every whole-grid column set is minted the same way.
@@ -57,14 +63,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [loadFailures, setLoadFailures] = useState<PluginLoadFailure[]>([]);
   const [fileColumn, setFileColumn] = useState<ColumnKey | undefined>(undefined);
   const [error, setError] = useState<string | null>(mEditWindow.mEditLoadError ?? null);
-  const [collapsedRows, setCollapsedRows] = useState<Set<string>>(new Set());
+  const [given] = useState(placeGiven);
+  const [collapsedRows, setCollapsedRows] = useState<Set<string>>(() => new Set(given.collapsedRows));
   const toggleRow = (rowKey: string) => setCollapsedRows(prev => {
     const next = new Set(prev);
     if (next.has(rowKey)) next.delete(rowKey); else next.add(rowKey);
     return next;
   });
   // The one focused cell (editor.md, The focused cell).
-  const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
+  const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(given.focusedCell);
   const enteredCell = useRef(false);
   const scroller = useRef<HTMLDivElement>(null);
   const headerRow = useRef<HTMLTableRowElement>(null);
@@ -76,7 +83,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [editorOpen, setEditorOpen] = useState(false);
   const editorMounted = useCallback((editor: HTMLElement | null) => setEditorOpen(editor !== null), []);
   // Keyed by column identity — two same-filename columns must collapse independently.
-  const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
+  const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(() => new Set(given.collapsedColumns));
+  const scrolled = useRef(given.scroll);
+  const toldPlace = useRef(JSON.stringify(given));
+  const tellPlace = useCallback(() => {
+    const place: ViewState = {
+      collapsedRows: [...collapsedRows], collapsedColumns: [...collapsedColumns], focusedCell, scroll: scrolled.current,
+    };
+    const told = JSON.stringify(place);
+    if (told === toldPlace.current) return;
+    toldPlace.current = told;
+    keepViewState(place);
+  }, [collapsedRows, collapsedColumns, focusedCell]);
+  useEffect(tellPlace, [tellPlace]);
   const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | typeof LABEL_COLUMN, number>>(new Map());
   const resizeColumn = (key: ColumnKey | typeof LABEL_COLUMN, width: number) => setColumnWidths(prev => new Map(prev).set(key, width));
   // One definition of "this column can be written" (ADR-0007; editor.md, Columns, story 4), for the
@@ -206,6 +225,26 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, [refresh, pasteIntoFocused, client, formKey]);
+
+  const gridShown = result !== null && !gone;
+  const scrollRestored = useRef(false);
+  useLayoutEffect(() => {
+    const grid = scroller.current;
+    if (!grid || scrollRestored.current) return;
+    scrollRestored.current = true;
+    grid.scrollTop = scrolled.current.top;
+    grid.scrollLeft = scrolled.current.left;
+  }, [gridShown]);
+  useEffect(() => {
+    const grid = scroller.current;
+    if (!grid) return;
+    const keepScroll = () => {
+      scrolled.current = { top: grid.scrollTop, left: grid.scrollLeft };
+      tellPlace();
+    };
+    grid.addEventListener('scrollend', keepScroll);
+    return () => grid.removeEventListener('scrollend', keepScroll);
+  }, [gridShown, tellPlace]);
 
   const containerStyle: React.CSSProperties = {
     position: 'fixed',

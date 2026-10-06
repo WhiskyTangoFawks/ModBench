@@ -596,7 +596,7 @@ describe('HttpMEditClient — an edit answered as its source changes', () => {
 
 describe('HttpMEditClient — the not-OK response text', () => {
 
-  it('getEditChanges leaves an ordinary typed refusal exactly as the backend worded it', async () => {
+  it('getEditChanges answers a 422 refusal with its cause, in the backend\'s words', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {
       refusal: 'PluginNotTracked', detail: 'MyPatch.esp is not tracked, so it is read-only.',
     })));
@@ -611,9 +611,9 @@ describe('HttpMEditClient — the not-OK response text', () => {
     });
   });
 
-  it('getEditChanges carries a refused disk read as the typed SourceWriteFailed, not Unknown', async () => {
+  it('getEditChanges answers a refused disk read with its cause, SourceAccessFailed', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {
-      refusal: 'SourceWriteFailed', detail: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
+      refusal: 'SourceAccessFailed', detail: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
     })));
     const client = makeClient(fetch);
 
@@ -622,11 +622,11 @@ describe('HttpMEditClient — the not-OK response text', () => {
     );
 
     expect(outcome).toEqual({
-      applied: false, refusal: 'SourceWriteFailed', message: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
+      applied: false, refusal: 'SourceAccessFailed', message: 'Could not write the source file for 000800:MyPatch.esp: Access denied.',
     });
   });
 
-  it('getEditChanges leaves the load-order-absent 503 alone, its outcome carrying this side\'s own Unknown as there is no typed refusal in it', async () => {
+  it('getEditChanges answers a 503 that names no cause as Unknown, in the backend\'s words', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
 

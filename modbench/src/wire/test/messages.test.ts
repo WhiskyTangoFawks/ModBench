@@ -19,6 +19,22 @@ describe('the focused cell message that tells the host which cell a palette fiel
   });
 });
 
+describe('the place a grid tells the host, which the tab a move of its file opens shows again', () => {
+  const state = { collapsedRows: ['Bounds'], collapsedColumns: ['A.esp|ModA'], focusedCell: { rowKey: 'Bounds', plugin: null }, scroll: { top: 4, left: 0 } };
+
+  it('carries the rows and columns collapsed, the focused cell and the scroll', () => {
+    expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.VIEW_STATE, state }))
+      .toEqual({ type: WEBVIEW_TO_EXTENSION.VIEW_STATE, state });
+    expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.VIEW_STATE, state: { ...state, focusedCell: null } }))
+      .toEqual({ type: WEBVIEW_TO_EXTENSION.VIEW_STATE, state: { ...state, focusedCell: null } });
+  });
+
+  it('is refused without its scroll, or with a focused cell that names no row', () => {
+    expect(() => parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.VIEW_STATE, state: { ...state, scroll: undefined } })).toThrow();
+    expect(() => parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.VIEW_STATE, state: { ...state, focusedCell: { plugin: null } } })).toThrow();
+  });
+});
+
 describe('the record load request the webview asks of the host, because nothing outside the client names the port, and its answer', () => {
   it('carries the formKey, the columns the tab shows beside it and the requestId that pairs the reply', () => {
     const columns = [{ formKey: '000002:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }];

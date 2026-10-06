@@ -100,7 +100,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             var refused = Assert.Single((await response.Body()).GetProperty("refused").EnumerateArray());
-            Assert.Equal("SourceWriteFailed", refused.GetProperty("refusal").GetString());
+            Assert.Equal("SourceAccessFailed", refused.GetProperty("refusal").GetString());
             Assert.False(string.IsNullOrWhiteSpace(refused.GetProperty("message").GetString()));
         }
         finally

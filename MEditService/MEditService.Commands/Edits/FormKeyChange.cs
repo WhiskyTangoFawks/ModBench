@@ -56,12 +56,25 @@ internal sealed class FormKeyChange(RecordTextCodec codec, ILogger logger)
         if (FormKeyAllocator.Over(repository, plugin, release).Claim(requestedFormKey, out var targetFormKey)
             is { } refusedTarget) return refusedTarget with { Path = Member };
 
-        var failed = $"Changing the FormID of {formKey} to {targetFormKey} failed.";
-        return PlanFailure.Refused(logger, failed, () => new RecordEditChanges(
+        var failed = $"Changing the FormID of {formKey} to {targetFormKey} failed";
+        return WriteFailure.Refused<RecordEditChanges>(() => new RecordEditChanges(
             RecordEditResult.Success(targetFormKey),
             repository.ChangesToRekey(plugin, carrying, identity, targetFormKey, new DocumentRekey(
-                (document, newKey) => RecordDocumentEdits.WithFormKey(codec, document.Body, release, document.RecordType, newKey),
-                (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
-                    codec, owner.Body, release, owner.RecordType, oldKey, newKey)))));
+                (document, newKey) => Read(() => RecordDocumentEdits.WithFormKey(codec, document.Body, release, document.RecordType, newKey)),
+                (owner, oldKey, newKey) => Read(() => RecordDocumentEdits.WithEmbeddedChildFormKey(
+                    codec, owner.Body, release, owner.RecordType, oldKey, newKey))))), refused => refused, failed, logger);
+    }
+
+    // The codec is the one reader that sees why a text it is given is no record, as it is for an edit's patch.
+    private static T Read<T>(Func<T> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            throw new UnreadableSourceDocumentException(ex.Message, ex);
+        }
     }
 }

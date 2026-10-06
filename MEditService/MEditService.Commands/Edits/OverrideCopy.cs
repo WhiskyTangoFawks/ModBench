@@ -157,7 +157,7 @@ internal sealed class OverrideCopy
                         AmbiguousSourceUnitException => RecordEditRefusal.AmbiguousSourceUnit,
                         UnreadableSourceDocumentException => RecordEditRefusal.RecordParseFailed,
                         ChildSlotHeldByAnotherRecordException => RecordEditRefusal.ChildSlotHeldByAnotherRecord,
-                        _ => RecordEditRefusal.SourceWriteFailed,
+                        _ => RecordEditRefusal.SourceAccessFailed,
                     },
                     $"{identity.FormKey} landed in {destination.Plugin.Name} ({destination.Plugin.Origin}) only in part, " +
                     $"and nothing was rolled back. The cells that landed: {(landed.Count == 0 ? "none" : string.Join(", ", landed))}. " +

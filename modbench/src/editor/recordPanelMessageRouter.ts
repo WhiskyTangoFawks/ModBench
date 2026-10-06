@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
-  type ColumnCopy, type ExtensionToWebview, type WebviewToExtension,
+  type ColumnCopy, type ExtensionToWebview, type ViewState, type WebviewToExtension,
 } from '../wire/messages';
 import type { MEditClient, PluginLoadFailure } from '../client';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
@@ -39,6 +39,8 @@ export interface RouteRecordPanelMessageDeps {
   tabPlace: () => TabPlace | undefined;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
   readAnswered: (formKey: string, columns: readonly ColumnCopy[]) => void;
+  // The grid's place, which the tab an edit's move of the file opens shows again.
+  keepViewState: (state: ViewState) => void;
   // The latest load-order status, read rather than fetched.
   conflictsComputed: () => boolean;
   loadFailures: () => readonly PluginLoadFailure[];
@@ -48,8 +50,8 @@ export interface RouteRecordPanelMessageDeps {
 export type SharedRecordPanelDeps = Omit<
   RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'readAnswered' | 'tabPlace'>;
 
-/** What a tab's document gives the reads of its panel. */
-export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'documentText'>;
+/** What a tab gives its panel's messages: its document's, and a keeper of its place. */
+export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'documentText' | 'keepViewState'>;
 
 /** The router's bundle for one panel's messages: the picker and the record load both reply to it.
  *  An answer can land after the panel closed, and then touches nothing of it. */
@@ -72,6 +74,7 @@ export function routerDepsForPanel<Panel extends FollowedPanel & Pick<vscode.Web
     reply,
     ...tab,
     titleFromRead: whileOpen(tab.titleFromRead),
+    keepViewState: whileOpen(tab.keepViewState),
     readAnswered: whileOpen((formKey: string, columns: readonly ColumnCopy[]) => { editsInFlight.answered(panel, formKey, columns); }),
     tabPlace: () => (panel.viewColumn === undefined ? undefined : { document, viewColumn: panel.viewColumn }),
   };
@@ -100,6 +103,7 @@ const HANDLERS: {
     const placement = deps.tabPlace();
     if (placement) await vscode.commands.executeCommand('modbench.record.open', m.records.map((record) => ({ ...record, placement })));
   },
+  [WEBVIEW_TO_EXTENSION.VIEW_STATE]: (deps, m) => { deps.keepViewState(m.state); },
 };
 
 // Each case below narrows `m` to its own variant, so calling its HANDLERS entry needs no
@@ -112,6 +116,7 @@ function dispatch(deps: RouteRecordPanelMessageDeps, m: WebviewToExtension): Pro
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE: return HANDLERS[m.type](deps, m);
+    case WEBVIEW_TO_EXTENSION.VIEW_STATE: return HANDLERS[m.type](deps, m);
     default: {
       const unreachable: never = m;
       return unreachable;

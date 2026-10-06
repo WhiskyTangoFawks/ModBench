@@ -50,8 +50,9 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
     internal RecordEditChanges Land(
         PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder, string written, CellCrossing crossing, string spelled)
     {
-        var failed = $"Moving {edit.Identity.FormKey} into another cell failed.";
-        return PlanFailure.Refused(logger, failed, () => Cross(plugin, edit, holder, written, crossing, spelled));
+        var failed = $"Moving {edit.Identity.FormKey} into another cell failed";
+        return WriteFailure.Refused<RecordEditChanges>(
+            () => Cross(plugin, edit, holder, written, crossing, spelled), refused => refused, failed, logger);
     }
 
     private RecordEditChanges Cross(

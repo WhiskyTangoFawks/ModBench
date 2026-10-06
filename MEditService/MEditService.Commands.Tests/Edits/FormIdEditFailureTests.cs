@@ -79,7 +79,7 @@ public sealed class FormIdEditFailureTests
 
         var result = fixture.EditHandler.SetFormId(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey);
 
-        Assert.Equal(RecordEditRefusal.SourceWriteFailed, result.Refusal);
+        Assert.Equal(RecordEditRefusal.SourceAccessFailed, result.Refusal);
         Assert.Contains("nowhere to move to", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, TrackedTree.Records(fixture.ModFolder, fixture.Plugin));
         Assert.Equal(statusBefore, fixture.ChangedFormKeys());

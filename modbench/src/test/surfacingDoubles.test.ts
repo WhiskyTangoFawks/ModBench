@@ -26,7 +26,7 @@ const EDIT: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'Ed
 const EDITED = { formKey: '000800:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } };
 
 const editDeps = (reporter: RecordWriteDeps['reporter'], getEditChanges: RecordWriteDeps['meditClient']['getEditChanges']): RecordWriteDeps => ({
-  meditClient: { getEditChanges }, reporter, refreshSourceControlFor: () => {}, moving: () => {}, oneAtATime: oneAtATime(),
+  meditClient: { getEditChanges }, reporter, refreshSourceControlFor: () => {}, moving: () => () => {}, oneAtATime: oneAtATime(),
   documentOf: () => Promise.resolve({ uri: fakeUri('/mods/ModA/plugin-source/A.esp/Npc.json') }),
 });
 

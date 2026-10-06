@@ -43,16 +43,9 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
 
 const IDENTITY = { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA' };
 
-function editsMade(edit: ReturnType<typeof makeDeps>['edit']) {
-  return edit.mock.calls.map(([{ formKey, plugin }, envelope]) => ({ args: [formKey, plugin, envelope] }));
-}
+const ADDRESS = { formKey: IDENTITY.formKey, plugin: { name: IDENTITY.plugin, origin: IDENTITY.origin } };
 
-function envelopeValueNarrowedFromUnknownCallArgs(args: unknown[]): string {
-  const envelope = args[2];
-  const value: unknown = typeof envelope === 'object' && envelope !== null ? Reflect.get(envelope, 'value') : undefined;
-  if (typeof value !== 'string') throw new Error('expected an edit envelope carrying a string value');
-  return value;
-}
+const envelopesOf = (edit: ReturnType<typeof makeDeps>['edit']) => edit.mock.calls.map(([, envelope]) => envelope);
 
 function parentContext(path: ArrayParentContext['path']): ArrayParentContext {
   return { webviewSection: 'arrayParent', ...IDENTITY, path, preventDefaultContextMenuItems: true };
@@ -83,11 +76,9 @@ describe('right-click array ops write one envelope from the host', () => {
       [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }],
     ));
 
-    expect(editsMade(edit)).toHaveLength(1);
-    expect(present(editsMade(edit)[0], "the sole edit").args).toEqual([
-      IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
-      { op: 'add', path: [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }] },
-    ]);
+    expect(edit.mock.calls).toEqual([[
+      ADDRESS, { op: 'add', path: [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }] },
+    ]]);
   });
 
   it('Add lands the value a drop supplies in its add envelope', async () => {
@@ -97,8 +88,7 @@ describe('right-click array ops write one envelope from the host', () => {
     await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
       parentContext([{ kind: 'member', name: 'Values' }]), 6);
 
-    expect(present(editsMade(edit)[0], 'the sole edit').args[2])
-      .toEqual({ op: 'add', path: [{ kind: 'member', name: 'Values' }], value: 6 });
+    expect(envelopesOf(edit)).toEqual([{ op: 'add', path: [{ kind: 'member', name: 'Values' }], value: 6 }]);
   });
 
   it('Remove lands a remove envelope at the element\'s own path', async () => {
@@ -109,10 +99,9 @@ describe('right-click array ops write one envelope from the host', () => {
       [{ kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 }],
     ));
 
-    expect(present(editsMade(edit)[0], "the sole edit").args).toEqual([
-      IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
-      { op: 'remove', path: [{ kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 }] },
-    ]);
+    expect(edit.mock.calls).toEqual([[
+      ADDRESS, { op: 'remove', path: [{ kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 }] },
+    ]]);
   });
 
   it.each([
@@ -126,14 +115,14 @@ describe('right-click array ops write one envelope from the host', () => {
       [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }, { kind: 'index', index: 2 }],
     ));
 
-    expect(present(editsMade(edit)[0], "the sole edit").args).toEqual([
-      IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
+    expect(edit.mock.calls).toEqual([[
+      ADDRESS,
       {
         op: 'move',
         path: [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }, { kind: 'index', index: 2 }],
         value: destination,
       },
-    ]);
+    ]]);
   });
 
   it('Move Up on the first element still lands the move, to the position before it, since the webview posts what the user asked for', async () => {
@@ -142,10 +131,9 @@ describe('right-click array ops write one envelope from the host', () => {
 
     await present(handlers.get('modbench.record.moveElementUp'), "the handler registered for 'modbench.record.moveElementUp'")(elementContext([{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }]));
 
-    expect(present(editsMade(edit)[0], "the sole edit").args).toEqual([
-      IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
-      { op: 'move', path: [{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }], value: -1 },
-    ]);
+    expect(edit.mock.calls).toEqual([[
+      ADDRESS, { op: 'move', path: [{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }], value: -1 },
+    ]]);
   });
 
   it('does nothing when a command fires with no context', async () => {
@@ -154,7 +142,7 @@ describe('right-click array ops write one envelope from the host', () => {
 
     await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(undefined);
 
-    expect(editsMade(edit)).toHaveLength(0);
+    expect(edit).not.toHaveBeenCalled();
   });
 });
 
@@ -173,7 +161,7 @@ describe('right-click edits go through the gate of the panels showing the record
       parentContext([{ kind: 'member', name: 'Entries' }]));
 
     expect(gated).toEqual([IDENTITY.formKey]);
-    expect(editsMade(edit).map(c => c.args[0])).toEqual(['000900:Fallout4.esm']);
+    expect(edit.mock.calls.map(([address]) => address.formKey)).toEqual(['000900:Fallout4.esm']);
   });
 
   it('takes the gate of the panels showing the record it is addressed to', async () => {
@@ -195,7 +183,7 @@ describe('right-click edits go through the gate of the panels showing the record
     await commitField(deps, fieldOf(stringContext()), 'saved');
 
     expect(gated).toEqual([IDENTITY.formKey]);
-    expect(editsMade(edit).map(c => c.args[0])).toEqual(['000900:Fallout4.esm']);
+    expect(edit.mock.calls.map(([address]) => address.formKey)).toEqual(['000900:Fallout4.esm']);
   });
 });
 
@@ -227,10 +215,7 @@ describe('the extended editor opens and saves from the host, from the context it
 
     await commitField(deps, fieldOf(stringContext({ path })), 'edited in the tab');
 
-    expect(present(editsMade(edit)[0], "the sole edit").args).toEqual([
-      IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
-      { op: 'set', path, value: 'edited in the tab' },
-    ]);
+    expect(edit.mock.calls).toEqual([[ADDRESS, { op: 'set', path, value: 'edited in the tab' }]]);
   });
 
   it('a second save of the same tab writes again', async () => {
@@ -240,7 +225,7 @@ describe('the extended editor opens and saves from the host, from the context it
     await commitField(deps, fieldOf(stringContext()), 'first save');
     await commitField(deps, fieldOf(stringContext()), 'second save');
 
-    expect(editsMade(edit).map(c => envelopeValueNarrowedFromUnknownCallArgs(c.args))).toEqual(['first save', 'second save']);
+    expect(envelopesOf(edit).map(({ value }) => value)).toEqual(['first save', 'second save']);
   });
 });
 
@@ -252,7 +237,7 @@ describe('a field gesture from the palette, which hands it no cell', () => {
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(editsMade(edit).map(c => c.args[2])).toEqual([{ op: 'remove', path }]);
+    expect(envelopesOf(edit)).toEqual([{ op: 'remove', path }]);
   });
 
   it('does nothing with no focused cell', async () => {
@@ -261,7 +246,7 @@ describe('a field gesture from the palette, which hands it no cell', () => {
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(editsMade(edit)).toEqual([]);
+    expect(edit).not.toHaveBeenCalled();
   });
 
   it('acts on a cell whose context carries its section beside another, as a string element of an array does', async () => {
@@ -273,7 +258,7 @@ describe('a field gesture from the palette, which hands it no cell', () => {
 
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
-    expect(editsMade(edit).map(c => c.args[2])).toEqual([{ op: 'remove', path }]);
+    expect(envelopesOf(edit)).toEqual([{ op: 'remove', path }]);
   });
 });
 
@@ -288,7 +273,7 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
 
     await editField()(IDENTITY, envelope);
 
-    expect(editsMade(edit).map(c => c.args)).toEqual([[IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin }, envelope]]);
+    expect(edit.mock.calls).toEqual([[ADDRESS, envelope]]);
   });
 
   it('goes through the gate of the panels showing the record its Argument names', async () => {
@@ -309,9 +294,8 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
     await editField()();
 
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'a long description' }));
-    expect(editsMade(edit).map(c => c.args)).toEqual([[
-      IDENTITY.formKey, { name: IDENTITY.plugin, origin: IDENTITY.origin },
-      { op: 'set', path: [{ kind: 'member', name: 'Description' }], value: 'a new description' },
+    expect(edit.mock.calls).toEqual([[
+      ADDRESS, { op: 'set', path: [{ kind: 'member', name: 'Description' }], value: 'a new description' },
     ]]);
   });
 
@@ -322,7 +306,7 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
 
     await editField()();
 
-    expect(editsMade(edit)).toEqual([]);
+    expect(edit).not.toHaveBeenCalled();
   });
 
   it('from the palette, on a cell that is not a string value, writes nothing', async () => {
@@ -332,7 +316,7 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
     await editField()();
 
     expect(showInputBox).not.toHaveBeenCalled();
-    expect(editsMade(edit)).toEqual([]);
+    expect(edit).not.toHaveBeenCalled();
   });
 
   it('writes nothing for an Argument that is not a record\'s plugin copy', async () => {
@@ -341,7 +325,7 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
 
     await editField()({ formKey: IDENTITY.formKey }, envelope);
 
-    expect(editsMade(edit)).toEqual([]);
+    expect(edit).not.toHaveBeenCalled();
   });
 });
 

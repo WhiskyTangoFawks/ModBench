@@ -51,16 +51,16 @@ public sealed class SourceTransaction
     /// each act replaced so a later failure in this batch puts it back.</summary>
     public void Apply(SourceRepository repository, SourceChanges changes)
     {
+        var (moves, documents) = changes.Under(repository);
         try
         {
-            foreach (var move in changes.Moves)
+            foreach (var (from, to) in moves)
             {
-                var (from, to) = (Path.Combine(repository.ModFolder, move.From), Path.Combine(repository.ModFolder, move.To));
                 SourceRepositoryLayout.MoveEntry(from, to);
                 _log.Add(new EntryMove(repository.ModFolder, from, to));
             }
 
-            foreach (var document in changes.Documents) Write(repository.ModFolder, document);
+            foreach (var (path, text) in documents) Write(repository.ModFolder, path, text);
         }
         finally
         {
@@ -68,15 +68,14 @@ public sealed class SourceTransaction
         }
     }
 
-    private void Write(string modFolder, DocumentChange document)
+    private void Write(string modFolder, string path, string text)
     {
-        var path = Path.Combine(modFolder, document.Path);
         var before = Snapshot(path);
         var directory = PathShape.DirectoryOf(path);
         var minted = SourceRepositoryLayout.LevelsMintedBy(directory);
         try
         {
-            SourceRepositoryLayout.InMintedDirectory(directory, () => SourceRepositoryLayout.WriteTextAtomic(path, document.Text));
+            SourceRepositoryLayout.InMintedDirectory(directory, () => SourceRepositoryLayout.WriteTextAtomic(path, text));
         }
         finally
         {

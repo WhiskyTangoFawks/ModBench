@@ -1,10 +1,13 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -173,6 +176,77 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         var copied = Document(MasterGridCell);
         Assert.Equal("MasterGrid", copied["EditorID"].Require().GetValue<string>());
         Assert.Equal(["Leaver"], Group(copied, "Temporary"));
+    }
+
+    private sealed class FaultingOnClosingAMasterAskedForACell() : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        public override IPluginRecordLookup OpenRecordLookup(
+            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+            new Faulting(base.OpenRecordLookup(modPath, gameRelease, schemas));
+
+        private sealed class Faulting(IPluginRecordLookup inner) : IPluginRecordLookup
+        {
+            private bool _askedForACell;
+
+            public RecordIdentity? IdentityOf(string formKey) => inner.IdentityOf(formKey);
+            public long? RecordFlagsOf(string formKey) => inner.RecordFlagsOf(formKey);
+            public string? TextOf(string formKey) => inner.TextOf(formKey);
+            public DocumentContainment? ContainmentOf(string formKey) => inner.ContainmentOf(formKey);
+            public CellStructure? CellStructureOf(string formKey) => inner.CellStructureOf(formKey);
+            public IReadOnlyList<string> CellsIn(string worldspace) => inner.CellsIn(worldspace);
+
+            public string? CellAt(string worldspace, int x, int y)
+            {
+                _askedForACell = true;
+                return inner.CellAt(worldspace, x, y);
+            }
+
+            public void Dispose()
+            {
+                inner.Dispose();
+                if (_askedForACell) throw new InvalidOperationException("Expected the plugin to close.");
+            }
+        }
+    }
+
+    private sealed class UntrackingAModWhenAMasterIsRead(string modFolder) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        public override IPluginRecordLookup OpenRecordLookup(
+            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        {
+            var repository = Path.Combine(modFolder, ".git");
+            if (Directory.Exists(repository)) Directory.Move(repository, Path.Combine(modFolder, ".git-untracked"));
+            return base.OpenRecordLookup(modPath, gameRelease, schemas);
+        }
+    }
+
+    [Fact]
+    public void ClearingPersistent_WhoseModIsUntrackedWhileItIsPlanned_AnswersTheChangesUnderTheTreeItRead()
+    {
+        Load(masterTracked: false);
+        var modFolder = _plugins.FolderOf(Override);
+        var services = TestEditService.Over(_plugins.Holder, adapter: new UntrackingAModWhenAMasterIsRead(modFolder));
+        var handler = new TestEditor(services.GetRequiredService<EditRecordChangesHandler>(), _plugins.Holder);
+
+        var result = handler.Edit(
+            Address(Override), _keys["Leaver"].ToString(), SetAt(JsonDocument.Parse("0").RootElement, Member("MajorRecordFlagsRaw")));
+
+        Assert.True(result.Applied, result.Message);
+        Directory.Move(Path.Combine(modFolder, ".git-untracked"), Path.Combine(modFolder, ".git"));
+        Assert.Equal(["Leaver"], Group(Document(MasterGridCell), "Temporary"));
+    }
+
+    [Fact]
+    public void ClearingPersistent_WhoseLandingFaults_ThrowsTheFault_NeverRefusesItAsATreeMovedOutsideModbench()
+    {
+        Load(masterTracked: false);
+        var services = TestEditService.Over(_plugins.Holder, adapter: new FaultingOnClosingAMasterAskedForACell());
+        var handler = new TestEditor(services.GetRequiredService<EditRecordChangesHandler>(), _plugins.Holder);
+
+        var fault = Assert.Throws<InvalidOperationException>(() => handler.Edit(
+            Address(Override), _keys["Leaver"].ToString(), SetAt(JsonDocument.Parse("0").RootElement, Member("MajorRecordFlagsRaw"))));
+
+        Assert.Equal("Expected the plugin to close.", fault.Message);
     }
 
     [Fact]

@@ -51,6 +51,17 @@ describe('referencedByTitle', () => {
     expect(referencedByTitle(0)).toBe('Referenced By (0)');
     expect(referencedByTitle(undefined)).toBe('Referenced By');
   });
+
+  it('counts in the user\'s locale, as the Plugins view counts', () => {
+    const german = new Intl.NumberFormat('de-DE');
+    const inGerman = vi.spyOn(Number.prototype, 'toLocaleString').mockImplementation(function (this: number) { return german.format(this); });
+
+    try {
+      expect(referencedByTitle(1234)).toBe('Referenced By (1.234)');
+    } finally {
+      inGerman.mockRestore();
+    }
+  });
 });
 
 describe('the Referenced By view', () => {
