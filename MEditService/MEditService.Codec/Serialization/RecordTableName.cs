@@ -24,8 +24,8 @@ public static class RecordTableName
         }
 
         // A table built from several concrete classes (Globals) binds its RecordType to whichever
-        // was discovered first, so a sibling matches nothing above — and the GRUP signature the
-        // schema names that table after is on the record's own class, or a base it inherits it from.
+        // was discovered first, so a sibling matches nothing above; the schema names that table after
+        // the GRUP signature the record's class declares or inherits.
         return GrupSignatureOf(RecordClassOf(concrete), BindingFlags.FlattenHierarchy) ?? concrete.Name.ToLowerInvariant();
     }
 

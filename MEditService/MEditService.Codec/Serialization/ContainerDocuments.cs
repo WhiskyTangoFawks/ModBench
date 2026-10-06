@@ -8,9 +8,8 @@ namespace MEditService.Codec.Serialization;
 /// <see cref="ContainerSlots"/> holds.</summary>
 public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<string, RecordTableSchema> schemas)
 {
-    /// <summary><c>Node</c> is the child's subtree of its owner's document, which spells an ambiguous
-    /// child's own type; <c>SlotIndex</c> is its GRUP position. <c>RecordType</c> is null when
-    /// neither the child's text nor its slot names a type this game has.</summary>
+    /// <summary><c>Node</c> is the child's subtree of its owner's document; <c>SlotIndex</c> is its
+    /// GRUP position. <c>RecordType</c> is null when nothing names a type this game has.</summary>
     public readonly record struct ChildDocument(
         string SlotName, int SlotIndex, string FormKey, string? RecordType, JsonElement Node)
     {
