@@ -104,9 +104,9 @@ internal sealed class FakeReads(
     public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();
     public Index.CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey) => new([], []);
     public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;
-    public IReadOnlyDictionary<string, CellLocationRow> CellLocations { get; set; } = new Dictionary<string, CellLocationRow>();
+    public IReadOnlyDictionary<RecordAt, CellLocationRow> CellLocations { get; set; } = new Dictionary<RecordAt, CellLocationRow>();
     public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) =>
-        CellLocations.TryGetValue(cellFormKey, out var location) ? location : null;
+        CellLocations.TryGetValue(new RecordAt(plugin, cellFormKey), out var location) ? location : null;
     public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey) => [];
     public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
     public IReadOnlySet<RecordAt> RecordsWithChildren { get; set; } = new HashSet<RecordAt>();

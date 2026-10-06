@@ -105,7 +105,7 @@ public static class PluginEndpoints
         })
             .WithName("GetCreatableRecordTypes")
             .WithTags(Tag)
-            .Produces<IReadOnlyList<CreatableRecordType>>()
+            .Produces<IReadOnlyList<RecordTypeChoice>>()
             .ProducesProblem(503);
 
         app.MapGet("/plugins/{plugin}/records/{formKey}/child-record-types", (
@@ -126,7 +126,7 @@ public static class PluginEndpoints
             .WithName("GetChildRecordTypes")
             .WithTags(Tag)
             .WithDescription("The record types the plugin's copy of a container record can hold, in name order.")
-            .Produces<IReadOnlyList<CreatableRecordType>>()
+            .Produces<IReadOnlyList<RecordTypeChoice>>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(503);

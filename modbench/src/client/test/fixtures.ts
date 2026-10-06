@@ -41,6 +41,9 @@ export function recordSummaryFixture(overrides: Partial<RecordSummary> = {}): Re
   };
 }
 
+/** The record types mEdit answers `isContainer` for in the fixtures' game. */
+export const CONTAINER_TYPES: ReadonlySet<string> = new Set(['qust', 'dial', 'cell', 'wrld']);
+
 /** A `PluginRecordTypeCount` with every required wire member at its neutral value. */
 export function recordTypeCountFixture(overrides: Partial<PluginRecordTypeCount> & { type: string }): PluginRecordTypeCount {
   return {
@@ -48,7 +51,7 @@ export function recordTypeCountFixture(overrides: Partial<PluginRecordTypeCount>
     displayName: overrides.type,
     hasParseFailure: false,
     isCreatable: true,
-    isContainer: false,
+    isContainer: CONTAINER_TYPES.has(overrides.type),
     ...overrides,
   };
 }

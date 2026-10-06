@@ -6,6 +6,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Plugins.Utility;
 
 namespace MEditService.Codec.Tests.Schema;
 
@@ -30,7 +31,7 @@ public sealed class ChildRecordTypesTests
     }
 
     [Fact]
-    public void AQuestHoldingATopic_HoldsMore()
+    public void AQuestHoldingATopic_CanHoldAnother_ForAListMemberStaysOpenWhenFilled()
     {
         var quest = new Quest(Mod);
         quest.DialogTopics.Add(new DialogTopic(Mod));
@@ -72,6 +73,56 @@ public sealed class ChildRecordTypesTests
     public void AWorldspacesPersistentCell_HoldsOnlyPlacedRecords()
     {
         Assert.Equal(["achr", "refr"], Of(new Cell(Mod), CellPlace.PersistentWorldspaceCell));
+    }
+
+    [Fact]
+    public void ACellsPlace_IsWhereItsStructureSitsIt()
+    {
+        Assert.Equal(CellPlace.Interior, CellStructure.Interior(0, 0).Place);
+        Assert.Equal(CellPlace.Exterior, new CellStructure("000801:Holds.esp", 0, -1, 0, -1, IsInterior: false).Place);
+        Assert.Equal(
+            CellPlace.PersistentWorldspaceCell, new CellStructure("000801:Holds.esp", null, null, null, null, IsInterior: false).Place);
+    }
+
+    [Fact]
+    public void ADeletedContainer_HoldsNothing()
+    {
+        Assert.Empty(Of(new Quest(Mod) { MajorRecordFlagsRaw = DeletedFlag.Bit }));
+    }
+
+    [Fact]
+    public void EveryTypeHasChildFieldsCallsAContainer_HoldsSomethingWhenEmpty_InEveryPlaceACellCanSit()
+    {
+        var checkedTypes = 0;
+        foreach (var release in Enum.GetValues<GameRelease>())
+        {
+            if (SchemasOf(release) is not { } schemas) continue;
+            var dispatch = RecordTypeDispatch.For(release);
+            foreach (var type in schemas.Keys.Where(type => ContainerChildFields.HasChildFields(type, release)))
+            {
+                var empty = MajorRecordInstantiator.Activator(
+                    FormKey.Factory("000800:Holds.esp"), release, dispatch.ConcreteFor(type).Require());
+                var text = Codec.SerializeToText(empty, release);
+                CellPlace?[] places = dispatch.IsCell(type) ? [.. Enum.GetValues<CellPlace>().Cast<CellPlace?>()] : [null];
+                foreach (var place in places)
+                    Assert.True(ChildRecordTypes.Of(type, text, place, schemas, release).Count > 0, $"{release} {type} in {place} holds nothing.");
+                checkedTypes++;
+            }
+        }
+
+        Assert.True(checkedTypes > 0, "Expected at least one container type; a sweep over none agrees with anything.");
+    }
+
+    private static IReadOnlyDictionary<string, RecordTableSchema>? SchemasOf(GameRelease release)
+    {
+        try
+        {
+            return SharedSchemaReflector.Instance.GetSchemas(release);
+        }
+        catch (UnsupportedGameReleaseException)
+        {
+            return null;
+        }
     }
 
     [Fact]

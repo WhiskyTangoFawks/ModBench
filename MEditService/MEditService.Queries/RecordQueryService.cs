@@ -188,36 +188,29 @@ public sealed class RecordQueryService(
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
 
-    // Sorted as a plugin's groups are, so the pick reads in the order the tree shows.
-    public IReadOnlyList<CreatableRecordType> GetCreatableRecordTypes()
+    public IReadOnlyList<RecordTypeChoice> GetCreatableRecordTypes()
     {
         var schemas = RequireSchemas();
-        return [.. CreatableRecordTypes.Of(schemas, _loadOrder.Require().GameRelease)
-            .Select(type => new CreatableRecordType(type, schemas.DisplayNameFor(type)))
-            .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => r.Type, StringComparer.Ordinal)];
+        return Choices(CreatableRecordTypes.Of(schemas, _loadOrder.Require().GameRelease), schemas);
     }
 
-    public IReadOnlyList<CreatableRecordType>? GetChildRecordTypes(PluginAddress plugin, string formKey)
+    public IReadOnlyList<RecordTypeChoice>? GetChildRecordTypes(PluginAddress plugin, string formKey)
     {
         var reads = RequireReads();
         if (reads.GetDocument(formKey, plugin) is not { Body: { } body } container) return null;
         var schemas = RequireSchemas();
-        var release = _loadOrder.Require().GameRelease;
-        var place = reads.GetCellLocation(plugin, formKey) is { } cell ? PlaceOf(cell) : (CellPlace?)null;
-        return [.. ChildRecordTypes.Of(container.RecordType, body, place, schemas, release)
-            .Select(type => new CreatableRecordType(type, schemas.DisplayNameFor(type)))
-            .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => r.Type, StringComparer.Ordinal)];
+        var place = reads.GetCellLocation(plugin, formKey) is { } cell
+            ? new CellStructure(cell.ParentWorldspace, cell.BlockX, cell.BlockY, cell.SubX, cell.SubY, cell.IsInterior).Place
+            : (CellPlace?)null;
+        return Choices(ChildRecordTypes.Of(container.RecordType, body, place, schemas, _loadOrder.Require().GameRelease), schemas);
     }
 
-    // A worldspace's cell with no block is the one its persistent-cell member holds.
-    private static CellPlace PlaceOf(CellLocationRow cell) => cell switch
-    {
-        { ParentWorldspace: null } => CellPlace.Interior,
-        { BlockX: null } => CellPlace.PersistentWorldspaceCell,
-        _ => CellPlace.Exterior,
-    };
+    // Sorted as a plugin's groups are, so the pick reads in the order the tree shows.
+    private static List<RecordTypeChoice> Choices(IEnumerable<string> types, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        [.. types
+            .Select(type => new RecordTypeChoice(type, schemas.DisplayNameFor(type)))
+            .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.Type, StringComparer.Ordinal)];
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey)
     {

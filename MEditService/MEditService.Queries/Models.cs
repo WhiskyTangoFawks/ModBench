@@ -130,7 +130,7 @@ public record ReferenceResult(
 public record PluginRecordTypeCount(
     string Type, int Count, string DisplayName, bool HasParseFailure, bool IsCreatable, bool IsContainer);
 
-public record CreatableRecordType(string Type, string DisplayName);
+public record RecordTypeChoice(string Type, string DisplayName);
 
 /// <summary>The answer to "did the projection reach at least N?" (ADR-0015). Sequence
 /// is the value observed at the moment of that answer, not necessarily equal to the awaited

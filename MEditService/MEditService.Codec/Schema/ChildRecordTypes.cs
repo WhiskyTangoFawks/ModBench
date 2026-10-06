@@ -28,23 +28,25 @@ public static class ChildRecordTypes
             ],
         };
 
-    /// <summary><paramref name="containerText"/> is the container's own document, which says which
-    /// single-record members are filled. <paramref name="place"/> is null for a container that is no
-    /// cell.</summary>
-    public static IEnumerable<string> Of(
+    /// <summary><paramref name="containerText"/> is the container's own document, which says whether it
+    /// is deleted and which single-record members are filled. <paramref name="place"/> is null for a
+    /// container that is no cell.</summary>
+    public static IReadOnlyList<string> Of(
         string containerType, string containerText, CellPlace? place,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
         if (!XEditAddList.TryGetValue(containerType, out var adds)) return [];
         var dispatch = RecordTypeDispatch.For(release);
         if (dispatch.ConcreteFor(containerType) is not { } container) return [];
+        using var document = JsonDocument.Parse(containerText);
+        if (DeletedFlag.IsSet(document.RootElement)) return [];
 
-        var openSlots = OpenSlots(container, containerType, containerText, schemas, release);
-        return adds
+        var openSlots = OpenSlots(container, containerType, document.RootElement, schemas, release);
+        return [.. adds
             .Where(add => Allows(add.Narrowing, place) && schemas.ContainsKey(add.Type))
             .Where(add => dispatch.ConcreteFor(add.Type) is { } held
                 && openSlots.Exists(slot => slot.Any(type => type.IsAssignableFrom(held))))
-            .Select(add => add.Type);
+            .Select(add => add.Type)];
     }
 
     private static bool Allows(Narrowing narrowing, CellPlace? place) => narrowing switch
@@ -56,11 +58,10 @@ public static class ChildRecordTypes
 
     // A member holding a single record is open only while it holds none.
     private static List<IReadOnlyList<Type>> OpenSlots(
-        Type container, string containerType, string containerText,
+        Type container, string containerType, JsonElement document,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
-        using var document = JsonDocument.Parse(containerText);
-        var filled = new ContainerDocuments(release, schemas).ChildrenOf(containerType, document.RootElement)
+        var filled = new ContainerDocuments(release, schemas).ChildrenOf(containerType, document)
             .Select(child => child.SlotName)
             .ToHashSet(StringComparer.Ordinal);
         var category = release.ToCategory();

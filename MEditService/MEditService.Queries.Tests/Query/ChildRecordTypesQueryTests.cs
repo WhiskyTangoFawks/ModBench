@@ -47,7 +47,7 @@ public sealed class ChildRecordTypesQueryTests
     {
         var types = _svc.GetChildRecordTypes(Plugin, _quest.ToString());
 
-        Assert.Equal<CreatableRecordType>(
+        Assert.Equal<RecordTypeChoice>(
             [new("dlbr", "Dialog Branch"), new("dial", "Dialog Topic"), new("scen", "Scene")],
             types);
     }
@@ -58,14 +58,29 @@ public sealed class ChildRecordTypesQueryTests
     [InlineData(Worldspace, null, false, new[] { "Placed NPC", "Placed Object" })]
     public void ACell_HoldsWhatItsPlaceInTheIndexAllows(string? worldspace, int? blockX, bool isInterior, string[] expected)
     {
-        _reads.CellLocations = new Dictionary<string, CellLocationRow>
+        _reads.CellLocations = new Dictionary<RecordAt, CellLocationRow>
         {
-            [_cell.ToString()] = new(_cell.ToString(), worldspace, blockX, blockX, blockX, blockX, blockX, blockX, isInterior),
+            [new(Plugin, _cell.ToString())] = new(_cell.ToString(), worldspace, blockX, blockX, blockX, blockX, blockX, blockX, isInterior),
         };
 
         var types = _svc.GetChildRecordTypes(Plugin, _cell.ToString());
 
         Assert.Equal(expected, types?.Select(t => t.DisplayName));
+    }
+
+    [Fact]
+    public void ACell_TakesItsPlaceFromThePluginAsked_NotAnotherOfTheSameName()
+    {
+        _reads.CellLocations = new Dictionary<RecordAt, CellLocationRow>
+        {
+            [new(Plugin, _cell.ToString())] = new(_cell.ToString(), Worldspace, 0, 0, 0, 0, 0, 0, IsInterior: false),
+            [new(new PluginAddress(PluginName, "OtherMod"), _cell.ToString())] =
+                new(_cell.ToString(), Worldspace, null, null, null, null, null, null, IsInterior: false),
+        };
+
+        var types = _svc.GetChildRecordTypes(Plugin, _cell.ToString());
+
+        Assert.Contains("Landscape", types?.Select(t => t.DisplayName) ?? []);
     }
 
     [Fact]

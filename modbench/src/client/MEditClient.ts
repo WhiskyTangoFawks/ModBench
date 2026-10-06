@@ -123,7 +123,7 @@ export type PluginDependants = components['schemas']['PluginDependantsResponse']
  *  record and its source file relative to the mod folder. */
 export type PluginProblems = components['schemas']['PluginProblems'];
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
-export type CreatableRecordType = components['schemas']['CreatableRecordType'];
+export type RecordTypeChoice = components['schemas']['RecordTypeChoice'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type InteriorCellBlock = components['schemas']['InteriorCellBlock'];
 export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock'];
@@ -209,9 +209,9 @@ export interface MEditClient {
   getPluginProblems(): Promise<PluginProblems[]>;
   getRecordTypes(plugin: PluginAddress): Promise<PluginRecordTypeCount[]>;
   // The game's, not a plugin's: every plugin of the load order shares it.
-  getCreatableRecordTypes(): Promise<CreatableRecordType[]>;
+  getCreatableRecordTypes(): Promise<RecordTypeChoice[]>;
   /** The types the plugin's copy of a container record can hold, in name order. */
-  getChildRecordTypes(plugin: PluginAddress, formKey: string): Promise<CreatableRecordType[]>;
+  getChildRecordTypes(plugin: PluginAddress, formKey: string): Promise<RecordTypeChoice[]>;
   getCreatablePluginExtensions(): Promise<string[]>;
   // `unfiltered` lists what the record filter hides too.
   getRecords(

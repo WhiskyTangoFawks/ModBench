@@ -753,10 +753,6 @@ export interface components {
             plugin: components["schemas"]["PluginAddress"];
             documentText: string;
         };
-        CreatableRecordType: {
-            type: string;
-            displayName: string;
-        };
         CreatePluginRequest: {
             origin: string;
             name: string;
@@ -1134,6 +1130,10 @@ export interface components {
             items: components["schemas"]["RecordSummary"][];
             /** Format: int32 */
             total: number;
+        };
+        RecordTypeChoice: {
+            type: string;
+            displayName: string;
         };
         RecordsWithChildrenRequest: {
             records: components["schemas"]["RecordAddress"][];
@@ -1706,7 +1706,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreatableRecordType"][];
+                    "application/json": components["schemas"]["RecordTypeChoice"][];
                 };
             };
             /** @description Service Unavailable */
@@ -1740,7 +1740,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreatableRecordType"][];
+                    "application/json": components["schemas"]["RecordTypeChoice"][];
                 };
             };
             /** @description Bad Request */
