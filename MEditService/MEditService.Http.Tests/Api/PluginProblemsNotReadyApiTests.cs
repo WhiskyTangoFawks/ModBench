@@ -22,6 +22,6 @@ public sealed class PluginProblemsNotReadyApiTests : HostedTests
         var response = await Client.GetAsync(new Uri("/plugins/problems", UriKind.Relative));
 
         var problem = await response.AssertIsProblem(HttpStatusCode.ServiceUnavailable);
-        Assert.Contains("finished indexing", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        Assert.Contains("index is not ready", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
     }
 }

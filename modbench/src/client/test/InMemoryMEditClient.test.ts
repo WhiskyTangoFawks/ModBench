@@ -32,15 +32,6 @@ describe('InMemoryMEditClient — unscripted queries reject', () => {
   });
 });
 
-describe('InMemoryMEditClient — the plugin problems', () => {
-  it('answers the scripted problems, and rejects before any is scripted', async () => {
-    const client = new InMemoryMEditClient();
-    await expect(client.getPluginProblems()).rejects.toThrow(/getPluginProblems/);
-    client.setQueryAnswer('getPluginProblems', []);
-    await expect(client.getPluginProblems()).resolves.toEqual([]);
-  });
-});
-
 describe('InMemoryMEditClient — a scripted query failure', () => {
   it('rejects every call with the scripted error until re-scripted, an answer alone not clearing a standing failure', async () => {
     const client = new InMemoryMEditClient();

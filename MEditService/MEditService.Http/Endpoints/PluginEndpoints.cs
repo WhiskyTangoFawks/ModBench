@@ -44,7 +44,7 @@ public static class PluginEndpoints
             {
                 return svc.GetProblems() is { } problems
                     ? Results.Ok(problems)
-                    : Results.Problem("mEdit has not finished indexing the plugins.", statusCode: 503);
+                    : Results.Problem("mEdit's index is not ready, so what is wrong in the plugins' source is not known yet.", statusCode: 503);
             }
             catch (NoLoadOrderException ex)
             {

@@ -943,6 +943,7 @@ export interface components {
         PluginProblems: {
             plugin: components["schemas"]["PluginAddress"];
             problems: components["schemas"]["SourceProblem"][];
+            failure?: string | null;
         };
         /** @enum {string} */
         PluginProviderKind: "Mod" | "Game" | "None";
