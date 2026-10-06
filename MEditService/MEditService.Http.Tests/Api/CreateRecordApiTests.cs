@@ -91,14 +91,25 @@ public sealed class CreateRecordApiTests : HostedTests
     }
 
     [Fact]
-    public async Task CreatingARecord_InAWorldspace_IsRefusedAsNotYetSupported()
+    public async Task CreatingACell_InAWorldspace_AnswersTheNewFormKey()
     {
         await Loaded(tracked: true);
 
         var response = await Create(Origin, "cell", _worldspace, new { x = 1, y = -2 });
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        Assert.Equal("HeldInAnotherRecordNotYetSupported", (await response.Body()).GetProperty("refusal").GetString());
+        response.EnsureSuccessStatusCode();
+        Assert.EndsWith(":" + Plugin, (await response.Body()).GetProperty("formKey").GetString().Require(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreatingACell_InAWorldspace_WithOnlyOneCoordinate_Is400()
+    {
+        await Loaded(tracked: true);
+
+        var response = await Create(Origin, "cell", _worldspace, new { x = 1 });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("InvalidEnvelope", (await response.Body()).GetProperty("refusal").GetString());
     }
 
     [Fact]
