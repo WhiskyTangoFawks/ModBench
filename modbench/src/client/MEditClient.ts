@@ -216,7 +216,8 @@ export interface MEditClient {
   getChildRecordTypes(plugin: PluginAddress, formKey: string): Promise<RecordTypeChoice[]>;
   getCreatablePluginExtensions(): Promise<string[]>;
   getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage>;
-  searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
+  /** Every active plugin's copies, or one plugin's. */
+  searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage>;
   getRecordOwner(formKey: string): Promise<PluginAddress | undefined>;
   /** Every plugin that holds a copy of the record, its own included. */
   getRecordHolders(formKey: string): Promise<PluginAddress[]>;

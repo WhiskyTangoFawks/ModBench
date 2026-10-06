@@ -1,17 +1,19 @@
 import { parseTree, type Node } from 'jsonc-parser';
+import type { MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
+import type { Reporter } from '../ports/reporter';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import { copyDocument, type RecordCopy } from '../drivingLib/recordDocument';
 import { formKeyAt } from './formKeyHover';
 import { ownFormKey, recordObject, type RecordLocation, type RecordLocationDeps, type TextSpan } from './recordLocation';
 
-// A nested object with a FormKey of its own is a child record, whose references are its own
-// (editor-referenced-by.md, The tree, story 5).
 const valuesOf = (node: Node): Node[] => (node.type === 'property' ? node.children?.slice(1) : node.children) ?? [];
 
 function firstReference(node: Node, formKey: string): Node | undefined {
   const own = ownFormKey(node)?.parent;
   for (const child of valuesOf(node)) {
+    // A nested object with a FormKey of its own is a child record, whose references are its own
+    // (editor-referenced-by.md, The tree, story 5).
     if (child === own || ownFormKey(child) !== undefined) continue;
     if (child.type === 'string' && child.value === formKey) return child;
     const found = firstReference(child, formKey);
@@ -27,8 +29,13 @@ function referenceSpan(text: string, referrer: string, formKey: string): TextSpa
   return found ? { start: found.offset, end: found.offset + found.length } : { start: 0, end: 0 };
 }
 
+export interface ReferencesDeps<Document> extends RecordLocationDeps<Document> {
+  client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getReferences'>;
+  reporter: Pick<Reporter, 'report'>;
+}
+
 export function referencesOf<Document extends { getText(): string }>(
-  { client, reporter, open }: RecordLocationDeps<Document>,
+  { client, reporter, open }: ReferencesDeps<Document>,
 ): (text: string, offset: number) => Promise<RecordLocation<Document>[]> {
   const located = async (copy: RecordCopy, formKey: string): Promise<RecordLocation<Document> | string> => {
     try {

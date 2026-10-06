@@ -21,10 +21,13 @@ export function formKeyAt(text: string, offset: number): FormKeyString | undefin
     ? { formKey: value, start: node.offset, end: node.offset + node.length } : undefined;
 }
 
+export const recordLabel = (editorId: string | null | undefined, formKey: string): string =>
+  [editorId, `[${formKey}]`].filter(Boolean).join(' ');
+
 function markdownOf(formKey: string, comparison: CompareResult): string {
   const winner = comparison.overrides.find((copy) => copy.isWinner);
   return [
-    '`' + [winner?.editorId, '[' + formKey + ']'].filter(Boolean).join(' ') + '`',
+    '`' + recordLabel(winner?.editorId, formKey) + '`',
     comparison.recordTypeName,
     ...(winner ? [`Winner: ${winner.plugin}`] : []),
   ].join('\n\n');

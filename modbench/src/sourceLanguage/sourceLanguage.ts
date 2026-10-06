@@ -7,10 +7,11 @@ import { definitionsOf } from './formKeyDefinition';
 import { referencesOf } from './formKeyReferences';
 import { locationOf } from './recordLocation';
 import { completionsAt } from './completion';
+import { workspaceSymbolsOf, type RecordSymbol } from './workspaceSymbols';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
 
 export interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles' | 'reporter'> {
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferences'> & RecordDocumentClient & SourceProblemsDeps['client'];
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferences' | 'getPlugins'> & RecordDocumentClient & SourceProblemsDeps['client'];
 }
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
@@ -18,6 +19,13 @@ const pluginSource: vscode.DocumentSelector = { language: 'json' };
 
 const diagnosticOf = ({ message, start, end }: ProblemOnFile): vscode.Diagnostic =>
   new vscode.Diagnostic(new vscode.Range(start.line, start.character, end.line, end.character), message, vscode.DiagnosticSeverity.Warning);
+
+// Located at its document's start until VS Code resolves it, when it is opened.
+class RecordSymbolInformation extends vscode.SymbolInformation {
+  constructor(readonly record: RecordSymbol) {
+    super(record.name, vscode.SymbolKind.Object, record.plugin.name, new vscode.Location(record.uri, new vscode.Position(0, 0)));
+  }
+}
 
 function sourceProblems(deps: SourceLanguageDeps): vscode.Disposable {
   const collection = vscode.languages.createDiagnosticCollection('modbench-source');
@@ -73,5 +81,17 @@ export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposabl
       return (await referencesAt(document.getText(), document.offsetAt(position))).map(locationOf);
     },
   });
-  return vscode.Disposable.from(hover, completion, definition, references, sourceProblems(deps));
+  const workspace = workspaceSymbolsOf({ client, reporter: deps.reporter, open });
+  const symbolProvider: vscode.WorkspaceSymbolProvider<RecordSymbolInformation> = {
+    async provideWorkspaceSymbols(query) {
+      return (await workspace.symbolsFor(query)).map((record) => new RecordSymbolInformation(record));
+    },
+    async resolveWorkspaceSymbol(symbol) {
+      const found = await workspace.locate(symbol.record);
+      if (found) symbol.location = locationOf(found);
+      return symbol;
+    },
+  };
+  const symbols = vscode.languages.registerWorkspaceSymbolProvider(symbolProvider);
+  return vscode.Disposable.from(hover, completion, definition, references, symbols, sourceProblems(deps));
 }

@@ -1,14 +1,11 @@
 import * as vscode from 'vscode';
 import { findNodeAtLocation, type Node } from 'jsonc-parser';
-import type { MEditClient } from '../client';
-import type { Reporter } from '../ports/reporter';
 import type { RecordDocumentClient } from '../drivingLib/recordDocument';
 
 export interface TextSpan { start: number; end: number }
 
 export interface RecordLocationDeps<Document> {
-  client: RecordDocumentClient & Pick<MEditClient, 'getReferences'>;
-  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
+  client: RecordDocumentClient;
   open: (uri: vscode.Uri) => PromiseLike<Document>;
 }
 
