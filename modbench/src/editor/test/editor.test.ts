@@ -68,13 +68,13 @@ vi.mock('vscode', () => ({
 import { createEditor } from '..';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createFocusedView } from '../../drivingLib/focusedView';
-import { recordUri } from '../recordUri';
 import { renderedDocumentUri } from '../renderedDocument';
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { ReferencedByTreeProvider } from '../ReferencedByTreeProvider';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { comparisonOf } from '../../test/comparison';
 
+const COPY_PLUGIN = { name: 'A.esp', origin: 'ModA' };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 interface FakePanel {
@@ -108,18 +108,10 @@ function fakePanel(): FakePanel {
 }
 
 interface RecordEditorProvider {
-  openCustomDocument(uri: unknown): unknown;
-  resolveCustomEditor(document: unknown, panel: unknown): void;
-}
-
-const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =>
-  typeof value === 'object' && value !== null && 'openCustomDocument' in value && 'resolveCustomEditor' in value;
-
-interface RecordFileEditorProvider {
   resolveCustomTextEditor(document: unknown, panel: unknown): Promise<void>;
 }
 
-const isRecordFileEditorProvider = (value: unknown): value is RecordFileEditorProvider =>
+const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =>
   typeof value === 'object' && value !== null && 'resolveCustomTextEditor' in value;
 
 function makeEditor(client = new InMemoryMEditClient(), viewSelections = new Map<string, () => readonly unknown[]>()) {
@@ -142,14 +134,12 @@ function makeEditor(client = new InMemoryMEditClient(), viewSelections = new Map
   if (!referencedBy) throw new Error('no Referenced By view');
   const open = (formKey: string): FakePanel => {
     const panel = fakePanel();
-    provider.resolveCustomEditor(provider.openCustomDocument(recordUri(formKey)), panel);
+    void provider.resolveCustomTextEditor({ uri: renderedDocumentUri({ formKey, plugin: COPY_PLUGIN }, `${formKey}.json`) }, panel);
     return panel;
   };
-  const fileProvider = h.editorProviders.get('modbench.recordFile');
-  if (!isRecordFileEditorProvider(fileProvider)) throw new Error('no record file editor registered');
   const openDocument = async (uri: unknown): Promise<FakePanel> => {
     const panel = fakePanel();
-    await fileProvider.resolveCustomTextEditor({ uri }, panel);
+    await provider.resolveCustomTextEditor({ uri }, panel);
     return panel;
   };
   const openFile = (fsPath: string): Promise<FakePanel> => openDocument({ scheme: 'file', fsPath });
@@ -302,13 +292,17 @@ describe('a record tab whose record an edit of its FormID moved', () => {
 describe('a record gesture from the palette', () => {
   it('opens the records selected in a view the Editor is handed, while that view has the focus', async () => {
     const plugins = { selection: [{ formKey: '000803:A.esp', kind: 'placed' }], onDidChangeSelection: (listener: (event: { selection: unknown[] }) => void) => { listener({ selection: [] }); return { dispose: () => undefined }; } };
-    const { focusedView } = makeEditor(new InMemoryMEditClient(), new Map([['modbench.pluginListTree', () => plugins.selection]]));
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getRecordOwner', COPY_PLUGIN);
+    client.setQueryAnswer('getRecordFile', { path: null });
+    client.setQueryAnswer('getRenderedDocument', { fileName: 'Placed.json', text: '{}' });
+    const { focusedView } = makeEditor(client, new Map([['modbench.pluginListTree', () => plugins.selection]]));
     focusedView.follow('modbench.pluginListTree', plugins);
 
     await h.commands.get('modbench.record.open')?.();
 
     expect(h.contextKeys.get('modbench.record.selectionIn')).toBe('modbench.pluginListTree');
-    expect(opened()).toEqual([recordUri('000803:A.esp')]);
+    expect(opened()).toEqual([renderedDocumentUri({ formKey: '000803:A.esp', plugin: COPY_PLUGIN }, 'Placed.json')]);
   });
 });
 

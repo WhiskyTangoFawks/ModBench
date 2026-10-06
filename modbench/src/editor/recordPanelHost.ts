@@ -22,7 +22,6 @@ import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE, RECORD_FILE_VIEW_TYPE } from './recordUri';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
 import { RENDERED_DOCUMENT_SCHEME, RenderedDocuments, renderedDocumentUri } from './renderedDocument';
@@ -71,14 +70,9 @@ function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
   };
 }
 
-// The document model RecordEditorProvider hands back to VS Code: an opaque handle naming only the
-// FormKey its URI addresses.
-class RecordDocument implements vscode.CustomDocument {
-  constructor(readonly uri: vscode.Uri, readonly formKey: string) {}
-  dispose(): void { /* no owned resources */ }
-}
+const RECORD_VIEW_TYPE = 'modbench.record';
 
-interface RecordEditorProviderDeps {
+interface ShowRecordDeps {
   context: Pick<vscode.ExtensionContext, 'extensionUri'>;
   recordPanels: Set<vscode.WebviewPanel>;
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
@@ -87,32 +81,17 @@ interface RecordEditorProviderDeps {
   routerDeps: SharedRecordPanelDeps;
 }
 
-// A VS Code custom editor, one per record address: preview, pinning, history, closed-tab
-// reopening and restore-after-reload are VS Code's own, for any tab backed by a URI.
-class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<RecordDocument> {
-  constructor(private readonly deps: RecordEditorProviderDeps) {}
-
-  openCustomDocument(uri: vscode.Uri): RecordDocument {
-    return new RecordDocument(uri, formKeyOfRecordUri(uri));
-  }
-
-  resolveCustomEditor(document: RecordDocument, panel: vscode.WebviewPanel): void {
-    panel.title = recordTitle(document.formKey, undefined);
-    showRecord(this.deps, panel, document.formKey, (formKey, columns) => { panel.title = recordTitle(formKey, columns); });
-  }
-}
-
-interface RecordFileEditorProviderDeps extends RecordEditorProviderDeps {
+interface RecordEditorProviderDeps extends ShowRecordDeps {
   client: Pick<MEditClient, 'getRecordOfFile'>;
   channel: Pick<vscode.LogOutputChannel, 'warn'>;
 }
 
 // The grid as VS Code's editor for a record's file, a child's or a rendered document. A file's
 // tab restored before mEdit holds the load order asks again on each load-order status.
-class RecordFileEditorProvider implements vscode.CustomTextEditorProvider {
+class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   private readonly unread = new Map<vscode.WebviewPanel, () => Promise<void>>();
 
-  constructor(private readonly deps: RecordFileEditorProviderDeps) {}
+  constructor(private readonly deps: RecordEditorProviderDeps) {}
 
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
     if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
@@ -151,7 +130,7 @@ class RecordFileEditorProvider implements vscode.CustomTextEditorProvider {
 }
 
 function showRecord(
-  deps: RecordEditorProviderDeps, panel: vscode.WebviewPanel, formKey: string, titleFromRead: TitleFromRead,
+  deps: ShowRecordDeps, panel: vscode.WebviewPanel, formKey: string, titleFromRead: TitleFromRead,
 ): void {
   const {
     context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps,
@@ -207,7 +186,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     loadFailures: () => loadOrderStatusTracker.failures(),
   };
   const providerDeps = { context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps };
-  const recordFileEditorProvider = new RecordFileEditorProvider({ ...providerDeps, client: meditClient, channel: outputChannel });
+  const recordEditorProvider = new RecordEditorProvider({ ...providerDeps, client: meditClient, channel: outputChannel });
   const keepsItsPlace = { webviewOptions: { retainContextWhenHidden: true } };
 
   return [
@@ -216,9 +195,8 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     new RenderedDocuments(meditClient),
     new ChildRecordDocuments(meditClient),
     { dispose: () => { loadOrderStatusTracker.dispose(); } },
-    vscode.window.registerCustomEditorProvider(RECORD_EDITOR_VIEW_TYPE, new RecordEditorProvider(providerDeps), keepsItsPlace),
-    vscode.window.registerCustomEditorProvider(RECORD_FILE_VIEW_TYPE, recordFileEditorProvider, keepsItsPlace),
-    { dispose: meditClient.onNotification('load-order-status', () => { recordFileEditorProvider.readAgain(); }) },
+    vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, keepsItsPlace),
+    { dispose: meditClient.onNotification('load-order-status', () => { recordEditorProvider.readAgain(); }) },
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended-field documents.
     ...registerRecordPanelContextCommands({
@@ -252,7 +230,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   ];
 }
 
-type OpenClient = Pick<MEditClient, 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
+type OpenClient = Pick<MEditClient, 'getRecordOwner' | 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
 
 async function openRecordTab(
   client: OpenClient, reporter: Reporter, address: RecordToOpen, viewColumn: vscode.ViewColumn, preview: boolean,
@@ -263,19 +241,21 @@ async function openRecordTab(
   });
 }
 
-// A tracked copy opens as its own file and an untracked one as mEdit's rendering of it. A copy
-// carried in another record's file opens as a child's document of that file.
-async function tabOf(client: OpenClient, { formKey, plugin }: RecordToOpen): Promise<[vscode.Uri, string]> {
-  if (!plugin) return [recordUri(formKey), RECORD_EDITOR_VIEW_TYPE];
+// A record given without a plugin opens its winning copy. A tracked copy opens as its own file and
+// an untracked one as mEdit's rendering of it. A copy carried in another record's file opens as a
+// child's document of that file.
+async function tabOf(client: OpenClient, { formKey, plugin: given }: RecordToOpen): Promise<[vscode.Uri, string]> {
+  const plugin = given ?? await client.getRecordOwner(formKey);
+  if (!plugin) throw new Error(`No active plugin holds ${formKey}.`);
   const file = await client.getRecordFile(plugin, formKey);
   if (file === null) throw holdsNoCopy({ formKey, plugin });
   if (!file.path) {
     const rendered = await client.getRenderedDocument(plugin, formKey);
     if (rendered === null) throw holdsNoCopy({ formKey, plugin });
-    return [renderedDocumentUri({ formKey, plugin }, rendered.fileName), RECORD_FILE_VIEW_TYPE];
+    return [renderedDocumentUri({ formKey, plugin }, rendered.fileName), RECORD_VIEW_TYPE];
   }
-  if ((await client.getRecordOfFile(file.path)).formKey === formKey) return [vscode.Uri.file(file.path), RECORD_FILE_VIEW_TYPE];
-  return [childRecordUri({ formKey, plugin }, file.path), RECORD_FILE_VIEW_TYPE];
+  if ((await client.getRecordOfFile(file.path)).formKey === formKey) return [vscode.Uri.file(file.path), RECORD_VIEW_TYPE];
+  return [childRecordUri({ formKey, plugin }, file.path), RECORD_VIEW_TYPE];
 }
 
 // `ViewColumn.Beside` resolves once: the first tab opened becomes active, so a second Beside call

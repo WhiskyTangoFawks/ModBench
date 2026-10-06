@@ -1,7 +1,7 @@
 import { headerFormKeyOf } from '../wire/headerFormKey';
 import type { PluginAddress } from '../wire/pluginAddress';
 
-/** A record to open: a copy when it names its plugin, else the record as no plugin gives it. */
+/** A record to open: a copy when it names its plugin, else its winning copy. */
 export interface RecordToOpen { formKey: string; plugin?: PluginAddress }
 
 export interface RecordOpenPlan {
