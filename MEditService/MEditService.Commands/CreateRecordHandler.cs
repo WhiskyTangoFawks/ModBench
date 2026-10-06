@@ -146,12 +146,8 @@ public sealed class CreateRecordHandler
         var (container, root, slot) = landing;
         if (FormKeyAllocator.Over(repository, plugin, release).Next(out var formKey) is { } refusedTarget) return refusedTarget;
         var child = ObjectOf(RecordMint.BareDocument(_codec, schema, release, formKey, editorId: null), $"the minted {recordType}");
-        if (!PlacedCell.TryAsCreatedIn(child, slot, root, release))
-        {
-            return NotYetSupported(
-                $"a {recordType} in the cell {container.FormKey}, which has a grid, since mEdit knows no cell width for {release} " +
-                "to start it at the grid cell's centre by");
-        }
+        if (!PlacedCell.TryAsCreatedIn(child, slot, root, release, out var unplaceable))
+            return RecordEditResult.Refused(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, unplaceable);
         var withChild = ContainerDocumentEdits.WithChildAppended(
                 _codec, container.Body, release, container.RecordType, container.FormKey, slot, child.ToJsonString(), recordType)
             ?? throw new InvalidOperationException($"{container.FormKey} was found, but its own text does not carry it.");

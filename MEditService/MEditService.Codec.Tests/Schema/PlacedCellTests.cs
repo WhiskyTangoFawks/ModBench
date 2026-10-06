@@ -8,13 +8,20 @@ namespace MEditService.Codec.Tests.Schema;
 public sealed class PlacedCellTests
 {
     [Fact]
-    public void APlacedRecordCreatedInAGridCell_OfAGameWithNoKnownCellWidth_IsNotPlaced_AndKeepsTheBareDocument()
+    public void APlacedRecordCreatedInAGridCell_OfAGameWithNoKnownCellWidth_IsRefusedNamingTheCell_AndKeepsTheBareDocument()
     {
-        var placed = new JsonObject { ["FormKey"] = "000801:Holds.esm" };
-        var cell = new JsonObject { [RecordTypeDispatch.CellGridMember] = PlacedCell.GridAt(3, -2) };
+        var placed = new JsonObject { [RecordMembers.FormKey] = "000802:Holds.esm" };
+        var cell = new JsonObject
+        {
+            [RecordMembers.FormKey] = "000801:Holds.esm",
+            [RecordTypeDispatch.CellGridMember] = PlacedCell.GridAt(3, -2),
+        };
 
-        Assert.False(PlacedCell.TryAsCreatedIn(placed, PersistentFlag.TemporaryGroup, cell, GameRelease.Starfield));
+        Assert.False(PlacedCell.TryAsCreatedIn(placed, PersistentFlag.TemporaryGroup, cell, GameRelease.Starfield, out var refusal));
 
-        Assert.Equal("""{"FormKey":"000801:Holds.esm"}""", placed.ToJsonString());
+        Assert.Equal(
+            "000801:Holds.esm has a grid, and mEdit knows no cell width for Starfield to place a new reference at its centre.",
+            refusal);
+        Assert.Equal("""{"FormKey":"000802:Holds.esm"}""", placed.ToJsonString());
     }
 }
