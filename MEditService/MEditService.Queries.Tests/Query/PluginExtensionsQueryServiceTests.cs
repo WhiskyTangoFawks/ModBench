@@ -11,7 +11,7 @@ public sealed class PluginExtensionsQueryServiceTests
     {
         var extensions = new PluginExtensionsQueryService(FakeLoadOrder.Of(GameRelease.Fallout4)).GetCreatable();
 
-        Assert.Equal([".esl", ".esm", ".esp"], extensions.Order());
+        Assert.Equal([".esm", ".esl", ".esp"], extensions);
     }
 
     [Theory]
@@ -21,7 +21,7 @@ public sealed class PluginExtensionsQueryServiceTests
     {
         var extensions = new PluginExtensionsQueryService(FakeLoadOrder.Of(release)).GetCreatable();
 
-        Assert.Equal([".esm", ".esp"], extensions.Order());
+        Assert.Equal([".esm", ".esp"], extensions);
     }
 
     [Fact]

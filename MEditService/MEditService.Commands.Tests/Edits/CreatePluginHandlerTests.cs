@@ -152,6 +152,16 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     [Theory]
+    [InlineData(GameRelease.Fallout4, "must be .esm, .esl or .esp.")]
+    [InlineData(GameRelease.Oblivion, "must be .esm or .esp.")]
+    public async Task CreatePlugin_ANonPluginName_IsRefusedNamingTheExtensionsTheReleaseTakes(GameRelease release, string expected)
+    {
+        var result = await HandlerIn(release, new RecordingAdapter()).CreatePlugin(new PluginAddress("Mod.txt", "BadMod"), ModFolder("BadMod"));
+
+        Assert.EndsWith(expected, result.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("Plain.esp")]
     [InlineData("Master.esm")]
     public async Task CreatePlugin_AFullPluginInAReleaseWithoutLightPlugins_IsWritten(string name)

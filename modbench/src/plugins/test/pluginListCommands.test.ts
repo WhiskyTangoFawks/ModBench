@@ -76,7 +76,7 @@ function makeMo2() {
 const WROTE = { name: 'MyPatch.esp', origin: 'Winning Mod' };
 
 describe('registerCreatePluginCommand', () => {
-  function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined, creatableExtensions = ['.esp', '.esm', '.esl']) {
+  function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined, creatableExtensions = ['.esm', '.esl', '.esp']) {
     client.setQueryAnswer('getCreatablePluginExtensions', creatableExtensions);
     const reporter = recordingReporter();
     registerCreatePluginCommand(client, mo2?.instance, reporter);
@@ -126,9 +126,9 @@ describe('registerCreatePluginCommand', () => {
 
     const validate = present(prompt.validate, 'the name prompt\'s validator');
     expect(validate('')).toBe('Name is required');
-    expect(validate('MyPatch.txt')).toBe('Extension must be .esp, .esm, or .esl');
-    expect(validate('MyPatch')).toBe('Extension must be .esp, .esm, or .esl');
-    expect(validate('.esp')).toBe('Extension must be .esp, .esm, or .esl');
+    expect(validate('MyPatch.txt')).toBe('Extension must be .esm, .esl, or .esp');
+    expect(validate('MyPatch')).toBe('Extension must be .esm, .esl, or .esp');
+    expect(validate('.esp')).toBe('Extension must be .esm, .esl, or .esp');
     expect(['A.esp', 'B.ESM', 'C.esl'].map(validate)).toEqual([undefined, undefined, undefined]);
   });
 
@@ -139,11 +139,11 @@ describe('registerCreatePluginCommand', () => {
       prompt.validate = options.validateInput;
       return Promise.resolve(undefined);
     });
-    const { run } = invoke(new InMemoryMEditClient(), makeMo2(), ['.esp', '.esm']);
+    const { run } = invoke(new InMemoryMEditClient(), makeMo2(), ['.esm', '.esp']);
     await run();
 
     const validate = present(prompt.validate, 'the name prompt\'s validator');
-    expect(validate('MyPatch.esl')).toBe('Extension must be .esp or .esm');
+    expect(validate('MyPatch.esl')).toBe('Extension must be .esm or .esp');
     expect(['A.esp', 'B.ESM'].map(validate)).toEqual([undefined, undefined]);
   });
 

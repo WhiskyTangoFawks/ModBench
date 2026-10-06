@@ -43,7 +43,7 @@ const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
 
 function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string | undefined)[]) {
   const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getCreatablePluginExtensions', ['.esp', '.esm', '.esl']);
+  client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esl', '.esp']);
   client.setCommandResult('renameSource', { renamed: true });
   client.setQueryAnswer('getPluginDependants', { dependants: [], unreadable: [] });
   const dialog = scriptedDialog(...answers);
@@ -176,9 +176,9 @@ describe('modbench.plugin.rename', () => {
 
     it('refuses a name with no plugin extension, and one mEdit leaves out', async () => {
       const { validate, client } = setup();
-      expect(await validate('Patch.txt')).toBe('Extension must be .esp, .esm, or .esl');
-      client.setQueryAnswer('getCreatablePluginExtensions', ['.esp', '.esm']);
-      expect(await validate('Patch.esl')).toBe('Extension must be .esp or .esm');
+      expect(await validate('Patch.txt')).toBe('Extension must be .esm, .esl, or .esp');
+      client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esp']);
+      expect(await validate('Patch.esl')).toBe('Extension must be .esm or .esp');
     });
 
     it('refuses a name the plugin\'s own place holds, a case-only rename of itself too', async () => {
