@@ -8,7 +8,7 @@ type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
   | 'getRecords' | 'searchRecords'
   | 'getRecordOwner' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations' | 'getComparison' | 'getRecordsComparison' | 'getReferences'
-  | 'getRenderedDocument'
+  | 'getRenderedDocument' | 'getRecordFile' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
@@ -265,6 +265,14 @@ export class InMemoryMEditClient implements MEditClient {
   }
   getRenderedDocument(...args: Parameters<MEditClient['getRenderedDocument']>): ReturnType<MEditClient['getRenderedDocument']> {
     return this.query('getRenderedDocument', args);
+  }
+
+  getRecordFile(...args: Parameters<MEditClient['getRecordFile']>): ReturnType<MEditClient['getRecordFile']> {
+    return this.query('getRecordFile', args);
+  }
+
+  getRecordOfFile(...args: Parameters<MEditClient['getRecordOfFile']>): ReturnType<MEditClient['getRecordOfFile']> {
+    return this.query('getRecordOfFile', args);
   }
 
   getComparison(...args: Parameters<MEditClient['getComparison']>): ReturnType<MEditClient['getComparison']> {
