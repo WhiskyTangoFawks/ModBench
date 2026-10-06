@@ -16,7 +16,7 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
         /// <summary>Why no type resolves, for a child whose <c>RecordType</c> is null.</summary>
         public string WhyUntyped =>
             Node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var named) && named.ValueKind == JsonValueKind.String
-                ? $"its '{SlotName}' names '{FormKey}' a '{named.GetString()}', and this game has no record type of that name"
+                ? $"its '{SlotName}' names '{FormKey}' a '{named.GetString()}', and its slot holds no record type of that name"
                 : $"its '{SlotName}' names '{FormKey}' with no '{LoquiUnions.UnionTypeDiscriminator}' naming its type, " +
                   "and its slot holds more than one record type";
 
@@ -107,15 +107,18 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
     }
 
     // The child's own spelling where the document carries one, else the slot's declared element type:
-    // a slot whose member type is concrete writes no discriminator. A spelling no type answers to is
-    // no type, whatever the slot holds.
+    // a slot whose member type is concrete writes no discriminator. A spelling no type the slot holds
+    // answers to is no type.
     private string? RecordTypeOf(Type owner, string slotName, JsonElement node)
     {
         var concrete = node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var named) && named.ValueKind == JsonValueKind.String
-            ? _dispatch.ConcreteFor(DocumentNodes.StringValueOf(named))
+            ? SpelledTypeHeld(owner, slotName, DocumentNodes.StringValueOf(named))
             : SlotElementType(owner, slotName);
         return concrete is null ? null : TableFor(concrete);
     }
+
+    private Type? SpelledTypeHeld(Type owner, string slotName, string spelled) =>
+        _dispatch.ConcreteFor(spelled) is { } type && _slots.Holds(owner.Name, slotName, type) ? type : null;
 
     private Type? SlotElementType(Type owner, string slotName) =>
         _slots.ElementTypeOf(owner.Name, slotName) is { } element ? _dispatch.ConcreteFor(element) : null;
