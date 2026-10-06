@@ -25,6 +25,7 @@ import type { AskQuestion } from '../ports/dialog';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen, type TabPlace } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
 import { inTabsPlace } from './inTabsPlace';
+import { followReportedCopies, type CopyChanged } from './recordCopy';
 import { fileText } from './fileText';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from './childRecordDocument';
@@ -97,27 +98,29 @@ const movedTo = (uri: vscode.Uri, moves: readonly SourceMove[]): vscode.Uri => m
 // tab restored before mEdit holds the load order asks again on each load-order status.
 class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   private readonly unread = new Map<vscode.WebviewPanel, () => Promise<void>>();
-  // The columns an open asks for, until the tab it opens takes them.
-  private readonly columnsToShow = new Map<string, readonly RecordCopy[]>();
+  // The columns and place an open asks for, until the tab it opens takes them.
+  private readonly toShow = new Map<string, Omit<GridPage, 'formKey'>>();
   private readonly documentOf = new Map<vscode.WebviewPanel, string>();
   // The copy each tab's document holds, once it is shown.
   private readonly shown = new Map<vscode.WebviewPanel, { uri: vscode.Uri; plugin: PluginAddress }>();
   private readonly places = new Map<vscode.WebviewPanel, ViewState>();
   private readonly moved = new Map<string, MovedTab>();
+  // The child records' tabs on their way to the document that carries their record now.
+  private readonly following = new Set<vscode.WebviewPanel>();
 
   constructor(private readonly deps: RecordEditorProviderDeps) {}
 
   /** Opens the grid on `uri`, with `columns` beside the document's own copy, and none when there
    *  are none, so a tab shown again shows every active plugin's copy. */
-  async open(uri: vscode.Uri, columns: readonly RecordCopy[], options: vscode.TextDocumentShowOptions): Promise<void> {
+  async open(uri: vscode.Uri, columns: readonly RecordCopy[], options: vscode.TextDocumentShowOptions, place?: ViewState): Promise<void> {
     const key = uri.toString();
-    this.columnsToShow.set(key, columns);
+    this.toShow.set(key, { columns, place });
     let untaken: readonly RecordCopy[] | undefined;
     try {
       await vscode.commands.executeCommand('vscode.openWith', uri, RECORD_VIEW_TYPE, options);
     } finally {
-      untaken = this.columnsToShow.get(key);
-      this.columnsToShow.delete(key);
+      untaken = this.toShow.get(key)?.columns;
+      this.toShow.delete(key);
     }
     if (!untaken) return;
     // No new tab took them, so VS Code showed the document's tab already open in the group, which
@@ -127,6 +130,27 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
         void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] } satisfies ExtensionToWebview);
       }
     }
+  }
+
+  /** Each child record's tab whose record mEdit reports changed follows it to the document that carries
+   *  it now, as a file's tab follows its file (editor.md, Opening, story 10). */
+  async followCarried(affects: CopyChanged): Promise<void> {
+    await Promise.all([...this.shown].map(async ([panel, { uri, plugin }]) => {
+      const formKey = this.deps.activeRecordTracker.formKeyOf(panel);
+      if (uri.scheme !== CHILD_RECORD_SCHEME || !formKey || !affects({ formKey, plugin }) || this.following.has(panel)) return;
+      this.following.add(panel);
+      try {
+        const carrying = await copyDocument(this.deps.client, { formKey, plugin });
+        const tab = panel.viewColumn === undefined ? undefined : recordTabAt({ document: uri.toString(), viewColumn: panel.viewColumn });
+        if ('refused' in carrying || carrying.uri.toString() === uri.toString() || !tab) return;
+        const [columns, place] = [this.deps.editsInFlight.columnsOf(panel), this.places.get(panel)];
+        await inTabsPlace(tab, (options) => this.open(carrying.uri, columns, options, place));
+      } catch (err) {
+        this.deps.channel.warn(`Failed to follow ${formKey} to the document that carries it: ${errorMessage(err)}`);
+      } finally {
+        this.following.delete(panel);
+      }
+    }));
   }
 
   /** The document carrying the record: the tab's that shows it, or the one it opens as. */
@@ -157,21 +181,21 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
 
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
     const key = document.uri.toString();
-    const columns = this.columnsToShow.get(key) ?? [];
-    this.columnsToShow.delete(key);
+    const { columns, place } = this.toShow.get(key) ?? { columns: [] };
+    this.toShow.delete(key);
     this.documentOf.set(panel, key);
     panel.onDidDispose(() => this.documentOf.delete(panel));
     if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
       const { formKey, plugin } = copyOf(document.uri);
       const documentText = (pluginActive: boolean) => Promise.resolve(pluginActive ? undefined : document.getText());
-      this.show(panel, document.uri, { formKey, columns }, { titleFromRead: () => undefined, plugin, documentText });
+      this.show(panel, document.uri, { formKey, columns, place }, { titleFromRead: () => undefined, plugin, documentText });
       return;
     }
     if (document.uri.scheme === CHILD_RECORD_SCHEME) {
       // The file is the container's, so its name is not the child's.
       const { formKey, plugin } = copyOf(document.uri);
       panel.title = recordTitle(formKey, undefined);
-      this.showFile(panel, document, { formKey, plugin }, columns, (read, titled) => { panel.title = recordTitle(read, titled, plugin); });
+      this.showFile(panel, document, { formKey, plugin }, columns, (read, titled) => { panel.title = recordTitle(read, titled, plugin); }, place);
       return;
     }
     const moved = this.moved.get(key);
@@ -186,7 +210,7 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     const read = async (): Promise<void> => {
       try {
         const { formKey, ...copy } = await this.deps.client.getRecordOfFile(fsPath);
-        if (this.unread.delete(panel)) this.showFile(panel, document, { formKey, plugin: pluginAddressOf(copy) }, columns, () => undefined);
+        if (this.unread.delete(panel)) this.showFile(panel, document, { formKey, plugin: pluginAddressOf(copy) }, columns, () => undefined, place);
       } catch (err) {
         const reason = errorMessage(err);
         if (reason === shownReason || !this.unread.has(panel)) return;
@@ -316,6 +340,9 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     { dispose: () => { loadOrderStatusTracker.dispose(); } },
     vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, keepsItsPlace),
     { dispose: meditClient.onNotification('load-order-status', () => { recordEditorProvider.readAgain(); }) },
+    // A report names the records that changed, and a move of any of them can move a child's carrier.
+    followReportedCopies(meditClient, (affects) => { void recordEditorProvider.followCarried(affects); },
+      ({ plugin }) => (copy) => samePluginAddress(copy.plugin, plugin)),
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended-field documents.
     ...registerRecordPanelContextCommands({
