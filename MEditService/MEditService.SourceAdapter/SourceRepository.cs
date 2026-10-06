@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -146,6 +147,22 @@ public sealed class SourceRepository
     public (RecordIdentity Record, SourceDocument Carrying)? CarryingFromText(
         PluginAddress plugin, string formKey, string text, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         Locator.CarryingFromText(plugin, formKey, text, schemas);
+
+    /// <summary>The record at <paramref name="formKey"/> with its own text read out of <paramref name="text"/>, the
+    /// document carrying it by <see cref="CarryingFromText"/>'s rule. Null and throws as that does.</summary>
+    public SourceDocument? RecordFromText(
+        PluginAddress plugin, string formKey, string text, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (CarryingFromText(plugin, formKey, text, schemas) is not var (record, carrying)) return null;
+        if (FormKey.TryFactory(carrying.FormKey, out var declared) && declared == FormKey.Factory(record.FormKey))
+            return new SourceDocument(record.FormKey, record.RecordType, record.EditorId, text);
+
+        var bytes = Encoding.UTF8.GetBytes(text);
+        var body = EmbeddedChildSplice.TextOf(
+                bytes, EmbeddedChildSplice.ContainerTypeName(carrying.RecordType, bytes, _release), record.FormKey, _release)
+            ?? throw new InvalidOperationException($"Expected the text CarryingFromText found carrying {record.FormKey} to hold it.");
+        return new SourceDocument(record.FormKey, record.RecordType, record.EditorId, body);
+    }
 
     /// <summary>The record that carries <paramref name="identity"/> inline, and the slot it sits in; null
     /// for a record with a document of its own.</summary>
