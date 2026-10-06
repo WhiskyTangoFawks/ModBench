@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -44,10 +45,13 @@ public sealed class CreateRecordHandler
     private static RecordEditResult NotYetSupported(string what) =>
         RecordEditResult.Refused(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, $"Creating {what} is not supported yet.");
 
+    private static JsonObject ObjectOf(string document, string what) =>
+        JsonNode.Parse(document) as JsonObject
+            ?? throw new InvalidOperationException($"Expected {what}'s document to hold a JSON object.");
+
     private static string AsInteriorCell(string bareCell)
     {
-        var cell = JsonNode.Parse(bareCell) as JsonObject
-            ?? throw new InvalidOperationException("Expected a minted cell's document to hold a JSON object.");
+        var cell = ObjectOf(bareCell, "a minted cell");
         PlacedCell.MarkInterior(cell);
         return cell.ToJsonString();
     }
@@ -116,30 +120,36 @@ public sealed class CreateRecordHandler
             return WriteTargets.RefuseUnreadable(container, ex.Message);
         }
 
-        switch (ChildRecordTypes.SlotFor(containerType, containerDocument.Body, place, recordType, schemas, release))
+        using var parsed = JsonDocument.Parse(containerDocument.Body);
+        switch (ChildRecordTypes.SlotFor(containerType, parsed.RootElement, place, recordType, schemas, release))
         {
             case ChildSlot.Open(var slot):
-                return AppendChild(repository, plugin, recordType, schema, release, containerDocument, slot);
+                var root = JsonObject.Create(parsed.RootElement)
+                    ?? throw new InvalidOperationException($"Expected {container}'s document to hold a JSON object.");
+                return AppendChild(repository, plugin, recordType, schema, release, new Landing(containerDocument, root, slot));
             case ChildSlot.Filled(var slot, var held):
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ChildSlotHeldByAnotherRecord,
                     $"{container} already holds {held} as its {slot}, and holds one at most. Delete it to create another.");
-            case ChildSlot.Several:
-                return NotYetSupported($"a {recordType} in {container}");
             default:
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ContainerCannotHoldType, $"{container} cannot hold a new '{recordType}' where it sits.");
         }
     }
 
+    private sealed record Landing(SourceDocument Container, JsonObject Root, string Slot);
+
     private RecordEditResult AppendChild(
         SourceRepository repository, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
-        SourceDocument container, string slot)
+        Landing landing)
     {
+        var (container, root, slot) = landing;
         if (FormKeyAllocator.Over(repository, plugin, release).Next(out var formKey) is { } refusedTarget) return refusedTarget;
-        var child = RecordMint.BareDocument(_codec, schema, release, formKey, editorId: null);
+        var child = ObjectOf(RecordMint.BareDocument(_codec, schema, release, formKey, editorId: null), $"the minted {recordType}");
+        if (!PlacedCell.TryAsCreatedIn(child, slot, root, release, out var unplaceable))
+            return RecordEditResult.Refused(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, unplaceable);
         var withChild = ContainerDocumentEdits.WithChildAppended(
-                _codec, container.Body, release, container.RecordType, container.FormKey, slot, child, recordType)
+                _codec, container.Body, release, container.RecordType, container.FormKey, slot, child.ToJsonString(), recordType)
             ?? throw new InvalidOperationException($"{container.FormKey} was found, but its own text does not carry it.");
 
         SourceTransaction.Atomically(repository, transaction =>

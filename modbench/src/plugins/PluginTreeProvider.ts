@@ -50,6 +50,11 @@ function collapsibleWhen(hasChildren: boolean): vscode.TreeItemCollapsibleState 
 // A row whose plugin no caller has described offers no record edit.
 const NOT_EDITABLE: PluginConditions = { tracked: false, editable: false };
 
+// A row opens its own plugin's copy (commands.md, Argument: "Singular means the clicked row").
+function openCopyCommand(formKey: string, plugin: PluginAddress): vscode.Command {
+  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey, plugin }] };
+}
+
 // The contextValues state, on the row, refusals the backend would otherwise reach only after
 // walking the whole gesture (plugins.md, Menus and keys, story 4).
 function conditionedContextValue(kind: string, conditions: PluginConditions, isContainer = false): string {
@@ -93,11 +98,7 @@ export class RecordNode extends vscode.TreeItem {
     const label = record.editorId ?? record.formKey;
     super(label, collapsibleWhen(isContainer && hasContainerChildren));
     this.contextValue = conditionedContextValue('record', conditions, isContainer);
-    this.command = {
-      command: 'modbench.record.open',
-      title: 'Open Record',
-      arguments: [{ formKey: record.formKey }],
-    };
+    this.command = openCopyCommand(record.formKey, { name: record.plugin, origin });
     // RecordDecorationProvider's keying identity — record.plugin (this row's own copy's owning
     // plugin, which an override stack row can differ from the RecordTypeNode's) paired with origin.
     this.resourceUri = recordResourceUri({ name: record.plugin, origin }, record.formKey);
@@ -122,7 +123,7 @@ export class WorldspaceNode extends vscode.TreeItem {
     this.formKey = worldspace.formKey;
     this.editorId = worldspace.editorId ?? undefined;
     this.contextValue = conditionedContextValue('worldspace', conditions, true);
-    this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: worldspace.formKey }] };
+    this.command = openCopyCommand(worldspace.formKey, { name: plugin, origin });
     describeRecordRow(this, worldspace);
   }
 }
@@ -191,7 +192,7 @@ export class CellNode extends vscode.TreeItem {
     this.formKey = cell.formKey;
     this.editorId = cell.editorId ?? undefined;
     this.contextValue = conditionedContextValue('cell', conditions, true);
-    this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: cell.formKey }] };
+    this.command = openCopyCommand(cell.formKey, { name: plugin, origin });
     describeRecordRow(this, cell);
   }
 }
@@ -230,7 +231,7 @@ export class ChildRecordNode extends vscode.TreeItem {
     this.formKey = child.formKey;
     this.editorId = child.editorId ?? undefined;
     this.contextValue = conditionedContextValue('placed', conditions);
-    this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: child.formKey }] };
+    this.command = openCopyCommand(child.formKey, { name: plugin, origin });
     describeRecordRow(this, child);
   }
 }

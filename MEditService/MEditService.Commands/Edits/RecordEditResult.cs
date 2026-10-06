@@ -49,9 +49,8 @@ public enum RecordEditRefusal
     /// <summary>A typed refusal, not an exception: a full plugin is an ordinary outcome, never conflated with "no usable load order".</summary>
     FormKeySpaceExhausted,
 
-    /// <summary>The record is held inside another record's document — a type the game holds nowhere
-    /// else, a placed reference created in a cell, or a record created in a worldspace — and the
-    /// gesture does not reach it yet.</summary>
+    /// <summary>The gesture does not reach the record yet: a type held only inside another record's
+    /// document, a record created in a worldspace, or a placed record in a grid cell of unknown width.</summary>
     HeldInAnotherRecordNotYetSupported,
 
     /// <summary>The index and the working tree disagree (a file moved outside Modbench). Not recreated at

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
@@ -54,6 +55,27 @@ public static class PlacedCell
         && Components(placed[PositionMember]) is [var x, var y, _]
             ? ((int)Math.Floor(x / width), (int)Math.Floor(y / width))
             : null;
+
+    /// <summary>What xEdit creates in <paramref name="group"/>: persistent in the persistent group, and in the
+    /// temporary group of a cell with a grid, at its centre. False, changing nothing, where the game's cell width is unknown.</summary>
+    public static bool TryAsCreatedIn(
+        JsonObject placed, string group, JsonObject cell, GameRelease release, [NotNullWhen(false)] out string? refusal)
+    {
+        refusal = null;
+        if (group == PersistentFlag.PersistentGroup)
+        {
+            placed[RecordHeaderFlags.Member] = PersistentFlag.Bit;
+            return true;
+        }
+        if (group != PersistentFlag.TemporaryGroup || Grid(cell) is not (int x, int y)) return true;
+        if (SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth is not { } width)
+        {
+            refusal = $"{cell[RecordMembers.FormKey]} has a grid, and mEdit knows no cell width for {release} to place a new reference at its centre.";
+            return false;
+        }
+        placed[PositionMember] = ReflectedTypes.VectorText(new { X = (x + 0.5f) * width, Y = (y + 0.5f) * width, Z = 0f });
+        return true;
+    }
 
     // The codec writes a vector as its components in English, comma-separated (ReflectedTypes.VectorText).
     private static double[]? Components(JsonNode? vector)

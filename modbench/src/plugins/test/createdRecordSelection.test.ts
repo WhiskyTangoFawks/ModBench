@@ -42,12 +42,12 @@ function harness(shown: (formKey: string) => boolean = () => true) {
   return { stream, asked, selection, revealed, settle, opened };
 }
 
-const OPEN_NEW = ['modbench.record.open', { formKey: NEW }];
+const OPEN_NEW = ['modbench.record.open', { formKey: NEW, plugin: PLUGIN }];
 
 beforeEach(() => { executeCommand.mockReset(); });
 
 describe('createdRecordSelection', () => {
-  it('selects the new record\'s row once a change to its plugin names it, then opens it as a click does', async () => {
+  it('selects the new record\'s row once a change to its plugin names it, then opens its plugin\'s copy as a click does', async () => {
     const { stream, asked, selection, revealed, settle, opened } = harness();
     selection.watch(PLUGIN).select(NPCS, NEW);
 

@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries.Tests.TestSupport;
@@ -18,10 +19,11 @@ public sealed class ChildRecordTypesQueryTests
     private readonly RecordQueryService _svc;
     private readonly FormKey _quest;
     private readonly FormKey _cell;
+    private readonly FormKey _persistentCell;
 
     public ChildRecordTypesQueryTests()
     {
-        FormKey quest = default, cell = default;
+        FormKey quest = default, cell = default, persistentCell = default;
         var fixture = new FakeFixtureBuilder()
             .WithPlugin(PluginName, mod =>
             {
@@ -29,6 +31,9 @@ public sealed class ChildRecordTypesQueryTests
                 var held = new Cell(mod) { EditorID = "Cell" };
                 var subBlock = new CellSubBlock { GroupType = GroupTypeEnum.InteriorCellSubBlock };
                 subBlock.Cells.Add(held);
+                var flagged = new Cell(mod) { EditorID = "PersistentCell", MajorRecordFlagsRaw = PersistentFlag.Bit };
+                subBlock.Cells.Add(flagged);
+                persistentCell = flagged.FormKey;
                 var block = new CellBlock { GroupType = GroupTypeEnum.InteriorCellBlock };
                 block.SubBlocks.Add(subBlock);
                 mod.Cells.Records.Add(block);
@@ -40,6 +45,7 @@ public sealed class ChildRecordTypesQueryTests
         _svc = new RecordQueryService(index, holder, SharedSchemaReflector.Instance);
         _quest = quest;
         _cell = cell;
+        _persistentCell = persistentCell;
     }
 
     [Fact]
@@ -55,7 +61,7 @@ public sealed class ChildRecordTypesQueryTests
     [Theory]
     [InlineData(null, null, true, new[] { "Navmesh" })]
     [InlineData(Worldspace, 0, false, new[] { "Landscape", "Navmesh" })]
-    [InlineData(Worldspace, null, false, new string[0])]
+    [InlineData(Worldspace, null, false, new[] { "Navmesh" })]
     public void ACell_HoldsWhatItsPlaceInTheIndexAllows(string? worldspace, int? blockX, bool isInterior, string[] besidesPlacedRecords)
     {
         _reads.CellLocations = new Dictionary<RecordAt, CellLocationRow>
@@ -66,6 +72,20 @@ public sealed class ChildRecordTypesQueryTests
         var types = _svc.GetChildRecordTypes(Plugin, _cell.ToString());
 
         Assert.Equal([.. besidesPlacedRecords, .. PlacedRecordTables.DisplayNames], types?.Select(t => t.DisplayName));
+    }
+
+    [Fact]
+    public void AWorldspacesPersistentCellCarryingThePersistentFlag_HoldsOnlyPlacedRecords()
+    {
+        _reads.CellLocations = new Dictionary<RecordAt, CellLocationRow>
+        {
+            [new(Plugin, _persistentCell.ToString())] =
+                new(_persistentCell.ToString(), Worldspace, null, null, null, null, null, null, IsInterior: false),
+        };
+
+        var types = _svc.GetChildRecordTypes(Plugin, _persistentCell.ToString());
+
+        Assert.Equal(PlacedRecordTables.DisplayNames, types?.Select(t => t.DisplayName));
     }
 
     [Fact]

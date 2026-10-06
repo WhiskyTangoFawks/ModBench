@@ -114,17 +114,6 @@ public sealed class CreateRecordHandlerTests
     }
 
     [Fact]
-    public void CreateRecord_OfAPlacedReferenceInACell_RefusesAsNotYetSupported()
-    {
-        using var mod = SourceEditFixture.Tracked();
-
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", mod.Cell.ToString());
-
-        Assert.Equal(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, result.Refusal);
-        Assert.Contains(mod.Cell.ToString(), result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void CreateRecord_NamingAContainerThePluginLacks_RefusesRecordNotFound_NamingIt()
     {
         using var mod = SourceEditFixture.Tracked();

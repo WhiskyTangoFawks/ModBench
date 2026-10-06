@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace MEditService.Codec.Schema;
 
 /// <summary>Record-header flag bit 10, "Persistent", on every game's placed records, and the two cell
@@ -11,4 +13,6 @@ public static class PersistentFlag
     public const string PersistentGroup = "Persistent";
 
     public const string TemporaryGroup = "Temporary";
+
+    public static bool IsSet(JsonElement document) => RecordHeaderFlags.Carry(document, Bit);
 }
