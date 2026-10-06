@@ -160,9 +160,8 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
         return null;
     }
 
-    /// <summary>The child <paramref name="formKey"/> names anywhere inside <paramref name="ownerBytes"/>;
-    /// null when no embedded slot of the owner carries it, when the text is no JSON, and when neither
-    /// <paramref name="ownerRecordType"/> nor the text's own discriminator names a type that resolves.</summary>
+    /// <summary>The child <paramref name="formKey"/> names anywhere inside <paramref name="ownerBytes"/>.
+    /// Null when no embedded slot carries it, the text is no JSON, or no owner type resolves.</summary>
     public ChildDocument? EmbeddedChild(string? ownerRecordType, byte[] ownerBytes, string formKey)
     {
         if (EmbeddedChildLocator.ContainerTypeName(ownerRecordType, ownerBytes, release) is not { } ownerType) return null;

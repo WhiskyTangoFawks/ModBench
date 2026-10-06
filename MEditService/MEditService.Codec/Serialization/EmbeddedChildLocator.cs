@@ -49,7 +49,6 @@ public static class EmbeddedChildLocator
         }
     }
 
-    /// <summary>The type the document at its root declares, for a path that cannot name one.</summary>
     private static string? RootDiscriminator(byte[] ownerBytes)
     {
         try
