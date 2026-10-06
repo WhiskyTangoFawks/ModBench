@@ -241,6 +241,7 @@ public sealed class FailedReadStateTests : IDisposable
         index.NextSnapshotUntil(() => Failed(index), "the failed read");
 
         Assert.Contains("git cannot report what changed", Reason(index), StringComparison.Ordinal);
+        Assert.DoesNotContain("is filed as a record", Reason(index), StringComparison.Ordinal);
     }
 
     [Fact]
