@@ -37,14 +37,6 @@
         "viewType": "modbench.record",
         "displayName": "Record",
         "selector": [
-          { "filenamePattern": "**/*.modbench-record" }
-        ],
-        "priority": "option"
-      },
-      {
-        "viewType": "modbench.recordFile",
-        "displayName": "Record",
-        "selector": [
           { "filenamePattern": "**/plugin-source/**/*.json" },
           { "filenamePattern": "modbench-rendered:/**" }
         ],

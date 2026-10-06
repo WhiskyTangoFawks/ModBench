@@ -992,6 +992,19 @@ describe('package.json conflict table menus follow mods-conflicts.md', () => {
   });
 });
 
+describe('package.json menus and keys on an editor tab', () => {
+  it('name only an editor the extension contributes, so each is offered on that editor\'s tabs', () => {
+    const raw = fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8');
+    const manifest: unknown = JSON.parse(raw);
+    const editors: unknown = isRecord(manifest) && isRecord(manifest.contributes) ? manifest.contributes.customEditors : undefined;
+    const viewTypes = new Set(Array.isArray(editors) ? editors.flatMap((e) => (isRecord(e) && isString(e.viewType) ? [e.viewType] : [])) : []);
+    const named = [...raw.matchAll(/(?:activeCustomEditorId|webviewId) == '([^']+)'/g)].map(([, viewType]) => viewType);
+
+    expect(named.length).toBeGreaterThan(0);
+    expect([...new Set(named)].filter((viewType) => viewType === undefined || !viewTypes.has(viewType))).toEqual([]);
+  });
+});
+
 describe('package.json record tab menus', () => {
   const menu = (): MenuEntry[] => present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']")
     .filter((e) => requires(e.when, "webviewId == 'modbench.record'"));
