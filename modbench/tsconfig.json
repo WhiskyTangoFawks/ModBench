@@ -19,6 +19,7 @@
     { "path": "./src/downloads" },
     { "path": "./src/plugins" },
     { "path": "./src/editor" },
+    { "path": "./src/sourceLanguage" },
     { "path": "./src" },
     { "path": "./webview" },
     { "path": "./eslint-rules" },

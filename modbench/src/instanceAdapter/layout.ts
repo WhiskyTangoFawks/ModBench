@@ -132,6 +132,9 @@ const nameKey = (name: string): string => name.toLowerCase();
 /** Whether an entry at a mod folder's root is its plugin source. */
 export const isPluginSourceFolder = (name: string): boolean => nameKey(name) === PLUGIN_SOURCE_FOLDER;
 
+/** Whether `path` is a file inside some folder that is plugin source. */
+export const isPluginSourcePath = (path: string): boolean => path.split(/[\\/]/).slice(0, -1).some(isPluginSourceFolder);
+
 const REPOSITORY_OR_PLUGIN_SOURCE_ENTRIES = new Set([GIT_DIR, '.gitignore', PLUGIN_SOURCE_FOLDER]);
 
 /** Whether an entry at a mod folder's root is its repository or its plugin source (ADR-0007),
