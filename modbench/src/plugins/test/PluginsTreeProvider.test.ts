@@ -133,7 +133,7 @@ function makeClient(overrides: Partial<{
   client.setQueryAnswer('getDiagnoses', overrides.diagnoses ?? []);
   client.setQueryAnswer('getRecordTypes', (overrides.recordTypes ?? []).map((rt) => ({
     type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
-    isCreatable: rt.isCreatable ?? true,
+    isCreatable: rt.isCreatable ?? true, isContainer: false,
   })));
   client.setQueryAnswer('getRecords', overrides.records ?? { items: [], total: 0 });
   client.setQueryAnswer('getWorldspaces', overrides.worldspaces ?? []);
@@ -2287,7 +2287,7 @@ describe('PluginsTreeProvider — groups and records are named and described as 
   it('names a quest\'s children as it names a record', async () => {
     const child = (overrides: Partial<ContainerChildSummary>): ContainerChildSummary => ({
       formKey: 'd:A.esp', plugin: 'A.esp', origin: 'SomeMod', loadOrderIndex: 0, isWinner: true,
-      workingTreeState: 'None', recordType: 'dial', hasContainerChildren: false, hasParseFailure: false,
+      workingTreeState: 'None', recordType: 'dial', hasContainerChildren: false, isContainer: false, hasParseFailure: false,
       ...overrides,
     });
     const { h, groups } = await expandedRow(makeClient({

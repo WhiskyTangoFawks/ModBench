@@ -47,7 +47,7 @@ function makeClient(overrides: Partial<{
   const recordTypes = overrides.recordTypes ?? [{ type: 'WEAP', count: 5, displayName: 'Weapon' }];
   client.setQueryAnswer('getRecordTypes', recordTypes.map((rt) => ({
     type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
-    isCreatable: rt.isCreatable ?? true,
+    isCreatable: rt.isCreatable ?? true, isContainer: false,
   })));
   client.setQueryAnswer('getRecords', overrides.records ?? { items: [makeRecord(0)], total: 1 });
   client.setQueryAnswer('getWorldspaces', []);
@@ -408,7 +408,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
       recordTypes: [{ type: 'WEAP', count: 1 }, { type: 'qust', count: 1 }, { type: 'wrld', count: 1 }, { type: 'cell', count: 1 }],
       records: { items: [makeRecord(0, 'None', true)], total: 1 },
     });
-    repo.setQueryAnswer('getContainerChildren', [{ ...makeRecord(1), recordType: 'dial', hasContainerChildren: false }]);
+    repo.setQueryAnswer('getContainerChildren', [{ ...makeRecord(1), recordType: 'dial', hasContainerChildren: false, isContainer: false }]);
     repo.setQueryAnswer('getWorldspaces', [{ formKey: '000001:Plugin0.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [cell],
@@ -878,7 +878,7 @@ function makeContainerChild(
 ): ContainerChildSummary {
   return {
     formKey, editorId, plugin: 'Plugin0.esp', origin: 'Data',
-    loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', recordType, hasContainerChildren,
+    loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', recordType, hasContainerChildren, isContainer: false,
     hasParseFailure: false,
   };
 }
@@ -1088,7 +1088,7 @@ describe('the failure prefix', () => {
       records: { items: [{ ...makeRecord(0, 'None', true), hasParseFailure: true }], total: 1 },
     });
     repo.setQueryAnswer('getContainerChildren', [
-      { ...makeRecord(1), recordType: 'info', hasContainerChildren: false,
+      { ...makeRecord(1), recordType: 'info', hasContainerChildren: false, isContainer: false,
         parseDiagnosis: 'INFO 12 — unknown: bad', hasParseFailure: true },
     ]);
     const provider = new PluginTreeProvider(repo);

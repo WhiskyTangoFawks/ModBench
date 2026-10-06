@@ -108,7 +108,30 @@ public static class PluginEndpoints
             .Produces<IReadOnlyList<CreatableRecordType>>()
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/creatable-extensions", (PluginExtensionsQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/records/{formKey}/child-record-types", (
+            string plugin, string formKey, string? origin, IRecordQueryService svc) =>
+        {
+            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
+            try
+            {
+                return svc.GetChildRecordTypes(WriteEndpointMapping.PluginAddressOf(plugin, origin), Uri.UnescapeDataString(formKey)) is { } types
+                    ? Results.Ok(types)
+                    : Results.NotFound();
+            }
+            catch (NoLoadOrderException ex)
+            {
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            }
+        })
+            .WithName("GetChildRecordTypes")
+            .WithTags(Tag)
+            .WithDescription("The record types the plugin's copy of a container record can hold, in name order.")
+            .Produces<IReadOnlyList<CreatableRecordType>>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(503);
+
+        app.MapGet("/plugins/creatable-extensions",(PluginExtensionsQueryService svc) =>
         {
             try
             {

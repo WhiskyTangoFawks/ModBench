@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
@@ -182,7 +183,7 @@ public sealed class RecordQueryService(
             .Where(c => c.Type != PluginHeader.RecordType && schemas.ContainsKey(c.Type))
             .Select(c => new PluginRecordTypeCount(
                 c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure,
-                CreatableRecordTypes.Includes(c.Type, release)))
+                CreatableRecordTypes.Includes(c.Type, release), ContainerChildFields.HasChildFields(c.Type, release)))
             .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
@@ -196,6 +197,27 @@ public sealed class RecordQueryService(
             .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
+
+    public IReadOnlyList<CreatableRecordType>? GetChildRecordTypes(PluginAddress plugin, string formKey)
+    {
+        var reads = RequireReads();
+        if (reads.GetDocument(formKey, plugin) is not { Body: { } body } container) return null;
+        var schemas = RequireSchemas();
+        var release = _loadOrder.Require().GameRelease;
+        var place = reads.GetCellLocation(plugin, formKey) is { } cell ? PlaceOf(cell) : (CellPlace?)null;
+        return [.. ChildRecordTypes.Of(container.RecordType, body, place, schemas, release)
+            .Select(type => new CreatableRecordType(type, schemas.DisplayNameFor(type)))
+            .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.Type, StringComparer.Ordinal)];
+    }
+
+    // A worldspace's cell with no block is the one its persistent-cell member holds.
+    private static CellPlace PlaceOf(CellLocationRow cell) => cell switch
+    {
+        { ParentWorldspace: null } => CellPlace.Interior,
+        { BlockX: null } => CellPlace.PersistentWorldspaceCell,
+        _ => CellPlace.Exterior,
+    };
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey)
     {

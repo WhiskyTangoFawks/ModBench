@@ -210,6 +210,8 @@ export interface MEditClient {
   getRecordTypes(plugin: PluginAddress): Promise<PluginRecordTypeCount[]>;
   // The game's, not a plugin's: every plugin of the load order shares it.
   getCreatableRecordTypes(): Promise<CreatableRecordType[]>;
+  /** The types the plugin's copy of a container record can hold, in name order. */
+  getChildRecordTypes(plugin: PluginAddress, formKey: string): Promise<CreatableRecordType[]>;
   getCreatablePluginExtensions(): Promise<string[]>;
   // `unfiltered` lists what the record filter hides too.
   getRecords(

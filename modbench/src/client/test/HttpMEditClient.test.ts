@@ -960,6 +960,28 @@ describe('HttpMEditClient — the record types the game can create', () => {
   });
 });
 
+describe('HttpMEditClient — the record types a container record can hold', () => {
+  it('asks mEdit for the plugin\'s copy of the record and reads each type with its name', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, [{ type: 'dial', displayName: 'Dialog Topic' }])));
+    const client = makeClient(fetch);
+
+    const types = await client.getChildRecordTypes({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp');
+
+    expect(types).toEqual([{ type: 'dial', displayName: 'Dialog Topic' }]);
+    const url = new URL(fetch.mock.calls[0]?.[0].url ?? '');
+    expect(url.pathname).toBe('/plugins/Shared.esp/records/000800%3AShared.esp/child-record-types');
+    expect(url.searchParams.get('origin')).toBe('ModA');
+  });
+
+  it('rejects, naming the reason, when mEdit cannot answer', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
+    const client = makeClient(fetch);
+
+    await expect(client.getChildRecordTypes({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
+      .rejects.toThrow(/No load order has been loaded/);
+  });
+});
+
 describe('HttpMEditClient — the extensions a new plugin may take', () => {
   it('asks mEdit and reads its answer', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, ['.esp', '.esm'])));

@@ -16,4 +16,6 @@ public record ContainerChildSummary(
     // its own children so the tree renders the failure prefix without walking them.
     string? ParseDiagnosis = null,
     bool HasParseFailure = false,
-    string? FullName = null);
+    string? FullName = null,
+    // The child's type holds child records in the game, whether or not this one holds any.
+    bool IsContainer = false);

@@ -5,12 +5,14 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Codec.Schema;
 
 /// <summary>The members holding child major records, read from each game module's own types.
-/// EmbeddedSlots is the subset the embed customization accepts. Every dictionary is keyed by game
+/// EmbeddedSlots is the subset the embed customization accepts. HeldTypesBySlot is the major record
+/// types a member reaches, through a worldspace's blocks too. Every dictionary is keyed by game
 /// too: two games' classes can share a bare name.</summary>
 public sealed record ContainerMembers(
     IReadOnlyDictionary<(GameCategory Game, string Type), string[]> ChildFieldsByType,
     IReadOnlySet<(GameCategory Game, string ParentType, string Slot)> EmbeddedSlots,
-    IReadOnlyDictionary<(GameCategory Game, string ParentType, string Slot), string> ElementTypeBySlot)
+    IReadOnlyDictionary<(GameCategory Game, string ParentType, string Slot), string> ElementTypeBySlot,
+    IReadOnlyDictionary<(GameCategory Game, string ParentType, string Slot), IReadOnlyList<Type>> HeldTypesBySlot)
 {
     public static ContainerMembers Derived => Instance.Value;
 
@@ -30,6 +32,7 @@ public sealed record ContainerMembers(
         var childFields = new Dictionary<(GameCategory, string), SortedSet<string>>();
         var embedded = new HashSet<(GameCategory Game, string ParentType, string Slot)>();
         var elementTypes = new Dictionary<(GameCategory Game, string ParentType, string Slot), string>();
+        var heldTypes = new Dictionary<(GameCategory Game, string ParentType, string Slot), IReadOnlyList<Type>>();
 
         foreach (var (category, assembly) in GameModules())
         {
@@ -37,14 +40,16 @@ public sealed record ContainerMembers(
             {
                 foreach (var property in recordType.GetProperties())
                 {
+                    var held = HeldMajorTypes(property.PropertyType, assembly, []).ToList();
+                    if (held.Count == 0) continue;
                     var embeds = TypedAsChildMajor(property.PropertyType);
-                    if (!embeds && !ReachesChildMajor(property.PropertyType, assembly, [])) continue;
 
                     var key = (category, recordType.Name);
                     if (!childFields.TryGetValue(key, out var members))
                         childFields[key] = members = new SortedSet<string>(StringComparer.Ordinal);
                     members.Add(property.Name);
                     if (embeds) embedded.Add((category, recordType.Name, property.Name));
+                    heldTypes[(category, recordType.Name, property.Name)] = held;
                     if (ElementTypeOf(property.PropertyType) is { } element)
                         elementTypes[(category, recordType.Name, property.Name)] = element.Name;
                 }
@@ -54,7 +59,8 @@ public sealed record ContainerMembers(
         return new ContainerMembers(
             childFields.ToDictionary(entry => entry.Key, entry => entry.Value.ToArray()),
             embedded,
-            elementTypes);
+            elementTypes,
+            heldTypes);
     }
 
     /// <summary>A list slot's element, or a single-value slot's own type.</summary>
@@ -85,13 +91,14 @@ public sealed record ContainerMembers(
 
     // A worldspace's blocks: a list of a plain class whose own members reach the cells. Those cells
     // have directories of their own, so the member carries containment without being embedded.
-    private static bool ReachesChildMajor(Type type, Assembly module, HashSet<Type> seen)
+    private static IEnumerable<Type> HeldMajorTypes(Type type, Assembly module, HashSet<Type> seen)
     {
-        if (!seen.Add(type) || IsFormLink(type)) return false;
-        if (typeof(IMajorRecordGetter).IsAssignableFrom(type)) return true;
-        if (type.IsGenericType) return type.GetGenericArguments().Any(arg => ReachesChildMajor(arg, module, seen));
+        if (!seen.Add(type) || IsFormLink(type)) return [];
+        if (typeof(IMajorRecordGetter).IsAssignableFrom(type)) return [type];
+        if (type.IsGenericType) return type.GetGenericArguments().SelectMany(arg => HeldMajorTypes(arg, module, seen));
         return type.Assembly == module
-            && type.GetProperties().Any(property => ReachesChildMajor(property.PropertyType, module, seen));
+            ? type.GetProperties().SelectMany(property => HeldMajorTypes(property.PropertyType, module, seen))
+            : [];
     }
 
     // A reference, never embedded content: without this every link member reads as containment.

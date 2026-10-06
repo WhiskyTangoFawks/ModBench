@@ -48,6 +48,7 @@ export function recordTypeCountFixture(overrides: Partial<PluginRecordTypeCount>
     displayName: overrides.type,
     hasParseFailure: false,
     isCreatable: true,
+    isContainer: false,
     ...overrides,
   };
 }

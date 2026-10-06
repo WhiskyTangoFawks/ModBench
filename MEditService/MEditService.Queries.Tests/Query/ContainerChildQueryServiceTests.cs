@@ -9,6 +9,8 @@ namespace MEditService.Queries.Tests.Query;
 
 public class ContainerChildQueryServiceTests
 {
+    private static readonly LoadOrderHolder Fallout4 = FakeLoadOrder.Of(GameRelease.Fallout4);
+
     private sealed class StubReader(
         IReadOnlyList<ContainerChildRow> containerChildren,
         IReadOnlyDictionary<string, IReadOnlyList<Index.RecordSummary>>? searchByType = null) : IRecordReads
@@ -79,7 +81,7 @@ public class ContainerChildQueryServiceTests
                 ["dlbr"] = [new Index.RecordSummary("dlbr1:M.esp", "M.esp", 0, true, "BranchA", "Data")],
                 ["scen"] = [new Index.RecordSummary("scen1:M.esp", "M.esp", 0, true, "SceneA", "Data")],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader), Fallout4);
 
         var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
@@ -105,12 +107,33 @@ public class ContainerChildQueryServiceTests
                     new Index.RecordSummary("dial2:M.esp", "M.esp", 0, true, "TopicB", "Data", HasContainerChildren: false),
                 ],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader), Fallout4);
 
         var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
         Assert.True(result.Single(r => r.FormKey == "dial1:M.esp").HasContainerChildren);
         Assert.False(result.Single(r => r.FormKey == "dial2:M.esp").HasContainerChildren);
+    }
+
+    [Fact]
+    public void GetChildren_SaysWhichChildIsAContainer_AnEmptyTopicIncluded()
+    {
+        var reader = new StubReader(
+            [
+                new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
+                new ContainerChildRow("dlbr1:M.esp", "qust1:M.esp", "Quest", "DialogBranches", 0),
+            ],
+            new Dictionary<string, IReadOnlyList<Index.RecordSummary>>
+            {
+                ["dial"] = [new Index.RecordSummary("dial1:M.esp", "M.esp", 0, true, "Topic", "Data", HasContainerChildren: false)],
+                ["dlbr"] = [new Index.RecordSummary("dlbr1:M.esp", "M.esp", 0, true, "Branch", "Data")],
+            });
+        var svc = new ContainerChildQueryService(new StubIndex(reader), Fallout4);
+
+        var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
+
+        Assert.True(result.Single(r => r.FormKey == "dial1:M.esp").IsContainer);
+        Assert.False(result.Single(r => r.FormKey == "dlbr1:M.esp").IsContainer);
     }
 
     [Fact]
@@ -129,7 +152,7 @@ public class ContainerChildQueryServiceTests
                     new Index.RecordSummary("info2:M.esp", "M.esp", 0, true, null, "Data"),
                 ],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader), Fallout4);
 
         var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "dial1:M.esp");
 
@@ -141,7 +164,7 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_PassesGivenOriginToReads()
     {
         var reader = new StubReader([]);
-        var svc = new ContainerChildQueryService(new StubIndex(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader), Fallout4);
 
         svc.GetChildren(new PluginAddress("M.esp", "ModB"), "qust1:M.esp");
 
@@ -163,7 +186,7 @@ public class ContainerChildQueryServiceTests
         var entries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(entries)));
         var svc = new ContainerChildQueryService(
-            new StubIndex(reader), loggerFactory.CreateLogger<ContainerChildQueryService>());
+            new StubIndex(reader), Fallout4, loggerFactory.CreateLogger<ContainerChildQueryService>());
 
         var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
@@ -179,7 +202,7 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_NoContainerChildRows_ReturnsEmpty_WithoutSearching()
     {
         var reader = new StubReader([]);
-        var svc = new ContainerChildQueryService(new StubIndex(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader), Fallout4);
 
         var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
@@ -190,7 +213,7 @@ public class ContainerChildQueryServiceTests
     [Fact]
     public void GetChildren_NoReads_ThrowsNoLoadOrderException()
     {
-        var svc = new ContainerChildQueryService(new StubIndex(reads: null));
+        var svc = new ContainerChildQueryService(new StubIndex(reads: null), Fallout4);
         Assert.Throws<NoLoadOrderException>(() => svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp"));
     }
 }

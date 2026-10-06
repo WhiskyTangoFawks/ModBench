@@ -516,6 +516,17 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
+  async getChildRecordTypes({ name: plugin, origin }: PluginAddress, formKey: string): Promise<CreatableRecordType[]> {
+    return this.withTimeout(`getChildRecordTypes(${plugin}, ${formKey})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/child-record-types', {
+        params: { path: { plugin, formKey }, query: { origin } },
+        signal,
+      });
+      this.ensureOk(`getChildRecordTypes(${plugin}, ${formKey})`, response, error);
+      return data ?? [];
+    });
+  }
+
   async getCreatablePluginExtensions(): Promise<string[]> {
     return this.withTimeout('getCreatablePluginExtensions', async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/creatable-extensions', { signal });
