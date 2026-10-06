@@ -47,13 +47,12 @@ public sealed class RenderedDocumentApiTests : HostedTests
         return (document.GetProperty("fileName").GetString().Require(), document.GetProperty("text").GetString().Require());
     }
 
-    // A null record type is the plugin header, whose file is named for its FormKey alone.
     [Theory]
     [InlineData("npc_", "RenderedNpc")]
     [InlineData("qust", "RenderedQuest")]
     [InlineData("cell", "RenderedRoom")]
     [InlineData(null, null)]
-    public async Task AnUntrackedCopy_IsTheFileTrackWrites_ByNameAndText(string? recordType, string? editorId)
+    public async Task AnUntrackedCopy_IsTheFileTrackWrites_ByNameAndText_TheHeadersWithNoRecordType(string? recordType, string? editorId)
     {
         var fx = await Untracked();
         var formKey = recordType is null ? $"000000:{Plugin}" : await Client.FormKeyNamed(Plugin, Origin, recordType, editorId.Require());

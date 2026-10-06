@@ -223,8 +223,8 @@ public sealed class RecordQueryService(
                 r.FormKey, r.Plugin, r.Origin, r.FieldPath, r.RecordType, schemas.DisplayNameFor(r.RecordType), r.EditorId))];
     }
 
-    // The index stores each copy's document as the codec writes it, a stub where the codec could not (ADR-0005).
-    // A tracked copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
+    // The index stores each copy's document as the codec writes it, or a stub (ADR-0005). A tracked
+    // copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
     public RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey)
     {
         if (RequireReads().GetDocument(formKey, plugin) is not { Body: { } body } copy) return null;
