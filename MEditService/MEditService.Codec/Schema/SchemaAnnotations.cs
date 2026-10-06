@@ -31,9 +31,6 @@ internal sealed record RecordHeaderMember(
 /// name. <see cref="Validate"/> fails schema generation naming any row the assembly does not bear
 /// out.</summary>
 internal sealed record SchemaAnnotations(
-    // GRUP signatures the schema builds no table for, and why: xEdit's REFR-flavour placement
-    // variants this repo collapses into refr.
-    Dictionary<string, string> ExcludedSignatures,
     // Top-level properties that are not record data: GRUP timestamps. The serializer still writes
     // them (ADR-0006); a reflected column and a source-document field are different promises.
     HashSet<(string TypeName, string MemberName)> ExcludedColumns,
@@ -100,15 +97,6 @@ internal sealed record SchemaAnnotations(
     [
         ("ICellGetter", "Timestamp"), ("ICellGetter", "PersistentTimestamp"), ("ICellGetter", "TemporaryTimestamp"),
         ("IDialogTopicGetter", "Timestamp"),
-    ];
-
-    // Rare REFR-flavour placement types: projectile, hazard and the rest of xEdit's variants.
-    private const string CollapsedIntoRefr = "an xEdit REFR-flavour placement variant, collapsed into refr rather than given its own table";
-
-    private static readonly KeyValuePair<string, string>[] ExcludedSignaturesInEveryGame =
-    [
-        .. new[] { "pgre", "pmis", "parw", "pbar", "pbea", "pcon", "pfla", "phzd" }
-            .Select(s => KeyValuePair.Create(s, CollapsedIntoRefr)),
     ];
 
     // Not editor surface in any game: Mutagen.Bethesda.Core / Loqui plumbing, and one generated alias.
@@ -210,7 +198,6 @@ internal sealed record SchemaAnnotations(
     private static readonly Dictionary<GameCategory, SchemaAnnotations> Tables = new()
     {
         [GameCategory.Fallout4] = new(
-            ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
             ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
             ExcludedMembers:
             [
@@ -278,7 +265,6 @@ internal sealed record SchemaAnnotations(
             PluginHeaderMembers: PluginHeaderMembersOf("IFallout4ModHeaderGetter")),
 
         [GameCategory.Skyrim] = new(
-            ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
             ExcludedColumns: [.. GrupTimestampColumns],
             ExcludedMembers: [.. PlumbingMembers, ("IGlobalGetter", "TypeChar")],
             ExcludedUnions: [],
@@ -314,7 +300,6 @@ internal sealed record SchemaAnnotations(
             PluginHeaderMembers: PluginHeaderMembersOf("ISkyrimModHeaderGetter")),
 
         [GameCategory.Starfield] = new(
-            ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
             ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
             ExcludedMembers:
             [
@@ -620,10 +605,9 @@ internal sealed record SchemaAnnotations(
             .Select(t => t.IsGenericType ? t.GetGenericTypeDefinition() : t)
             .Distinct();
 
-    /// <summary>Resolves every row against the assembly's types, its GRUP signatures and the shapes
-    /// its members hold, and throws naming each row that does not resolve or is not the kind of
-    /// thing its table says it is.</summary>
-    public void Validate(GameCategory category, Assembly gameAssembly, IEnumerable<string> grupSignatures)
+    /// <summary>Resolves every row against the assembly's types and the shapes its members hold, and
+    /// throws naming each row that does not resolve or is not the kind of thing its table says it is.</summary>
+    public void Validate(GameCategory category, Assembly gameAssembly)
     {
         var allTypes = gameAssembly.GetTypes()
             .SelectMany(t => t.GetInterfaces().Append(t))
@@ -633,15 +617,12 @@ internal sealed record SchemaAnnotations(
         var shapes = MemberShapes(allTypes).ToList();
         var shapeNames = shapes.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
         var shapeFullNames = shapes.Select(t => t.FullName ?? t.Name).ToHashSet(StringComparer.Ordinal);
-        var signatures = grupSignatures.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         IEnumerable<string> UnresolvedTypes(string concern, IEnumerable<string> entries) =>
             entries.Where(t => !typesByName[t].Any()).Select(t => $"{concern}: {t}");
 
         string[] missing =
         [
-            .. ExcludedSignatures.Keys.Where(s => !signatures.Contains(s)).Order(StringComparer.Ordinal)
-                .Select(s => $"{nameof(ExcludedSignatures)}: {s} is no GRUP signature this game declares"),
             .. UnresolvedMembers(typesByName, nameof(ExcludedColumns), ExcludedColumns),
             .. UnresolvedMembers(typesByName, nameof(ExcludedMembers), ExcludedMembers),
             .. UnresolvedTypes(nameof(ExcludedUnions), ExcludedUnions),

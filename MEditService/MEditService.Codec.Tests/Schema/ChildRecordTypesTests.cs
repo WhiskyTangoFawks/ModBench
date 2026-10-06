@@ -18,6 +18,9 @@ public sealed class ChildRecordTypesTests
 
     private static readonly Fallout4Mod Mod = new(ModKey.FromFileName("Holds.esp"), Fallout4Release.Fallout4);
 
+    private static string[] Holding(params string[] others) =>
+        [.. PlacedRecordTables.Names.Concat(others).Order(StringComparer.Ordinal)];
+
     private static string[] Of(IMajorRecordGetter container, CellPlace? place = null) =>
         [.. ChildRecordTypes.Of(
                 RecordTableName.Of(container, Schemas), Codec.SerializeToText(container, GameRelease.Fallout4), place,
@@ -52,27 +55,27 @@ public sealed class ChildRecordTypesTests
     }
 
     [Fact]
-    public void AnInteriorCell_HoldsPlacedNpcsObjectsAndNavmeshes_ButNoLandscape()
+    public void AnInteriorCell_HoldsPlacedRecordsAndNavmeshes_ButNoLandscape()
     {
-        Assert.Equal(["achr", "navm", "refr"], Of(new Cell(Mod), CellPlace.Interior));
+        Assert.Equal(Holding("navm"), Of(new Cell(Mod), CellPlace.Interior));
     }
 
     [Fact]
     public void AnExteriorCell_HoldsALandscapeToo()
     {
-        Assert.Equal(["achr", "land", "navm", "refr"], Of(new Cell(Mod), CellPlace.Exterior));
+        Assert.Equal(Holding("land", "navm"), Of(new Cell(Mod), CellPlace.Exterior));
     }
 
     [Fact]
     public void AnExteriorCellHoldingALandscape_HoldsNoSecond()
     {
-        Assert.Equal(["achr", "navm", "refr"], Of(new Cell(Mod) { Landscape = new Landscape(Mod) }, CellPlace.Exterior));
+        Assert.Equal(Holding("navm"), Of(new Cell(Mod) { Landscape = new Landscape(Mod) }, CellPlace.Exterior));
     }
 
     [Fact]
     public void AWorldspacesPersistentCell_HoldsOnlyPlacedRecords()
     {
-        Assert.Equal(["achr", "refr"], Of(new Cell(Mod), CellPlace.PersistentWorldspaceCell));
+        Assert.Equal(Holding(), Of(new Cell(Mod), CellPlace.PersistentWorldspaceCell));
     }
 
     [Fact]

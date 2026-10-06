@@ -125,6 +125,7 @@ export type PluginProblems = components['schemas']['PluginProblems'];
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 export type RecordTypeChoice = components['schemas']['RecordTypeChoice'];
 export type RenderedDocument = components['schemas']['RenderedDocument'];
+export type RecordFile = components['schemas']['RecordFile'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type InteriorCellBlock = components['schemas']['InteriorCellBlock'];
 export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock'];
@@ -235,6 +236,10 @@ export interface MEditClient {
   getReferences(formKey: string): Promise<ReferenceResult[]>;
   /** Null: the plugin holds no such record. */
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null>;
+  /** Null: the plugin holds no such record. No path: the plugin is untracked, so its copy has no file. */
+  getRecordFile(plugin: PluginAddress, formKey: string): Promise<RecordFile | null>;
+  /** The record whose own document the file at the absolute `path` is. Rejects with mEdit's reason when it is none. */
+  getRecordOfFile(path: string): Promise<RecordAddress>;
   /** `text` is the current text of the document carrying the record; mEdit writes nothing. */
   getEditChanges(
     formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope, text: string,

@@ -53,10 +53,10 @@ public sealed class ChildRecordTypesQueryTests
     }
 
     [Theory]
-    [InlineData(null, null, true, new[] { "Navmesh", "Placed NPC", "Placed Object" })]
-    [InlineData(Worldspace, 0, false, new[] { "Landscape", "Navmesh", "Placed NPC", "Placed Object" })]
-    [InlineData(Worldspace, null, false, new[] { "Placed NPC", "Placed Object" })]
-    public void ACell_HoldsWhatItsPlaceInTheIndexAllows(string? worldspace, int? blockX, bool isInterior, string[] expected)
+    [InlineData(null, null, true, new[] { "Navmesh" })]
+    [InlineData(Worldspace, 0, false, new[] { "Landscape", "Navmesh" })]
+    [InlineData(Worldspace, null, false, new string[0])]
+    public void ACell_HoldsWhatItsPlaceInTheIndexAllows(string? worldspace, int? blockX, bool isInterior, string[] besidesPlacedRecords)
     {
         _reads.CellLocations = new Dictionary<RecordAt, CellLocationRow>
         {
@@ -65,7 +65,7 @@ public sealed class ChildRecordTypesQueryTests
 
         var types = _svc.GetChildRecordTypes(Plugin, _cell.ToString());
 
-        Assert.Equal(expected, types?.Select(t => t.DisplayName));
+        Assert.Equal([.. besidesPlacedRecords, .. PlacedRecordTables.DisplayNames], types?.Select(t => t.DisplayName));
     }
 
     [Fact]

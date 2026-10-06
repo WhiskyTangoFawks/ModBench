@@ -12,7 +12,7 @@ import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
-  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument,
+  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type RecordFile,
   type RebuildIndexOutcome, type CopyItem, type CopyMode, type RecordChildHolders,
   type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditChangesOutcome, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
@@ -619,6 +619,28 @@ export class HttpMEditClient implements MEditClient {
       if (response.status === 404) return null;
       this.ensureOk(`getRenderedDocument(${plugin}, ${formKey})`, response, error);
       if (!data) throw new Error(`getRenderedDocument(${plugin}, ${formKey}): ok response carried no body`);
+      return data;
+    });
+  }
+
+  async getRecordFile({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RecordFile | null> {
+    return this.withTimeout(`getRecordFile(${plugin}, ${formKey})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/file', {
+        params: { path: { plugin, formKey }, query: { origin } },
+        signal,
+      });
+      if (response.status === 404) return null;
+      this.ensureOk(`getRecordFile(${plugin}, ${formKey})`, response, error);
+      if (!data) throw new Error(`getRecordFile(${plugin}, ${formKey}): ok response carried no body`);
+      return data;
+    });
+  }
+
+  async getRecordOfFile(path: string): Promise<RecordAddress> {
+    return this.withTimeout(`getRecordOfFile(${path})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugin-source/record', { params: { query: { path } }, signal });
+      this.ensureOk(`getRecordOfFile(${path})`, response, error);
+      if (!data) throw new Error(`getRecordOfFile(${path}): ok response carried no body`);
       return data;
     });
   }

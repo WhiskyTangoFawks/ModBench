@@ -56,7 +56,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     [Fact]
     public void EveryEmbeddedChildRecord_IsItsOwnQueryableRecord_OnBothPaths()
     {
-        foreach (var type in (string[])["refr", "achr", "navm", "land", "cell", "pgre", "pmis", "phzd"])
+        foreach (var type in (string[])["navm", "land", "cell", .. PlacedRecordTables.Names])
         {
             var binary = CountOf(fixture.FromBinary, type);
             if (binary == 0) continue;
