@@ -16,7 +16,7 @@ import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
 import { PluginFacts, placeOf, type PluginWarning } from './pluginFacts';
 import { isRecordRow, PLUGINS_KEY_ARGS } from './gestureEntry';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import type { RecordGroup } from './createdRecordSelection';
+import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
@@ -366,17 +366,33 @@ export class PluginsTreeProvider
     return current && addressOfRow(current);
   }
 
-  /** The row of a record, once mEdit lists it in its group. */
-  async recordRow({ plugin, recordType }: RecordGroup, formKey: string): Promise<PluginsTreeNode | undefined> {
-    const pluginRow = (await this.rows()).find((row) => row.kind === 'plugin' && samePluginAddress(addressOfRow(row), plugin));
-    if (pluginRow === undefined) return undefined;
-    const group = (await this.getChildren(pluginRow)).find((row) => row.kind === 'recordType' && row.recordType === recordType);
-    if (group === undefined) return undefined;
-    return this.recordRowBeneath(group, formKey);
+  /** The row of a record, once mEdit lists it where it landed. */
+  async recordRow(place: RecordPlace<PluginsTreeNode>, formKey: string): Promise<PluginsTreeNode | undefined> {
+    const parent = 'container' in place ? await this.currentRow(place.container) : await this.groupRow(place);
+    return parent && this.recordRowBeneath(parent, formKey);
   }
 
-  // A group's records sit in it directly, or in its blocks and sub-blocks as the Cell group's do. A
-  // record row ends the walk: what it holds belongs to another group.
+  private async groupRow({ plugin, recordType }: RecordGroup): Promise<PluginsTreeNode | undefined> {
+    const pluginRow = (await this.rows()).find((row) => row.kind === 'plugin' && samePluginAddress(addressOfRow(row), plugin));
+    if (pluginRow === undefined) return undefined;
+    return (await this.getChildren(pluginRow)).find((row) => row.kind === 'recordType' && row.recordType === recordType);
+  }
+
+  // A row from before a rebuild still expands, but VS Code tells a row with no id from its new
+  // copy by label and position, so a reveal through it would not find the row it shows.
+  private async currentRow(row: PluginsTreeNode): Promise<PluginsTreeNode | undefined> {
+    const parent = this.parentOf.get(row);
+    const siblings = parent === undefined ? await this.rows() : await this.childrenOfCurrent(parent);
+    return siblings.find((sibling) => sibling.kind === row.kind && (sibling.id ?? sibling.label) === (row.id ?? row.label));
+  }
+
+  private async childrenOfCurrent(row: PluginsTreeNode): Promise<PluginsTreeNode[]> {
+    const current = await this.currentRow(row);
+    return current === undefined ? [] : this.getChildren(current);
+  }
+
+  // A group's or a container's records sit beneath it directly, or beneath rows that stand for no
+  // record, as blocks do. A record row ends the walk: what it holds is its own.
   private async recordRowBeneath(parent: PluginsTreeNode, formKey: string): Promise<PluginsTreeNode | undefined> {
     for (const row of await this.getChildren(parent)) {
       if (isRecordRow(row)) {

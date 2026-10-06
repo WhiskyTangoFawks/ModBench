@@ -2916,6 +2916,73 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
       .toEqual(['000900:A.esp', 'Sub-Block 9', 'Block 1', 'cell', 'A.esp']);
   });
 
+  describe('beneath the container it landed in', () => {
+    const cell = (formKey: string, hasChildren = false): CellSummary => ({ formKey, isPersistentWorldspaceCell: false, hasChildren, hasParseFailure: false });
+    const placed = (formKey: string): ChildRecordSummary => ({ formKey, recordType: 'refr', hasParseFailure: false });
+    const interiorCell = (formKey: string): InteriorCellBlock[] =>
+      [{ number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells: [cell(formKey)] }] }];
+
+    async function rowBeneath(tree: PluginsTreeProvider, parent: PluginsTreeNode, kind: string): Promise<PluginsTreeNode> {
+      return present((await tree.getChildren(parent)).find((row) => row.kind === kind), `the ${kind} row`);
+    }
+
+    async function ancestry(tree: PluginsTreeProvider, row: PluginsTreeNode): Promise<PluginsTreeNode[]> {
+      const parent = tree.getParent(row);
+      return parent === undefined ? [] : [parent, ...await ancestry(tree, parent)];
+    }
+
+    it('finds a placed reference beneath the empty cell it was created on, through rows the tree shows after the change', async () => {
+      const h = await heldWith(makeClient({ recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }], interiorCells: interiorCell('000800:A.esp') }));
+      const [pluginRow] = await h.tree.getChildren();
+      const group = await rowBeneath(h.tree, present(pluginRow, 'the A.esp row'), 'recordType');
+      const subBlock = await rowBeneath(h.tree, await rowBeneath(h.tree, group, 'interiorBlock'), 'interiorSubBlock');
+      const shownBefore = await rowBeneath(h.tree, subBlock, 'cell');
+      h.client.setQueryAnswer('getCellChildRecords', { persistent: [], temporary: [placed(NEW_NPC)] });
+      h.records.refresh();
+
+      const row = present(await h.tree.recordRow({ container: shownBefore }, NEW_NPC), 'the new placed reference\'s row');
+      const above = await ancestry(h.tree, row);
+
+      expect(row.kind).toBe('placed');
+      expect(above.map((r) => [r.kind, r.label])).toEqual([
+        ['placedGroup', 'Temporary'], ['cell', '000800:A.esp'], ['interiorSubBlock', 'Sub-Block 0'], ['interiorBlock', 'Block 0'],
+        ['recordType', 'Cell'], ['plugin', 'A.esp'],
+      ]);
+      expect(above.filter((r) => [shownBefore, subBlock, group].includes(r))).toEqual([]);
+    });
+
+    it('finds a new exterior cell beneath its worldspace\'s block and sub-block', async () => {
+      const h = await heldWith(makeClient({
+        recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
+        worldspaces: [{ formKey: '000800:A.esp', hasParseFailure: false, hasChildren: false }],
+      }));
+      const [pluginRow] = await h.tree.getChildren();
+      const worldspace = await rowBeneath(h.tree, await rowBeneath(h.tree, present(pluginRow, 'the A.esp row'), 'recordType'), 'worldspace');
+      h.client.setQueryAnswer('getWorldspaceBlocks', {
+        topCells: [], blocks: [{ x: 0, y: -1, hasParseFailure: false, subBlocks: [{ x: 1, y: -2, hasParseFailure: false, cells: [cell(NEW_NPC)] }] }],
+      });
+      h.records.refresh();
+
+      const row = expectInstanceOf(await h.tree.recordRow({ container: worldspace }, NEW_NPC), CellNode);
+
+      expect((await ancestry(h.tree, row)).slice(0, 3).map((r) => r.label)).toEqual(['Sub-Block 1, -2', 'Block 0, -1', '000800:A.esp']);
+    });
+
+    it('finds nothing once the name filter hides the container\'s plugin', async () => {
+      const h = await heldWith(makeClient({
+        recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }], interiorCells: interiorCell('000800:A.esp'),
+        cellChildRecords: { persistent: [placed(NEW_NPC)], temporary: [] },
+      }));
+      const [pluginRow] = await h.tree.getChildren();
+      const group = await rowBeneath(h.tree, present(pluginRow, 'the A.esp row'), 'recordType');
+      const subBlock = await rowBeneath(h.tree, await rowBeneath(h.tree, group, 'interiorBlock'), 'interiorSubBlock');
+      const cellRow = await rowBeneath(h.tree, subBlock, 'cell');
+      h.tree.setFilter('B.esp');
+
+      expect(await h.tree.recordRow({ container: cellRow }, NEW_NPC)).toBeUndefined();
+    });
+  });
+
   it('never expands a record row while it looks, since what a record holds is not its group\'s', async () => {
     const h = await heldWith(makeClient({
       recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }],

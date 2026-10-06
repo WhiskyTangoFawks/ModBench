@@ -34,6 +34,11 @@ const hasFlags = (row: PluginsTreeNode | undefined, ...flags: string[]): boolean
   return flags.every((flag) => own.has(flag));
 };
 
+/** The rows create record is offered on (plugins.md, Menus and keys). */
+export const CREATE_ROW_KINDS = ['plugin', 'recordType', 'record', 'worldspace', 'cell'] as const;
+
+export const isContainerRow = (row: PluginsTreeNode): boolean => hasFlags(row, 'container');
+
 // A palette gesture sends no item it would refuse, so it needs every selected row to qualify.
 const every = (selection: readonly PluginsTreeNode[], qualifies: (row: PluginsTreeNode) => boolean): boolean =>
   selection.length > 0 && selection.every(qualifies);
@@ -62,17 +67,16 @@ export function pluginsKeyContext(
   selection: readonly PluginsTreeNode[], isEnabled: (row: RowOf<'plugin'>) => boolean,
 ): PluginsKeyContext {
   const firstPlugin = selection.find(isOf(['plugin']));
-  const creatableCandidate = onlySelected(selection, 'plugin', 'recordType');
+  const creatableCandidate = onlySelected(selection, ...CREATE_ROW_KINDS);
   return {
     singlePlugin: onlySelected(selection, ...PLUGIN_ROW_KINDS) !== undefined,
     allInUntrackedMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'inUntrackedMod')),
     allInTrackedMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'inTrackedMod')),
-    // A record-type row also states whether its type is creatable; a plugin row carries no such
-    // fact and needs none — its own pick lists only creatable types (plugins.md, Create record,
-    // story 1; "No dead entries").
+    // A plugin row carries no creatable fact and needs none: its own pick lists only creatable
+    // types (plugins.md, Create record, story 1; "No dead entries").
     singleCreatable: creatableCandidate !== undefined
       && hasFlags(creatableCandidate, 'tracked', 'editable')
-      && (creatableCandidate.kind !== 'recordType' || hasFlags(creatableCandidate, 'creatable')),
+      && (creatableCandidate.kind === 'plugin' || hasFlags(creatableCandidate, 'creatable') || isContainerRow(creatableCandidate)),
     singleTracked: hasFlags(onlySelected(selection, 'plugin'), 'tracked'),
     allDeletableRecords: every(selection, (row) => isOf(RECORD_ROW_KINDS)(row) && hasFlags(row, 'tracked', 'editable')),
     allRecords: every(selection, isOf(RECORD_ROW_KINDS)),
