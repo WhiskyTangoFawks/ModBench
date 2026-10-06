@@ -57,9 +57,9 @@ internal sealed class HeldPlugins
     public PluginMetadata? Find(PluginAddress key) =>
         Plugins.FirstOrDefault(p => PluginAddress.Comparer.Equals(p.Key, key));
 
-    /// <summary>A plugin that cannot be opened or parsed must not abort the whole reconcile: it is
-    /// recorded in <see cref="Failures"/> and nothing is held for it. A success clears any
-    /// earlier failure for the same plugin.</summary>
+    /// <summary>A plugin that cannot be parsed is recorded in <see cref="Failures"/> and nothing is
+    /// held for it; a file that cannot be read throws, for its reader to read again. A success
+    /// clears an earlier failure.</summary>
     public PluginMetadata? Open(RegisteredPlugin plugin, Registration registration)
     {
         if (!File.Exists(plugin.Path))
@@ -108,7 +108,7 @@ internal sealed class HeldPlugins
             }
             return metadata;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (ex is not (OutOfMemoryException or IOException or UnauthorizedAccessException))
         {
             _logger.LogWarning(ex, "Failed to open plugin {FileName} ({Origin}); it is held in an error state", plugin.Name, plugin.Origin);
             SetFailure(plugin.Key, PluginLoadFailure.ReasonFor(ex));
