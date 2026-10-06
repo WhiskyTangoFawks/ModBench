@@ -81,7 +81,7 @@ internal sealed class OverrideCopy
                 container, destination, release, replace, withChildren);
         }
 
-        if (RefuseIfCopySourceHasNoContainerOfItsOwn(identity.RecordType, release) is { } containerRefusal)
+        if (WriteTargets.RefuseIfHeldInsideAnotherRecord(identity.RecordType, release) is { } containerRefusal)
             return containerRefusal;
 
         var landed = LandRecord(copy, destinationPlugin, replace, withChildren);
@@ -288,18 +288,6 @@ internal sealed class OverrideCopy
             $"{destinationPlugin.Name} loads before {originName}, which originates {formKey} — copying it " +
             "there would be an underride, not an override: the origin's copy would still win at runtime. " +
             "Pick a destination that loads after the origin.");
-    }
-
-    // A container's own top-level record has a directory to land in, so only a record with no
-    // container of its own anywhere in the tree refuses.
-    private static RecordEditResult? RefuseIfCopySourceHasNoContainerOfItsOwn(string recordType, GameRelease release)
-    {
-        if (RecordTypeDispatch.For(release).GroupFolderNameFor(recordType) is not null) return null;
-
-        return RecordEditResult.Refused(
-            RecordEditRefusal.ContainerRecordNotYetSupported,
-            $"'{recordType}' lives inside a container's document (a dialog topic, a scene), and no readable " +
-            "container document in the source plugin carries this record.");
     }
 
     private string StripEmbeddedChildrenForShallowCopy(string body, string recordType, GameRelease release) =>

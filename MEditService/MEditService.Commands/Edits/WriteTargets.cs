@@ -332,8 +332,7 @@ internal sealed class WriteTargets(
         if (CreatableRecordTypes.Includes(recordType, release)) return null;
 
         return RecordEditResult.Refused(
-            RecordEditRefusal.ContainerRecordNotYetSupported,
-            $"'{recordType}' is held inside another record's document (a placed reference, a landscape, a " +
-            "navmesh, a dialog branch, a scene or a response), so it is created on its container.");
+            RecordEditRefusal.HeldInAnotherRecordNotYetSupported,
+            $"'{recordType}' is held inside another record's document, and creating one is not supported yet.");
     }
 }

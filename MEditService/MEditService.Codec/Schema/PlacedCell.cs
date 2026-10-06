@@ -12,8 +12,8 @@ public static class PlacedCell
     /// <summary>The worldspace member holding its persistent cell.</summary>
     public const string WorldspacePersistentCellMember = "TopCell";
 
-    internal const string FlagsMember = "Flags";
-    internal const string InteriorFlag = "IsInteriorCell";
+    private const string FlagsMember = "Flags";
+    private const string InteriorFlag = "IsInteriorCell";
     /// <summary>The cell grid's member holding its point.</summary>
     public const string GridPointMember = "Point";
     private const string PositionMember = "Position";
@@ -29,6 +29,8 @@ public static class PlacedCell
         if (Says(cell)) return cell;
         return copyOnTheLeft is { } text ? JsonNode.Parse(text) as JsonObject : null;
     }
+
+    public static void MarkInterior(JsonObject cell) => cell[FlagsMember] = new JsonArray(InteriorFlag);
 
     public static bool IsInterior(JsonObject cell) =>
         cell[FlagsMember] is JsonArray flags && flags.Any(flag => flag?.GetValue<string>() == InteriorFlag);

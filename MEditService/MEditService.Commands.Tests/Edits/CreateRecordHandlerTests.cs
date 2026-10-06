@@ -72,7 +72,7 @@ public sealed class CreateRecordHandlerTests
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType);
 
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.Equal(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, result.Refusal);
     }
 
     [Theory]
@@ -98,7 +98,8 @@ public sealed class CreateRecordHandlerTests
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "cell");
 
         var document = mod.Document(result.NewFormKey.Require()).Require();
-        Assert.True(PlacedCell.IsInterior(JsonNode.Parse(document.Body).Require().AsObject()));
+        var flags = JsonNode.Parse(document.Body).Require()["Flags"].Require().AsArray();
+        Assert.Contains(flags, flag => flag?.GetValue<string>() == "IsInteriorCell");
     }
 
     [Fact]
@@ -108,7 +109,7 @@ public sealed class CreateRecordHandlerTests
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "cell", mod.Worldspace.ToString(), new GridPosition(1, -2));
 
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.Equal(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, result.Refusal);
         Assert.Contains(mod.Worldspace.ToString(), result.Message, StringComparison.Ordinal);
     }
 
@@ -119,7 +120,7 @@ public sealed class CreateRecordHandlerTests
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", mod.Cell.ToString());
 
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.Equal(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, result.Refusal);
         Assert.Contains(mod.Cell.ToString(), result.Message, StringComparison.Ordinal);
     }
 
@@ -130,7 +131,7 @@ public sealed class CreateRecordHandlerTests
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "dial", mod.Quest.ToString());
 
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.Equal(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, result.Refusal);
         Assert.Contains(mod.Quest.ToString(), result.Message, StringComparison.Ordinal);
     }
 

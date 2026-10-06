@@ -11,7 +11,7 @@ public static class RecordMint
     /// <summary>The codec is the one constructor: a record begins as the document naming its identity,
     /// read back through the door every edit goes through.</summary>
     internal static IMajorRecord Bare(
-        RecordTextCodec codec, RecordTableSchema schema, GameRelease release, string formKey, string? editorId, bool interior = false)
+        RecordTextCodec codec, RecordTableSchema schema, GameRelease release, string formKey, string? editorId)
     {
         var members = new JsonObject();
         // A path-ambiguous document leads with its concrete type.
@@ -22,12 +22,11 @@ public static class RecordMint
         }
         members[nameof(IMajorRecordGetter.FormKey)] = formKey;
         if (editorId != null) members[nameof(IMajorRecordGetter.EditorID)] = editorId;
-        if (interior) members[PlacedCell.FlagsMember] = new JsonArray(PlacedCell.InteriorFlag);
         return codec.Deserialize(members.ToJsonString(), release, schema.TableName);
     }
 
     /// <summary>The same record as a document, for a caller that writes text rather than a graph.</summary>
     public static string BareDocument(
-        RecordTextCodec codec, RecordTableSchema schema, GameRelease release, string formKey, string? editorId, bool interior = false) =>
-        codec.SerializeToText(Bare(codec, schema, release, formKey, editorId, interior), release);
+        RecordTextCodec codec, RecordTableSchema schema, GameRelease release, string formKey, string? editorId) =>
+        codec.SerializeToText(Bare(codec, schema, release, formKey, editorId), release);
 }

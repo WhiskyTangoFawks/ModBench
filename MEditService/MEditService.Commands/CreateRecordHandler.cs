@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -56,7 +57,15 @@ public sealed class CreateRecordHandler
         RecordEditResult.Refused(RecordEditRefusal.InvalidEnvelope, $"A grid position is for a cell in a worldspace, and the request {why}.");
 
     private static RecordEditResult NotYetSupported(string what) =>
-        RecordEditResult.Refused(RecordEditRefusal.ContainerRecordNotYetSupported, $"Creating {what} is not supported yet.");
+        RecordEditResult.Refused(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, $"Creating {what} is not supported yet.");
+
+    private static string AsInteriorCell(string bareCell)
+    {
+        var cell = JsonNode.Parse(bareCell) as JsonObject
+            ?? throw new InvalidOperationException("Expected a minted cell's document to hold a JSON object.");
+        PlacedCell.MarkInterior(cell);
+        return cell.ToJsonString();
+    }
 
     private RecordEditResult MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
     {
@@ -78,7 +87,8 @@ public sealed class CreateRecordHandler
         if (FormKeyAllocator.Over(repository, plugin, release).Next(out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
-        var body = RecordMint.BareDocument(_codec, schema, release, targetFormKey, editorId: null, interior: RecordTypeDispatch.For(release).IsCell(recordType));
+        var body = RecordMint.BareDocument(_codec, schema, release, targetFormKey, editorId: null);
+        if (RecordTypeDispatch.For(release).IsCell(recordType)) body = AsInteriorCell(body);
 
         repository.Put(plugin, new SourceDocument(targetFormKey, recordType, null, body));
 

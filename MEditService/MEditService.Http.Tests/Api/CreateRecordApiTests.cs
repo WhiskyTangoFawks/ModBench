@@ -98,7 +98,7 @@ public sealed class CreateRecordApiTests : HostedTests
         var response = await Create(Origin, "cell", _worldspace, new { x = 1, y = -2 });
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        Assert.Equal("ContainerRecordNotYetSupported", (await response.Body()).GetProperty("refusal").GetString());
+        Assert.Equal("HeldInAnotherRecordNotYetSupported", (await response.Body()).GetProperty("refusal").GetString());
     }
 
     [Fact]
