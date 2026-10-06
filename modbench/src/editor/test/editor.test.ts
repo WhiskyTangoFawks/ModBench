@@ -36,6 +36,8 @@ vi.mock('vscode', () => ({
   },
   workspace: {
     registerFileSystemProvider: () => ({ dispose: () => undefined }),
+    registerTextDocumentContentProvider: () => ({ dispose: () => undefined }),
+    textDocuments: [],
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
   },
   window: {
@@ -67,6 +69,7 @@ import { createEditor } from '..';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { recordUri } from '../recordUri';
+import { renderedDocumentUri } from '../renderedDocument';
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { ReferencedByTreeProvider } from '../ReferencedByTreeProvider';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
@@ -139,17 +142,18 @@ function makeEditor(client = new InMemoryMEditClient(), viewSelections = new Map
   if (!referencedBy) throw new Error('no Referenced By view');
   const open = (formKey: string): FakePanel => {
     const panel = fakePanel();
-    provider.resolveCustomEditor(provider.openCustomDocument(recordUri({ formKey })), panel);
+    provider.resolveCustomEditor(provider.openCustomDocument(recordUri(formKey)), panel);
     return panel;
   };
   const fileProvider = h.editorProviders.get('modbench.recordFile');
   if (!isRecordFileEditorProvider(fileProvider)) throw new Error('no record file editor registered');
-  const openFile = async (fsPath: string): Promise<FakePanel> => {
+  const openDocument = async (uri: unknown): Promise<FakePanel> => {
     const panel = fakePanel();
-    await fileProvider.resolveCustomTextEditor({ uri: { fsPath } }, panel);
+    await fileProvider.resolveCustomTextEditor({ uri }, panel);
     return panel;
   };
-  return { editor, open, openFile, referencedBy, focusedView, outputChannel };
+  const openFile = (fsPath: string): Promise<FakePanel> => openDocument({ scheme: 'file', fsPath });
+  return { editor, open, openFile, openDocument, referencedBy, focusedView, outputChannel };
 }
 
 beforeEach(() => {
@@ -165,6 +169,11 @@ const recordOf = async (referencedBy: FakeTreeView) => {
   await rowsOf(referencedBy).getChildren();
   await settle();
   return { description: referencedBy.view.description, message: referencedBy.view.message };
+};
+
+const pageGlobal = (panel: FakePanel, name: string): unknown => {
+  const assigned = new RegExp(`window\\.${name} = ("(?:[^"\\\\]|\\\\.)*");`).exec(panel.webview.html ?? '')?.[1];
+  return assigned === undefined ? undefined : JSON.parse(assigned);
 };
 
 const opened = () => h.executed.filter(([id]) => id === 'vscode.openWith').map(([, uri]) => uri);
@@ -299,7 +308,7 @@ describe('a record gesture from the palette', () => {
     await h.commands.get('modbench.record.open')?.();
 
     expect(h.contextKeys.get('modbench.record.selectionIn')).toBe('modbench.pluginListTree');
-    expect(opened()).toEqual([recordUri({ formKey: '000803:A.esp' })]);
+    expect(opened()).toEqual([recordUri('000803:A.esp')]);
   });
 });
 
@@ -307,10 +316,6 @@ describe('a record file\'s tab', () => {
   const GUN = '000801:A.esp';
   const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
   const holding = (formKey: string) => ({ formKey, plugin: 'A.esp', origin: 'ModA' });
-  const pageGlobal = (panel: FakePanel, name: string): unknown => {
-    const assigned = new RegExp(`window\\.${name} = ("(?:[^"\\\\]|\\\\.)*");`).exec(panel.webview.html ?? '')?.[1];
-    return assigned === undefined ? undefined : JSON.parse(assigned);
-  };
   function fileClient(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
@@ -376,6 +381,22 @@ describe('a record file\'s tab', () => {
 
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
     expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
+  });
+});
+
+describe('an untracked copy\'s tab', () => {
+  it('shows the copy\'s record, followed by Referenced By, with no file for mEdit to name it by', async () => {
+    const GUN = '000801:A.esp';
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]));
+    const { openDocument, referencedBy } = makeEditor(client);
+
+    const tab = await openDocument(renderedDocumentUri({ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' } }, 'Gun.json'));
+
+    expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
+    expect((await recordOf(referencedBy)).description).toBe('Gun');
+    expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
   });
 });
 

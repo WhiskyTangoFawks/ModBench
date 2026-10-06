@@ -14,7 +14,7 @@ export type OpenExtendedFieldEditorParams =
   Pick<StringValueContext, 'formKey' | 'plugin' | 'origin' | 'path' | 'recordLabel' | 'fieldName' | 'readOnly'>;
 
 export interface ExtendedFieldDocumentsDeps {
-  client: Pick<MEditClient, 'getComparison' | 'onNotification'>;
+  client: Pick<MEditClient, 'getComparison' | 'onNotification' | 'onReconnected'>;
   reporter: Reporter;
   // Runs once per save, not once per tab: a tab can be saved any number of times while open, and
   // each save is its own commit of the leaf.
@@ -151,6 +151,9 @@ export class ExtendedFieldDocuments implements vscode.Disposable {
       }),
       deps.client.onNotification('plugin-changed', event => {
         for (const files of both) files.changedWhere(field => samePluginAddress(field.plugin, event.plugin));
+      }),
+      deps.client.onReconnected(() => {
+        for (const files of both) files.changedWhere(() => true);
       }),
     ];
     this.registrations = [
