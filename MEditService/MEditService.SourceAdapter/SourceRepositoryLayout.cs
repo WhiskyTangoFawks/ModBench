@@ -347,14 +347,14 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
     // Removes the directories this call minted when write throws: an empty record directory is
     // invisible to git and fails the next ingest, since the reader opens every one unconditionally.
-    internal static T InMintedDirectory<T>(string directory, Func<T> write)
+    internal static void InMintedDirectory(string directory, Action write)
     {
         var minted = LevelsMintedBy(directory);
 
         try
         {
             Directory.CreateDirectory(directory);
-            return write();
+            write();
         }
         catch
         {
@@ -363,13 +363,10 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         }
     }
 
-    internal static void InMintedDirectory(string directory, Action write) =>
-        InMintedDirectory(directory, () => { write(); return true; });
-
-    // Where a document this plugin does not hold yet lands, from the identity alone. Null for a
-    // record with no group folder: it lands inside its container's document, which its own identity
-    // cannot name.
-    internal SourceUnit? PlaceNewDocument(PluginAddress plugin, RecordIdentity identity, CellPlacement? placement)
+    /// <summary>Where a new document lands, and the block level documents the tree lacks above it, outermost
+    /// first. Null for a record with no group folder, which lands inside its container's document.</summary>
+    internal (IReadOnlyList<DocumentChange> Levels, SourceUnit Unit)? PlaceNewDocument(
+        PluginAddress plugin, RecordIdentity identity, CellPlacement? placement)
     {
         var dispatch = RecordTypeDispatch.For(_release);
         if (dispatch.GroupFolderNameFor(identity.RecordType) is not { } groupFolder) return null;
@@ -378,36 +375,24 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         // with tells an exterior cell from an interior one, which has no worldspace above it.
         if (dispatch.IsCell(identity.RecordType) && placement is { IsInterior: false } exterior)
         {
-            return locator.Unit(
-                ExteriorCellDocument(plugin, identity, exterior),
-                identity.FormKey, identity.RecordType, isEmbedded: false);
+            var (exteriorLevels, cell) = ExteriorCellDocuments(plugin, identity, exterior);
+            return (exteriorLevels, locator.Unit(cell, identity.FormKey, identity.RecordType, isEmbedded: false));
         }
 
-        // An interior cell's levels are minted before the placement they become part of.
-        var blockPath = dispatch.IsCell(identity.RecordType)
-            ? InteriorCellBlockPathIn(
+        var (levels, blockPath) = dispatch.IsCell(identity.RecordType)
+            ? InteriorCellBlocksIn(
                 Path.Combine(_modFolder, RootFor(plugin.Name), groupFolder), FormKey.Factory(identity.FormKey).ID)
-            : null;
+            : ([], null);
 
         var where = PlacementFor(
             plugin.Name, identity.RecordType, identity.FormKey, identity.EditorId, _release, blockPath);
-        return locator.Unit(
-            Path.Combine(_modFolder, where.RelativePath), identity.FormKey, identity.RecordType, isEmbedded: false);
+        return (levels, locator.Unit(
+            Path.Combine(_modFolder, where.RelativePath), identity.FormKey, identity.RecordType, isEmbedded: false));
     }
 
-    // The worldspace's directory is found by its FormKey rather than composed from it: an override
-    // the destination named itself is written into, never doubled by a bare-named sibling.
-    private string ExteriorCellDocument(PluginAddress plugin, RecordIdentity identity, CellPlacement placement)
-    {
-        var (levels, cell) = ExteriorCellDocuments(plugin, identity, placement);
-        foreach (var (path, text) in levels)
-            InMintedDirectory(PathShape.DirectoryOf(path), () => WriteTextAtomic(path, text));
-        return cell;
-    }
-
-    /// <summary>The block level documents an exterior cell at <paramref name="placement"/> needs and the tree
-    /// lacks, outermost first, and the path of the cell's own document.</summary>
-    internal (IReadOnlyList<(string Path, string Text)> Levels, string Cell) ExteriorCellDocuments(
+    // The block level documents an exterior cell at the placement needs and the tree lacks, outermost
+    // first, and the path of the cell's own document.
+    private (IReadOnlyList<DocumentChange> Levels, string Cell) ExteriorCellDocuments(
         PluginAddress plugin, RecordIdentity identity, CellPlacement placement)
     {
         var levels = RecordTypeDispatch.For(_release).ExteriorCellBlockLevels;
@@ -428,7 +413,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
             [.. needed
                 .Select(level => (Path: Path.Combine(level.Directory, GroupRecordDataFileName), level.Level, level.X, level.Y))
                 .Where(level => !File.Exists(level.Path))
-                .Select(level => (level.Path, BlockLevelDocument(level.Level, level.X, level.Y)))],
+                .Select(level => LevelDocument(level.Path, BlockLevelDocument(level.Level, level.X, level.Y)))],
             ContainerDocumentIn(cell));
     }
 
@@ -443,8 +428,9 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
     private const int ExteriorBlockLevels = 2;
 
-    // A worldspace is a record and only the codec mints one, so a tree already holding it is this
-    // put's precondition.
+    // Found by the worldspace's FormKey, not composed from it, so an override the destination named itself
+    // is written into, never doubled by a bare-named sibling. Only the codec mints a worldspace, so the
+    // tree must hold it.
     private string WorldspaceDirectoryHolding(PluginAddress plugin, CellPlacement placement)
     {
         if (placement.ParentWorldspace is not { } worldspace)
@@ -470,8 +456,11 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
                 [RecordTypeDispatch.BlockNumberYMember] = y ?? 0,
             });
 
+    private DocumentChange LevelDocument(string fullPath, string text) => new(Path.GetRelativePath(_modFolder, fullPath), text);
+
     // Block = ID mod 10 and sub-block = ID / 10 mod 10: the formula of Mutagen's AddInteriorCell.
-    private List<string> InteriorCellBlockPathIn(string groupDirectory, uint formId)
+    private (IReadOnlyList<DocumentChange> Levels, List<string> BlockPath) InteriorCellBlocksIn(
+        string groupDirectory, uint formId)
     {
         var levels = RecordTypeDispatch.For(_release).InteriorCellBlockLevels;
         var labels = RecordTypeDispatch.InteriorCellBlockGroupTypes;
@@ -485,43 +474,31 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         // The group's own level has no blank document to ask the codec for: its class has a generated
         // serializer and no deserializer. The compile round-trip gate needs the file, so the empty
         // document stands in.
-        InMintedDirectory(groupDirectory, () => WriteIfMissing(groupDirectory, EmptyLevelDocument));
+        var documents = new List<DocumentChange>();
+        var groupDocument = Path.Combine(groupDirectory, GroupRecordDataFileName);
+        if (!File.Exists(groupDocument)) documents.Add(LevelDocument(groupDocument, EmptyLevelDocument));
 
         int[] numbers = [(int)(formId % 10), (int)(formId / 10 % 10)];
         var path = new List<string>();
         var parent = groupDirectory;
         for (var level = 0; level < levels.Count; level++)
         {
-            parent = FindOrMintBlockDirectory(parent, levels[level], labels[level], numbers[level]);
+            parent = Path.Combine(parent, numbers[level].ToString(CultureInfo.InvariantCulture));
             path.Add(Path.GetFileName(parent));
+            if (Directory.Exists(parent)) continue;
+
+            documents.Add(LevelDocument(Path.Combine(parent, GroupRecordDataFileName), RecordTextCodec.BlankDocument(
+                levels[level], _release,
+                new JsonObject
+                {
+                    [RecordTypeDispatch.GroupTypeMember] = labels[level],
+                    [RecordTypeDispatch.BlockNumberMember] = numbers[level],
+                })));
         }
-        return path;
+        return (documents, path);
     }
 
     private static readonly string EmptyLevelDocument = new JsonObject().ToJsonString();
-
-    private static void WriteIfMissing(string directory, string document)
-    {
-        var path = Path.Combine(directory, GroupRecordDataFileName);
-        if (!File.Exists(path)) WriteTextAtomic(path, document);
-    }
-
-    private string FindOrMintBlockDirectory(string parentDirectory, Type level, string groupType, int number)
-    {
-        var directory = Path.Combine(parentDirectory, number.ToString(CultureInfo.InvariantCulture));
-        if (Directory.Exists(directory)) return directory;
-
-        var document = RecordTextCodec.BlankDocument(
-            level, _release,
-            new JsonObject
-            {
-                [RecordTypeDispatch.GroupTypeMember] = groupType,
-                [RecordTypeDispatch.BlockNumberMember] = number,
-            });
-        InMintedDirectory(
-            directory, () => WriteTextAtomic(Path.Combine(directory, GroupRecordDataFileName), document));
-        return directory;
-    }
 
     // Takes back the levels LevelsMintedBy named, deepest first, so a parent is already empty by
     // the time it is reached. A level something else filled stops the walk.

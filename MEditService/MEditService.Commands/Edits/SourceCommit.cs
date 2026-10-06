@@ -53,12 +53,11 @@ internal static class SourceCommit
         }
     }
 
-    // Only the tree is put back; the next snapshot lands the restored files. Paths are relative to
-    // the mod folder, the form the Source Control panel lists.
+    // Only the tree is put back; the next snapshot lands the restored files.
     private static string RollBack(
         SourceTransaction transaction, SourceRepository repository, ILogger logger, string failed, Exception cause)
     {
-        var (unrestored, relativeError) = transaction.Rollback(cause, repository);
+        var (unrestored, report) = transaction.Rollback(cause, repository);
         if (unrestored.Count > 0)
         {
             logger.LogWarning(
@@ -67,33 +66,6 @@ internal static class SourceCommit
                 string.Join("; ", unrestored.Select(u => $"{u.FullPath} [{u.Reason}{(u.Error is null ? "" : $": {u.Error}")}]")));
         }
 
-        var sentences = new List<string>
-        {
-            failed,
-            unrestored.Count == 0
-                ? "Every source tree it had written is back as it was — nothing to review or revert."
-                : "Every source tree it had written is back as it was, except:",
-        };
-
-        sentences.AddRange(new[]
-        {
-            (UnrestoredReason.ChangedByAnother,
-                "changed by something else after this change wrote them, so their current content was kept"),
-            (UnrestoredReason.RemovedByAnother,
-                "removed by something else after this change wrote them, so they were not put back"),
-            (UnrestoredReason.OccupiedByAnother,
-                "occupied by something else, so what this change moved away was not moved back"),
-            (UnrestoredReason.RestoreFailed, "could not be restored"),
-        }.Select(r => NamedPaths(unrestored, r.Item1, r.Item2)).OfType<string>());
-
-        sentences.Add($"Underlying error: {relativeError}");
-        return string.Join(" ", sentences);
-    }
-
-    private static string? NamedPaths(
-        IReadOnlyList<UnrestoredPath> unrestored, UnrestoredReason reason, string phrase)
-    {
-        var named = unrestored.Where(u => u.Reason == reason).Select(u => u.RelativePath).ToList();
-        return named.Count == 0 ? null : $"{string.Join(", ", named)} — {phrase}.";
+        return $"{failed} {report}";
     }
 }
