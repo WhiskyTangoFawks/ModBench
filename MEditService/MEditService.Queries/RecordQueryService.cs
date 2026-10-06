@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
@@ -224,7 +225,9 @@ public sealed class RecordQueryService(
 
     // The index stores each copy's document as the codec writes it, a stub where the codec could not (ADR-0005).
     public RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey) =>
-        RequireReads().GetDocument(formKey, plugin) is { Body: { } body } ? new RenderedDocument(body) : null;
+        RequireReads().GetDocument(formKey, plugin) is { Body: { } body } copy
+            ? new RenderedDocument(SourceRepository.FileNameOf(new RecordIdentity(formKey, copy.RecordType, copy.EditorId)), body)
+            : null;
 
     public LoadOrderStatus GetStatus() => _index.Status;
 

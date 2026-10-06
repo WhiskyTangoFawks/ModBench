@@ -48,20 +48,22 @@ public sealed class RenderedDocumentApiTests : HostedTests
             ["RenderedRoom - "] = await Client.FormKeyNamed(Plugin, Origin, "cell", "RenderedRoom"),
             ["000000_"] = $"000000:{Plugin}",
         };
-        var rendered = new Dictionary<string, string>();
+        var rendered = new Dictionary<string, (string FileName, string Text)>();
         foreach (var (file, formKey) in copies)
         {
             var response = await Rendered(formKey);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            rendered[file] = (await response.Body()).GetProperty("text").GetString().Require();
+            var document = await response.Body();
+            rendered[file] = (document.GetProperty("fileName").GetString().Require(), document.GetProperty("text").GetString().Require());
         }
 
         (await Client.Track(Origin)).EnsureSuccessStatusCode();
 
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
-        foreach (var (file, text) in rendered)
+        foreach (var (file, (fileName, text)) in rendered)
         {
             var written = Directory.EnumerateFiles(modFolder, $"{file}*.json", SearchOption.AllDirectories).Single();
+            Assert.Equal(Path.GetFileName(written), fileName);
             Assert.Equal(File.ReadAllText(written), text);
         }
     }

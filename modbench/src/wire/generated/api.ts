@@ -1170,6 +1170,7 @@ export interface components {
             newName: string;
         };
         RenderedDocument: {
+            fileName: string;
             text: string;
         };
         SequenceAwaitResponse: {

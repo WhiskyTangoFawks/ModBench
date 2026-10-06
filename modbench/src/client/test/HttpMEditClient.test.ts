@@ -983,13 +983,14 @@ describe('HttpMEditClient — the record types a container record can hold', () 
 });
 
 describe('HttpMEditClient — a copy rendered as its document', () => {
-  it('asks mEdit for the plugin\'s copy of the record and reads its text', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { text: '{ "FormKey": "000800:Shared.esp" }' })));
+  it('asks mEdit for the plugin\'s copy of the record and reads its name and text', async () => {
+    const rendered = { fileName: 'SharedNpc - 000800_Shared.esp.json', text: '{ "FormKey": "000800:Shared.esp" }' };
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, rendered)));
     const client = makeClient(fetch);
 
     const document = await client.getRenderedDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp');
 
-    expect(document).toEqual({ text: '{ "FormKey": "000800:Shared.esp" }' });
+    expect(document).toEqual(rendered);
     const url = new URL(fetch.mock.calls[0]?.[0].url ?? '');
     expect(url.pathname).toBe('/plugins/Shared.esp/records/000800%3AShared.esp/rendered-document');
     expect(url.searchParams.get('origin')).toBe('ModA');

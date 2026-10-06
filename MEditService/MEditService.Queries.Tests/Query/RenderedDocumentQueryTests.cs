@@ -24,6 +24,15 @@ public sealed class RenderedDocumentQueryTests
         new(Npc, plugin, 0, IsWinner: false, "SharedNpc", "npc_", body, [], ParseDiagnosis: parseDiagnosis);
 
     [Fact]
+    public void APlacedReference_IsNamedByItsOwnEditorId()
+    {
+        const string placed = "000801:Shared.esp";
+        var svc = Service(new RecordDocument(placed, ModA, 0, IsWinner: false, "SharedRef", "refr", "{}", []));
+
+        Assert.Equal("SharedRef - 000801_Shared.esp.json", svc.GetRenderedDocument(ModA, placed)?.FileName);
+    }
+
+    [Fact]
     public void ACopy_RendersAsTheDocumentItsPluginHolds_NotAnotherOfTheSameName()
     {
         var svc = Service(Copy(ModA, """{ "held": "by ModA" }"""), Copy(ModB, """{ "held": "by ModB" }"""));

@@ -236,8 +236,8 @@ export interface MEditClient {
    *  state on any cell or row. Null is a copy no plugin holds and no `documentText` gives. */
   getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult | null>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
-  /** The plugin's copy as its own document: an untracked plugin's is the text Track writes for it.
-   *  Null: the plugin holds no such record. */
+  /** The plugin's copy as its own document, with the name its file has in plugin source: an untracked
+   *  plugin's is the text Track writes for it. Null: the plugin holds no such record. */
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null>;
   /** `text` is the current text of the document carrying the record; mEdit writes nothing. */
   getEditChanges(
