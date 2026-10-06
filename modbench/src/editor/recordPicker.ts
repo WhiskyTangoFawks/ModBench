@@ -16,6 +16,10 @@ function toPickItem(r: RecordSummary): PickItem {
   return { label: r.editorId ? `${r.editorId} [${r.formKey}]` : r.formKey, formKey: r.formKey };
 }
 
+function cutTitle(shown: number, total: number): string | undefined {
+  return shown < total ? `${shown.toLocaleString()} of ${total.toLocaleString()}` : undefined;
+}
+
 function failureItem(err: unknown): PickItem {
   return { label: '$(error) The search failed', detail: errorMessage(err), alwaysShow: true };
 }
@@ -38,23 +42,28 @@ export async function pickRecord(
   quickPick.placeholder = 'Search EditorID, FormID or FormKey…';
   quickPick.value = seed;
 
+  const show = (items: PickItem[], title?: string) => {
+    quickPick.items = items;
+    quickPick.title = title;
+  };
+
   let seq = 0;
   const runSearch = async (query: string) => {
     const mySeq = ++seq;
-    if (!query.trim()) { quickPick.items = []; return; }
+    if (!query.trim()) { show([]); return; }
     quickPick.busy = true;
     try {
-      const { items } = await deps.meditClient.searchRecords(normalizeFormKeyQuery(query), validTypes);
+      const { items, total } = await deps.meditClient.searchRecords(normalizeFormKeyQuery(query), validTypes);
       if (mySeq !== seq) return;
       const qpItems = items.map(toPickItem);
-      quickPick.items = qpItems;
+      show(qpItems, cutTitle(qpItems.length, total));
       // Normalized, because the seed is the composite the cell displays — comparing
       // the raw seed against a bare formKey would match only when the reference is unresolved.
       const seeded = qpItems.find(i => i.formKey === normalizeFormKeyQuery(seed));
       if (seeded) quickPick.activeItems = [seeded];
     } catch (err) {
       if (mySeq !== seq) return;
-      quickPick.items = [failureItem(err)];
+      show([failureItem(err)]);
       deps.reporter.shownOnSurface('error', 'The record search failed.', errorMessage(err));
     } finally {
       if (mySeq === seq) quickPick.busy = false;
@@ -66,7 +75,7 @@ export async function pickRecord(
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   quickPick.onDidChangeValue(value => {
     if (debounceTimer) clearTimeout(debounceTimer);
-    if (!value.trim()) { quickPick.items = []; seq++; return; }
+    if (!value.trim()) { show([]); seq++; return; }
     debounceTimer = setTimeout(() => void runSearch(value), 200);
   });
 
