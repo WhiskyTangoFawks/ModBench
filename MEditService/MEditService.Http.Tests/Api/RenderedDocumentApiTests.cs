@@ -37,35 +37,49 @@ public sealed class RenderedDocumentApiTests : HostedTests
             (origin is null ? string.Empty : $"?origin={origin}"),
             UriKind.Relative));
 
-    [Fact]
-    public async Task AnUntrackedCopy_IsTheTextTrackWritesToItsFile()
+    private static string ModFolderOf(ScatteredFixtureData fx) => Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
+
+    private async Task<(string FileName, string Text)> RenderedOk(string formKey)
+    {
+        var response = await Rendered(formKey);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var document = await response.Body();
+        return (document.GetProperty("fileName").GetString().Require(), document.GetProperty("text").GetString().Require());
+    }
+
+    // A null record type is the plugin header, whose file is named for its FormKey alone.
+    [Theory]
+    [InlineData("npc_", "RenderedNpc")]
+    [InlineData("qust", "RenderedQuest")]
+    [InlineData("cell", "RenderedRoom")]
+    [InlineData(null, null)]
+    public async Task AnUntrackedCopy_IsTheFileTrackWrites_ByNameAndText(string? recordType, string? editorId)
     {
         var fx = await Untracked();
-        var copies = new Dictionary<string, string>
-        {
-            ["RenderedNpc - "] = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc"),
-            ["RenderedQuest - "] = await Client.FormKeyNamed(Plugin, Origin, "qust", "RenderedQuest"),
-            ["RenderedRoom - "] = await Client.FormKeyNamed(Plugin, Origin, "cell", "RenderedRoom"),
-            ["000000_"] = $"000000:{Plugin}",
-        };
-        var rendered = new Dictionary<string, (string FileName, string Text)>();
-        foreach (var (file, formKey) in copies)
-        {
-            var response = await Rendered(formKey);
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            var document = await response.Body();
-            rendered[file] = (document.GetProperty("fileName").GetString().Require(), document.GetProperty("text").GetString().Require());
-        }
+        var formKey = recordType is null ? $"000000:{Plugin}" : await Client.FormKeyNamed(Plugin, Origin, recordType, editorId.Require());
+        var (fileName, text) = await RenderedOk(formKey);
 
         (await Client.Track(Origin)).EnsureSuccessStatusCode();
 
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
-        foreach (var (file, (fileName, text)) in rendered)
-        {
-            var written = Directory.EnumerateFiles(modFolder, $"{file}*.json", SearchOption.AllDirectories).Single();
-            Assert.Equal(Path.GetFileName(written), fileName);
-            Assert.Equal(File.ReadAllText(written), text);
-        }
+        var written = Directory.EnumerateFiles(
+            ModFolderOf(fx), editorId is null ? "000000_*.json" : $"{editorId} - *.json", SearchOption.AllDirectories).Single();
+        Assert.Equal(Path.GetFileName(written), fileName);
+        Assert.Equal(File.ReadAllText(written), text);
+    }
+
+    [Fact]
+    public async Task ATrackedCopy_IsNamedAsItsFileIs_AfterARenameByHand()
+    {
+        var fx = await Untracked();
+        var npc = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc");
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
+        await Client.PluginReportsTracked(Plugin);
+        var written = Directory.EnumerateFiles(ModFolderOf(fx), "RenderedNpc - *.json", SearchOption.AllDirectories).Single();
+
+        File.Move(written, Path.Combine(Path.GetDirectoryName(written).Require(), "Named By Hand.json"));
+
+        Assert.Equal("Named By Hand.json", (await RenderedOk(npc)).FileName);
     }
 
     [Fact]

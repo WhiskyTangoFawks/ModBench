@@ -255,7 +255,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The plugin's copy of a record as its own document: for an untracked plugin, the text Track writes for it. A copy mEdit could not parse is what could be stored. */
+        /** @description The plugin's copy of a record as its own document and the name of its file in plugin source. An untracked plugin's is the text Track writes for it, under the name Track gives its file. A copy mEdit could not parse is what could be stored. */
         get: operations["GetRenderedDocument"];
         put?: never;
         post?: never;

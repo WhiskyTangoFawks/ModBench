@@ -221,7 +221,6 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         return $"{named} - {filesafe}{extension}";
     }
 
-    /// <summary>The name of the file holding a record's own document, whichever folder it sits in.</summary>
     internal static string FileNameFor(FormKey formKey, string? editorId) => LeafNameFor(formKey, editorId, isDirectory: false);
 
     internal static string FilesafeFormKey(string formKey) => FilesafeFormKey(FormKey.Factory(formKey));

@@ -120,8 +120,6 @@ public record RecordCopy(string FormKey, PluginAddress Plugin, string? DocumentT
 /// from, in place of the copy the index holds.</summary>
 public record CopyText(PluginAddress Plugin, string DocumentText);
 
-/// <summary>A plugin's copy of a record as its own document (editor.md, Opening, stories 5 and 9): an untracked
-/// plugin's is the text Track writes for it, under the name its file has in plugin source.</summary>
 public record RenderedDocument(string FileName, string Text);
 
 // ADR-0012.

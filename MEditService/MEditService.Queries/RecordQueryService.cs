@@ -224,10 +224,15 @@ public sealed class RecordQueryService(
     }
 
     // The index stores each copy's document as the codec writes it, a stub where the codec could not (ADR-0005).
-    public RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey) =>
-        RequireReads().GetDocument(formKey, plugin) is { Body: { } body } copy
-            ? new RenderedDocument(SourceRepository.FileNameOf(new RecordIdentity(formKey, copy.RecordType, copy.EditorId)), body)
-            : null;
+    // A tracked copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
+    public RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey)
+    {
+        if (RequireReads().GetDocument(formKey, plugin) is not { Body: { } body } copy) return null;
+        var identity = new RecordIdentity(formKey, copy.RecordType, copy.EditorId);
+        var snapshot = _loadOrder.Require();
+        var tree = SourceRepository.TrackedModOf(snapshot, plugin) is { } mod ? SourceRepository.Over(mod, snapshot.GameRelease) : null;
+        return new RenderedDocument(tree?.FileNameOf(plugin, identity) ?? SourceRepository.FileNameOf(identity), body);
+    }
 
     public LoadOrderStatus GetStatus() => _index.Status;
 
