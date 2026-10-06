@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isRefused, type MEditClient, type PluginAddress } from '../client';
+import { isRefused, type GridPosition, type MEditClient, type PluginAddress, type RecordTypeChoice } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import { registerGesture, singularArgument, type RowOf } from '../drivingLib/gestureEntry';
@@ -18,8 +18,6 @@ export interface RecordCreateDeps {
 }
 
 type CreateRow = RowOf<PluginsTreeNode, typeof CREATE_ROW_KINDS[number]>;
-type RecordTypeChoice = Awaited<ReturnType<MEditClient['getChildRecordTypes']>>[number];
-type GridPosition = NonNullable<NonNullable<Parameters<MEditClient['createRecord']>[2]>['position']>;
 
 type Target =
   | { plugin: PluginAddress; recordType: string }

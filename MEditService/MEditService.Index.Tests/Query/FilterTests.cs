@@ -60,19 +60,6 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_Unfiltered_WithActiveFilter_ReturnsEveryRecord()
-    {
-        using var index = LoadedIndex();
-        var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
-
-        index.SetFilter($"SELECT '{all.Items[0].FormKey}' AS form_key", "filter.sql");
-
-        var unfiltered = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0, Unfiltered: true));
-        Assert.Equal(all.Items.Select(r => r.FormKey), unfiltered.Items.Select(r => r.FormKey));
-    }
-
-    [Fact]
     public void GetRecords_AfterClearFilter_ReturnsAllRecords()
     {
         using var index = LoadedIndex();

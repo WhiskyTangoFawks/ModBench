@@ -9,7 +9,7 @@ public interface IRecordQueryService
     IReadOnlyList<PluginRow> GetPlugins();
     // A null plugin browses every plugin.
     PagedResult<RecordSummary> GetRecords(
-        IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset, bool unfiltered = false);
+        IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset);
     RecordDetail? GetRecord(string formKey);
 
     CompareResult? GetCompare(string formKey, CopyText? text = null);
@@ -21,6 +21,8 @@ public interface IRecordQueryService
     // Null when the plugin holds no such record.
     IReadOnlyList<RecordTypeChoice>? GetChildRecordTypes(PluginAddress plugin, string formKey);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
+    // Null when the plugin holds no such record.
+    RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey);
 
     // Answered in every state, "no load order yet" included (ADR-0013).
     LoadOrderStatus GetStatus();

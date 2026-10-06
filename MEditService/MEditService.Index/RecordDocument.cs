@@ -41,8 +41,7 @@ public sealed record RecordQuery(
     string? SearchFormKey = null,
     int Limit = 50,
     int Offset = 0,
-    bool GroupOnly = false,
-    bool Unfiltered = false);
+    bool GroupOnly = false);
 
 /// <summary>One record type's row count for one plugin, from one grouped query.</summary>
 public record RecordTypeCount(string Type, int Count, bool HasParseFailure);

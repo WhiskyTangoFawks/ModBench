@@ -110,23 +110,25 @@ public static class PluginEndpoints
 
         app.MapGet("/plugins/{plugin}/records/{formKey}/child-record-types", (
             string plugin, string formKey, string? origin, IRecordQueryService svc) =>
-        {
-            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            try
-            {
-                return svc.GetChildRecordTypes(WriteEndpointMapping.PluginAddressOf(plugin, origin), Uri.UnescapeDataString(formKey)) is { } types
-                    ? Results.Ok(types)
-                    : Results.NotFound();
-            }
-            catch (NoLoadOrderException ex)
-            {
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            }
-        })
+            PluginRecordAnswer(plugin, formKey, origin, svc.GetChildRecordTypes))
             .WithName("GetChildRecordTypes")
             .WithTags(Tag)
             .WithDescription("The record types the plugin's copy of a container record can hold, in name order.")
             .Produces<IReadOnlyList<RecordTypeChoice>>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(503);
+
+        app.MapGet("/plugins/{plugin}/records/{formKey}/rendered-document", (
+            string plugin, string formKey, string? origin, IRecordQueryService svc) =>
+            PluginRecordAnswer(plugin, formKey, origin, svc.GetRenderedDocument))
+            .WithName("GetRenderedDocument")
+            .WithTags(Tag)
+            .WithDescription(
+                "The plugin's copy of a record as its own document and the name of its file in plugin source. An untracked " +
+                "plugin's is the text Track writes for it, under the name Track gives its file. A copy mEdit could not parse " +
+                "is what could be stored.")
+            .Produces<RenderedDocument>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(503);
@@ -211,8 +213,9 @@ public static class PluginEndpoints
             .WithName("CreateRecord")
             .WithSummary("Create a new record as a working-tree change.")
             .WithDescription(
-                "Mints a new record and writes it as a new source file in the plugin's working tree — " +
-                "a git-native create, answering at Effective only until committed and compiled.")
+                "Mints a new record in the plugin's working tree: a new source file of its own, or, for a record created " +
+                "in a container, an entry in the container's document. A git-native create, answering at Effective only " +
+                "until committed and compiled.")
             .WithTags(Tag)
             .Produces<RecordCreateResponse>()
             .ProducesProblem(400)
@@ -391,6 +394,22 @@ public static class PluginEndpoints
             },
             execute: () => edits.CreateRecord(WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType, req.Container, req.Position),
             onApplied: result => Results.Ok(new RecordCreateResponse(true, WriteEndpointMapping.RequireNewFormKey(result), req.RecordType)));
+    }
+
+    private static IResult PluginRecordAnswer<T>(
+        string plugin, string formKey, string? origin, Func<PluginAddress, string, T?> answer) where T : class
+    {
+        if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
+        try
+        {
+            return answer(WriteEndpointMapping.PluginAddressOf(plugin, origin), Uri.UnescapeDataString(formKey)) is { } found
+                ? Results.Ok(found)
+                : Results.Problem("The plugin holds no such record.", statusCode: 404);
+        }
+        catch (NoLoadOrderException ex)
+        {
+            return WriteEndpointMapping.NoLoadOrder(ex);
+        }
     }
 }
 

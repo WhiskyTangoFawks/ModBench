@@ -124,6 +124,7 @@ export type PluginDependants = components['schemas']['PluginDependantsResponse']
 export type PluginProblems = components['schemas']['PluginProblems'];
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 export type RecordTypeChoice = components['schemas']['RecordTypeChoice'];
+export type RenderedDocument = components['schemas']['RenderedDocument'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type InteriorCellBlock = components['schemas']['InteriorCellBlock'];
 export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock'];
@@ -213,10 +214,7 @@ export interface MEditClient {
   /** The types the plugin's copy of a container record can hold, in name order. */
   getChildRecordTypes(plugin: PluginAddress, formKey: string): Promise<RecordTypeChoice[]>;
   getCreatablePluginExtensions(): Promise<string[]>;
-  // `unfiltered` lists what the record filter hides too.
-  getRecords(
-    plugin: PluginAddress, type: string, offset: number, limit: number, options?: { unfiltered: boolean },
-  ): Promise<RecordPage>;
+  getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage>;
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
   getRecordOwner(formKey: string): Promise<PluginAddress | undefined>;
   /** Every plugin that holds a copy of the record, its own included. */
@@ -235,6 +233,8 @@ export interface MEditClient {
    *  state on any cell or row. Null is a copy no plugin holds and no `documentText` gives. */
   getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult | null>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
+  /** Null: the plugin holds no such record. */
+  getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null>;
   /** `text` is the current text of the document carrying the record; mEdit writes nothing. */
   getEditChanges(
     formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope, text: string,

@@ -18,8 +18,7 @@ public static class RecordEndpoints
             string? search,
             string? origin = null,
             int limit = 50,
-            int offset = 0,
-            bool unfiltered = false) =>
+            int offset = 0) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -30,7 +29,7 @@ public static class RecordEndpoints
                 address = new PluginAddress(plugin, origin);
             else if (!string.IsNullOrWhiteSpace(plugin) || !string.IsNullOrWhiteSpace(origin))
                 return Results.Problem("Name a plugin with both plugin and origin, or neither to browse every plugin.", statusCode: 400);
-            var result = svc.GetRecords(type is { Length: > 0 } ? type : null, address, search, limit, offset, unfiltered);
+            var result = svc.GetRecords(type is { Length: > 0 } ? type : null, address, search, limit, offset);
             return Results.Ok(result);
         })
         .WithName("GetRecords")
