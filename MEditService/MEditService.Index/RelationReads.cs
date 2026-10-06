@@ -120,7 +120,7 @@ internal sealed class RelationReads(
     {
         using var connection = store.OpenReadConnection();
         var (where, paramValues) = BuildWhere(
-            query.Plugin?.Name, query.Search, query.Unfiltered ? null : store.Filter.Listing, query.Origin, query.RecordTypes,
+            query.Plugin?.Name, query.Search, store.Filter.Listing, query.Origin, query.RecordTypes,
             query.GroupOnly ? NavigatorSql.NotHeld("r") : null, query.SearchFormKey);
         var dataParams = new List<string>(paramValues);
         var holdings = HoldingsOf(query.Plugin?.Name, query.Origin, dataParams);
@@ -129,7 +129,7 @@ internal sealed class RelationReads(
             EXISTS (
                 SELECT 1 FROM container_child cc
                 WHERE cc.parent_form_key = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
-                  {(query.Unfiltered ? "" : store.Filter.AlsoKeeps("cc", "child_form_key"))}
+                  {store.Filter.AlsoKeeps("cc", "child_form_key")}
             ) AS has_container_children,
             r.parse_diagnosis,
             r.parse_diagnosis IS NOT NULL OR EXISTS (

@@ -146,6 +146,15 @@ public sealed class SourceRepository
     public string? RelativePathOf(PluginAddress plugin, RecordIdentity identity) =>
         Locator.Locate(plugin, identity)?.RelativePath;
 
+    /// <summary>The name the layout gives the file of the record's own document.</summary>
+    public static string FileNameOf(RecordIdentity identity) =>
+        SourceRepositoryLayout.FileNameFor(FormKey.Factory(identity.FormKey), identity.EditorId);
+
+    /// <summary>The name of the file in this tree holding <paramref name="identity"/>, whatever it was renamed to; null
+    /// when nothing here holds it.</summary>
+    public string? FileNameOf(PluginAddress plugin, RecordIdentity identity) =>
+        RelativePathOf(plugin, identity) is { } path ? Path.GetFileName(path) : null;
+
     /// <summary>The worldspace carrying the cell <paramref name="identity"/> names; null for an interior
     /// cell or one the plugin does not hold. A cell filed under neither refuses with the reader's words.</summary>
     public string? WorldspaceOf(PluginAddress plugin, RecordIdentity identity)

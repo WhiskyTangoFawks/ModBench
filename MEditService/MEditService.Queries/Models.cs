@@ -120,6 +120,8 @@ public record RecordCopy(string FormKey, PluginAddress Plugin, string? DocumentT
 /// from, in place of the copy the index holds.</summary>
 public record CopyText(PluginAddress Plugin, string DocumentText);
 
+public record RenderedDocument(string FileName, string Text);
+
 // ADR-0012.
 public record ReferenceResult(
     string FormKey, string Plugin, string Origin, string FieldPath, string RecordType, string RecordTypeName, string? EditorId);

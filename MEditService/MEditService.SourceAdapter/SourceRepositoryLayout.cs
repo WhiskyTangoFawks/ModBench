@@ -155,7 +155,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         Path.Combine(RootFor(pluginFileName), HeaderDocumentLeaf(pluginFileName));
 
     internal static string HeaderDocumentLeaf(string pluginFileName) =>
-        LeafNameFor(FormKey.Factory(HeaderFormKeyOf(pluginFileName)), editorId: null, isDirectory: false);
+        FileNameFor(FormKey.Factory(HeaderFormKeyOf(pluginFileName)), editorId: null);
 
     // The flat record's own file. The origin ModKey, never the plugin written into, keeps two
     // masters' records from colliding on one path; a directory-per-record type refuses.
@@ -170,7 +170,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
         return Path.Combine(
             RootFor(pluginFileName), folder,
-            LeafNameFor(FormKey.Factory(formKeyString), editorId, isDirectory: false));
+            FileNameFor(FormKey.Factory(formKeyString), editorId));
     }
 
     // The three shapes with a group folder: flat file, container directory, and an interior Cell
@@ -220,6 +220,8 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         var named = editorId.Length > MaxEditorIdInLeaf ? editorId[..MaxEditorIdInLeaf] : editorId;
         return $"{named} - {filesafe}{extension}";
     }
+
+    internal static string FileNameFor(FormKey formKey, string? editorId) => LeafNameFor(formKey, editorId, isDirectory: false);
 
     internal static string FilesafeFormKey(string formKey) => FilesafeFormKey(FormKey.Factory(formKey));
 

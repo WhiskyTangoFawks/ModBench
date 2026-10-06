@@ -307,11 +307,15 @@ internal sealed class SourceRepositoryWrites(
         if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !File.Exists(unit.FullPath))
             return new LeafMoves([], unit.FullPath);
 
-        var leaf = SourceRepositoryLayout.LeafNameFor(
-            FormKey.Factory(document.FormKey), document.EditorId, unit.IsDirectoryPerRecord);
-        if (unit.IsDirectoryPerRecord) return ContainerPlan(unit, Path.Combine(PathShape.DirectoryOf(PathShape.DirectoryOf(unit.FullPath)), leaf));
+        var formKey = FormKey.Factory(document.FormKey);
+        if (unit.IsDirectoryPerRecord)
+        {
+            return ContainerPlan(unit, Path.Combine(
+                PathShape.DirectoryOf(PathShape.DirectoryOf(unit.FullPath)),
+                SourceRepositoryLayout.LeafNameFor(formKey, document.EditorId, isDirectory: true)));
+        }
 
-        var to = Path.Combine(PathShape.DirectoryOf(unit.FullPath), leaf);
+        var to = Path.Combine(PathShape.DirectoryOf(unit.FullPath), SourceRepositoryLayout.FileNameFor(formKey, document.EditorId));
         return new LeafMoves(Differing([(unit.FullPath, to)]), to);
     }
 
