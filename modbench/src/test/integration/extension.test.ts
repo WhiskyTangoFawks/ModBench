@@ -530,13 +530,9 @@ describe('a tracked copy of a record', () => {
   const fileTabs = () => openTabs().filter((t) =>
     t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath === TRACKED_FS_PATH && t.input.viewType === 'modbench.record');
   const reads = () => requestLog.filter((line) => line === `GET /records/${encodeURIComponent(TRACKED_FORM_KEY)}/compare`).length;
-  const trackedPlugin = mockPlugin({ name: TRACKED_PLUGIN, path: TRACKED_FILE, origin: TRACKED_ORIGIN, inLoadOrder: true, loadOrderIndex: 4, isTracked: true });
+  const trackedPlugin = present(MOCK_PLUGINS.find((p) => p.name === TRACKED_PLUGIN), 'the tracked plugin\'s row');
 
-  before(async () => {
-    MOCK_PLUGINS.push(trackedPlugin);
-    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-  });
-  after(() => { MOCK_PLUGINS.splice(MOCK_PLUGINS.indexOf(trackedPlugin), 1); });
+  before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
 
   it('opens as its file in the record grid, titled with the file\'s name after its read lands', async () => {
@@ -552,13 +548,13 @@ describe('a tracked copy of a record', () => {
   });
 
   it('reads its own column from the file on disk while it is saved and its plugin is not active, so it shows', async () => {
-    Object.assign(trackedPlugin, { inLoadOrder: false, loadOrderIndex: null });
+    Object.assign(trackedPlugin, { inLoadOrder: false });
     try {
       await vscode.commands.executeCommand('modbench.record.open', trackedCopy);
 
       await waitFor('a read of the saved text', () => comparedTexts.includes(fs.readFileSync(TRACKED_FILE, 'utf8')));
     } finally {
-      Object.assign(trackedPlugin, { inLoadOrder: true, loadOrderIndex: 4 });
+      Object.assign(trackedPlugin, { inLoadOrder: true });
     }
   });
 
