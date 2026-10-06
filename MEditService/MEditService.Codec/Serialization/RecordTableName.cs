@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Codec.Serialization;
 
 /// <summary>Which schema table a record belongs to: the table whose type it is one of, else the GRUP
-/// signature the schema names tables after, else the CLR type name lowercased.</summary>
+/// signature the schema names tables after.</summary>
 public static class RecordTableName
 {
     public static string Of(IMajorRecordGetter record, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
@@ -22,7 +22,8 @@ public static class RecordTableName
         // A table built from several concrete classes (Globals) binds its RecordType to whichever
         // was discovered first, so a sibling matches nothing above; the schema names that table after
         // the GRUP signature the record's class declares or inherits.
-        return GrupSignatureOf(RecordClassOf(concrete), BindingFlags.FlattenHierarchy) ?? concrete.Name.ToLowerInvariant();
+        return GrupSignatureOf(RecordClassOf(concrete), BindingFlags.FlattenHierarchy)
+            ?? throw new InvalidOperationException($"'{concrete.Name}' is no record class a GRUP registers, so no table holds it.");
     }
 
     /// <summary>The record signature a table is named after: the table is its lowercase.</summary>

@@ -34,4 +34,13 @@ public sealed class RecordTableNameTests
 
         Assert.Equal("omod", RecordTableName.Of(inheriting, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)));
     }
+
+    [Fact]
+    public void AClassNoGrupRegisters_IsRefused_NamingIt()
+    {
+        var refused = Assert.Throws<InvalidOperationException>(
+            () => RecordTableName.Of(typeof(Fallout4MajorRecord), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)));
+
+        Assert.Contains(nameof(Fallout4MajorRecord), refused.Message, StringComparison.Ordinal);
+    }
 }
