@@ -12,8 +12,8 @@ public static class PlacedCell
     /// <summary>The worldspace member holding its persistent cell.</summary>
     public const string WorldspacePersistentCellMember = "TopCell";
 
-    private const string FlagsMember = "Flags";
-    private const string InteriorFlag = "IsInteriorCell";
+    internal const string FlagsMember = "Flags";
+    internal const string InteriorFlag = "IsInteriorCell";
     /// <summary>The cell grid's member holding its point.</summary>
     public const string GridPointMember = "Point";
     private const string PositionMember = "Position";

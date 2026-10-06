@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -62,9 +63,8 @@ public sealed class CreateRecordHandlerTests
     }
 
     [Theory]
-    [InlineData("cell")]
     [InlineData("refr")]
-    [InlineData("qust")]
+    [InlineData("navm")]
     public void CreateRecord_RefusesATypeTheCreatableListLeavesOut(string recordType)
     {
         using var mod = SourceEditFixture.Tracked();
@@ -73,6 +73,32 @@ public sealed class CreateRecordHandlerTests
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType);
 
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+    }
+
+    [Theory]
+    [InlineData("qust", "Quests")]
+    [InlineData("wrld", "Worldspaces")]
+    [InlineData("cell", "Cells")]
+    public void CreateRecord_OfATypeHoldingChildren_LandsUnderItsGroupFolder(string recordType, string groupFolder)
+    {
+        using var mod = SourceEditFixture.Tracked();
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType);
+
+        Assert.True(result.Applied, result.Message);
+        var file = mod.DocumentFile(result.NewFormKey.Require()).Require();
+        Assert.Contains(Path.DirectorySeparatorChar + groupFolder + Path.DirectorySeparatorChar, file, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CreateRecord_OfACell_CarriesTheIsInteriorCellFlag()
+    {
+        using var mod = SourceEditFixture.Tracked();
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "cell");
+
+        var document = mod.Document(result.NewFormKey.Require()).Require();
+        Assert.True(PlacedCell.IsInterior(JsonNode.Parse(document.Body).Require().AsObject()));
     }
 
     [Fact]

@@ -290,8 +290,8 @@ internal sealed class OverrideCopy
             "Pick a destination that loads after the origin.");
     }
 
-    // Narrower than RefuseIfContainerType: a container's own top-level record has a directory to
-    // land in, so only a record with no container of its own anywhere in the tree refuses.
+    // A container's own top-level record has a directory to land in, so only a record with no
+    // container of its own anywhere in the tree refuses.
     private static RecordEditResult? RefuseIfCopySourceHasNoContainerOfItsOwn(string recordType, GameRelease release)
     {
         if (RecordTypeDispatch.For(release).GroupFolderNameFor(recordType) is not null) return null;

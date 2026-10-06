@@ -833,7 +833,7 @@ public sealed class RecordQueryServiceTests
         var result = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, "Data"));
 
         Assert.Contains("npc_", creatable);
-        Assert.DoesNotContain("qust", creatable);
+        Assert.Contains("qust", creatable);
         foreach (var row in result) Assert.Equal(creatable.Contains(row.Type), row.IsCreatable);
     }
 
@@ -872,17 +872,23 @@ public sealed class RecordQueryServiceTests
 
     [Theory]
     [InlineData(PluginHeader.RecordType)]
-    [InlineData("cell")]
-    [InlineData("wrld")]
     [InlineData("refr")]
     [InlineData("dial")]
     [InlineData("info")]
-    [InlineData("qust")]
-    public void GetCreatableRecordTypes_LeavesOutTheHeaderAndEveryContainerOrHeldType(string recordType)
+    public void GetCreatableRecordTypes_LeavesOutTheHeaderAndEveryHeldType(string recordType)
     {
         var result = _svc.GetCreatableRecordTypes();
 
         Assert.DoesNotContain(result, r => r.Type == recordType);
+    }
+
+    [Theory]
+    [InlineData("cell")]
+    [InlineData("wrld")]
+    [InlineData("qust")]
+    public void GetCreatableRecordTypes_NamesEveryTypeWithATopLevelGroup(string recordType)
+    {
+        Assert.Contains(_svc.GetCreatableRecordTypes(), r => r.Type == recordType);
     }
 
     [Fact]
