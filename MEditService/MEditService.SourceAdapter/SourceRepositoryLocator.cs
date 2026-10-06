@@ -521,9 +521,8 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         return documents;
     }
 
-    // Null for a file that holds no record: group and block metadata, a document that declares no
-    // FormKey, and one whose type neither its path nor its own text names. An EditorID that is no
-    // string reads as none, since history may hold one (ADR-0007).
+    // Null for a file that holds no record: metadata, or a document naming no FormKey or type. An
+    // EditorID that is no string reads as none, since history may hold one (ADR-0007).
     internal SourceDocument? DocumentAt(string relativePath, string text, string pluginFileName)
     {
         if (Declared(relativePath, text, pluginFileName) is not var (formKey, recordType, editorId)) return null;
