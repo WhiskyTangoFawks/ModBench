@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { before, after, afterEach, describe, it } from 'mocha';
 import type { CompareResult, PluginMetadata } from '../../client';
 import { present } from '../../ports/present';
+import { comparisonOf } from '../comparison';
 import { isRecord, requires } from '../manifest';
 
 const MANIFEST: unknown = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'));
@@ -216,15 +217,10 @@ function createMockBackend(): http.Server {
 }
 
 const HELD_FORM_KEY = '000801:Held.esp';
-const MOCK_COMPARISONS = new Map<string, CompareResult>([[HELD_FORM_KEY, {
-  overrides: [
-    { plugin: 'Held.esp', isWinner: false, editorId: 'OldGun' },
-    { plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun' },
-  ].map((copy) => ({
-    formKey: HELD_FORM_KEY, fields: [], origin: 'Data', recordType: 'weap', isPartialForm: false, loadIndex: '00', isInOverwrite: false, ...copy,
-  })),
-  diffs: [], conflictAll: 'Override', recordTypeName: 'Weapon',
-}]]);
+const MOCK_COMPARISONS = new Map<string, CompareResult>([[HELD_FORM_KEY, comparisonOf(HELD_FORM_KEY, [
+  { plugin: 'Held.esp', isWinner: false, editorId: 'OldGun' },
+  { plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun' },
+])]]);
 
 before(async function () {
   this.timeout(15000);
@@ -740,21 +736,30 @@ describe('A FormKey in plugin source', () => {
   after(() => fs.rmSync(folder, { recursive: true, force: true }));
 
   const positionIn = (text: string) => document.positionAt(document.getText().indexOf(text) + 1);
-  const hoverTexts = async (text: string): Promise<string[]> => {
-    const hovers = await vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', document.uri, positionIn(text));
+  const hoverTextsIn = async (doc: vscode.TextDocument, text: string): Promise<string[]> => {
+    const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+      'vscode.executeHoverProvider', doc.uri, doc.positionAt(doc.getText().indexOf(text) + 1));
     return hovers.flatMap((hover) => hover.contents.map(markdownText));
+  };
+  const hoverTexts = (text: string) => hoverTextsIn(document, text);
+  const heldHover = [`\`NewGun [${HELD_FORM_KEY}]\`\n\nWeapon\n\nWinner: Patch.esp`];
+  const activated = () => waitFor('the FormKey hover', async () => {
+    const shown = await hoverTexts(HELD_FORM_KEY);
+    return shown.length > 0 && shown;
+  });
+  const documentAt = async (...segments: string[]) => {
+    const file = path.join(folder, ...segments);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY }));
+    return vscode.workspace.openTextDocument(file);
   };
 
   it('shows its record on hover: EditorID, FormKey, record type and the winning plugin', async () => {
-    const texts = await waitFor('the FormKey hover', async () => {
-      const shown = await hoverTexts(HELD_FORM_KEY);
-      return shown.length > 0 && shown;
-    });
-
-    assert.deepStrictEqual(texts, [`\`NewGun [${HELD_FORM_KEY}]\`\n\nWeapon\n\nWinner: Patch.esp`]);
+    assert.deepStrictEqual(await activated(), heldHover);
   });
 
   it('shows no hover for a FormKey no active plugin holds', async () => {
+    await activated();
     const asked = requestLog.length;
     const texts = await hoverTexts(NOT_HELD_FORM_KEY);
 
@@ -762,18 +767,22 @@ describe('A FormKey in plugin source', () => {
     assert.ok(requestLog.slice(asked).some((line) => line.includes(encodeURIComponent(NOT_HELD_FORM_KEY))), 'sanity: mEdit was asked');
   });
 
+  it('shows its record in a plugin source folder the adapter names in another case', async () => {
+    await activated();
+    const other = await documentAt('Mods', 'Plugin-Source', 'Held.esp', 'Gun.json');
+
+    assert.deepStrictEqual(await hoverTextsIn(other, '000801'), heldHover);
+  });
+
   it('shows no hover in JSON outside the plugin source folder', async () => {
-    const elsewhere = path.join(folder, 'Other.json');
-    fs.writeFileSync(elsewhere, JSON.stringify({ FormKey: HELD_FORM_KEY }));
-    const other = await vscode.workspace.openTextDocument(elsewhere);
+    await activated();
+    const other = await documentAt('Other.json');
 
-    const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
-      'vscode.executeHoverProvider', other.uri, other.positionAt(other.getText().indexOf('000801')));
-
-    assert.deepStrictEqual(hovers.filter((hover) => hover.contents.some((c) => markdownText(c).includes('Weapon'))), []);
+    assert.deepStrictEqual(await hoverTextsIn(other, '000801'), []);
   });
 
   it('shows no hover for text that is not a FormKey', async () => {
+    await activated();
     assert.deepStrictEqual(await hoverTexts('Rusty'), []);
   });
 

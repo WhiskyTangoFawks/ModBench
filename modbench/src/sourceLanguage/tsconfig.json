@@ -3,13 +3,13 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "../../out/projects/sourceLanguage",
-    // A language feature is a driving adapter: it answers VS Code's own hover, definition and
-    // completion requests, so the extension host is its whole reason to exist.
+    // A driving adapter registers its providers with VS Code's own language API.
     "types": ["node", "vscode"]
   },
   "references": [
     { "path": "../client" },
     { "path": "../instanceAdapter" },
+    { "path": "../instanceLoader" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],

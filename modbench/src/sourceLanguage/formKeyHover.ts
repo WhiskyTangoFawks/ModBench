@@ -31,7 +31,7 @@ function markdownOf(formKey: string, comparison: CompareResult): string {
 }
 
 /** The hover over the FormKey string at `offset` of a plugin source document; undefined where
- *  there is no FormKey, or no active plugin holds it (its problem is on the Problems panel). */
+ *  there is no FormKey, or no active plugin holds it. */
 export async function hoverAt(client: Pick<MEditClient, 'getComparison'>, text: string, offset: number): Promise<SourceHover | undefined> {
   const found = formKeyAt(text, offset);
   const comparison = found && await client.getComparison(found.formKey);

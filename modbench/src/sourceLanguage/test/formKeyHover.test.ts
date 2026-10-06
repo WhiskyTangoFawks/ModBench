@@ -1,18 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { hoverAt } from '../formKeyHover';
 import type { CompareResult } from '../../client';
+import { comparisonOf, type Copy } from '../../test/comparison';
 
 const FORM_KEY = '000801:Mod.esp';
 
-interface Copy { plugin: string; isWinner: boolean; editorId?: string | null }
-
-const override = (copy: Copy): CompareResult['overrides'][number] => ({
-  formKey: FORM_KEY, fields: [], origin: 'Data', recordType: 'weap', isPartialForm: false, loadIndex: '00', isInOverwrite: false, ...copy,
-});
-
-function comparison(copies: Copy[] = [{ plugin: 'Mod.esp', isWinner: true, editorId: 'Gun' }]): CompareResult {
-  return { overrides: copies.map(override), diffs: [], conflictAll: 'OnlyOne', recordTypeName: 'Weapon' };
-}
+const comparison = (copies: Copy[] = [{ plugin: 'Mod.esp', isWinner: true, editorId: 'Gun' }]): CompareResult =>
+  comparisonOf(FORM_KEY, copies);
 
 const askingFor = (answer: CompareResult | null) => ({ getComparison: vi.fn(() => Promise.resolve(answer)) });
 
@@ -48,7 +42,7 @@ describe('hoverAt (plugin-source.md, In the text editor, story 3)', () => {
   it('answers the record\'s own root FormKey member too', async () => {
     const text = `{ "FormKey": "${FORM_KEY}" }`;
     const hover = await hoverAt(askingFor(comparison()), text, text.indexOf('000801'));
-    expect(hover).toBeDefined();
+    expect(hover?.markdown).toBe(`\`Gun [${FORM_KEY}]\`\n\nWeapon\n\nWinner: Mod.esp`);
   });
 
   it('shows nothing for a FormKey no active plugin holds', async () => {

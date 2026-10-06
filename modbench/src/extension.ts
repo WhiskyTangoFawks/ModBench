@@ -374,7 +374,7 @@ export function activate(context: vscode.ExtensionContext): void {
     views,
     { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
     editor,
-    createSourceLanguage({ client: meditClient }),
+    createSourceLanguage({ client: meditClient, originFiles: (origin) => views.originFiles(origin) }),
     ...registerPluginRowCommands(pluginRowDeps),
     ...registerFilterCommands({
       client: meditClient, treeProvider,
