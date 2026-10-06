@@ -11,6 +11,7 @@ import type { EditsInFlight, FollowedPanel } from './followRecord';
 import type { FocusedCellContext, FocusedCells } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
 import type { TitledColumn } from './recordTitle';
+import type { TabPlace } from './recordOpenPlan';
 
 type TitleFromRead = (formKey: string, columns: readonly TitledColumn[] | undefined) => void;
 
@@ -34,6 +35,8 @@ export interface RouteRecordPanelMessageDeps {
   // column reads from; undefined reads mEdit's copy.
   plugin: PluginAddress;
   documentText: (pluginActive: boolean) => Promise<string | undefined>;
+  // Where the panel's tab stands now; undefined while VS Code shows it nowhere.
+  tabPlace: () => TabPlace | undefined;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
   readAnswered: (formKey: string, columns: readonly string[]) => void;
   // The latest load-order status, read rather than fetched.
@@ -42,19 +45,21 @@ export interface RouteRecordPanelMessageDeps {
 }
 
 /** What every panel's messages share: the rest is the panel's own. */
-export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'readAnswered'>;
+export type SharedRecordPanelDeps = Omit<
+  RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'readAnswered' | 'tabPlace'>;
 
 /** What a tab's document gives the reads of its panel. */
 export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'documentText'>;
 
 /** The router's bundle for one panel's messages: the picker and the record load both reply to it.
  *  An answer can land after the panel closed, and then touches nothing of it. */
-export function routerDepsForPanel<Panel extends FollowedPanel & Pick<vscode.WebviewPanel, 'onDidDispose'>>(
+export function routerDepsForPanel<Panel extends FollowedPanel & Pick<vscode.WebviewPanel, 'onDidDispose' | 'viewColumn'>>(
   shared: SharedRecordPanelDeps,
   panel: Panel,
   focusedCells: FocusedCells<Panel>,
   editsInFlight: Pick<EditsInFlight<Panel>, 'answered'>,
   tab: TabDocument,
+  document: string,
 ): RouteRecordPanelMessageDeps {
   let open = true;
   panel.onDidDispose(() => { open = false; });
@@ -68,6 +73,7 @@ export function routerDepsForPanel<Panel extends FollowedPanel & Pick<vscode.Web
     ...tab,
     titleFromRead: whileOpen(tab.titleFromRead),
     readAnswered: whileOpen((formKey: string, columns: readonly string[]) => { editsInFlight.answered(panel, formKey, columns); }),
+    tabPlace: () => (panel.viewColumn === undefined ? undefined : { document, viewColumn: panel.viewColumn }),
   };
 }
 
@@ -90,8 +96,9 @@ const HANDLERS: {
   [WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER]: (deps, m) => replyFormKeyPicked(deps.formKeyPicker, m),
   [WEBVIEW_TO_EXTENSION.FOCUS_CELL]: (deps, m) => { deps.focusCell(m.context ?? undefined, m.entered); },
   [WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD]: answerRecordLoad,
-  [WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE]: async (_deps, m) => {
-    await vscode.commands.executeCommand('modbench.record.open', m.records.map((record) => ({ ...record, placement: 'inPlace' })));
+  [WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE]: async (deps, m) => {
+    const placement = deps.tabPlace();
+    if (placement) await vscode.commands.executeCommand('modbench.record.open', m.records.map((record) => ({ ...record, placement })));
   },
 };
 

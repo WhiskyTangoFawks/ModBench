@@ -43,6 +43,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     titleFromRead: vi.fn(),
     plugin: { name: 'A.esp', origin: 'ModA' },
     documentText: () => Promise.resolve(undefined),
+    tabPlace: () => undefined,
     readAnswered: vi.fn(),
     conflictsComputed: () => true,
     loadFailures: () => [],
@@ -129,15 +130,23 @@ describe('routeRecordPanelMessage — ADD_ELEMENT', () => {
 describe('routeRecordPanelMessage — OPEN_IN_PLACE', () => {
   beforeEach(() => { executeCommand.mockReset(); });
 
-  it('fires open with the records a column\'s header names, each placed in the tab\'s place', async () => {
-    const knife = { formKey: '000803:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
-    const gun = { formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } };
+  const knife = { formKey: '000803:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
+  const gun = { formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } };
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: [knife, gun] }, makeDeps());
+  it('fires open with the records a column\'s header names, each placed in the asking tab\'s place', async () => {
+    const place = { document: 'file:///mods/ModA/Gun.json', viewColumn: 2 };
+
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: [knife, gun] }, makeDeps({ tabPlace: () => place }));
 
     expect(executeCommand.mock.calls).toEqual([
-      ['modbench.record.open', [{ ...knife, placement: 'inPlace' }, { ...gun, placement: 'inPlace' }]],
+      ['modbench.record.open', [{ ...knife, placement: place }, { ...gun, placement: place }]],
     ]);
+  });
+
+  it('opens nothing for a tab that has no place, as one VS Code has not shown', async () => {
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: [knife] }, makeDeps({ tabPlace: () => undefined }));
+
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 });
 

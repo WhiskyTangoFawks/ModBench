@@ -690,8 +690,21 @@ describe('a record opened from a column\'s header, in its tab\'s place', () => {
     await openTab(formKey);
     await vscode.commands.executeCommand('workbench.action.keepEditor');
   };
-  const openInPlace = (formKey: string) =>
-    vscode.commands.executeCommand('modbench.record.open', [{ ...copyOf(formKey), placement: 'inPlace' }]);
+  const placeOf = (formKey: string) => {
+    const group = vscode.window.tabGroups.all.find((g) => g.tabs.some((t) => t.label === renderedName(formKey)));
+    const input = group?.tabs.find((t) => t.label === renderedName(formKey))?.input;
+    if (!group || !(input instanceof vscode.TabInputCustom)) throw new Error(`expected ${formKey}'s record tab`);
+    return { document: input.uri.toString(), viewColumn: group.viewColumn };
+  };
+  const openInPlaceOf = (replaced: string, formKey: string) =>
+    vscode.commands.executeCommand('modbench.record.open', [{ ...copyOf(formKey), placement: placeOf(replaced) }]);
+  const openInPlace = (formKey: string) => {
+    const active = vscode.window.tabGroups.activeTabGroup.activeTab?.label;
+    const replaced = ['80', '81', '82', '83', '84'].map((n) => `Fallout4.esm:0000${n}`).find((f) => renderedName(f) === active);
+    if (!replaced) throw new Error('expected a record tab active');
+    return openInPlaceOf(replaced, formKey);
+  };
+  const tabsAre = (labels: string[]) => waitFor(`the tabs ${labels.join(', ')}`, () => JSON.stringify(shown()) === JSON.stringify([labels]));
 
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
@@ -705,9 +718,7 @@ describe('a record opened from a column\'s header, in its tab\'s place', () => {
 
       await openInPlace('Fallout4.esm:000083');
 
-      await waitFor('the opened record in the tab\'s place', () => JSON.stringify(shown()) === JSON.stringify([[
-        renderedName('Fallout4.esm:000080'), renderedName('Fallout4.esm:000083'), renderedName('Fallout4.esm:000082'),
-      ]]));
+      await tabsAre(['Fallout4.esm:000080', 'Fallout4.esm:000083', 'Fallout4.esm:000082'].map(renderedName));
     } finally {
       await positioning.update('openPositioning', undefined, vscode.ConfigurationTarget.Workspace);
     }
@@ -719,9 +730,24 @@ describe('a record opened from a column\'s header, in its tab\'s place', () => {
 
     await openInPlace('Fallout4.esm:000083');
 
-    await waitFor('the opened record in the tab\'s place', () => JSON.stringify(shown()) === JSON.stringify([[
-      renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000083')} (preview)`,
-    ]]));
+    await tabsAre([renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000083')} (preview)`]);
+  });
+
+  it('takes the tab\'s place with a record already open in a tab left of it, which moves there', async () => {
+    for (const n of ['80', '81', '82', '83', '84']) await openPinned(`Fallout4.esm:0000${n}`);
+    await openTab('Fallout4.esm:000083');
+
+    await openInPlace('Fallout4.esm:000081');
+
+    await tabsAre(['80', '82', '81', '84'].map((n) => renderedName(`Fallout4.esm:0000${n}`)));
+  });
+
+  it('takes the place of the tab it was asked from, though another tab is active by the time it opens', async () => {
+    for (const n of ['80', '81', '82']) await openPinned(`Fallout4.esm:0000${n}`);
+
+    await openInPlaceOf('Fallout4.esm:000081', 'Fallout4.esm:000083');
+
+    await tabsAre(['80', '83', '82'].map((n) => renderedName(`Fallout4.esm:0000${n}`)));
   });
 });
 

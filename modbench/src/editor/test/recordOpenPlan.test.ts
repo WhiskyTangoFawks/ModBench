@@ -19,9 +19,10 @@ describe('recordOpenPlan', () => {
       .toEqual({ addresses: [A, B], placement: 'beside', preview: false });
   });
 
-  it('records that each ask the tab\'s place open in it', () => {
-    expect(recordOpenPlan([{ ...A, placement: 'inPlace' }, { ...B, placement: 'inPlace' }], []))
-      .toEqual({ addresses: [A, B], placement: 'inPlace', preview: false });
+  it('records that each name a tab\'s place open in it', () => {
+    const place = { document: 'modbench-rendered:/Data/A.esp/Gun.json', viewColumn: 2 };
+    expect(recordOpenPlan([{ ...A, placement: place }, { ...B, placement: place }], []))
+      .toEqual({ addresses: [A, B], placement: place, preview: false });
   });
 
   it('several records without a placement each open pinned', () => {

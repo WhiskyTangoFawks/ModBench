@@ -1,16 +1,18 @@
 import { headerFormKeyOf } from '../wire/headerFormKey';
+import type { ViewColumn } from 'vscode';
 import type { PluginAddress } from '../wire/pluginAddress';
 
 /** A record to open: a copy when it names its plugin, else its winning copy. */
 export interface RecordToOpen { formKey: string; plugin?: PluginAddress }
 
-/** The active group; beside it; or the active tab's place (editor.md, Columns, story 8). */
-export type Placement = 'active' | 'beside' | 'inPlace';
+/** A record tab, by its document and its group, whose place an open takes (editor.md, Columns, story 8). */
+export interface TabPlace { document: string; viewColumn: ViewColumn }
+
+export type Placement = 'active' | 'beside' | TabPlace;
 
 export interface RecordOpenPlan {
   addresses: RecordToOpen[];
   placement: Placement;
-  /** Only a lone record opened in the active group is a preview, which the next click replaces. */
   preview: boolean;
 }
 
@@ -43,8 +45,12 @@ function pluginOf({ kind, origin }: StatedRecord, plugin: Stated['plugin']): Plu
   return isPluginsRow && plugin !== undefined && origin ? { name: plugin, origin } : undefined;
 }
 
-const asks = (placement: Placement) => (argument: unknown): boolean =>
-  typeof argument === 'object' && argument !== null && 'placement' in argument && argument.placement === placement;
+const placementOf = (argument: unknown): unknown =>
+  (typeof argument === 'object' && argument !== null && 'placement' in argument ? argument.placement : undefined);
+
+const isTabPlace = (value: unknown): value is TabPlace =>
+  typeof value === 'object' && value !== null && 'document' in value && typeof value.document === 'string'
+  && 'viewColumn' in value && typeof value.viewColumn === 'number';
 
 /** A palette entry or key hands over no Argument, so it takes the focused view's selection
  *  (commands.md, Principles). */
@@ -52,7 +58,8 @@ export function recordOpenPlan(argument: unknown, focusedSelection: readonly unk
   const subjects: readonly unknown[] = argument === undefined ? focusedSelection
     : Array.isArray(argument) ? argument : [argument];
   const addresses = subjects.flatMap((s) => addressOf(s) ?? []);
-  const placement = subjects.some(asks('beside')) ? 'beside' : subjects.some(asks('inPlace')) ? 'inPlace' : 'active';
+  const placements = subjects.map(placementOf);
+  const placement = placements.includes('beside') ? 'beside' : placements.find(isTabPlace) ?? 'active';
   return { addresses, placement, preview: placement === 'active' && addresses.length === 1 };
 }
 

@@ -22,9 +22,9 @@ import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
+import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen, type TabPlace } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
-import { inActiveTabsPlace } from './inTabsPlace';
+import { inTabsPlace } from './inTabsPlace';
 import { fileText } from './fileText';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from './childRecordDocument';
@@ -132,7 +132,7 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
       const { formKey, plugin } = copyOf(document.uri);
       const documentText = (pluginActive: boolean) => Promise.resolve(pluginActive ? undefined : document.getText());
-      showRecord(this.deps, panel, formKey, columns, { titleFromRead: () => undefined, plugin, documentText });
+      showRecord(this.deps, panel, document.uri, formKey, columns, { titleFromRead: () => undefined, plugin, documentText });
       return;
     }
     if (document.uri.scheme === CHILD_RECORD_SCHEME) {
@@ -174,7 +174,7 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   ): void {
     const documentText = async (pluginActive: boolean) =>
       (document.isDirty ? document.getText() : pluginActive ? undefined : savedText(document.uri));
-    showRecord(this.deps, panel, formKey, columns, { titleFromRead, plugin, documentText });
+    showRecord(this.deps, panel, document.uri, formKey, columns, { titleFromRead, plugin, documentText });
     const following = vscode.workspace.onDidChangeTextDocument((change) => {
       if (change.document === document && change.contentChanges.length > 0) this.deps.editsInFlight.refresh(panel);
     });
@@ -194,7 +194,7 @@ async function savedText(uri: vscode.Uri): Promise<string | undefined> {
 }
 
 function showRecord(
-  deps: ShowRecordDeps, panel: vscode.WebviewPanel, formKey: string, columns: readonly RecordCopy[], tab: TabDocument,
+  deps: ShowRecordDeps, panel: vscode.WebviewPanel, document: vscode.Uri, formKey: string, columns: readonly RecordCopy[], tab: TabDocument,
 ): void {
   const {
     context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps,
@@ -220,7 +220,7 @@ function showRecord(
   });
 
   // A reply and a follow reach the one panel that asked, never a broadcast.
-  const panelRouterDeps = routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight, tab);
+  const panelRouterDeps = routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight, tab, document.toString());
   panel.webview.onDidReceiveMessage((msg: unknown) => { void routeRecordPanelMessage(msg, panelRouterDeps); });
 
   showWebviewPage(panel.webview, context.extensionUri, {
@@ -318,11 +318,18 @@ async function openRecords(
       columns.push(copy);
     }
     const show = (options: vscode.TextDocumentShowOptions) => grid.open(tab.uri, columns, options);
-    await (placement === 'inPlace'
-      ? inActiveTabsPlace(show)
-      : show({ viewColumn: placement === 'beside' ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preview }));
+    if (typeof placement !== 'object') {
+      await show({ viewColumn: placement === 'beside' ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preview });
+      return;
+    }
+    const replaced = recordTabAt(placement);
+    await (replaced ? inTabsPlace(replaced, show) : show({ viewColumn: placement.viewColumn }));
   });
 }
+
+const recordTabAt = ({ document, viewColumn }: TabPlace): vscode.Tab | undefined =>
+  vscode.window.tabGroups.all.find((group) => group.viewColumn === viewColumn)?.tabs.find(({ input }) =>
+    input instanceof vscode.TabInputCustom && input.viewType === RECORD_VIEW_TYPE && input.uri.toString() === document);
 
 const noActivePluginHolds = (formKey: string) => ({ refused: `No active plugin holds ${formKey}.` });
 

@@ -100,6 +100,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 interface FakePanel {
   title: string;
   active: boolean;
+  viewColumn: number;
   webview: { postMessage: ReturnType<typeof vi.fn>; options?: unknown; html?: string; cspSource: string; asWebviewUri: (uri: unknown) => unknown; onDidReceiveMessage: (listener: (message: unknown) => void) => { dispose(): void } };
   onDidDispose: (listener: () => void) => { dispose(): void };
   onDidChangeViewState: (listener: () => void) => { dispose(): void };
@@ -113,7 +114,7 @@ function fakePanel(): FakePanel {
   const viewState: (() => void)[] = [];
   const received: ((message: unknown) => void)[] = [];
   const panel: FakePanel = {
-    title: '', active: true,
+    title: '', active: true, viewColumn: 2,
     webview: {
       postMessage: vi.fn(() => Promise.resolve(true)), cspSource: 'csp', asWebviewUri: (uri) => uri,
       onDidReceiveMessage: (listener) => { received.push(listener); return { dispose: () => undefined }; },
@@ -542,6 +543,22 @@ describe('a record tab closed while its read is in flight', () => {
 
     expect(tab.webview.postMessage).not.toHaveBeenCalled();
     expect(tab.title).toBe(PLACED);
+  });
+});
+
+describe('a click on a column\'s header', () => {
+  it('opens the records it names in the place of the tab it was clicked in, as that tab stood when the click arrived', async () => {
+    const gun = { formKey: '000801:A.esp', plugin: COPY_PLUGIN };
+    const { openDocument } = makeEditor();
+    const uri = renderedDocumentUri(gun, 'Gun.json');
+    const tab = await openDocument(uri);
+    const knife = { formKey: '000803:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
+
+    tab.receive({ type: 'openInPlace', records: [knife] });
+    tab.viewColumn = 3;
+
+    expect(h.executed.filter(([id]) => id === 'modbench.record.open'))
+      .toEqual([['modbench.record.open', [{ ...knife, placement: { document: String(uri), viewColumn: 2 } }]]]);
   });
 });
 
