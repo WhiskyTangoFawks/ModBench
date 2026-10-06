@@ -390,8 +390,8 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
             Path.Combine(_modFolder, where.RelativePath), identity.FormKey, identity.RecordType, isEmbedded: false));
     }
 
-    /// <summary>The block level documents an exterior cell at <paramref name="placement"/> needs and the tree
-    /// lacks, outermost first, and the path of the cell's own document.</summary>
+    // The block level documents an exterior cell at the placement needs and the tree lacks, outermost
+    // first, and the path of the cell's own document.
     private (IReadOnlyList<DocumentChange> Levels, string Cell) ExteriorCellDocuments(
         PluginAddress plugin, RecordIdentity identity, CellPlacement placement)
     {
