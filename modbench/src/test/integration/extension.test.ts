@@ -272,7 +272,7 @@ const HELD_FORM_KEY = '000801:Held.esp';
 const MOCK_COMPARISONS = new Map<string, CompareResult>([[TRACKED_FORM_KEY, comparisonOf(TRACKED_FORM_KEY, [
   { plugin: TRACKED_PLUGIN, isWinner: true, editorId: 'TrackedGun' },
 ])], [CHILD_FORM_KEY, comparisonOf(CHILD_FORM_KEY, [
-  { plugin: TRACKED_PLUGIN, isWinner: true, editorId: 'TrackedRef' },
+  { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN, isWinner: true, editorId: 'TrackedRef' },
 ])], [HELD_FORM_KEY, comparisonOf(HELD_FORM_KEY, [
   { plugin: 'Held.esp', isWinner: false, editorId: 'OldGun' },
   { plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun', fields: [
