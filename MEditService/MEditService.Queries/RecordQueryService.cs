@@ -248,9 +248,7 @@ public sealed class RecordQueryService(
             : null;
     }
 
-    public bool TryGetRecordOfFile(
-        string path,
-        [NotNullWhen(true)] out (PluginAddress Plugin, string FormKey)? record, [NotNullWhen(false)] out string? whyNone) =>
+    public bool TryGetRecordOfFile(string path, [NotNullWhen(true)] out RecordAt? record, [NotNullWhen(false)] out string? whyNone) =>
         SourceRepository.TryRecordOfFile(_loadOrder.Require(), path, out record, out whyNone);
 
     public LoadOrderStatus GetStatus() => _index.Status;

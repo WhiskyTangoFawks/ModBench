@@ -27,6 +27,31 @@ public sealed class RecordFileQueryTests : IDisposable
                 new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)),
             SharedSchemaReflector.Instance);
 
+    private string TrackTheNpc()
+    {
+        var document = Path.Combine(PluginSourceRoot.For(Plugin.Name), "Npcs", "FiledNpc - 000800_Filed.esp.json");
+        SourceRepository.Track(_modFolder, [(
+            [new TreeFile(document, "{\"FormKey\": \"000800:Filed.esp\", \"EditorID\": \"FiledNpc\"}"u8.ToArray())],
+            new DecompiledPlugin(Plugin.Name, null))]);
+        return Path.Combine(_modFolder, document);
+    }
+
+    [Fact]
+    public void ATrackedCopy_IsInItsFile()
+    {
+        var file = TrackTheNpc();
+
+        Assert.Equal(new RecordFile(file), Service().GetRecordFile(Plugin, Npc));
+    }
+
+    [Fact]
+    public void ATrackedCopyWhoseFileIsGone_HasNoAnswer()
+    {
+        File.Delete(TrackTheNpc());
+
+        Assert.Null(Service().GetRecordFile(Plugin, Npc));
+    }
+
     [Fact]
     public void AnUntrackedCopy_IsInNoFile()
     {

@@ -174,8 +174,6 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         return null;
     }
 
-    /// <summary>The FormKey the file at <paramref name="fullPath"/>, under the plugin's source, declares for its own
-    /// record, as the index reads it; otherwise why it is no record's document.</summary>
     internal bool TryFormKeyOfFile(
         string pluginFileName, string fullPath,
         [NotNullWhen(true)] out string? formKey, [NotNullWhen(false)] out string? whyNone)
@@ -193,19 +191,19 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             return true;
         }
 
-        (formKey, whyNone) = (null, WhyNoRecordIn(relativePath, text));
+        (formKey, whyNone) = (null, WhyNoRecordIn(fullPath, text));
         return false;
     }
 
-    private static string WhyNoRecordIn(string relativePath, string? text)
+    private static string WhyNoRecordIn(string fullPath, string? text)
     {
-        if (Path.GetFileName(relativePath).Equals(SourceRepositoryLayout.GroupRecordDataFileName, StringComparison.Ordinal))
-            return $"{relativePath} is a group's metadata file, which holds no record.";
-        if (SourceRepositoryLayout.CarriesNoRecord(relativePath)) return $"{relativePath} is no JSON document, so it holds no record.";
-        if (text is null) return $"{relativePath} could not be read.";
+        if (Path.GetFileName(fullPath).Equals(SourceRepositoryLayout.GroupRecordDataFileName, StringComparison.Ordinal))
+            return $"{fullPath} is a group's metadata file, which holds no record.";
+        if (SourceRepositoryLayout.CarriesNoRecord(fullPath)) return $"{fullPath} is no JSON document, so it holds no record.";
+        if (text is null) return $"{fullPath} could not be read.";
         return NotADocument(text) is { } why
-            ? $"{relativePath} is no record document: {why}"
-            : $"{relativePath} declares no FormKey, so it is no record's document.";
+            ? $"{fullPath} is no record document: {why}"
+            : $"{fullPath} declares no FormKey, so it is no record's document.";
     }
 
     // Its root has to be a JSON object before any member of it can be read; anything else is a file
@@ -337,8 +335,11 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     private static string Canonical(string formKey) =>
         FormKey.TryFactory(formKey, out var parsed) ? parsed.ToString() : formKey;
 
-    private static bool IsUnder(string directory, string path) =>
-        path.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+    // Windows names a file without regard to case, and VS Code spells a drive letter in lower case.
+    internal static bool IsUnder(string directory, string path) =>
+        path.StartsWith(
+            directory + Path.DirectorySeparatorChar,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
     /// holds it. Only the repository reads block directories back (ADR-0014). A

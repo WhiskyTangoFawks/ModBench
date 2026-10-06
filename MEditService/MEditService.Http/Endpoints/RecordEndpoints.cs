@@ -93,6 +93,31 @@ public static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(503);
 
+        app.MapGet("/plugin-source/record", (string? path, IRecordQueryService svc) =>
+        {
+            if (path is null || !Path.IsPathFullyQualified(path))
+                return Results.Problem("Name the file by its absolute path.", statusCode: 400);
+            try
+            {
+                return svc.TryGetRecordOfFile(path, out var record, out var whyNone)
+                    ? Results.Ok(Addressed(record.Value))
+                    : Results.Problem(whyNone, statusCode: 422);
+            }
+            catch (NoLoadOrderException ex)
+            {
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            }
+        })
+        .WithName("GetRecordOfFile")
+        .WithDescription(
+            "The record whose own document the file at an absolute path is, read from the file's text: its plugin and " +
+            "FormKey. A file that is no record's own document refuses, saying why.")
+        .WithTags("Records")
+        .Produces<RecordAddress>()
+        .ProducesProblem(400)
+        .ProducesProblem(422)
+        .ProducesProblem(503);
+
         app.MapGet("/records/{formKey}/references", (string formKey, IRecordQueryService svc) =>
             GetReferences(formKey, svc, logger))
         .WithName("GetReferences")

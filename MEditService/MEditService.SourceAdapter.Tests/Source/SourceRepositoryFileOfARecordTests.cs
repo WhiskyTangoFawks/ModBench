@@ -63,7 +63,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     private LoadOrderSnapshot LoadOrder(params LoadOrderEntry[] plugins) =>
         SnapshotPlugins.Snapshot(_modFolder, null, Release, plugins.Length == 0 ? [Entry(_modFolder, Origin)] : plugins);
 
-    private (PluginAddress Plugin, string FormKey) RecordOf(string path, LoadOrderSnapshot? loadOrder = null)
+    private RecordAt RecordOf(string path, LoadOrderSnapshot? loadOrder = null)
     {
         Assert.True(SourceRepository.TryRecordOfFile(loadOrder ?? LoadOrder(), path, out var record, out var whyNone), whyNone);
         return record.Value;
@@ -125,19 +125,19 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     [Fact]
     public void ARecordsOwnDocument_HoldsThatRecord()
     {
-        Assert.Equal((Plugin, Npc.FormKey), RecordOf(NpcFile));
+        Assert.Equal(new RecordAt(Plugin, Npc.FormKey), RecordOf(NpcFile));
     }
 
     [Fact]
     public void TheRootHeaderDocument_HoldsThePluginHeaderRecord()
     {
-        Assert.Equal((Plugin, Header.FormKey), RecordOf(HeaderFile));
+        Assert.Equal(new RecordAt(Plugin, Header.FormKey), RecordOf(HeaderFile));
     }
 
     [Fact]
     public void AContainersDocument_HoldsTheContainer_NotAChildItCarries()
     {
-        Assert.Equal((Plugin, Room.FormKey), RecordOf(RoomFile));
+        Assert.Equal(new RecordAt(Plugin, Room.FormKey), RecordOf(RoomFile));
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         var renamed = RenameNpcFileByHand();
 
-        Assert.Equal((Plugin, Npc.FormKey), RecordOf(renamed));
+        Assert.Equal(new RecordAt(Plugin, Npc.FormKey), RecordOf(renamed));
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     public void AGroupsMetadataFile_HoldsNoRecord()
     {
         Assert.Equal(
-            $"{GroupMetadata} is a group's metadata file, which holds no record.",
+            $"{Path.Combine(_modFolder, GroupMetadata)} is a group's metadata file, which holds no record.",
             WhyNoRecordIn(Path.Combine(_modFolder, GroupMetadata)));
     }
 
@@ -205,7 +205,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         var notes = Path.Combine(PluginSourceRoot.For(PluginName), "Npcs", "notes.txt");
         File.WriteAllText(Path.Combine(_modFolder, notes), "{\"FormKey\": \"000900:Filed.esp\"}");
 
-        Assert.Equal($"{notes} is no JSON document, so it holds no record.", WhyNoRecordIn(Path.Combine(_modFolder, notes)));
+        Assert.Equal($"{Path.Combine(_modFolder, notes)} is no JSON document, so it holds no record.", WhyNoRecordIn(Path.Combine(_modFolder, notes)));
     }
 
     [Fact]
@@ -213,7 +213,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         File.WriteAllText(NpcFile, "[1, 2]");
 
-        Assert.Equal($"{NpcDocument} is no record document: its root is not a JSON object.", WhyNoRecordIn(NpcFile));
+        Assert.Equal($"{NpcFile} is no record document: its root is not a JSON object.", WhyNoRecordIn(NpcFile));
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         File.Delete(NpcFile);
 
-        Assert.Equal($"{NpcDocument} could not be read.", WhyNoRecordIn(NpcFile));
+        Assert.Equal($"{NpcFile} could not be read.", WhyNoRecordIn(NpcFile));
     }
 
     [Fact]
@@ -229,6 +229,6 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         File.WriteAllText(NpcFile, "{\"EditorID\": \"FiledNpc\"}");
 
-        Assert.Equal($"{NpcDocument} declares no FormKey, so it is no record's document.", WhyNoRecordIn(NpcFile));
+        Assert.Equal($"{NpcFile} declares no FormKey, so it is no record's document.", WhyNoRecordIn(NpcFile));
     }
 }

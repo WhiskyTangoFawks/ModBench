@@ -39,26 +39,56 @@ public sealed class RecordFileApiTests : HostedTests
         Client.GetAsync(new Uri(
             "/plugin-source/record" + (path is null ? string.Empty : $"?path={Uri.EscapeDataString(path)}"), UriKind.Relative));
 
+    private static string NpcFile(ScatteredFixtureData fx) =>
+        Directory.EnumerateFiles(Path.GetDirectoryName(fx.Plugins.Single().Path).Require(), "FiledNpc - *.json", SearchOption.AllDirectories)
+            .Single();
+
+    [Fact]
+    public async Task ATrackedCopy_IsInItsFile()
+    {
+        var fx = await Tracked();
+
+        var file = await FileOf(await Npc());
+
+        Assert.Equal(HttpStatusCode.OK, file.StatusCode);
+        Assert.Equal(NpcFile(fx), (await file.Body()).GetProperty("path").GetString());
+    }
+
     [Fact]
     public async Task ATrackedCopysFile_HoldsThatCopy()
     {
         var fx = await Tracked();
-        var npc = await Npc();
 
-        var file = await FileOf(npc);
-        Assert.Equal(HttpStatusCode.OK, file.StatusCode);
-        var path = (await file.Body()).GetProperty("path").GetString().Require();
-        Assert.Equal(
-            Directory.EnumerateFiles(Path.GetDirectoryName(fx.Plugins.Single().Path).Require(), "FiledNpc - *.json", SearchOption.AllDirectories)
-                .Single(),
-            path);
+        var record = await RecordOf(NpcFile(fx));
 
-        var record = await RecordOf(path);
         Assert.Equal(HttpStatusCode.OK, record.StatusCode);
         var held = await record.Body();
         Assert.Equal(
-            (npc, Plugin, Origin),
+            (await Npc(), Plugin, Origin),
             (held.GetProperty("formKey").GetString(), held.GetProperty("plugin").GetString(), held.GetProperty("origin").GetString()));
+    }
+
+    [Fact]
+    public async Task ATrackedCopyWhoseFileIsGone_Is404()
+    {
+        var fx = await Tracked();
+        var npc = await Npc();
+
+        File.Delete(NpcFile(fx));
+
+        await (await FileOf(npc)).AssertIsProblem(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task ACopyTwoDocumentsClaim_Is422_SayingSo()
+    {
+        var fx = await Tracked();
+        var npc = await Npc();
+
+        File.Copy(NpcFile(fx), Path.Combine(Path.GetDirectoryName(NpcFile(fx)).Require(), $"Twin - {npc.Replace(':', '_')}.json"));
+
+        var refused = await (await FileOf(npc)).AssertIsProblem(HttpStatusCode.UnprocessableEntity);
+        Assert.Contains("More than one document", refused.GetProperty("detail").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]

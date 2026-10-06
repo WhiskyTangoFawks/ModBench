@@ -2,6 +2,7 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.Queries;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -127,10 +128,11 @@ public static class PluginEndpoints
             .WithDescription(
                 "The plugin's copy of a record as its own document and the name of its file in plugin source. An untracked " +
                 "plugin's is the text Track writes for it, under the name Track gives its file. A copy mEdit could not parse " +
-                "is what could be stored.")
+                "is what could be stored. Two documents claiming the copy refuse, naming them.")
             .Produces<RenderedDocument>()
             .ProducesProblem(400)
             .ProducesProblem(404)
+            .ProducesProblem(422)
             .ProducesProblem(503);
 
         app.MapGet("/plugins/{plugin}/records/{formKey}/file", (
@@ -141,34 +143,10 @@ public static class PluginEndpoints
             .WithDescription(
                 "The absolute path of the file in plugin source holding the plugin's copy of a record: its own document, the " +
                 "root header document for the Plugin Header record, or the document of the record carrying a child record. " +
-                "Null for an untracked plugin's copy, which has no file.")
+                "Null for an untracked plugin's copy, which has no file. Two documents claiming the copy refuse, naming them.")
             .Produces<RecordFile>()
             .ProducesProblem(400)
             .ProducesProblem(404)
-            .ProducesProblem(503);
-
-        app.MapGet("/plugin-source/record", (string? path, IRecordQueryService svc) =>
-        {
-            if (path is null || !Path.IsPathFullyQualified(path))
-                return Results.Problem("Name the file by its absolute path.", statusCode: 400);
-            try
-            {
-                return svc.TryGetRecordOfFile(path, out var record, out var whyNone)
-                    ? Results.Ok(new RecordAddress(record.Value.FormKey, record.Value.Plugin.Name, record.Value.Plugin.Origin))
-                    : Results.Problem(whyNone, statusCode: 422);
-            }
-            catch (NoLoadOrderException ex)
-            {
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            }
-        })
-            .WithName("GetRecordOfFile")
-            .WithTags(Tag)
-            .WithDescription(
-                "The record whose own document the file at an absolute path is, read from the file's text: its plugin and " +
-                "FormKey. A file that is no record's own document refuses, saying why.")
-            .Produces<RecordAddress>()
-            .ProducesProblem(400)
             .ProducesProblem(422)
             .ProducesProblem(503);
 
@@ -448,6 +426,10 @@ public static class PluginEndpoints
         catch (NoLoadOrderException ex)
         {
             return WriteEndpointMapping.NoLoadOrder(ex);
+        }
+        catch (AmbiguousSourceUnitException ex)
+        {
+            return Results.Problem(ex.Message, statusCode: 422);
         }
     }
 }

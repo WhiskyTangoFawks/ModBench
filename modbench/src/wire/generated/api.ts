@@ -255,7 +255,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The plugin's copy of a record as its own document and the name of its file in plugin source. An untracked plugin's is the text Track writes for it, under the name Track gives its file. A copy mEdit could not parse is what could be stored. */
+        /** @description The plugin's copy of a record as its own document and the name of its file in plugin source. An untracked plugin's is the text Track writes for it, under the name Track gives its file. A copy mEdit could not parse is what could be stored. Two documents claiming the copy refuse, naming them. */
         get: operations["GetRenderedDocument"];
         put?: never;
         post?: never;
@@ -272,25 +272,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The absolute path of the file in plugin source holding the plugin's copy of a record: its own document, the root header document for the Plugin Header record, or the document of the record carrying a child record. Null for an untracked plugin's copy, which has no file. */
+        /** @description The absolute path of the file in plugin source holding the plugin's copy of a record: its own document, the root header document for the Plugin Header record, or the document of the record carrying a child record. Null for an untracked plugin's copy, which has no file. Two documents claiming the copy refuse, naming them. */
         get: operations["GetRecordFile"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugin-source/record": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description The record whose own document the file at an absolute path is, read from the file's text: its plugin and FormKey. A file that is no record's own document refuses, saying why. */
-        get: operations["GetRecordOfFile"];
         put?: never;
         post?: never;
         delete?: never;
@@ -484,6 +467,23 @@ export interface paths {
          * @description A copy's DocumentText, when given, is the document that column is read from, whether or not its plugin is active; the copy is otherwise the one its plugin holds.
          */
         post: operations["CompareRecords"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plugin-source/record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The record whose own document the file at an absolute path is, read from the file's text: its plugin and FormKey. A file that is no record's own document refuses, saying why. */
+        get: operations["GetRecordOfFile"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1871,6 +1871,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Service Unavailable */
             503: {
                 headers: {
@@ -1916,46 +1925,6 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    GetRecordOfFile: {
-        parameters: {
-            query?: {
-                path?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecordAddress"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2565,6 +2534,55 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetRecordOfFile: {
+        parameters: {
+            query?: {
+                path?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordAddress"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
