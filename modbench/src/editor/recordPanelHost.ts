@@ -197,9 +197,8 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     for (const read of this.unread.values()) void read();
   }
 
-  // A child's column follows its container's document. Saved, the read model wins (commands.md,
-  // Principles), but mEdit compares no inactive plugin's copy, nor a record it has not yet reported
-  // an edit moved, so the file's column reads the document then.
+  // Saved, the read model wins (commands.md, Principles), but mEdit compares no inactive plugin's
+  // copy, nor a record an edit moved before mEdit reports it, so the file's column reads the document then.
   private showFile(
     panel: vscode.WebviewPanel, document: vscode.TextDocument, { formKey, plugin }: RecordCopy, columns: readonly RecordCopy[],
     titleFromRead: TabDocument['titleFromRead'],

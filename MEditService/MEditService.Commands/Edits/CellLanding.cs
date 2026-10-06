@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>A placed record moving into another cell of its worldspace, as one set of source changes. A
+/// <summary>A placed record moving into another cell of its worldspace. A
 /// cell the plugin lacks is copied in from the nearest of its masters to hold it, or created, as xEdit's Add does.</summary>
 internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, SchemaReflector schemaReflector, ILogger logger)
 {

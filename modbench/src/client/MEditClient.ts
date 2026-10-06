@@ -94,10 +94,9 @@ export interface LoadOrderOptions {
   signal?: AbortSignal;
 }
 
-/** An edit answered as the changes it makes to plugin source, or the refusal the edit gives:
- *  each move first, then each document's new text at its absolute path once moved. A refusal is an
- *  outcome, not an exception: `refusal` is the backend's own name for it, and `'Unknown'` this side's
- *  own addition. `newFormKey` is set by an edit of the FormID. */
+/** An edit's changes to plugin source, each move first and then each document's text at its absolute
+ *  path, or its refusal, as an outcome: `refusal` is the backend's name for it, `'Unknown'` this side's.
+ *  `newFormKey` is set by an edit of the FormID. */
 export type RecordEditChangesOutcome =
   | ({ applied: true; newFormKey?: string } & Pick<components['schemas']['RecordEditChangesResponse'], 'moves' | 'documents'>)
   | { applied: false; refusal: string; message: string };

@@ -800,8 +800,9 @@ describe('an edit in a tracked copy\'s grid', () => {
 
   it('moves the file with the tab, which keeps beside its record the records it showed beside it', async () => {
     const column = { formKey: 'Fallout4.esm:000070', plugin: { name: 'Fallout4.esm', origin: 'Data' } };
+    const openedAt = comparedSideBySide.length;
     await vscode.commands.executeCommand('modbench.record.open', [{ formKey: TRACKED_FORM_KEY, plugin }, column]);
-    await waitFor('the records read side by side', () => comparedSideBySide.some((asked) => JSON.stringify(asked).includes(column.formKey)));
+    await waitFor('the records read side by side', () => comparedSideBySide.slice(openedAt).some((asked) => JSON.stringify(asked).includes(column.formKey)));
     answerEdit = answeredIn(MOVED_FILE, { moves: [{ from: TRACKED_FILE, to: MOVED_FILE }], newFormKey: MOVED_FORM_KEY });
     const readsBefore = comparedSideBySide.length;
 
