@@ -12,8 +12,6 @@ namespace MEditService.Index;
 internal sealed class RelationReads(
     Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins) : IRecordReads
 {
-    private static readonly string[] CellChildTypeNames = ["refr", "achr", "land", "navm"];
-
     public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => openedPlugins();
 
     // A SELECT COUNT(*) always answers exactly one row with a non-null count.
@@ -466,18 +464,11 @@ internal sealed class RelationReads(
 
     public CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey)
     {
-        var schemas = store.Schemas;
-        var cellChildTypes = CellChildTypeNames.Where(schemas.ContainsKey).ToList();
-        if (cellChildTypes.Count == 0)
-            return new CellChildRecords([], []);
-
         using var connection = store.OpenReadConnection();
 
         // ADR-0005: the placed ref's base form comes out of the document rather than a
         // `base` column; json_extract_string unquotes the stored FormLink text, and a placed ref
         // with no base reads NULL.
-        var typeList = string.Join(", ", cellChildTypes.Select(t => $"'{t}'"));
-
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"""
             SELECT p.placement_group, r.record_type, p.form_key, r.editor_id,
@@ -490,8 +481,7 @@ internal sealed class RelationReads(
                     LIMIT 1)
             FROM ({NavigatorSql.CellChildren}) p
             JOIN records r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
-            WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
-              AND r.record_type IN ({typeList}){store.Filter.AlsoKeeps("p")}
+            WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3{store.Filter.AlsoKeeps("p")}
             ORDER BY {NavigatorSql.FormIdOrder("p.form_key")}
             """;
         DuckDbSql.AddParams(cmd, [cellFormKey, plugin.Name, plugin.Origin]);

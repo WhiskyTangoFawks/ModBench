@@ -94,7 +94,7 @@ public sealed class SchemaReflector
             ?? throw new InvalidOperationException($"Expected '{assembly.FullName}' to declare '{majorRecordGetterTypeName}'.");
         var grups = GrupRecordTypes(assembly, majorRecordGetterType, category).ToList();
 
-        annotations.Validate(category, assembly, grups.Select(g => g.TableName));
+        annotations.Validate(category, assembly);
 
         // One GRUP signature can be backed by several concrete subclasses (GMST, GLOB, DMGT) because
         // the discriminant lives on the record, not the table. One winner per table keeps RecordType
@@ -105,15 +105,6 @@ public sealed class SchemaReflector
 
         foreach (var (tableName, getterInterface) in grups)
         {
-            // Named, so not an anomaly, but still said out loud: a real run can answer "why is this
-            // record type missing?" without anyone reading the table.
-            if (annotations.ExcludedSignatures.TryGetValue(tableName, out var whyExcluded))
-            {
-                if (logger.IsEnabled(LogLevel.Debug))
-                    logger.LogDebug("SchemaReflector: no table for {Signature} — {Reason}", tableName, whyExcluded);
-                continue;
-            }
-
             if (!siblingsByTable.TryGetValue(tableName, out var siblings))
                 siblingsByTable[tableName] = siblings = [];
             siblings.Add(getterInterface);
@@ -148,7 +139,7 @@ public sealed class SchemaReflector
     }
 
     // Every concrete record class the assembly registers under a GRUP, paired with its own getter
-    // interface. The annotation table's signature rows are checked against this before it is read.
+    // interface.
     private static IEnumerable<(string TableName, Type GetterInterface)> GrupRecordTypes(
         Assembly assembly, Type majorRecordGetterType, GameCategory category)
     {

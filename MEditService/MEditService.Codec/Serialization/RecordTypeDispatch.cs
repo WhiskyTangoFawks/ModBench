@@ -185,8 +185,6 @@ public sealed class RecordTypeDispatch
             .Distinct()
             .ToHashSet();
 
-        // Same discovery SchemaReflector runs, but not taken from it: that one drops the tables mEdit
-        // doesn't surface (the REFR-flavour placements), whose documents still need reading.
         var byName = new Dictionary<string, Type?>(StringComparer.OrdinalIgnoreCase);
         var folderByType = new Dictionary<Type, string>();
         // Valued by the schema table spelling (lowercased GRUP signature), never the CLR name:

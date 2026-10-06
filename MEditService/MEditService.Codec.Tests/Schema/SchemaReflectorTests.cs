@@ -9,12 +9,21 @@ public class SchemaReflectorTests
 {
     private readonly SchemaReflector _reflector = SharedSchemaReflector.Instance;
 
-    [Fact]
-    public void GetSchemas_BuildsNoTableForAPlacementVariantCollapsedIntoRefr()
+    [Theory]
+    [InlineData("parw", typeof(IPlacedArrowGetter), "Placed Arrow")]
+    [InlineData("pbar", typeof(IPlacedBarrierGetter), "Placed Barrier")]
+    [InlineData("pbea", typeof(IPlacedBeamGetter), "Placed Beam")]
+    [InlineData("pcon", typeof(IPlacedConeGetter), "Placed Cone/Voice")]
+    [InlineData("pfla", typeof(IPlacedFlameGetter), "Placed Flame")]
+    [InlineData("pgre", typeof(IPlacedTrapGetter), "Placed Projectile")]
+    [InlineData("phzd", typeof(IPlacedHazardGetter), "Placed Hazard")]
+    [InlineData("pmis", typeof(IPlacedMissileGetter), "Placed Missile")]
+    public void GetSchemas_GivesEachPlacedVariantItsOwnTable_UnderXEditsName(string table, Type getter, string displayName)
     {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.False(schemas.ContainsKey("pgre"));
-        Assert.False(schemas.ContainsKey("phzd"));
+        var schema = _reflector.GetSchemas(GameRelease.Fallout4)[table];
+
+        Assert.Equal(getter, schema.RecordType);
+        Assert.Equal(displayName, schema.DisplayName);
     }
 
     [Fact]

@@ -60,9 +60,7 @@ internal sealed class PluginIngest
         }
         var documentsMs = phaseTimer.ElapsedMilliseconds;
 
-        // Refs are collected in the one pass above, off the document each row is written from. What
-        // that pass does not see is what has no schema (SchemaAnnotations.ExcludedSignatures): no
-        // document, no row, no refs.
+        // Refs are collected in the one pass above, off the document each row is written from.
 
         phaseTimer.Restart();
         WritePlacement(plugin, origin, placementRows, cellLocationRows);
