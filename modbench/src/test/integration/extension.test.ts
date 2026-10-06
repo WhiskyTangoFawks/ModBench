@@ -359,7 +359,7 @@ const TRACKED_FILE = path.join(
 fs.mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
 fs.writeFileSync(TRACKED_FILE, JSON.stringify({
   FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun', Model: HELD_FORM_KEY, Placed: [
-    { FormKey: CHILD_FORM_KEY, EditorID: 'TrackedRef', Base: HELD_FORM_KEY }, { FormKey: SECOND_CHILD_FORM_KEY, EditorID: 'SecondRef', Base: HELD_FORM_KEY },
+    { FormKey: CHILD_FORM_KEY, EditorID: 'TrackedRef', Base: HELD_FORM_KEY }, { FormKey: SECOND_CHILD_FORM_KEY, EditorID: 'SecondRef' },
   ],
 }));
 const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
