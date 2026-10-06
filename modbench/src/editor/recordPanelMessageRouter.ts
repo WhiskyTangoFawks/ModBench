@@ -3,7 +3,8 @@ import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
   type ExtensionToWebview, type WebviewToExtension,
 } from '../wire/messages';
-import type { CopyText, MEditClient, PluginLoadFailure } from '../client';
+import type { MEditClient, PluginLoadFailure } from '../client';
+import type { PluginAddress } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
 import { pickRecord, type RecordPickerDeps } from './recordPicker';
 import type { EditsInFlight, FollowedPanel } from './followRecord';
@@ -16,7 +17,7 @@ type TitleFromRead = (formKey: string, columns: readonly TitledColumn[] | undefi
 export interface RouteRecordPanelMessageDeps {
   // The FormKey picker's search and the panel's own read — one client serves both, and the
   // per-panel picker bundle below reuses it.
-  meditClient: Pick<MEditClient, 'searchRecords' | 'getComparison' | 'getPlugins'>;
+  meditClient: Pick<MEditClient, 'searchRecords' | 'getComparison' | 'getRecordsComparison' | 'getPlugins'>;
   channel: Pick<vscode.LogOutputChannel, 'warn'>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
@@ -29,10 +30,12 @@ export interface RouteRecordPanelMessageDeps {
   reply: (msg: ExtensionToWebview) => void;
   // Titles the panel from the record its read answered (editor.md, Opening, story 5).
   titleFromRead: TitleFromRead;
-  // The unsaved text of the copy the tab's document holds, which its column reads from.
-  unsavedText: () => CopyText | undefined;
+  // The plugin whose copy the tab's document holds, and the document's unsaved text, which that
+  // copy's column reads from.
+  plugin: PluginAddress;
+  unsavedText: () => string | undefined;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
-  readAnswered: (formKey: string) => void;
+  readAnswered: (formKey: string, columns: readonly string[]) => void;
   // The latest load-order status, read rather than fetched.
   conflictsComputed: () => boolean;
   loadFailures: () => readonly PluginLoadFailure[];
@@ -42,7 +45,7 @@ export interface RouteRecordPanelMessageDeps {
 export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'readAnswered'>;
 
 /** What a tab's document gives the reads of its panel. */
-export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'unsavedText'>;
+export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'unsavedText'>;
 
 /** The router's bundle for one panel's messages: the picker and the record load both reply to it. */
 export function routerDepsForPanel<Panel extends FollowedPanel>(
@@ -58,7 +61,7 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
     focusCell: (context, userFocus) => { focusedCells.setCell(panel, context, userFocus); },
     reply: (m) => { void panel.webview.postMessage(m); },
     ...tab,
-    readAnswered: (formKey) => { editsInFlight.answered(panel, formKey); },
+    readAnswered: (formKey, columns) => { editsInFlight.answered(panel, formKey, columns); },
   };
 }
 
@@ -140,8 +143,11 @@ async function answerRecordLoad(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD }>,
 ): Promise<void> {
+  const documentText = deps.unsavedText();
   const [compare, plugins] = await Promise.allSettled([
-    deps.meditClient.getComparison(m.formKey, deps.unsavedText()),
+    m.columns.length > 0
+      ? deps.meditClient.getRecordsComparison([{ formKey: m.formKey, plugin: deps.plugin, documentText }, ...m.columns])
+      : deps.meditClient.getComparison(m.formKey, documentText === undefined ? undefined : { plugin: deps.plugin, documentText }),
     deps.meditClient.getPlugins(),
   ]);
   if (compare.status === 'rejected') {
@@ -153,7 +159,7 @@ async function answerRecordLoad(
     return;
   }
   deps.titleFromRead(m.formKey, compare.value?.overrides);
-  deps.readAnswered(m.formKey);
+  deps.readAnswered(m.formKey, m.columns.map(({ formKey }) => formKey));
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     compare: compare.value, plugins: plugins.status === 'fulfilled' ? plugins.value : null,

@@ -1,4 +1,5 @@
 import type { components } from './generated/api';
+import type { PluginAddress } from './pluginAddress';
 
 export const EXTENSION_TO_WEBVIEW = {
   LOAD_RECORD: 'loadRecord',
@@ -12,6 +13,8 @@ export const EXTENSION_TO_WEBVIEW = {
   // which alone holds its editor and its field's schema to parse pasted text with.
   OPEN_CELL_EDITOR: 'openCellEditor',
   PASTE_INTO_CELL: 'pasteIntoCell',
+  // The records the tab shows beside its document's own from now on, read at once.
+  SHOW_COLUMNS: 'showColumns',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -47,7 +50,21 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.ADD_ELEMENT; context: Record<string, unknown>; value?: unknown }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null; entered: boolean }
-  | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string };
+  | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string; columns: ColumnCopy[] };
+
+/** A record's copy the grid shows beside its document's own (editor.md, Columns, story 7). */
+export interface ColumnCopy { formKey: string; plugin: PluginAddress }
+
+function isPluginAddress(value: unknown): value is PluginAddress {
+  return typeof value === 'object' && value !== null
+    && 'name' in value && isString(value.name) && 'origin' in value && isString(value.origin);
+}
+
+export function isColumnCopies(value: unknown): value is ColumnCopy[] {
+  return Array.isArray(value) && value.every((copy: unknown) =>
+    typeof copy === 'object' && copy !== null && 'formKey' in copy && isString(copy.formKey)
+    && 'plugin' in copy && isPluginAddress(copy.plugin));
+}
 
 // A `data-vscode-context` payload VS Code hands the invoked command, never a `postMessage` — hence
 // beside the message unions. `path` is the envelope's own wire path, resolved cell-side
@@ -178,7 +195,8 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
   | ({ type: typeof EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED; requestId: string } & RecordLoadAnswer)
   | { type: typeof EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR }
-  | { type: typeof EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL; text: string };
+  | { type: typeof EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL; text: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.SHOW_COLUMNS; columns: ColumnCopy[] };
 
 function isString(value: unknown): value is string {
   return typeof value === 'string';
@@ -196,7 +214,7 @@ export function isRecordEditEnvelope(value: unknown): value is RecordEditEnvelop
 type WebviewToExtensionWitness = {
   type?: unknown; formKey?: unknown; level?: unknown; message?: unknown; value?: unknown;
   plugin?: unknown; origin?: unknown; envelope?: unknown;
-  requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown; entered?: unknown;
+  requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown; entered?: unknown; columns?: unknown;
 };
 
 function parseEditField(w: WebviewToExtensionWitness): WebviewToExtension {
@@ -237,7 +255,8 @@ function parseFocusCell(w: WebviewToExtensionWitness): WebviewToExtension {
 function parseRequestRecordLoad(w: WebviewToExtensionWitness): WebviewToExtension {
   if (!isString(w.requestId)) throw new Error('Expected "requestRecordLoad" to carry a string requestId.');
   if (!isString(w.formKey)) throw new Error('Expected "requestRecordLoad" to carry a string formKey.');
-  return { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: w.requestId, formKey: w.formKey };
+  if (!isColumnCopies(w.columns)) throw new Error('Expected "requestRecordLoad" to carry its columns, each a FormKey and a plugin.');
+  return { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: w.requestId, formKey: w.formKey, columns: w.columns };
 }
 
 /** The webview message router's one entry point for data crossing `postMessage`: every
@@ -322,14 +341,20 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
   const w = value as {
     type?: unknown; formKey?: unknown; requestId?: unknown;
     ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
-    text?: unknown;
+    text?: unknown; columns?: unknown;
   };
   switch (w.type) {
     case EXTENSION_TO_WEBVIEW.LOAD_RECORD: return parseLoadRecord(w);
+    case EXTENSION_TO_WEBVIEW.SHOW_COLUMNS: return parseShowColumns(w);
     case EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED: return parseFormKeyPicked(w);
     case EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED: return { type: w.type, ...parseRecordLoadAnswer(w) };
     default: return parseFocusedCellMessage(w);
   }
+}
+
+function parseShowColumns(w: { columns?: unknown }): ExtensionToWebview {
+  if (!isColumnCopies(w.columns)) throw new Error('Expected "showColumns" to carry its columns, each a FormKey and a plugin.');
+  return { type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: w.columns };
 }
 
 function parseFocusedCellMessage(w: { type?: unknown; text?: unknown }): ExtensionToWebview {

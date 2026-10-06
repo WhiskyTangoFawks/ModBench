@@ -1,7 +1,7 @@
 import { vscode } from './vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseExtensionToWebview,
-  type ArrayParentContext, type ExtensionToWebview, type RecordEditEnvelope, type RecordLoadAnswer, type WebviewToExtension,
+  type ArrayParentContext, type ColumnCopy, type ExtensionToWebview, type RecordEditEnvelope, type RecordLoadAnswer, type WebviewToExtension,
 } from '../../src/wire/messages';
 
 // The webview's bridge to native VS Code surfaces: a new native-surface gesture extends the
@@ -57,7 +57,7 @@ export function pickFormKey(seed: string, validTypes: string[]): Promise<string 
 
 // RecordPanelClient's own read: the host's mEdit client answers with the
 // comparison, the plugin list and conflictsComputed, untransformed.
-export function requestRecordLoad(formKey: string): Promise<RecordLoadAnswer> {
+export function requestRecordLoad(formKey: string, columns: ColumnCopy[]): Promise<RecordLoadAnswer> {
   return requestReply(
     EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED,
     (msg): RecordLoadAnswer => {
@@ -66,7 +66,7 @@ export function requestRecordLoad(formKey: string): Promise<RecordLoadAnswer> {
         ? { ok: true, compare: msg.compare, plugins: msg.plugins, conflictsComputed: msg.conflictsComputed, loadFailures: msg.loadFailures }
         : { ok: false, error: msg.error };
     },
-    requestId => ({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId, formKey }),
+    requestId => ({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId, formKey, columns }),
   );
 }
 

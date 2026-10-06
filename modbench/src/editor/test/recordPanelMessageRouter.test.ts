@@ -41,6 +41,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     focusCell: vi.fn(),
     reply: vi.fn(),
     titleFromRead: vi.fn(),
+    plugin: { name: 'A.esp', origin: 'ModA' },
     unsavedText: () => undefined,
     readAnswered: vi.fn(),
     conflictsComputed: () => true,
@@ -164,7 +165,7 @@ describe('routeRecordPanelMessage — the focused cell', () => {
 describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdit client by the host rather than fetched by the webview', () => {
   const compare: CompareResult = { overrides: [], diffs: [], conflictAll: 'OnlyOne', recordTypeName: 'Activator' };
   const plugins = [pluginMetadataFixture({ name: 'A.esp', isImmutable: true })];
-  const loadMessage = { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp' };
+  const loadMessage = { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp', columns: [] };
 
   it('answers with the comparison, the plugin list and the settled conflictsComputed', async () => {
     meditClient.setQueryAnswer('getComparison', compare);
@@ -231,7 +232,7 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdi
     meditClient.setQueryFailure('getComparison', new Error('ECONNREFUSED'));
     await routeRecordPanelMessage(loadMessage, makeDeps({ readAnswered: failed }));
 
-    expect(answered.mock.calls).toEqual([['000001:A.esp']]);
+    expect(answered.mock.calls).toEqual([['000001:A.esp', []]]);
     expect(failed).not.toHaveBeenCalled();
   });
 
