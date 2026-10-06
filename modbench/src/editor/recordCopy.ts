@@ -20,8 +20,8 @@ export function copyOf(uri: vscode.Uri): RecordCopy {
   return { formKey: stated('formKey'), plugin: { name: stated('name'), origin: stated('origin') } };
 }
 
-export const holdsNoCopy = ({ formKey, plugin }: RecordCopy): Error =>
-  new Error(`${plugin.name} (${plugin.origin}) holds no ${formKey}.`);
+export const holdsNoCopy = ({ formKey, plugin }: RecordCopy): string =>
+  `${plugin.name} (${plugin.origin}) holds no ${formKey}.`;
 
 export type CopyChanged = (copy: RecordCopy) => boolean;
 
