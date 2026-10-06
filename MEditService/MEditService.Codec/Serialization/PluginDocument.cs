@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 
 namespace MEditService.Codec.Serialization;
 
@@ -9,6 +10,13 @@ public readonly record struct CellStructure(
 {
     /// <summary>An interior block and sub-block are one number each, held in the X coordinates.</summary>
     public static CellStructure Interior(int? block, int? subBlock) => new(null, block, null, subBlock, null, IsInterior: true);
+
+    public CellPlace Place => this switch
+    {
+        { ParentWorldspace: null } => CellPlace.Interior,
+        { BlockX: null } => CellPlace.PersistentWorldspaceCell,
+        _ => CellPlace.Exterior,
+    };
 }
 
 /// <summary>One child record a container's GRUP holds, the member Mutagen reads it into, and its

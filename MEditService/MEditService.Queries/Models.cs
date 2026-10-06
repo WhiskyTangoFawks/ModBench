@@ -126,9 +126,11 @@ public record ReferenceResult(
 
 // HasParseFailure: whether this subtree holds a record Mutagen could not read, so the tree renders
 // the failure prefix instead of walking children. IsCreatable: CreatableRecordTypes' own verdict.
-public record PluginRecordTypeCount(string Type, int Count, string DisplayName, bool HasParseFailure, bool IsCreatable);
+// IsContainer: the type holds child records in the game; an empty one counts.
+public record PluginRecordTypeCount(
+    string Type, int Count, string DisplayName, bool HasParseFailure, bool IsCreatable, bool IsContainer);
 
-public record CreatableRecordType(string Type, string DisplayName);
+public record RecordTypeChoice(string Type, string DisplayName);
 
 /// <summary>The answer to "did the projection reach at least N?" (ADR-0015). Sequence
 /// is the value observed at the moment of that answer, not necessarily equal to the awaited

@@ -5,7 +5,7 @@ import { NotificationListenerRegistry } from '../notificationStream';
 // Every query and command a test can script; `putLoadOrder` counts as a command here — the
 // distinction is architectural, not behavioural.
 type QueryMethod =
-  | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getCreatablePluginExtensions'
+  | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
   | 'getRecords' | 'searchRecords'
   | 'getRecordOwner' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations' | 'getComparison' | 'getRecordsComparison' | 'getReferences'
   | 'getEditChanges'
@@ -233,6 +233,9 @@ export class InMemoryMEditClient implements MEditClient {
 
   getCreatableRecordTypes(): ReturnType<MEditClient['getCreatableRecordTypes']> {
     return this.query('getCreatableRecordTypes', []);
+  }
+  getChildRecordTypes(...args: Parameters<MEditClient['getChildRecordTypes']>): ReturnType<MEditClient['getChildRecordTypes']> {
+    return this.query('getChildRecordTypes', args);
   }
   getCreatablePluginExtensions(): ReturnType<MEditClient['getCreatablePluginExtensions']> {
     return this.query('getCreatablePluginExtensions', []);

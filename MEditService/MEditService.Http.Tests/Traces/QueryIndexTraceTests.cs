@@ -27,6 +27,14 @@ public sealed class QueryIndexTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task AQuestionAboutTheRecordTypesARecordCanHold_BeforeAnyLoadOrder_IsRefusedAsUnavailable()
+    {
+        var response = await Client.GetAsync(new Uri("/plugins/Any.esp/records/000800%3AAny.esp/child-record-types?origin=AnyMod", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
     public async Task AQuestionAboutCreatablePluginExtensions_BeforeAnyLoadOrder_IsRefusedAsUnavailable()
     {
         var response = await Client.GetAsync(new Uri("/plugins/creatable-extensions", UriKind.Relative));
