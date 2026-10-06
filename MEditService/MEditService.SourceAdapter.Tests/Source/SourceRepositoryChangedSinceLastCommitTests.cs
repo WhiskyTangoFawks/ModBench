@@ -175,7 +175,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     [Fact]
     public void AnEditToTheHeadersRecordDataJson_NamesItsComputedFormKey_ThoughTheDocumentCarriesNoFormKey()
     {
-        var headerPath = Path.Combine("plugin-source", PluginName, "RecordData.json");
+        var headerPath = PluginSourceRoot.HeaderDocument(PluginName);
         var repository = Tracked(new TreeFile(headerPath, "{\"MasterReferences\": []}"u8.ToArray()));
 
         File.WriteAllText(Path.Combine(_modFolder, headerPath), "{\"MasterReferences\": [], \"Changed\": true}");

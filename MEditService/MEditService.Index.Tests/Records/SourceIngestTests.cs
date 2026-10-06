@@ -57,7 +57,7 @@ public sealed class SourceIngestTests : IDisposable
     private string NpcSourceFile(OpenedIndex index) =>
         _entry.SourceFileOf(index.RequireReads().DocumentOf(_npc, Plugin));
 
-    private string RootDocument => Path.Combine(ModFolder, PluginSourceRoot.For(PluginName), "RecordData.json");
+    private string RootDocument => Path.Combine(ModFolder, PluginSourceRoot.HeaderDocument(PluginName));
 
     [Fact]
     public void AnExternalEditToASourceFile_IsAtEffectiveAfterReload_WithNoPointRead()

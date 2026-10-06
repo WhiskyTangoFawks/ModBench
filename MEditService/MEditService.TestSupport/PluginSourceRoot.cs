@@ -6,5 +6,7 @@ public static class PluginSourceRoot
 {
     public static string For(string pluginFileName) => Path.Combine("plugin-source", pluginFileName);
 
+    public static string HeaderDocument(string pluginFileName) => Path.Combine(For(pluginFileName), $"000000_{pluginFileName}.json");
+
     public static string In(string modFolder, string pluginFileName) => Path.Combine(modFolder, For(pluginFileName));
 }

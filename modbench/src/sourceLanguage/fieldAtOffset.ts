@@ -46,7 +46,7 @@ export function metadataAt(fields: Field[], record: Node, path: Segment[]): Fiel
   let shape: Pick<FieldMetadata, 'fields'> = { fields: fields.map((field) => field.metadata) };
   let current: FieldMetadata | undefined;
   for (const [depth, segment] of path.entries()) {
-    current = typeof segment === 'number' ? current?.elementType ?? undefined : memberOf(shape, findNodeAtLocation(record, path.slice(0, depth)), segment);
+    current = typeof segment === 'number' ? (current?.type === 'flags' ? current : current?.elementType) ?? undefined : memberOf(shape, findNodeAtLocation(record, path.slice(0, depth)), segment);
     if (!current) return undefined;
     shape = current;
   }
