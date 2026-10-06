@@ -81,4 +81,77 @@ public sealed class IngestOnlySourceFileFailureTests : IDisposable
         Assert.Equal(Relative(CellFile), Assert.Single(index.SourceFileFailures).SourceRelativePath);
         Assert.NotNull(index.RequireReads().GetDocument(TemporaryRef, _fixture.Plugin));
     }
+
+    private string CellFileWithItsEditorIdANumber(string editorId)
+    {
+        var cell = CellFile;
+        EditTheCell($"\"{editorId}\"", "5");
+        return cell;
+    }
+
+    [Fact]
+    public void AFileWhoseEditorIdIsNoString_IsNamed_WithTheFieldAndItsFormKey()
+    {
+        var cell = CellFileWithItsEditorIdANumber(ContainerModPlugin.EmbedCellEditorId);
+
+        using var index = Reloaded();
+
+        var failure = Assert.Single(index.SourceFileFailures);
+        Assert.Equal((Relative(cell), _fixture.EmbedCell.ToString()), (failure.SourceRelativePath, failure.FormKey));
+        Assert.Contains("'EditorID' is not a string", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnEmbeddedChildWhoseEditorIdIsNoString_NamesTheOwnersFile_TheChildAndTheField()
+    {
+        var cell = CellFileWithItsEditorIdANumber(ContainerModPlugin.TemporaryRefEditorId);
+
+        using var index = Reloaded();
+
+        var failure = Assert.Single(index.SourceFileFailures);
+        Assert.Equal((Relative(cell), TemporaryRef), (failure.SourceRelativePath, failure.FormKey));
+        Assert.Contains("whose 'EditorID' is not a string", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnEditorIdEditedIntoANumberOnceRead_NamesTheFile_WhileItsLastGoodRowsStand()
+    {
+        using var index = Reloaded();
+        var cell = CellFileWithItsEditorIdANumber(ContainerModPlugin.EmbedCellEditorId);
+
+        index.NextSnapshotUntil(() => index.SourceFileFailures.Count > 0, "the re-read's failure");
+
+        Assert.Equal(Relative(cell), Assert.Single(index.SourceFileFailures).SourceRelativePath);
+        Assert.Equal(
+            ContainerModPlugin.EmbedCellEditorId,
+            index.RequireReads().GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)?.EditorId);
+    }
+
+    [Fact]
+    public void AnEmbeddedChildsEditorIdEditedIntoANumberOnceRead_NamesTheOwnersFile_WhileItsLastGoodRowsStand()
+    {
+        using var index = Reloaded();
+        var cell = CellFileWithItsEditorIdANumber(ContainerModPlugin.TemporaryRefEditorId);
+
+        index.NextSnapshotUntil(() => index.SourceFileFailures.Count > 0, "the re-read's failure");
+
+        var failure = Assert.Single(index.SourceFileFailures);
+        Assert.Equal((Relative(cell), TemporaryRef), (failure.SourceRelativePath, failure.FormKey));
+        Assert.Equal(
+            ContainerModPlugin.TemporaryRefEditorId, index.RequireReads().GetDocument(TemporaryRef, _fixture.Plugin)?.EditorId);
+    }
+
+    [Fact]
+    public void AChildEditedToCarryItsOwnersFormKeyOnceRead_NamesTheOwnersFile_WhileItsLastGoodRowsStand()
+    {
+        using var index = Reloaded();
+        var cell = CellFile;
+        EditTheCell(TemporaryRef, _fixture.EmbedCell.ToString());
+
+        index.NextSnapshotUntil(() => index.SourceFileFailures.Count > 0, "the re-read's failure");
+
+        var failure = Assert.Single(index.SourceFileFailures);
+        Assert.Equal((Relative(cell), _fixture.EmbedCell.ToString()), (failure.SourceRelativePath, failure.FormKey));
+        Assert.NotNull(index.RequireReads().GetDocument(TemporaryRef, _fixture.Plugin));
+    }
 }

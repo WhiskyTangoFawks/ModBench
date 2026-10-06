@@ -64,4 +64,24 @@ public sealed class DocumentFromTextTests
         Assert.Equal((Elsewhere, 7, stored.RecordType), (copy.Plugin, copy.LoadOrderIndex, copy.RecordType));
         Assert.All(copy.Fields, f => Assert.Null(f.Value));
     }
+
+    [Fact]
+    public void TextWhoseEditorIdIsNoString_IsACopyThatCouldNotBeParsed_NamingTheField()
+    {
+        FormKey npc = default;
+        using var fixture = new PluginFixtureBuilder("document-from-text-editor-id")
+            .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
+            .BuildScattered();
+        using var index = Indexes.Reconciled(fixture);
+        var stored = index.RequireReads().GetDocument(npc.ToString(), fixture.Plugins.Single().KeyOf())
+            ?? throw new InvalidOperationException("Expected the Npc to be indexed.");
+        var text = (stored.Body ?? throw new InvalidOperationException("Expected a body."))
+            .Replace("\"FixtureNpc\"", "5", StringComparison.Ordinal);
+
+        var copy = index.RequireReads().DocumentFromText(npc.ToString(), Elsewhere, 7, text);
+
+        Assert.NotNull(copy);
+        Assert.Contains("'EditorID'", copy.ParseDiagnosis, StringComparison.Ordinal);
+        Assert.Null(copy.EditorId);
+    }
 }

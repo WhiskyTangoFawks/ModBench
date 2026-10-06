@@ -121,13 +121,17 @@ public static class DocumentNodes
     public static FieldMetadata Variant(FieldMetadata member, string? leaf) =>
         leaf != null && member.Variants is { } variants && variants.TryGetValue(leaf, out var variant) ? variant : member;
 
-    /// <summary>The EditorID a record's own node names; null when it names none as a string.</summary>
-    public static string? EditorIdOf(JsonElement record) =>
-        record.ValueKind == JsonValueKind.Object
-        && record.TryGetProperty(RecordMembers.EditorId, out var editorId)
-        && editorId.ValueKind == JsonValueKind.String
-            ? StringValueOf(editorId)
-            : null;
+    /// <summary>The EditorID a record's own node names.</summary>
+    public static EditorIdRead EditorIdOf(JsonElement record)
+    {
+        if (record.ValueKind != JsonValueKind.Object
+            || !record.TryGetProperty(RecordMembers.EditorId, out var editorId)
+            || editorId.ValueKind == JsonValueKind.Null)
+            return EditorIdRead.None;
+        return editorId.ValueKind == JsonValueKind.String
+            ? EditorIdRead.Of(StringValueOf(editorId))
+            : EditorIdRead.Unreadable($"'{RecordMembers.EditorId}' is not a string");
+    }
 
     /// <summary>The string value of a node the caller has already checked is a JSON string.</summary>
     public static string StringValueOf(JsonElement element) =>
