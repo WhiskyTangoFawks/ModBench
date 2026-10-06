@@ -208,6 +208,8 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         foreach (var child in children)
         {
             if (!ContainerChildFields.EmbeddedSlotsFor(_release.ToCategory()).Contains((containerType, child.SlotName))) continue;
+            if (child.RecordType.Length == 0)
+                throw new UnreadableSourceDocumentException(ownerDocument, $"its '{child.SlotName}' names '{child.FormKey}' {TypeNotResolved(child.Node)}");
 
             // The index holds the file's own bytes (ADR-0005), so a hand edit the codec would respell
             // reaches it as the file spells it.
@@ -226,6 +228,11 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             foreach (var deeper in Embedded(child.RecordType, child.FormKey, text, ownerDocument)) yield return deeper;
         }
     }
+
+    private static string TypeNotResolved(JsonElement child) =>
+        child.TryGetProperty(MutagenObjectTypeMember, out var named) && named.ValueKind == JsonValueKind.String
+            ? $"a '{named.GetString()}', and this game has no record type of that name"
+            : $"with no '{MutagenObjectTypeMember}' naming its type, and its slot holds more than one record type";
 
     // "<x>, <y>" is the whole-mod door's own name for a block level's directory; an interior level is
     // a single number and contributes no coordinates.

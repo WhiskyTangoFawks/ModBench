@@ -106,14 +106,7 @@ public sealed class SourceIngestContainerTests : IDisposable
     public void AnEmbeddedChildNamingATypeTheGameLacks_FailsTheSourceRead_NamingTheChild()
     {
         var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-        var original = File.ReadAllText(file);
-        var temporaryChild = ObjectEnclosingTheLineNaming(original, ContainerModPlugin.TemporaryRefEditorId);
-        var misspelt = original.Replace(
-            temporaryChild,
-            temporaryChild.Replace("\"PlacedObject\"", "\"PlacedObjekt\"", StringComparison.Ordinal),
-            StringComparison.Ordinal);
-        Assert.NotEqual(original, misspelt);
-        File.WriteAllText(file, misspelt);
+        File.WriteAllText(file, WithTemporaryRefMisspelt(File.ReadAllText(file)));
 
         using var reloaded = Reloaded();
 
@@ -121,6 +114,36 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.Equal(ContainerMod.PluginName, failure.Name);
         Assert.Contains("source tree", failure.Reason, StringComparison.Ordinal);
         Assert.Contains(_fixture.TemporaryRef.ToString(), failure.Reason, StringComparison.Ordinal);
+        Assert.Contains("PlacedObjekt", failure.Reason, StringComparison.Ordinal);
+        Assert.Contains(file, failure.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AContainerEditedAfterTheReadToNameATypeTheGameLacks_FailsTheSourceRead_AndKeepsTheContainersLastGoodRows()
+    {
+        using var index = Reloaded();
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
+        File.WriteAllText(file, WithTemporaryRefMisspelt(File.ReadAllText(file)));
+
+        index.NextSnapshotUntil(() => index.Status.Failures.Count > 0, "the plugin's failure");
+
+        var failure = Assert.Single(index.Status.Failures);
+        Assert.Contains(_fixture.TemporaryRef.ToString(), failure.Reason, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "PlacedObjekt",
+            index.RequireReads().DocumentOf(_fixture.EmbedCell.ToString(), _fixture.Plugin).BodyOf(),
+            StringComparison.Ordinal);
+    }
+
+    private static string WithTemporaryRefMisspelt(string cellDocument)
+    {
+        var temporaryChild = ObjectEnclosingTheLineNaming(cellDocument, ContainerModPlugin.TemporaryRefEditorId);
+        var misspelt = cellDocument.Replace(
+            temporaryChild,
+            temporaryChild.Replace("\"PlacedObject\"", "\"PlacedObjekt\"", StringComparison.Ordinal),
+            StringComparison.Ordinal);
+        Assert.NotEqual(cellDocument, misspelt);
+        return misspelt;
     }
 
     private static string ObjectEnclosingTheLineNaming(string document, string editorId)
