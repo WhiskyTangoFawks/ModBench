@@ -27,7 +27,7 @@ public sealed class SourceRepositoryCellsInTests : IDisposable
         $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
 
     private TreeFile File(string[] folders, Cell cell) =>
-        new(Path.Combine([PluginSourceRoot.For(PluginName), .. folders, Leaf(cell), "RecordData.json"]), _codec.SerializeToBytes(cell, Release));
+        new(PluginSourceRoot.ContainerDocument(Path.Combine([PluginSourceRoot.For(PluginName), .. folders, Leaf(cell)])), _codec.SerializeToBytes(cell, Release));
 
     private Cell ExteriorCell(string editorId, int x, int y) =>
         new(_mod) { EditorID = editorId, Grid = new CellGrid { Point = new P2Int(x, y) } };
