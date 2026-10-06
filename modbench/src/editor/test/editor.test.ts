@@ -459,6 +459,12 @@ describe('a record file\'s tab', () => {
         .toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }' }]]);
     });
 
+    it('reads the saved file without its byte order mark, as its document\'s text has none', async () => {
+      h.disk.set(FILE, '\uFEFF{ "EditorID": "OnDisk" }');
+      expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false)))
+        .toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }' }]]);
+    });
+
     it('reads the file\'s column from mEdit once the saved document is gone from disk', async () => {
       expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false))).toEqual([[GUN, undefined]]);
     });

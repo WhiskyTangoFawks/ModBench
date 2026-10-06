@@ -79,9 +79,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
   const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | typeof LABEL_COLUMN, number>>(new Map());
   const resizeColumn = (key: ColumnKey | typeof LABEL_COLUMN, width: number) => setColumnWidths(prev => new Map(prev).set(key, width));
-  // One definition of "this column can be written" (ADR-0007; editor.md, Columns, story 4): the
-  // file's, computed for the whole grid at once, since per cell it would lag. The backend refuses
-  // every write to a parse-failed record, so a diagnosis vetoes it too.
+  // One definition of "this column can be written" (ADR-0007; editor.md, Columns, story 4), for the
+  // whole grid at once, since per cell it would lag. mEdit refuses every write to a parse-failed record.
   const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, o =>
     copyColumnKey(o) === fileColumn && !immutableSet.has(pluginKeyOf(o)) && trackedSet?.has(pluginKeyOf(o)) === true
       && o.parseDiagnosis == null),

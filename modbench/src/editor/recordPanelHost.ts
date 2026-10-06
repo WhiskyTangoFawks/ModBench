@@ -164,26 +164,27 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   }
 
   // The file's column follows its document, a child's its container's (editor.md, States, story 5),
-  // so it shows whatever its plugin's state: mEdit's own comparison holds the active plugins' copies
-  // alone. Saved, the text is the file's on disk, as VS Code misses a write to a file outside the
-  // workspace while its tab is hidden; a file gone from disk is mEdit's to answer for.
+  // whatever its plugin's state: mEdit compares only the active plugins' copies of its own.
   private showFile(
     panel: vscode.WebviewPanel, document: vscode.TextDocument, { formKey, plugin }: RecordCopy, columns: readonly RecordCopy[],
     titleFromRead: TabDocument['titleFromRead'],
   ): void {
-    const documentText = async (): Promise<string | undefined> => {
-      if (document.isDirty) return document.getText();
-      try {
-        return new TextDecoder().decode(await vscode.workspace.fs.readFile(document.uri));
-      } catch {
-        return undefined;
-      }
-    };
+    const documentText = async () => (document.isDirty ? document.getText() : savedText(document.uri));
     showRecord(this.deps, panel, formKey, columns, { titleFromRead, plugin, documentText });
     const following = vscode.workspace.onDidChangeTextDocument((change) => {
       if (change.document === document && change.contentChanges.length > 0) this.deps.editsInFlight.refresh(panel);
     });
     panel.onDidDispose(() => { following.dispose(); });
+  }
+}
+
+// The file on disk, as VS Code misses a write to a file outside the workspace while its tab is
+// hidden. Its byte order mark goes, as a document's text has none. A file gone is mEdit's to answer.
+async function savedText(uri: vscode.Uri): Promise<string | undefined> {
+  try {
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await vscode.workspace.fs.readFile(uri)).replace(/^\uFEFF/, '');
+  } catch {
+    return undefined;
   }
 }
 
