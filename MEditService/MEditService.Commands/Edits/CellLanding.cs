@@ -79,9 +79,9 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         var landing = crossing.Into is AnotherCell.GridCell grid ? IntoGridCell(move, grid, record) : IntoPersistentCell(move, record);
         return landing.Finish(landed => new EditPlan(
             RecordEditResult.Success(),
-            repository.ChangesToPut(plugin, given).Then(landed.NewInWorldspace is { } into
+            repository.ChangesToRewrite(plugin, given).Then(landed.NewInWorldspace is { } into
                 ? repository.ChangesToPutInWorldspace(plugin, landed.Cell, into)
-                : repository.ChangesToPut(plugin, landed.Cell)),
+                : repository.ChangesToRewrite(plugin, landed.Cell)),
             repository, failed));
     }
 

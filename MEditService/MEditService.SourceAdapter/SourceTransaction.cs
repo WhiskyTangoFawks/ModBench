@@ -30,6 +30,23 @@ public sealed record UnrestoredPath(
 /// A failed gesture writes nothing; ADR-0003).</summary>
 public sealed class SourceTransaction
 {
+    /// <summary>Runs <paramref name="write"/> on a new transaction. A throw puts back what it applied and is
+    /// rethrown, or becomes the rollback's report when that left a path standing.</summary>
+    public static void Atomically(SourceRepository repository, Action<SourceTransaction> write)
+    {
+        var transaction = new SourceTransaction();
+        try
+        {
+            write(transaction);
+        }
+        catch (Exception cause) when (cause is not OutOfMemoryException)
+        {
+            var (unrestored, report) = transaction.Rollback(cause, repository);
+            if (unrestored.Count == 0) throw;
+            throw new IOException(report, cause);
+        }
+    }
+
     /// <summary>Makes each move of <paramref name="changes"/> and then writes each document, holding what
     /// each act replaced so a later failure in this batch puts it back.</summary>
     public void Apply(SourceRepository repository, SourceChanges changes)
@@ -116,10 +133,10 @@ public sealed class SourceTransaction
         return unrestored;
     }
 
-    /// <summary>Rolls back, then answers <paramref name="cause"/>'s own message with every mod folder
-    /// this batch touched, and <paramref name="repository"/>'s, stripped out of it, so a report reads
-    /// the same whichever tree the fault named.</summary>
-    public (IReadOnlyList<UnrestoredPath> Unrestored, string RelativeError) Rollback(
+    /// <summary>Rolls back, then reports what it left standing and <paramref name="cause"/>'s message, with
+    /// every mod folder this batch touched stripped out, so a report reads the same whichever tree the fault
+    /// named.</summary>
+    public (IReadOnlyList<UnrestoredPath> Unrestored, string Report) Rollback(
         Exception cause, SourceRepository repository)
     {
         var unrestored = Rollback();
@@ -127,7 +144,37 @@ public sealed class SourceTransaction
         var relativeError = modFolders
             .OrderByDescending(f => f.Length)
             .Aggregate(cause.Message, (text, folder) => text.Replace(folder + Path.DirectorySeparatorChar, "", StringComparison.Ordinal));
-        return (unrestored, relativeError);
+        return (unrestored, Report(unrestored, relativeError));
+    }
+
+    private static string Report(IReadOnlyList<UnrestoredPath> unrestored, string relativeError)
+    {
+        var sentences = new List<string>
+        {
+            unrestored.Count == 0
+                ? "Every source tree it had written is back as it was — nothing to review or revert."
+                : "Every source tree it had written is back as it was, except:",
+        };
+
+        sentences.AddRange(new[]
+        {
+            (UnrestoredReason.ChangedByAnother,
+                "changed by something else after this change wrote them, so their current content was kept"),
+            (UnrestoredReason.RemovedByAnother,
+                "removed by something else after this change wrote them, so they were not put back"),
+            (UnrestoredReason.OccupiedByAnother,
+                "occupied by something else, so what this change moved away was not moved back"),
+            (UnrestoredReason.RestoreFailed, "could not be restored"),
+        }.Select(r => NamedPaths(unrestored, r.Item1, r.Item2)).OfType<string>());
+
+        sentences.Add($"Underlying error: {relativeError}");
+        return string.Join(" ", sentences);
+    }
+
+    private static string? NamedPaths(IReadOnlyList<UnrestoredPath> unrestored, UnrestoredReason reason, string phrase)
+    {
+        var named = unrestored.Where(u => u.Reason == reason).Select(u => u.RelativePath).ToList();
+        return named.Count == 0 ? null : $"{string.Join(", ", named)} — {phrase}.";
     }
 
     private static void RestoreFile(FileState file, List<UnrestoredPath> unrestored)

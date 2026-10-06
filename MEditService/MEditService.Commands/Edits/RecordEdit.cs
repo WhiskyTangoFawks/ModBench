@@ -130,7 +130,7 @@ internal sealed class RecordEdit(WriteTargets targets, RecordTextCodec codec, Sc
 
         return new EditPlan(
             RecordEditResult.Success(),
-            repository.ChangesToPut(plugin, new SourceDocument(target.FormKey, target.RecordType, WriteTargets.EditorIdOf(newText), newText)),
+            repository.ChangesToRewrite(plugin, new SourceDocument(target.FormKey, target.RecordType, WriteTargets.EditorIdOf(newText), newText)),
             repository, $"Could not write the source file for {formKey}.");
     }
 
