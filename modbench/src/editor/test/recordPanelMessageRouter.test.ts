@@ -41,6 +41,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     focusCell: vi.fn(),
     reply: vi.fn(),
     titleFromRead: vi.fn(),
+    unsavedText: () => undefined,
     readAnswered: vi.fn(),
     conflictsComputed: () => true,
     loadFailures: () => [],

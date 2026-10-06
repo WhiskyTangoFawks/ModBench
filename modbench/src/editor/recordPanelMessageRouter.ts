@@ -30,7 +30,7 @@ export interface RouteRecordPanelMessageDeps {
   // Titles the panel from the record its read answered (editor.md, Opening, story 5).
   titleFromRead: TitleFromRead;
   // The unsaved text of the copy the tab's document holds, which its column reads from.
-  copyText?: () => CopyText | undefined;
+  unsavedText: () => CopyText | undefined;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
   readAnswered: (formKey: string) => void;
   // The latest load-order status, read rather than fetched.
@@ -42,7 +42,7 @@ export interface RouteRecordPanelMessageDeps {
 export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'readAnswered'>;
 
 /** What a tab's document gives the reads of its panel. */
-export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'copyText'>;
+export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'unsavedText'>;
 
 /** The router's bundle for one panel's messages: the picker and the record load both reply to it. */
 export function routerDepsForPanel<Panel extends FollowedPanel>(
@@ -141,7 +141,7 @@ async function answerRecordLoad(
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD }>,
 ): Promise<void> {
   const [compare, plugins] = await Promise.allSettled([
-    deps.meditClient.getComparison(m.formKey, deps.copyText?.()),
+    deps.meditClient.getComparison(m.formKey, deps.unsavedText()),
     deps.meditClient.getPlugins(),
   ]);
   if (compare.status === 'rejected') {

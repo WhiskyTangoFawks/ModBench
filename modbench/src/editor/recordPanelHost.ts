@@ -95,14 +95,16 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
 
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
     if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
-      showRecord(this.deps, panel, copyOf(document.uri).formKey, { titleFromRead: () => undefined });
+      showRecord(this.deps, panel, copyOf(document.uri).formKey, { titleFromRead: () => undefined, unsavedText: () => undefined });
       return;
     }
     if (document.uri.scheme === CHILD_RECORD_SCHEME) {
       // The file is the container's, so its name is not the child's.
       const { formKey, plugin } = copyOf(document.uri);
       panel.title = recordTitle(formKey, undefined);
-      showRecord(this.deps, panel, formKey, { titleFromRead: (read, columns) => { panel.title = recordTitle(read, columns, plugin); } });
+      showRecord(this.deps, panel, formKey, {
+        titleFromRead: (read, columns) => { panel.title = recordTitle(read, columns, plugin); }, unsavedText: () => undefined,
+      });
       return;
     }
     const { fsPath } = document.uri;
@@ -131,8 +133,8 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   // The file's column follows its unsaved text (editor.md, States, story 5). Saved, it reads mEdit's
   // copy: VS Code misses a write to a file outside the workspace while the file's tab is hidden.
   private showFile(panel: vscode.WebviewPanel, document: vscode.TextDocument, { formKey, plugin }: RecordCopy): void {
-    const copyText = () => (document.isDirty ? { plugin, documentText: document.getText() } : undefined);
-    showRecord(this.deps, panel, formKey, { titleFromRead: () => undefined, copyText });
+    const unsavedText = () => (document.isDirty ? { plugin, documentText: document.getText() } : undefined);
+    showRecord(this.deps, panel, formKey, { titleFromRead: () => undefined, unsavedText });
     const following = vscode.workspace.onDidChangeTextDocument((change) => {
       if (change.document === document && change.contentChanges.length > 0) this.deps.editsInFlight.refresh(panel);
     });
@@ -246,26 +248,31 @@ type OpenClient = Pick<MEditClient, 'getRecordOwner' | 'getRecordFile' | 'getRec
 async function openRecordTab(
   client: OpenClient, reporter: Reporter, address: RecordToOpen, viewColumn: vscode.ViewColumn, preview: boolean,
 ): Promise<void> {
-  await reportFailure(reporter, `Failed to open "${recordTitle(address.formKey, undefined)}".`, async () => {
-    const [uri, viewType] = await tabOf(client, address);
-    await vscode.commands.executeCommand('vscode.openWith', uri, viewType, { viewColumn, preview });
+  const failMessage = `Failed to open "${recordTitle(address.formKey, undefined)}".`;
+  await reportFailure(reporter, failMessage, async () => {
+    const tab = await tabOf(client, address);
+    if ('refused' in tab) {
+      reporter.report('error', failMessage, tab.refused);
+      return;
+    }
+    await vscode.commands.executeCommand('vscode.openWith', tab.uri, RECORD_VIEW_TYPE, { viewColumn, preview });
   });
 }
 
 // A record given without a plugin opens its winning copy. A tracked copy opens as its own file, an
 // untracked one as mEdit's rendering, and one carried in another record's file as a child's tab.
-async function tabOf(client: OpenClient, { formKey, plugin: given }: RecordToOpen): Promise<[vscode.Uri, string]> {
+async function tabOf(client: OpenClient, { formKey, plugin: given }: RecordToOpen): Promise<{ uri: vscode.Uri } | { refused: string }> {
   const plugin = given ?? await client.getRecordOwner(formKey);
-  if (!plugin) throw new Error(`No active plugin holds ${formKey}.`);
+  if (!plugin) return { refused: `No active plugin holds ${formKey}.` };
   const file = await client.getRecordFile(plugin, formKey);
-  if (file === null) throw holdsNoCopy({ formKey, plugin });
+  if (file === null) return { refused: holdsNoCopy({ formKey, plugin }) };
   if (!file.path) {
     const rendered = await client.getRenderedDocument(plugin, formKey);
-    if (rendered === null) throw holdsNoCopy({ formKey, plugin });
-    return [renderedDocumentUri({ formKey, plugin }, rendered.fileName), RECORD_VIEW_TYPE];
+    if (rendered === null) return { refused: holdsNoCopy({ formKey, plugin }) };
+    return { uri: renderedDocumentUri({ formKey, plugin }, rendered.fileName) };
   }
-  if ((await client.getRecordOfFile(file.path)).formKey === formKey) return [vscode.Uri.file(file.path), RECORD_VIEW_TYPE];
-  return [childRecordUri({ formKey, plugin }, file.path), RECORD_VIEW_TYPE];
+  if ((await client.getRecordOfFile(file.path)).formKey === formKey) return { uri: vscode.Uri.file(file.path) };
+  return { uri: childRecordUri({ formKey, plugin }, file.path) };
 }
 
 // `ViewColumn.Beside` resolves once: the first tab opened becomes active, so a second Beside call

@@ -370,27 +370,27 @@ const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 const renderedName = (formKey: string) => `${formKey.replace(':', '_')}.json`;
 
 describe('modbench.record.open', () => {
-  const titled = (formKey: string) => openTabs().some(t => t.label === renderedName(formKey));
+  const hasRenderedTab = (formKey: string) => openTabs().some(t => t.label === renderedName(formKey));
 
   it('opens the winning copy\'s document, titled with its file\'s name', async () => {
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000001' });
 
-    await waitFor('the winning copy\'s tab', () => titled('Fallout4.esm:000001') || undefined);
+    await waitFor('the winning copy\'s tab', () => hasRenderedTab('Fallout4.esm:000001') || undefined);
   });
 
   it('a second click replaces the preview tab instead of adding one', async () => {
     const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000002' });
-    await waitFor('the second record\'s tab', () => titled('Fallout4.esm:000002') || undefined);
+    await waitFor('the second record\'s tab', () => hasRenderedTab('Fallout4.esm:000002') || undefined);
 
     assert.strictEqual(openTabs().length, tabsBefore, 'the next click replaces the preview editor');
-    assert.ok(!titled('Fallout4.esm:000001'), 'the first record\'s preview tab is gone');
+    assert.ok(!hasRenderedTab('Fallout4.esm:000001'), 'the first record\'s preview tab is gone');
   });
 
   it('shows a record already open in a tab of its own, and does not open it twice', async () => {
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000010', placement: 'beside' });
-    await waitFor('the pinned tab', () => titled('Fallout4.esm:000010') || undefined);
+    await waitFor('the pinned tab', () => hasRenderedTab('Fallout4.esm:000010') || undefined);
     const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000010' });
@@ -404,21 +404,21 @@ describe('modbench.record.open', () => {
     await vscode.commands.executeCommand('modbench.record.open', [
       { formKey: 'Fallout4.esm:000011' }, { formKey: 'Fallout4.esm:000012' },
     ]);
-    await waitFor('both tabs', () => (titled('Fallout4.esm:000011') && titled('Fallout4.esm:000012')) || undefined);
+    await waitFor('both tabs', () => (hasRenderedTab('Fallout4.esm:000011') && hasRenderedTab('Fallout4.esm:000012')) || undefined);
 
     assert.strictEqual(openTabs().length, tabsBefore + 2);
   });
 
   it('opens beside as a genuinely new tab, leaving the tab it was fired from alone', async () => {
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000020', placement: 'beside' });
-    await waitFor('the seed tab', () => titled('Fallout4.esm:000020') || undefined);
+    await waitFor('the seed tab', () => hasRenderedTab('Fallout4.esm:000020') || undefined);
     const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000021', placement: 'beside' });
-    await waitFor('the beside tab', () => titled('Fallout4.esm:000021') || undefined);
+    await waitFor('the beside tab', () => hasRenderedTab('Fallout4.esm:000021') || undefined);
 
     assert.strictEqual(openTabs().length, tabsBefore + 1);
-    assert.ok(titled('Fallout4.esm:000020'), 'the seed tab is untouched');
+    assert.ok(hasRenderedTab('Fallout4.esm:000020'), 'the seed tab is untouched');
   });
 
   it('reads a Plugins-tree RecordNode-shaped row from a menu to its own record', async () => {
@@ -426,7 +426,7 @@ describe('modbench.record.open', () => {
 
     await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 
-    await waitFor('the RecordNode\'s tab', () => titled('Fallout4.esm:000030') || undefined);
+    await waitFor('the RecordNode\'s tab', () => hasRenderedTab('Fallout4.esm:000030') || undefined);
   });
 
   it('reads a Plugins-tree ChildRecordNode-shaped row from a menu to its own record', async () => {
@@ -434,7 +434,7 @@ describe('modbench.record.open', () => {
 
     await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 
-    await waitFor('the ChildRecordNode\'s tab', () => titled('Fallout4.esm:000040') || undefined);
+    await waitFor('the ChildRecordNode\'s tab', () => hasRenderedTab('Fallout4.esm:000040') || undefined);
   });
 
   it('a menu\'s multi-selection opens one tab per record, all in a single new group beside the active one', async () => {
@@ -444,7 +444,7 @@ describe('modbench.record.open', () => {
     ];
 
     await vscode.commands.executeCommand('modbench.record.openToSide', selection[0], selection);
-    await waitFor('every selected tab', () => selection.every((s) => titled(s.formKey)) || undefined);
+    await waitFor('every selected tab', () => selection.every((s) => hasRenderedTab(s.formKey)) || undefined);
 
     const tabsByGroup = vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => t.label));
     assert.deepStrictEqual(tabsByGroup, [[], selection.map((s) => renderedName(s.formKey))]);
@@ -498,11 +498,13 @@ describe('a tracked copy of a record', () => {
     };
     const unsaved = JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'Unsaved' });
 
-    await replaceAll(unsaved);
-    await waitFor('a read of the unsaved text', () => comparedTexts.includes(unsaved));
-
-    await replaceAll(saved);
-    await document.save();
+    try {
+      await replaceAll(unsaved);
+      await waitFor('a read of the unsaved text', () => comparedTexts.includes(unsaved));
+    } finally {
+      await replaceAll(saved);
+      await document.save();
+    }
   });
 
   it('opens as its file when it wins and the record is given without a plugin', async () => {

@@ -32,7 +32,7 @@ export class RenderedDocuments implements vscode.TextDocumentContentProvider, vs
   async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
     const copy = copyOf(uri);
     const document = await this.client.getRenderedDocument(copy.plugin, copy.formKey);
-    if (document === null) throw holdsNoCopy(copy);
+    if (document === null) throw new Error(holdsNoCopy(copy));
     return document.text;
   }
 

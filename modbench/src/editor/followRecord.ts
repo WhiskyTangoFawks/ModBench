@@ -21,9 +21,8 @@ interface InFlight { writes: number; reported: Set<string>; refreshed: boolean }
 // `to`. `readAt` is when that read was answered: an address taken after it names what it means.
 interface Move { plugin: PluginAddress; from: string; to: string; asked: boolean; readAt: number | undefined }
 
-/** The one place a record tab reads again. With an edit in flight, it reads once after the
- *  answer, under the FormKey it then shows, and only on mEdit's report, which may land first
- *  (editor.md, States, story 5). */
+/** The one place a record tab reads again. With an edit in flight, what asks for a read waits for
+ *  the answer, and the tab then reads once, under the FormKey it then shows. */
 export class EditsInFlight<Panel extends FollowedPanel> {
   private readonly inFlight = new Map<Panel, InFlight>();
   private readonly moves = new Map<Panel, Move[]>();
