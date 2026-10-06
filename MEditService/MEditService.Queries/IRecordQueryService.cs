@@ -12,7 +12,7 @@ public interface IRecordQueryService
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset, bool unfiltered = false);
     RecordDetail? GetRecord(string formKey);
 
-    CompareResult? GetCompare(string formKey);
+    CompareResult? GetCompare(string formKey, CopyText? text = null);
 
     CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies);
 

@@ -21,6 +21,7 @@ export type CompareResult = Schemas['CompareResult'];
 /** One column of `POST /records/compare`: the copy a plugin holds, or the one `documentText` spells
  *  in its place. */
 export type RecordCopy = Schemas['RecordCopy'];
+export type CopyText = Schemas['CopyText'];
 
 /** The `track-progress` notification's payload, subscribed alongside the in-flight
  *  `POST /plugins/track`. Counts are of *plugins*, not records. */

@@ -38,13 +38,10 @@ internal sealed class RelationReads(
         using var connection = store.OpenReadConnection();
         var tableName = FindRecordTypeInAnyPlugin(connection, formKey);
         if (tableName == null) return null;
-        using var parsed = JsonDocument.Parse(text);
-        if (parsed.RootElement.ValueKind != JsonValueKind.Object)
-            throw new JsonException("A record's document is a JSON object.");
-        var editorId = DocumentNodes.At(parsed.RootElement, "EditorID")?.GetString();
+        var (body, editorId, parseDiagnosis) = CallerText.Read(text);
         return DocumentFromBody(
-            connection, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, text,
-            store.Schemas[tableName], LinkResolution.ForLinksOf(connection, formKey, Resolve), parseDiagnosis: null);
+            connection, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, body,
+            store.Schemas[tableName], LinkResolution.ForLinksOf(connection, formKey, Resolve), parseDiagnosis);
     }
 
     // One query rather than two point queries per record. Rows are materialized before
