@@ -22,7 +22,12 @@ vi.mock('vscode', () => ({
     constructor(public dispose: () => void) {}
     static from(...parts: { dispose(): void }[]) { return { dispose: () => parts.forEach((part) => part.dispose()) }; }
   },
-  Uri: { from: uriFrom, joinPath: (...parts: unknown[]) => parts.join('/') },
+  Uri: {
+    from: (parts: Parameters<typeof uriFrom>[0]) => Object.defineProperty(uriFrom(parts), 'toString', {
+      value: () => `${parts.scheme}:${parts.path}?${parts.query ?? ''}`,
+    }),
+    joinPath: (...parts: unknown[]) => parts.join('/'),
+  },
   ViewColumn: { Active: -1, One: 1, Beside: -2 },
   commands: {
     registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => {
@@ -148,7 +153,17 @@ function makeEditor(client = new InMemoryMEditClient(), viewSelections = new Map
     return panel;
   };
   const openFile = (fsPath: string, document?: object): Promise<FakePanel> => openDocument({ scheme: 'file', fsPath }, document);
-  return { editor, open, openFile, openDocument, referencedBy, focusedView, outputChannel };
+  const tabs = new Map<string, FakePanel>();
+  const vsCodeOpensTabs = () => {
+    h.commands.set('vscode.openWith', async (uri: unknown) => {
+      if (tabs.has(String(uri))) return;
+      const panel = fakePanel();
+      tabs.set(String(uri), panel);
+      await provider.resolveCustomTextEditor({ uri }, panel);
+    });
+    return (uri: unknown) => tabs.get(String(uri));
+  };
+  return { editor, open, openFile, openDocument, referencedBy, focusedView, outputChannel, vsCodeOpensTabs };
 }
 
 beforeEach(() => {
@@ -167,8 +182,12 @@ const recordOf = async (referencedBy: FakeTreeView) => {
 };
 
 const pageGlobal = (panel: FakePanel, name: string): unknown => {
-  const assigned = new RegExp(`window\\.${name} = ("(?:[^"\\\\]|\\\\.)*");`).exec(panel.webview.html ?? '')?.[1];
-  return assigned === undefined ? undefined : JSON.parse(assigned);
+  const html = panel.webview.html ?? '';
+  const at = html.indexOf(`window.${name} = `);
+  if (at < 0) return undefined;
+  const start = at + `window.${name} = `.length;
+  const nextAssignment = html.indexOf('; window.', start);
+  return JSON.parse(html.slice(start, nextAssignment >= 0 ? nextAssignment : html.indexOf(';</script>', start)));
 };
 
 const comparisonsAsked = (client: InMemoryMEditClient) =>
@@ -293,7 +312,7 @@ describe('a record tab whose record an edit of its FormID moved', () => {
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: MOVED }]]);
 
     await editField(OLD);
-    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: MOVED });
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: MOVED, columns: [] });
     await settle();
     await editField(OLD);
 
@@ -351,7 +370,7 @@ describe('a record file\'s tab', () => {
     const tab = await openFile(FILE);
     tab.title = 'Gun.json';
 
-    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN });
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
     await settle();
 
     expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'recordLoadAnswered', ok: true }));
@@ -402,7 +421,7 @@ describe('a record file\'s tab', () => {
       const { openFile } = makeEditor(client);
       const tab = await openFile(FILE, document);
       Object.assign(document, { text: '{ "EditorID": "Typed" }' });
-      tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN });
+      tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
       await settle();
       return comparisonsAsked(client);
     }
@@ -410,6 +429,20 @@ describe('a record file\'s tab', () => {
     it('reads the file\'s column from the unsaved text as it is when the read is asked', async () => {
       expect(await readOf(fileDocument('{ "EditorID": "Gun" }', true)))
         .toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Typed" }' }]]);
+    });
+
+    it('reads the file\'s column from the unsaved text beside the other records the tab shows', async () => {
+      const client = holdingClient();
+      client.setQueryAnswer('getRecordsComparison', null);
+      const { openFile } = makeEditor(client);
+      const tab = await openFile(FILE, fileDocument('{ "EditorID": "Typed" }', true));
+      const column = { formKey: '000900:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
+
+      tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [column] });
+      await settle();
+
+      expect(client.calls.filter(({ method }) => method === 'getRecordsComparison').map(({ args }) => args))
+        .toEqual([[[{ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Typed" }' }, column]]]);
     });
 
     it('reads the file\'s column from mEdit once the document is saved, as mEdit reads the file VS Code may not have', async () => {
@@ -427,6 +460,28 @@ describe('a record file\'s tab', () => {
 
       expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
     });
+  });
+});
+
+describe('a record tab closed while its read is in flight', () => {
+  it('is told nothing and keeps its title when the read lands', async () => {
+    const PLACED = '000803:A.esp';
+    const client = new InMemoryMEditClient();
+    let land: (answer: ReturnType<typeof comparisonOf>) => void = () => undefined;
+    client.setQueryAnswerOnce('getComparison', new Promise((resolve) => { land = resolve; }));
+    client.setQueryAnswer('getPlugins', []);
+    const { openDocument } = makeEditor(client);
+    const tab = await openDocument({
+      scheme: 'modbench-child-record', path: '/mods/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000803%3AA.esp&name=A.esp&origin=ModA',
+    });
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED, columns: [] });
+
+    tab.close();
+    land(comparisonOf(PLACED, [{ plugin: 'A.esp', origin: 'ModA', isWinner: true, editorId: 'SharedRef' }]));
+    await settle();
+
+    expect(tab.webview.postMessage).not.toHaveBeenCalled();
+    expect(tab.title).toBe(PLACED);
   });
 });
 
@@ -453,7 +508,7 @@ describe('an untracked copy\'s tab', () => {
     const { openDocument } = makeEditor(client);
     const tab = await openDocument(RENDERED, { getText: () => '{}' });
 
-    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN });
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
     await settle();
 
     expect(comparisonsAsked(client)).toEqual([[GUN, undefined]]);
@@ -477,7 +532,7 @@ describe('a child record\'s tab', () => {
     const tab = await openDocument(CHILD);
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(PLACED);
     expect(tab.title).toBe(PLACED);
-    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED });
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED, columns: [] });
     await settle();
 
     expect(tab.title).toBe('SharedRef');
@@ -490,10 +545,95 @@ describe('a child record\'s tab', () => {
     const { openDocument } = makeEditor(client);
     const tab = await openDocument(CHILD, { isDirty: true, getText: () => '{ "EditorID": "Cell" }' });
 
-    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED });
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED, columns: [] });
     await settle();
 
     expect(comparisonsAsked(client)).toEqual([[PLACED, undefined]]);
+  });
+});
+
+describe('several records opened at once', () => {
+  const [GUN, AMMO, KNIFE] = ['000801:A.esp', '000802:A.esp', '000803:C.esp'];
+  const winner = { name: 'B.esp', origin: 'ModB' };
+  const knifeIn = { name: 'C.esp', origin: 'ModC' };
+  const gunDocument = renderedDocumentUri({ formKey: GUN, plugin: COPY_PLUGIN }, 'Gun.json');
+  const openSeveral = (placement?: 'beside') => h.commands.get('modbench.record.open')?.(
+    [{ formKey: GUN, plugin: COPY_PLUGIN, placement }, { formKey: AMMO, placement }, { formKey: KNIFE, plugin: knifeIn, placement }]);
+  function severalClient(): InMemoryMEditClient {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    client.setQueryAnswer('getRecordOwner', winner);
+    client.setQueryAnswer('getRecordFile', { path: null });
+    client.setQueryAnswer('getRenderedDocument', { fileName: 'Gun.json', text: '{}' });
+    client.setQueryAnswer('getPlugins', []);
+    return client;
+  }
+
+  it('open one grid, pinned: the first record\'s document, with the others as its columns in the order given, each without a plugin its winning copy', async () => {
+    const { vsCodeOpensTabs } = makeEditor(severalClient());
+    const tabOn = vsCodeOpensTabs();
+
+    await openSeveral();
+
+    expect(h.executed.filter(([id]) => id === 'vscode.openWith'))
+      .toEqual([['vscode.openWith', gunDocument, 'modbench.record', { viewColumn: -1, preview: false }]]);
+    const tab = tabOn(gunDocument);
+    expect(pageGlobal(tab ?? fakePanel(), 'mEditColumns'))
+      .toEqual([{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }]);
+    expect(tab?.webview.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('show the first record\'s tab already open, which takes the others as its columns, and leave its tab in another group alone', async () => {
+    const { vsCodeOpensTabs, openDocument } = makeEditor(severalClient());
+    const tabOn = vsCodeOpensTabs();
+    await h.commands.get('modbench.record.open')?.({ formKey: GUN, plugin: COPY_PLUGIN });
+    const elsewhere = await openDocument(gunDocument);
+    elsewhere.active = false;
+
+    await openSeveral();
+
+    expect(tabOn(gunDocument)?.webview.postMessage.mock.calls).toEqual([[{
+      type: 'showColumns', columns: [{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }],
+    }]]);
+    expect(elsewhere.webview.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('leave the tab they opened to show every active plugin\'s copy again when its record is opened alone onto it', async () => {
+    const { vsCodeOpensTabs } = makeEditor(severalClient());
+    const tabOn = vsCodeOpensTabs();
+    await openSeveral();
+
+    await h.commands.get('modbench.record.open')?.({ formKey: GUN, plugin: COPY_PLUGIN });
+
+    expect(tabOn(gunDocument)?.webview.postMessage.mock.calls).toEqual([[{ type: 'showColumns', columns: [] }]]);
+  });
+
+  it('read the tab again when mEdit reports a record of another column changed, and not for a record it does not show', async () => {
+    const client = severalClient();
+    client.setQueryAnswer('getRecordsComparison', null);
+    const { openDocument } = makeEditor(client);
+    const tab = await openDocument(gunDocument);
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
+    await settle();
+
+    client.emit({ kind: 'rows-changed', plugin: 'C.esp', origin: 'ModC', keys: [KNIFE], sequence: 1 });
+    client.emit({ kind: 'rows-changed', plugin: 'B.esp', origin: 'ModB', keys: [AMMO], sequence: 2 });
+
+    expect(tab.webview.postMessage.mock.calls).toEqual([[expect.objectContaining({ type: 'recordLoadAnswered' })], [{ type: 'loadRecord', formKey: GUN }]]);
+  });
+
+  it('read the first record\'s copy and the columns the tab shows side by side, in that order', async () => {
+    const client = severalClient();
+    client.setQueryAnswer('getRecordsComparison', null);
+    const { openDocument } = makeEditor(client);
+    const tab = await openDocument(gunDocument);
+
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
+    await settle();
+
+    expect(client.calls.filter(({ method }) => method === 'getRecordsComparison').map(({ args }) => args))
+      .toEqual([[[{ formKey: GUN, plugin: COPY_PLUGIN }, { formKey: AMMO, plugin: winner }]]]);
+    expect(comparisonsAsked(client)).toEqual([]);
   });
 });
 

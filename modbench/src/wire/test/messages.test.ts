@@ -20,13 +20,20 @@ describe('the focused cell message that tells the host which cell a palette fiel
 });
 
 describe('the record load request the webview asks of the host, because nothing outside the client names the port, and its answer', () => {
-  it('carries the formKey and the requestId that pairs the reply', () => {
-    expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp' }))
-      .toEqual({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp' });
+  it('carries the formKey, the columns the tab shows beside it and the requestId that pairs the reply', () => {
+    const columns = [{ formKey: '000002:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }];
+    expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp', columns }))
+      .toEqual({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp', columns });
+  });
+
+  it('rejects a request whose column names no plugin whole', () => {
+    expect(() => parseWebviewToExtension({
+      type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp', columns: [{ formKey: '000002:B.esp', plugin: { name: 'B.esp' } }],
+    })).toThrow();
   });
 
   it('rejects a request missing its formKey', () => {
-    expect(() => parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1' })).toThrow();
+    expect(() => parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', columns: [] })).toThrow();
   });
 
   it('carries the comparison, the plugin list and conflictsComputed on success', () => {

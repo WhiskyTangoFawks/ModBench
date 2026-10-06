@@ -98,7 +98,7 @@ describe('a record panel reading the FormKey its record moved to (editor.md, Sta
     const load = vi.fn()
       .mockResolvedValueOnce(answered(recordNamed('Before')))
       .mockReturnValueOnce(new Promise(resolve => { landMoved = resolve; }));
-    render(<RecordPanel client={{ load }} />);
+    render(<RecordPanel client={{ load, showColumns: vi.fn() }} />);
     await waitFor(() => screen.getByText('Before'));
 
     tellPanel({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: MOVED });
