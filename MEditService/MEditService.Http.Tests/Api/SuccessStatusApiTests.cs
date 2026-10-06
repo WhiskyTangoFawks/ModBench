@@ -65,11 +65,11 @@ public sealed class SuccessStatusApiTests(LoadedApiFixture<TestPluginFixture> lo
     }
 
     [Fact]
-    public async Task GetLightPluginsSupported_Is200()
+    public async Task GetCreatablePluginExtensions_Is200()
     {
-        var response = await Client.GetAsync(new Uri("/plugins/light-plugins-supported", UriKind.Relative));
+        var response = await Client.GetAsync(new Uri("/plugins/creatable-extensions", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(JsonValueKind.True, (await response.Body()).ValueKind);
+        Assert.NotEmpty((await response.Body()).EnumerateArray());
     }
 }
