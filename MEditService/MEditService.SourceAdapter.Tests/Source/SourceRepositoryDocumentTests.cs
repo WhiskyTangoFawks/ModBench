@@ -336,6 +336,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
             Plugin, new SourceDocument(formKey, recordType, editorId, $"{{\n  \"FormKey\": \"{formKey}\"\n}}")));
 
         Assert.Contains(formKey, refusal.Message, StringComparison.Ordinal);
+        Assert.EndsWith("It was moved or removed outside Modbench. Check the Source Control panel.", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]

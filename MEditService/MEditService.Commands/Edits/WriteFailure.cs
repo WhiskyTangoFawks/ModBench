@@ -25,9 +25,7 @@ internal static class WriteFailure
         }
         catch (SourceUnitNotFoundException ex)
         {
-            return refused(RecordEditResult.Refused(
-                RecordEditRefusal.SourceUnitNotFound,
-                $"{ex.Message} It was moved or removed outside Modbench. Check the Source Control panel."));
+            return refused(RecordEditResult.Refused(RecordEditRefusal.SourceUnitNotFound, ex.Message));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

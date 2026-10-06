@@ -145,18 +145,23 @@ public sealed class CreateRecordHandler
         SourceRepository repository, PluginAddress plugin, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         GameRelease release, string worldspace, (int X, int Y) grid)
     {
-        var at = $"at {grid.X}, {grid.Y} of {worldspace}";
-        switch (GridCells.At(_targets, repository, plugin, schemas, worldspace, grid, worldspace, $"whether a cell sits at {grid.X}, {grid.Y}"))
+        var at = $"at {grid.X}, {grid.Y}";
+        var holder = GridCells.At(_targets, repository, plugin, schemas, worldspace, grid, worldspace, $"whether a cell sits {at}");
+        switch (holder)
         {
             case GridCells.Holder.Unreadable(var why):
                 return why;
             case GridCells.Holder.Plugins(var held):
                 return RecordEditResult.Refused(
-                    RecordEditRefusal.ChildSlotHeldByAnotherRecord, $"{plugin.Name} already holds the cell {held.FormKey} {at}.");
+                    RecordEditRefusal.ChildSlotHeldByAnotherRecord, $"{plugin.Name} already holds the cell {held.FormKey} {at} of {worldspace}.");
             case GridCells.Holder.Masters(var copy, var masterCell):
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ChildSlotHeldByAnotherRecord,
-                    $"{copy.Plugin.Name} holds the cell {masterCell} {at}. \"{WriteTargets.CopyCommandTitle}\" as an override brings it into {plugin.Name}.");
+                    $"{copy.Plugin.Name} holds the cell {masterCell} {at} of {worldspace}. \"{WriteTargets.CopyCommandTitle}\" as an override brings it into {plugin.Name}.");
+            case GridCells.Holder.Nobody:
+                break;
+            default:
+                throw new InvalidOperationException($"Expected GridCells.At to answer one of its holders, not {holder.GetType().Name}.");
         }
 
         if (GridCells.Mint(repository, plugin, _codec, schemas[recordType], release, grid, out var cell) is { } exhausted) return exhausted;

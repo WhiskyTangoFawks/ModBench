@@ -383,6 +383,9 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var refused = Assert.Throws<SourceUnitNotFoundException>(() => Repository.ChangesToRewrite(Plugin, child));
 
         Assert.Contains("its own text does not carry it", refused.Message, StringComparison.Ordinal);
+        Assert.EndsWith(
+            "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit so the index re-reads the tree.",
+            refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

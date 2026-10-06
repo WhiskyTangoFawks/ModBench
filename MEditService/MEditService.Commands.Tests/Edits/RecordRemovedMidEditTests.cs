@@ -1,5 +1,5 @@
-using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -9,7 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using static MEditService.Commands.Tests.TestSupport.Envelopes;
 using static MEditService.Commands.Tests.TestSupport.LoadOrderOfPlugins;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -31,12 +30,16 @@ public sealed class RecordRemovedMidEditTests : IDisposable
 
     public void Dispose() => _plugins.Dispose();
 
-    private sealed class RemovingTheDocumentOnReadingACopyToItsLeft(string document) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    private sealed class RemovingTheDocumentOnReadingACopyToItsLeft(string document, string modFolder)
+        : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
+        internal IReadOnlyList<string> TreeAsRemoved { get; private set; } = [];
+
         public override IPluginRecordLookup OpenRecordLookup(
             ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
         {
             File.Delete(document);
+            TreeAsRemoved = TreeSnapshot.Of(modFolder);
             return base.OpenRecordLookup(modPath, gameRelease, schemas);
         }
     }
@@ -45,15 +48,18 @@ public sealed class RecordRemovedMidEditTests : IDisposable
     public void AnUndeleteWhoseDocumentIsRemovedAfterItIsRead_IsRefusedAsSourceUnitNotFound_AndWritesNothing()
     {
         var edited = Address(_edited);
-        var document = TreeTampering.FileOf(_plugins.FolderOf(_edited), edited, new RecordIdentity(Npc.ToString(), "npc_", null));
-        var handler = TestEditService.Over(_plugins.Holder, adapter: new RemovingTheDocumentOnReadingACopyToItsLeft(document))
-            .GetRequiredService<EditRecordHandler>();
+        var modFolder = _plugins.FolderOf(_edited);
+        var remover = new RemovingTheDocumentOnReadingACopyToItsLeft(
+            TreeTampering.FileOf(modFolder, edited, new RecordIdentity(Npc.ToString(), "npc_", null)), modFolder);
+        var handler = TestEditService.Over(_plugins.Holder, adapter: remover).GetRequiredService<EditRecordHandler>();
 
-        var result = handler.Edit(
-            edited, Npc.ToString(), SetAt(JsonDocument.Parse(0.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")));
+        var result = handler.Set(edited, Npc.ToString(), "MajorRecordFlagsRaw", JsonDocument.Parse("0").RootElement);
 
         Assert.Equal(RecordEditRefusal.SourceUnitNotFound, result.Refusal);
         Assert.Contains(Npc.ToString(), result.Message, StringComparison.Ordinal);
-        Assert.False(File.Exists(document));
+        Assert.EndsWith("It was moved or removed outside Modbench. Check the Source Control panel.", result.Message, StringComparison.Ordinal);
+        Assert.Equal(1, Regex.Count(result.Message, "outside Modbench"));
+        Assert.NotEmpty(remover.TreeAsRemoved);
+        Assert.Equal(remover.TreeAsRemoved, TreeSnapshot.Of(modFolder));
     }
 }
