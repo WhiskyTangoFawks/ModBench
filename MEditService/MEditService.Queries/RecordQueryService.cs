@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
@@ -53,7 +54,7 @@ public sealed class RecordQueryService(
     // GetCompare resolve it by FormKey, but both browse paths below exclude it.
 
     public PagedResult<RecordSummary> GetRecords(
-        IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset, bool unfiltered = false)
+        IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset)
     {
         var reads = RequireReads();
         var schemas = RequireSchemas();
@@ -68,7 +69,7 @@ public sealed class RecordQueryService(
         var query = new RecordQuery(
             RecordTypes: recordTypes, Plugin: pluginFilter, Origin: plugin?.Origin, Search: search,
             SearchFormKey: FormKeyOfFormId(search, reads), Limit: limit, Offset: offset,
-            GroupOnly: search is null, Unfiltered: unfiltered);
+            GroupOnly: search is null);
         return reads.Search(query).ToQuery();
     }
 
@@ -220,6 +221,17 @@ public sealed class RecordQueryService(
             .OrderBy(r => snapshot.LoadOrderIndex(new PluginAddress(r.Plugin, r.Origin)) ?? int.MaxValue)
             .Select(r => new ReferenceResult(
                 r.FormKey, r.Plugin, r.Origin, r.FieldPath, r.RecordType, schemas.DisplayNameFor(r.RecordType), r.EditorId))];
+    }
+
+    // The index stores each copy's document as the codec writes it, or a stub (ADR-0005). A tracked
+    // copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
+    public RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey)
+    {
+        if (RequireReads().GetDocument(formKey, plugin) is not { Body: { } body } copy) return null;
+        var identity = new RecordIdentity(formKey, copy.RecordType, copy.EditorId);
+        var snapshot = _loadOrder.Require();
+        var tree = SourceRepository.TrackedModOf(snapshot, plugin) is { } mod ? SourceRepository.Over(mod, snapshot.GameRelease) : null;
+        return new RenderedDocument(tree?.FileNameOf(plugin, identity) ?? SourceRepository.FileNameOf(identity), body);
     }
 
     public LoadOrderStatus GetStatus() => _index.Status;
