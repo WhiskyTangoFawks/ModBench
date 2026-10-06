@@ -230,7 +230,7 @@ function createMockBackend(): http.Server {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(formKey === UNTRACKED_FORM_KEY
         ? { fileName: UNTRACKED_FILE_NAME, text: untrackedText }
-        : { fileName: renderedName(formKey), text: '{}' }));
+        : { fileName: renderedName(formKey), text: JSON.stringify({ FormKey: formKey }) }));
       return;
     }
     if (url.startsWith('/plugin-source/record?')) {
@@ -255,8 +255,13 @@ function createMockBackend(): http.Server {
       return;
     }
     const wonFormKey = /^\/records\/([^/?]+)$/.exec(url)?.[1];
+    if (wonFormKey !== undefined && decodeURIComponent(wonFormKey) === NOT_HELD_FORM_KEY) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
     if (wonFormKey !== undefined) {
-      const winner = decodeURIComponent(wonFormKey) === TRACKED_FORM_KEY
+      const winner = [TRACKED_FORM_KEY, CHILD_FORM_KEY].includes(decodeURIComponent(wonFormKey))
         ? { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN } : { plugin: 'Fallout4.esm', origin: 'Data' };
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ formKey: decodeURIComponent(wonFormKey), ...winner }));
@@ -296,19 +301,22 @@ function createMockBackend(): http.Server {
 const TRACKED_PLUGIN = 'Tracked.esp';
 const TRACKED_ORIGIN = 'TrackedMod';
 const TRACKED_FORM_KEY = '000801:Tracked.esp';
+const CHILD_FORM_KEY = '000802:Tracked.esp';
 const TRACKED_FILE = path.join(
   fs.mkdtempSync(path.join(os.tmpdir(), 'modbench-tracked-')), TRACKED_ORIGIN, 'plugin-source', TRACKED_PLUGIN, 'Weapons', 'TrackedGun.json');
 fs.mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
-fs.writeFileSync(TRACKED_FILE, JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun' }));
+fs.writeFileSync(TRACKED_FILE, JSON.stringify({
+  FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun', Placed: [{ FormKey: CHILD_FORM_KEY, EditorID: 'TrackedRef' }],
+}));
 const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
 
-const CHILD_FORM_KEY = '000802:Tracked.esp';
 
 const UNTRACKED_FORM_KEY = '000801:Untracked.esp';
 const UNTRACKED_FILE_NAME = 'UntrackedGun - 000801_Untracked.esp.json';
 let untrackedText = '{ "EditorID": "UntrackedGun" }';
 
 const HELD_FORM_KEY = '000801:Held.esp';
+const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
 const MOCK_COMPARISONS = new Map<string, CompareResult>([[TRACKED_FORM_KEY, comparisonOf(TRACKED_FORM_KEY, [
   { plugin: TRACKED_PLUGIN, isWinner: true, editorId: 'TrackedGun' },
 ])], [CHILD_FORM_KEY, comparisonOf(CHILD_FORM_KEY, [
@@ -1021,7 +1029,6 @@ describe('Refresh rebuilds the index, then re-reads the instance', () => {
 const markdownText = (content: vscode.Hover['contents'][number]): string => (content instanceof vscode.MarkdownString ? content.value : '');
 
 describe('A FormKey in plugin source', () => {
-  const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
   let folder = '';
   let document: vscode.TextDocument;
 
@@ -1085,6 +1092,64 @@ describe('A FormKey in plugin source', () => {
     assert.deepStrictEqual(await hoverTexts('Rusty'), []);
   });
 
+  const definitionsOf = async (formKey: string): Promise<vscode.Location[]> => {
+    const referencing = path.join(folder, 'plugin-source', 'Held.esp', 'References', `${formKey.replace(':', '_')}.json`);
+    fs.mkdirSync(path.dirname(referencing), { recursive: true });
+    fs.writeFileSync(referencing, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: formKey }));
+    const doc = await vscode.workspace.openTextDocument(referencing);
+    return vscode.commands.executeCommand<vscode.Location[]>(
+      'vscode.executeDefinitionProvider', doc.uri, doc.positionAt(doc.getText().indexOf(formKey) + 1));
+  };
+  const definedText = async ({ uri, range }: vscode.Location) => (await vscode.workspace.openTextDocument(uri)).getText(range);
+
+  it('goes to the definition of a FormKey whose winning copy is tracked: its file, at the record\'s own FormKey member', async () => {
+    await activated();
+    const [definition, ...more] = await definitionsOf(TRACKED_FORM_KEY);
+
+    assert.deepStrictEqual(more, []);
+    assert.strictEqual(definition?.uri.fsPath, TRACKED_FS_PATH);
+    assert.strictEqual(await definedText(definition), `"FormKey":"${TRACKED_FORM_KEY}"`);
+  });
+
+  it('goes to the definition of a FormKey whose winning copy is untracked: mEdit\'s rendering of it, at the record\'s own FormKey member', async () => {
+    await activated();
+    const [definition, ...more] = await definitionsOf(HELD_FORM_KEY);
+
+    assert.deepStrictEqual(more, []);
+    assert.strictEqual(definition?.uri.toString(true), `modbench-rendered:/Data/Fallout4.esm/${renderedName(HELD_FORM_KEY)}?formKey=000801%3AHeld.esp&name=Fallout4.esm&origin=Data`);
+    assert.strictEqual(await definedText(definition), `"FormKey":"${HELD_FORM_KEY}"`);
+  });
+
+  it('goes to the definition of a FormKey whose winning copy is a child record: its own tab on its owner\'s file, at its own FormKey member', async () => {
+    await activated();
+    const childUri = `modbench-child-record:${vscode.Uri.file(TRACKED_FILE).path}?formKey=000802%3ATracked.esp&name=Tracked.esp&origin=TrackedMod`;
+    for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN, keys: [CHILD_FORM_KEY] });
+
+    const definition = await waitFor('the definition on the child\'s own member', async () => {
+      const [found, ...more] = await definitionsOf(CHILD_FORM_KEY);
+      return more.length === 0 && found?.uri.toString(true) === childUri && await definedText(found) === `"FormKey":"${CHILD_FORM_KEY}"` && found;
+    });
+
+    assert.strictEqual(definition.range.start.character, fs.readFileSync(TRACKED_FILE, 'utf8').indexOf(`"FormKey":"${CHILD_FORM_KEY}"`));
+  });
+
+  it('has no definition in JSON outside the plugin source folder', async () => {
+    await activated();
+    const other = await documentAt('Other.json');
+    const definitions = await vscode.commands.executeCommand<vscode.Location[]>(
+      'vscode.executeDefinitionProvider', other.uri, other.positionAt(other.getText().indexOf(HELD_FORM_KEY) + 1));
+
+    assert.deepStrictEqual(definitions, []);
+  });
+
+  it('has no definition for a FormKey no active plugin holds', async () => {
+    await activated();
+    const asked = requestLog.length;
+
+    assert.deepStrictEqual(await definitionsOf(NOT_HELD_FORM_KEY), []);
+    assert.ok(requestLog.slice(asked).includes(`GET /records/${encodeURIComponent(NOT_HELD_FORM_KEY)}`), 'sanity: mEdit was asked');
+  });
+
   const offeredIn = async (doc: vscode.TextDocument, text: string): Promise<string[]> => {
     const list = await vscode.commands.executeCommand<vscode.CompletionList>(
       'vscode.executeCompletionItemProvider', doc.uri, doc.positionAt(doc.getText().indexOf(text) + 2));
@@ -1142,7 +1207,6 @@ describe('A FormKey in plugin source', () => {
 });
 
 describe('The Problems panel on plugin source', () => {
-  const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
   const MESSAGE = `Armor: [${NOT_HELD_FORM_KEY}] <Error: Could not be resolved>`;
   const SOURCE_FILE = path.join('plugin-source', 'Held.esp', 'Gun.json');
   const file = path.join(FIXTURE_GAME_DIRECTORY, 'Data', SOURCE_FILE);

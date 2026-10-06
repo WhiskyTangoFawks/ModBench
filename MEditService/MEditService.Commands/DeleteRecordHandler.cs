@@ -47,7 +47,7 @@ public sealed class DeleteRecordHandler
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
-                removal == SourceRemoval.NoDocumentHoldsIt
+                removal == SourceRemoval.NoDocumentHoldsIt || relativePath is null
                     ? $"No document in {plugin.Name}'s tree holds {formKey}. {SourceUnitNotFoundException.DefectOrOutsideChange}"
                     : SourceUnitNotFoundException.NotCarried(relativePath, formKey));
         }

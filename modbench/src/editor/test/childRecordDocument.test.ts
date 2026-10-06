@@ -36,7 +36,8 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { ChildRecordDocuments, childRecordUri } from '../childRecordDocument';
+import { ChildRecordDocuments } from '../childRecordDocument';
+import { childRecordUri } from '../../drivingLib/recordDocument';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 interface FileSystem {
@@ -98,10 +99,6 @@ describe('a child record\'s document', () => {
     await files.writeFile(childRecordUri(placed, CELL_FILE), new TextEncoder().encode('{ "EditorID": "Saved" }'), { create: true, overwrite: true });
 
     expect(new TextDecoder().decode(h.files.get(`file:${CELL_FILE}?`))).toBe('{ "EditorID": "Saved" }');
-  });
-
-  it('is addressed apart from its sibling\'s, which shares its file', () => {
-    expect(childRecordUri(placed, CELL_FILE)).not.toEqual(childRecordUri({ formKey: '000804:A.esp', plugin: modA }, CELL_FILE));
   });
 });
 

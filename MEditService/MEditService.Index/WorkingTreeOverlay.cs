@@ -275,8 +275,8 @@ internal sealed class WorkingTreeOverlay
         foreach (var child in children)
         {
             if (!ContainerChildFields.EmbeddedSlotsFor(_category).Contains((containerType, child.SlotName))) continue;
-            var childType = child.RecordType ?? throw new UnreadableSourceDocumentException(
-                $"A container's source in {key.Name} ({key.Origin}) cannot be read: {child.WhyUntyped}.");
+            var childType = child.RecordType ?? throw new InvalidOperationException(
+                $"{child.FormKey} in {key.Name} ({key.Origin}) reached projection untyped, past the read that refuses it.");
 
             var childBody = _containers.TextOf(_codec, child);
             if (string.Equals(childBody, EffectiveBody(key, child.FormKey), StringComparison.Ordinal)) continue;

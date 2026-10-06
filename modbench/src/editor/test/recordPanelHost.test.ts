@@ -42,7 +42,7 @@ import { ActiveRecordTracker } from '../ActiveRecordTracker';
 import { EditsInFlight } from '../followRecord';
 import { FocusedCells } from '../focusedCells';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { renderedDocumentUri } from '../renderedDocument';
+import { renderedDocumentUri } from '../../drivingLib/recordDocument';
 
 const reporter = { report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() };
 

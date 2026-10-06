@@ -19,6 +19,8 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
                 ? $"its '{SlotName}' names '{FormKey}' a '{named.GetString()}', and this game has no record type of that name"
                 : $"its '{SlotName}' names '{FormKey}' with no '{LoquiUnions.UnionTypeDiscriminator}' naming its type, " +
                   "and its slot holds more than one record type";
+
+        public string? EditorId => DocumentNodes.EditorIdOf(Node);
     }
 
     private const string FormKeyMember = RecordMembers.FormKey;
@@ -104,20 +106,21 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
             slotName, index, DocumentNodes.StringValueOf(formKey), RecordTypeOf(owner, slotName, node), node.Clone());
     }
 
-    // The child's own spelling where the document carries it, else the slot's declared element type:
-    // a slot whose member type is concrete writes no discriminator.
-    private string? RecordTypeOf(Type owner, string slotName, JsonElement node) =>
-        (DeclaredType(node) ?? SlotElementType(owner, slotName)) is { } concrete ? TableFor(concrete) : null;
-
-    private Type? DeclaredType(JsonElement node) =>
-        node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var named) && named.ValueKind == JsonValueKind.String
+    // The child's own spelling where the document carries one, else the slot's declared element type:
+    // a slot whose member type is concrete writes no discriminator. A spelling no type answers to is
+    // no type, whatever the slot holds.
+    private string? RecordTypeOf(Type owner, string slotName, JsonElement node)
+    {
+        var concrete = node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var named) && named.ValueKind == JsonValueKind.String
             ? _dispatch.ConcreteFor(DocumentNodes.StringValueOf(named))
-            : null;
+            : SlotElementType(owner, slotName);
+        return concrete is null ? null : TableFor(concrete);
+    }
 
     private Type? SlotElementType(Type owner, string slotName) =>
         _slots.ElementTypeOf(owner.Name, slotName) is { } element ? _dispatch.ConcreteFor(element) : null;
 
-    private string TableFor(Type? concrete) => RecordTableName.Of(concrete, schemas);
+    private string TableFor(Type concrete) => RecordTableName.Of(concrete, schemas);
 
     /// <summary>Every child a document carries inline, at any depth: a worldspace's own document
     /// holds its top cell, which holds its placed references.</summary>
@@ -157,15 +160,24 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
         return null;
     }
 
-    /// <summary>The type and name of the child <paramref name="formKey"/> names anywhere inside
-    /// <paramref name="ownerBytes"/>; null when no embedded slot of the owner carries it.</summary>
-    public (string RecordType, string? EditorId)? EmbeddedIdentity(
-        string? ownerRecordType, byte[] ownerBytes, string formKey)
+    /// <summary>The child <paramref name="formKey"/> names anywhere inside <paramref name="ownerBytes"/>.
+    /// Null when no embedded slot carries it, the text is no JSON, or no owner type resolves.</summary>
+    public ChildDocument? EmbeddedChild(string? ownerRecordType, byte[] ownerBytes, string formKey)
     {
-        var ownerTypeName = EmbeddedChildLocator.ContainerTypeName(ownerRecordType, ownerBytes, release);
-        if (EmbeddedChildLocator.Find(ownerBytes, ownerTypeName, formKey, release) is not { } span) return null;
+        if (EmbeddedChildLocator.ContainerTypeName(ownerRecordType, ownerBytes, release) is not { } ownerType) return null;
 
-        var declared = span.Discriminator ?? _slots.ElementTypeOf(null, span.SlotName);
-        return (TableFor(_dispatch.ConcreteFor(declared ?? string.Empty)), span.EditorId);
+        try
+        {
+            using var document = JsonDocument.Parse(ownerBytes);
+            foreach (var child in EmbeddedDescendantsOf(ownerType, document.RootElement))
+            {
+                if (string.Equals(child.FormKey, formKey, StringComparison.Ordinal)) return child;
+            }
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

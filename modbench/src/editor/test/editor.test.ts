@@ -78,7 +78,7 @@ vi.mock('vscode', () => ({
 import { createEditor } from '..';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createFocusedView } from '../../drivingLib/focusedView';
-import { renderedDocumentUri } from '../renderedDocument';
+import { renderedDocumentUri } from '../../drivingLib/recordDocument';
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { ReferencedByTreeProvider } from '../ReferencedByTreeProvider';
 import { expectInstanceOf } from '../../test/expectInstanceOf';

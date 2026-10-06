@@ -10,14 +10,17 @@ namespace MEditService.SourceAdapter;
 /// document, and the FormKey it was read for when one is known.</summary>
 public sealed record UnreadableFile(string SourceRelativePath, string Message, string? FormKey = null);
 
-/// <summary>A FormKey that more than one document of a plugin's tree declares, with those documents
-/// as the mod folder spells them.</summary>
+/// <summary>A FormKey a plugin's tree holds more than once, with the documents holding it as the mod
+/// folder spells them: one document when that document holds it twice.</summary>
 public sealed record ClaimedFormKey(string FormKey, IReadOnlyList<string> Documents)
 {
     public string Message =>
-        $"More than one document in this plugin's source tree holds {FormKey}: " +
-        $"{string.Join(", ", Documents.Select(d => $"'{d}'"))}. A FormKey is unique within a plugin, so the tree " +
-        "is corrupt — most likely a copy or an interrupted rename. Remove the duplicate by hand.";
+        (Documents is [var only]
+            ? $"'{only}' holds {FormKey} more than once."
+            : $"More than one document in this plugin's source tree holds {FormKey}: " +
+              $"{string.Join(", ", Documents.Select(d => $"'{d}'"))}.") +
+        " A FormKey is unique within a plugin, so the tree is corrupt — most likely a copy or an interrupted " +
+        "rename. Remove the duplicate by hand.";
 
     public bool Equals(ClaimedFormKey? other) =>
         other is not null && FormKey == other.FormKey && Documents.SequenceEqual(other.Documents);

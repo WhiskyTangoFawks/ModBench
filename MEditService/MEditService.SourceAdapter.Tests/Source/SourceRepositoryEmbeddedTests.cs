@@ -249,6 +249,98 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains("its root is not a JSON object", refused.Message, StringComparison.Ordinal);
     }
 
+    private string InteriorCellWithItsRefsTyped(string type) =>
+        File.ReadAllText(FullPath(InteriorCellPath)).Replace("\"PlacedObject\"", $"\"{type}\"", StringComparison.Ordinal);
+
+    private void AssertNamesTheInteriorCellsUntypedRef(UnreadableSourceDocumentException refused)
+    {
+        Assert.Equal(
+            (InteriorCellPath, _temporaryRef.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
+        Assert.Contains("a 'PlacedObjekt', and this game has no record type of that name", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Get_ByFormKey_OfAChildNoTypeResolves_RefusesNamingItsOwnersFileAndWhy()
+    {
+        File.WriteAllText(FullPath(InteriorCellPath), InteriorCellWithItsRefsTyped("PlacedObjekt"));
+
+        AssertNamesTheInteriorCellsUntypedRef(Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas)));
+    }
+
+    [Fact]
+    public void CarryingFromText_OfAChildNoTypeResolves_RefusesNamingItsOwnersFileAndWhy()
+    {
+        AssertNamesTheInteriorCellsUntypedRef(Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.CarryingFromText(
+                Plugin, _temporaryRef.FormKey.ToString(), InteriorCellWithItsRefsTyped("PlacedObjekt"), Schemas)));
+    }
+
+    private string TopCellFormKey => _worldspace.TopCell.Require().FormKey.ToString();
+
+    private void MisspellTheTopCellsType()
+    {
+        var path = FullPath(WorldspacePath);
+        var text = File.ReadAllText(path);
+        var misspelt = text.Replace("\"TopCell\": {", "\"TopCell\": {\n    \"MutagenObjectType\": \"Cel\",", StringComparison.Ordinal);
+        Assert.NotEqual(text, misspelt);
+        File.WriteAllText(path, misspelt);
+    }
+
+    private void AssertNamesTheWorldspacesMisspeltTopCell(UnreadableSourceDocumentException refused)
+    {
+        Assert.Equal((WorldspacePath, TopCellFormKey), (refused.File?.SourceRelativePath, refused.File?.FormKey));
+        Assert.Contains("a 'Cel', and this game has no record type of that name", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Get_ByFormKey_OfAChildInASingleTypeSlotWhoseTypeIsMisspelt_RefusesNamingItsOwnersFileAndWhy()
+    {
+        MisspellTheTopCellsType();
+
+        AssertNamesTheWorldspacesMisspeltTopCell(Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.Get(Plugin, TopCellFormKey, Schemas)));
+    }
+
+    [Fact]
+    public void ReadingTheTree_WhenAChildInASingleTypeSlotHasItsTypeMisspelt_IsRefusedNamingItsOwnersFileAndWhy()
+    {
+        MisspellTheTopCellsType();
+        using var tree = Repository.OpenDocuments(Plugin, Schemas);
+
+        AssertNamesTheWorldspacesMisspeltTopCell(Assert.Throws<UnreadableSourceDocumentException>(() => tree.Records.ToList()));
+    }
+
+    private void HoldTheTemporaryRefTwiceInItsCell()
+    {
+        _interiorCell.Temporary.Add(_temporaryRef);
+        File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
+    }
+
+    private void AssertClaimedTwiceByTheInteriorCell(AmbiguousSourceUnitException refused)
+    {
+        Assert.Equal(new ClaimedFormKey(_temporaryRef.FormKey.ToString(), [InteriorCellPath]), refused.Claim);
+        Assert.StartsWith($"'{InteriorCellPath}' holds {_temporaryRef.FormKey} more than once.", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Get_OfAChildItsOwnersDocumentHoldsTwice_IsRefusedAsAClaimOfThatDocument()
+    {
+        HoldTheTemporaryRefTwiceInItsCell();
+
+        AssertClaimedTwiceByTheInteriorCell(Assert.Throws<AmbiguousSourceUnitException>(
+            () => Repository.Get(Plugin, Identity(_temporaryRef, "refr"))));
+    }
+
+    [Fact]
+    public void ReadingTheTree_WhenADocumentHoldsAChildTwice_IsRefusedAsAClaimOfThatDocument()
+    {
+        HoldTheTemporaryRefTwiceInItsCell();
+        using var tree = Repository.OpenDocuments(Plugin, Schemas);
+
+        AssertClaimedTwiceByTheInteriorCell(Assert.Throws<AmbiguousSourceUnitException>(() => tree.Records.ToList()));
+    }
+
     [Fact]
     public void ContainerOf_APlacedReferenceInsideItsCell_NamesTheCellAndTheSlot()
     {

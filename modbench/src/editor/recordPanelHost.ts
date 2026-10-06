@@ -24,9 +24,11 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
-import { RENDERED_DOCUMENT_SCHEME, RenderedDocuments, renderedDocumentUri } from './renderedDocument';
-import { CHILD_RECORD_SCHEME, ChildRecordDocuments, childRecordUri } from './childRecordDocument';
-import { copyOf, holdsNoCopy, type RecordCopy } from './recordCopy';
+import { RenderedDocuments } from './renderedDocument';
+import { ChildRecordDocuments } from './childRecordDocument';
+import {
+  CHILD_RECORD_SCHEME, RENDERED_DOCUMENT_SCHEME, copyOf, recordDocument, type RecordCopy,
+} from '../drivingLib/recordDocument';
 import { errorMessage } from '../ports/errorMessage';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
 
@@ -287,7 +289,7 @@ async function openRecords(
   if (!first) return;
   const failMessage = `Failed to open "${recordTitle(first.formKey, undefined)}".`;
   await reportFailure(reporter, failMessage, async () => {
-    const tab = await tabOf(client, first);
+    const tab = await recordDocument(client, first) ?? noActivePluginHolds(first.formKey);
     if ('refused' in tab) {
       reporter.report('error', failMessage, tab.refused);
       return;
@@ -305,24 +307,10 @@ async function openRecords(
   });
 }
 
+const noActivePluginHolds = (formKey: string) => ({ refused: `No active plugin holds ${formKey}.` });
+
 // A record given without a plugin is its winning copy.
 async function copyToOpen(client: OpenClient, { formKey, plugin }: RecordToOpen): Promise<RecordCopy | { refused: string }> {
   const owner = plugin ?? await client.getRecordOwner(formKey);
-  return owner ? { formKey, plugin: owner } : { refused: `No active plugin holds ${formKey}.` };
-}
-
-// A tracked copy opens as its own file, an untracked one as mEdit's rendering, and one carried in
-// another record's file as a child's tab.
-async function tabOf(client: OpenClient, address: RecordToOpen): Promise<{ uri: vscode.Uri } | { refused: string }> {
-  const copy = await copyToOpen(client, address);
-  if ('refused' in copy) return copy;
-  const file = await client.getRecordFile(copy.plugin, copy.formKey);
-  if (file === null) return { refused: holdsNoCopy(copy) };
-  if (!file.path) {
-    const rendered = await client.getRenderedDocument(copy.plugin, copy.formKey);
-    if (rendered === null) return { refused: holdsNoCopy(copy) };
-    return { uri: renderedDocumentUri(copy, rendered.fileName) };
-  }
-  if ((await client.getRecordOfFile(file.path)).formKey === copy.formKey) return { uri: vscode.Uri.file(file.path) };
-  return { uri: childRecordUri(copy, file.path) };
+  return owner ? { formKey, plugin: owner } : noActivePluginHolds(formKey);
 }
