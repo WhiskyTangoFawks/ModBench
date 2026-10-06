@@ -539,16 +539,36 @@ describe('a child record\'s tab', () => {
     expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
   });
 
-  it('reads every column from mEdit, its document being its container\'s, which mEdit does not read as the child\'s', async () => {
+  async function readOf(document: object): Promise<unknown[][]> {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getComparison', null);
     const { openDocument } = makeEditor(client);
-    const tab = await openDocument(CHILD, { isDirty: true, getText: () => '{ "EditorID": "Cell" }' });
+    const tab = await openDocument(CHILD, document);
 
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED, columns: [] });
     await settle();
+    return comparisonsAsked(client);
+  }
 
-    expect(comparisonsAsked(client)).toEqual([[PLACED, undefined]]);
+  it('reads the child\'s column from its container\'s unsaved text, out of which mEdit reads the child', async () => {
+    expect(await readOf({ isDirty: true, getText: () => '{ "EditorID": "Cell" }' }))
+      .toEqual([[PLACED, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Cell" }' }]]);
+  });
+
+  it('reads the child\'s column from mEdit once its container is saved', async () => {
+    expect(await readOf({ isDirty: false, getText: () => '{ "EditorID": "Cell" }' })).toEqual([[PLACED, undefined]]);
+  });
+
+  it('reads again when its container\'s text changes, and not when another document\'s does', async () => {
+    const { openDocument } = makeEditor(new InMemoryMEditClient());
+    const document = { isDirty: true, getText: () => '{}' };
+    const tab = await openDocument(CHILD, document);
+    const typed = { range: {}, text: 'x' };
+
+    changeDocument({ document: { isDirty: true, getText: () => '{}' }, contentChanges: [typed] });
+    changeDocument({ document, contentChanges: [typed] });
+
+    expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: PLACED }]]);
   });
 });
 

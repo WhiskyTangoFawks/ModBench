@@ -137,9 +137,7 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
       // The file is the container's, so its name is not the child's.
       const { formKey, plugin } = copyOf(document.uri);
       panel.title = recordTitle(formKey, undefined);
-      showRecord(this.deps, panel, formKey, columns, {
-        titleFromRead: (read, titled) => { panel.title = recordTitle(read, titled, plugin); }, plugin, unsavedText: () => undefined,
-      });
+      this.showFile(panel, document, { formKey, plugin }, columns, (read, titled) => { panel.title = recordTitle(read, titled, plugin); });
       return;
     }
     const { fsPath } = document.uri;
@@ -147,7 +145,7 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     const read = async (): Promise<void> => {
       try {
         const { formKey, ...copy } = await this.deps.client.getRecordOfFile(fsPath);
-        if (this.unread.delete(panel)) this.showFile(panel, document, { formKey, plugin: pluginAddressOf(copy) }, columns);
+        if (this.unread.delete(panel)) this.showFile(panel, document, { formKey, plugin: pluginAddressOf(copy) }, columns, () => undefined);
       } catch (err) {
         const reason = errorMessage(err);
         if (reason === shownReason || !this.unread.has(panel)) return;
@@ -165,13 +163,15 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     for (const read of this.unread.values()) void read();
   }
 
-  // The file's column follows its unsaved text (editor.md, States, story 5). Saved, it reads mEdit's
-  // copy: VS Code misses a write to a file outside the workspace while the file's tab is hidden.
+  // The file's column follows its unsaved text, a child's its container's (editor.md, States, story 5).
+  // Saved, it reads mEdit's copy: VS Code misses a write to a file outside the workspace while the
+  // file's tab is hidden.
   private showFile(
     panel: vscode.WebviewPanel, document: vscode.TextDocument, { formKey, plugin }: RecordCopy, columns: readonly RecordCopy[],
+    titleFromRead: TabDocument['titleFromRead'],
   ): void {
     const unsavedText = () => (document.isDirty ? document.getText() : undefined);
-    showRecord(this.deps, panel, formKey, columns, { titleFromRead: () => undefined, plugin, unsavedText });
+    showRecord(this.deps, panel, formKey, columns, { titleFromRead, plugin, unsavedText });
     const following = vscode.workspace.onDidChangeTextDocument((change) => {
       if (change.document === document && change.contentChanges.length > 0) this.deps.editsInFlight.refresh(panel);
     });
