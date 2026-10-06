@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
-import { gamePathInfoForRelease } from '../tables/gamePaths';
+import { GAME_RELEASES, gamePathInfoForRelease } from '../tables/gamePaths';
 import { isTestSupport, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
@@ -11,9 +11,7 @@ const THIS_FILE_QUOTING_THE_LITERALS = 'gameNameScan.test.ts';
 
 const TABLE_FILES = [join('tables', 'gamePaths.ts')];
 
-const KNOWN_RELEASES = [
-  'Fallout4', 'Fallout4VR', 'Fallout3', 'FalloutNV', 'SkyrimLE', 'SkyrimSE', 'SkyrimVR', 'EnderalLE', 'Oblivion',
-];
+const KNOWN_RELEASES = GAME_RELEASES;
 
 function knownGameNameLiterals(): string[] {
   const literals = new Set<string>();
@@ -60,7 +58,8 @@ const allFiles = (roots: readonly string[]): string[] =>
   roots.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
 
 describe('no extension file names a game outside the table, in a literal a static scan reads', () => {
-  it('holds only releases the table has a row for', () => {
+  it('knows every release the table holds', () => {
+    expect(KNOWN_RELEASES.length).toBeGreaterThan(8);
     expect(KNOWN_RELEASES.filter((release) => gamePathInfoForRelease(release) === undefined)).toEqual([]);
   });
 
