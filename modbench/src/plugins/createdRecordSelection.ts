@@ -32,10 +32,10 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
 } {
   let forgetLatest: (() => void) | undefined;
 
-  const selectAndOpen = async (place: RecordPlace<Row>, formKey: string): Promise<void> => {
+  const selectAndOpen = async (plugin: PluginAddress, place: RecordPlace<Row>, formKey: string): Promise<void> => {
     const row = await deps.rowOf(place, formKey);
     if (row !== undefined) await deps.view.reveal(row, { select: true, focus: true });
-    void vscode.commands.executeCommand('modbench.record.open', { formKey });
+    void vscode.commands.executeCommand('modbench.record.open', { formKey, plugin });
   };
 
   return {
@@ -47,7 +47,7 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
       const settle = (): void => {
         if (created === undefined || !landed || forgetLatest !== forget) return;
         forget();
-        void selectAndOpen(created.place, created.formKey);
+        void selectAndOpen(plugin, created.place, created.formKey);
       };
       const unsubscribes = [
         deps.client.onNotification('rows-changed', (event) => {

@@ -11,34 +11,33 @@ export interface RecordOpenPlan {
   preview: boolean;
 }
 
-interface StatedRecord {
-  kind?: string; record?: { formKey?: string; plugin?: string }; formKey?: string; plugin?: unknown; origin?: string; header?: PluginAddress;
+// An Argument names its plugin whole; a Plugins row names it by file name beside its origin.
+interface Stated { formKey?: string; plugin?: string | PluginAddress }
+
+interface StatedRecord extends Stated {
+  kind?: string; record?: Stated; origin?: string; header?: PluginAddress;
 }
 
 const PLUGINS_RECORD_ROWS = new Set(['record', 'worldspace', 'cell', 'placed']);
 
-function isPluginAddress(value: unknown): value is PluginAddress {
-  return typeof value === 'object' && value !== null
-    && typeof Reflect.get(value, 'name') === 'string' && typeof Reflect.get(value, 'origin') === 'string';
-}
+// A Plugins record row nests its record's summary.
+const statedBy = (n: StatedRecord): Stated => (n.kind === 'record' ? n.record ?? {} : n);
 
 // A tree row states its record structurally, so a test can use literals shaped like the nodes.
 function addressOf(node: unknown): RecordToOpen | undefined {
   if (!node || typeof node !== 'object') return undefined;
   const n = node as StatedRecord;
   if (n.header) return { formKey: headerFormKeyOf(n.header), plugin: n.header };
-  const formKey = n.kind === 'record' ? n.record?.formKey : n.formKey;
+  const { formKey, plugin } = statedBy(n);
   if (!formKey) return undefined;
-  const plugin = pluginOf(n);
-  return plugin ? { formKey, plugin } : { formKey };
+  const copy = pluginOf(n, plugin);
+  return copy ? { formKey, plugin: copy } : { formKey };
 }
 
-// A Plugins row is its own plugin's copy (commands.md, Argument: "Singular means the clicked row").
-function pluginOf(n: StatedRecord): PluginAddress | undefined {
-  if (isPluginAddress(n.plugin)) return n.plugin;
-  const name = n.kind === 'record' ? n.record?.plugin : n.plugin;
-  const isPluginsRow = n.kind !== undefined && PLUGINS_RECORD_ROWS.has(n.kind);
-  return isPluginsRow && typeof name === 'string' && n.origin ? { name, origin: n.origin } : undefined;
+function pluginOf({ kind, origin }: StatedRecord, plugin: Stated['plugin']): PluginAddress | undefined {
+  if (typeof plugin === 'object') return plugin;
+  const isPluginsRow = kind !== undefined && PLUGINS_RECORD_ROWS.has(kind);
+  return isPluginsRow && plugin !== undefined && origin ? { name: plugin, origin } : undefined;
 }
 
 function asksBeside(argument: unknown): boolean {

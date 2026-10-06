@@ -228,7 +228,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
     await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
 
-    expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, `A.esp (ModA) holds no ${GUN}.`]]);
+    expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, `A.esp (ModA) holds no ${GUN}, or its file is gone.`]]);
     expect(opened()).toEqual([]);
   });
 });

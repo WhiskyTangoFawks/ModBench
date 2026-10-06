@@ -1034,7 +1034,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
   });
 });
 
-const loaded =(result: CompareResult | null, conflictsComputed = true) => ({
+const loaded = (result: CompareResult | null, conflictsComputed = true) => ({
   ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), conflictsComputed, loadFailures: [],
 });
 

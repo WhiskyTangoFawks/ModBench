@@ -250,7 +250,7 @@ async function openRecordTab(
 async function tabOf(client: OpenClient, { formKey, plugin }: RecordToOpen): Promise<[vscode.Uri, string]> {
   if (!plugin) return [recordUri({ formKey }), RECORD_EDITOR_VIEW_TYPE];
   const file = await client.getRecordFile(plugin, formKey);
-  if (file === null) throw new Error(`${plugin.name} (${plugin.origin}) holds no ${formKey}.`);
+  if (file === null) throw new Error(`${plugin.name} (${plugin.origin}) holds no ${formKey}, or its file is gone.`);
   if (file.path && (await client.getRecordOfFile(file.path)).formKey === formKey) {
     return [vscode.Uri.file(file.path), RECORD_FILE_VIEW_TYPE];
   }

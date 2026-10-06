@@ -218,7 +218,7 @@ function createMockBackend(): http.Server {
     }
     if (url.startsWith('/plugin-source/record?')) {
       const filePath = new URL(url, 'http://x').searchParams.get('path');
-      const holds = filePath === TRACKED_FILE;
+      const holds = filePath !== null && vscode.Uri.file(filePath).fsPath === TRACKED_FS_PATH;
       res.writeHead(holds ? 200 : 422, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(holds
         ? { formKey: TRACKED_FORM_KEY, plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN }
@@ -251,6 +251,8 @@ const TRACKED_FILE = path.join(
   fs.mkdtempSync(path.join(os.tmpdir(), 'modbench-tracked-')), TRACKED_ORIGIN, 'plugin-source', TRACKED_PLUGIN, 'Weapons', 'TrackedGun.json');
 fs.mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
 fs.writeFileSync(TRACKED_FILE, JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun' }));
+// The path as VS Code names the file, its drive letter lowercased on Windows.
+const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
 
 const HELD_FORM_KEY = '000801:Held.esp';
 const MOCK_COMPARISONS = new Map<string, CompareResult>([[TRACKED_FORM_KEY, comparisonOf(TRACKED_FORM_KEY, [
@@ -422,7 +424,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 describe('a tracked copy of a record', () => {
   const trackedCopy = { formKey: TRACKED_FORM_KEY, plugin: { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN } };
   const fileTabs = () => openTabs().filter((t) =>
-    t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath === TRACKED_FILE && t.input.viewType === 'modbench.recordFile');
+    t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath === TRACKED_FS_PATH && t.input.viewType === 'modbench.recordFile');
   const reads = () => requestLog.filter((line) => line === `GET /records/${encodeURIComponent(TRACKED_FORM_KEY)}/compare`).length;
 
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
@@ -448,13 +450,13 @@ describe('a tracked copy of a record', () => {
 
     await waitFor('the file\'s tab active', () => {
       const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
-      return input instanceof vscode.TabInputCustom && input.uri.fsPath === TRACKED_FILE;
+      return input instanceof vscode.TabInputCustom && input.uri.fsPath === TRACKED_FS_PATH;
     });
     assert.strictEqual(openTabs().length, 2);
   });
 
   it('opens in the record grid by the route VS Code opens any file by, reading the record mEdit says it holds', async () => {
-    const asked = `GET /plugin-source/record?path=${encodeURIComponent(TRACKED_FILE)}`;
+    const asked = `GET /plugin-source/record?path=${encodeURIComponent(TRACKED_FS_PATH)}`;
     const readsBefore = requestLog.filter((line) => line === asked).length;
 
     await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(TRACKED_FILE));
