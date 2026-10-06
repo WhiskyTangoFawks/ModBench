@@ -110,7 +110,7 @@ public sealed class IngestOnlySourceFileFailureTests : IDisposable
 
         var failure = Assert.Single(index.SourceFileFailures);
         Assert.Equal((Relative(cell), TemporaryRef), (failure.SourceRelativePath, failure.FormKey));
-        Assert.Contains("'EditorID' that is not a string", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("whose 'EditorID' is not a string", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -125,6 +125,20 @@ public sealed class IngestOnlySourceFileFailureTests : IDisposable
         Assert.Equal(
             ContainerModPlugin.EmbedCellEditorId,
             index.RequireReads().GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)?.EditorId);
+    }
+
+    [Fact]
+    public void AnEmbeddedChildsEditorIdEditedIntoANumberOnceRead_NamesTheOwnersFile_WhileItsLastGoodRowsStand()
+    {
+        using var index = Reloaded();
+        var cell = CellFileWithItsEditorIdANumber(ContainerModPlugin.TemporaryRefEditorId);
+
+        index.NextSnapshotUntil(() => index.SourceFileFailures.Count > 0, "the re-read's failure");
+
+        var failure = Assert.Single(index.SourceFileFailures);
+        Assert.Equal((Relative(cell), TemporaryRef), (failure.SourceRelativePath, failure.FormKey));
+        Assert.Equal(
+            ContainerModPlugin.TemporaryRefEditorId, index.RequireReads().GetDocument(TemporaryRef, _fixture.Plugin)?.EditorId);
     }
 
     [Fact]

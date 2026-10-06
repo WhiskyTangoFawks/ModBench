@@ -151,7 +151,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             using var document = JsonDocument.Parse(text);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
                 throw Unreadable(file, "its root is not an object");
-            RefuseEditorIdThatIsNoString(_modFolder, document.RootElement, file, declared);
+            _ = RequireReadable(_modFolder, DocumentNodes.EditorIdOf(document.RootElement), file, declared);
         }
         catch (JsonException ex)
         {
@@ -196,32 +196,31 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     }
 
     /// <summary>Throws, naming <paramref name="file"/>, when <paramref name="text"/> holds what the whole
-    /// read refuses: an EditorID that is no string, or an embedded child <see cref="IdentityOf"/> refuses.</summary>
+    /// read refuses: an EditorID that is no string, or an embedded child that is untyped or holds one.</summary>
     internal void RefuseUnreadable(string recordType, string formKey, string text, string file)
     {
         using (var document = JsonDocument.Parse(text))
-            RefuseEditorIdThatIsNoString(_modFolder, document.RootElement, file, formKey);
-        foreach (var embedded in EmbeddedTexts(recordType, formKey, text)) IdentityOf(_modFolder, embedded.Child, file);
+            _ = RequireReadable(_modFolder, DocumentNodes.EditorIdOf(document.RootElement), file, formKey);
+        foreach (var embedded in EmbeddedTexts(recordType, formKey, text)) _ = RequireReadable(_modFolder, embedded.Child, file);
     }
 
-    internal static void RefuseEditorIdThatIsNoString(string modFolder, JsonElement record, string file, string? formKey)
-    {
-        if (DocumentNodes.HoldsEditorIdThatIsNoString(record))
-            throw UnreadableSourceDocumentException.In(modFolder, file, $"its '{RecordMembers.EditorId}' is not a string", formKey);
-    }
+    /// <summary>The EditorID of the record at a document's root, refusing as that document one that is no string.</summary>
+    internal static string? RequireReadable(string modFolder, EditorIdRead editorId, string file, string? formKey) =>
+        editorId.WhyUnreadable is { } why
+            ? throw UnreadableSourceDocumentException.In(modFolder, file, $"its {why}", formKey)
+            : editorId.EditorId;
 
-    /// <summary>The child's identity, refusing as the file holding it a child no record type resolves
-    /// for, or one whose EditorID is no string.</summary>
-    internal static RecordIdentity IdentityOf(string modFolder, ContainerDocuments.ChildDocument child, string ownerFile)
+    /// <summary>The child's record type, refusing as the file holding it a child none resolves for, or
+    /// one whose EditorID is no string.</summary>
+    internal static string RequireReadable(string modFolder, ContainerDocuments.ChildDocument child, string ownerFile)
     {
         var type = child.RecordType ?? throw UnreadableSourceDocumentException.In(modFolder, ownerFile, child.WhyUntyped, child.FormKey);
-        if (DocumentNodes.HoldsEditorIdThatIsNoString(child.Node))
+        if (DocumentNodes.EditorIdOf(child.Node).WhyUnreadable is { } why)
         {
             throw UnreadableSourceDocumentException.In(
-                modFolder, ownerFile,
-                $"its '{child.SlotName}' names '{child.FormKey}' with an '{RecordMembers.EditorId}' that is not a string", child.FormKey);
+                modFolder, ownerFile, $"its '{child.SlotName}' names '{child.FormKey}', whose {why}", child.FormKey);
         }
-        return new RecordIdentity(child.FormKey, type, child.EditorId);
+        return type;
     }
 
     private IEnumerable<PluginDocument> Embedded(
@@ -229,7 +228,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         foreach (var (child, text, directOwner) in EmbeddedTexts(ownerRecordType, ownerFormKey, ownerText))
         {
-            var childType = IdentityOf(_modFolder, child, ownerFile).RecordType;
+            var childType = RequireReadable(_modFolder, child, ownerFile);
             // The one embedded cell: a worldspace's top cell, outside every exterior block grid.
             var cell = _containers.IsCell(childType)
                 ? CellPlacement.TopCellOf(directOwner).Structure

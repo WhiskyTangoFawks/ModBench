@@ -103,9 +103,12 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
         if (DocumentText.BytesOrNull(owner.FullPath) is not { } ownerBytes) return null;
         return new ContainerDocuments(_release, schemas).EmbeddedChild(owner.RecordType, ownerBytes, spelled) is { } child
-            ? SourceTreeDocuments.IdentityOf(_modFolder, child, owner.FullPath)
+            ? ChildIdentity(child, owner.FullPath)
             : null;
     }
+
+    private RecordIdentity ChildIdentity(ContainerDocuments.ChildDocument child, string ownerFile) =>
+        new(child.FormKey, SourceTreeDocuments.RequireReadable(_modFolder, child, ownerFile), child.EditorId);
 
     /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>
     /// rather than that document's file, which is only found. Null when nothing in the tree holds it.</summary>
@@ -138,7 +141,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         var child = new ContainerDocuments(_release, schemas).EmbeddedChild(owner.RecordType, Encoding.UTF8.GetBytes(text), spelled)
             ?? throw new UnreadableSourceDocumentException(
                 $"The text given for {Path.GetRelativePath(_modFolder, owner.FullPath)} does not carry {spelled}.");
-        return (SourceTreeDocuments.IdentityOf(_modFolder, child, owner.FullPath), carrying);
+        return (ChildIdentity(child, owner.FullPath), carrying);
     }
 
     private SourceDocument DeclaredIn(
@@ -147,7 +150,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         var relativePath = Path.GetRelativePath(_modFolder, documentPath);
         if (NotADocument(text) is { } why)
             throw new UnreadableSourceDocumentException($"The text given for {relativePath} is not a readable document: {why}");
-        var document = DocumentAt(relativePath, text, pluginFileName)
+        var document = ReadableDocumentAt(relativePath, text, pluginFileName)
             ?? throw new UnreadableSourceDocumentException($"The text given for {relativePath} names no record.");
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
             ?? new ContainerDocuments(_release, schemas).RecordTypeNamed(document.RecordType)
@@ -265,10 +268,8 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         {
             if (DocumentText.ReadOrNull(documentPath) is not { } text) continue;
             var relativePath = Path.GetRelativePath(_modFolder, documentPath);
-            if (DocumentAt(relativePath, text, pluginFileName) is not { } document) continue;
+            if (ReadableDocumentAt(relativePath, text, pluginFileName) is not { } document) continue;
             if (!FormKey.TryFactory(document.FormKey, out var declared) || declared != formKey) continue;
-            using (var parsed = JsonDocument.Parse(text))
-                SourceTreeDocuments.RefuseEditorIdThatIsNoString(_modFolder, parsed.RootElement, documentPath, spelled);
 
             // A path-ambiguous group's document names its own type, and that name is the codec's
             // rather than the schema's table, so the codec maps it to one.
@@ -509,15 +510,36 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         foreach (var path in Directory.EnumerateFiles(root, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories))
         {
             if (DocumentText.ReadOrNull(path) is not { } text) continue;
-            if (DocumentAt(Path.GetRelativePath(_modFolder, path), text, plugin.Name) is { } document)
-                documents.Add(document);
+            if (ReadableDocumentAt(Path.GetRelativePath(_modFolder, path), text, plugin.Name) is not { } document) continue;
+            if (DocumentTokens.EditorIdsIn(Encoding.UTF8.GetBytes(text)).Contains(null))
+            {
+                throw UnreadableSourceDocumentException.In(
+                    _modFolder, path, $"a child it embeds has an '{RecordMembers.EditorId}' that is not a string");
+            }
+            documents.Add(document);
         }
         return documents;
     }
 
     // Null for a file that holds no record: group and block metadata, a document that declares no
-    // FormKey, and one whose type neither its path nor its own text names.
+    // FormKey, and one whose type neither its path nor its own text names. An EditorID that is no
+    // string reads as none, since history may hold one (ADR-0007).
     internal SourceDocument? DocumentAt(string relativePath, string text, string pluginFileName)
+    {
+        if (Declared(relativePath, text, pluginFileName) is not var (formKey, recordType, editorId)) return null;
+        return new SourceDocument(formKey, recordType, editorId.WhyUnreadable is null ? editorId.EditorId : null, text);
+    }
+
+    // DocumentAt for the tree as it stands, which refuses an EditorID that is no string.
+    private SourceDocument? ReadableDocumentAt(string relativePath, string text, string pluginFileName) =>
+        Declared(relativePath, text, pluginFileName) is var (formKey, recordType, editorId)
+            ? new SourceDocument(
+                formKey, recordType,
+                SourceTreeDocuments.RequireReadable(_modFolder, editorId, Path.Combine(_modFolder, relativePath), formKey), text)
+            : null;
+
+    private (string FormKey, string RecordType, EditorIdRead EditorId)? Declared(
+        string relativePath, string text, string pluginFileName)
     {
         if (SourceRepositoryLayout.CarriesNoRecord(relativePath)) return null;
 
@@ -527,9 +549,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
                          ?? DocumentText.RootStringIn(text, "MutagenObjectType");
-        return recordType == null
-            ? null
-            : new SourceDocument(formKey, recordType, DocumentText.RootStringIn(text, "EditorID"), text);
+        return recordType == null ? null : (formKey, recordType, DocumentText.EditorIdIn(text));
     }
 
     internal PluginSourceFiles FilesOf(PluginAddress plugin)

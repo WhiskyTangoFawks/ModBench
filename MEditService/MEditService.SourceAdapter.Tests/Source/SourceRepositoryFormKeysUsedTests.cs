@@ -62,6 +62,16 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
     }
 
     [Fact]
+    public void ADocumentCommittedWithAnEditorIdThatIsNoString_IsHeld_OnceTheTreeHoldsItReadable()
+    {
+        var relativePath = Path.Combine(PluginSourceRoot.For(PluginName), "Npcs", $"Fixed - 000850_{PluginName}.json");
+        var repository = Tracked(new TreeFile(relativePath, System.Text.Encoding.UTF8.GetBytes($"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": 5}}")));
+        File.WriteAllText(Path.Combine(_modFolder, relativePath), $"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": \"Fixed\"}}");
+
+        Assert.True(repository.FormKeysUsed(Plugin).Contains($"000850:{PluginName}"));
+    }
+
+    [Fact]
     public void AnUncommittedEmbeddedChild_IsHeld_UnderAnyFormKeySpellingThatParses()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);

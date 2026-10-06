@@ -20,7 +20,7 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
                 : $"its '{SlotName}' names '{FormKey}' with no '{LoquiUnions.UnionTypeDiscriminator}' naming its type, " +
                   "and its slot holds more than one record type";
 
-        public string? EditorId => DocumentNodes.EditorIdOf(Node);
+        public string? EditorId => DocumentNodes.EditorIdOf(Node).EditorId;
     }
 
     private const string FormKeyMember = RecordMembers.FormKey;

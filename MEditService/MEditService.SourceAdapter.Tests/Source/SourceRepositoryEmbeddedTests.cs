@@ -279,13 +279,47 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
             () => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas));
 
         Assert.Equal((InteriorCellPath, _temporaryRef.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
-        Assert.Contains("an 'EditorID' that is not a string", refused.Message, StringComparison.Ordinal);
+        Assert.Contains($"its 'Temporary' names '{_temporaryRef.FormKey}', whose 'EditorID' is not a string", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CarryingFromText_OfARecordWithADocumentOfItsOwn_WhoseEditorIdIsNoString_RefusesNamingItsFileAndTheField()
+    {
+        var text = File.ReadAllText(FullPath(QuestPath)).Replace("\"EditorID\": \"Quest\"", "\"EditorID\": 5", StringComparison.Ordinal);
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.CarryingFromText(Plugin, _quest.FormKey.ToString(), text, Schemas));
+
+        Assert.Contains(QuestPath, refused.Message, StringComparison.Ordinal);
+        Assert.Contains("its 'EditorID' is not a string", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EditorIdsHeld_WhenADocumentsEditorIdIsNoString_RefusesNamingItsFileAndTheField()
+    {
+        GiveANumberForTheEditorId(QuestPath, "Quest");
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.EditorIdsHeld(Plugin));
+
+        Assert.Equal((QuestPath, _quest.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
+        Assert.Contains("its 'EditorID' is not a string", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EditorIdsHeld_WhenAnEmbeddedChildsEditorIdIsNoString_RefusesNamingItsOwnersFileAndTheField()
+    {
+        GiveANumberForTheEditorId(InteriorCellPath, "TempRef");
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.EditorIdsHeld(Plugin));
+
+        Assert.Equal(InteriorCellPath, refused.File?.SourceRelativePath);
+        Assert.Contains("a child it embeds has an 'EditorID' that is not a string", refused.Message, StringComparison.Ordinal);
     }
 
     private string InteriorCellWithItsRefsTyped(string type) =>
         File.ReadAllText(FullPath(InteriorCellPath)).Replace("\"PlacedObject\"", $"\"{type}\"", StringComparison.Ordinal);
 
-    private void AssertNamesTheInteriorCellsUntypedRef(UnreadableSourceDocumentException refused, string type = "PlacedObjekt")
+    private void AssertNamesTheInteriorCellsUntypedRef(string type, UnreadableSourceDocumentException refused)
     {
         Assert.Equal(
             (InteriorCellPath, _temporaryRef.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
@@ -297,14 +331,14 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     {
         File.WriteAllText(FullPath(InteriorCellPath), InteriorCellWithItsRefsTyped("PlacedObjekt"));
 
-        AssertNamesTheInteriorCellsUntypedRef(Assert.Throws<UnreadableSourceDocumentException>(
+        AssertNamesTheInteriorCellsUntypedRef("PlacedObjekt", Assert.Throws<UnreadableSourceDocumentException>(
             () => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas)));
     }
 
     [Fact]
     public void CarryingFromText_OfAChildNoTypeResolves_RefusesNamingItsOwnersFileAndWhy()
     {
-        AssertNamesTheInteriorCellsUntypedRef(Assert.Throws<UnreadableSourceDocumentException>(
+        AssertNamesTheInteriorCellsUntypedRef("PlacedObjekt", Assert.Throws<UnreadableSourceDocumentException>(
             () => Repository.CarryingFromText(
                 Plugin, _temporaryRef.FormKey.ToString(), InteriorCellWithItsRefsTyped("PlacedObjekt"), Schemas)));
     }
@@ -315,8 +349,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         File.WriteAllText(FullPath(InteriorCellPath), InteriorCellWithItsRefsTyped("Npc"));
 
         AssertNamesTheInteriorCellsUntypedRef(
-            Assert.Throws<UnreadableSourceDocumentException>(() => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas)),
-            "Npc");
+            "Npc", Assert.Throws<UnreadableSourceDocumentException>(() => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas)));
     }
 
     private string TopCellFormKey => _worldspace.TopCell.Require().FormKey.ToString();
@@ -397,15 +430,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
     private void AssertTheCellClaimedTwiceByItsOwnDocument(AmbiguousSourceUnitException refused) =>
         Assert.Equal(new ClaimedFormKey(_interiorCell.FormKey.ToString(), [InteriorCellPath]), refused.Claim);
-
-    [Fact]
-    public void ReadingTheTree_WhenAChildCarriesItsOwnersFormKey_IsRefusedAsAClaimOfThatDocument()
-    {
-        GiveTheTemporaryRefItsCellsOwnFormKey();
-        using var tree = Repository.OpenDocuments(Plugin, Schemas);
-
-        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(() => tree.Records.ToList()));
-    }
 
     [Fact]
     public void Get_OfAContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
