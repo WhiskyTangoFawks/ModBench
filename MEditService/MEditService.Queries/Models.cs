@@ -116,6 +116,10 @@ public record CompareResult(
 /// or the one <paramref name="DocumentText"/> spells in its place (ADR-0012).</summary>
 public record RecordCopy(string FormKey, PluginAddress Plugin, string? DocumentText = null);
 
+/// <summary>The document <paramref name="DocumentText"/> a comparison reads <paramref name="Plugin"/>'s copy
+/// from, in place of the copy the index holds.</summary>
+public record CopyText(PluginAddress Plugin, string DocumentText);
+
 // ADR-0012.
 public record ReferenceResult(
     string FormKey, string Plugin, string Origin, string FieldPath, string RecordType, string RecordTypeName, string? EditorId);

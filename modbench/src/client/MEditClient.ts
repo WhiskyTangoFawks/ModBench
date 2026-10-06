@@ -6,7 +6,7 @@ import {
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
   type ChildRecordSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
-  type PluginLoadFailure, type CompareResult, type RecordCopy,
+  type PluginLoadFailure, type CompareResult, type RecordCopy, type CopyText,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -220,10 +220,10 @@ export interface MEditClient {
   getChildrenInDestinations(
     records: readonly RecordAddress[], destinations: readonly PluginAddress[],
   ): Promise<RecordChildHolders[]>;
-  /** One record as every active plugin has it: the record panel's host asks for this and posts it
-   *  to the webview untransformed (target-architecture.d2 `modbench_driving.editor`). Null is a
-   *  record held by no active plugin. */
-  getComparison(formKey: string): Promise<CompareResult | null>;
+  /** One record as every active plugin has it, untransformed (target-architecture.d2 `modbench_driving.editor`).
+   *  Null: no active plugin holds it and no `text` gives it. With `text`, that plugin's column reads
+   *  from it, outside the conflict states if inactive. */
+  getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null>;
   /** Several records side by side: one column per copy, in the order given, with no conflict
    *  state on any cell or row. Null is a copy no plugin holds and no `documentText` gives. */
   getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult | null>;
@@ -268,5 +268,5 @@ export type {
   TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic,
-  LoadOrderStatus, LoadOrderRefusal, PluginLoadFailure, CompareResult, RecordCopy,
+  LoadOrderStatus, LoadOrderRefusal, PluginLoadFailure, CompareResult, RecordCopy, CopyText,
 };

@@ -399,6 +399,18 @@ describe('HttpMEditClient — getComparison', () => {
     expect(request?.url).toMatch(/\/records\/000801%3AMyPatch\.esp\/compare$/);
   });
 
+  it('posts the plugin\'s document text and returns the comparison untransformed', async () => {
+    const comparison = { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Weapon' };
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, comparison)));
+    const text = { plugin: { name: 'Patch.esp', origin: 'PatchMod' }, documentText: '{}' };
+
+    expect(await makeClient(fetch).getComparison('000801:MyPatch.esp', text)).toEqual(comparison);
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.method).toBe('POST');
+    expect(request?.url).toMatch(/\/records\/000801%3AMyPatch\.esp\/compare$/);
+    expect(await request?.json()).toEqual(text);
+  });
+
   it('answers null on a 404, a record gone from every active plugin', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(404, { detail: 'No such record.' })));
     const client = makeClient(fetch);
