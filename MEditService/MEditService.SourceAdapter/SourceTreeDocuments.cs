@@ -29,8 +29,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         _release = release;
         _containers = new ContainerDocuments(release, schemas);
         _root = SourceRepositoryLayout.RootIn(modFolder, pluginFileName);
-        _headerRelativePath = Path.Combine(
-            SourceRepositoryLayout.RootFor(pluginFileName), SourceRepositoryLayout.RecordDataFileName);
+        _headerRelativePath = SourceRepositoryLayout.HeaderDocumentFor(pluginFileName);
     }
 
     /// <summary>Throws when the tree holds no readable root document: serving the binary instead of
@@ -43,7 +42,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             var text = Read(path)
                 ?? throw new FileNotFoundException(
                     $"'{_pluginFileName}' is tracked but its source tree holds no root " +
-                    $"{SourceRepositoryLayout.RecordDataFileName}, so it describes no plugin.", path);
+                    $"{Path.GetFileName(_headerRelativePath)}, so it describes no plugin.", path);
 
             using var _ = JsonDocument.Parse(text);
             return new PluginDocument(
