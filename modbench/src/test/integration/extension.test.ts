@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { before, after, afterEach, describe, it } from 'mocha';
 import type { CompareResult, PluginMetadata } from '../../client';
 import { present } from '../../ports/present';
-import { comparisonOf } from '../comparison';
+import { comparisonOf, fieldOf } from '../comparison';
 import { isRecord, requires } from '../manifest';
 
 const MANIFEST: unknown = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'));
@@ -211,6 +211,13 @@ function createMockBackend(): http.Server {
       res.end(answer ? JSON.stringify(answer) : undefined);
       return;
     }
+    if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.has('search')) {
+      const items = [{ formKey: HELD_FORM_KEY, plugin: 'Patch.esp', loadOrderIndex: 1, isWinner: true, editorId: 'NewGun', origin: 'Data',
+        workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false }];
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ items, total: items.length }));
+      return;
+    }
     res.writeHead(404);
     res.end();
   });
@@ -219,7 +226,10 @@ function createMockBackend(): http.Server {
 const HELD_FORM_KEY = '000801:Held.esp';
 const MOCK_COMPARISONS = new Map<string, CompareResult>([[HELD_FORM_KEY, comparisonOf(HELD_FORM_KEY, [
   { plugin: 'Held.esp', isWinner: false, editorId: 'OldGun' },
-  { plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun' },
+  { plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun', fields: [
+    fieldOf({ name: 'Armor', type: 'formKey', validFormKeyTypes: ['WEAP'] }),
+    fieldOf({ name: 'Name', type: 'string' }),
+  ] },
 ])]]);
 
 before(async function () {
@@ -750,7 +760,7 @@ describe('A FormKey in plugin source', () => {
   const documentAt = async (...segments: string[]) => {
     const file = path.join(folder, ...segments);
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY }));
+    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY }));
     return vscode.workspace.openTextDocument(file);
   };
 
@@ -784,6 +794,28 @@ describe('A FormKey in plugin source', () => {
   it('shows no hover for text that is not a FormKey', async () => {
     await activated();
     assert.deepStrictEqual(await hoverTexts('Rusty'), []);
+  });
+
+  const offeredIn = async (doc: vscode.TextDocument, text: string): Promise<string[]> => {
+    const list = await vscode.commands.executeCommand<vscode.CompletionList>(
+      'vscode.executeCompletionItemProvider', doc.uri, doc.positionAt(doc.getText().indexOf(text) + 2));
+    return list.items.filter((item) => item.insertText === HELD_FORM_KEY).map((item) => typeof item.label === 'string' ? item.label : item.label.label);
+  };
+
+  it('completes a reference field by EditorID, inserting the FormKey', async () => {
+    await activated();
+    assert.deepStrictEqual(await offeredIn(document, NOT_HELD_FORM_KEY), ['NewGun']);
+  });
+
+  it('completes no field that is not a reference', async () => {
+    await activated();
+    assert.deepStrictEqual(await offeredIn(document, 'Rusty'), []);
+  });
+
+  it('completes no reference in JSON outside the plugin source folder', async () => {
+    await activated();
+    const other = await documentAt('Other.json');
+    assert.deepStrictEqual(await offeredIn(other, NOT_HELD_FORM_KEY), []);
   });
 
   it('offers no quick fix', async () => {
