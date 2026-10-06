@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -62,9 +63,8 @@ public sealed class CreateRecordHandlerTests
     }
 
     [Theory]
-    [InlineData("cell")]
     [InlineData("refr")]
-    [InlineData("qust")]
+    [InlineData("navm")]
     public void CreateRecord_RefusesATypeTheCreatableListLeavesOut(string recordType)
     {
         using var mod = SourceEditFixture.Tracked();
@@ -72,7 +72,34 @@ public sealed class CreateRecordHandlerTests
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType);
 
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.Equal(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, result.Refusal);
+    }
+
+    [Theory]
+    [InlineData("qust", "Quests")]
+    [InlineData("wrld", "Worldspaces")]
+    [InlineData("cell", "Cells")]
+    public void CreateRecord_OfATypeHoldingChildren_LandsUnderItsGroupFolder(string recordType, string groupFolder)
+    {
+        using var mod = SourceEditFixture.Tracked();
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType);
+
+        Assert.True(result.Applied, result.Message);
+        var file = mod.DocumentFile(result.NewFormKey.Require()).Require();
+        Assert.Contains(Path.DirectorySeparatorChar + groupFolder + Path.DirectorySeparatorChar, file, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CreateRecord_OfACell_CarriesTheIsInteriorCellFlag()
+    {
+        using var mod = SourceEditFixture.Tracked();
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "cell");
+
+        var document = mod.Document(result.NewFormKey.Require()).Require();
+        var flags = JsonNode.Parse(document.Body).Require()["Flags"].Require().AsArray();
+        Assert.Contains(flags, flag => flag?.GetValue<string>() == "IsInteriorCell");
     }
 
     [Fact]
@@ -82,7 +109,7 @@ public sealed class CreateRecordHandlerTests
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "cell", mod.Worldspace.ToString(), new GridPosition(1, -2));
 
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.Equal(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, result.Refusal);
         Assert.Contains(mod.Worldspace.ToString(), result.Message, StringComparison.Ordinal);
     }
 
@@ -93,7 +120,7 @@ public sealed class CreateRecordHandlerTests
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", mod.Cell.ToString());
 
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.Equal(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, result.Refusal);
         Assert.Contains(mod.Cell.ToString(), result.Message, StringComparison.Ordinal);
     }
 
@@ -104,7 +131,7 @@ public sealed class CreateRecordHandlerTests
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "dial", mod.Quest.ToString());
 
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.Equal(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, result.Refusal);
         Assert.Contains(mod.Quest.ToString(), result.Message, StringComparison.Ordinal);
     }
 

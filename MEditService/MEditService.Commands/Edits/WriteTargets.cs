@@ -326,19 +326,4 @@ internal sealed class WriteTargets(
                 RecordEditRefusal.HeaderDeleteNotSupported,
                 "The plugin header cannot be deleted — it is not an ordinary record.")
             : null;
-
-    // CreateRecord and CopyAsNewRecord only: a brand-new record has no containment to resolve to, and
-    // choosing one is a UX decision.
-    internal static RecordEditResult? RefuseIfContainerType(string recordType, GameRelease release)
-    {
-        if (CreatableRecordTypes.Includes(recordType, release)) return null;
-
-        return RecordEditResult.Refused(
-            RecordEditRefusal.ContainerRecordNotYetSupported,
-            $"'{recordType}' is a container record — it owns child records of its own (a cell, a " +
-            "worldspace, a quest, a dialog topic) — or the game cannot create it (a placed reference, " +
-            "a landscape, a navmesh, a dialog branch, a scene or a response, each held inside another " +
-            "record's document). Editing its fields and its FormID works, and so does deleting it; " +
-            "creating one from scratch is not supported.");
-    }
 }

@@ -30,6 +30,8 @@ public static class PlacedCell
         return copyOnTheLeft is { } text ? JsonNode.Parse(text) as JsonObject : null;
     }
 
+    public static void MarkInterior(JsonObject cell) => cell[FlagsMember] = new JsonArray(InteriorFlag);
+
     public static bool IsInterior(JsonObject cell) =>
         cell[FlagsMember] is JsonArray flags && flags.Any(flag => flag?.GetValue<string>() == InteriorFlag);
 
