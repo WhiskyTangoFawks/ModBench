@@ -67,12 +67,7 @@ internal sealed class RecordEdit(WriteTargets targets, RecordTextCodec codec, Sc
             if (found == null)
             {
                 return RecordEditResult.Refused(
-                    RecordEditRefusal.SourceUnitNotFound,
-                    // Deliberately does not blame an external change: a defect reads identically, and a
-                    // wrong explanation sends the user hunting a problem that is not there.
-                    $"{relativePath} was found holding {formKey}, but its own text does not " +
-                    "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
-                    "report it; otherwise relaunch mEdit so the index re-reads the tree.");
+                    RecordEditRefusal.SourceUnitNotFound, SourceUnitNotFoundException.NotCarried(relativePath, formKey));
             }
             prefix = found;
             cellToLookUp = CellGroupMove.CellToLookUp(root, prefix, envelope);
