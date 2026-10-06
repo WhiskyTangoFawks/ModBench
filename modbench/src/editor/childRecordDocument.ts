@@ -1,14 +1,8 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { samePluginAddress } from '../wire/pluginAddress';
-import { copyOf, copyQuery, followReportedCopies, type CopyChanged, type RecordCopy } from './recordCopy';
-
-export const CHILD_RECORD_SCHEME = 'modbench-child-record';
-
-// The path is the container's file, so VS Code shows where the child lives; the query tells two
-// children of one file apart.
-export const childRecordUri = (copy: RecordCopy, containerFile: string): vscode.Uri =>
-  vscode.Uri.file(containerFile).with({ scheme: CHILD_RECORD_SCHEME, query: copyQuery(copy) });
+import { followReportedCopies, type CopyChanged } from './recordCopy';
+import { CHILD_RECORD_SCHEME, copyOf } from '../drivingLib/recordDocument';
 
 const containerFileOf = (uri: vscode.Uri): vscode.Uri => uri.with({ scheme: 'file', query: '' });
 

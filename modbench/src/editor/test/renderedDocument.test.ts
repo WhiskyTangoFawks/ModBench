@@ -19,9 +19,8 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import * as vscode from 'vscode';
-import { RenderedDocuments, renderedDocumentUri } from '../renderedDocument';
-import { copyOf } from '../recordCopy';
+import { RenderedDocuments } from '../renderedDocument';
+import { renderedDocumentUri } from '../../drivingLib/recordDocument';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 interface ContentProvider {
@@ -49,32 +48,6 @@ function rendered(client = new InMemoryMEditClient()) {
 beforeEach(() => {
   h.providers.clear();
   h.textDocuments.length = 0;
-});
-
-describe('a rendered document\'s address', () => {
-  it('names the copy by its FormKey and plugin, and ends in the name its file would have', () => {
-    const uri = renderedDocumentUri(copy, NAME);
-
-    expect(copyOf(uri)).toEqual(copy);
-    expect(uri.path.split('/').at(-1)).toBe(NAME);
-  });
-
-  it('survives a plugin address containing "/"', () => {
-    const odd = { formKey: '000801:Mod/A.esp', plugin: { name: 'Mod/A.esp', origin: 'Mods/A' } };
-
-    expect(copyOf(renderedDocumentUri(odd, NAME))).toEqual(odd);
-  });
-
-  it('refuses an address that states no plugin name, naming what it lacks', () => {
-    const uri = vscode.Uri.from({ scheme: 'modbench-rendered', path: '/ModA/A.esp/Gun.json', query: 'formKey=000801%3AA.esp&origin=ModA' });
-
-    expect(() => copyOf(uri)).toThrow('The document /ModA/A.esp/Gun.json states no name.');
-  });
-
-  it('tells apart the copies of two plugins of one file name from different origins', () => {
-    expect(renderedDocumentUri(copy, NAME))
-      .not.toEqual(renderedDocumentUri({ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModB' } }, NAME));
-  });
 });
 
 describe('a rendered document\'s text', () => {
