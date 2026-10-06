@@ -234,7 +234,7 @@ public sealed class ConditionEditTests : IDisposable
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
-        public EditRecordHandler EditHandler { get; }
+        public TestEditor EditHandler { get; }
         public FormKey Cobj { get; }
         public FormKey Perk { get; }
         public FormKey Message { get; }
@@ -304,7 +304,7 @@ public sealed class ConditionEditTests : IDisposable
             EditHandler = TestEditService.EditHandler(holder);
         }
 
-        public EditRecordHandler Service() => EditHandler;
+        public TestEditor Service() => EditHandler;
 
         public string Body(FormKey formKey) =>
             TrackedTree.Body(_modFolder, Plugin, formKey.ToString());

@@ -25,7 +25,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
     private readonly ScratchDirectory _modFolder = new("medit-docedit-real-");
     private readonly ScratchDirectory _gameDirectory = new("medit-docedit-real-game-");
     private readonly PluginAddress _plugin;
-    private readonly EditRecordHandler _editHandler;
+    private readonly TestEditor _editHandler;
 
     public DocumentEditRealDataTests(ITestOutputHelper output)
     {

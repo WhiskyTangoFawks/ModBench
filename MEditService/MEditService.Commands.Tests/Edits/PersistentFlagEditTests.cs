@@ -174,19 +174,6 @@ public sealed class PersistentFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void AMoveIntoAnotherCellWhoseDocumentCannotBeWritten_LeavesTheSourceTreeUnchanged()
-    {
-        TreeTampering.BlockWrite(_mod.ModFolder, _mod.Plugin, new RecordIdentity(_keys["World"].ToString(), "wrld", "World"));
-        var before = TrackedTree.Records(_mod.ModFolder, _mod.Plugin);
-
-        var result = SetFlags("OutsideTemp", Persistent);
-
-        Assert.Equal(RecordEditRefusal.SourceWriteFailed, result.Refusal);
-        Assert.Equal(before, TrackedTree.Records(_mod.ModFolder, _mod.Plugin));
-        Assert.Contains("back as it was — nothing to review or revert", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void ClearingPersistent_OnAPlacedRecordInsideItsExteriorCellsGrid_MovesItIntoAGroupTheCellLacked()
     {
         var before = Document("HoldingWithin");

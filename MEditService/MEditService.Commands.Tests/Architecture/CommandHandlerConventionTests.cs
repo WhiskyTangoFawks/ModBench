@@ -8,7 +8,6 @@ public sealed class CommandHandlerConventionTests
 {
     private static readonly Type[] SingleWriteHandlers =
     [
-        typeof(EditRecordHandler),
         typeof(CreateRecordHandler),
         typeof(CreatePluginHandler),
         typeof(PutLoadOrderHandler),
@@ -108,7 +107,7 @@ public sealed class CommandHandlerConventionTests
     [Fact]
     public void EveryCommandInTheNamespace_IsAHandlerOrACarrierThisSuiteNames()
     {
-        var found = typeof(EditRecordHandler).Assembly.GetExportedTypes()
+        var found = typeof(EditRecordChangesHandler).Assembly.GetExportedTypes()
             .Where(type => type.Namespace == CommandsNamespace)
             .OrderBy(type => type.Name, StringComparer.Ordinal);
 

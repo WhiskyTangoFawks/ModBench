@@ -50,7 +50,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     }
 
     [Fact]
-    public void ElementOpsOnAnOverriddenPlugin_AreRefused_ThroughEditRecordHandler()
+    public void ElementOpsOnAnOverriddenPlugin_AreRefused()
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
         var npc = mod.OverriddenNpc.ToString();
@@ -176,7 +176,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     }
 
     [Fact]
-    public void ElementOpsOnAPluginWithNoLine_AreRefused_ThroughEditRecordHandler()
+    public void ElementOpsOnAPluginWithNoLine_AreRefused()
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
         var npc = mod.UnlistedNpc.ToString();

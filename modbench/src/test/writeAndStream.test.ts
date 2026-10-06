@@ -1,11 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom } from './vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Range, uriFile, uriFrom, fakeUri } from './vscodeMock';
 
 vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri: { from: uriFrom },
+  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Range, Uri: { from: uriFrom, file: uriFile },
+  WorkspaceEdit: class { renameFile() {} createFile() {} replace() {} },
+  workspace: {
+    openTextDocument: () => Promise.resolve({ getText: () => '{}', isDirty: true, save: () => Promise.resolve(true) }),
+    applyEdit: () => Promise.resolve(true),
+  },
 }));
 
-import { applyRecordEdit } from '../editor/applyRecordEdit';
+import { applyRecordEdit, oneAtATime, type RecordWriteDeps } from '../editor/applyRecordEdit';
 import { RecordDecorationProvider } from '../plugins/RecordDecorationProvider';
 import { PluginTreeProvider, RecordNode, RecordTypeNode } from '../plugins/PluginTreeProvider';
 import { subscribeRecordPanelsToNotifications } from '../editor/notificationWiring';
@@ -39,6 +44,14 @@ function record(workingTreeState: RecordSummary['workingTreeState']): RecordSumm
   };
 }
 
+const FILE = '/mods/ModA/plugin-source/Test.esp/Npcs/TestNpc.json';
+const EDITED = { formKey: FORM_KEY, plugin: { name: 'Test.esp', origin: 'ModA' } };
+const editDeps = (meditClient: InMemoryMEditClient): RecordWriteDeps => ({
+  meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter(), moving: vi.fn(), oneAtATime: oneAtATime(),
+  documentOf: () => Promise.resolve({ uri: fakeUri(FILE) }),
+});
+const landed = { applied: true as const, moves: [], documents: [{ path: FILE, text: '{"Height": 0.75}' }] };
+
 const rowsChanged = () => ({ kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys: [FORM_KEY], sequence: 1 });
 
 const asVsCodeReReadsAnExpandedGroupOnTreeChange = (tree: PluginTreeProvider, group: RecordTypeNode) => tree.getChildren(group);
@@ -46,14 +59,13 @@ const asVsCodeReReadsAnExpandedGroupOnTreeChange = (tree: PluginTreeProvider, gr
 describe('a write and the stream, together: the write\'s own callback is silent and the stream is how the panel, the tree and the badge learn of it', () => {
   it('after a write, the panel re-reads exactly once, on rows-changed', async () => {
     const meditClient = new InMemoryMEditClient();
-    meditClient.setCommandResult('editRecord', { applied: true });
+    meditClient.setQueryAnswer('getEditChanges', landed);
     const panel = fakePanel();
     const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, FORM_KEY);
     subscribeRecordPanelsToNotifications(meditClient, recordPanels, new EditsInFlight(tracker));
-    await applyRecordEdit(
-      { meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter() }, FORM_KEY, { name: 'Test.esp', origin: 'ModA' }, { op: 'set', path: [] });
+    await applyRecordEdit(editDeps(meditClient), EDITED, { op: 'set', path: [] });
     expect(panel.webview.postMessage).not.toHaveBeenCalled();
 
     meditClient.emit(rowsChanged());
@@ -64,7 +76,7 @@ describe('a write and the stream, together: the write\'s own callback is silent 
 
   it('a landed field edit touches neither the tree nor the badge; the M arrives with mEdit\'s changed rows', async () => {
     const meditClient = new InMemoryMEditClient();
-    meditClient.setCommandResult('editRecord', { applied: true });
+    meditClient.setQueryAnswer('getEditChanges', landed);
     meditClient.setQueryAnswer('getRecords', { items: [record('None')], total: 1 });
     const tree = new PluginTreeProvider(meditClient);
     const badges = new RecordDecorationProvider(tree);
@@ -76,9 +88,7 @@ describe('a write and the stream, together: the write\'s own callback is silent 
     const badgeChanges: unknown[] = [];
     badges.onDidChangeFileDecorations((changed) => { badgeChanges.push(changed); });
 
-    await applyRecordEdit(
-      { meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter() },
-      FORM_KEY, { name: 'Test.esp', origin: 'ModA' }, { op: 'set', path: [] });
+    await applyRecordEdit(editDeps(meditClient), EDITED, { op: 'set', path: [] });
 
     expect(treeChanges).toBe(0);
     expect(badgeChanges).toEqual([]);

@@ -30,11 +30,11 @@ internal static class Envelopes
 
     /// <summary>A set of one top-level member: the gesture most tests make.</summary>
     internal static RecordEditResult Set(
-        this EditRecordHandler handler, PluginAddress plugin, string formKey, string member, JsonElement value) =>
+        this TestEditor handler, PluginAddress plugin, string formKey, string member, JsonElement value) =>
         handler.Edit(plugin, formKey, SetAt(value, Member(member)));
 
     /// <summary>A set of the record's FormID, which the document holds as its FormKey member.</summary>
     internal static RecordEditResult SetFormId(
-        this EditRecordHandler handler, PluginAddress plugin, string formKey, string newFormKey) =>
+        this TestEditor handler, PluginAddress plugin, string formKey, string newFormKey) =>
         handler.Set(plugin, formKey, "FormKey", JsonSerializer.SerializeToElement(newFormKey));
 }

@@ -51,7 +51,7 @@ public sealed class RecordRemovedMidEditTests : IDisposable
         var modFolder = _plugins.FolderOf(_edited);
         var remover = new RemovingTheDocumentOnReadingACopyToItsLeft(
             TreeTampering.FileOf(modFolder, edited, new RecordIdentity(Npc.ToString(), "npc_", null)), modFolder);
-        var handler = TestEditService.Over(_plugins.Holder, adapter: remover).GetRequiredService<EditRecordHandler>();
+        var handler = new TestEditor(TestEditService.Over(_plugins.Holder, adapter: remover).GetRequiredService<EditRecordChangesHandler>(), _plugins.Holder);
 
         var result = handler.Set(edited, Npc.ToString(), "MajorRecordFlagsRaw", JsonDocument.Parse("0").RootElement);
 

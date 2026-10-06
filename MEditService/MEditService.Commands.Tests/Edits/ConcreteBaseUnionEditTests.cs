@@ -101,7 +101,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
-        public EditRecordHandler EditHandler { get; }
+        public TestEditor EditHandler { get; }
         public FormKey Npc { get; }
 
         public ScriptedNpcFixture()
@@ -133,7 +133,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
             EditHandler = TestEditService.EditHandler(holder);
         }
 
-        public EditRecordHandler Service() => EditHandler;
+        public TestEditor Service() => EditHandler;
 
         public string NpcBody() => TrackedTree.Body(_modFolder, Plugin, Npc.ToString());
 

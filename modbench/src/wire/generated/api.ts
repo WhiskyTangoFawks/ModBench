@@ -506,22 +506,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/records/{formKey}/edit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["EditRecord"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/records/{formKey}/edit-changes": {
         parameters: {
             query?: never;
@@ -533,7 +517,7 @@ export interface paths {
         put?: never;
         /**
          * The changes an edit of a record makes to plugin source, writing nothing.
-         * @description Given the edit and the current text of the document carrying the record, the text each document the edit changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each against the tree the one before it left, and each document's path is where it stands once moved, relative to the mod folder. Any other document the edit reads is read from disk. A refusal is the one the edit itself gives.
+         * @description Given the edit and the current text of the document carrying the record, the text each document the edit changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each against the tree the one before it left, and each document's path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from disk. A refusal is the one the edit itself gives.
          */
         post: operations["EditRecordChanges"];
         delete?: never;
@@ -1156,12 +1140,6 @@ export interface components {
             op: string;
             path: components["schemas"]["PathHop"][];
             value?: unknown;
-        };
-        RecordEditResponse: {
-            applied: boolean;
-            formKey: string;
-            path: string;
-            newFormKey?: string | null;
         };
         RecordFile: {
             path?: string | null;
@@ -2633,77 +2611,6 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    EditRecord: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                formKey: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RecordEditRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecordEditResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -14,7 +14,7 @@ import {
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type RecordFile,
   type RebuildIndexOutcome, type CopyItem, type CopyMode, type RecordChildHolders,
-  type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditChangesOutcome, type RecordEditOutcome, type RecordPage,
+  type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditChangesOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
@@ -399,22 +399,8 @@ export class HttpMEditClient implements MEditClient {
     return isRefused(answer) ? answer : selectionOutcome(answer);
   }
 
-  /** A refusal (untracked plugin, a link that would dangle) comes back typed (ADR-0014);
-   *  only a transport failure rejects. */
-  async editRecord(formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope): Promise<RecordEditOutcome> {
-    const spelled = JSON.stringify(envelope.path);
-    const { data, error, response } = await this.apiClient.POST('/records/{formKey}/edit', {
-      params: { path: { formKey } },
-      body: { plugin, origin, ...envelope },
-    });
-    if (response.ok && data?.applied) return data.newFormKey ? { applied: true, newFormKey: data.newFormKey } : { applied: true };
-
-    const outcome = editRefused(error, response.status);
-    this.log(`[HttpMEditClient] editRecord(${formKey} ${envelope.op} ${spelled}) refused: ${outcome.refusal} — ${outcome.message}`);
-    return outcome;
-  }
-
-  /** Only a transport failure rejects, as `editRecord`'s does. */
+  /** A refusal (untracked plugin, a link that would dangle) comes back typed (ADR-0014); only a
+   *  transport failure rejects. */
   async getEditChanges(
     formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope, text: string,
   ): Promise<RecordEditChangesOutcome> {

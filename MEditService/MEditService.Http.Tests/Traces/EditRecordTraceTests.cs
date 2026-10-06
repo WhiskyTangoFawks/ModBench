@@ -50,7 +50,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var applied = await Edit(formKey, "HeightMax", 0.75);
 
         applied.EnsureSuccessStatusCode();
-        Assert.True((await Body(applied)).GetProperty("applied").GetBoolean());
+        Assert.NotEmpty((await Body(applied)).GetProperty("documents").EnumerateArray());
         await Client.NextSnapshot(fx);
 
         var rows = Assert.Single(await stream.EventsUntil(
@@ -134,16 +134,8 @@ public sealed class EditRecordTraceTests : HostedTests
         using var fx = await Loaded(Origin);
         var formKey = await Client.FirstFormKey(Plugin, Origin);
 
-        var response = await Client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/edit",
-            new
-            {
-                plugin = Plugin,
-                origin = Origin,
-                op = "frobnicate",
-                path = new[] { new { kind = "member", name = "HeightMax" } },
-                value = 1,
-            });
+        var response = await Client.EditChanges(
+            formKey, Plugin, Origin, "HeightMax", 1, await Client.RecordFileText(formKey, Plugin, Origin), op: "frobnicate");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var problem = await Body(response);

@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>A real tracked plugin with no records of its own: a case seeds the document it needs,
-/// then edits it through the real <see cref="EditRecordHandler"/>.</summary>
+/// then edits it through the real <see cref="EditRecordChangesHandler"/>, saving what it answers.</summary>
 internal sealed class DocumentEditFixture : TestInstance
 {
     private const string PluginName = "DocEdit.esp";

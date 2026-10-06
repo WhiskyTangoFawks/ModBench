@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
-  type ExtensionToWebview, type WebviewToExtension,
+  type ColumnCopy, type ExtensionToWebview, type WebviewToExtension,
 } from '../wire/messages';
 import type { MEditClient, PluginLoadFailure } from '../client';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
@@ -38,7 +38,7 @@ export interface RouteRecordPanelMessageDeps {
   // Where the panel's tab stands now; undefined while VS Code shows it nowhere.
   tabPlace: () => TabPlace | undefined;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
-  readAnswered: (formKey: string, columns: readonly string[]) => void;
+  readAnswered: (formKey: string, columns: readonly ColumnCopy[]) => void;
   // The latest load-order status, read rather than fetched.
   conflictsComputed: () => boolean;
   loadFailures: () => readonly PluginLoadFailure[];
@@ -72,7 +72,7 @@ export function routerDepsForPanel<Panel extends FollowedPanel & Pick<vscode.Web
     reply,
     ...tab,
     titleFromRead: whileOpen(tab.titleFromRead),
-    readAnswered: whileOpen((formKey: string, columns: readonly string[]) => { editsInFlight.answered(panel, formKey, columns); }),
+    readAnswered: whileOpen((formKey: string, columns: readonly ColumnCopy[]) => { editsInFlight.answered(panel, formKey, columns); }),
     tabPlace: () => (panel.viewColumn === undefined ? undefined : { document, viewColumn: panel.viewColumn }),
   };
 }
@@ -179,7 +179,7 @@ async function answerRecordLoad(
     return;
   }
   deps.titleFromRead(m.formKey, compare.value?.overrides);
-  deps.readAnswered(m.formKey, m.columns.map(({ formKey }) => formKey));
+  deps.readAnswered(m.formKey, m.columns);
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     compare: compare.value, plugins: listed,

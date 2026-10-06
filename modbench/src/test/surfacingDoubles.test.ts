@@ -8,19 +8,27 @@ vi.mock('vscode', async () => ({
   TreeItem: (await import('./vscodeMock')).TreeItem,
   TreeItemCollapsibleState: (await import('./vscodeMock')).TreeItemCollapsibleState,
   window: { showErrorMessage },
+  workspace: { openTextDocument: () => Promise.resolve({ getText: () => '{}' }) },
   commands: { registerCommand: (id: string, handler: (...args: unknown[]) => Promise<void>) => { handlers.set(id, handler); return { dispose: () => {} }; } },
 }));
 
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
+import { fakeUri } from './vscodeMock';
 import { makeReporter } from '../reporter';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
-import { applyRecordEdit } from '../editor/applyRecordEdit';
+import { applyRecordEdit, oneAtATime, type RecordWriteDeps } from '../editor/applyRecordEdit';
 import { registerRecordLifecycleCommands } from '../editor/recordLifecycleCommands';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { present } from '../ports/present';
 import type { RecordEditEnvelope } from '../wire/messages';
 
 const EDIT: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'X' };
+const EDITED = { formKey: '000800:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } };
+
+const editDeps = (reporter: RecordWriteDeps['reporter'], getEditChanges: RecordWriteDeps['meditClient']['getEditChanges']): RecordWriteDeps => ({
+  meditClient: { getEditChanges }, reporter, refreshSourceControlFor: () => {}, moving: () => {}, oneAtATime: oneAtATime(),
+  documentOf: () => Promise.resolve({ uri: fakeUri('/mods/ModA/plugin-source/A.esp/Npc.json') }),
+});
 
 const ACCEPT = 'Delete';
 
@@ -40,9 +48,7 @@ async function offerTwice(dialog: ReturnType<typeof scriptedDialog>): Promise<bo
 describe('the recording reporter', () => {
   it('records the severity, message and detail a module reported, in order', async () => {
     const reporter = recordingReporter();
-    const meditClient = { editRecord: () => Promise.reject(new Error('backend down')) };
-
-    await applyRecordEdit({ meditClient, refreshSourceControlFor: () => {}, reporter }, '000800', { name: 'A.esp', origin: 'ModA' }, EDIT);
+    await applyRecordEdit(editDeps(reporter, () => Promise.reject(new Error('backend down'))), EDITED, EDIT);
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not edit EditorID.', detail: 'backend down' },
@@ -52,9 +58,8 @@ describe('the recording reporter', () => {
 
   it('records a refusal as a warning with no detail, and a landing separately from a report', async () => {
     const reporter = recordingReporter();
-    const meditClient = { editRecord: () => Promise.resolve({ applied: false as const, refusal: 'ReadOnly', message: 'Record is read-only.' }) };
-
-    await applyRecordEdit({ meditClient, refreshSourceControlFor: () => {}, reporter }, '000800', { name: 'A.esp', origin: 'ModA' }, EDIT);
+    await applyRecordEdit(
+      editDeps(reporter, () => Promise.resolve({ applied: false as const, refusal: 'ReadOnly', message: 'Record is read-only.' })), EDITED, EDIT);
     reporter.landed('Mods deployed.');
 
     expect(reporter.reports).toEqual([

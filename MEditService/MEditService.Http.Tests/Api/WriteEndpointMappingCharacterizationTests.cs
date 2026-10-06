@@ -81,31 +81,6 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    [Fact]
-    public async Task EditingTheFormId_WhenTheSourceCannotBeWritten_IsATypedRefusal_NotAnUnhandled500()
-    {
-        using var fx = BuildOneModOnePlugin();
-        await Load(fx);
-        await Track(Origin);
-        var formKey = await FirstNpcFormKey(Plugin, Origin);
-        var modFolder = ModFolderOf(fx, Origin);
-
-        OtherTool.SetsThePermissions(modFolder, ReadAndExecuteOnly);
-        try
-        {
-            var response = await _client.Edit(formKey, Plugin, Origin, "FormKey", $"000F00:{Plugin}");
-
-            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-            var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal("SourceWriteFailed", problem.GetProperty("refusal").GetString());
-            Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("detail").GetString()));
-        }
-        finally
-        {
-            OtherTool.SetsThePermissions(modFolder, OwnerFullAccess);
-        }
-    }
-
     [Theory]
     [InlineData("Override")]
     [InlineData("New")]

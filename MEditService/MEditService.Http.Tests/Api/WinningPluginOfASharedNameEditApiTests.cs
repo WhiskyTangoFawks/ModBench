@@ -30,6 +30,6 @@ public sealed class WinningPluginOfASharedNameEditApiTests : HostedTests
         var response = await Client.Edit(formKey, PluginName, WinningOrigin, "HeightMax", 0.75);
 
         response.EnsureSuccessStatusCode();
-        Assert.True((await response.Body()).GetProperty("applied").GetBoolean());
+        Assert.NotEmpty((await response.Body()).GetProperty("documents").EnumerateArray());
     }
 }

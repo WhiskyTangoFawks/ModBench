@@ -77,7 +77,7 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
 
   it('reads the record it shows once, after the answer, when mEdit reports a record it shows as a column changed', async () => {
     const { client, panel, edits } = openOn('000800:Mod.esp');
-    edits.answered(panel, '000800:Mod.esp', ['000801:Mod.esp']);
+    edits.answered(panel, '000800:Mod.esp', [{ formKey: '000801:Mod.esp', plugin: EDITED_MOD_ESP_FROM_MODA.plugin }]);
     const { write, answer } = writeAnsweredWhenTheTestChooses();
 
     const editing = edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, write);
@@ -128,6 +128,20 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
     expect(written).toEqual(['000900:Mod.esp']);
     expect(tracker.formKeyOf(moved)).toBe('000a00:Mod.esp');
     expect(loadsOf(elsewhere)).toEqual([]);
+  });
+
+  it('reads nothing into a tab closed while its edit was in flight, nor follows it to the new FormKey', async () => {
+    const { client, panel, tracker, edits } = openOn('000800:Mod.esp');
+    const { write, answer } = writeAnsweredWhenTheTestChooses();
+    const editing = edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, write);
+    client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+
+    edits.forget(panel);
+    answer('000900:Mod.esp');
+    await editing;
+
+    expect(loadsOf(panel)).toEqual([]);
+    expect(tracker.formKeyOf(panel)).toBe('000800:Mod.esp');
   });
 
   it('holds only the panel whose edit is in flight', async () => {

@@ -20,7 +20,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private EditRecordHandler EditService() => _fixture.EditHandler;
+    private TestEditor EditService() => _fixture.EditHandler;
 
     private async Task<IFallout4ModGetter> CompileAndReparse()
     {

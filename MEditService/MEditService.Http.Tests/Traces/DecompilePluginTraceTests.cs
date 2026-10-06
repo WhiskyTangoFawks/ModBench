@@ -46,7 +46,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
 
         var edit = await Client.Edit(await Client.FirstFormKey(Plugin, Origin), Plugin, Origin, "HeightMax", 0.75);
         edit.EnsureSuccessStatusCode();
-        Assert.True((await edit.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
+        Assert.NotEmpty((await edit.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("documents").EnumerateArray());
     }
 
     [Fact]

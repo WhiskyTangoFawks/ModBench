@@ -71,17 +71,44 @@ internal static class Wire
         this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>
         client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
 
-    internal static Task<HttpResponseMessage> Edit(
-        this HttpClient client, string formKey, string plugin, string origin, string member, object value) =>
-        client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/edit",
-            new { plugin, origin, op = "set", path = new[] { new { kind = "member", name = member } }, value });
+    /// <summary>An edit as Modbench makes one: mEdit is given the text of the record's file and answers the changes
+    /// the edit makes, and each move and then each document is saved. The answer is mEdit's.</summary>
+    internal static async Task<HttpResponseMessage> Edit(
+        this HttpClient client, string formKey, string plugin, string origin, string member, object value)
+    {
+        var response = await client.EditChanges(formKey, plugin, origin, member, value, await client.RecordFileText(formKey, plugin, origin));
+        if (!response.IsSuccessStatusCode) return response;
+
+        var changes = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        foreach (var move in changes.GetProperty("moves").EnumerateArray())
+        {
+            var (from, to) = (move.GetProperty("from").GetString().Require(), move.GetProperty("to").GetString().Require());
+            if (Directory.Exists(from)) Directory.Move(from, to);
+            else File.Move(from, to);
+        }
+        foreach (var document in changes.GetProperty("documents").EnumerateArray())
+        {
+            var at = document.GetProperty("path").GetString().Require();
+            Directory.CreateDirectory(Path.GetDirectoryName(at).Require());
+            await File.WriteAllTextAsync(at, document.GetProperty("text").GetString());
+        }
+        return response;
+    }
+
+    /// <summary>The text of the file holding the plugin's copy of the record; empty when it has none.</summary>
+    internal static async Task<string> RecordFileText(this HttpClient client, string formKey, string plugin, string origin)
+    {
+        var file = await client.GetAsync(
+            $"/plugins/{Uri.EscapeDataString(plugin)}/records/{Uri.EscapeDataString(formKey)}/file?origin={Uri.EscapeDataString(origin)}");
+        var path = file.IsSuccessStatusCode ? (await file.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("path").GetString() : null;
+        return path is null ? "" : await File.ReadAllTextAsync(path);
+    }
 
     internal static Task<HttpResponseMessage> EditChanges(
-        this HttpClient client, string formKey, string plugin, string origin, string member, object value, string? text) =>
+        this HttpClient client, string formKey, string plugin, string origin, string member, object value, string? text, string op = "set") =>
         client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/edit-changes",
-            new { edit = new { plugin, origin, op = "set", path = new[] { new { kind = "member", name = member } }, value }, text });
+            new { edit = new { plugin, origin, op, path = new[] { new { kind = "member", name = member } }, value }, text });
 
     internal static Task<HttpResponseMessage> Copy(
         this HttpClient client, IEnumerable<(string FormKey, string Plugin, string Origin)> records, string mode,

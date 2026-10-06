@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class FormIdEditRollbackTests
+public sealed class FormIdEditFailureTests
 {
     private static readonly FormKey NewNpcFormKey = FormKey.Factory("000F00:Fixture.esp");
 
@@ -17,23 +17,6 @@ public sealed class FormIdEditRollbackTests
         new(NewNpcFormKey.ToString(), "npc_", SourceEditFixture.NpcEditorId);
 
     private const string NewWorldspaceFormKey = "000F00:SourceContainer.esp";
-
-    [Fact]
-    public void BlockingTheRecordsNewFile_LeavesTheSourceTreeUnchanged()
-    {
-        using var mod = SourceEditFixture.Tracked();
-        TreeTampering.BlockWrite(mod.ModFolder, mod.Plugin, NewNpcIdentity);
-
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
-        var statusBefore = mod.ChangedFormKeys();
-
-        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), NewNpcFormKey.ToString());
-
-        Assert.Equal(RecordEditRefusal.SourceWriteFailed, result.Refusal);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
-        Assert.Equal(statusBefore, mod.ChangedFormKeys());
-        Assert.Contains("back as it was — nothing to review or revert", result.Message, StringComparison.Ordinal);
-    }
 
     [Fact]
     public void AFormIdEditWhoseContainerHasTwoSourceUnits_RefusesAsAmbiguous_WithTheTreeAsItWas()
@@ -68,7 +51,7 @@ public sealed class FormIdEditRollbackTests
     }
 
     [Fact]
-    public void AFormIdEditThatFaultsUnexpectedly_RollsBack_AndRethrowsTheFaultAsItself()
+    public void AFormIdEditThatFaultsUnexpectedly_RethrowsTheFaultAsItself_AndChangesNothing()
     {
         using var fixture = new SourceContainerFixture();
         var worldspace = fixture.DocumentCarrying(SourceContainerFixture.WorldspaceEditorId);

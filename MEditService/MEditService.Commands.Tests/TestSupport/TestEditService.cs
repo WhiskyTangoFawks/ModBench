@@ -30,8 +30,8 @@ internal static class TestEditService
             .AddCommandHandlers()
             .BuildServiceProvider();
 
-    internal static EditRecordHandler EditHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<EditRecordHandler>();
+    internal static TestEditor EditHandler(LoadOrderHolder holder) =>
+        new(Over(holder).GetRequiredService<EditRecordChangesHandler>(), holder);
 
     internal static DeleteRecordHandler DeleteHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<DeleteRecordHandler>();

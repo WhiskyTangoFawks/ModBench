@@ -128,20 +128,6 @@ public static class RecordEndpoints
         .ProducesProblem(503)
         .ProducesProblem(500);
 
-        // The single write path's one door (ADR-0007). Scripts and agents reach the same
-        // handler the UI does, which is why the untracked refusal is expressible here.
-        app.MapPost("/records/{formKey}/edit", (
-            string formKey, RecordEditRequest request, EditRecordHandler edits) =>
-            EditRecord(formKey, request, edits, logger))
-        .WithName("EditRecord")
-        .WithTags("Records")
-        .Produces<RecordEditResponse>()
-        .ProducesProblem(400)
-        .ProducesProblem(404)
-        .ProducesProblem(409)
-        .ProducesProblem(422)
-        .ProducesProblem(500);
-
         // ADR-0001: the document is the caller's to change and save.
         app.MapPost("/records/{formKey}/edit-changes", (
             string formKey, RecordEditChangesRequest request, EditRecordChangesHandler edits) =>
@@ -152,7 +138,7 @@ public static class RecordEndpoints
             "Given the edit and the current text of the document carrying the record, the text each document the edit " +
             "changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each " +
             "against the tree the one before it left, and each document's " +
-            "path is where it stands once moved, relative to the mod folder. Any other document the edit reads is read from " +
+            "path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from " +
             "disk. A refusal is the one the edit itself gives.")
         .WithTags("Records")
         .Produces<RecordEditChangesResponse>()
@@ -233,32 +219,6 @@ public static class RecordEndpoints
         .ProducesProblem(503);
 
         return app;
-    }
-
-    // The source file sits in a working tree Modbench does not own exclusively (root CLAUDE.md)
-    // and there is no exception middleware, so I/O failures are mapped here rather than escaping
-    // as a bodyless 500.
-    internal static IResult EditRecord(
-        string formKey, RecordEditRequest request, EditRecordHandler edits, ILogger logger)
-    {
-        var decoded = Uri.UnescapeDataString(formKey);
-        var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
-        return WriteEndpointMapping.Execute(
-            "Edit", logger,
-            logReceived: () =>
-            {
-                if (logger.IsEnabled(LogLevel.Information))
-                {
-                    logger.LogInformation(
-                        "Received EditRecord {Op} {Path} for {FormKey} in {Plugin} ({Origin})",
-                        request.Op, spelled, decoded, request.Plugin, request.Origin);
-                }
-            },
-            validate: () => EditRequestProblem(request),
-            execute: () => edits.Edit(
-                new PluginAddress(request.Plugin, request.Origin), decoded,
-                new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value)),
-            onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled, result.NewFormKey)));
     }
 
     internal static IResult EditRecordChanges(

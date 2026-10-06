@@ -21,7 +21,7 @@ public sealed class PersistentFlagPartialFormCellTests : IDisposable
     private readonly ScratchDirectory _root = new("medit-persistent-partial-");
     private readonly PluginAddress _override = new("Override.esp", OverrideOrigin);
     private readonly FormKey _cell, _temporary, _persistent;
-    private readonly EditRecordHandler _handler;
+    private readonly TestEditor _handler;
 
     public PersistentFlagPartialFormCellTests()
     {

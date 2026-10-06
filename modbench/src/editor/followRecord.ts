@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
+import { EXTENSION_TO_WEBVIEW, type ColumnCopy, type ExtensionToWebview } from '../wire/messages';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 
 export type FollowedPanel = { title: string; webview: Pick<vscode.Webview, 'postMessage'> };
@@ -27,7 +27,9 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   private readonly inFlight = new Map<Panel, InFlight>();
   private readonly moves = new Map<Panel, Move[]>();
   // The records each panel's last answered read showed beside its own.
-  private readonly columns = new Map<Panel, readonly string[]>();
+  private readonly columns = new Map<Panel, readonly ColumnCopy[]>();
+  // A closed panel's edit can still be answered.
+  private readonly closed = new WeakSet<Panel>();
   private clock = 0;
 
   constructor(private readonly tracker: FormKeyTracker<Panel>) {}
@@ -96,7 +98,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
 
   /** The tab's read of `formKey` is answered: it shows that record from now on, and `columns`
    *  beside it. Reading a chain's last key ends every move in it, back to the key the tab last read. */
-  answered(panel: Panel, formKey: string, columns: readonly string[]): void {
+  answered(panel: Panel, formKey: string, columns: readonly ColumnCopy[]): void {
     this.columns.set(panel, columns);
     const moves = this.moves.get(panel) ?? [];
     const readAt = ++this.clock;
@@ -109,8 +111,22 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     }
   }
 
+  /** The records the panel's last answered read showed beside its own. */
+  columnsOf(panel: Panel): readonly ColumnCopy[] {
+    return this.columns.get(panel) ?? [];
+  }
+
+  /** An edit moved the plugin's record from `from` to `to`, which the panel shows: it reads `to` once
+   *  mEdit reports it. */
+  moved(panel: Panel, plugin: PluginAddress, from: string, to: string): void {
+    const moves = this.moves.get(panel) ?? [];
+    moves.push({ plugin, from, to, asked: false, readAt: undefined });
+    this.moves.set(panel, moves);
+  }
+
   /** A closed panel: nothing of it is held any longer. */
   forget(panel: Panel): void {
+    this.closed.add(panel);
     this.inFlight.delete(panel);
     this.moves.delete(panel);
     this.columns.delete(panel);
@@ -130,6 +146,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
       entry.writes -= 1;
       if (entry.writes === 0) this.inFlight.delete(panel);
     }
+    if (this.closed.has(panel)) return;
     if (newFormKey) this.follow(panel, target, newFormKey);
     if (entry.writes === 0) this.settle(panel, entry);
   }
@@ -137,9 +154,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   // An edit of the FormID moves its own plugin's record, and the tab goes with it (editor.md,
   // The record header, story 2).
   private follow(panel: Panel, target: EditAddress, newFormKey: string): void {
-    const moves = this.moves.get(panel) ?? [];
-    moves.push({ plugin: target.plugin, from: target.formKey, to: newFormKey, asked: false, readAt: undefined });
-    this.moves.set(panel, moves);
+    this.moved(panel, target.plugin, target.formKey, newFormKey);
     if (this.tracker.formKeyOf(panel) !== target.formKey) return;
     this.tracker.setFormKey(panel, newFormKey);
     if (panel.title === target.formKey) panel.title = newFormKey;
@@ -153,7 +168,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   }
 
   private shows(panel: Panel, shown: string, keys: readonly string[]): boolean {
-    return [shown, ...this.columns.get(panel) ?? []].some(key => keys.includes(key));
+    return [shown, ...this.columnsOf(panel).map(({ formKey }) => formKey)].some(key => keys.includes(key));
   }
 
   private awaitsReport(panel: Panel): boolean {
