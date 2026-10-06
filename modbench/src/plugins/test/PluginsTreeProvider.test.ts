@@ -32,8 +32,8 @@ import {
   type PluginListSource, type PluginsTreeNode, type PluginsTreeProviderOptions,
 } from '../PluginsTreeProvider';
 import {
-  PluginTreeProvider, RecordTypeNode, RecordNode, WorldspacesNode, WorldspaceNode, BlockNode,
-  SubBlockNode, CellNode, InteriorCellsNode, InteriorBlockNode, InteriorSubBlockNode, IndexingNode,
+  PluginTreeProvider, RecordTypeNode, RecordNode, WorldspaceNode, BlockNode,
+  SubBlockNode, CellNode, InteriorBlockNode, InteriorSubBlockNode, IndexingNode,
 } from '../PluginTreeProvider';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -1921,7 +1921,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const [row] = await h.tree.getChildren();
 
     const [worldspaces] = await h.tree.getChildren(row);
-    expect(worldspaces).toBeInstanceOf(WorldspacesNode);
+    expect(expectInstanceOf(worldspaces, RecordTypeNode).recordType).toBe('wrld');
     const [worldspace] = await h.tree.getChildren(worldspaces);
     expect(worldspace).toBeInstanceOf(WorldspaceNode);
     const [block] = await h.tree.getChildren(worldspace);
@@ -1951,7 +1951,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const [row] = await h.tree.getChildren();
 
     const [interior] = await h.tree.getChildren(row);
-    expect(interior).toBeInstanceOf(InteriorCellsNode);
+    expect(expectInstanceOf(interior, RecordTypeNode).recordType).toBe('cell');
     const [block] = await h.tree.getChildren(interior);
     expect(expectInstanceOf(block, InteriorBlockNode).label).toBe('Block 3');
     const [subBlock] = await h.tree.getChildren(block);
@@ -2065,8 +2065,7 @@ describe('PluginsTreeProvider — a record row is identified by its kind, its pl
     const states = rows.map((row) => tree.getTreeItem(row).collapsibleState);
 
     expect([...new Set(rows.map((row) => row.kind))].sort()).toEqual([
-      'cell', 'interiorBlock', 'interiorCells', 'interiorSubBlock', 'placed', 'placedGroup', 'plugin', 'record',
-      'recordType', 'worldspace', 'worldspaces',
+      'cell', 'interiorBlock', 'interiorSubBlock', 'placed', 'placedGroup', 'plugin', 'record', 'recordType', 'worldspace',
     ]);
     expect(states.filter((state) => state === vscode.TreeItemCollapsibleState.Expanded)).toEqual([]);
   });
@@ -2883,6 +2882,50 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
     tree.setFilter('B.esp');
 
     expect(await tree.recordRow(NPCS, NEW_NPC)).toBeUndefined();
+  });
+
+  it('finds a worldspace\'s row beneath the Worldspace group, and walks up through it to its plugin row', async () => {
+    const { tree } = await heldWith(makeClient({
+      recordTypes: [{ type: 'wrld', count: 2, displayName: 'Worldspace' }],
+      worldspaces: ['000800:A.esp', '000900:A.esp'].map((formKey) => ({ formKey, hasParseFailure: false, hasChildren: true })),
+    }));
+
+    const row = expectInstanceOf(await tree.recordRow({ ...NPCS, recordType: 'wrld' }, '000900:A.esp'), WorldspaceNode);
+    const group = expectInstanceOf(tree.getParent(row), RecordTypeNode);
+
+    expect([row.formKey, group.recordType, expectInstanceOf(tree.getParent(group), PluginNode).plugin.name])
+      .toEqual(['000900:A.esp', 'wrld', 'A.esp']);
+  });
+
+  it('finds an interior cell\'s row beneath the Cell group\'s block and sub-block, and walks up through each to its plugin row', async () => {
+    const cell = (formKey: string): CellSummary => ({ formKey, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false });
+    const { tree } = await heldWith(makeClient({
+      recordTypes: [{ type: 'cell', count: 2, displayName: 'Cell' }],
+      interiorCells: [
+        { number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells: [cell('000800:A.esp')] }] },
+        { number: 1, hasParseFailure: false, subBlocks: [{ number: 9, hasParseFailure: false, cells: [cell('000900:A.esp')] }] },
+      ],
+    }));
+
+    const row = expectInstanceOf(await tree.recordRow({ ...NPCS, recordType: 'cell' }, '000900:A.esp'), CellNode);
+    const subBlock = expectInstanceOf(tree.getParent(row), InteriorSubBlockNode);
+    const block = expectInstanceOf(tree.getParent(subBlock), InteriorBlockNode);
+    const group = expectInstanceOf(tree.getParent(block), RecordTypeNode);
+
+    expect([row.formKey, subBlock.label, block.label, group.recordType, expectInstanceOf(tree.getParent(group), PluginNode).plugin.name])
+      .toEqual(['000900:A.esp', 'Sub-Block 9', 'Block 1', 'cell', 'A.esp']);
+  });
+
+  it('never expands a record row while it looks, since what a record holds is not its group\'s', async () => {
+    const h = await heldWith(makeClient({
+      recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }],
+      interiorCells: [{ number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells: [
+        { formKey: '000800:A.esp', isPersistentWorldspaceCell: false, hasChildren: true, hasParseFailure: false },
+      ] }] }],
+    }));
+
+    expect(await h.tree.recordRow({ ...NPCS, recordType: 'cell' }, NEW_NPC)).toBeUndefined();
+    expect(callCount(h.client, 'getCellChildRecords')).toBe(0);
   });
 });
 
