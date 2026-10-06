@@ -22,8 +22,10 @@ import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
+import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen, type TabPlace } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
+import { inTabsPlace } from './inTabsPlace';
+import { fileText } from './fileText';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from './childRecordDocument';
 import {
@@ -129,16 +131,15 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     panel.onDidDispose(() => this.documentOf.delete(panel));
     if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
       const { formKey, plugin } = copyOf(document.uri);
-      showRecord(this.deps, panel, formKey, columns, { titleFromRead: () => undefined, plugin, unsavedText: () => undefined });
+      const documentText = (pluginActive: boolean) => Promise.resolve(pluginActive ? undefined : document.getText());
+      showRecord(this.deps, panel, document.uri, formKey, columns, { titleFromRead: () => undefined, plugin, documentText });
       return;
     }
     if (document.uri.scheme === CHILD_RECORD_SCHEME) {
       // The file is the container's, so its name is not the child's.
       const { formKey, plugin } = copyOf(document.uri);
       panel.title = recordTitle(formKey, undefined);
-      showRecord(this.deps, panel, formKey, columns, {
-        titleFromRead: (read, titled) => { panel.title = recordTitle(read, titled, plugin); }, plugin, unsavedText: () => undefined,
-      });
+      this.showFile(panel, document, { formKey, plugin }, columns, (read, titled) => { panel.title = recordTitle(read, titled, plugin); });
       return;
     }
     const { fsPath } = document.uri;
@@ -146,7 +147,7 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     const read = async (): Promise<void> => {
       try {
         const { formKey, ...copy } = await this.deps.client.getRecordOfFile(fsPath);
-        if (this.unread.delete(panel)) this.showFile(panel, document, { formKey, plugin: pluginAddressOf(copy) }, columns);
+        if (this.unread.delete(panel)) this.showFile(panel, document, { formKey, plugin: pluginAddressOf(copy) }, columns, () => undefined);
       } catch (err) {
         const reason = errorMessage(err);
         if (reason === shownReason || !this.unread.has(panel)) return;
@@ -164,13 +165,15 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     for (const read of this.unread.values()) void read();
   }
 
-  // The file's column follows its unsaved text (editor.md, States, story 5). Saved, it reads mEdit's
-  // copy: VS Code misses a write to a file outside the workspace while the file's tab is hidden.
+  // A child's column follows its container's document. Saved, the read model wins (commands.md,
+  // Principles), but mEdit compares no inactive plugin's copy, so the file's column reads the file then.
   private showFile(
     panel: vscode.WebviewPanel, document: vscode.TextDocument, { formKey, plugin }: RecordCopy, columns: readonly RecordCopy[],
+    titleFromRead: TabDocument['titleFromRead'],
   ): void {
-    const unsavedText = () => (document.isDirty ? document.getText() : undefined);
-    showRecord(this.deps, panel, formKey, columns, { titleFromRead: () => undefined, plugin, unsavedText });
+    const documentText = async (pluginActive: boolean) =>
+      (document.isDirty ? document.getText() : pluginActive ? undefined : savedText(document.uri));
+    showRecord(this.deps, panel, document.uri, formKey, columns, { titleFromRead, plugin, documentText });
     const following = vscode.workspace.onDidChangeTextDocument((change) => {
       if (change.document === document && change.contentChanges.length > 0) this.deps.editsInFlight.refresh(panel);
     });
@@ -178,8 +181,19 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   }
 }
 
+// The file on disk, as VS Code misses a write to a file outside the workspace while its tab is
+// hidden. A document's text has no byte order mark. A file gone is mEdit's to answer.
+async function savedText(uri: vscode.Uri): Promise<string | undefined> {
+  try {
+    return (await fileText(uri)).replace(/^\uFEFF/, '');
+  } catch (err) {
+    if (err instanceof vscode.FileSystemError && err.code === 'FileNotFound') return undefined;
+    throw err;
+  }
+}
+
 function showRecord(
-  deps: ShowRecordDeps, panel: vscode.WebviewPanel, formKey: string, columns: readonly RecordCopy[], tab: TabDocument,
+  deps: ShowRecordDeps, panel: vscode.WebviewPanel, document: vscode.Uri, formKey: string, columns: readonly RecordCopy[], tab: TabDocument,
 ): void {
   const {
     context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps,
@@ -205,7 +219,7 @@ function showRecord(
   });
 
   // A reply and a follow reach the one panel that asked, never a broadcast.
-  const panelRouterDeps = routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight, tab);
+  const panelRouterDeps = routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight, tab, document.toString());
   panel.webview.onDidReceiveMessage((msg: unknown) => { void routeRecordPanelMessage(msg, panelRouterDeps); });
 
   showWebviewPage(panel.webview, context.extensionUri, {
@@ -270,7 +284,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
         return;
       }
       const formKey = await pickRecord({ meditClient, reporter }, '', []);
-      if (formKey) await openRecords(meditClient, reporter, recordEditorProvider, { addresses: [{ formKey }], beside: false, preview: true });
+      if (formKey) await openRecords(meditClient, reporter, recordEditorProvider, { addresses: [{ formKey }], placement: 'active', preview: true });
     }),
     vscode.commands.registerCommand('modbench.record.openToSide', (row?: unknown, selection?: unknown) =>
       vscode.commands.executeCommand('modbench.record.open', besideArgument(row, selection))),
@@ -283,7 +297,7 @@ type OpenClient = Pick<MEditClient, 'getRecordOwner' | 'getRecordFile' | 'getRec
 // (editor.md, Opening, story 4).
 async function openRecords(
   client: OpenClient, reporter: Reporter, grid: Pick<RecordEditorProvider, 'open'>,
-  { addresses: [first, ...others], beside, preview }: RecordOpenPlan,
+  { addresses: [first, ...others], placement, preview }: RecordOpenPlan,
 ): Promise<void> {
   if (!first) return;
   const failMessage = `Failed to open "${recordTitle(first.formKey, undefined)}".`;
@@ -302,9 +316,19 @@ async function openRecords(
       }
       columns.push(copy);
     }
-    await grid.open(tab.uri, columns, { viewColumn: beside ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preview });
+    const show = (options: vscode.TextDocumentShowOptions) => grid.open(tab.uri, columns, options);
+    if (typeof placement !== 'object') {
+      await show({ viewColumn: placement === 'beside' ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preview });
+      return;
+    }
+    const replaced = recordTabAt(placement);
+    await (replaced ? inTabsPlace(replaced, show) : show({ viewColumn: placement.viewColumn }));
   });
 }
+
+const recordTabAt = ({ document, viewColumn }: TabPlace): vscode.Tab | undefined =>
+  vscode.window.tabGroups.all.find((group) => group.viewColumn === viewColumn)?.tabs.find(({ input }) =>
+    input instanceof vscode.TabInputCustom && input.viewType === RECORD_VIEW_TYPE && input.uri.toString() === document);
 
 const noActivePluginHolds = (formKey: string) => ({ refused: `No active plugin holds ${formKey}.` });
 

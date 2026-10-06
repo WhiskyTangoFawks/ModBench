@@ -32,6 +32,9 @@ export const WEBVIEW_TO_EXTENSION = {
   // RecordPanelClient's own read, asked of the host's mEdit client rather than fetched by the
   // webview itself. `requestId` pairs the reply.
   REQUEST_RECORD_LOAD: 'requestRecordLoad',
+  // A click on a column's header (editor.md, Columns, story 8): the records the tab opens on in its
+  // own place, the first as the file.
+  OPEN_IN_PLACE: 'openInPlace',
 } as const;
 
 export type ConflictThis = components['schemas']['ConflictThis'];
@@ -50,7 +53,8 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.ADD_ELEMENT; context: Record<string, unknown>; value?: unknown }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null; entered: boolean }
-  | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string; columns: ColumnCopy[] };
+  | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string; columns: ColumnCopy[] }
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE; records: ColumnCopy[] };
 
 /** A record's copy the grid shows beside its document's own (editor.md, Columns, story 7). */
 export type ColumnCopy = Omit<components['schemas']['RecordCopy'], 'documentText'>;
@@ -187,6 +191,7 @@ export type RecordLoadAnswer =
       conflictsComputed: boolean;
       // The plugins mEdit cannot read, as the Plugins tree is told them.
       loadFailures: components['schemas']['PluginLoadFailure'][];
+      documentPlugin: PluginAddress;
     }
   | { ok: false; error: string };
 
@@ -215,6 +220,7 @@ type WebviewToExtensionWitness = {
   type?: unknown; formKey?: unknown; level?: unknown; message?: unknown; value?: unknown;
   plugin?: unknown; origin?: unknown; envelope?: unknown;
   requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown; entered?: unknown; columns?: unknown;
+  records?: unknown;
 };
 
 function parseEditField(w: WebviewToExtensionWitness): WebviewToExtension {
@@ -259,6 +265,11 @@ function parseRequestRecordLoad(w: WebviewToExtensionWitness): WebviewToExtensio
   return { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: w.requestId, formKey: w.formKey, columns: w.columns };
 }
 
+function parseOpenInPlace(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isColumnCopies(w.records)) throw new Error('Expected "openInPlace" to carry its records, each a FormKey and a plugin.');
+  return { type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: w.records };
+}
+
 /** The webview message router's one entry point for data crossing `postMessage`: every
  *  `WEBVIEW_TO_EXTENSION` site parses through this rather than asserting the shape itself.
  *  Throws when the discriminant or a required field doesn't match what the type demands. */
@@ -273,6 +284,7 @@ export function parseWebviewToExtension(value: unknown): WebviewToExtension {
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return parseOpenFormKeyPicker(w);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return parseFocusCell(w);
     case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return parseRequestRecordLoad(w);
+    case WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE: return parseOpenInPlace(w);
     default:
       throw new Error(`Unknown webview-to-extension message type: ${String(w.type)}.`);
   }
@@ -307,6 +319,7 @@ function parseFormKeyPicked(w: { requestId?: unknown; formKey?: unknown }): Exte
 
 function parseRecordLoadAnswer(w: {
   requestId?: unknown; ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
+  documentPlugin?: unknown;
 }): { requestId: string } & RecordLoadAnswer {
   if (!isString(w.requestId)) throw new Error('Expected "recordLoadAnswered" to carry a string requestId.');
   if (w.ok === false) {
@@ -314,6 +327,12 @@ function parseRecordLoadAnswer(w: {
     return { requestId: w.requestId, ok: false, error: w.error };
   }
   if (w.ok !== true) throw new Error('Expected "recordLoadAnswered" to carry a boolean ok.');
+  return { requestId: w.requestId, ...parseAnswered(w) };
+}
+
+function parseAnswered(w: {
+  compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; documentPlugin?: unknown;
+}): RecordLoadAnswer {
   if (w.compare !== null && !isCompareResultShape(w.compare)) {
     throw new Error('Expected an answered "recordLoadAnswered" to carry a compare object or null.');
   }
@@ -326,9 +345,10 @@ function parseRecordLoadAnswer(w: {
   if (!isPluginLoadFailureArray(w.loadFailures)) {
     throw new Error('Expected "recordLoadAnswered" to carry a loadFailures array.');
   }
+  if (!isPluginAddress(w.documentPlugin)) throw new Error('Expected "recordLoadAnswered" to carry the document\'s plugin.');
   return {
-    requestId: w.requestId, ok: true, compare: w.compare, plugins: w.plugins, conflictsComputed: w.conflictsComputed,
-    loadFailures: w.loadFailures,
+    ok: true, compare: w.compare, plugins: w.plugins, conflictsComputed: w.conflictsComputed,
+    loadFailures: w.loadFailures, documentPlugin: w.documentPlugin,
   };
 }
 
@@ -341,7 +361,7 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
   const w = value as {
     type?: unknown; formKey?: unknown; requestId?: unknown;
     ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
-    text?: unknown; columns?: unknown;
+    documentPlugin?: unknown; text?: unknown; columns?: unknown;
   };
   switch (w.type) {
     case EXTENSION_TO_WEBVIEW.LOAD_RECORD: return parseLoadRecord(w);

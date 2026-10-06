@@ -183,3 +183,19 @@ describe('RecordPanel — drag and drop', () => {
     expect(await cellOf('Level', MASTER)).toHaveAttribute('draggable', 'true');
   });
 });
+
+describe('RecordPanel — a drop on a tracked column that is not the file\'s', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('changes nothing, as the file\'s column alone is edited', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.mocked(vscode.postMessage).mockClear();
+    const bothTracked = [{ name: 'Fallout4.esm', isTracked: true }, { name: 'MyMod.esp', isTracked: true }];
+    render(<RecordPanel client={panelClient(() => record, { plugins: bothTracked, fileColumn: 'MyMod.esp' })} />);
+
+    const { landed } = drag(await cellOf('Level', MOD), await cellOf('Level', MASTER));
+
+    expect(landed).toBe(false);
+    expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();
+  });
+});

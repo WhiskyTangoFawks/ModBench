@@ -1,13 +1,17 @@
 import { headerFormKeyOf } from '../wire/headerFormKey';
+import type { ViewColumn } from 'vscode';
 import type { PluginAddress } from '../wire/pluginAddress';
 
 /** A record to open: a copy when it names its plugin, else its winning copy. */
 export interface RecordToOpen { formKey: string; plugin?: PluginAddress }
 
+export interface TabPlace { document: string; viewColumn: ViewColumn }
+
+export type Placement = 'active' | 'beside' | TabPlace;
+
 export interface RecordOpenPlan {
   addresses: RecordToOpen[];
-  beside: boolean;
-  /** Only a lone record opened in place is a preview, which the next click replaces. */
+  placement: Placement;
   preview: boolean;
 }
 
@@ -40,9 +44,12 @@ function pluginOf({ kind, origin }: StatedRecord, plugin: Stated['plugin']): Plu
   return isPluginsRow && plugin !== undefined && origin ? { name: plugin, origin } : undefined;
 }
 
-function asksBeside(argument: unknown): boolean {
-  return typeof argument === 'object' && argument !== null && 'placement' in argument && argument.placement === 'beside';
-}
+const placementOf = (argument: unknown): unknown =>
+  (typeof argument === 'object' && argument !== null && 'placement' in argument ? argument.placement : undefined);
+
+const isTabPlace = (value: unknown): value is TabPlace =>
+  typeof value === 'object' && value !== null && 'document' in value && typeof value.document === 'string'
+  && 'viewColumn' in value && typeof value.viewColumn === 'number';
 
 /** A palette entry or key hands over no Argument, so it takes the focused view's selection
  *  (commands.md, Principles). */
@@ -50,8 +57,9 @@ export function recordOpenPlan(argument: unknown, focusedSelection: readonly unk
   const subjects: readonly unknown[] = argument === undefined ? focusedSelection
     : Array.isArray(argument) ? argument : [argument];
   const addresses = subjects.flatMap((s) => addressOf(s) ?? []);
-  const beside = subjects.some(asksBeside);
-  return { addresses, beside, preview: !beside && addresses.length === 1 };
+  const placements = subjects.map(placementOf);
+  const placement = placements.includes('beside') ? 'beside' : placements.find(isTabPlace) ?? 'active';
+  return { addresses, placement, preview: placement === 'active' && addresses.length === 1 };
 }
 
 /** What a menu's open to the side hands to open: the menu's selection, else its clicked row. */

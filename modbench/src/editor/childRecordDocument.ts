@@ -3,6 +3,7 @@ import type { MEditClient } from '../client';
 import { samePluginAddress } from '../wire/pluginAddress';
 import { followReportedCopies, type CopyChanged } from './recordCopy';
 import { CHILD_RECORD_SCHEME, copyOf } from '../drivingLib/recordDocument';
+import { fileText } from './fileText';
 
 const containerFileOf = (uri: vscode.Uri): vscode.Uri => uri.with({ scheme: 'file', query: '' });
 
@@ -25,11 +26,9 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
 
   watch(): vscode.Disposable { return new vscode.Disposable(() => undefined); }
   stat(uri: vscode.Uri): Thenable<vscode.FileStat> { return vscode.workspace.fs.stat(containerFileOf(uri)); }
-  // Decoded, so it yields no plugin's bytes (ADR-0004); refusing what is not text and keeping a
-  // byte order mark, so a save writes back what it read.
+  // A save writes back what it read.
   async readFile(uri: vscode.Uri): Promise<Uint8Array> {
-    const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await vscode.workspace.fs.readFile(containerFileOf(uri)));
-    return new TextEncoder().encode(text);
+    return new TextEncoder().encode(await fileText(containerFileOf(uri)));
   }
   writeFile(uri: vscode.Uri, content: Uint8Array): Thenable<void> { return vscode.workspace.fs.writeFile(containerFileOf(uri), content); }
   readDirectory(): [string, vscode.FileType][] { return []; }

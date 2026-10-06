@@ -23,6 +23,8 @@ function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typ
         })}
         isImmutable={facts.isImmutable ?? false}
         isTracked={facts.isTracked ?? true}
+        isFile={false}
+        onOpen={vi.fn()}
         collapsed={false}
         onToggleCollapse={onToggleCollapse}
         onResize={onResize}
