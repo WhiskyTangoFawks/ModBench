@@ -82,7 +82,7 @@ public sealed class CreateRecordHandler
                 RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");
         }
         if (RouteByContainer(plugin, container, position) is { } routed) return routed;
-        if (WriteTargets.RefuseIfHeldInsideAnotherRecord(recordType, release) is { } held) return held;
+        if (WriteTargets.RefuseIfHeldInsideAnotherRecord(recordType, release, "creating one is not supported yet") is { } held) return held;
 
         if (FormKeyAllocator.Over(repository, plugin, release).Next(out var targetFormKey)
             is { } refusedTarget) return refusedTarget;

@@ -44,7 +44,9 @@ internal sealed class NewRecordCopy
         {
             if (source.ContainerOf(identity) is { } container)
                 return CopyEmbeddedChildAsNewRecord(copy, container, destinationPlugin);
-            if (WriteTargets.RefuseIfHeldInsideAnotherRecord(identity.RecordType, release) is { } containerRefusal) return containerRefusal;
+            if (WriteTargets.RefuseIfHeldInsideAnotherRecord(
+                    identity.RecordType, release, WriteTargets.SourceHoldsNoContainer) is { } containerRefusal)
+                return containerRefusal;
         }
 
         return CopyUnderNextFormKey(

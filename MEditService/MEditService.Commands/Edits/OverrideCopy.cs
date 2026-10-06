@@ -81,7 +81,8 @@ internal sealed class OverrideCopy
                 container, destination, release, replace, withChildren);
         }
 
-        if (WriteTargets.RefuseIfHeldInsideAnotherRecord(identity.RecordType, release) is { } containerRefusal)
+        if (WriteTargets.RefuseIfHeldInsideAnotherRecord(
+            identity.RecordType, release, WriteTargets.SourceHoldsNoContainer) is { } containerRefusal)
             return containerRefusal;
 
         var landed = LandRecord(copy, destinationPlugin, replace, withChildren);

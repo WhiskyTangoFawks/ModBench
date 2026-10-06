@@ -327,12 +327,14 @@ internal sealed class WriteTargets(
                 "The plugin header cannot be deleted — it is not an ordinary record.")
             : null;
 
-    internal static RecordEditResult? RefuseIfHeldInsideAnotherRecord(string recordType, GameRelease release)
+    internal const string SourceHoldsNoContainer = "no readable container document in the source plugin carries it";
+
+    internal static RecordEditResult? RefuseIfHeldInsideAnotherRecord(string recordType, GameRelease release, string because)
     {
         if (CreatableRecordTypes.Includes(recordType, release)) return null;
 
         return RecordEditResult.Refused(
             RecordEditRefusal.HeldInAnotherRecordNotYetSupported,
-            $"'{recordType}' is held inside another record's document, and creating one is not supported yet.");
+            $"'{recordType}' is held inside another record's document, and {because}.");
     }
 }
