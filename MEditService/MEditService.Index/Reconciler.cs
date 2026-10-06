@@ -595,17 +595,11 @@ internal sealed class Reconciler(
             scope.Projector.Ingest(plugin, ModHoldingTree(plugin), token);
             return true;
         }
-        catch (OperationCanceledException)
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException or IOException
+            or UnauthorizedAccessException))
         {
-            // The reconcile is being superseded; this is not a source failure and must not be
-            // reported as one, nor absorbed into a fallback that would keep working after the cancel.
-            throw;
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            // Deliberately every other exception, not a curated set: reading a folder tree through
-            // a third-party deserializer fails in open-ended ways, and a curated list would drop the
-            // first mode that isn't on it.
+            // Every other exception, not a curated set: a third-party deserializer fails in open-ended
+            // ways. A cancel is no source failure, and a file that cannot be read is read again, not stood in for.
             logger.LogWarning(ex,
                 "Could not ingest {Plugin} from its source tree; falling back to the binary", plugin.Name);
             scope.Held.SetFailure(plugin.Key, TreeReadFailure(ex, DerivedFrom.Binary));

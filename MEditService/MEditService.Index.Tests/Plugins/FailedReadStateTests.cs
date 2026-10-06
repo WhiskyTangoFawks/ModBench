@@ -1,6 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
@@ -217,6 +218,48 @@ public sealed class FailedReadStateTests : IDisposable
         Assert.True(adapter.Threw);
         Assert.False(Failed(index));
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+    }
+
+    [Fact]
+    public void ATreeDocumentHeldOnlyWhileTheTreeIsRead_IsReadAgainWithItsBytesUnchanged()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        var document = NpcDocument;
+        ArmOn($"Ingesting {PluginName} from its source tree", () =>
+        {
+            var hold = File.Open(document, FileMode.Open, FileAccess.Read, FileShare.None);
+            Arm(e => e.Level == LogLevel.Warning, hold.Dispose);
+        });
+
+        using var index = Reconciled();
+
+        Assert.Null(_armed);
+        Assert.False(Failed(index));
+        Assert.Contains(Plugin.KeyOf(), index.RequireReads().GetTrackedPlugins());
+    }
+
+    [Fact]
+    public void ABinaryThatHashesButIsHeldWhenItOpens_IsOpenedAtTheNextSnapshot()
+    {
+        using var index = Reconciled(new HeldAtFirstRead());
+        Assert.True(Failed(index));
+
+        index.NextSnapshotUntil(() => !Failed(index), "the binary opened again");
+
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+    }
+
+    private sealed class HeldAtFirstRead : DelegatingPluginAdapter
+    {
+        private int _read;
+
+        public HeldAtFirstRead() : base(TestAdapters.Mutagen()) { }
+
+        public override (PluginContent Content, Exception? Unreachable) ReadContent(
+            ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
+            Interlocked.Increment(ref _read) == 1
+                ? throw new IOException("held by another process")
+                : base.ReadContent(modPath, gameRelease, strings);
     }
 
     private sealed class FailsToOpen(Exception failure, Func<int, bool> atOpen, Action? beforeFailing = null)
