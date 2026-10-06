@@ -18,11 +18,11 @@ public sealed class FailedReadStateTests : IDisposable
         .WithPlugin(PluginName, mod => mod.Npcs.AddNew(NpcEditorId), origin: "PlainMod")
         .BuildScattered();
     private readonly List<LogEntry> _log = [];
-    private string? _mendOnLogged;
+    private (string Prefix, Action Act)? _onLogged;
     private readonly ILoggerFactory _loggerFactory;
 
     public FailedReadStateTests() =>
-        _loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(_log, MendTheTreeOnce)));
+        _loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(_log, ActOnceLogged)));
 
     public void Dispose()
     {
@@ -48,17 +48,27 @@ public sealed class FailedReadStateTests : IDisposable
         File.Copy(document, Path.Combine(backup, Path.GetFileName(document)));
     }
 
-    private void MendTheTreeOnce(LogEntry entry)
+    private void ActOnceLogged(LogEntry entry)
     {
-        if (_mendOnLogged is not { } prefix || !entry.Message.StartsWith(prefix, StringComparison.Ordinal)) return;
-        _mendOnLogged = null;
+        if (_onLogged is not { } once || !entry.Message.StartsWith(once.Prefix, StringComparison.Ordinal)) return;
+        _onLogged = null;
+        once.Act();
+    }
+
+    private void Mend()
+    {
         foreach (var backup in Directory.EnumerateDirectories(Plugin.ModFolderOf(), "Backup", SearchOption.AllDirectories).ToList())
             Directory.Delete(backup, recursive: true);
     }
 
+    private void MendOnceLogged(string prefix) => _onLogged = (prefix, Mend);
+
+    private string StrayDocument => Path.Combine(Path.GetDirectoryName(NpcDocument).Require(), "Stray.json");
+
     private int TreeReads()
     {
-        lock (_log) return _log.Count(e => e.Message.Contains($"ngesting {PluginName} from its source tree", StringComparison.Ordinal));
+        string[] treeReads = [$"Ingesting {PluginName} from its source tree", $"Re-ingesting {PluginName} from its source tree"];
+        lock (_log) return _log.Count(e => treeReads.Contains(e.Message));
     }
 
     private static bool Failed(OpenedIndex index) => index.Status.Failures.Any(f => f.Name == PluginName);
@@ -66,7 +76,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ABinaryRewrittenDuringAFailedRead_IsReadAgain()
     {
-        var adapter = new FailsOnceAfter(() =>
+        var adapter = new FailsOnce(atOpen: 1, new InvalidOperationException("injected read failure"), () =>
             PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenAfterTheFailure")));
 
         using var index = Reconciled(adapter);
@@ -89,15 +99,31 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
+    public void ATreeThatStillFailsAfterAChange_SaysItsBinaryStillStandsIn()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        ClaimedTwice();
+        using var index = Reconciled();
+        var readsBefore = TreeReads();
+        Mend();
+        File.WriteAllText(StrayDocument, "{}");
+
+        index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the changed tree read again");
+
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+        Assert.Contains("Showing the compiled binary instead", index.Status.Failures.Single(f => f.Name == PluginName).Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ATreeMendedWhileItsBinaryStoodInForIt_IsReadAgain()
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         ClaimedTwice();
-        _mendOnLogged = $"Could not ingest {PluginName} from its source tree";
+        MendOnceLogged($"Could not ingest {PluginName} from its source tree");
 
         using var index = Reconciled();
 
-        Assert.Null(_mendOnLogged);
+        Assert.Null(_onLogged);
         Assert.False(Failed(index));
         Assert.Contains(Plugin.KeyOf(), index.RequireReads().GetTrackedPlugins());
     }
@@ -108,9 +134,9 @@ public sealed class FailedReadStateTests : IDisposable
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         using var index = Reconciled();
         ClaimedTwice();
-        _mendOnLogged = $"Reconciling {PluginName}:";
+        MendOnceLogged($"Reconciling {PluginName}:");
         index.NextSnapshotUntil(() => Failed(index), "the validation's failure");
-        Assert.Null(_mendOnLogged);
+        Assert.Null(_onLogged);
 
         index.NextSnapshotUntil(() => !Failed(index), "the mended tree read again");
 
@@ -122,24 +148,71 @@ public sealed class FailedReadStateTests : IDisposable
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         using var index = Reconciled();
-        File.WriteAllText(Path.Combine(Path.GetDirectoryName(NpcDocument).Require(), "Stray.json"), "{}");
+        File.WriteAllText(StrayDocument, "{}");
         index.NextSnapshotUntil(() => Failed(index), "the validation's failure");
+
+        for (var snapshot = 1; snapshot <= 3; snapshot++)
+        {
+            var readsBefore = TreeReads();
+            index.NextSnapshotUntil(() => TreeReads() > readsBefore, $"the tree read again at snapshot {snapshot}");
+        }
+    }
+
+    [Fact]
+    public void ATreeUnreadableWhenItsWholeReadBegan_IsReadAgainOnceReadable()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        using var index = Reconciled();
+        var stray = StrayDocument;
+        var untyped = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(NpcDocument)).Require(), "Untyped")).FullName;
+        _onLogged = ($"Re-ingesting {PluginName}", () => File.WriteAllText(stray, "{}"));
+        File.WriteAllText(Path.Combine(untyped, "Gained.json"), $$"""{"FormKey":"000ABC:{{PluginName}}"}""");
+        index.NextSnapshotUntil(() => Failed(index), "the whole read's failure");
+        Assert.Null(_onLogged);
+        File.Delete(stray);
         var readsBefore = TreeReads();
 
         index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the tree read again");
     }
 
-    private sealed class FailsOnceAfter(Action beforeFailing) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    [Fact]
+    public void ABinaryHeldByAnotherProcessWhenItIsReadAgain_IsReadAtTheNextSnapshot()
+    {
+        using var index = Reconciled(new FailsOnce(atOpen: 2, new IOException("held by another process")));
+        PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenBeforeTheHold"));
+        index.NextSnapshotUntil(() => Failed(index), "the held read's failure");
+
+        index.NextSnapshotUntil(() => !Failed(index), "the binary read again");
+
+        Assert.Contains(index.RequireReads().GetDocuments(Plugin.KeyOf()), d => d.EditorId == "WrittenBeforeTheHold");
+    }
+
+    [Fact]
+    public void ABinaryHeldByAnotherProcessWhenItArrives_IsReadAgainWithItsBytesUnchanged()
+    {
+        var adapter = new FailsOnce(atOpen: 1, new IOException("held by another process"));
+
+        using var index = Reconciled(adapter);
+
+        Assert.True(adapter.Threw);
+        Assert.False(Failed(index));
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+    }
+
+    private sealed class FailsOnce(int atOpen, Exception failure, Action? beforeFailing = null)
+        : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         private int _opened;
+
+        public bool Threw => Volatile.Read(ref _opened) >= atOpen;
 
         public override IPluginDocuments OpenDocuments(
             ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
             PluginStrings? strings = null)
         {
-            if (Interlocked.Increment(ref _opened) > 1) return base.OpenDocuments(modPath, gameRelease, schemas, strings);
-            beforeFailing();
-            throw new InvalidOperationException("injected read failure");
+            if (Interlocked.Increment(ref _opened) != atOpen) return base.OpenDocuments(modPath, gameRelease, schemas, strings);
+            beforeFailing?.Invoke();
+            throw failure;
         }
     }
 }
