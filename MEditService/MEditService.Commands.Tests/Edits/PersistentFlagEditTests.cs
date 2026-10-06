@@ -211,6 +211,20 @@ public sealed class PersistentFlagEditTests : IDisposable
     }
 
     [Fact]
+    public void ClearingPersistent_IntoTheCellAtItsPosition_WhoseDocumentIsNoJson_IsRefusedAsUnreadable_AndWritesNothing()
+    {
+        File.WriteAllText(
+            TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, new RecordIdentity(_keys["Outside"].ToString(), "cell", "Outside")),
+            "this is no JSON");
+        var before = Document("Holding");
+
+        var result = SetFlags("HoldingBeyond", 0);
+
+        AssertRefusedUnchanged(result, RecordEditRefusal.RecordParseFailed, "Holding", before);
+        Assert.Contains($"the cell {_keys["HoldingBeyond"]} moves into cannot be read", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SettingPersistent_InACellNoCopyOfWhichSaysWhereItSits_IsRefused()
     {
         var before = Document("Unmarked");
