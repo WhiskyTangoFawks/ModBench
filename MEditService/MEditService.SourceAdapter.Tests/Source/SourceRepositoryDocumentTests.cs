@@ -324,6 +324,20 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         Assert.Equal(before, (File.ReadAllText(atLayoutName), File.ReadAllText(renamed)));
     }
 
+    [Theory]
+    [InlineData(NpcFormKey, "npc_", NpcEditorId)]
+    [InlineData("000900:Fixture.esp", "cell", "FreshCell")]
+    public void ChangesToRewrite_OfARecordNoDocumentHolds_RefusesNamingIt(string formKey, string recordType, string editorId)
+    {
+        var repository = Opened();
+        File.Delete(Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json"));
+
+        var refusal = Assert.Throws<InvalidOperationException>(() => repository.ChangesToRewrite(
+            Plugin, new SourceDocument(formKey, recordType, editorId, $"{{\n  \"FormKey\": \"{formKey}\"\n}}")));
+
+        Assert.Contains(formKey, refusal.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Put_OverADocumentThatIsNotJson_RefusesWithAReason_AndLeavesTheFileAsItWas()
     {
