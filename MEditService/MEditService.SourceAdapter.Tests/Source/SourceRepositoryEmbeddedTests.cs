@@ -249,6 +249,33 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains("its root is not a JSON object", refused.Message, StringComparison.Ordinal);
     }
 
+    private string InteriorCellWithItsRefsTyped(string type) =>
+        File.ReadAllText(FullPath(InteriorCellPath)).Replace("\"PlacedObject\"", $"\"{type}\"", StringComparison.Ordinal);
+
+    private void AssertNamesTheInteriorCellsUntypedRef(UnreadableSourceDocumentException refused)
+    {
+        Assert.Equal(
+            (InteriorCellPath, _temporaryRef.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
+        Assert.Contains("a 'PlacedObjekt', and this game has no record type of that name", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Get_ByFormKey_OfAChildNoTypeResolves_RefusesNamingItsOwnersFileAndWhy()
+    {
+        File.WriteAllText(FullPath(InteriorCellPath), InteriorCellWithItsRefsTyped("PlacedObjekt"));
+
+        AssertNamesTheInteriorCellsUntypedRef(Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas)));
+    }
+
+    [Fact]
+    public void CarryingFromText_OfAChildNoTypeResolves_RefusesNamingItsOwnersFileAndWhy()
+    {
+        AssertNamesTheInteriorCellsUntypedRef(Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.CarryingFromText(
+                Plugin, _temporaryRef.FormKey.ToString(), InteriorCellWithItsRefsTyped("PlacedObjekt"), Schemas)));
+    }
+
     [Fact]
     public void ContainerOf_APlacedReferenceInsideItsCell_NamesTheCellAndTheSlot()
     {

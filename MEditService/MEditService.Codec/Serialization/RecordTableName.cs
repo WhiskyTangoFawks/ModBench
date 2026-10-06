@@ -12,12 +12,8 @@ public static class RecordTableName
     public static string Of(IMajorRecordGetter record, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         Of(record.GetType(), schemas);
 
-    /// <summary>Empty for a type nothing resolved, so a caller that could not name the document's
-    /// class gets no table rather than a guessed one.</summary>
-    public static string Of(Type? concrete, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    public static string Of(Type concrete, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        if (concrete == null) return string.Empty;
-
         foreach (var (tableName, schema) in schemas)
         {
             if (schema.RecordType.IsAssignableFrom(concrete)) return tableName;

@@ -102,14 +102,15 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         // type and name off that document's text.
         if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
         if (DocumentText.BytesOrNull(owner.FullPath) is not { } ownerBytes) return null;
-        if (new ContainerDocuments(_release, schemas).EmbeddedIdentity(owner.RecordType, ownerBytes, spelled)
-            is not { } child)
-        {
-            return null;
-        }
-
-        return new RecordIdentity(spelled, child.RecordType, child.EditorId);
+        return new ContainerDocuments(_release, schemas).EmbeddedChild(owner.RecordType, ownerBytes, spelled) is { } child
+            ? ChildIdentity(child, owner.FullPath)
+            : null;
     }
+
+    private RecordIdentity ChildIdentity(ContainerDocuments.ChildDocument child, string ownerFile) =>
+        new(child.FormKey,
+            child.RecordType ?? throw UnreadableSourceDocumentException.In(_modFolder, ownerFile, child.WhyUntyped, child.FormKey),
+            child.EditorId);
 
     /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>
     /// rather than that document's file, which is only found. Null when nothing in the tree holds it.</summary>
@@ -139,10 +140,10 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
         if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
         var carrying = DeclaredIn(owner.FullPath, text, plugin.Name, schemas);
-        var child = new ContainerDocuments(_release, schemas).EmbeddedIdentity(owner.RecordType, Encoding.UTF8.GetBytes(text), spelled)
+        var child = new ContainerDocuments(_release, schemas).EmbeddedChild(owner.RecordType, Encoding.UTF8.GetBytes(text), spelled)
             ?? throw new UnreadableSourceDocumentException(
                 $"The text given for {Path.GetRelativePath(_modFolder, owner.FullPath)} does not carry {spelled}.");
-        return (new RecordIdentity(spelled, child.RecordType, child.EditorId), carrying);
+        return (ChildIdentity(child, owner.FullPath), carrying);
     }
 
     private SourceDocument DeclaredIn(

@@ -190,7 +190,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         yield return (formKey, text);
         var table = _containers.RecordTypeNamed(recordType) ?? recordType;
-        foreach (var embedded in EmbeddedTexts(table, formKey, text, ownerFile: null))
+        foreach (var embedded in EmbeddedTexts(table, formKey, text))
             yield return (embedded.Child.FormKey, embedded.Text);
     }
 
@@ -198,7 +198,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     /// no record type resolves, as the whole read does.</summary>
     internal void RefuseUntypedChildren(string recordType, string formKey, string text, string file)
     {
-        foreach (var embedded in EmbeddedTexts(recordType, formKey, text, file)) TypeOf(embedded.Child, file);
+        foreach (var embedded in EmbeddedTexts(recordType, formKey, text)) TypeOf(embedded.Child, file);
     }
 
     private string TypeOf(ContainerDocuments.ChildDocument child, string ownerFile) =>
@@ -207,7 +207,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     private IEnumerable<PluginDocument> Embedded(
         string ownerRecordType, string ownerFormKey, string ownerText, string ownerFile)
     {
-        foreach (var (child, text, directOwner) in EmbeddedTexts(ownerRecordType, ownerFormKey, ownerText, ownerFile))
+        foreach (var (child, text, directOwner) in EmbeddedTexts(ownerRecordType, ownerFormKey, ownerText))
         {
             var childType = TypeOf(child, ownerFile);
             // The one embedded cell: a worldspace's top cell, outside every exterior block grid.
@@ -222,7 +222,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     // worldspace embeds its top cell, which embeds its placed references. An untyped child has no
     // slots to read.
     private IEnumerable<(ContainerDocuments.ChildDocument Child, string Text, string DirectOwner)> EmbeddedTexts(
-        string ownerRecordType, string ownerFormKey, string ownerText, string? ownerFile)
+        string ownerRecordType, string ownerFormKey, string ownerText)
     {
         List<ContainerDocuments.ChildDocument> children;
         using (var document = JsonDocument.Parse(ownerText))
@@ -236,15 +236,12 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
             // The index holds the file's own bytes (ADR-0005), so a hand edit the codec would respell
             // reaches it as the file spells it.
-            var noSpan = $"its '{child.SlotName}' names '{child.FormKey}', and a child an embedded slot " +
-                "names has a span of its owner's text that nothing here carries";
             var text = EmbeddedChildSplice.TextOf(ownerBytes, containerType, child.FormKey, _release)
-                ?? throw (ownerFile is null
-                    ? new UnreadableSourceDocumentException(ownerFormKey, noSpan)
-                    : Unreadable(ownerFile, noSpan, child.FormKey));
+                ?? throw new InvalidOperationException(
+                    $"{ownerFormKey}'s '{child.SlotName}' names '{child.FormKey}', yet the span reader finds no text for it.");
             yield return (child, text, ownerFormKey);
             if (child.RecordType is not { } childType) continue;
-            foreach (var deeper in EmbeddedTexts(childType, child.FormKey, text, ownerFile)) yield return deeper;
+            foreach (var deeper in EmbeddedTexts(childType, child.FormKey, text)) yield return deeper;
         }
     }
 
@@ -278,8 +275,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     }
 
     private UnreadableSourceDocumentException Unreadable(string file, string because, string? formKey = null) =>
-        new(new UnreadableFile(
-            Path.GetRelativePath(_modFolder, file), UnreadableSourceDocumentException.Because(file, because), formKey));
+        UnreadableSourceDocumentException.In(_modFolder, file, because, formKey);
 }
 
 /// <summary>A file a plugin's source tree files as a record that this reader cannot turn into a
@@ -311,6 +307,9 @@ public sealed class UnreadableSourceDocumentException : InvalidOperationExceptio
     /// <summary>The file that could not be read, when one is known.</summary>
     public UnreadableFile? File { get; }
 
-    internal static string Because(string filePath, string because) =>
+    internal static UnreadableSourceDocumentException In(string modFolder, string file, string because, string? formKey = null) =>
+        new(new UnreadableFile(Path.GetRelativePath(modFolder, file), Because(file, because), formKey));
+
+    private static string Because(string filePath, string because) =>
         $"'{filePath}' is filed as a record in this plugin's source tree, but {because}.";
 }

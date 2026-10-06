@@ -19,6 +19,11 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
                 ? $"its '{SlotName}' names '{FormKey}' a '{named.GetString()}', and this game has no record type of that name"
                 : $"its '{SlotName}' names '{FormKey}' with no '{LoquiUnions.UnionTypeDiscriminator}' naming its type, " +
                   "and its slot holds more than one record type";
+
+        public string? EditorId =>
+            Node.TryGetProperty(RecordMembers.EditorId, out var editorId) && editorId.ValueKind == JsonValueKind.String
+                ? DocumentNodes.StringValueOf(editorId)
+                : null;
     }
 
     private const string FormKeyMember = RecordMembers.FormKey;
@@ -117,7 +122,7 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
     private Type? SlotElementType(Type owner, string slotName) =>
         _slots.ElementTypeOf(owner.Name, slotName) is { } element ? _dispatch.ConcreteFor(element) : null;
 
-    private string TableFor(Type? concrete) => RecordTableName.Of(concrete, schemas);
+    private string TableFor(Type concrete) => RecordTableName.Of(concrete, schemas);
 
     /// <summary>Every child a document carries inline, at any depth: a worldspace's own document
     /// holds its top cell, which holds its placed references.</summary>
@@ -157,15 +162,26 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
         return null;
     }
 
-    /// <summary>The type and name of the child <paramref name="formKey"/> names anywhere inside
-    /// <paramref name="ownerBytes"/>; null when no embedded slot of the owner carries it.</summary>
-    public (string RecordType, string? EditorId)? EmbeddedIdentity(
-        string? ownerRecordType, byte[] ownerBytes, string formKey)
+    /// <summary>The child <paramref name="formKey"/> names anywhere inside <paramref name="ownerBytes"/>;
+    /// null when no embedded slot of the owner carries it.</summary>
+    public ChildDocument? EmbeddedChild(string? ownerRecordType, byte[] ownerBytes, string formKey)
     {
-        var ownerTypeName = EmbeddedChildLocator.ContainerTypeName(ownerRecordType, ownerBytes, release);
-        if (EmbeddedChildLocator.Find(ownerBytes, ownerTypeName, formKey, release) is not { } span) return null;
+        var ownerType = EmbeddedChildLocator.ContainerTypeName(ownerRecordType, ownerBytes, release)
+            ?? EmbeddedChildLocator.RootDiscriminator(ownerBytes);
+        if (ownerType is null) return null;
 
-        var declared = span.Discriminator ?? _slots.ElementTypeOf(null, span.SlotName);
-        return (TableFor(_dispatch.ConcreteFor(declared ?? string.Empty)), span.EditorId);
+        try
+        {
+            using var document = JsonDocument.Parse(ownerBytes);
+            foreach (var child in EmbeddedDescendantsOf(ownerType, document.RootElement))
+            {
+                if (string.Equals(child.FormKey, formKey, StringComparison.Ordinal)) return child;
+            }
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

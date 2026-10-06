@@ -230,6 +230,20 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
+    public void ATreeWhoseStatusGitCannotReport_WhenARecordChanges_FailsThePlugin_NamingGit()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        using var index = Reconciled();
+        var npc = NpcDocument;
+        File.WriteAllText(Path.Combine(Plugin.ModFolderOf(), ".git", "index"), "not an index");
+        File.WriteAllText(npc, File.ReadAllText(npc).Replace(NpcEditorId, "RenamedNpc", StringComparison.Ordinal));
+
+        index.NextSnapshotUntil(() => Failed(index), "the failed read");
+
+        Assert.Contains("git cannot report what changed", Reason(index), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ATreeWithAnUnreadableDocument_IsReadAgainAtEverySnapshot()
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
