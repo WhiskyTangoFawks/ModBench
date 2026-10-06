@@ -212,8 +212,9 @@ function createMockBackend(): http.Server {
     }
     const copyFile = /^\/plugins\/([^/?]+)\/records\/[^/?]+\/file\?/.exec(url)?.[1];
     if (copyFile !== undefined) {
+      const tracked = decodeURIComponent(copyFile) === TRACKED_PLUGIN && new URL(url, 'http://x').searchParams.get('origin') === TRACKED_ORIGIN;
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ path: decodeURIComponent(copyFile) === TRACKED_PLUGIN ? TRACKED_FILE : null }));
+      res.end(JSON.stringify({ path: tracked ? TRACKED_FILE : null }));
       return;
     }
     const rendered = /^\/plugins\/[^/?]+\/records\/([^/?]+)\/rendered-document\?/.exec(url)?.[1];
@@ -222,7 +223,7 @@ function createMockBackend(): http.Server {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(formKey === UNTRACKED_FORM_KEY
         ? { fileName: UNTRACKED_FILE_NAME, text: untrackedText }
-        : { fileName: `${formKey.replace(':', '_')}.json`, text: '{}' }));
+        : { fileName: renderedName(formKey), text: '{}' }));
       return;
     }
     if (url.startsWith('/plugin-source/record?')) {
@@ -232,6 +233,14 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify(holds
         ? { formKey: TRACKED_FORM_KEY, plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN }
         : { detail: `${filePath} declares no FormKey, so it is no record's document.` }));
+      return;
+    }
+    const wonFormKey = /^\/records\/([^/?]+)$/.exec(url)?.[1];
+    if (wonFormKey !== undefined) {
+      const winner = decodeURIComponent(wonFormKey) === TRACKED_FORM_KEY
+        ? { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN } : { plugin: 'Fallout4.esm', origin: 'Data' };
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ formKey: decodeURIComponent(wonFormKey), ...winner }));
       return;
     }
     const comparedFormKey = /^\/records\/([^/?]+)\/compare$/.exec(url)?.[1];
@@ -340,14 +349,15 @@ describe('Mod sync', () => {
 });
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
+const renderedName = (formKey: string) => `${formKey.replace(':', '_')}.json`;
 
 describe('modbench.record.open', () => {
-  const titled = (title: string) => openTabs().some(t => t.label === title);
+  const titled = (formKey: string) => openTabs().some(t => t.label === renderedName(formKey));
 
-  it('opens a tab titled by the FormKey', async () => {
+  it('opens the winning copy\'s document, titled with its file\'s name', async () => {
     await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000001' });
 
-    await waitFor('a tab titled by the FormKey', () => titled('Fallout4.esm:000001') || undefined);
+    await waitFor('the winning copy\'s tab', () => titled('Fallout4.esm:000001') || undefined);
   });
 
   it('a second click replaces the preview tab instead of adding one', async () => {
@@ -365,7 +375,7 @@ describe('modbench.record.open', () => {
     await waitFor('the pinned tab', () => titled('Fallout4.esm:000010') || undefined);
     const tabsBefore = openTabs().length;
 
-    await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000010', placement: 'beside' });
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000010' });
 
     assert.strictEqual(openTabs().length, tabsBefore);
   });
@@ -419,7 +429,7 @@ describe('modbench.record.open', () => {
     await waitFor('every selected tab', () => selection.every((s) => titled(s.formKey)) || undefined);
 
     const tabsByGroup = vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => t.label));
-    assert.deepStrictEqual(tabsByGroup, [[], selection.map((s) => s.formKey)]);
+    assert.deepStrictEqual(tabsByGroup, [[], selection.map((s) => renderedName(s.formKey))]);
   });
 
   it('opens the headers of two untracked plugins of one file name from different origins as two tabs', async () => {
@@ -440,7 +450,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 describe('a tracked copy of a record', () => {
   const trackedCopy = { formKey: TRACKED_FORM_KEY, plugin: { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN } };
   const fileTabs = () => openTabs().filter((t) =>
-    t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath === TRACKED_FS_PATH && t.input.viewType === 'modbench.recordFile');
+    t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath === TRACKED_FS_PATH && t.input.viewType === 'modbench.record');
   const reads = () => requestLog.filter((line) => line === `GET /records/${encodeURIComponent(TRACKED_FORM_KEY)}/compare`).length;
 
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
@@ -456,6 +466,12 @@ describe('a tracked copy of a record', () => {
 
     assert.strictEqual(tab?.label, 'TrackedGun.json');
     assert.deepStrictEqual(fileTabs().map((t) => t.label), ['TrackedGun.json']);
+  });
+
+  it('opens as its file when it wins and the record is given without a plugin', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: TRACKED_FORM_KEY });
+
+    await waitFor('the file\'s tab', () => fileTabs().length === 1);
   });
 
   it('shows the file already open in a tab, and does not open it twice', async () => {
@@ -486,8 +502,8 @@ describe('a child record of a tracked plugin', () => {
   const plugin = { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN };
   const childCopy = { formKey: CHILD_FORM_KEY, plugin };
   const containerText = fs.readFileSync(TRACKED_FILE, 'utf8');
-  const recordFileTabs = () => openTabs().filter((t) => t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.recordFile');
-  const childTab = () => recordFileTabs().find((t) => t.input instanceof vscode.TabInputCustom && t.input.uri.scheme !== 'file');
+  const recordTabs = () => openTabs().filter((t) => t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.record');
+  const childTab = () => recordTabs().find((t) => t.input instanceof vscode.TabInputCustom && t.input.uri.scheme !== 'file');
   const childDocument = async () => {
     const tab = await waitFor('the child\'s tab', childTab);
     if (!(tab.input instanceof vscode.TabInputCustom)) throw new Error('expected a custom editor tab');
@@ -504,7 +520,7 @@ describe('a child record of a tracked plugin', () => {
     await vscode.commands.executeCommand('modbench.record.open', [{ formKey: TRACKED_FORM_KEY, plugin }, childCopy]);
 
     await waitFor('the child\'s tab titled with its EditorID', () => childTab()?.label === 'TrackedRef');
-    assert.deepStrictEqual(recordFileTabs().map((t) => t.label).sort(), ['TrackedGun.json', 'TrackedRef']);
+    assert.deepStrictEqual(recordTabs().map((t) => t.label).sort(), ['TrackedGun.json', 'TrackedRef']);
     assert.strictEqual((await childDocument()).getText(), containerText);
   });
 
@@ -515,8 +531,8 @@ describe('a child record of a tracked plugin', () => {
 
     await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(TRACKED_FILE));
 
-    await waitFor('the container\'s own tab', () => recordFileTabs().some((t) => t.input instanceof vscode.TabInputCustom && t.input.uri.scheme === 'file'));
-    assert.strictEqual(recordFileTabs().length, 2);
+    await waitFor('the container\'s own tab', () => recordTabs().some((t) => t.input instanceof vscode.TabInputCustom && t.input.uri.scheme === 'file'));
+    assert.strictEqual(recordTabs().length, 2);
   });
 
   it('shows a change saved from its tab in its container\'s tab beside it, and one saved from the container\'s in its own', async () => {
@@ -546,7 +562,7 @@ describe('a child record of a tracked plugin', () => {
 describe('an untracked copy of a record', () => {
   const untrackedCopy = { formKey: UNTRACKED_FORM_KEY, plugin: { name: 'Untracked.esp', origin: 'UntrackedMod' } };
   const renderedTabs = () => openTabs().filter((t) =>
-    t.input instanceof vscode.TabInputCustom && t.input.uri.scheme === 'modbench-rendered' && t.input.viewType === 'modbench.recordFile');
+    t.input instanceof vscode.TabInputCustom && t.input.uri.scheme === 'modbench-rendered' && t.input.viewType === 'modbench.record');
   const renderedDocument = async () => {
     const [tab] = await waitFor('the copy\'s tab', () => renderedTabs().length > 0 && renderedTabs());
     if (!(tab?.input instanceof vscode.TabInputCustom)) throw new Error('expected a custom editor tab');
