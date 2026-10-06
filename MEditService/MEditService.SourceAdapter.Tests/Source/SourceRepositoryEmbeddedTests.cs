@@ -276,6 +276,36 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
                 Plugin, _temporaryRef.FormKey.ToString(), InteriorCellWithItsRefsTyped("PlacedObjekt"), Schemas)));
     }
 
+    private void HoldTheTemporaryRefTwiceInItsCell()
+    {
+        _interiorCell.Temporary.Add(_temporaryRef);
+        File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
+    }
+
+    private void AssertClaimedTwiceByTheInteriorCell(AmbiguousSourceUnitException refused)
+    {
+        Assert.Equal(new ClaimedFormKey(_temporaryRef.FormKey.ToString(), [InteriorCellPath]), refused.Claim);
+        Assert.StartsWith($"'{InteriorCellPath}' holds {_temporaryRef.FormKey} more than once.", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Get_OfAChildItsOwnersDocumentHoldsTwice_IsRefusedAsAClaimOfThatDocument()
+    {
+        HoldTheTemporaryRefTwiceInItsCell();
+
+        AssertClaimedTwiceByTheInteriorCell(Assert.Throws<AmbiguousSourceUnitException>(
+            () => Repository.Get(Plugin, Identity(_temporaryRef, "refr"))));
+    }
+
+    [Fact]
+    public void ReadingTheTree_WhenADocumentHoldsAChildTwice_IsRefusedAsAClaimOfThatDocument()
+    {
+        HoldTheTemporaryRefTwiceInItsCell();
+        using var tree = Repository.OpenDocuments(Plugin, Schemas);
+
+        AssertClaimedTwiceByTheInteriorCell(Assert.Throws<AmbiguousSourceUnitException>(() => tree.Records.ToList()));
+    }
+
     [Fact]
     public void ContainerOf_APlacedReferenceInsideItsCell_NamesTheCellAndTheSlot()
     {
