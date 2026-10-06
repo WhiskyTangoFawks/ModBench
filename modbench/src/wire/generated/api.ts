@@ -444,7 +444,7 @@ export interface paths {
         put?: never;
         /**
          * One record as every active plugin has it, one plugin's copy read from the document text given.
-         * @description The named plugin's column, and the conflict states, are read from the text whether or not that plugin is active. Text that is no record document is a column that could not be parsed. Nothing is stored.
+         * @description The named plugin's column, and the conflict states, are read from the text whether or not that plugin is active. The text is the document carrying the record: its own, or an embedded child's container's. Text that is no record document, or does not carry the record, is a column that could not be parsed. Nothing is stored.
          */
         post: operations["CompareRecordWithText"];
         delete?: never;
@@ -464,7 +464,7 @@ export interface paths {
         put?: never;
         /**
          * Several records side by side: one column per copy, in the order given, with no conflict state.
-         * @description A copy's DocumentText, when given, is the document that column is read from, whether or not its plugin is active; the copy is otherwise the one its plugin holds.
+         * @description A copy's DocumentText, when given, is the document carrying that column's record, read whether or not its plugin is active; the copy is otherwise the one its plugin holds.
          */
         post: operations["CompareRecords"];
         delete?: never;

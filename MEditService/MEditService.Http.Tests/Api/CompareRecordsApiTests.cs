@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -101,6 +103,62 @@ public sealed class CompareRecordsApiTests : HostedTests
         var column = (await response.Body()).GetProperty("overrides").EnumerateArray().Single();
         Assert.Equal((WithNpc, WithNpcMod), (column.GetProperty("plugin").GetString(), column.GetProperty("origin").GetString()));
         Assert.False(string.IsNullOrWhiteSpace(column.GetProperty("parseDiagnosis").GetString()));
+    }
+
+    private async Task<(string Cell, string PlacedRef, string CellText)> LoadedACell()
+    {
+        var fx = Owned(new PluginFixtureBuilder("compare-child")
+            .WithPlugin(WithNpc, mod =>
+            {
+                var room = new Cell(mod) { EditorID = "Room" };
+                room.Temporary.Add(new PlacedObject(mod) { EditorID = "PlacedRef" });
+                var subBlock = new CellSubBlock { BlockNumber = 0 };
+                subBlock.Cells.Add(room);
+                var block = new CellBlock { BlockNumber = 0 };
+                block.SubBlocks.Add(subBlock);
+                mod.Cells.Records.Add(block);
+            }, origin: WithNpcMod)
+            .BuildScattered());
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        var cell = await Client.FormKeyNamed(WithNpc, WithNpcMod, "cell", "Room");
+        var rendered = await Client.GetAsync(new Uri(
+            $"/plugins/{WithNpc}/records/{Uri.EscapeDataString(cell)}/rendered-document?origin={WithNpcMod}", UriKind.Relative));
+        rendered.EnsureSuccessStatusCode();
+        return (cell, await Client.FormKeyNamed(WithNpc, WithNpcMod, "refr", "PlacedRef"),
+            (await rendered.Body()).GetProperty("text").GetString().Require());
+    }
+
+    private async Task<JsonElement> ColumnReadFrom(string formKey, string text)
+    {
+        var response = await Client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(formKey)}/compare",
+            new { plugin = new { name = WithNpc, origin = WithNpcMod }, documentText = text });
+        response.EnsureSuccessStatusCode();
+        return (await response.Body()).GetProperty("overrides").EnumerateArray().Single();
+    }
+
+    [Fact]
+    public async Task AChildWithItsContainersText_IsTheChildReadFromIt()
+    {
+        var (_, placedRef, cellText) = await LoadedACell();
+
+        var column = await ColumnReadFrom(placedRef, cellText.Replace("\"PlacedRef\"", "\"EditedRef\"", StringComparison.Ordinal));
+
+        Assert.Equal(placedRef, column.GetProperty("formKey").GetString());
+        Assert.Equal("EditedRef", column.GetProperty("editorId").GetString());
+        Assert.False(column.TryGetProperty("parseDiagnosis", out var diagnosis) && diagnosis.ValueKind != JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task AChildWithAContainersTextThatDoesNotCarryIt_IsAColumnSayingSo()
+    {
+        var (cell, placedRef, cellText) = await LoadedACell();
+
+        var column = await ColumnReadFrom(placedRef, cellText.Replace(placedRef, "000FFF:WithNpc.esp", StringComparison.Ordinal));
+
+        var diagnosis = column.GetProperty("parseDiagnosis").GetString().Require();
+        Assert.Contains(cell, diagnosis, StringComparison.Ordinal);
+        Assert.Contains(placedRef, diagnosis, StringComparison.Ordinal);
     }
 
     [Fact]

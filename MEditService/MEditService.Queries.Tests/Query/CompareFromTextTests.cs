@@ -15,24 +15,39 @@ public sealed class CompareFromTextTests
     private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
     private static readonly PluginAddress ModPlugin = new("Mod.esp", "Data");
     private static readonly PluginAddress InactivePlugin = new("Off.esp", "Data");
-    private static readonly string[] Fields = ["Name", "Items"];
+    private static readonly string[] Fields = ["Name", "Items", "Scale"];
 
     private readonly Fallout4Mod _baseMod = new(ModKey.FromFileName("Base.esm"), Fallout4Release.Fallout4);
     private readonly Fallout4Mod _modMod = new(ModKey.FromFileName("Mod.esp"), Fallout4Release.Fallout4);
     private readonly Container _chest;
-    private readonly Container _otherChest;
+    private readonly Container _editedChest;
     private readonly Container _chestOverride;
+    private readonly Cell _room;
+    private readonly PlacedObject _placed;
+    private readonly Fallout4Mod _offMod = new(ModKey.FromFileName("Off.esp"), Fallout4Release.Fallout4);
+    private readonly Cell _offRoom;
+    private readonly PlacedObject _offPlaced;
     private readonly RecordQueryService _service;
 
     public CompareFromTextTests()
     {
         _chest = new Container(_baseMod) { EditorID = "Chest", Name = "Chest", Items = [Entry(new FormKey(_baseMod.ModKey, 0x900))] };
         _chestOverride = _modMod.Containers.GetOrAddAsOverride(_chest);
-        _otherChest = new Container(_modMod) { EditorID = "Other", Name = "Other", Items = [Entry(new FormKey(_baseMod.ModKey, 0x901))] };
+        _editedChest = new Container(_chest.FormKey, Fallout4Release.Fallout4) { EditorID = "Chest", Name = "Chest", Items = [Entry(new FormKey(_baseMod.ModKey, 0x901))] };
+        _placed = new PlacedObject(_modMod) { EditorID = "Placed", Scale = 1f };
+        _room = new Cell(_modMod) { EditorID = "Room" };
+        _room.Temporary.Add(_placed);
+        _offPlaced = new PlacedObject(_offMod) { EditorID = "OffPlaced" };
+        _offRoom = new Cell(_offMod) { EditorID = "OffRoom" };
+        _offRoom.Temporary.Add(_offPlaced);
         var rows = new[]
         {
             Row(_chest, BasePlugin, 0, "cont"),
             Row(_chestOverride, ModPlugin, 1, "cont"),
+            Row(_room, ModPlugin, 1, "cell"),
+            Row(_placed, ModPlugin, 1, "refr"),
+            Row(_offRoom, InactivePlugin, 2, "cell", isWinner: false),
+            Row(_offPlaced, InactivePlugin, 2, "refr", isWinner: false),
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
@@ -50,8 +65,9 @@ public sealed class CompareFromTextTests
     private static ContainerEntry Entry(FormKey item) =>
         new() { Item = new ContainerItem { Item = new FormLink<IItemGetter>(item), Count = 1 } };
 
-    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, string recordType) =>
-        new(plugin, loadOrderIndex, true, RealDocuments.Of(record, plugin, loadOrderIndex, true, Release, recordType, Fields));
+    private static FakeRow Row(
+        IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, string recordType, bool isWinner = true) =>
+        new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, Release, recordType, Fields));
 
     private CompareResult Compare(PluginAddress plugin, string text) =>
         _service.GetCompare(_chest.FormKey.ToString(), new CopyText(plugin, text))
@@ -70,7 +86,7 @@ public sealed class CompareFromTextTests
     [Fact]
     public void ThePluginsColumnReadsTheText_AndTheConflictStatesFollowIt()
     {
-        var compare = Compare(ModPlugin, RealDocuments.BodyOf(_otherChest, Release));
+        var compare = Compare(ModPlugin, RealDocuments.BodyOf(_editedChest, Release));
 
         Assert.Equal([BasePlugin, ModPlugin], compare.Overrides.Select(AddressOf));
         Assert.NotEqual(ConflictAll.NoConflict, compare.ConflictAll);
@@ -83,7 +99,7 @@ public sealed class CompareFromTextTests
     {
         var without = _service.GetCompare(_chest.FormKey.ToString()) ?? throw new InvalidOperationException();
 
-        var compare = Compare(InactivePlugin, RealDocuments.BodyOf(_otherChest, Release));
+        var compare = Compare(InactivePlugin, RealDocuments.BodyOf(_editedChest, Release));
 
         Assert.Equal([BasePlugin, ModPlugin, InactivePlugin], compare.Overrides.Select(AddressOf));
         var items = compare.Diffs.Single(d => d.FieldName == "Items");
@@ -96,6 +112,48 @@ public sealed class CompareFromTextTests
         Assert.Equal(
             without.Overrides.Select(o => o.ConflictThis), compare.Overrides.Take(2).Select(o => o.ConflictThis));
         Assert.Equal(StatesOf(without.Diffs).Where(r => r.States != ""), StatesOf(compare.Diffs).Where(r => r.States != ""));
+    }
+
+    [Fact]
+    public void AChildsColumn_IsReadFromItsContainersText()
+    {
+        _placed.EditorID = "Edited";
+        _placed.Scale = 2.5f;
+        var cellText = RealDocuments.BodyOf(_room, Release);
+
+        var compare = _service.GetCompare(_placed.FormKey.ToString(), new CopyText(ModPlugin, cellText))
+            ?? throw new InvalidOperationException("Expected the child to compare.");
+
+        var column = compare.Overrides.Single();
+        Assert.Equal(("Edited", null), (column.EditorId, column.ParseDiagnosis));
+        Assert.Equal("2.5", compare.Diffs.Single(d => d.FieldName == "Scale").Values[KeyOf(ModPlugin)]?.ToString());
+    }
+
+    [Fact]
+    public void AChildsColumn_IsReadFromItsContainersText_WhenNeitherIsInAnActivePlugin()
+    {
+        _offPlaced.EditorID = "Edited";
+
+        var compare = _service.GetCompare(_offPlaced.FormKey.ToString(), new CopyText(InactivePlugin, RealDocuments.BodyOf(_offRoom, Release)))
+            ?? throw new InvalidOperationException("Expected the child to compare.");
+
+        var column = compare.Overrides.Single();
+        Assert.Equal(("Edited", null), (column.EditorId, column.ParseDiagnosis));
+    }
+
+    [Fact]
+    public void AContainersTextThatNoLongerCarriesTheChild_IsAColumnSayingSo()
+    {
+        _room.Temporary.Clear();
+        var cellText = RealDocuments.BodyOf(_room, Release);
+
+        var compare = _service.GetCompare(_placed.FormKey.ToString(), new CopyText(ModPlugin, cellText))
+            ?? throw new InvalidOperationException("Expected the child to compare.");
+
+        var column = compare.Overrides.Single();
+        Assert.Equal((_placed.FormKey.ToString(), (string?)null), (column.FormKey, column.EditorId));
+        Assert.Contains(_room.FormKey.ToString(), column.ParseDiagnosis, StringComparison.Ordinal);
+        Assert.Contains(_placed.FormKey.ToString(), column.ParseDiagnosis, StringComparison.Ordinal);
     }
 
     [Fact]

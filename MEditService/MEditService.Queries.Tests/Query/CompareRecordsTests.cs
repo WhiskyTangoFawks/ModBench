@@ -21,6 +21,8 @@ public sealed class CompareRecordsTests
     private readonly Container _chest;
     private readonly Container _otherChest;
     private readonly Weapon _sword;
+    private readonly Cell _room;
+    private readonly PlacedObject _placed;
     private readonly RecordQueryService _service;
 
     public CompareRecordsTests()
@@ -28,11 +30,16 @@ public sealed class CompareRecordsTests
         _chest = new Container(_baseMod) { EditorID = "Chest", Name = "Chest", Items = [Entry(new FormKey(_baseMod.ModKey, 0x900))] };
         _otherChest = new Container(_modMod) { EditorID = "Other", Name = "Other", Items = [Entry(new FormKey(_baseMod.ModKey, 0x901))] };
         _sword = new Weapon(_modMod) { EditorID = "Sword", Name = "Sword" };
+        _placed = new PlacedObject(_modMod) { EditorID = "Placed" };
+        _room = new Cell(_modMod) { EditorID = "Room" };
+        _room.Temporary.Add(_placed);
         var rows = new[]
         {
             Row(_chest, BasePlugin, 0, "cont"),
             Row(_otherChest, ModPlugin, 1, "cont"),
             Row(_sword, ModPlugin, 1, "weap"),
+            Row(_room, ModPlugin, 1, "cell"),
+            Row(_placed, ModPlugin, 1, "refr"),
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
@@ -124,13 +131,28 @@ public sealed class CompareRecordsTests
     [Fact]
     public void ACopyWithText_IsAColumnReadFromIt_EvenWhenItsPluginIsNotActive()
     {
-        var edited = RealDocuments.BodyOf(_otherChest, Release);
+        var edited = new Container(_chest.FormKey, Fallout4Release.Fallout4)
+        {
+            EditorID = "Chest", Name = "Chest", Items = [Entry(new FormKey(_baseMod.ModKey, 0x901))],
+        };
 
-        var compare = Compare(Copy(_chest, InactivePlugin, edited), Copy(_chest, BasePlugin));
+        var compare = Compare(Copy(_chest, InactivePlugin, RealDocuments.BodyOf(edited, Release)), Copy(_chest, BasePlugin));
 
         Assert.Equal([InactivePlugin.Name, BasePlugin.Name], compare.Overrides.Select(o => o.Plugin));
+        Assert.Null(compare.Overrides[0].ParseDiagnosis);
         var items = compare.Diffs.Single(d => d.FieldName == "Items");
-        Assert.NotEqual(items.Values[Column(compare, 0)]?.ToString(), items.Values[Column(compare, 1)]?.ToString());
+        Assert.Contains("000901", items.Values[Column(compare, 0)]?.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("000901", items.Values[Column(compare, 1)]?.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AChildsCopyWithItsContainersText_IsTheChildReadFromIt()
+    {
+        _placed.EditorID = "Edited";
+
+        var compare = Compare(Copy(_placed, ModPlugin, RealDocuments.BodyOf(_room, Release)));
+
+        Assert.Equal(("Edited", null), (compare.Overrides.Single().EditorId, compare.Overrides.Single().ParseDiagnosis));
     }
 
     [Fact]

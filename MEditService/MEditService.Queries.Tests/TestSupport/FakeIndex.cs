@@ -33,8 +33,8 @@ internal sealed class FakeReads(
 
     public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text)
     {
-        if (Resolve(formKey) is not { } entry) return null;
-        return RealDocuments.FromText(text, formKey, plugin, loadOrderIndex, entry.RecordType, TextFieldNames);
+        if (rows.FirstOrDefault(r => r.Document.FormKey == formKey) is not { } row) return null;
+        return RealDocuments.FromText(text, formKey, plugin, loadOrderIndex, row.Document.RecordType, TextFieldNames);
     }
 
     public IReadOnlyList<RecordDocument> GetDocuments(PluginAddress plugin) =>
