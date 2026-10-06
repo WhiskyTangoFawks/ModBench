@@ -217,6 +217,15 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     expect(opened()).toEqual([[renderedDocumentUri({ formKey: '000000:A.esp', plugin }, 'A.esp.json'), 'modbench.recordFile']]);
   });
 
+  it('opens an untracked placed reference as its own rendered document, named by its own EditorID', async () => {
+    const PLACED = '000803:A.esp';
+    registerAnswering({ path: null }, PLACED, 'SharedRef - 000803_A.esp.json');
+
+    await commandHandlers.get('modbench.record.open')?.({ kind: 'placed', formKey: PLACED, plugin: plugin.name, origin: plugin.origin });
+
+    expect(opened()).toEqual([[renderedDocumentUri({ formKey: PLACED, plugin }, 'SharedRef - 000803_A.esp.json'), 'modbench.recordFile']]);
+  });
+
   it('opens a copy carried in another record\'s file, as a placed reference is in its cell\'s, in its own tab', async () => {
     registerAnswering({ path: FILE }, '000700:A.esp');
 
@@ -231,7 +240,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
     await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
 
-    expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, `A.esp (ModA) holds no ${GUN}, or its file is gone.`]]);
+    expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, `A.esp (ModA) holds no ${GUN}.`]]);
     expect(opened()).toEqual([]);
   });
 });

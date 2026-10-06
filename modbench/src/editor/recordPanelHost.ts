@@ -23,7 +23,9 @@ import type { AskQuestion } from '../ports/dialog';
 import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE, RECORD_FILE_VIEW_TYPE } from './recordUri';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
-import { RENDERED_DOCUMENT_SCHEME, RenderedDocuments, renderedCopyOf, renderedDocumentUri } from './renderedDocument';
+import {
+  RENDERED_DOCUMENT_SCHEME, RenderedDocuments, holdsNoCopy, renderedCopyOf, renderedDocumentUri,
+} from './renderedDocument';
 import { errorMessage } from '../ports/errorMessage';
 
 export interface EditorCommandDeps {
@@ -103,8 +105,9 @@ interface RecordFileEditorProviderDeps extends RecordEditorProviderDeps {
   channel: Pick<vscode.LogOutputChannel, 'warn'>;
 }
 
-// The grid as VS Code's editor for a record's file, so the tab carries the file's name. A tab
-// restored before mEdit holds the load order asks again on each load-order status.
+// The grid as VS Code's editor for a record's file, or for an untracked copy's rendered document,
+// so the tab carries the document's name. A file's tab restored before mEdit holds the load order
+// asks again on each load-order status.
 class RecordFileEditorProvider implements vscode.CustomTextEditorProvider {
   private readonly unread = new Map<vscode.WebviewPanel, () => Promise<void>>();
 
@@ -255,12 +258,11 @@ async function openRecordTab(
 // carried in another record's file keeps the record's tab.
 async function tabOf(client: OpenClient, { formKey, plugin }: RecordToOpen): Promise<[vscode.Uri, string]> {
   if (!plugin) return [recordUri(formKey), RECORD_EDITOR_VIEW_TYPE];
-  const holdsNone = new Error(`${plugin.name} (${plugin.origin}) holds no ${formKey}, or its file is gone.`);
   const file = await client.getRecordFile(plugin, formKey);
-  if (file === null) throw holdsNone;
+  if (file === null) throw holdsNoCopy({ formKey, plugin });
   if (!file.path) {
     const rendered = await client.getRenderedDocument(plugin, formKey);
-    if (rendered === null) throw holdsNone;
+    if (rendered === null) throw holdsNoCopy({ formKey, plugin });
     return [renderedDocumentUri({ formKey, plugin }, rendered.fileName), RECORD_FILE_VIEW_TYPE];
   }
   if ((await client.getRecordOfFile(file.path)).formKey === formKey) return [vscode.Uri.file(file.path), RECORD_FILE_VIEW_TYPE];

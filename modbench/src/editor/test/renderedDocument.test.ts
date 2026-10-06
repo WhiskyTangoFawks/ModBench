@@ -63,6 +63,12 @@ describe('a rendered document\'s address', () => {
     expect(renderedCopyOf(renderedDocumentUri(odd, NAME))).toEqual(odd);
   });
 
+  it('refuses an address that states no plugin name, naming what it lacks', () => {
+    const uri = { scheme: 'modbench-rendered', path: '/ModA/A.esp/Gun.json', query: 'formKey=000801%3AA.esp&origin=ModA' };
+
+    expect(() => renderedCopyOf(uri)).toThrow('The rendered document /ModA/A.esp/Gun.json states no name.');
+  });
+
   it('tells apart the copies of two plugins of one file name from different origins', () => {
     expect(renderedDocumentUri(copy, NAME))
       .not.toEqual(renderedDocumentUri({ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModB' } }, NAME));
@@ -112,6 +118,17 @@ describe('an open rendered document, when mEdit reports a change', () => {
     client.emit(rowsChanged({ name: 'A.esp', origin: 'ModB' }, [GUN]));
 
     expect(changed).toEqual([]);
+  });
+
+  it('changes, every one, when the stream of mEdit\'s reports opens again', () => {
+    const client = new InMemoryMEditClient();
+    const { changed } = rendered(client);
+    const [gun, other] = [renderedDocumentUri(copy, NAME), renderedDocumentUri({ formKey: GUN, plugin: { name: 'B.esp', origin: 'ModB' } }, NAME)];
+    h.textDocuments.push({ uri: gun }, { uri: other }, { uri: { scheme: 'file', path: gun.path, query: gun.query } });
+
+    client.reconnected();
+
+    expect(changed).toEqual([gun, other]);
   });
 
   it('changes when mEdit read its plugin again whole', () => {
