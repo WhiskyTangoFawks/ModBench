@@ -267,8 +267,7 @@ internal sealed class WorkingTreeOverlay
             """, childFormKey, thisParentFormKey, key.Name, key.Origin) != null;
 
     // An embedded child's own row is a projection of its container's document, like its placement
-    // row: serialized out of the container's graph through the codec ingest uses. No schema, no
-    // row, as at ingest.
+    // row: serialized out of the container's graph through the codec ingest uses.
     private void DeriveEmbeddedChildRows(
         PluginAddress key, string containerType, IReadOnlyList<ContainerDocuments.ChildDocument> children,
         ICollection<string> touched)
@@ -276,7 +275,8 @@ internal sealed class WorkingTreeOverlay
         foreach (var child in children)
         {
             if (!ContainerChildFields.EmbeddedSlotsFor(_category).Contains((containerType, child.SlotName))) continue;
-            if (!_schemas.ContainsKey(child.RecordType)) continue;
+            var childType = child.RecordType ?? throw new UnreadableSourceDocumentException(
+                $"A container's source in {key.Name} ({key.Origin}) cannot be read: {child.WhyUntyped}.");
 
             var childBody = _containers.TextOf(_codec, child);
             if (string.Equals(childBody, EffectiveBody(key, child.FormKey), StringComparison.Ordinal)) continue;
@@ -285,7 +285,7 @@ internal sealed class WorkingTreeOverlay
             if (RowExistsAtEffective(key, child.FormKey))
                 ApplyOneWorkingTreeChange(key, child.FormKey, childBody, touched);
             else
-                MaterializeRecord(key, child.FormKey, child.RecordType, childBody, touched);
+                MaterializeRecord(key, child.FormKey, childType, childBody, touched);
         }
     }
 
