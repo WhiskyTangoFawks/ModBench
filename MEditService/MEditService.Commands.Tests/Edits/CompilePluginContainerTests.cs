@@ -242,6 +242,19 @@ public sealed class CompilePluginContainerTests : IDisposable
     }
 
     [Fact]
+    public async Task Compile_WithACellDirectoryRenamedByHandToAnotherEditorId_Succeeds_WithTheMisplacedWarning()
+    {
+        var cell = TrackedTree.DocumentCarrying(_modFolder, _plugin, "CellA");
+        var directory = TreeTampering.DirectoryOf(_modFolder, _plugin, new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId));
+        Directory.Move(directory, Path.Combine(Path.GetDirectoryName(directory) ?? string.Empty, Path.GetFileName(directory).Replace("CellA", "CellB", StringComparison.Ordinal)));
+
+        var result = await CompileService().CompileOneAsync(_plugin);
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Single(result.Diagnostics, d => d.Message.Contains("belongs at", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Compile_AfterDeletingTheMiddleOfThreeDialogTopics_Succeeds_KeepingSurvivorsInOrder()
     {
         SourceEdits.Rewrite<Quest>(

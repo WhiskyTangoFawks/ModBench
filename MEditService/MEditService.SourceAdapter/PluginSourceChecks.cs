@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
@@ -31,10 +32,10 @@ public sealed record SourceComparison(SourceDivergence? Divergence, IReadOnlyLis
 internal static class PluginSourceChecks
 {
     internal static IReadOnlyList<string> CollidingFormKeys(
-        string pluginFileName, PluginSourceFiles source, IEnumerable<FormKey> formKeys)
+        string pluginFileName, PluginSourceFiles source, IEnumerable<FormKey> formKeys, GameRelease gameRelease)
     {
         var entriesByTail = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var name in EntryNamesIn(source.Files, SourceRepositoryLayout.RootFor(pluginFileName)))
+        foreach (var name in EntryNamesIn(source.Files, SourceRepositoryLayout.RootFor(pluginFileName), gameRelease))
         {
             foreach (var tail in TailsCarriedBy(name))
                 entriesByTail[tail] = entriesByTail.GetValueOrDefault(tail) + 1;
@@ -116,14 +117,15 @@ internal static class PluginSourceChecks
     // One name per entry under the tree's own root: every file, and every directory once however many
     // files it holds, and a container's document is its directory's. A directory counted twice would read
     // as a collision.
-    private static IEnumerable<string> EntryNamesIn(IReadOnlyList<TreeFile> files, string treeRoot)
+    private static IEnumerable<string> EntryNamesIn(IReadOnlyList<TreeFile> files, string treeRoot, GameRelease gameRelease)
     {
         var directories = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var relativePath in files.Select(file => file.RelativePath))
+        var paths = files.Select(file => file.RelativePath).ToList();
+        var documents = SourceRepositoryLayout.ContainerDocumentsAmong(paths, gameRelease);
+        foreach (var relativePath in paths)
         {
             var directory = Path.GetDirectoryName(relativePath);
-            if (!Path.GetFileName(relativePath).Equals(Path.GetFileName(directory) + SourceRepositoryLayout.JsonSuffix, StringComparison.Ordinal))
-                yield return Path.GetFileName(relativePath);
+            if (!documents.Contains(relativePath)) yield return Path.GetFileName(relativePath);
 
             while (!string.IsNullOrEmpty(directory)
                    && !directory.Equals(treeRoot, StringComparison.Ordinal)

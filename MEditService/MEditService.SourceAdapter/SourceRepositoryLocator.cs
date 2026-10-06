@@ -188,8 +188,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         }
     }
 
-    // Every entry whose leaf name carries the FormKey, as the path of the document it stands for: a
-    // directory holds its record in the document its leaf names, a file is the record.
+    // Every entry whose leaf name carries the FormKey, as the path of the document it stands for.
     private IEnumerable<string> DocumentsNaming(string sourceRoot, string spelled)
     {
         // Computed once rather than per entry: FilesafeFormKey reparses the FormKey on every call.
@@ -199,12 +198,15 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             var leaf = Path.GetFileName(entry);
             if (!SourceRepositoryLayout.NameCarries(leaf, filesafe) && !SourceRepositoryLayout.NameCarries(leaf, filesafe + SourceRepositoryLayout.JsonSuffix)) continue;
 
-            // A container's document inside a directory that names the record too: the directory answers for it.
-            if (!Directory.Exists(entry) && SourceRepositoryLayout.NameCarries(Path.GetFileName(PathShape.DirectoryOf(entry)), filesafe)) continue;
+            if (!Directory.Exists(entry) && IsAContainersDocument(entry)) continue;
 
             yield return Directory.Exists(entry) ? SourceRepositoryLayout.ContainerDocumentHeldBy(entry) : entry;
         }
     }
+
+    private bool IsAContainersDocument(string file) =>
+        SourceRepositoryLayout.InAContainerGroup(Path.GetRelativePath(_modFolder, file), _release)
+        && SourceRepositoryLayout.ContainerDocumentHeldBy(PathShape.DirectoryOf(file)) == file;
 
     // A record with a document of its own, found as Locate finds it. A name the text contradicts is
     // stale, and the record it claims is elsewhere or gone.
@@ -367,14 +369,8 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     }
 
     internal SourceUnit Unit(string fullPath, string ownerFormKey, string? ownerRecordType, bool isEmbedded) =>
-        new(fullPath, Path.GetRelativePath(_modFolder, fullPath), ownerFormKey, ownerRecordType, isEmbedded, InAContainerGroup(fullPath));
-
-    private bool InAContainerGroup(string fullPath)
-    {
-        var path = new LayoutPath(Path.GetRelativePath(_modFolder, fullPath));
-        return path.IsContainerDocument
-            && RecordTypeDispatch.For(_release).DirectoryPerRecordFolderNames.Contains(path.GroupFolderName);
-    }
+        new(fullPath, Path.GetRelativePath(_modFolder, fullPath), ownerFormKey, ownerRecordType, isEmbedded,
+            SourceRepositoryLayout.InAContainerGroup(Path.GetRelativePath(_modFolder, fullPath), _release));
 
     // Matches the FormKey alone, never the EditorID, which a caller may hold stale mid-rename. Every
     // directory-per-record group is searched, since a cell's directory sits in its own group's blocks

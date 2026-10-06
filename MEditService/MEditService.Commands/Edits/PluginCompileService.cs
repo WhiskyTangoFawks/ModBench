@@ -161,13 +161,23 @@ internal sealed class PluginCompileService(
     private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(
         IReadOnlyList<TreeFile> files, string pluginName, GameRelease release)
     {
-        var read = await adapter.ReadTreeAsync(SourceRepository.DoorFilesOf(pluginName, files, release), codec, release);
+        IReadOnlyList<TreeFile> doorFiles;
+        try
+        {
+            doorFiles = SourceRepository.DoorFilesOf(pluginName, files, release);
+        }
+        catch (AmbiguousSourceUnitException ex)
+        {
+            return (null, $"{pluginName} could not be read from its source: {ex.Message}");
+        }
+
+        var read = await adapter.ReadTreeAsync(doorFiles, codec, release);
         if (read.Tree is { } tree) return (tree, null);
 
         logger.LogWarning(read.Error, "{Plugin} could not be read from its source", pluginName);
         var diagnosis = read.Diagnosis
             ?? throw new InvalidOperationException("Expected a failed read to carry a diagnosis.");
-        var described = SourceRepository.SourceTextOf(pluginName, diagnosis.Describe());
+        var described = SourceRepository.SourceTextOf(pluginName, diagnosis.Describe(), files, release);
         return (null, $"{pluginName} could not be read from its source: {described} {RegenerateTheSource}");
     }
 

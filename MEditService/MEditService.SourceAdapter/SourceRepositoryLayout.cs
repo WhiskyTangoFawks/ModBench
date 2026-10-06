@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -20,7 +19,7 @@ internal readonly record struct SourcePlacement(string RelativePath);
 
 /// <summary>The source tree's layout: the only type spelling the root folder, the door's file names
 /// and the JSON suffix. The instance places a new document and mints the levels above it.</summary>
-internal sealed partial class SourceRepositoryLayout(string modFolder, GameRelease release, SourceRepositoryLocator locator)
+internal sealed class SourceRepositoryLayout(string modFolder, GameRelease release, SourceRepositoryLocator locator)
 {
     private readonly string _modFolder = modFolder;
     private readonly GameRelease _release = release;
@@ -66,50 +65,84 @@ internal sealed partial class SourceRepositoryLayout(string modFolder, GameRelea
 
     /// <summary>The files of <see cref="PristineFilesOf"/> as the whole-mod door names them.</summary>
     internal static IReadOnlyList<TreeFile> DoorFilesOf(
-        string pluginFileName, IEnumerable<TreeFile> files, GameRelease gameRelease) =>
-        [.. files.Select(file => IsHeaderDocumentPath(file.RelativePath, pluginFileName)
-            ? new TreeFile(DoorHeaderDocumentFor(pluginFileName), file.Content)
-            : new TreeFile(DoorNameOf(file.RelativePath, gameRelease), file.Content))];
+        string pluginFileName, IEnumerable<TreeFile> files, GameRelease gameRelease)
+    {
+        var held = files.ToList();
+        return [.. DoorNames(pluginFileName, held, gameRelease).Zip(held, (name, file) => new TreeFile(name.Door, file.Content))];
+    }
 
     /// <summary><paramref name="doorText"/>, the door's words about <paramref name="pluginFileName"/>'s tree,
-    /// with each document's file named as the layout names it.</summary>
-    internal static string SourceTextOf(string pluginFileName, string doorText) =>
-        DoorContainerDocument().Replace(
-            doorText.Replace(DoorHeaderDocumentFor(pluginFileName), HeaderDocumentFor(pluginFileName), StringComparison.Ordinal),
-            "$1$2$1" + JsonSuffix);
+    /// with each of <paramref name="files"/> named as the layout names it.</summary>
+    internal static string SourceTextOf(
+        string pluginFileName, string doorText, IEnumerable<TreeFile> files, GameRelease gameRelease) =>
+        DoorNames(pluginFileName, [.. files], gameRelease)
+            .Where(name => name.Door != name.Source)
+            .Aggregate(doorText, (text, name) => text.Replace(name.Door, name.Source, StringComparison.Ordinal));
 
-    [GeneratedRegex(@"([^/\\]+)([/\\])RecordData\.json")]
-    private static partial Regex DoorContainerDocument();
+    private static IEnumerable<(string Source, string Door)> DoorNames(
+        string pluginFileName, IReadOnlyList<TreeFile> files, GameRelease gameRelease)
+    {
+        var sources = files.Select(file => file.RelativePath).ToList();
+        var documents = ContainerDocumentsAmong(sources, gameRelease);
+        string DoorName(string source)
+        {
+            if (IsHeaderDocumentPath(source, pluginFileName)) return DoorHeaderDocumentFor(pluginFileName);
+            return documents.Contains(source) ? Path.Combine(PathShape.DirectoryOf(source), RecordDataFileName) : source;
+        }
+
+        return sources.Select(source => (source, DoorName(source)));
+    }
 
     private static string SourceNameOf(string doorPath) =>
         Path.GetFileName(doorPath).Equals(RecordDataFileName, StringComparison.Ordinal)
             ? ContainerDocumentIn(PathShape.DirectoryOf(doorPath))
             : doorPath;
 
-    // Whatever file a container's directory holds is its document, so a directory or file renamed outside
-    // Modbench still reaches the door as the record it holds.
-    private static string DoorNameOf(string sourcePath, GameRelease gameRelease)
-    {
-        var path = new LayoutPath(sourcePath);
-        return path.IsContainerDocument && RecordTypeDispatch.For(gameRelease).DirectoryPerRecordFolderNames.Contains(path.GroupFolderName)
-            ? Path.Combine(PathShape.DirectoryOf(sourcePath), RecordDataFileName)
-            : sourcePath;
-    }
-
     /// <summary>The file a container's directory is written with: the one its leaf names.</summary>
     internal static string ContainerDocumentIn(string directory) =>
         Path.Combine(directory, Path.GetFileName(directory) + JsonSuffix);
 
-    /// <summary>The file a container's directory holds as its document: the one its leaf names, else the only
-    /// other document in it, so a directory or file renamed outside Modbench still reads.</summary>
-    internal static string ContainerDocumentHeldBy(string directory)
+    /// <summary>Whether <paramref name="relativePath"/> sits where a container's document does: in a record
+    /// directory of a directory-per-record group.</summary>
+    internal static bool InAContainerGroup(string relativePath, GameRelease gameRelease)
+    {
+        var path = new LayoutPath(relativePath);
+        return path.IsContainerDocument
+            && RecordTypeDispatch.For(gameRelease).DirectoryPerRecordFolderNames.Contains(path.GroupFolderName);
+    }
+
+    /// <summary>Each container directory's document among <paramref name="relativePaths"/>, by the one rule of
+    /// <see cref="ContainerDocumentAmong"/>.</summary>
+    internal static HashSet<string> ContainerDocumentsAmong(IEnumerable<string> relativePaths, GameRelease gameRelease) =>
+        relativePaths
+            .Where(path => InAContainerGroup(path, gameRelease))
+            .GroupBy(path => PathShape.DirectoryOf(path), StringComparer.Ordinal)
+            .Select(directory => ContainerDocumentAmong(directory.Key, directory))
+            .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>The document a container's directory holds, among the record-carrying files in it: the one its
+    /// leaf names, else the only one, so a directory or file renamed outside Modbench still reads. Several and
+    /// none named for it is a tree nothing can read one record from, and throws.</summary>
+    internal static string ContainerDocumentAmong(string directory, IEnumerable<string> documents)
     {
         var named = ContainerDocumentIn(directory);
-        if (File.Exists(named) || !Directory.Exists(directory)) return named;
+        var held = documents.ToList();
+        if (held.Contains(named, StringComparer.Ordinal)) return named;
 
-        var documents = Directory.EnumerateFiles(directory, "*" + JsonSuffix).Where(file => !CarriesNoRecord(file)).ToList();
-        return documents.Count == 1 ? documents[0] : named;
+        return held.Count switch
+        {
+            0 => named,
+            1 => held[0],
+            _ => throw new AmbiguousSourceUnitException(
+                $"{directory} holds more than one document ({string.Join(", ", held.Select(Path.GetFileName))}) and none is named " +
+                "for the directory, so no one record's document can be told. Remove the extra ones by hand."),
+        };
     }
+
+    internal static string ContainerDocumentHeldBy(string directory) =>
+        ContainerDocumentAmong(
+            directory,
+            Directory.Exists(directory) ? Directory.EnumerateFiles(directory).Where(file => !CarriesNoRecord(file)) : []);
 
     private static string DoorHeaderDocumentFor(string pluginFileName) =>
         Path.Combine(RootFor(pluginFileName), RecordDataFileName);

@@ -124,7 +124,8 @@ public static class RecordEndpoints
         .WithSummary("The changes an edit of a record makes to plugin source, writing nothing.")
         .WithDescription(
             "Given the edit and the current text of the document carrying the record, the text each document the edit " +
-            "changes or creates holds afterwards, and each file or folder it moves. Moves come first, and each document's " +
+            "changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each " +
+            "against the tree the one before it left, and each document's " +
             "path is where it stands once moved, relative to the mod folder. Any other document the edit reads is read from " +
             "disk. A refusal is the one the edit itself gives.")
         .WithTags("Records")

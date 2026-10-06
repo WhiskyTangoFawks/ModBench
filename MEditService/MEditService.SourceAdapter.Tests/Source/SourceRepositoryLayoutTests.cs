@@ -116,6 +116,26 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     [Fact]
+    public void SourceTextOf_NamesAContainerByTheFileHeld_NotByTheLeafItWouldBear()
+    {
+        var held = new TreeFile(Path.Combine("plugin-source", "Mixed.ESP", "Worldspaces", "ByHand", "Hand.json"), [1]);
+        var door = Path.Combine("plugin-source", "Mixed.ESP", "Worldspaces", "ByHand", "RecordData.json");
+
+        var text = SourceRepository.SourceTextOf("Mixed.ESP", $"bad JSON in {door}", [held], Release);
+
+        Assert.Equal($"bad JSON in {held.RelativePath}", text);
+    }
+
+    [Fact]
+    public void DoorFilesOf_RefusesADirectoryHoldingTwoDocumentsAndNoneNamedForIt()
+    {
+        var directory = Path.Combine("plugin-source", "Mixed.ESP", "Worldspaces", "ByHand");
+
+        Assert.Throws<AmbiguousSourceUnitException>(() => SourceRepository.DoorFilesOf(
+            "Mixed.ESP", [new TreeFile(Path.Combine(directory, "One.json"), [1]), new TreeFile(Path.Combine(directory, "Two.json"), [2])], Release));
+    }
+
+    [Fact]
     public void DoorFilesOf_LeavesAFlatRecordTheDoorReadsAsItIs()
     {
         var flat = new TreeFile(Path.Combine("plugin-source", "Mixed.ESP", "npc_", "sub", "SomeNpc - 000800_Mixed.ESP.json"), [1]);
