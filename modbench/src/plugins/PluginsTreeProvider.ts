@@ -391,8 +391,9 @@ export class PluginsTreeProvider
     return current === undefined ? [] : this.getChildren(current);
   }
 
-  // A group's records sit in it directly, or in its blocks and sub-blocks as the Cell group's do. A
-  // record row ends the walk: what it holds belongs to another group.
+  // A group's or a container's records sit beneath it directly, or beneath rows that stand for no
+  // record: blocks, sub-blocks, a cell's persistent and temporary groups. A record row ends the
+  // walk: what it holds is that record's.
   private async recordRowBeneath(parent: PluginsTreeNode, formKey: string): Promise<PluginsTreeNode | undefined> {
     for (const row of await this.getChildren(parent)) {
       if (isRecordRow(row)) {

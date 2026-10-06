@@ -18,13 +18,15 @@ export interface CreatedRecordSelectionDeps<Row> {
 }
 
 export interface CreatedRecordWatch<Row> {
-  /** The record mEdit created, selected and opened once a change to its plugin names it. */
+  /** The record mEdit created, selected and opened once a change to its plugin names it, or
+   *  mEdit re-derives the whole plugin. */
   select(place: RecordPlace<Row>, formKey: string): void;
   forget(): void;
 }
 
-/** Watched from before the create, since the change naming the new record can precede mEdit's
- *  answer to it. */
+/** Watched from before the create, since the change landing the new record can precede mEdit's
+ *  answer; until that answer, any change to the plugin counts. It settles once, and the next
+ *  watch settles it. */
 export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row>): {
   watch(plugin: PluginAddress): CreatedRecordWatch<Row>;
 } {
@@ -39,20 +41,28 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
   return {
     watch(plugin) {
       forgetLatest?.();
-      const named = new Set<string>();
+      let landed = false;
       let created: { place: RecordPlace<Row>; formKey: string } | undefined;
       const settle = (): void => {
-        if (created === undefined || !named.has(created.formKey) || forgetLatest !== forget) return;
+        if (created === undefined || !landed || forgetLatest !== forget) return;
         forget();
         void selectAndOpen(created.place, created.formKey);
       };
-      const unsubscribe = deps.client.onNotification('rows-changed', (event) => {
-        if (!samePluginAddress(event.plugin, plugin)) return;
-        for (const key of event.keys) named.add(key);
-        settle();
-      });
+      const unsubscribes = [
+        deps.client.onNotification('rows-changed', (event) => {
+          if (!samePluginAddress(event.plugin, plugin)) return;
+          landed ||= created === undefined || event.keys.includes(created.formKey);
+          settle();
+        }),
+        // A plugin re-derived whole is announced with no keys (ADR-0015).
+        deps.client.onNotification('plugin-changed', (event) => {
+          if (!samePluginAddress(event.plugin, plugin)) return;
+          landed = true;
+          settle();
+        }),
+      ];
       const forget = () => {
-        unsubscribe();
+        for (const unsubscribe of unsubscribes) unsubscribe();
         if (forgetLatest === forget) forgetLatest = undefined;
       };
       forgetLatest = forget;

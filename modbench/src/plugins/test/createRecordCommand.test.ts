@@ -257,18 +257,26 @@ describe('modbench.record.create on a container', () => {
     expect(validate('a, b')).toBe('Two whole numbers, as x, y.');
   });
 
-  it.each([['type pick', QUEST_ROW], ['grid position prompt', WORLDSPACE_ROW]])(
-    'creates nothing, watches nothing and says nothing when the %s is left with Esc', async (_step, row) => {
-      const { client, steps, reporter, create } = harness();
-      if (row === WORLDSPACE_ROW) client.setQueryAnswer('getChildRecordTypes', [{ type: 'cell', displayName: 'Cell' }]);
-      showQuickPick.mockResolvedValue(undefined);
-      showInputBox.mockResolvedValue(undefined);
+  it('creates nothing, watches nothing and says nothing when the type pick is left with Esc', async () => {
+    const { steps, reporter, create } = harness();
+    showQuickPick.mockResolvedValue(undefined);
 
-      await create(row);
+    await create(QUEST_ROW);
 
-      expect(steps).toEqual([]);
-      expect([reporter.reports, reporter.landings]).toEqual([[], []]);
-    });
+    expect(steps).toEqual([]);
+    expect([reporter.reports, reporter.landings]).toEqual([[], []]);
+  });
+
+  it('creates nothing, watches nothing and says nothing when the grid position prompt is left with Esc', async () => {
+    const { client, steps, reporter, create } = harness();
+    client.setQueryAnswer('getChildRecordTypes', [{ type: 'cell', displayName: 'Cell' }]);
+    showInputBox.mockResolvedValue(undefined);
+
+    await create(WORLDSPACE_ROW);
+
+    expect(steps).toEqual([]);
+    expect([reporter.reports, reporter.landings]).toEqual([[], []]);
+  });
 
   it('says a container that can hold nothing, as a deleted one, holds no new record, and creates nothing', async () => {
     const { client, steps, reporter, create } = harness();
@@ -322,6 +330,15 @@ describe('modbench.record.create ends when the write does', () => {
     await create(PLUGIN_ROW);
 
     expect(writing).toEqual(['picked', 'opens', 'create', 'ends']);
+  });
+
+  it('settles the watch when the create throws', async () => {
+    const { client, steps, create } = harness();
+    client.setCommandHandler('createRecord', () => Promise.reject(new Error('connection reset')));
+
+    await expect(create(NPC_GROUP)).rejects.toThrow('connection reset');
+
+    expect(steps).toEqual(['watch MyPatch.esp ModA', 'forget']);
   });
 
   it('ends the write after mEdit refuses the create', async () => {

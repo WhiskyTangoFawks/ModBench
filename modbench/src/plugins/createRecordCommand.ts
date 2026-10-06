@@ -8,6 +8,7 @@ import type { CreatedRecordWatch, RecordPlace } from './createdRecordSelection';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import { CREATE_ROW_KINDS, isContainerRow } from './gestureEntry';
 import { CELL_RECORD_TYPE } from './PluginTreeProvider';
+import { pluginAddressOf } from '../wire/pluginAddress';
 
 export interface RecordCreateDeps {
   client: Pick<MEditClient, 'createRecord' | 'getCreatableRecordTypes' | 'getChildRecordTypes'>;
@@ -26,11 +27,11 @@ type Target =
 
 function targetOf(row: CreateRow, client: RecordCreateDeps['client']): Target | undefined {
   if (row.kind === 'plugin') return { plugin: { name: row.plugin.name, origin: row.origin }, choices: () => client.getCreatableRecordTypes() };
-  if (row.kind === 'recordType') return { plugin: { name: row.plugin, origin: row.origin }, recordType: row.recordType };
+  if (row.kind === 'recordType') return { plugin: pluginAddressOf(row), recordType: row.recordType };
   if (!isContainerRow(row)) return undefined;
   const [plugin, container] = row.kind === 'record'
-    ? [{ name: row.record.plugin, origin: row.origin }, row.record.formKey]
-    : [{ name: row.plugin, origin: row.origin }, row.formKey];
+    ? [pluginAddressOf({ plugin: row.record.plugin, origin: row.origin }), row.record.formKey]
+    : [pluginAddressOf(row), row.formKey];
   return { plugin, container, choices: () => client.getChildRecordTypes(plugin, container) };
 }
 
@@ -110,15 +111,20 @@ export function registerRecordCreateCommand(
     const container = 'container' in target ? target.container : undefined;
     const place: RecordPlace<PluginsTreeNode> = container === undefined ? { plugin, recordType } : { container: row };
     const created = deps.createdRecords.watch(plugin);
-    await deps.write(async () => {
-      const result = await deps.client.createRecord(plugin, recordType, container === undefined ? undefined : { container, position });
-      if (isRefused(result)) {
-        created.forget();
-        deps.reporter.report('error', result.message);
-        return;
-      }
-      created.select(place, result.formKey);
-      deps.reporter.landed(`Created ${result.formKey}.`);
-    });
+    const answer: { formKey?: string } = {};
+    try {
+      await deps.write(async () => {
+        const result = await deps.client.createRecord(plugin, recordType, container === undefined ? undefined : { container, position });
+        if (isRefused(result)) {
+          deps.reporter.report('error', result.message);
+          return;
+        }
+        answer.formKey = result.formKey;
+        deps.reporter.landed(`Created ${result.formKey}.`);
+      });
+    } finally {
+      if (answer.formKey === undefined) created.forget();
+      else created.select(place, answer.formKey);
+    }
   });
 }

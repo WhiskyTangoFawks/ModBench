@@ -254,6 +254,7 @@ export type PluginTreeNode =
   | ErrorNode | IndexingNode;
 
 export const CELL_RECORD_TYPE = 'cell';
+const WORLDSPACE_RECORD_TYPE = 'wrld';
 
 type RecordPage = { items: RecordSummary[]; total: number };
 type PageCache = Map<string, RecordPage>;
@@ -389,7 +390,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   private fetchGroup(node: RecordTypeNode): Promise<PluginTreeNode[]> {
-    if (node.recordType === 'wrld') return this.fetchWorldspaces(node);
+    if (node.recordType === WORLDSPACE_RECORD_TYPE) return this.fetchWorldspaces(node);
     if (node.recordType === CELL_RECORD_TYPE) return this.fetchInteriorCells(node);
     return this.fetchRecords(node);
   }

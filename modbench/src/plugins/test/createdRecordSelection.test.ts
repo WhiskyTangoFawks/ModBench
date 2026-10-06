@@ -16,6 +16,10 @@ function rowsChanged(keys: string[], origin = PLUGIN.origin) {
   return { kind: 'rows-changed', plugin: PLUGIN.name, origin, keys, sequence: 1 };
 }
 
+function pluginChanged(origin = PLUGIN.origin) {
+  return { kind: 'plugin-changed', plugin: PLUGIN.name, origin, keys: [], sequence: 1 };
+}
+
 function harness(shown: (formKey: string) => boolean = () => true) {
   const stream = new InMemoryMEditClient();
   const asked: string[] = [];
@@ -101,6 +105,48 @@ describe('createdRecordSelection', () => {
 
     stream.emit(rowsChanged([NEW]));
     await settle();
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
+  it('selects the new record\'s row by its FormKey once mEdit re-derives its whole plugin, which names no record', async () => {
+    const { stream, asked, selection, revealed, settle, opened } = harness();
+    selection.watch(PLUGIN).select(QUEST, NEW);
+
+    stream.emit(pluginChanged('ModB'));
+    await settle();
+    expect(opened()).toEqual([]);
+
+    stream.emit(pluginChanged());
+    await settle();
+
+    expect(asked).toEqual([`quest row ${NEW}`]);
+    expect(revealed).toEqual([`row ${NEW} {"select":true,"focus":true}`]);
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
+  it('selects at once when mEdit re-derived the plugin before it answered the create', async () => {
+    const { stream, selection, settle, opened } = harness();
+    const watch = selection.watch(PLUGIN);
+    stream.emit(pluginChanged());
+    await settle();
+
+    watch.select(NPCS, NEW);
+    await settle();
+
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
+  it('selects nothing at a later change naming the record, once a re-derived plugin settled the watch', async () => {
+    const { stream, asked, selection, settle, opened } = harness(() => false);
+    selection.watch(PLUGIN).select(NPCS, NEW);
+    stream.emit(pluginChanged());
+    await settle();
+
+    stream.emit(rowsChanged([NEW]));
+    stream.emit(pluginChanged());
+    await settle();
+
+    expect(asked).toHaveLength(1);
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
