@@ -129,7 +129,7 @@ internal sealed class Projector(
             throw new UnreadableSourceDocumentException(
                 $"The source of {formKey} in {key.Name} ({key.Origin}) is not a readable document.");
         }
-        if (workingTreeText != null) repository.RefuseUntypedChildren(key, identity, workingTreeText, index.Schemas);
+        if (workingTreeText != null) repository.RefuseUnreadable(key, identity, workingTreeText, index.Schemas);
 
         return string.Equals(workingTreeText, effective.Body, StringComparison.Ordinal)
             ? []

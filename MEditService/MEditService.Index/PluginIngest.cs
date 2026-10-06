@@ -200,7 +200,7 @@ internal sealed class PluginIngest
         var body = Encoding.UTF8.GetBytes(document.Text);
         using var parsed = JsonDocument.Parse(body);
         var root = parsed.RootElement;
-        var editorId = DocumentNodes.At(root, "EditorID")?.GetString();
+        var editorId = DocumentNodes.EditorIdOf(root).EditorId;
 
         // ADR-0005: where a cell sits and what a container holds come from the GRUP
         // hierarchy, so a container whose document the codec refused still lists and still holds

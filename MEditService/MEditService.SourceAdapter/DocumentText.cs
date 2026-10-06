@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
@@ -59,6 +60,20 @@ internal static class DocumentText
         catch (JsonException)
         {
             return null;
+        }
+    }
+
+    /// <summary>The EditorID at the document's own root. Malformed text names none.</summary>
+    internal static EditorIdRead EditorIdIn(string text)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return DocumentNodes.EditorIdOf(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return EditorIdRead.None;
         }
     }
 

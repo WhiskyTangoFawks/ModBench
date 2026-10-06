@@ -13,9 +13,10 @@ public static class CallerText
         try
         {
             using var parsed = JsonDocument.Parse(text);
-            return parsed.RootElement.ValueKind == JsonValueKind.Object
-                ? (text, DocumentNodes.At(parsed.RootElement, "EditorID")?.GetString(), null)
-                : (NoBody, null, "A record's document is a JSON object.");
+            var root = parsed.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return (NoBody, null, "A record's document is a JSON object.");
+            var editorId = DocumentNodes.EditorIdOf(root);
+            return editorId.WhyUnreadable is { } why ? (NoBody, null, $"The record's {why}.") : (text, editorId.EditorId, null);
         }
         catch (JsonException ex)
         {
