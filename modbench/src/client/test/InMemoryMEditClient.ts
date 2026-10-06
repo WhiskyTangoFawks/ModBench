@@ -8,6 +8,7 @@ type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
   | 'getRecords' | 'searchRecords'
   | 'getRecordOwner' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations' | 'getComparison' | 'getRecordsComparison' | 'getReferences'
+  | 'getRenderedDocument'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
@@ -262,6 +263,10 @@ export class InMemoryMEditClient implements MEditClient {
   ): ReturnType<MEditClient['getChildrenInDestinations']> {
     return this.query('getChildrenInDestinations', args);
   }
+  getRenderedDocument(...args: Parameters<MEditClient['getRenderedDocument']>): ReturnType<MEditClient['getRenderedDocument']> {
+    return this.query('getRenderedDocument', args);
+  }
+
   getComparison(...args: Parameters<MEditClient['getComparison']>): ReturnType<MEditClient['getComparison']> {
     return this.query('getComparison', args);
   }
