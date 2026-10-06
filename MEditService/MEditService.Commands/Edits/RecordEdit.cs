@@ -19,7 +19,7 @@ internal sealed class RecordEdit(WriteTargets targets, RecordTextCodec codec, Sc
     /// <summary><paramref name="given"/> stands in for the file of the document carrying the record.</summary>
     internal RecordEditChanges Plan(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given) =>
         WriteFailure.Refused<RecordEditChanges>(
-            () => EditSource(plugin, formKey, envelope, given), refused => refused, $"Could not write the source file for {formKey}", logger);
+            () => EditSource(plugin, formKey, envelope, given), refused => refused, $"Could not read the source of {formKey}", logger);
 
     private RecordEditChanges EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given)
     {
