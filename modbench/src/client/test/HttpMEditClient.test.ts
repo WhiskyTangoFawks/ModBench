@@ -999,6 +999,57 @@ describe('HttpMEditClient — a copy rendered as its document', () => {
   });
 });
 
+describe('HttpMEditClient — the file holding a copy of a record', () => {
+  it('asks mEdit for the file of the plugin\'s copy of the record and reads its path', async () => {
+    const file = { path: '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json' };
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, file)));
+    const client = makeClient(fetch);
+
+    await expect(client.getRecordFile({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp')).resolves.toEqual(file);
+    const url = new URL(fetch.mock.calls[0]?.[0].url ?? '');
+    expect(url.pathname).toBe('/plugins/Shared.esp/records/000800%3AShared.esp/file');
+    expect(url.searchParams.get('origin')).toBe('ModA');
+  });
+
+  it('answers null when the plugin holds no such record', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(404, { detail: 'The plugin holds no such record.' })));
+    const client = makeClient(fetch);
+
+    await expect(client.getRecordFile({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp')).resolves.toBeNull();
+  });
+
+  it('rejects, naming the reason, when mEdit cannot answer', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
+    const client = makeClient(fetch);
+
+    await expect(client.getRecordFile({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
+      .rejects.toThrow(/No load order has been loaded/);
+  });
+});
+
+describe('HttpMEditClient — the record a file holds', () => {
+  const path = '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json';
+
+  it('asks mEdit for the record whose own document the file is', async () => {
+    const record = { formKey: '000800:Shared.esp', plugin: 'Shared.esp', origin: 'ModA' };
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, record)));
+    const client = makeClient(fetch);
+
+    await expect(client.getRecordOfFile(path)).resolves.toEqual(record);
+    const url = new URL(fetch.mock.calls[0]?.[0].url ?? '');
+    expect(url.pathname).toBe('/plugin-source/record');
+    expect(url.searchParams.get('path')).toBe(path);
+  });
+
+  it('rejects with mEdit\'s reason when the file holds no record', async () => {
+    const detail = 'plugin-source/Shared.esp/Cells/GroupRecordData.json is a group\'s metadata file, which holds no record.';
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { detail })));
+    const client = makeClient(fetch);
+
+    await expect(client.getRecordOfFile(path)).rejects.toThrow(detail);
+  });
+});
+
 describe('HttpMEditClient — the extensions a new plugin may take', () => {
   it('asks mEdit and reads its answer', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, ['.esp', '.esm'])));

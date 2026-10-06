@@ -82,6 +82,22 @@ public sealed class RenderedDocumentApiTests : HostedTests
     }
 
     [Fact]
+    public async Task ATrackedCopyTwoDocumentsClaim_Is422_SayingSo()
+    {
+        var fx = await Untracked();
+        var npc = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc");
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
+        await Client.PluginReportsTracked(Plugin);
+        var written = Directory.EnumerateFiles(ModFolderOf(fx), "RenderedNpc - *.json", SearchOption.AllDirectories).Single();
+
+        File.Copy(written, Path.Combine(Path.GetDirectoryName(written).Require(), $"Twin - {npc.Replace(':', '_')}.json"));
+
+        var refused = await (await Rendered(npc)).AssertIsProblem(HttpStatusCode.UnprocessableEntity);
+        Assert.Contains("More than one document", refused.GetProperty("detail").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ACopyThePluginDoesNotHold_Is404()
     {
         await Untracked();

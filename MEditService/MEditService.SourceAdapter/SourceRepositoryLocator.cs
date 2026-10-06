@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -173,6 +174,38 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         return null;
     }
 
+    internal bool TryFormKeyOfFile(
+        string pluginFileName, string fullPath,
+        [NotNullWhen(true)] out string? formKey, [NotNullWhen(false)] out string? whyNone)
+    {
+        var relativePath = Path.Combine(
+            SourceRepositoryLayout.RootFor(pluginFileName),
+            Path.GetRelativePath(SourceRepositoryLayout.RootIn(_modFolder, pluginFileName), fullPath));
+        var text = SourceRepositoryLayout.CarriesNoRecord(relativePath) ? null : DocumentText.ReadOrNull(fullPath);
+        var declared = text is null || NotADocument(text) is not null
+            ? null
+            : DocumentText.FormKeyDeclaredIn(text, relativePath, pluginFileName);
+        if (FormKey.TryFactory(declared, out var parsed))
+        {
+            (formKey, whyNone) = (parsed.ToString(), null);
+            return true;
+        }
+
+        (formKey, whyNone) = (null, WhyNoRecordIn(fullPath, text));
+        return false;
+    }
+
+    private static string WhyNoRecordIn(string fullPath, string? text)
+    {
+        if (Path.GetFileName(fullPath).Equals(SourceRepositoryLayout.GroupRecordDataFileName, StringComparison.Ordinal))
+            return $"{fullPath} is a group's metadata file, which holds no record.";
+        if (SourceRepositoryLayout.CarriesNoRecord(fullPath)) return $"{fullPath} is no JSON document, so it holds no record.";
+        if (text is null) return $"{fullPath} could not be read.";
+        return NotADocument(text) is { } why
+            ? $"{fullPath} is no record document: {why}"
+            : $"{fullPath} declares no FormKey, so it is no record's document.";
+    }
+
     // Its root has to be a JSON object before any member of it can be read; anything else is a file
     // something else wrote over the document, and the reader's message is the whole diagnosis.
     internal static string? NotADocument(string text)
@@ -302,8 +335,11 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     private static string Canonical(string formKey) =>
         FormKey.TryFactory(formKey, out var parsed) ? parsed.ToString() : formKey;
 
-    private static bool IsUnder(string directory, string path) =>
-        path.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+    // Windows names a file without regard to case, and VS Code spells a drive letter in lower case.
+    internal static bool IsUnder(string directory, string path) =>
+        path.StartsWith(
+            directory + Path.DirectorySeparatorChar,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
     /// holds it. Only the repository reads block directories back (ADR-0014). A
