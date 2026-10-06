@@ -21,7 +21,7 @@ import { recordResourceUri } from '../recordResourceUri';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import { expectInstanceOf, expectInstanceOfOrUndefined, expectInstancesOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
-import { listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
+import { CONTAINER_TYPES, listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
 
 function makeRecord(
   i: number, workingTreeState: RecordSummary['workingTreeState'] = 'None', hasContainerChildren = false,
@@ -47,7 +47,7 @@ function makeClient(overrides: Partial<{
   const recordTypes = overrides.recordTypes ?? [{ type: 'weap', count: 5, displayName: 'Weapon' }];
   client.setQueryAnswer('getRecordTypes', recordTypes.map((rt) => ({
     type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
-    isCreatable: rt.isCreatable ?? true,
+    isCreatable: rt.isCreatable ?? true, isContainer: CONTAINER_TYPES.has(rt.type),
   })));
   client.setQueryAnswer('getRecords', overrides.records ?? { items: [makeRecord(0)], total: 1 });
   client.setQueryAnswer('getWorldspaces', []);
@@ -410,7 +410,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
       recordTypes: [{ type: 'weap', count: 1 }, { type: 'qust', count: 1 }, { type: 'wrld', count: 1 }, { type: 'cell', count: 1 }],
       records: { items: [makeRecord(0, 'None', true)], total: 1 },
     });
-    repo.setQueryAnswer('getContainerChildren', [{ ...makeRecord(1), recordType: 'dial', hasContainerChildren: false }]);
+    repo.setQueryAnswer('getContainerChildren', [{ ...makeRecord(1), recordType: 'dial', hasContainerChildren: false, isContainer: true }]);
     repo.setQueryAnswer('getWorldspaces', [{ formKey: '000001:Plugin0.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [cell],
@@ -865,7 +865,7 @@ function makeContainerChild(
 ): ContainerChildSummary {
   return {
     formKey, editorId, plugin: 'Plugin0.esp', origin: 'Data',
-    loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', recordType, hasContainerChildren,
+    loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', recordType, hasContainerChildren, isContainer: CONTAINER_TYPES.has(recordType),
     hasParseFailure: false,
   };
 }
@@ -1075,7 +1075,7 @@ describe('the failure prefix', () => {
       records: { items: [{ ...makeRecord(0, 'None', true), hasParseFailure: true }], total: 1 },
     });
     repo.setQueryAnswer('getContainerChildren', [
-      { ...makeRecord(1), recordType: 'info', hasContainerChildren: false,
+      { ...makeRecord(1), recordType: 'info', hasContainerChildren: false, isContainer: false,
         parseDiagnosis: 'INFO 12 — unknown: bad', hasParseFailure: true },
     ]);
     const provider = new PluginTreeProvider(repo);

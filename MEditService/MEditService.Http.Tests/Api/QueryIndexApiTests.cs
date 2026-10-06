@@ -177,6 +177,43 @@ public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> l
     }
 
     [Fact]
+    public async Task AnExteriorCell_HoldsALandscape_AndAnInteriorOneDoesNot()
+    {
+        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces?origin={UserMod}");
+        var worldFk = Uri.EscapeDataString(worldspaces[0].GetProperty("formKey").GetString().Require());
+        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces/{worldFk}/blocks?origin={UserMod}");
+        var interiors = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/interior-cells?origin={UserMod}");
+        var exterior = blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require();
+        var interior = interiors[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require();
+
+        Assert.Equal(["Landscape", "Navmesh", "Placed NPC", "Placed Object"], await ChildRecordTypeNames(exterior));
+        Assert.Equal(["Navmesh", "Placed NPC", "Placed Object"], await ChildRecordTypeNames(interior));
+    }
+
+    private async Task<IEnumerable<string?>> ChildRecordTypeNames(string formKey)
+    {
+        var types = await Client.GetFromJsonAsync<JsonElement>(
+            $"/plugins/{UserPlugin}/records/{Uri.EscapeDataString(formKey)}/child-record-types?origin={UserMod}");
+        return types.EnumerateArray().Select(t => t.GetProperty("displayName").GetString());
+    }
+
+    [Fact]
+    public async Task TheRecordTypesOfARecordThePluginDoesNotHold_AreAnsweredWithNothingFound()
+    {
+        var response = await Client.GetAsync($"/plugins/{UserPlugin}/records/000FFF%3ANowhere.esp/child-record-types?origin={UserMod}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TheRecordTypesARecordCanHold_AskedWithNoOrigin_AreRefused()
+    {
+        var response = await Client.GetAsync($"/plugins/{UserPlugin}/records/000FFF%3ANowhere.esp/child-record-types");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task AQuestionAboutARecordNoPluginHolds_IsAnsweredWithNothingFound()
     {
         var response = await Client.GetAsync(new Uri("/records/000FFF:Nowhere.esp", UriKind.Relative));

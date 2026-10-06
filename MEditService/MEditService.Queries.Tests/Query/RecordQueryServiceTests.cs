@@ -838,6 +838,27 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
+    public void GetPluginRecordTypes_SaysWhichTypesAreContainers_AnEmptyOneIncluded()
+    {
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
+        {
+            [PluginKey] =
+            [
+                new RecordTypeCount("npc_", 1, HasParseFailure: false),
+                new RecordTypeCount("qust", 1, HasParseFailure: false),
+                new RecordTypeCount("dial", 1, HasParseFailure: false),
+                new RecordTypeCount("cell", 1, HasParseFailure: false),
+                new RecordTypeCount("wrld", 1, HasParseFailure: false),
+                new RecordTypeCount("refr", 1, HasParseFailure: false),
+            ],
+        };
+
+        var containers = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, "Data")).Where(r => r.IsContainer).Select(r => r.Type);
+
+        Assert.Equal(["cell", "dial", "qust", "wrld"], containers.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void GetPluginRecordTypes_ExcludesHeader_ForItIsReachedOnlyViaOpenHeaderOnThePluginNode()
     {
         _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
