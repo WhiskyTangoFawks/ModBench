@@ -8,6 +8,7 @@ public sealed class WriteRouteSeamTests
     private static readonly (string Route, string Method)[] Routes =
     [
         ("POST /records/{formKey}/edit", "EditRecord"),
+        ("POST /records/{formKey}/edit-changes", "EditRecordChanges"),
         ("POST /records/delete", "DeleteRecord"),
         ("POST /records/copy", "CopyRecord"),
         ("POST /plugins/create", "CreatePlugin"),
@@ -29,6 +30,7 @@ public sealed class WriteRouteSeamTests
     [
         """Results.Problem("Plugin name and origin are required.", statusCode: 400)""",
         """Results.Problem("An operation and a path are required.", statusCode: 400)""",
+        """Results.Problem("The text of the document carrying the record is required.", statusCode: 400)""",
         """Results.Problem("At least one record is required.", statusCode: 400)""",
         """Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400)""",
         """Results.Problem("At least one destination is required.", statusCode: 400)""",

@@ -56,28 +56,32 @@ public sealed class SourceTransactionTests : IDisposable
     private static void BlockTheWriteThenRenameWithADirectoryAtTheDestinationsTmpName(string path) => Directory.CreateDirectory(path + ".tmp");
 
     [Fact]
-    public void Put_WithANewEditorId_IsRefusedBeforeTheTreeIsTouched()
+    public void Rollback_PutsBackADocumentMovedToTheLeafNameItsNewEditorIdGivesIt()
     {
         Seed(Fk("000800"), "npc_", "OldName");
         var before = TreeSnapshot.Of(_root);
 
         var transaction = new SourceTransaction();
+        transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "NewName", Body(Fk("000800"), "NewName")));
 
-        Assert.Throws<NotSupportedException>(() => transaction.Put(
-            Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "NewName", Body(Fk("000800"), "NewName"))));
+        Assert.True(File.Exists(FlatFile(Fk("000800"), "npc_", "NewName")));
+        Assert.Empty(transaction.Undo(Repo));
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
 
     [Fact]
-    public void Put_OverAFileSomethingElseRenamed_IsRefusedBeforeTheTreeIsTouched()
+    public void Rollback_PutsBackAFileSomethingElseRenamed_ThatThePutMovedToItsLayoutName()
     {
         Seed(Fk("000800"), "npc_", "Npc");
         var group = Directory.GetFiles(_root, "*.json", SearchOption.AllDirectories).Single();
         File.Move(group, Path.Combine(Path.GetDirectoryName(group) ?? _root, $"RenamedOutside - 000800_{PluginName}.json"));
         var before = TreeSnapshot.Of(_root);
 
-        Assert.Throws<NotSupportedException>(() => new SourceTransaction().Put(
-            Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Npc", Body(Fk("000800"), "Npc"))));
+        var transaction = new SourceTransaction();
+        transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Npc", Body(Fk("000800"), "Rewritten")));
+
+        Assert.True(File.Exists(FlatFile(Fk("000800"), "npc_", "Npc")));
+        Assert.Empty(transaction.Undo(Repo));
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
 
@@ -228,7 +232,7 @@ public sealed class SourceTransactionTests : IDisposable
     }
 
     [Fact]
-    public void Rollback_ReportsAPathItCouldNotRestore_AndStillRestoresTheRest()
+    public void Rollback_ReportsAMoveItCouldNotPutBack_AndStillRestoresTheRest()
     {
         Seed(Fk("000800"), "npc_", "First");
         Seed(Fk("000801"), "npc_", "Second");
@@ -237,13 +241,33 @@ public sealed class SourceTransactionTests : IDisposable
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "First", Body(Fk("000800"), "Ours")));
         Rekey(transaction, "npc_", "Second", "000801", "000802");
 
-        var unwritableOnEveryPlatformWithNoPermissionBitsAPrivilegedRunnerWouldIgnore = FlatFile(Fk("000801"), "npc_", "Second");
-        Directory.CreateDirectory(unwritableOnEveryPlatformWithNoPermissionBitsAPrivilegedRunnerWouldIgnore);
+        var movedFrom = FlatFile(Fk("000801"), "npc_", "Second");
+        Directory.CreateDirectory(movedFrom);
+
+        var only = Assert.Single(transaction.Undo(Repo));
+        Assert.Equal(UnrestoredReason.OccupiedByAnother, only.Reason);
+        Assert.Equal(Path.GetRelativePath(_root, movedFrom), only.RelativePath);
+        Assert.Equal(Body(Fk("000800"), "First"), File.ReadAllText(FlatFile(Fk("000800"), "npc_", "First")));
+    }
+
+    [Fact]
+    public void Rollback_ReportsAMoveTheFileSystemRefusedToPutBack_WithItsWords()
+    {
+        Seed(Fk("000800"), "npc_", "Moved");
+        var from = Path.GetRelativePath(_root, FlatFile(Fk("000800"), "npc_", "Moved"));
+        var to = Path.Combine("Elsewhere", Path.GetFileName(from));
+        Directory.CreateDirectory(Path.Combine(_root, "Elsewhere"));
+
+        var transaction = new SourceTransaction();
+        transaction.Apply(Repo, new SourceChanges([new SourceMove(from, to)], []));
+        var folderItLeft = Path.GetDirectoryName(Path.Combine(_root, from)).Require();
+        Directory.Delete(folderItLeft);
 
         var only = Assert.Single(transaction.Undo(Repo));
         Assert.Equal(UnrestoredReason.RestoreFailed, only.Reason);
+        Assert.Equal(from, only.RelativePath);
         Assert.NotNull(only.Error);
-        Assert.Equal(Body(Fk("000800"), "First"), File.ReadAllText(FlatFile(Fk("000800"), "npc_", "First")));
+        Assert.True(File.Exists(Path.Combine(_root, to)));
     }
 
     [Fact]

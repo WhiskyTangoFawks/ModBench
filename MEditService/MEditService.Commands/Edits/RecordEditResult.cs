@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Edits;
 
@@ -147,3 +148,7 @@ public sealed record RecordEditResult(
     public static RecordEditResult RefusedAt(RecordEditRefusal refusal, string path, string message) =>
         new(false, refusal, message, Path: path);
 }
+
+/// <summary>An edit answered without writing: its outcome, and the changes it makes to plugin source when
+/// it applies.</summary>
+public sealed record RecordEditChanges(RecordEditResult Outcome, SourceChanges Changes);

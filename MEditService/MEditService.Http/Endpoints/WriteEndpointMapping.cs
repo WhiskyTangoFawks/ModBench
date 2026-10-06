@@ -172,15 +172,27 @@ internal static class WriteEndpointMapping
         Action? logReceived,
         Func<IResult?> validate,
         Func<RecordEditResult> execute,
-        Func<RecordEditResult, IResult> onApplied)
+        Func<RecordEditResult, IResult> onApplied) =>
+        Execute(gesture, logger, logReceived, validate, execute, result => result, onApplied);
+
+    /// <summary><see cref="Execute(string, ILogger, Action?, Func{IResult?}, Func{RecordEditResult}, Func{RecordEditResult, IResult})"/>
+    /// for an answer that carries more than its <paramref name="outcome"/>.</summary>
+    internal static IResult Execute<T>(
+        string gesture, ILogger logger,
+        Action? logReceived,
+        Func<IResult?> validate,
+        Func<T> execute,
+        Func<T, RecordEditResult> outcome,
+        Func<T, IResult> onApplied)
     {
         logReceived?.Invoke();
 
         if (validate() is { } validationFailure)
             return validationFailure;
 
-        var result = execute();
-        if (result.Applied) return onApplied(result);
+        var answer = execute();
+        var result = outcome(answer);
+        if (result.Applied) return onApplied(answer);
 
         LogRefusal(logger, gesture, result.Refusal, result.Message);
         return Refusal(result);

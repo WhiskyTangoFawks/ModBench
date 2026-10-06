@@ -77,6 +77,12 @@ internal static class Wire
             $"/records/{Uri.EscapeDataString(formKey)}/edit",
             new { plugin, origin, op = "set", path = new[] { new { kind = "member", name = member } }, value });
 
+    internal static Task<HttpResponseMessage> EditChanges(
+        this HttpClient client, string formKey, string plugin, string origin, string member, object value, string? text) =>
+        client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(formKey)}/edit-changes",
+            new { edit = new { plugin, origin, op = "set", path = new[] { new { kind = "member", name = member } }, value }, text });
+
     internal static Task<HttpResponseMessage> Copy(
         this HttpClient client, IEnumerable<(string FormKey, string Plugin, string Origin)> records, string mode,
         IEnumerable<(string Plugin, string Origin)> destinations, bool replace = false) =>
