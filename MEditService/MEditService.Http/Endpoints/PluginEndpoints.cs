@@ -87,20 +87,21 @@ public static class PluginEndpoints
             .Produces<IReadOnlyList<CreatableRecordType>>()
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/light-plugins-supported", (IRecordQueryService svc) =>
+        app.MapGet("/plugins/creatable-extensions", (PluginExtensionsQueryService svc) =>
         {
             try
             {
-                return Results.Ok(svc.GetLightPluginsSupported());
+                return Results.Ok(svc.GetCreatable());
             }
             catch (NoLoadOrderException ex)
             {
                 return WriteEndpointMapping.NoLoadOrder(ex);
             }
         })
-            .WithName("GetLightPluginsSupported")
+            .WithName("GetCreatablePluginExtensions")
             .WithTags(Tag)
-            .Produces<bool>()
+            .WithDescription("The file extensions a new plugin may take in the held release.")
+            .Produces<IReadOnlyList<string>>()
             .ProducesProblem(503);
 
         app.MapPost("/plugins/create", CreatePlugin)

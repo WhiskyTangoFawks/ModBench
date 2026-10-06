@@ -43,7 +43,7 @@ const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
 
 function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string | undefined)[]) {
   const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getLightPluginsSupported', true);
+  client.setQueryAnswer('getCreatablePluginExtensions', ['.esp', '.esm', '.esl']);
   client.setCommandResult('renameSource', { renamed: true });
   client.setQueryAnswer('getPluginDependants', { dependants: [], unreadable: [] });
   const dialog = scriptedDialog(...answers);
@@ -174,11 +174,11 @@ describe('modbench.plugin.rename', () => {
       expect(await validate('Patch.esp')).toBeUndefined();
     });
 
-    it('refuses a name with no plugin extension, and .esl where the game has no light plugins', async () => {
+    it('refuses a name with no plugin extension, and one mEdit leaves out', async () => {
       const { validate, client } = setup();
       expect(await validate('Patch.txt')).toBe('Extension must be .esp, .esm, or .esl');
-      client.setQueryAnswer('getLightPluginsSupported', false);
-      expect(await validate('Patch.esl')).toBe('This game has no light plugins');
+      client.setQueryAnswer('getCreatablePluginExtensions', ['.esp', '.esm']);
+      expect(await validate('Patch.esl')).toBe('Extension must be .esp or .esm');
     });
 
     it('refuses a name the plugin\'s own place holds, a case-only rename of itself too', async () => {

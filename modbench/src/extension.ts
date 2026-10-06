@@ -78,7 +78,7 @@ interface ExtensionSession {
 type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
-  'putLoadOrder' | 'rebuildIndex' | 'createPlugin' | 'renameSource' | 'getPluginDependants' | 'getLightPluginsSupported'
+  'putLoadOrder' | 'rebuildIndex' | 'createPlugin' | 'renameSource' | 'getPluginDependants' | 'getCreatablePluginExtensions'
   | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected'>;
 
 interface ViewsDeps {

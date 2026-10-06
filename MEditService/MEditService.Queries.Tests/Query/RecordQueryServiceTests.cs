@@ -901,32 +901,6 @@ public sealed class RecordQueryServiceTests
         Assert.Throws<NoLoadOrderException>(() => unloaded.GetCreatableRecordTypes());
     }
 
-    private static RecordQueryService ServiceIn(GameRelease release) => new(
-        new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), [])),
-        FakeLoadOrder.Of(release), SharedSchemaReflector.Instance);
-
-    [Fact]
-    public void GetLightPluginsSupported_AReleaseWithLightPlugins_IsTrue()
-    {
-        Assert.True(ServiceIn(GameRelease.Fallout4).GetLightPluginsSupported());
-    }
-
-    [Theory]
-    [InlineData(GameRelease.Oblivion)]
-    [InlineData(GameRelease.OblivionRE)]
-    public void GetLightPluginsSupported_AReleaseWithoutLightPlugins_IsFalse(GameRelease release)
-    {
-        Assert.False(ServiceIn(release).GetLightPluginsSupported());
-    }
-
-    [Fact]
-    public void GetLightPluginsSupported_NoLoadOrder_ThrowsNoLoadOrderException()
-    {
-        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance);
-
-        Assert.Throws<NoLoadOrderException>(() => unloaded.GetLightPluginsSupported());
-    }
-
     [Fact]
     public void GetRecords_SeveralTypes_SearchesExactlyThose()
     {

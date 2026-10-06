@@ -214,14 +214,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/light-plugins-supported": {
+    "/plugins/creatable-extensions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["GetLightPluginsSupported"];
+        /** @description The file extensions a new plugin may take in the held release. */
+        get: operations["GetCreatablePluginExtensions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1643,7 +1644,7 @@ export interface operations {
             };
         };
     };
-    GetLightPluginsSupported: {
+    GetCreatablePluginExtensions: {
         parameters: {
             query?: never;
             header?: never;
@@ -1658,7 +1659,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": boolean;
+                    "application/json": string[];
                 };
             };
             /** @description Service Unavailable */

@@ -76,14 +76,14 @@ function makeMo2() {
 const WROTE = { name: 'MyPatch.esp', origin: 'Winning Mod' };
 
 describe('registerCreatePluginCommand', () => {
-  function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined, lightPluginsSupported = true) {
-    client.setQueryAnswer('getLightPluginsSupported', lightPluginsSupported);
+  function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined, creatableExtensions = ['.esp', '.esm', '.esl']) {
+    client.setQueryAnswer('getCreatablePluginExtensions', creatableExtensions);
     const reporter = recordingReporter();
     registerCreatePluginCommand(client, mo2?.instance, reporter);
     return { run: present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler"), reporter };
   }
 
-  const lightPluginsQuery = { method: 'getLightPluginsSupported', args: [] };
+  const extensionsQuery = { method: 'getCreatablePluginExtensions', args: [] };
 
   type Place = { label: string; origin: string };
   const offering = (): { offered: Place[] } => {
@@ -107,7 +107,7 @@ describe('registerCreatePluginCommand', () => {
     await run();
 
     expect(client.calls).toEqual([
-      lightPluginsQuery,
+      extensionsQuery,
       { method: 'createPlugin', args: [{ name: 'MyPatch.esp', origin: 'Winning Mod' }, '/instance/mods/Winning Mod'] },
     ]);
     expect(reporter.landings).toEqual(['Created "MyPatch.esp" in Winning Mod.']);
@@ -132,32 +132,32 @@ describe('registerCreatePluginCommand', () => {
     expect(['A.esp', 'B.ESM', 'C.esl'].map(validate)).toEqual([undefined, undefined, undefined]);
   });
 
-  it('refuses an .esl name inline when the game has no light plugins, leaving .esp and .esm alone', async () => {
+  it('refuses an extension mEdit leaves out inline, naming the ones it allows', async () => {
     type Validate = (v: string) => string | undefined;
     const prompt: { validate?: Validate } = {};
     showInputBox.mockImplementation((options: { validateInput: Validate }) => {
       prompt.validate = options.validateInput;
       return Promise.resolve(undefined);
     });
-    const { run } = invoke(new InMemoryMEditClient(), makeMo2(), false);
+    const { run } = invoke(new InMemoryMEditClient(), makeMo2(), ['.esp', '.esm']);
     await run();
 
     const validate = present(prompt.validate, 'the name prompt\'s validator');
-    expect(validate('MyPatch.esl')).toBe('This game has no light plugins');
+    expect(validate('MyPatch.esl')).toBe('Extension must be .esp or .esm');
     expect(['A.esp', 'B.ESM'].map(validate)).toEqual([undefined, undefined]);
   });
 
-  it('reports why, and opens no prompt, when mEdit cannot say whether the game has light plugins', async () => {
+  it('reports why, and opens no prompt, when mEdit cannot say which extensions a plugin may take', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryFailure('getLightPluginsSupported', new Error('No load order has been loaded.'));
+    client.setQueryFailure('getCreatablePluginExtensions', new Error('No load order has been loaded.'));
 
     const { run, reporter } = invoke(client, makeMo2());
     await run();
 
     expect(showInputBox).not.toHaveBeenCalled();
-    expect(client.calls).toEqual([lightPluginsQuery]);
+    expect(client.calls).toEqual([extensionsQuery]);
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not look up whether this game has light plugins.', detail: 'No load order has been loaded.' },
+      { severity: 'error', message: 'Could not look up which extensions a plugin may take.', detail: 'No load order has been loaded.' },
     ]);
   });
 
@@ -179,7 +179,7 @@ describe('registerCreatePluginCommand', () => {
     await run();
 
     expect(showQuickPick).not.toHaveBeenCalled();
-    expect(client.calls).toEqual([lightPluginsQuery]);
+    expect(client.calls).toEqual([extensionsQuery]);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -191,7 +191,7 @@ describe('registerCreatePluginCommand', () => {
     const { run, reporter } = invoke(client, makeMo2());
     await run();
 
-    expect(client.calls).toEqual([lightPluginsQuery]);
+    expect(client.calls).toEqual([extensionsQuery]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
   });
@@ -208,7 +208,7 @@ describe('registerCreatePluginCommand', () => {
     const { run, reporter } = invoke(client, mo2);
     await run();
 
-    expect(client.calls).toEqual([lightPluginsQuery]);
+    expect(client.calls).toEqual([extensionsQuery]);
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'The mod "Winning Mod" is gone, so "MyPatch.esp" was not created.', detail: undefined },
     ]);
@@ -226,7 +226,7 @@ describe('registerCreatePluginCommand', () => {
     const { run, reporter } = invoke(client, mo2);
     await run();
 
-    expect(client.calls).toEqual([lightPluginsQuery]);
+    expect(client.calls).toEqual([extensionsQuery]);
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'The mod "Winning Mod" was disabled, so "MyPatch.esp" was not created.', detail: undefined },
     ]);
@@ -242,7 +242,7 @@ describe('registerCreatePluginCommand', () => {
     const { run, reporter } = invoke(client, mo2);
     await run();
 
-    expect(client.calls).toEqual([lightPluginsQuery]);
+    expect(client.calls).toEqual([extensionsQuery]);
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Overwrite has no folder yet, so "New.esp" was not created.', detail: undefined },
     ]);
