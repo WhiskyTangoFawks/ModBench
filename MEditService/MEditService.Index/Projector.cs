@@ -205,10 +205,10 @@ internal sealed class Projector(
         index.Announce(() => notifications?.Publish(new RowsChangedNotification(key, formKeys, index.Sequence)));
 
     /// <summary>ADR-0015: compares <paramref name="key"/>'s rows against the system of record they
-    /// came from, the tree <paramref name="read"/> stamps or else the binary, and refreshes what
+    /// came from, the tree <paramref name="state"/> stamps or else the binary, and refreshes what
     /// differs.</summary>
-    internal ValidationReport Validate(PluginAddress key, PluginProvider provider, ReadState read) =>
-        read switch
+    internal ValidationReport Validate(PluginAddress key, PluginProvider provider, ReadState state) =>
+        state switch
         {
             // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
             { Ambiguity: { } ambiguity } => new ValidationReport([], NeedsRebuild: true, [ambiguity]),
