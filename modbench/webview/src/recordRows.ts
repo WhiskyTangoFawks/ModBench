@@ -8,7 +8,7 @@ import {
   type CellContext, type Column, type PathSegment,
 } from './recordUtils';
 import type { FocusedCell, NavRow } from './gridNavigation';
-import type { ColumnKey, CompareResult, FieldDiff, FieldMetadata, PathHop } from './types';
+import type { ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop } from './types';
 import type { ArrayParentContext } from '../../src/wire/messages';
 
 export const RECORD_HEADER_ROW = 'Record Header';
@@ -62,8 +62,8 @@ interface RowsInput {
   columns: readonly Column[];
   editableColumns: ReadonlySet<ColumnKey>;
   partialFormColumns: ReadonlySet<ColumnKey>;
-  // The record as the panel's title names it, which a string cell's own tab is filed under.
-  recordLabel: string;
+  // A copy's record as the panel names it, which a string cell's own tab is filed under.
+  recordLabel: (copy: CompareOverride) => string;
 }
 
 export type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent' | 'depth' | 'isLastElement' | 'keyMembers'> & {
@@ -78,7 +78,7 @@ const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.le
 
 /** One field's row: what each column's cell holds, where an edit of it writes, and its context. */
 export function fieldRow(
-  diff: FieldDiff, meta: FieldMetadata, at: RowPlacement, columns: readonly Column[], recordLabel: string,
+  diff: FieldDiff, meta: FieldMetadata, at: RowPlacement, columns: readonly Column[], recordLabel: RowsInput['recordLabel'],
 ): FieldRow {
   const { present, editable, cellMetas, ...place } = at;
   const name = meta.displayLabel ?? diff.fieldName;
@@ -106,7 +106,7 @@ export function fieldRow(
       element,
       editPath && editableCellContext(o.formKey, o.plugin, o.origin, editPath, value != null),
       hops && meta.type === 'string'
-        ? stringValueContext(o.formKey, o.plugin, o.origin, recordLabel, name, modelValue(value, meta), !editPath, hops)
+        ? stringValueContext(o.formKey, o.plugin, o.origin, recordLabel(o), name, modelValue(value, meta), !editPath, hops)
         : undefined,
       typeof shown === 'string' && cellMeta.type === 'formKey' && resolution && resolution.state !== 'Unresolved'
         ? referenceContext(shown)

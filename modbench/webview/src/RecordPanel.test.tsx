@@ -12,7 +12,7 @@ import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, member, panelClient,
+  compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, lastToldCell, member, panelClient,
   parseJsonRecord, required,
   type PanelOpts,
 } from './test/fixtures';
@@ -2307,5 +2307,95 @@ describe('RecordPanel — a field the schema marks read-only, the reason coming 
     await waitFor(() => screen.getByText('A Name'));
 
     expect(required(screen.getByText('A Name').closest('td'), 'the cell')).toHaveAttribute('title', 'Single Record');
+  });
+});
+
+describe('RecordPanel — several records side by side', () => {
+  const [GUN, AMMO] = ['000801:A.esp', '000802:A.esp'];
+  const sideBySide: CompareResult = compareResultFixture({
+    overrides: [
+      compareOverride({ formKey: GUN, plugin: 'A.esp', isWinner: true, editorId: 'Gun', fields: [{ metadata: strMeta, value: 'Gun Name' }], conflictThis: null, column: '0#A.esp' }),
+      compareOverride({ formKey: AMMO, plugin: 'A.esp', isWinner: true, editorId: 'Ammo', fields: [{ metadata: strMeta, value: 'Ammo Name' }], conflictThis: null, column: '1#A.esp' }),
+    ],
+    diffs: [diffNode({ fieldName: 'Name', values: { '0#A.esp': 'Gun Name', '1#A.esp': 'Ammo Name' }, winnerColumn: '1#A.esp' })],
+  });
+  const tracked = [{ name: 'A.esp', isTracked: true }];
+
+  beforeEach(() => { vi.stubGlobal('mEditFormKey', GUN); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('shows one column for each record, in the order given, though two come from one plugin, each with its plugin\'s status', async () => {
+    renderPanel(sideBySide, { plugins: tracked });
+
+    await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
+    const nameCells = Array.from(required(screen.getByText('Gun Name').closest('tr'), 'the Name row').querySelectorAll('td')).slice(1);
+    expect(nameCells.map(cell => cell.textContent)).toEqual(['Gun Name', 'Ammo Name']);
+    expect(screen.getAllByText('(tracked)')).toHaveLength(2);
+  });
+
+  it('names the first record, the file\'s, in its header, though another record\'s copy is a winner', async () => {
+    const firstLoses = structuredClone(sideBySide);
+    required(firstLoses.overrides[0], 'the first copy').isWinner = false;
+    renderPanel(firstLoses, { plugins: tracked });
+
+    await waitFor(() => expect(screen.getByText('Non-Player Character Gun [000801:A.esp]')).toBeInTheDocument());
+  });
+
+  it('files a string field\'s own tab under its column\'s record', async () => {
+    renderPanel(sideBySide, { plugins: tracked });
+    await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Ammo Name'));
+
+    expect(lastToldCell(vscode.postMessage)).toMatchObject({ formKey: AMMO, recordLabel: 'Ammo [000802:A.esp]' });
+  });
+
+  it('says nothing of an incomplete comparison: the colours compare copies of one record', async () => {
+    renderPanel(sideBySide, { plugins: tracked, conflictsComputed: false });
+
+    await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
+    expect(screen.queryByText(required(recordPanelIncompleteMessage(false), 'the message'))).not.toBeInTheDocument();
+  });
+
+  it('writes an edit in a column to that column\'s own record', async () => {
+    renderPanel(sideBySide, { plugins: tracked });
+    await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
+    vi.mocked(vscode.postMessage).mockClear();
+
+    fireEvent.doubleClick(screen.getByText('Ammo Name'));
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'New name' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: AMMO, plugin: 'A.esp',
+    }));
+  });
+
+  it('reads at once with the records the host shows beside its own from now on', async () => {
+    const { client } = renderPanel(sideBySide, { plugins: tracked });
+    await waitFor(() => expect(client.load).toHaveBeenCalledTimes(1));
+    const columns = [{ formKey: AMMO, plugin: { name: 'A.esp', origin: 'Data' } }];
+
+    sendMessage({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns });
+
+    expect(client.showColumns).toHaveBeenCalledWith(columns);
+    await waitFor(() => expect(client.load).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('RecordPanel — a string field\'s own tab, opened from one record\'s column', () => {
+  beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is filed under the record as the panel names it, by the winning copy\'s EditorID, from any column', async () => {
+    const renamed = structuredClone(compareResult);
+    required(renamed.overrides[0], 'the master copy').editorId = 'OldNPC';
+    renderPanel(renamed);
+    await waitFor(() => expect(screen.getByText('Original Name')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Original Name'));
+
+    expect(lastToldCell(vscode.postMessage)).toMatchObject({ plugin: 'Fallout4.esm', recordLabel: 'TestNPC [000001:Fallout4.esm]' });
   });
 });

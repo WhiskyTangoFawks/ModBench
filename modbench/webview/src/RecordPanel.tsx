@@ -8,7 +8,7 @@ import type {
   ColumnKey, CompareOverride, CompareResult, PathHop, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
 import { LABEL_COLUMN } from './labelColumn';
-import { columnKey } from '../../src/wire/columnKey';
+import { columnKey, copyColumnKey } from '../../src/wire/columnKey';
 import { pluginAddressOf } from '../../src/wire/pluginAddress';
 import { addElement, editField, focusCell } from './nativeBridge';
 import { openEditor } from './DiskCell';
@@ -29,16 +29,12 @@ const mEditWindow = window as Window & typeof globalThis & {
 
 // One sweep over the response's own overrides, keyed as the backend keys its dictionaries
 // (ADR-0012), so every whole-grid column set is minted the same way.
-function columnKeysWhere(
-  overrides: CompareOverride[] | undefined, holds: (o: CompareOverride, key: ColumnKey) => boolean,
-): Set<ColumnKey> {
-  const keys = new Set<ColumnKey>();
-  for (const o of overrides ?? []) {
-    const key = columnKey(pluginAddressOf(o));
-    if (holds(o, key)) keys.add(key);
-  }
-  return keys;
+function columnKeysWhere(overrides: CompareOverride[] | undefined, holds: (o: CompareOverride) => boolean): Set<ColumnKey> {
+  return new Set((overrides ?? []).filter(holds).map(copyColumnKey));
 }
+
+// A column's status is its plugin's (editor.md, A column's header).
+const pluginKeyOf = (o: CompareOverride): ColumnKey => columnKey(pluginAddressOf(o));
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
 
@@ -85,8 +81,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // One definition of "this column can be written" (ADR-0007), computed for the whole grid at
   // once, since per cell it would lag. The backend refuses every write to a parse-failed record,
   // so a diagnosis vetoes it too.
-  const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
-    !immutableSet.has(key) && trackedSet?.has(key) === true && o.parseDiagnosis == null),
+  const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, o =>
+    !immutableSet.has(pluginKeyOf(o)) && trackedSet?.has(pluginKeyOf(o)) === true && o.parseDiagnosis == null),
     [result, immutableSet, trackedSet]);
 
   // editor.md, A column's header: a Partial Form column is dimmed, header and cells alike. One
@@ -100,14 +96,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // The column key alone is a rendering key; the override carries the compound identity (ADR-0012)
   // the write path needs and the values a wire path resolves against.
   const overrideFor = useCallback(
-    (plugin: ColumnKey) => (result?.overrides ?? []).find(o => columnKey(pluginAddressOf(o)) === plugin),
+    (column: ColumnKey) => (result?.overrides ?? []).find(o => copyColumnKey(o) === column),
     [result]);
 
   const post = useCallback((plugin: ColumnKey, envelope: RecordEditEnvelope) => {
     const override = overrideFor(plugin);
     if (!override) return;
-    editField(formKey, override.plugin, override.origin, envelope);
-  }, [overrideFor, formKey]);
+    editField(override.formKey, override.plugin, override.origin, envelope);
+  }, [overrideFor]);
 
   // An answer lands only if no later read was asked for since: reads answer out of order.
   const latestRead = useRef(0);
@@ -159,9 +155,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   );
   const rows = useMemo(
     () => result
-      ? recordRows({ result, columns, editableColumns, partialFormColumns, recordLabel: recordLabel(result.overrides, formKey) })
+      ? recordRows({ result, columns, editableColumns, partialFormColumns, recordLabel: copy => recordLabel(result.overrides, copy.formKey) })
       : [],
-    [result, columns, editableColumns, partialFormColumns, formKey],
+    [result, columns, editableColumns, partialFormColumns],
   );
 
   const focused = useMemo<GridCell | ValueCell | undefined>(
@@ -195,6 +191,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         return; // Not one of ours, or a stale/mismatched build.
       }
       if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) void refresh(msg.formKey);
+      if (msg.type === EXTENSION_TO_WEBVIEW.SHOW_COLUMNS) {
+        client.showColumns(msg.columns);
+        void refresh(formKey);
+      }
       if (msg.type === EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL) pasteIntoFocused(msg.text);
       if (msg.type === EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR) {
         const cell = scroller.current?.querySelector<HTMLElement>('[data-focused-cell]');
@@ -203,7 +203,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [refresh, pasteIntoFocused]);
+  }, [refresh, pasteIntoFocused, client, formKey]);
 
   const containerStyle: React.CSSProperties = {
     position: 'fixed',
@@ -241,6 +241,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const { overrides } = result;
 
   const title = recordLabel(overrides, formKey);
+  // Several records compared carry no colours to be final (editor.md, Columns, story 7).
+  const severalRecords = overrides.some(o => o.column != null);
+  const incompleteMessage = severalRecords ? undefined : recordPanelIncompleteMessage(conflictsComputed);
 
   const navColumns = columns.filter(c => !collapsedColumns.has(c.key)).map(c => c.key);
 
@@ -290,9 +293,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       {/* See recordPanelIncompleteMessage. Clears itself with no user action once refresh() next
           lands a settled `conflictsComputed`. */}
       {loadFailureMessage && <div style={messageStyle}>{loadFailureMessage}</div>}
-      {recordPanelIncompleteMessage(conflictsComputed) && (
-        <div style={messageStyle}>{recordPanelIncompleteMessage(conflictsComputed)}</div>
-      )}
+      {incompleteMessage && <div style={messageStyle}>{incompleteMessage}</div>}
       {/* flex:1 + minHeight:0 lets this wrapper shrink to the remaining viewport space (the
           flex-item default of min-height:auto would defeat that). overflow:auto then keeps the
           horizontal scrollbar reachable at any scroll position. */}
@@ -304,10 +305,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                 Field<ColumnEdge onResize={width => resizeColumn(LABEL_COLUMN, width)} />
               </th>
               {columns.map(col => {
-                // Keyed by col.key (ADR-0012), so two columns that share a file name collapse,
-                // resize and read-only apart.
-                const isImmutable = immutableSet.has(col.key);
-                const tracked = trackedSet?.has(col.key) === true;
+                // Keyed by col.key (ADR-0012), so two columns that share a file name collapse and
+                // resize apart; a status is the plugin's, by its compound key.
+                const isImmutable = immutableSet.has(pluginKeyOf(col.override));
+                const tracked = trackedSet?.has(pluginKeyOf(col.override)) === true;
                 return (
                   <PluginHeader
                     key={col.key}

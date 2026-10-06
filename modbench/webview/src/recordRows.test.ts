@@ -33,7 +33,7 @@ function answer(metas: FieldMetadata[], diffs: CompareResult['diffs'], partialMo
 function rowsFor(result: CompareResult, editable = [MASTER, MOD], partial: ColumnKey[] = []) {
   return recordRows({
     result, columns: buildColumns(result.overrides),
-    editableColumns: new Set(editable), partialFormColumns: new Set(partial), recordLabel: 'TestNPC [000001:Fallout4.esm]',
+    editableColumns: new Set(editable), partialFormColumns: new Set(partial), recordLabel: () => 'TestNPC [000001:Fallout4.esm]',
   });
 }
 
@@ -155,7 +155,7 @@ describe('what the rows show of what is collapsed', () => {
       result: answer([header], [diffNode({
         fieldName: 'Hdr', values: {}, children: [diffNode({ fieldName: 'X', values: {} })],
       })]),
-      columns: [], editableColumns: new Set(), partialFormColumns: new Set(), recordLabel: '',
+      columns: [], editableColumns: new Set(), partialFormColumns: new Set(), recordLabel: () => '',
     });
 
     expect(navRows(nested, new Set([RECORD_HEADER_ROW])).map(r => r.key)).toEqual([RECORD_HEADER_ROW]);
