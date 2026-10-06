@@ -2,6 +2,7 @@
 // plugin order's lock, and put back if a write fails.
 
 import { parse } from 'node:path';
+import { refuse } from '../ports/refuse';
 import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCodec/pluginsText';
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
 import { get, listDir, rename, undoAll, type Undo, withLock, write } from './files';
@@ -9,7 +10,7 @@ import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
 import { fileInFolder, originDir, pluginsFile, profilesDir } from './layout';
 import { readOrAbsent, type Mo2Context } from './mo2Context';
 
-export type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin'>;
+export type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin' | 'checkPluginRename'>;
 
 interface Move {
   readonly from: string;
@@ -91,19 +92,35 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
     ];
   }
 
-  return {
-    async renamePlugin(origin, from, to, gameRelease) {
-      const rule = pluginCompanionRule(gameRelease);
-      if (rule === undefined) throw new Error(`No table of the files named for a plugin for the release ${gameRelease ?? 'of this game'}`);
-      if (!namedFile(to)) throw new Error(`Not a valid plugin file name: "${to}"`);
-      const folder = originDir(instanceRoot, origin);
-      if (folder === undefined) throw notAFileOf(origin, from);
+  async function orderFiles(): Promise<string[]> {
+    const profiles = (await readOrAbsent(() => listDir(profilesDir(instanceRoot)), [])).filter((d) => d.isDirectory());
+    return profiles.map((d) => pluginsFile(instanceRoot, d.name)).sort();
+  }
 
-      const profiles = (await readOrAbsent(() => listDir(profilesDir(instanceRoot)), [])).filter((d) => d.isDirectory());
-      const orders = profiles.map((d) => pluginsFile(instanceRoot, d.name)).sort();
+  // Everything the rename refuses, read before any write, so a refusal can come before the plugin
+  // source moves.
+  async function plan(orders: readonly string[], origin: FileOrigin, from: string, to: string, gameRelease: string | undefined) {
+    const rule = pluginCompanionRule(gameRelease);
+    if (rule === undefined) throw new Error(`No table of the files named for a plugin for the release ${gameRelease ?? 'of this game'}`);
+    if (!namedFile(to)) throw new Error(`Not a valid plugin file name: "${to}"`);
+    const folder = originDir(instanceRoot, origin);
+    if (folder === undefined) throw notAFileOf(origin, from);
+    return { lines: await renamedLines(orders, from, to), files: await moves(origin, folder, from, to, rule) };
+  }
+
+  return {
+    async checkPluginRename(origin, from, to, gameRelease) {
+      try {
+        await plan(await orderFiles(), origin, from, to, gameRelease);
+        return { applied: true };
+      } catch (err) {
+        return refuse(err);
+      }
+    },
+    async renamePlugin(origin, from, to, gameRelease) {
+      const orders = await orderFiles();
       await withLocks(orders, async () => {
-        const lines = await renamedLines(orders, from, to);
-        const files = await moves(origin, folder, from, to, rule);
+        const { lines, files } = await plan(orders, origin, from, to, gameRelease);
         const undos: Undo[] = [];
         try {
           for (const move of files) {
