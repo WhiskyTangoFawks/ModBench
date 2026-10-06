@@ -5,8 +5,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Codec.Schema;
 
 /// <summary>The members holding child major records, read from each game module's own types.
-/// EmbeddedSlots is the subset the embed customization accepts. HeldTypesBySlot is the major record
-/// types a member reaches, through a worldspace's blocks too. Every dictionary is keyed by game
+/// EmbeddedSlots is the subset the embed customization accepts. Every dictionary is keyed by game
 /// too: two games' classes can share a bare name.</summary>
 public sealed record ContainerMembers(
     IReadOnlyDictionary<(GameCategory Game, string Type), string[]> ChildFieldsByType,

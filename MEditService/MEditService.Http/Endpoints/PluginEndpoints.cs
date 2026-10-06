@@ -131,7 +131,7 @@ public static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/creatable-extensions",(PluginExtensionsQueryService svc) =>
+        app.MapGet("/plugins/creatable-extensions", (PluginExtensionsQueryService svc) =>
         {
             try
             {

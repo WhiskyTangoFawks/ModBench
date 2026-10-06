@@ -126,7 +126,7 @@ public record ReferenceResult(
 
 // HasParseFailure: whether this subtree holds a record Mutagen could not read, so the tree renders
 // the failure prefix instead of walking children. IsCreatable: CreatableRecordTypes' own verdict.
-// IsContainer: the type holds child records in the game, so an empty record of it is one too.
+// IsContainer: the type holds child records in the game; an empty one counts.
 public record PluginRecordTypeCount(
     string Type, int Count, string DisplayName, bool HasParseFailure, bool IsCreatable, bool IsContainer);
 
