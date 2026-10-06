@@ -125,9 +125,9 @@ public static class ContainerChildFields
         property.SetValue(parent, child);
     }
 
-    /// <summary>Each incoming child overwrites the one <paramref name="root"/> holds under its FormKey
-    /// anywhere in its subtree or in <paramref name="carried"/>, landing in <paramref name="target"/>'s
-    /// slot; with none held it is added. What only the held one holds stays.</summary>
+    /// <summary>Each incoming child overwrites the one held under its FormKey in <paramref name="root"/>
+    /// or <paramref name="carried"/>, landing in <paramref name="target"/>'s slot, else is added. What
+    /// only the held one holds stays.</summary>
     internal static void MergeChildren(
         IMajorRecordGetter root, IMajorRecordGetter target, IReadOnlyList<(string SlotName, IMajorRecordGetter Child)> incoming,
         IReadOnlyDictionary<FormKey, IMajorRecordGetter> carried)
