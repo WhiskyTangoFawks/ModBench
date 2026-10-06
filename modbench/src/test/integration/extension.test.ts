@@ -798,6 +798,19 @@ describe('an edit in a tracked copy\'s grid', () => {
     await waitFor('the moved tab to read its new record from the document', () => comparedTexts.slice(readsBefore).includes(`${savedText}+moved`));
   });
 
+  it('moves the file with the tab, which keeps beside its record the records it showed beside it', async () => {
+    const column = { formKey: 'Fallout4.esm:000070', plugin: { name: 'Fallout4.esm', origin: 'Data' } };
+    await vscode.commands.executeCommand('modbench.record.open', [{ formKey: TRACKED_FORM_KEY, plugin }, column]);
+    await waitFor('the records read side by side', () => comparedSideBySide.some((asked) => JSON.stringify(asked).includes(column.formKey)));
+    answerEdit = answeredIn(MOVED_FILE, { moves: [{ from: TRACKED_FILE, to: MOVED_FILE }], newFormKey: MOVED_FORM_KEY });
+    const readsBefore = comparedSideBySide.length;
+
+    await edit(TRACKED_FORM_KEY, 'moved');
+
+    await waitFor('the moved tab to read its new record beside the same records', () => comparedSideBySide.slice(readsBefore).some((asked) =>
+      Array.isArray(asked) && JSON.stringify(asked.map((copy: unknown) => isRecord(copy) && copy.formKey)) === JSON.stringify([MOVED_FORM_KEY, column.formKey])));
+  });
+
   it('edits a child record through its own tab\'s document', async () => {
     await vscode.commands.executeCommand('modbench.record.open', { formKey: CHILD_FORM_KEY, plugin });
     const tab = await waitFor('the child\'s tab', () => openTabs().find((t) =>
