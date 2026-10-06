@@ -25,8 +25,8 @@ export interface CreatedRecordWatch<Row> {
 }
 
 /** Watched from before the create, since the change landing the new record can precede mEdit's
- *  answer; until that answer, any change to the plugin counts. It settles once, and the next
- *  watch settles it. */
+ *  answer, so the keys named until then are kept. It settles once, and the next watch settles
+ *  it. */
 export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row>): {
   watch(plugin: PluginAddress): CreatedRecordWatch<Row>;
 } {
@@ -42,6 +42,7 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
     watch(plugin) {
       forgetLatest?.();
       let landed = false;
+      let namedBeforeAnswer: Set<string> | undefined = new Set();
       let created: { place: RecordPlace<Row>; formKey: string } | undefined;
       const settle = (): void => {
         if (created === undefined || !landed || forgetLatest !== forget) return;
@@ -51,7 +52,8 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
       const unsubscribes = [
         deps.client.onNotification('rows-changed', (event) => {
           if (!samePluginAddress(event.plugin, plugin)) return;
-          landed ||= created === undefined || event.keys.includes(created.formKey);
+          if (created === undefined) for (const key of event.keys) namedBeforeAnswer?.add(key);
+          else landed ||= event.keys.includes(created.formKey);
           settle();
         }),
         // A plugin re-derived whole is announced with no keys (ADR-0015).
@@ -69,6 +71,8 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
       return {
         select(place, formKey) {
           created = { place, formKey };
+          landed ||= namedBeforeAnswer?.has(formKey) ?? false;
+          namedBeforeAnswer = undefined;
           settle();
         },
         forget,

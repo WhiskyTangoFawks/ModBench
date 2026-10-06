@@ -72,6 +72,21 @@ describe('createdRecordSelection', () => {
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
+  it('waits past a change before mEdit answered the create that does not name the record', async () => {
+    const { stream, asked, selection, settle, opened } = harness();
+    const watch = selection.watch(PLUGIN);
+    stream.emit(rowsChanged([OTHER]));
+    await settle();
+
+    watch.select(NPCS, NEW);
+    await settle();
+    expect([asked, opened()]).toEqual([[], []]);
+
+    stream.emit(rowsChanged([NEW]));
+    await settle();
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
   it('finds the row beneath the container the record landed in', async () => {
     const { stream, asked, selection, settle } = harness();
     selection.watch(PLUGIN).select(QUEST, NEW);
