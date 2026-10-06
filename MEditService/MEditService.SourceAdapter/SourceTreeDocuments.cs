@@ -218,7 +218,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
                     "names has a span of its owner's text that nothing here carries");
             // The one embedded cell: a worldspace's top cell, outside every exterior block grid.
             var cell = _containers.IsCell(child.RecordType)
-                ? new CellStructure(ownerFormKey, null, null, null, null, IsInterior: false)
+                ? CellPlacement.TopCellOf(ownerFormKey).Structure
                 : (CellStructure?)null;
 
             yield return new PluginDocument(

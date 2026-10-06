@@ -36,6 +36,10 @@ public enum RecordEditRefusal
     /// <summary>Create: no schema table of that name, or the header, which cannot be created this way.</summary>
     RecordTypeNotFound,
 
+    /// <summary>Create: the named container holds no new record of that type where it sits, as xEdit's Add
+    /// offers none; a deleted container holds nothing.</summary>
+    ContainerCannotHoldType,
+
     /// <summary>Held at either ref; checked server-side even for an allocator-suggested value, since a caller can type its own.</summary>
     FormKeyCollision,
 
@@ -46,7 +50,8 @@ public enum RecordEditRefusal
     FormKeySpaceExhausted,
 
     /// <summary>The record is held inside another record's document — a type the game holds nowhere
-    /// else, or a create on a container — and the gesture does not reach it yet.</summary>
+    /// else, a placed reference created in a cell, or a record created in a worldspace — and the
+    /// gesture does not reach it yet.</summary>
     HeldInAnotherRecordNotYetSupported,
 
     /// <summary>The index and the working tree disagree (a file moved outside Modbench). Not recreated at
@@ -96,8 +101,8 @@ public enum RecordEditRefusal
     /// then supplies the replace Option; the way out is confirming the replacement.</summary>
     DestinationHoldsRecord,
 
-    /// <summary>The slot a copied child takes holds another record, as a worldspace's persistent cell
-    /// does; the way out is outside the copy.</summary>
+    /// <summary>The single slot a copied or created child takes holds another record, as a worldspace's
+    /// persistent cell or a cell's landscape does; the way out is outside the gesture.</summary>
     ChildSlotHeldByAnotherRecord,
 
     /// <summary>A plugin cannot lose its header: the whole-mod door needs it, and its FormKey is synthetic.</summary>
