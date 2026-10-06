@@ -121,12 +121,24 @@ public static class DocumentNodes
     public static FieldMetadata Variant(FieldMetadata member, string? leaf) =>
         leaf != null && member.Variants is { } variants && variants.TryGetValue(leaf, out var variant) ? variant : member;
 
-    /// <summary>The EditorID a record's own node names; null when it names none as a string.</summary>
-    public static string? EditorIdOf(JsonElement record) =>
+    /// <summary>The EditorID a record's own node names; null when it names none. One that is no string
+    /// throws: a reader of hand-edited text refuses it first, through <see cref="HoldsEditorIdThatIsNoString"/>.</summary>
+    public static string? EditorIdOf(JsonElement record)
+    {
+        if (EditorIdNode(record) is not { } editorId) return null;
+        return editorId.ValueKind == JsonValueKind.String
+            ? StringValueOf(editorId)
+            : throw new InvalidOperationException($"The record's '{RecordMembers.EditorId}' is not a string.");
+    }
+
+    public static bool HoldsEditorIdThatIsNoString(JsonElement record) =>
+        EditorIdNode(record) is { ValueKind: not JsonValueKind.String };
+
+    private static JsonElement? EditorIdNode(JsonElement record) =>
         record.ValueKind == JsonValueKind.Object
         && record.TryGetProperty(RecordMembers.EditorId, out var editorId)
-        && editorId.ValueKind == JsonValueKind.String
-            ? StringValueOf(editorId)
+        && editorId.ValueKind != JsonValueKind.Null
+            ? editorId
             : null;
 
     /// <summary>The string value of a node the caller has already checked is a JSON string.</summary>

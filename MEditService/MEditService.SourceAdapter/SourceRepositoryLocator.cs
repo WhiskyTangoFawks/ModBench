@@ -103,12 +103,9 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
         if (DocumentText.BytesOrNull(owner.FullPath) is not { } ownerBytes) return null;
         return new ContainerDocuments(_release, schemas).EmbeddedChild(owner.RecordType, ownerBytes, spelled) is { } child
-            ? ChildIdentity(child, owner.FullPath)
+            ? SourceTreeDocuments.IdentityOf(_modFolder, child, owner.FullPath)
             : null;
     }
-
-    private RecordIdentity ChildIdentity(ContainerDocuments.ChildDocument child, string ownerFile) =>
-        new(child.FormKey, SourceTreeDocuments.TypeOf(_modFolder, child, ownerFile), child.EditorId);
 
     /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>
     /// rather than that document's file, which is only found. Null when nothing in the tree holds it.</summary>
@@ -141,7 +138,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         var child = new ContainerDocuments(_release, schemas).EmbeddedChild(owner.RecordType, Encoding.UTF8.GetBytes(text), spelled)
             ?? throw new UnreadableSourceDocumentException(
                 $"The text given for {Path.GetRelativePath(_modFolder, owner.FullPath)} does not carry {spelled}.");
-        return (ChildIdentity(child, owner.FullPath), carrying);
+        return (SourceTreeDocuments.IdentityOf(_modFolder, child, owner.FullPath), carrying);
     }
 
     private SourceDocument DeclaredIn(
@@ -270,6 +267,8 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             var relativePath = Path.GetRelativePath(_modFolder, documentPath);
             if (DocumentAt(relativePath, text, pluginFileName) is not { } document) continue;
             if (!FormKey.TryFactory(document.FormKey, out var declared) || declared != formKey) continue;
+            using (var parsed = JsonDocument.Parse(text))
+                SourceTreeDocuments.RefuseEditorIdThatIsNoString(_modFolder, parsed.RootElement, documentPath, spelled);
 
             // A path-ambiguous group's document names its own type, and that name is the codec's
             // rather than the schema's table, so the codec maps it to one.

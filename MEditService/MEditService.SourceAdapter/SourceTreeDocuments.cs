@@ -145,18 +145,19 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
         // A record filed here that nothing can read would go missing from the read model. The caller
         // degrades to the binary and says so, which is visible; dropping it here would not be.
+        var declared = DocumentText.FormKeyDeclaredIn(text, relativePath, _pluginFileName);
         try
         {
             using var document = JsonDocument.Parse(text);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
                 throw Unreadable(file, "its root is not an object");
+            RefuseEditorIdThatIsNoString(_modFolder, document.RootElement, file, declared);
         }
         catch (JsonException ex)
         {
             throw Unreadable(file, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
         }
 
-        var declared = DocumentText.FormKeyDeclaredIn(text, relativePath, _pluginFileName);
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
             ?? _containers.RecordTypeNamed(DocumentText.RootStringIn(text, MutagenObjectTypeMember))
             ?? throw Unreadable(file, "neither its path nor its text names a record type", declared);
@@ -194,23 +195,41 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             yield return (embedded.Child.FormKey, embedded.Text);
     }
 
-    /// <summary>Throws, naming <paramref name="file"/>, when <paramref name="text"/> embeds a child
-    /// no record type resolves, as the whole read does.</summary>
-    internal void RefuseUntypedChildren(string recordType, string formKey, string text, string file)
+    /// <summary>Throws, naming <paramref name="file"/>, when <paramref name="text"/> holds what the whole
+    /// read refuses: an EditorID that is no string, or an embedded child <see cref="IdentityOf"/> refuses.</summary>
+    internal void RefuseUnreadable(string recordType, string formKey, string text, string file)
     {
-        foreach (var embedded in EmbeddedTexts(recordType, formKey, text)) TypeOf(_modFolder, embedded.Child, file);
+        using (var document = JsonDocument.Parse(text))
+            RefuseEditorIdThatIsNoString(_modFolder, document.RootElement, file, formKey);
+        foreach (var embedded in EmbeddedTexts(recordType, formKey, text)) IdentityOf(_modFolder, embedded.Child, file);
     }
 
-    /// <summary>The child's record type, refusing a child none resolves for as the file holding it.</summary>
-    internal static string TypeOf(string modFolder, ContainerDocuments.ChildDocument child, string ownerFile) =>
-        child.RecordType ?? throw UnreadableSourceDocumentException.In(modFolder, ownerFile, child.WhyUntyped, child.FormKey);
+    internal static void RefuseEditorIdThatIsNoString(string modFolder, JsonElement record, string file, string? formKey)
+    {
+        if (DocumentNodes.HoldsEditorIdThatIsNoString(record))
+            throw UnreadableSourceDocumentException.In(modFolder, file, $"its '{RecordMembers.EditorId}' is not a string", formKey);
+    }
+
+    /// <summary>The child's identity, refusing as the file holding it a child no record type resolves
+    /// for, or one whose EditorID is no string.</summary>
+    internal static RecordIdentity IdentityOf(string modFolder, ContainerDocuments.ChildDocument child, string ownerFile)
+    {
+        var type = child.RecordType ?? throw UnreadableSourceDocumentException.In(modFolder, ownerFile, child.WhyUntyped, child.FormKey);
+        if (DocumentNodes.HoldsEditorIdThatIsNoString(child.Node))
+        {
+            throw UnreadableSourceDocumentException.In(
+                modFolder, ownerFile,
+                $"its '{child.SlotName}' names '{child.FormKey}' with an '{RecordMembers.EditorId}' that is not a string", child.FormKey);
+        }
+        return new RecordIdentity(child.FormKey, type, child.EditorId);
+    }
 
     private IEnumerable<PluginDocument> Embedded(
         string ownerRecordType, string ownerFormKey, string ownerText, string ownerFile)
     {
         foreach (var (child, text, directOwner) in EmbeddedTexts(ownerRecordType, ownerFormKey, ownerText))
         {
-            var childType = TypeOf(_modFolder, child, ownerFile);
+            var childType = IdentityOf(_modFolder, child, ownerFile).RecordType;
             // The one embedded cell: a worldspace's top cell, outside every exterior block grid.
             var cell = _containers.IsCell(childType)
                 ? CellPlacement.TopCellOf(directOwner).Structure

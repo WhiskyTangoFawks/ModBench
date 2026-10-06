@@ -249,6 +249,39 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains("its root is not a JSON object", refused.Message, StringComparison.Ordinal);
     }
 
+    private void GiveANumberForTheEditorId(string relativePath, string editorId)
+    {
+        var path = FullPath(relativePath);
+        var text = File.ReadAllText(path);
+        var edited = text.Replace($"\"EditorID\": \"{editorId}\"", "\"EditorID\": 5", StringComparison.Ordinal);
+        Assert.NotEqual(text, edited);
+        File.WriteAllText(path, edited);
+    }
+
+    [Fact]
+    public void Get_ByFormKey_OfARecordWhoseEditorIdIsNoString_RefusesNamingItsFileAndTheField()
+    {
+        GiveANumberForTheEditorId(QuestPath, "Quest");
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.Get(Plugin, _quest.FormKey.ToString(), Schemas));
+
+        Assert.Equal((QuestPath, _quest.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
+        Assert.Contains("its 'EditorID' is not a string", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Get_ByFormKey_OfAChildWhoseEditorIdIsNoString_RefusesNamingItsOwnersFileAndTheField()
+    {
+        GiveANumberForTheEditorId(InteriorCellPath, "TempRef");
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas));
+
+        Assert.Equal((InteriorCellPath, _temporaryRef.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
+        Assert.Contains("an 'EditorID' that is not a string", refused.Message, StringComparison.Ordinal);
+    }
+
     private string InteriorCellWithItsRefsTyped(string type) =>
         File.ReadAllText(FullPath(InteriorCellPath)).Replace("\"PlacedObject\"", $"\"{type}\"", StringComparison.Ordinal);
 

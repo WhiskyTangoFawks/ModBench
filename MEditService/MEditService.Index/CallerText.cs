@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 
 namespace MEditService.Index;
 
@@ -10,9 +11,11 @@ public static class CallerText
         try
         {
             using var parsed = JsonDocument.Parse(text);
-            return parsed.RootElement.ValueKind == JsonValueKind.Object
-                ? (text, DocumentNodes.At(parsed.RootElement, "EditorID")?.GetString(), null)
-                : ("{}", null, "A record's document is a JSON object.");
+            var root = parsed.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return ("{}", null, "A record's document is a JSON object.");
+            return DocumentNodes.HoldsEditorIdThatIsNoString(root)
+                ? ("{}", null, $"A record's '{RecordMembers.EditorId}' is a string.")
+                : (text, DocumentNodes.EditorIdOf(root), null);
         }
         catch (JsonException ex)
         {
