@@ -222,6 +222,10 @@ public sealed class RecordQueryService(
                 r.FormKey, r.Plugin, r.Origin, r.FieldPath, r.RecordType, schemas.DisplayNameFor(r.RecordType), r.EditorId))];
     }
 
+    // The index stores each copy's document as the codec writes it, a stub where the codec could not (ADR-0005).
+    public RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey) =>
+        RequireReads().GetDocument(formKey, plugin) is { Body: { } body } ? new RenderedDocument(body) : null;
+
     public LoadOrderStatus GetStatus() => _index.Status;
 
     public long GetSequence() => _index.Sequence;

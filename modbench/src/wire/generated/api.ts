@@ -248,6 +248,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/{plugin}/records/{formKey}/rendered-document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The plugin's copy of a record as its own document: for an untracked plugin, the text Track writes for it. A copy mEdit could not parse is what could be stored. */
+        get: operations["GetRenderedDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/creatable-extensions": {
         parameters: {
             query?: never;
@@ -1152,6 +1169,9 @@ export interface components {
             name: string;
             newName: string;
         };
+        RenderedDocument: {
+            text: string;
+        };
         SequenceAwaitResponse: {
             reached: boolean;
             /** Format: int64 */
@@ -1741,6 +1761,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecordTypeChoice"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetRenderedDocument: {
+        parameters: {
+            query?: {
+                origin?: string;
+            };
+            header?: never;
+            path: {
+                plugin: string;
+                formKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderedDocument"];
                 };
             };
             /** @description Bad Request */

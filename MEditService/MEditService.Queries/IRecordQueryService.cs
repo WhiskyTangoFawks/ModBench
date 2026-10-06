@@ -21,6 +21,8 @@ public interface IRecordQueryService
     // Null when the plugin holds no such record.
     IReadOnlyList<RecordTypeChoice>? GetChildRecordTypes(PluginAddress plugin, string formKey);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
+    // Null when the plugin holds no such record.
+    RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey);
 
     // Answered in every state, "no load order yet" included (ADR-0013).
     LoadOrderStatus GetStatus();

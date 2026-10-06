@@ -12,7 +12,7 @@ import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
-  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice,
+  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument,
   type RebuildIndexOutcome, type CopyItem, type CopyMode, type RecordChildHolders,
   type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditChangesOutcome, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
@@ -610,6 +610,19 @@ export class HttpMEditClient implements MEditClient {
     const { data, error, response } = await this.apiClient.GET('/records/{formKey}/references', { params: { path: { formKey } } });
     this.ensureOk(`getReferences(${formKey})`, response, error);
     return data ?? [];
+  }
+
+  async getRenderedDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RenderedDocument | null> {
+    return this.withTimeout(`getRenderedDocument(${plugin}, ${formKey})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/rendered-document', {
+        params: { path: { plugin, formKey }, query: { origin } },
+        signal,
+      });
+      if (response.status === 404) return null;
+      this.ensureOk(`getRenderedDocument(${plugin}, ${formKey})`, response, error);
+      if (!data) throw new Error(`getRenderedDocument(${plugin}, ${formKey}): ok response carried no body`);
+      return data;
+    });
   }
 
   async setFilter(filter: RecordFilter): Promise<string | null> {

@@ -982,6 +982,35 @@ describe('HttpMEditClient — the record types a container record can hold', () 
   });
 });
 
+describe('HttpMEditClient — a copy rendered as its document', () => {
+  it('asks mEdit for the plugin\'s copy of the record and reads its text', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { text: '{ "FormKey": "000800:Shared.esp" }' })));
+    const client = makeClient(fetch);
+
+    const document = await client.getRenderedDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp');
+
+    expect(document).toEqual({ text: '{ "FormKey": "000800:Shared.esp" }' });
+    const url = new URL(fetch.mock.calls[0]?.[0].url ?? '');
+    expect(url.pathname).toBe('/plugins/Shared.esp/records/000800%3AShared.esp/rendered-document');
+    expect(url.searchParams.get('origin')).toBe('ModA');
+  });
+
+  it('answers null when the plugin holds no such record', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(404, { detail: 'The plugin holds no such record.' })));
+    const client = makeClient(fetch);
+
+    await expect(client.getRenderedDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp')).resolves.toBeNull();
+  });
+
+  it('rejects, naming the reason, when mEdit cannot answer', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
+    const client = makeClient(fetch);
+
+    await expect(client.getRenderedDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
+      .rejects.toThrow(/No load order has been loaded/);
+  });
+});
+
 describe('HttpMEditClient — the extensions a new plugin may take', () => {
   it('asks mEdit and reads its answer', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, ['.esp', '.esm'])));

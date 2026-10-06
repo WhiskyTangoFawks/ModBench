@@ -131,6 +131,31 @@ public static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(503);
 
+        app.MapGet("/plugins/{plugin}/records/{formKey}/rendered-document", (
+            string plugin, string formKey, string? origin, IRecordQueryService svc) =>
+        {
+            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
+            try
+            {
+                return svc.GetRenderedDocument(WriteEndpointMapping.PluginAddressOf(plugin, origin), Uri.UnescapeDataString(formKey)) is { } document
+                    ? Results.Ok(document)
+                    : Results.Problem("The plugin holds no such record.", statusCode: 404);
+            }
+            catch (NoLoadOrderException ex)
+            {
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            }
+        })
+            .WithName("GetRenderedDocument")
+            .WithTags(Tag)
+            .WithDescription(
+                "The plugin's copy of a record as its own document: for an untracked plugin, the text Track writes for it. " +
+                "A copy mEdit could not parse is what could be stored.")
+            .Produces<RenderedDocument>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(503);
+
         app.MapGet("/plugins/creatable-extensions", (PluginExtensionsQueryService svc) =>
         {
             try
