@@ -45,9 +45,9 @@ public enum RecordEditRefusal
     /// <summary>A typed refusal, not an exception: a full plugin is an ordinary outcome, never conflated with "no usable load order".</summary>
     FormKeySpaceExhausted,
 
-    /// <summary>A container record (it owns child records), or a type the game cannot create. A new
-    /// record has no containment until a gesture asks for it, which is a UX decision.</summary>
-    ContainerRecordNotYetSupported,
+    /// <summary>The record is held inside another record's document — a type the game holds nowhere
+    /// else, or a create on a container — and the gesture does not reach it yet.</summary>
+    HeldInAnotherRecordNotYetSupported,
 
     /// <summary>The index and the working tree disagree (a file moved outside Modbench). Not recreated at
     /// a computed path: a container's path lives in the tree, not in a formula.</summary>
