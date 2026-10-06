@@ -69,9 +69,9 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
         var topCell = new Cell(mod) { EditorID = "TopCell", WaterHeight = 5f };
         topCell.Temporary.Add(child);
         var worldspace = new Worldspace(mod) { EditorID = "World", TopCell = topCell };
-        var worldspacePath = Path.Combine(
+        var worldspacePath = PluginSourceRoot.ContainerDocument(Path.Combine(
             PluginSourceRoot.For(PluginName), "Worldspaces",
-            $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}", "RecordData.json");
+            $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}"));
 
         var repository = Tracked(
             new TreeFile(worldspacePath, _codec.SerializeToBytes(worldspace, Release)));

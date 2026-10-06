@@ -46,7 +46,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
             }
             """),
         ("Cells/0/0/GroupRecordData.json", "{}"),
-        ("Cells/0/0/EmbedCell - 000804_Old.esp/RecordData.json", """
+        ("Cells/0/0/EmbedCell - 000804_Old.esp/EmbedCell - 000804_Old.esp.json", """
             {
               "FormKey": "000804:Old.esp",
               "Temporary": [
@@ -82,7 +82,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
                       }
                     }
                     """),
-                ("Cells/0/0/EmbedCell - 000804_New.esm/RecordData.json", """
+                ("Cells/0/0/EmbedCell - 000804_New.esm/EmbedCell - 000804_New.esm.json", """
                     {
                       "FormKey": "000804:New.esm",
                       "Temporary": [
@@ -125,7 +125,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         var documents = TreeDocuments.Of(Repository, renamed);
         Assert.Contains(documents, d => d.RecordType == PluginHeader.RecordType);
         Assert.Contains(
-            SourceRepository.DoorFilesOf(renamed.Name, Repository.FilesOf(renamed).Files),
+            SourceRepository.DoorFilesOf(renamed.Name, Repository.FilesOf(renamed).Files, GameRelease.Fallout4),
             file => file.RelativePath == Path.Combine(PluginSourceRoot.For(renamed.Name), "RecordData.json"));
     }
 

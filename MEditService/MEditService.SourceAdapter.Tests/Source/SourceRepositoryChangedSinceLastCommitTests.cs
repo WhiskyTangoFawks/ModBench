@@ -227,9 +227,9 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         topCell.Temporary.Add(edited);
         topCell.Temporary.Add(sibling);
         var worldspace = new Worldspace(mod) { EditorID = "World", TopCell = topCell };
-        var worldspacePath = Path.Combine(
+        var worldspacePath = PluginSourceRoot.ContainerDocument(Path.Combine(
             PluginSourceRoot.For(PluginName), "Worldspaces",
-            $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}", "RecordData.json");
+            $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}"));
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var repository = Tracked(new TreeFile(worldspacePath, codec.SerializeToBytes(worldspace, Release)));
 

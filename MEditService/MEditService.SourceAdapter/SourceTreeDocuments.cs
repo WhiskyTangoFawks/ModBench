@@ -99,7 +99,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
                 var structure = CellStructure.Interior(block, Number(Path.GetFileName(subBlockDirectory)));
                 foreach (var cellDirectory in Directory.EnumerateDirectories(subBlockDirectory))
                 {
-                    var cell = Path.Combine(cellDirectory, SourceRepositoryLayout.RecordDataFileName);
+                    var cell = SourceRepositoryLayout.ContainerDocumentHeldBy(cellDirectory);
                     foreach (var document in DocumentsAt(cell, structure, filedAt)) yield return document;
                 }
             }
@@ -110,7 +110,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         foreach (var worldspaceDirectory in Directory.EnumerateDirectories(worldspacesDirectory))
         {
-            var own = Path.Combine(worldspaceDirectory, SourceRepositoryLayout.RecordDataFileName);
+            var own = SourceRepositoryLayout.ContainerDocumentHeldBy(worldspaceDirectory);
             foreach (var document in DocumentsAt(own, cell: null, filedAt)) yield return document;
 
             var worldspaceFormKey = DocumentText.FormKeyDeclaredBy(own, _pluginFileName);
@@ -125,7 +125,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
                     foreach (var cellDirectory in Directory.EnumerateDirectories(subBlockDirectory))
                     {
-                        var cell = Path.Combine(cellDirectory, SourceRepositoryLayout.RecordDataFileName);
+                        var cell = SourceRepositoryLayout.ContainerDocumentHeldBy(cellDirectory);
                         foreach (var document in DocumentsAt(cell, structure, filedAt)) yield return document;
                     }
                 }

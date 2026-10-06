@@ -71,13 +71,15 @@ public sealed class SourceRepository
         SourceRepositoryLayout.PristineFilesOf(pluginFileName, treeFiles);
 
     /// <summary>Files of <see cref="PristineFilesOf"/> as the whole-mod door reads them.</summary>
-    public static IReadOnlyList<TreeFile> DoorFilesOf(string pluginFileName, IEnumerable<TreeFile> files) =>
-        SourceRepositoryLayout.DoorFilesOf(pluginFileName, files);
+    public static IReadOnlyList<TreeFile> DoorFilesOf(
+        string pluginFileName, IEnumerable<TreeFile> files, GameRelease gameRelease) =>
+        SourceRepositoryLayout.DoorFilesOf(pluginFileName, files, gameRelease);
 
     /// <summary><paramref name="doorText"/>, the door's words about <paramref name="pluginFileName"/>'s tree,
     /// with the header's file named as the layout names it.</summary>
-    public static string SourceTextOf(string pluginFileName, string doorText) =>
-        SourceRepositoryLayout.SourceTextOf(pluginFileName, doorText);
+    public static string SourceTextOf(
+        string pluginFileName, string doorText, IEnumerable<TreeFile> files, GameRelease gameRelease) =>
+        SourceRepositoryLayout.SourceTextOf(pluginFileName, doorText, files, gameRelease);
 
     /// <summary>Throws <see cref="GitUnavailableException"/> when git cannot be run, so no repository
     /// can be made or written here.</summary>
@@ -203,7 +205,7 @@ public sealed class SourceRepository
     /// files, not of the compiled mod: the reader's FormKey-keyed RecordCache collapses two documents
     /// in one group folder to the last read.</summary>
     public IReadOnlyList<string> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys) =>
-        PluginSourceChecks.CollidingFormKeys(plugin.Name, Locator.FilesOf(plugin), formKeys);
+        PluginSourceChecks.CollidingFormKeys(plugin.Name, Locator.FilesOf(plugin), formKeys, _release);
 
     /// <summary>Where the source and <paramref name="serialized"/>, the door's tree, first part ways,
     /// and the files held at another leaf name than the layout's. An unreadable file outranks the rest.</summary>

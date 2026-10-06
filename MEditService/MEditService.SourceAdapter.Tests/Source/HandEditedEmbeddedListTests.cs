@@ -131,7 +131,7 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
             PluginSourceRoot.HeaderDocument(PluginName),
             File.ReadAllBytes(Path.Combine(_modFolder, PluginSourceRoot.HeaderDocument(PluginName))));
         File.WriteAllBytes(
-            Path.Combine(_modFolder, SourceRepository.DoorFilesOf(PluginName, [header]).Single().RelativePath), header.Content);
+            Path.Combine(_modFolder, SourceRepository.DoorFilesOf(PluginName, [header], Release).Single().RelativePath), header.Content);
         var mod = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(
             SourceRoot, InlineWorkDropoff.Instance, CancellationToken.None);
         var quests = ((IFallout4ModGetter)mod).Quests;

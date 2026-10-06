@@ -239,7 +239,8 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
             Directory.GetDirectories(blockFolder));
         Assert.Equal(
             CellBody("NewCell"),
-            File.ReadAllText(Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}", "RecordData.json")));
+            File.ReadAllText(PluginSourceRoot.ContainerDocument(Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}"))));
+        Assert.Single(Directory.GetFiles(Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}")));
     }
 
     [Fact]
@@ -258,6 +259,40 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         repository.Put(Plugin, new SourceDocument(cellKey, "cell", "Cell", body));
 
         Assert.Equal([Path.Combine(blockFolder, $"Cell - 000A00_{PluginName}")], Directory.GetDirectories(blockFolder));
+    }
+
+    [Theory]
+    [InlineData("HandName.json")]
+    [InlineData("HandName.JSON")]
+    [InlineData("RecordData.json")]
+    public void Put_OfACellWhoseDocumentIsNamedOtherwiseInItsOwnDirectory_MovesTheDocumentToTheLeafName(string heldAs)
+    {
+        const string cellKey = "000A00:Fixture.esp";
+        PluginBaselines.TrackWithNoRecords(_modFolder);
+        var repository = RequireOpened();
+        var body = $"{{\n  \"FormKey\": \"{cellKey}\",\n  \"EditorID\": \"Cell\"\n}}";
+        repository.Put(Plugin, new SourceDocument(cellKey, "cell", "Cell", body));
+        var directory = Directory.GetDirectories(Path.Combine(_modFolder, "plugin-source", PluginName, "Cells"), "Cell*", SearchOption.AllDirectories).Single();
+        File.Move(PluginSourceRoot.ContainerDocument(directory), Path.Combine(directory, heldAs));
+
+        repository.Put(Plugin, new SourceDocument(cellKey, "cell", "Cell", body));
+
+        Assert.Equal([PluginSourceRoot.ContainerDocument(directory)], Directory.GetFiles(directory));
+    }
+
+    [Fact]
+    public void Put_OfACellWhoseDirectoryHoldsTwoDocumentsAndNoneNamedForIt_RefusesAsAmbiguous()
+    {
+        const string cellKey = "000A00:Fixture.esp";
+        PluginBaselines.TrackWithNoRecords(_modFolder);
+        var repository = RequireOpened();
+        var body = $"{{\n  \"FormKey\": \"{cellKey}\",\n  \"EditorID\": \"Cell\"\n}}";
+        repository.Put(Plugin, new SourceDocument(cellKey, "cell", "Cell", body));
+        var directory = Directory.GetDirectories(Path.Combine(_modFolder, "plugin-source", PluginName, "Cells"), "Cell*", SearchOption.AllDirectories).Single();
+        File.Move(PluginSourceRoot.ContainerDocument(directory), Path.Combine(directory, "One.json"));
+        File.WriteAllText(Path.Combine(directory, "Two.json"), body);
+
+        Assert.Throws<AmbiguousSourceUnitException>(() => repository.Put(Plugin, new SourceDocument(cellKey, "cell", "Cell", body)));
     }
 
     [Fact]

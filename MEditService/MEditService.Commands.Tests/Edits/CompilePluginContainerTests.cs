@@ -236,8 +236,22 @@ public sealed class CompilePluginContainerTests : IDisposable
         var diagnostic = Assert.Single(result.Diagnostics, d => d.Message.Contains("belongs at", StringComparison.Ordinal));
         Assert.Equal(cell.FormKey, diagnostic.FormKey);
         Assert.Equal(
-            Path.Combine(Path.GetRelativePath(_modFolder, renamed), "RecordData.json"), diagnostic.SourceRelativePath);
+            Path.Combine(Path.GetRelativePath(_modFolder, renamed), Path.GetFileName(PluginSourceRoot.ContainerDocument(directory))),
+            diagnostic.SourceRelativePath);
         Assert.Contains(belongsAt, diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Compile_WithACellDirectoryRenamedByHandToAnotherEditorId_Succeeds_WithTheMisplacedWarning()
+    {
+        var cell = TrackedTree.DocumentCarrying(_modFolder, _plugin, "CellA");
+        var directory = TreeTampering.DirectoryOf(_modFolder, _plugin, new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId));
+        Directory.Move(directory, Path.Combine(Path.GetDirectoryName(directory) ?? string.Empty, Path.GetFileName(directory).Replace("CellA", "CellB", StringComparison.Ordinal)));
+
+        var result = await CompileService().CompileOneAsync(_plugin);
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Single(result.Diagnostics, d => d.Message.Contains("belongs at", StringComparison.Ordinal));
     }
 
     [Fact]
