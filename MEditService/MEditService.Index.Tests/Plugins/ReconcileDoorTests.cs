@@ -13,8 +13,8 @@ public sealed class ReconcileDoorTests
         LoadOrderHolder holder, GatedPluginAdapter gate, InMemoryNotificationPublisher notifications, LoadOrderEntry plugin)
     {
         var before = notifications.Notifications.Count;
-        PluginBinaries.Touch(plugin.Path);
         gate.ParkNextOpenOf(plugin.Name);
+        PluginBinaries.Touch(plugin.Path);
         holder.Apply(holder.Current);
         await gate.WaitUntilParkedAsync();
         gate.Release();
