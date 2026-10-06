@@ -122,6 +122,17 @@ public sealed class SourceRepository
             : null;
     }
 
+    /// <summary>Throws <see cref="UnreadableSourceDocumentException"/>, naming the file that carries
+    /// <paramref name="identity"/>, when <paramref name="body"/> embeds a child no record type
+    /// resolves.</summary>
+    public void RefuseUntypedChildren(
+        PluginAddress plugin, RecordIdentity identity, string body, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (Locator.Locate(plugin, identity) is not { } unit) return;
+        using var documents = new SourceTreeDocuments(_modFolder, plugin.Name, _release, schemas);
+        documents.RefuseUntypedChildren(identity.RecordType, identity.FormKey, body, unit.FullPath);
+    }
+
     /// <summary>The document carrying <paramref name="identity"/>: its own, else its container's. Null
     /// when no document holds it. Throws <see cref="UnreadableSourceDocumentException"/> when the
     /// document carrying it names no record.</summary>

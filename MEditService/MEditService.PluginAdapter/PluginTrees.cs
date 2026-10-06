@@ -227,17 +227,10 @@ public sealed class CompiledTree
     /// <summary>Every record the tree holds, in the order the mod enumerates them.</summary>
     public IReadOnlyList<FormKey> FormKeys => _formKeys.Value;
 
-    /// <summary>Each record as its own document, under the schema table it belongs to. A record no
-    /// table claims has no document, so nothing is derived from it.</summary>
-    public IEnumerable<PluginDocument> Documents(IReadOnlyDictionary<string, RecordTableSchema> schemas)
-    {
-        foreach (var record in _mod.EnumerateMajorRecords())
-        {
-            var recordType = RecordTableName.Of(record, schemas);
-            if (!schemas.ContainsKey(recordType)) continue;
-            yield return new PluginDocument(recordType, record.FormKey.ToString(), _codec.SerializeToText(record, _gameRelease));
-        }
-    }
+    /// <summary>Each record as its own document, under the schema table it belongs to.</summary>
+    public IEnumerable<PluginDocument> Documents(IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        _mod.EnumerateMajorRecords().Select(record => new PluginDocument(
+            RecordTableName.Of(record, schemas), record.FormKey.ToString(), _codec.SerializeToText(record, _gameRelease)));
 
     /// <summary>What the current codec would write for this mod, which is what the round-trip gate
     /// compares the tree against.</summary>
