@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -202,6 +203,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         var result = CreateCellAt(5, 7);
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Equal(1, Regex.Count(result.Message, Regex.Escape(World.ToString())));
         Assert.EndsWith("Nothing was written.", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, Files);
     }

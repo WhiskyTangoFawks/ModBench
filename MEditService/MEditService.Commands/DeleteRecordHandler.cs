@@ -45,15 +45,11 @@ public sealed class DeleteRecordHandler
         var removal = repository.Remove(plugin, identity);
         if (removal != SourceRemoval.Removed)
         {
-            // States only what is observed: either the tree names no document for it, or the document
-            // it names lacks it.
-            var observed = removal == SourceRemoval.NoDocumentHoldsIt
-                ? $"No document in {plugin.Name}'s tree holds {formKey}."
-                : $"{relativePath} was found holding {formKey}, but its own text does not carry it.";
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
-                $"{observed} If nothing outside Modbench changed that file, this is a defect — please " +
-                "report it; otherwise relaunch mEdit so the index re-reads the tree.");
+                removal == SourceRemoval.NoDocumentHoldsIt
+                    ? $"No document in {plugin.Name}'s tree holds {formKey}. {SourceUnitNotFoundException.DefectOrOutsideChange}"
+                    : SourceUnitNotFoundException.NotCarried(relativePath, formKey));
         }
 
         if (_logger.IsEnabled(LogLevel.Information))
