@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative, sep } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { importSpecifiers, isTestSupport, rootFiles, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
@@ -44,6 +44,15 @@ function importsFromDir(imports: string[], dir: string): string[] {
   return imports.filter((s) => s.split('/').includes(dir));
 }
 
+const EDITING_VIEW_DIRS = [PLUGINS_VIEW_DIR, EDITOR_DIR, SOURCE_LANGUAGE_DIR];
+const DRIVING_LIB_DIR = 'drivingLib';
+
+function speaksForEditingAlone(root: string, libFile: string): boolean {
+  const importers = tsFiles(root).filter((path) => !isTestSupport(relative(root, path))
+    && importsOf(readFileSync(path, 'utf8')).some((s) => s.startsWith('.') && `${join(dirname(path), s)}.ts` === libFile));
+  return importers.length > 0 && importers.every((path) => EDITING_VIEW_DIRS.includes(relative(root, path).split(sep)[0] ?? ''));
+}
+
 function findOffenders(root: string): Offense[] {
   const offenses: Offense[] = [];
   for (const path of tsFiles(root)) {
@@ -52,7 +61,8 @@ function findOffenders(root: string): Offense[] {
     const text = readFileSync(path, 'utf8');
     const imports = importsOf(text);
     const clientImports = CLIENT_CALLERS.includes(relPath.split(sep)[0] ?? '') ? [] : importsFromDir(imports, CLIENT_DIR);
-    const vocab = domainVocabIn(text);
+    const isEditingLibFile = relPath.split(sep)[0] === DRIVING_LIB_DIR && speaksForEditingAlone(root, path);
+    const vocab = isEditingLibFile ? [] : domainVocabIn(text);
     if (clientImports.length > 0 || vocab.length > 0) offenses.push({ path: relPath, clientImports, vocab });
   }
   return offenses;
@@ -156,6 +166,38 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
         writeFileSync(join(root, 'instanceCommands', 'loadOrder.ts'), planted);
         writeFileSync(join(root, 'mods', 'ModListProvider.ts'), planted);
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
+      });
+    });
+
+    const LIB_FILE = join('drivingLib', 'recordDocument.ts');
+    const importingTheLibFile = "import { recordDocumentUri } from '../drivingLib/recordDocument';\n";
+    const plantLibFileImportedFrom = (root: string, ...dirs: string[]) => {
+      mkdirSync(join(root, 'drivingLib'), { recursive: true });
+      writeFileSync(join(root, LIB_FILE), 'export const formKey = 1;\n');
+      for (const dir of dirs) {
+        mkdirSync(join(root, dir), { recursive: true });
+        writeFileSync(join(root, dir, 'importer.ts'), importingTheLibFile);
+      }
+    };
+
+    it('FormKey vocabulary in a driving lib file the Editing views alone import is not caught', () => {
+      withPlantedTree((root) => {
+        plantLibFileImportedFrom(root, 'editor', 'sourceLanguage');
+        expect(findOffenders(root)).toEqual([]);
+      });
+    });
+
+    it('FormKey vocabulary in a driving lib file a Mods-shaped file imports too is caught', () => {
+      withPlantedTree((root) => {
+        plantLibFileImportedFrom(root, 'editor', 'mods');
+        expect(findOffenders(root).map((o) => o.path)).toEqual([LIB_FILE]);
+      });
+    });
+
+    it('FormKey vocabulary in a driving lib file no view imports is caught', () => {
+      withPlantedTree((root) => {
+        plantLibFileImportedFrom(root);
+        expect(findOffenders(root).map((o) => o.path)).toEqual([LIB_FILE]);
       });
     });
 

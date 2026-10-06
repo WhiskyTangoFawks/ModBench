@@ -1,12 +1,14 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
-import { hoverAt } from './formKeyHover';
+import { recordDocumentUri, type RecordDocumentClient } from '../drivingLib/recordDocument';
+import { formKeyAt, hoverAt } from './formKeyHover';
+import { formKeyMember } from './formKeyDefinition';
 import { completionsAt } from './completion';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
 
 export interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles' | 'reporter'> {
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords'> & SourceProblemsDeps['client'];
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords'> & RecordDocumentClient & SourceProblemsDeps['client'];
 }
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
@@ -53,5 +55,17 @@ export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposabl
       return new vscode.CompletionList(items, found.isIncomplete);
     },
   });
-  return vscode.Disposable.from(hover, completion, sourceProblems(deps));
+  const definition = vscode.languages.registerDefinitionProvider(pluginSource, {
+    async provideDefinition(document, position) {
+      if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
+      const found = formKeyAt(document.getText(), document.offsetAt(position));
+      if (!found) return undefined;
+      const uri = await recordDocumentUri(client, { formKey: found.formKey });
+      if (!uri) return undefined;
+      const target = await vscode.workspace.openTextDocument(uri);
+      const { start, end } = formKeyMember(target.getText(), found.formKey) ?? { start: 0, end: 0 };
+      return new vscode.Location(uri, new vscode.Range(target.positionAt(start), target.positionAt(end)));
+    },
+  });
+  return vscode.Disposable.from(hover, completion, definition, sourceProblems(deps));
 }

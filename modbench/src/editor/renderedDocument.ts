@@ -1,17 +1,8 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { samePluginAddress } from '../wire/pluginAddress';
-import { copyOf, copyQuery, followReportedCopies, holdsNoCopy, type CopyChanged, type RecordCopy } from './recordCopy';
-
-export const RENDERED_DOCUMENT_SCHEME = 'modbench-rendered';
-
-// The path is what VS Code shows: its last segment titles the tab, and the plugin's segments
-// before it tell apart two copies of one name.
-export function renderedDocumentUri(copy: RecordCopy, fileName: string): vscode.Uri {
-  return vscode.Uri.from({
-    scheme: RENDERED_DOCUMENT_SCHEME, path: `/${copy.plugin.origin}/${copy.plugin.name}/${fileName}`, query: copyQuery(copy),
-  });
-}
+import { followReportedCopies, type CopyChanged } from './recordCopy';
+import { RENDERED_DOCUMENT_SCHEME, copyOf, holdsNoCopy } from '../drivingLib/recordDocument';
 
 /** The read-only documents an untracked plugin's copies open as: mEdit's rendering, read again
  *  when mEdit reports the copy changed, and when its reports resume, since one may have been missed. */

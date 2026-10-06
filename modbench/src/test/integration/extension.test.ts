@@ -236,6 +236,11 @@ function createMockBackend(): http.Server {
       return;
     }
     const wonFormKey = /^\/records\/([^/?]+)$/.exec(url)?.[1];
+    if (wonFormKey !== undefined && decodeURIComponent(wonFormKey) === NOT_HELD_FORM_KEY) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
     if (wonFormKey !== undefined) {
       const winner = decodeURIComponent(wonFormKey) === TRACKED_FORM_KEY
         ? { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN } : { plugin: 'Fallout4.esm', origin: 'Data' };
@@ -278,6 +283,7 @@ const UNTRACKED_FILE_NAME = 'UntrackedGun - 000801_Untracked.esp.json';
 let untrackedText = '{ "EditorID": "UntrackedGun" }';
 
 const HELD_FORM_KEY = '000801:Held.esp';
+const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
 const MOCK_COMPARISONS = new Map<string, CompareResult>([[TRACKED_FORM_KEY, comparisonOf(TRACKED_FORM_KEY, [
   { plugin: TRACKED_PLUGIN, isWinner: true, editorId: 'TrackedGun' },
 ])], [CHILD_FORM_KEY, comparisonOf(CHILD_FORM_KEY, [
@@ -948,7 +954,6 @@ describe('Refresh rebuilds the index, then re-reads the instance', () => {
 const markdownText = (content: vscode.Hover['contents'][number]): string => (content instanceof vscode.MarkdownString ? content.value : '');
 
 describe('A FormKey in plugin source', () => {
-  const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
   let folder = '';
   let document: vscode.TextDocument;
 
@@ -1012,6 +1017,51 @@ describe('A FormKey in plugin source', () => {
     assert.deepStrictEqual(await hoverTexts('Rusty'), []);
   });
 
+  const definitionsOf = async (formKey: string): Promise<vscode.Location[]> => {
+    const referencing = path.join(folder, 'plugin-source', 'Held.esp', 'References', `${formKey.replace(':', '_')}.json`);
+    fs.mkdirSync(path.dirname(referencing), { recursive: true });
+    fs.writeFileSync(referencing, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: formKey }));
+    const doc = await vscode.workspace.openTextDocument(referencing);
+    return vscode.commands.executeCommand<vscode.Location[]>(
+      'vscode.executeDefinitionProvider', doc.uri, doc.positionAt(doc.getText().indexOf(formKey) + 1));
+  };
+  const definedText = async ({ uri, range }: vscode.Location) => (await vscode.workspace.openTextDocument(uri)).getText(range);
+
+  it('goes to the definition of a FormKey whose winning copy is tracked: its file, at the record\'s own FormKey member', async () => {
+    await activated();
+    const [definition, ...more] = await definitionsOf(TRACKED_FORM_KEY);
+
+    assert.deepStrictEqual(more, []);
+    assert.strictEqual(definition?.uri.fsPath, TRACKED_FS_PATH);
+    assert.strictEqual(await definedText(definition), `"FormKey":"${TRACKED_FORM_KEY}"`);
+  });
+
+  it('goes to the definition of a FormKey whose winning copy is untracked: mEdit\'s rendering of it, at its start where it states no FormKey member', async () => {
+    await activated();
+    const [definition, ...more] = await definitionsOf(HELD_FORM_KEY);
+
+    assert.deepStrictEqual(more, []);
+    assert.strictEqual(definition?.uri.toString(true), `modbench-rendered:/Data/Fallout4.esm/${renderedName(HELD_FORM_KEY)}?formKey=000801%3AHeld.esp&name=Fallout4.esm&origin=Data`);
+    assert.deepStrictEqual([definition.range.start, definition.range.end], [new vscode.Position(0, 0), new vscode.Position(0, 0)]);
+  });
+
+  it('has no definition in JSON outside the plugin source folder', async () => {
+    await activated();
+    const other = await documentAt('Other.json');
+    const definitions = await vscode.commands.executeCommand<vscode.Location[]>(
+      'vscode.executeDefinitionProvider', other.uri, other.positionAt(other.getText().indexOf(HELD_FORM_KEY) + 1));
+
+    assert.deepStrictEqual(definitions, []);
+  });
+
+  it('has no definition for a FormKey no active plugin holds', async () => {
+    await activated();
+    const asked = requestLog.length;
+
+    assert.deepStrictEqual(await definitionsOf(NOT_HELD_FORM_KEY), []);
+    assert.ok(requestLog.slice(asked).includes(`GET /records/${encodeURIComponent(NOT_HELD_FORM_KEY)}`), 'sanity: mEdit was asked');
+  });
+
   const offeredIn = async (doc: vscode.TextDocument, text: string): Promise<string[]> => {
     const list = await vscode.commands.executeCommand<vscode.CompletionList>(
       'vscode.executeCompletionItemProvider', doc.uri, doc.positionAt(doc.getText().indexOf(text) + 2));
@@ -1069,7 +1119,6 @@ describe('A FormKey in plugin source', () => {
 });
 
 describe('The Problems panel on plugin source', () => {
-  const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
   const MESSAGE = `Armor: [${NOT_HELD_FORM_KEY}] <Error: Could not be resolved>`;
   const SOURCE_FILE = path.join('plugin-source', 'Held.esp', 'Gun.json');
   const file = path.join(FIXTURE_GAME_DIRECTORY, 'Data', SOURCE_FILE);
