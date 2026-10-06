@@ -10,7 +10,7 @@ import {
 import { gestureEntry, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import { CellNode, ChildRecordNode, RecordNode, WorldspaceNode } from './PluginTreeProvider';
 import { placeFolder, pluginPlaces } from './pluginPlaces';
-import { lightPluginsSupportedOf, pluginNameRefusal } from './pluginName';
+import { creatablePluginExtensionsOf, pluginNameRefusal } from './pluginName';
 import type { Reporter } from '../ports/reporter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { errorMessage } from '../ports/errorMessage';
@@ -78,13 +78,13 @@ export function pluginsCopyValueText(
 }
 
 async function promptPluginName(
-  client: Pick<MEditClient, 'getLightPluginsSupported'>, reporter: Reporter,
+  client: Pick<MEditClient, 'getCreatablePluginExtensions'>, reporter: Reporter,
 ): Promise<string | undefined> {
-  const lightPluginsSupported = await lightPluginsSupportedOf(client, reporter);
-  if (lightPluginsSupported === undefined) return undefined;
+  const creatableExtensions = await creatablePluginExtensionsOf(client, reporter);
+  if (creatableExtensions === undefined) return undefined;
   return vscode.window.showInputBox({
     prompt: 'Enter new plugin name (e.g. MyPatch.esp)',
-    validateInput: (name) => pluginNameRefusal(name, lightPluginsSupported),
+    validateInput: (name) => pluginNameRefusal(name, creatableExtensions),
   });
 }
 
@@ -96,7 +96,7 @@ function lostPlace(origin: string, lost: 'gone' | 'disabled' | 'unread'): string
 // create-plugin: the file is the whole gesture. Its plugins.txt line is plugin sync's, once the
 // watch sees the file, so nothing here writes that line or refreshes a view.
 export function registerCreatePluginCommand(
-  client: Pick<MEditClient, 'createPlugin' | 'getLightPluginsSupported'>,
+  client: Pick<MEditClient, 'createPlugin' | 'getCreatablePluginExtensions'>,
   instance: Pick<Instance, 'value'> | undefined,
   reporter: Reporter,
 ): vscode.Disposable {

@@ -960,20 +960,20 @@ describe('HttpMEditClient — the record types the game can create', () => {
   });
 });
 
-describe('HttpMEditClient — whether the game has light plugins', () => {
+describe('HttpMEditClient — the extensions a new plugin may take', () => {
   it('asks mEdit and reads its answer', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, false)));
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, ['.esp', '.esm'])));
     const client = makeClient(fetch);
 
-    await expect(client.getLightPluginsSupported()).resolves.toBe(false);
-    expect(fetch.mock.calls[0]?.[0].url).toMatch(/\/plugins\/light-plugins-supported$/);
+    await expect(client.getCreatablePluginExtensions()).resolves.toEqual(['.esp', '.esm']);
+    expect(fetch.mock.calls[0]?.[0].url).toMatch(/\/plugins\/creatable-extensions$/);
   });
 
   it('rejects, naming the reason, when mEdit cannot answer', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
     const client = makeClient(fetch);
 
-    await expect(client.getLightPluginsSupported()).rejects.toThrow(/No load order has been loaded/);
+    await expect(client.getCreatablePluginExtensions()).rejects.toThrow(/No load order has been loaded/);
   });
 });
 

@@ -6,12 +6,12 @@ import { registerGesture, singularArgument } from '../drivingLib/gestureEntry';
 import { promptRename } from '../drivingLib/promptRename';
 import type { Reporter } from '../ports/reporter';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
-import { lightPluginsSupportedOf, pluginNameRefusal } from './pluginName';
+import { creatablePluginExtensionsOf, pluginNameRefusal } from './pluginName';
 import { holdsPlugin } from './pluginPlaces';
 import type { PluginsTreeNode } from './PluginsTreeProvider';
 
 export interface RenamePluginDeps extends PluginRenameAccess, PluginRenameConfirmation {
-  client: PluginRenameAccess['client'] & PluginRenameConfirmation['client'] & Pick<MEditClient, 'getLightPluginsSupported'>;
+  client: PluginRenameAccess['client'] & PluginRenameConfirmation['client'] & Pick<MEditClient, 'getCreatablePluginExtensions'>;
   instance: Pick<Instance, 'value' | 'quiet'>;
   reporter: Reporter;
 }
@@ -24,12 +24,12 @@ export function registerRenamePluginCommand(
     const row = singularArgument(entry, 'plugin');
     if (!row) return;
     const plugin = { name: row.plugin.name, origin: row.origin };
-    const lightPluginsSupported = await lightPluginsSupportedOf(client, reporter);
-    if (lightPluginsSupported === undefined) return;
+    const creatableExtensions = await creatablePluginExtensionsOf(client, reporter);
+    if (creatableExtensions === undefined) return;
 
     const refusal = (value: string): string | undefined => {
       if (value === '' || value === plugin.name) return undefined;
-      return pluginNameRefusal(value, lightPluginsSupported)
+      return pluginNameRefusal(value, creatableExtensions)
         ?? (holdsPlugin(instance.value, { name: value, origin: plugin.origin }) ? `"${plugin.origin}" already holds "${value}".` : undefined);
     };
     const newName = await promptRename('Rename plugin', plugin.name, refusal);

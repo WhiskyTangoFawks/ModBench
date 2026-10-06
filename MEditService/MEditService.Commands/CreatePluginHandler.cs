@@ -23,8 +23,9 @@ public sealed class CreatePluginHandler
         var release = _holder.Require().GameRelease;
         if (!ModKey.TryFromFileName(plugin.Name, out var modKey))
         {
+            var extensions = CreatablePluginExtensions.Of(release);
             return new PluginCreateResult(PluginCreateRefusal.NotAPluginFile,
-                $"{plugin.Name} is not a plugin file: its extension must be .esp, .esm or .esl.");
+                $"{plugin.Name} is not a plugin file: its extension must be {string.Join(", ", extensions.SkipLast(1))} or {extensions[^1]}.");
         }
 
         if (modKey.Type == ModType.Light && !LightPluginSupport.Of(release))
