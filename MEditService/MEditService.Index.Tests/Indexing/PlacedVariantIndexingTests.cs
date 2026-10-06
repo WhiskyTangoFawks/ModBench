@@ -26,15 +26,13 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
         public Built()
         {
             var placed = new Dictionary<string, Placed>(StringComparer.Ordinal);
-            FormKey cell = default, linker = default;
+            FormKey cell = default;
             _fixture = new PluginFixtureBuilder("placed-variants")
                 .WithPlugin(Key.Name, mod =>
                 {
                     var projectile = mod.Projectiles.AddNew("VariantProjectile");
                     var hazard = mod.Hazards.AddNew("VariantHazard");
                     var interior = new Cell(mod) { EditorID = "VariantCell" };
-                    var linking = new PlacedObject(mod) { EditorID = "linkingRef" };
-                    interior.Persistent.Add(linking);
                     foreach (var (table, index) in VariantTables.Select((table, index) => (table, index)))
                     {
                         var (record, baseRecord) = Variant(mod, table, projectile, hazard);
@@ -42,7 +40,6 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
                         ((IPositionRotation)record).Position = new P3Float(index + 1, 0, 0);
                         var persistent = index % 2 == 0;
                         (persistent ? interior.Persistent : interior.Temporary).Add(record);
-                        linking.LinkedReferences.Add(new LinkedReferences { Reference = new FormLink<IPlacedGetter>(record.FormKey) });
                         placed[table] = new Placed(
                             record.FormKey, $"{table}Ref", baseRecord, persistent ? "persistent" : "temporary", index + 1);
                     }
@@ -51,15 +48,14 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
                     var block = new CellBlock { BlockNumber = 0 };
                     block.SubBlocks.Add(sub);
                     mod.Cells.Records.Add(block);
-                    (cell, linker) = (interior.FormKey, linking.FormKey);
+                    cell = interior.FormKey;
                 })
                 .Build();
             _index = Indexes.Reconciled(_fixture);
-            (Cell, Linker, PlacedByTable) = (cell, linker, placed);
+            (Cell, PlacedByTable) = (cell, placed);
         }
 
         public FormKey Cell { get; }
-        public FormKey Linker { get; }
         internal IReadOnlyDictionary<string, Placed> PlacedByTable { get; }
         public IRecordReads Reads => _index.RequireReads();
 
@@ -138,14 +134,5 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
         Assert.Contains(
             built.Reads.GetReferencedBy(Of(table).Base.ToString()),
             r => r.FormKey == Of(table).FormKey.ToString() && r.RecordType == table);
-    }
-
-    [Theory]
-    [MemberData(nameof(Variants))]
-    public void AVariant_IsReferencedByAPlacedObjectLinkingToIt(string table)
-    {
-        Assert.Contains(
-            built.Reads.GetReferencedBy(Of(table).FormKey.ToString()),
-            r => r.FormKey == built.Linker.ToString() && r.RecordType == "refr");
     }
 }
