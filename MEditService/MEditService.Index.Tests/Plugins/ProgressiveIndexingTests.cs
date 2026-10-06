@@ -295,7 +295,7 @@ public sealed class ProgressiveIndexingTests
         await gate.WaitUntilParkedAsync();
 
         var listed = manager.RequireReads().Search(
-            new RecordQuery(RecordTypes: ["acti"], Plugin: "Patch.esp", Limit: 10, GroupOnly: true)).Items.Select(r => r.EditorId);
+            new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["acti"], Plugin: "Patch.esp", Limit: 10, GroupOnly: true)).Items.Select(r => r.EditorId);
 
         Assert.Equal(["CZuluLever", "BBetaLever", "AAlphaLever"], listed);
 

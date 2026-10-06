@@ -36,7 +36,7 @@ public sealed class ReconcileDiffTests
 
     private static string SharedNpc(OpenedIndex index) =>
         ReadsOf(index)
-            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
+            .Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
             .Items.Single().FormKey;
 
     private static string? WinnerOf(OpenedIndex index, string formKey) =>

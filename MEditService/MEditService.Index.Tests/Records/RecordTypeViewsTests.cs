@@ -26,14 +26,14 @@ public sealed class RecordTypeViewsTests
         Assert.Equal("LazyNpc", (reads.GetDocument(npc, Plugin)
             ?? throw new InvalidOperationException($"Expected a document for '{npc}' in '{Plugin}'.")).EditorId);
         Assert.Contains(reads.GetDocuments(Plugin), d => d.FormKey == npc);
-        Assert.Contains(reads.Search(new RecordQuery(Plugin: Plugin.Name, Origin: Plugin.Origin, Limit: 10)).Items, i => i.FormKey == npc);
+        Assert.Contains(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: Plugin.Name, Origin: Plugin.Origin, Limit: 10)).Items, i => i.FormKey == npc);
         Assert.Equal("npc_", reads.Resolve(npc)?.RecordType);
         Assert.Contains(reads.GetRecordTypeCounts(Plugin), c => c.Type == "npc_" && c.Count == 1);
 
         index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'LazyNpc'", "filter.sql");
 
-        Assert.Contains(reads.Search(new RecordQuery(Plugin: Plugin.Name, Origin: Plugin.Origin, Limit: 10)).Items, i => i.FormKey == npc);
+        Assert.Contains(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: Plugin.Name, Origin: Plugin.Origin, Limit: 10)).Items, i => i.FormKey == npc);
         index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NobodyHere'", "filter.sql");
-        Assert.Empty(reads.Search(new RecordQuery(Plugin: Plugin.Name, Origin: Plugin.Origin, Limit: 10)).Items);
+        Assert.Empty(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: Plugin.Name, Origin: Plugin.Origin, Limit: 10)).Items);
     }
 }

@@ -28,7 +28,7 @@ public class IndexAtomicityTests
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "Atomic.esp");
         Assert.Equal(0, reads.CountOf(key, "npc_"));
         Assert.Empty(reads.GetDocuments(key));
-        Assert.Empty(reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10)).Items);
+        Assert.Empty(reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10)).Items);
     }
 
     [Fact]

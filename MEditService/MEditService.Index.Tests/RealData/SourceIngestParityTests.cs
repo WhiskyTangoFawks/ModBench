@@ -140,11 +140,11 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
 
     private List<string> AllFormKeysInOneUnpagedQuery(OpenedIndex index) =>
         [.. index.RequireReads()
-            .Search(new RecordQuery(Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: int.MaxValue))
+            .Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: int.MaxValue))
             .Items.Select(i => i.FormKey)];
 
     private int CountOf(OpenedIndex index, string recordType) =>
-        index.RequireReads().Search(new RecordQuery(
+        index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator,
             RecordTypes: [recordType], Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: 0)).Total;
 
     private static Dictionary<string, (string RecordType, string Body)> DocumentsByFormKey(string instanceRoot) =>

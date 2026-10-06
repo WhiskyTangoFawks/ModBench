@@ -35,7 +35,7 @@ public sealed class StoreRebuildTests : IDisposable
     {
         _index.Reconcile(_holder, _fixture.GameDirectory, [], GameRelease.Fallout4);
 
-        var result = _index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 1, Offset: 0));
+        var result = _index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 1, Offset: 0));
         Assert.Equal(0, result.Total);
     }
 
@@ -75,7 +75,7 @@ public sealed class StoreRebuildTests : IDisposable
         .Build();
 
     private static string[] ListedNpcs(OpenedIndex index) =>
-        [.. index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Items.Select(i => i.EditorId ?? "")];
+        [.. index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Items.Select(i => i.EditorId ?? "")];
 
     [Fact]
     public async Task Rebuild_KeepsTheRecordFilter_AndTheRefilledRowsAnswerThroughIt()

@@ -93,7 +93,7 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
 
         var worldspaces = world.Reads
-            .Search(new RecordQuery(RecordTypes: ["wrld"], Plugin: SpatialWorld.PluginName, Limit: 100)).Items;
+            .Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["wrld"], Plugin: SpatialWorld.PluginName, Limit: 100)).Items;
 
         Assert.Equal(world.WorldspaceFormKey, Assert.Single(worldspaces).FormKey);
         Assert.Equal(
@@ -134,7 +134,7 @@ public sealed class SpatialParseFailurePrefixTests
         internal IRecordReads Reads => _index.RequireReads();
 
         internal RecordSummary Row(string recordType) =>
-            Assert.Single(Reads.Search(new RecordQuery(RecordTypes: [recordType], Plugin: PluginName, Limit: 100)).Items);
+            Assert.Single(Reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [recordType], Plugin: PluginName, Limit: 100)).Items);
 
         internal SpatialWorld()
         {

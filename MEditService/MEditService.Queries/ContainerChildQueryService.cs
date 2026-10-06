@@ -43,7 +43,7 @@ public sealed class ContainerChildQueryService(
         foreach (var recordType in rows.Select(r => SlotRecordTypes[r.SlotName]).Distinct(StringComparer.Ordinal))
         {
             var page = repo.Search(new RecordQuery(
-                RecordTypes: [recordType], Plugin: plugin.Name, Origin: plugin.Origin, Limit: UnlimitedRecords, Offset: 0));
+                RecordQueryScope.Navigator, RecordTypes: [recordType], Plugin: plugin.Name, Origin: plugin.Origin, Limit: UnlimitedRecords, Offset: 0));
             foreach (var record in page.Items) byFormKey[record.FormKey] = record.ToQuery();
         }
 

@@ -51,7 +51,7 @@ public sealed class WorkingTreeChangeMarkingTests : IDisposable
         var filterNarrowingToKeepMesTwoOverrideRowsOfTheFixturesThree = $"SELECT '{_keptNpc}' AS form_key";
         index.SetFilter(filterNarrowingToKeepMesTwoOverrideRowsOfTheFixturesThree, "filter.sql");
 
-        var listing = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var listing = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0));
 
         Assert.Equal(2, listing.Total);
         Assert.All(listing.Items, i => Assert.Equal(_keptNpc, i.FormKey));

@@ -16,7 +16,7 @@ public class MultiSubclassIndexingTests
     private static Dictionary<string, object?> FieldByEditorId(IRecordReads reads, string table, string field)
     {
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
-        foreach (var summary in reads.Search(new RecordQuery(RecordTypes: [table], Limit: 100, Offset: 0)).Items)
+        foreach (var summary in reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [table], Limit: 100, Offset: 0)).Items)
         {
             var detail = reads.GetDocument(summary.FormKey, new PluginAddress(summary.Plugin, summary.Origin));
             Assert.NotNull(detail);

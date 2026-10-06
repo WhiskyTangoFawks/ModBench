@@ -179,7 +179,7 @@ public sealed class ValidateByStampsTests : IDisposable
 
         using var index = Indexes.Reconciled(_fixture);
 
-        var listing = index.RequireReads().Search(new RecordQuery(Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
+        var listing = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
         Assert.Equal(WorkingTreeState.None, listing.Items.Single(i => i.FormKey == _npc).WorkingTreeState);
     }
 
@@ -213,7 +213,7 @@ public sealed class ValidateByStampsTests : IDisposable
         var broken = fixture.Plugins.Single(p => p.Name == "Broken.esp");
         var sound = fixture.Plugins.Single(p => p.Name == "Sound.esp");
         var brokenDocument = broken.SourceFileOf(index.RequireReads().DocumentOf(
-            index.RequireReads().Search(new RecordQuery(Plugin: broken.Name, Origin: broken.Origin, RecordTypes: ["npc_"], Limit: 1)).Items.Single().FormKey,
+            index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: broken.Name, Origin: broken.Origin, RecordTypes: ["npc_"], Limit: 1)).Items.Single().FormKey,
             broken.KeyOf()));
         var backup = Path.Combine(Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(brokenDocument).Require(), "Backup")).FullName, Path.GetFileName(brokenDocument));
         File.Copy(brokenDocument, backup);

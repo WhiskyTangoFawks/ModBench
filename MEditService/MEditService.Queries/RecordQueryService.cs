@@ -69,9 +69,9 @@ public sealed class RecordQueryService(
         if (plugin is { } address) pluginFilter = address.Name;
         var scope = search is null ? RecordQueryScope.Navigator : RecordQueryScope.Search;
         var query = new RecordQuery(
-            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: plugin?.Origin, Search: search,
+            scope, RecordTypes: recordTypes, Plugin: pluginFilter, Origin: plugin?.Origin, Search: search,
             SearchFormKey: FormKeyOfFormId(search, reads), Limit: limit, Offset: offset,
-            GroupOnly: scope == RecordQueryScope.Navigator, Scope: scope);
+            GroupOnly: scope == RecordQueryScope.Navigator);
         return reads.Search(query).ToQuery();
     }
 

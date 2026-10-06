@@ -152,7 +152,7 @@ public sealed class SourceIngestTests : IDisposable
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        var byFormKey = reloaded.RequireReads().Search(new RecordQuery(Plugin: PluginName, Limit: 100))
+        var byFormKey = reloaded.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: PluginName, Limit: 100))
             .Items.ToDictionary(r => r.FormKey, StringComparer.Ordinal);
 
         Assert.Equal(WorkingTreeState.Modified, byFormKey[_npc].WorkingTreeState);

@@ -169,7 +169,7 @@ public sealed class HeldPluginsTests
         var holder = new LoadOrderHolder();
         using var held = Indexes.Open(holder);
         held.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-        var npc = held.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10)).Items.Single().FormKey;
+        var npc = held.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10)).Items.Single().FormKey;
         Assert.True(held.RequireReads().GetDocument(npc, Key("A.esp"))?.IsWinner);
 
         held.Reconcile(holder, data.DataFolder, [data.Plugins.Single() with { Enabled = false }], GameRelease.Fallout4);

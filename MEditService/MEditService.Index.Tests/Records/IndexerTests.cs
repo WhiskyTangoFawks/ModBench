@@ -42,7 +42,7 @@ public sealed class IndexerTests
 
     private static string SharedNpc(OpenedIndex indexer) =>
         indexer.RequireReads()
-            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
+            .Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
             .Items.Single().FormKey;
 
     private static string? WinnerOf(OpenedIndex indexer, string formKey)
@@ -161,7 +161,7 @@ public sealed class IndexerTests
         ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, Snapshot(fx));
 
         var arrived = fx.Plugins[1];
-        var rows = indexer.RequireReads().Search(new RecordQuery(
+        var rows = indexer.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator,
             Plugin: arrived.Name, Origin: arrived.Origin, Limit: 10, Offset: 0));
         Assert.NotEmpty(rows.Items);
     }
@@ -183,7 +183,7 @@ public sealed class IndexerTests
         ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, Snapshot(fx));
 
         var matched = indexer.RequireReads()
-            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "C.esp", Origin: PluginOrigin.DataDirectory, Limit: 10, Offset: 0));
+            .Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "C.esp", Origin: PluginOrigin.DataDirectory, Limit: 10, Offset: 0));
         Assert.Equal([charlieNpcOwnedNotOverriddenFromASoTheFilterCouldNotAlreadyHaveListedItsFormKey], matched.Items.Select(i => i.EditorId));
     }
 

@@ -12,7 +12,7 @@ public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture)
     private JsonElement? Field(string type, string editorId, string column)
     {
         var reads = fixture.Reads;
-        var summary = reads.Search(new RecordQuery(RecordTypes: [type], Search: editorId, Limit: 1, Offset: 0)).Items.Single();
+        var summary = reads.Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: [type], Search: editorId, Limit: 1, Offset: 0)).Items.Single();
         var document = reads.GetDocument(summary.FormKey, new PluginAddress(summary.Plugin, summary.Origin))
             ?? throw new InvalidOperationException($"Expected {summary.FormKey} to resolve to a document.");
         return document.Fields.Single(f => f.Metadata.Name == column).Value as JsonElement?;
@@ -22,7 +22,7 @@ public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture)
     public void Level_EveryFixtureNpc_NamesItsLeafInTheDocument()
     {
         var reads = fixture.Reads;
-        var npcs = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 5000, Offset: 0)).Items;
+        var npcs = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 5000, Offset: 0)).Items;
         Assert.NotEmpty(npcs);
         foreach (var npc in npcs)
         {

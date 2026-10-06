@@ -139,8 +139,8 @@ public class RegistrationScopingTests
         Assert.NotNull(sharedDocument);
         Assert.Equal(AlphaKey.Name, sharedDocument.Plugin.Name);
 
-        Assert.Empty(reads.Search(new RecordQuery(Plugin: BetaKey.Name, Origin: BetaKey.Origin, Limit: 1000)).Items);
-        Assert.DoesNotContain(reads.Search(new RecordQuery(Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
+        Assert.Empty(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: BetaKey.Name, Origin: BetaKey.Origin, Limit: 1000)).Items);
+        Assert.DoesNotContain(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
         Assert.Empty(reads.GetRecordTypeCounts(BetaKey));
 
         Assert.Null(reads.Resolve(fx.BetaNpcFk));
@@ -158,11 +158,11 @@ public class RegistrationScopingTests
         var filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy =
             $"SELECT form_key FROM npc_ WHERE plugin = '{BetaKey.Name}' AND origin = '{BetaKey.Origin}'";
         fx.Index.SetFilter(filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy, "filter.sql");
-        Assert.Empty(reads.Search(new RecordQuery(Limit: 1000)).Items);
+        Assert.Empty(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1000)).Items);
         Assert.Empty(reads.GetPluginsWithMatchingRecords(["npc_"]));
         fx.Index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{AlphaKey.Name}' AND origin = '{AlphaKey.Origin}'", "filter.sql");
         Assert.Contains(AlphaKey, reads.GetPluginsWithMatchingRecords(["npc_"]));
-        Assert.Contains(reads.Search(new RecordQuery(Limit: 1000)).Items, r => r.FormKey == fx.SharedNpcFk);
+        Assert.Contains(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1000)).Items, r => r.FormKey == fx.SharedNpcFk);
         fx.Index.ClearFilter();
 
         Assert.NotEmpty(reads.GetDocuments(AlphaKey));
@@ -184,7 +184,7 @@ public class RegistrationScopingTests
         Assert.Null(reads.GetOverrideStack(fx.BetaNpcFk));
         var shared = Assert.Single(reads.GetOverrideStack(fx.SharedNpcFk)?.Entries ?? []);
         Assert.Equal(AlphaKey, shared.Plugin);
-        Assert.DoesNotContain(reads.Search(new RecordQuery(Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
+        Assert.DoesNotContain(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
         Assert.Empty(reads.GetRecordTypeCounts(BetaKey));
         Assert.Null(reads.Resolve(fx.BetaNpcFk));
         Assert.Empty(reads.GetReferencedBy(fx.BetaRaceFk));

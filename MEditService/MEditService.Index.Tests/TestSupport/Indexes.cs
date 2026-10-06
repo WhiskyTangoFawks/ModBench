@@ -118,7 +118,7 @@ internal static class Indexes
         index.SetFilter(sql, "filter.sql");
         try
         {
-            return index.RequireReads().Search(new RecordQuery(Limit: 1)).Total;
+            return index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1)).Total;
         }
         finally
         {

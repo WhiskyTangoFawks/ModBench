@@ -41,7 +41,7 @@ internal static class Announcements
     /// <summary>A tracked plugin's one NPC renamed on disk under a new name: announced as its rows.</summary>
     internal static Predicate<INotification> RenamedByHand(this LoadOrderEntry plugin, IRecordReads reads)
     {
-        var listed = reads.Search(new RecordQuery(Plugin: plugin.Name, Origin: plugin.Origin, RecordTypes: ["npc_"], Limit: 1)).Items.Single();
+        var listed = reads.Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: plugin.Name, Origin: plugin.Origin, RecordTypes: ["npc_"], Limit: 1)).Items.Single();
         var document = reads.DocumentOf(listed.FormKey, plugin.KeyOf());
         plugin.HandEdit(document, $"\"{document.EditorId}\"", $"\"Edited{Guid.NewGuid():N}\"");
         return RowsChanged(listed.FormKey);

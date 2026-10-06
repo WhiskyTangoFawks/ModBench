@@ -181,7 +181,7 @@ public sealed class RecordQueryServiceTests
     [Theory]
     [InlineData("TestNPC01", RecordQueryScope.Search)]
     [InlineData(null, RecordQueryScope.Navigator)]
-    public void GetRecords_WithSearchText_IsASearch_OtherwiseTheNavigators(string? search, RecordQueryScope scope)
+    public void GetRecords_IsASearch_OnlyWithSearchText(string? search, RecordQueryScope scope)
     {
         _svc.GetRecords(types: ["npc_"], plugin: null, search: search, limit: 10, offset: 0);
 

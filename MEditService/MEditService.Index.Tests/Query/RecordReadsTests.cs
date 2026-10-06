@@ -22,7 +22,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void GetRecords_ByTable_ReturnsAllRecords()
     {
         using var index = LoadedIndex();
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, result.Total);
         Assert.Equal(TestPluginFixture.RecordCount, result.Items.Count);
     }
@@ -31,7 +31,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void GetRecords_WithPluginFilter_ReturnsMatchingOnly()
     {
         using var index = LoadedIndex();
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: TestPluginFixture.PluginName, Limit: 100, Offset: 0));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: TestPluginFixture.PluginName, Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, result.Total);
         Assert.All(result.Items, r => Assert.Equal(TestPluginFixture.PluginName, r.Plugin));
     }
@@ -40,7 +40,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void GetRecords_WithPluginFilter_WrongPlugin_ReturnsEmpty()
     {
         using var index = LoadedIndex();
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "NonExistent.esp", Limit: 100, Offset: 0));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "NonExistent.esp", Limit: 100, Offset: 0));
         Assert.Equal(0, result.Total);
         Assert.Empty(result.Items);
     }
@@ -49,7 +49,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void GetRecords_WithSearch_FiltersOnEditorId()
     {
         using var index = LoadedIndex();
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Search: "TestNPC01", Limit: 100, Offset: 0));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_"], Search: "TestNPC01", Limit: 100, Offset: 0));
         Assert.Equal(1, result.Total);
         Assert.Equal("TestNPC01", result.Items[0].EditorId);
     }
@@ -59,9 +59,9 @@ public class RecordReadsTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
-        var other = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Search: "TestNPC02", Limit: 100)).Items.Single();
+        var other = reads.Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_"], Search: "TestNPC02", Limit: 100)).Items.Single();
 
-        var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Search: "TestNPC01", SearchFormKey: other.FormKey, Limit: 100));
+        var result = reads.Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_"], Search: "TestNPC01", SearchFormKey: other.FormKey, Limit: 100));
 
         Assert.Equal(["TestNPC01", "TestNPC02"], result.Items.Select(r => r.EditorId));
         Assert.Equal(2, result.Total);
@@ -82,7 +82,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Search: search, Limit: 10));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_"], Search: search, Limit: 10));
 
         Assert.Equal([found], result.Items.Select(r => r.EditorId));
     }
@@ -92,8 +92,8 @@ public class RecordReadsTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
-        var page1 = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 1, Offset: 0));
-        var page2 = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 1, Offset: 1));
+        var page1 = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 1, Offset: 0));
+        var page2 = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 1, Offset: 1));
         Assert.Single(page1.Items);
         Assert.Single(page2.Items);
         Assert.NotEqual(page1.Items[0].FormKey, page2.Items[0].FormKey);
@@ -106,7 +106,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
         using var index = LoadedIndex();
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Search: formKey, Limit: 100, Offset: 0));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_"], Search: formKey, Limit: 100, Offset: 0));
 
         Assert.Equal(1, result.Total);
         Assert.Equal(formKey, result.Items[0].FormKey);
@@ -118,7 +118,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
         using var index = LoadedIndex();
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Search: formKey.ToLowerInvariant(), Limit: 100, Offset: 0));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_"], Search: formKey.ToLowerInvariant(), Limit: 100, Offset: 0));
 
         Assert.Equal(1, result.Total);
         Assert.Equal(formKey, result.Items[0].FormKey);
@@ -129,7 +129,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
 
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Search: "ZZZZZZ:NotAFormKey.esp", Limit: 100, Offset: 0));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_"], Search: "ZZZZZZ:NotAFormKey.esp", Limit: 100, Offset: 0));
 
         Assert.Equal(0, result.Total);
     }
@@ -149,7 +149,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
         using var fixture = ZebraBeforeApple();
         using var index = Indexes.Reconciled(fixture);
 
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0, GroupOnly: true));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0, GroupOnly: true));
 
         Assert.Equal(["Zebra", "Apple"], result.Items.Select(r => r.EditorId));
     }
@@ -167,7 +167,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var result = index.RequireReads().Search(new RecordQuery(
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator,
             RecordTypes: ["npc_"], Plugin: new PluginName("Later.esp"), Origin: PluginOrigin.DataDirectory, Limit: 10, Offset: 0, GroupOnly: true));
 
         Assert.Equal(["Overridden", "Own"], result.Items.Select(r => r.EditorId));
@@ -179,7 +179,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
         using var fixture = ZebraBeforeApple();
         using var index = Indexes.Reconciled(fixture);
 
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Search: "e", Limit: 10, Offset: 0));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_"], Search: "e", Limit: 10, Offset: 0));
 
         Assert.Equal(["Apple", "Zebra"], result.Items.Select(r => r.EditorId));
     }
@@ -401,7 +401,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void UpdateWinners_SinglePlugin_AllRecordsAreWinners()
     {
         using var index = LoadedIndex();
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 100, Offset: 0));
         Assert.All(result.Items, r => Assert.True(r.IsWinner));
     }
 
@@ -437,7 +437,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void GetRecords_WithPluginAndSearchFilter_AnUnknownPluginWithAMatchingSearchYieldsNothing()
     {
         using var index = LoadedIndex();
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "NonExistent.esp", Search: "TestNPC", Limit: 100, Offset: 0));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_"], Plugin: "NonExistent.esp", Search: "TestNPC", Limit: 100, Offset: 0));
         Assert.Equal(0, result.Total);
     }
 
@@ -450,7 +450,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "SearchA.esm", Limit: 100, Offset: 0));
+        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "SearchA.esm", Limit: 100, Offset: 0));
 
         Assert.Equal(1, result.Total);
         Assert.All(result.Items, r => Assert.Equal("SearchA.esm", r.Plugin));
@@ -470,7 +470,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
         using var index = Indexes.Reconciled(fixture);
         var reads = index.RequireReads();
 
-        var summary = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0)).Items.Single();
+        var summary = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 100, Offset: 0)).Items.Single();
         Assert.Null(summary.EditorId);
 
         var detail = reads.GetDocument(npcFormKey.ToString());
@@ -598,7 +598,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
         using var index = Indexes.Reconciled(fixture);
         var reads = index.RequireReads();
 
-        var full = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
+        var full = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 100, Offset: 0));
         Assert.Equal(7, full.Total);
         var expected = full.Items.Select(i => i.FormKey).ToList();
 
@@ -607,7 +607,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
             var seen = new List<string>();
             for (var offset = 0; offset < full.Total; offset += 2)
             {
-                var page = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 2, Offset: offset));
+                var page = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 2, Offset: offset));
                 seen.AddRange(page.Items.Select(i => i.FormKey));
             }
             return seen;

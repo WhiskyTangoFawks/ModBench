@@ -34,6 +34,7 @@ public record RecordOverrides(string FormKey, string RecordType, IReadOnlyList<O
 /// <c>SearchFormKey</c> is a FormID search's FormKey, matched beside the EditorID text.
 /// <c>Plugin</c> and <c>Origin</c> filter apart (ADR-0012).</summary>
 public sealed record RecordQuery(
+    RecordQueryScope Scope,
     IReadOnlyList<string>? RecordTypes = null,
     PluginName? Plugin = null,
     string? Origin = null,
@@ -41,8 +42,7 @@ public sealed record RecordQuery(
     string? SearchFormKey = null,
     int Limit = 50,
     int Offset = 0,
-    bool GroupOnly = false,
-    RecordQueryScope Scope = RecordQueryScope.Navigator);
+    bool GroupOnly = false);
 
 /// <summary>The record filter narrows the navigator and never a search: plugins.md says of it, "It never
 /// narrows the Editor or Referenced By".</summary>

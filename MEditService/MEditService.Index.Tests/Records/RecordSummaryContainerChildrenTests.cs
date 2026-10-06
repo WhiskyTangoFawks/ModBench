@@ -29,7 +29,7 @@ public sealed class RecordSummaryContainerChildrenTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var page = index.RequireReads().Search(new RecordQuery(Plugin: Key.Name, Origin: Key.Origin, RecordTypes: ["qust"], Limit: 50));
+        var page = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: Key.Name, Origin: Key.Origin, RecordTypes: ["qust"], Limit: 50));
 
         Assert.True(SummaryFor(page, withChildren.ToString()).HasContainerChildren);
         Assert.False(SummaryFor(page, withoutChildren.ToString()).HasContainerChildren);
@@ -50,7 +50,7 @@ public sealed class RecordSummaryContainerChildrenTests
         using var index = Indexes.Reconciled(fixture);
         index.SetFilter($"SELECT '{quest}' AS form_key", "filter.sql");
 
-        var page = index.RequireReads().Search(new RecordQuery(RecordTypes: ["qust"], Search: "QuestWithChildren", Limit: 50, Scope: RecordQueryScope.Search));
+        var page = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["qust"], Search: "QuestWithChildren", Limit: 50));
 
         Assert.True(SummaryFor(page, quest.ToString()).HasContainerChildren);
     }
