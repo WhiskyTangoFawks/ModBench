@@ -133,7 +133,9 @@ public sealed class CompareRecordsTests
     {
         var edited = new Container(_chest.FormKey, Fallout4Release.Fallout4)
         {
-            EditorID = "Chest", Name = "Chest", Items = [Entry(new FormKey(_baseMod.ModKey, 0x901))],
+            EditorID = "Chest",
+            Name = "Chest",
+            Items = [Entry(new FormKey(_baseMod.ModKey, 0x901))],
         };
 
         var compare = Compare(Copy(_chest, InactivePlugin, RealDocuments.BodyOf(edited, Release)), Copy(_chest, BasePlugin));
