@@ -46,9 +46,10 @@ function makeView(client = new InMemoryMEditClient()) {
 }
 
 describe('referencedByTitle', () => {
-  it('counts the records that reference it, and shows no count while it is not known', () => {
+  it('counts the records that reference it, as the Plugins view counts, and shows no count while it is not known', () => {
     expect(referencedByTitle(12)).toBe('Referenced By (12)');
     expect(referencedByTitle(0)).toBe('Referenced By (0)');
+    expect(referencedByTitle(1234)).toBe('Referenced By (1,234)');
     expect(referencedByTitle(undefined)).toBe('Referenced By');
   });
 });

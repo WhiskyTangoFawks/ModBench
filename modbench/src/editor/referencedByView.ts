@@ -4,7 +4,7 @@ import {
 } from './ReferencedByTreeProvider';
 
 export function referencedByTitle(count: number | undefined): string {
-  return count === undefined ? 'Referenced By' : `Referenced By (${count})`;
+  return count === undefined ? 'Referenced By' : `Referenced By (${count.toLocaleString()})`;
 }
 
 export interface ReferencedByFilter extends vscode.Disposable {

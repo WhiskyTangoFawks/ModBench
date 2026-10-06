@@ -119,7 +119,7 @@ export type PathSegment =
 export type PathHop = Exclude<PathSegment, { kind: 'element' }>;
 
 /** The one write shape: an operation, a path and an optional value, spelled by the webview and
- *  carried unchanged to `POST /records/{formKey}/edit`. */
+ *  carried unchanged to `POST /records/{formKey}/edit-changes`. */
 export type RecordEditEnvelope =
   Omit<components['schemas']['RecordEditRequest'], 'plugin' | 'origin' | 'op' | 'path'>
   & { op: 'set' | 'add' | 'remove' | 'move'; path: PathHop[] };
