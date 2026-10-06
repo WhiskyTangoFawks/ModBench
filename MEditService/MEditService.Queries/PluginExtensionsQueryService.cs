@@ -8,11 +8,13 @@ namespace MEditService.Queries;
 /// the release's format carries.</summary>
 public sealed class PluginExtensionsQueryService(LoadOrderHolder loadOrder)
 {
+    private const string Stem = "x";
+
     public IReadOnlyList<string> GetCreatable()
     {
         var release = loadOrder.Require().GameRelease;
         return [.. Enum.GetValues<ModType>()
             .Where(type => type != ModType.Light || LightPluginSupport.Of(release))
-            .Select(type => Path.GetExtension(new ModKey("x", type).FileName.String))];
+            .Select(type => new ModKey(Stem, type).FileName.String[Stem.Length..])];
     }
 }
