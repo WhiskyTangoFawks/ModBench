@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const vscodeBridgeAcquiredAtModuleLoad = vi.hoisted(() => ({ postMessage: vi.fn() }));
-vi.mock('./vscode', () => ({ vscode: vscodeBridgeAcquiredAtModuleLoad }));
+const tab = vi.hoisted(() => {
+  let state: unknown;
+  return { getState: () => state, setState: (next: unknown) => { state = next; } };
+});
+vi.mock('./vscode', () => ({ vscode: vscodeBridgeAcquiredAtModuleLoad, tabState: tab }));
 
 import { createRecordPanelClient } from './RecordPanelClient';
 import { columnKey } from '../../src/wire/columnKey';
@@ -20,7 +24,16 @@ function answer(requestId: string, data: Record<string, unknown>): void {
   }));
 }
 
-beforeEach(() => { vi.mocked(vscode.postMessage).mockClear(); });
+beforeEach(() => {
+  vi.mocked(vscode.postMessage).mockClear();
+  tab.setState(undefined);
+  vi.unstubAllGlobals();
+});
+
+const postedColumns = () => {
+  const msg = vi.mocked(vscode.postMessage).mock.calls.at(-1)?.[0];
+  return msg?.type === WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD ? msg.columns : undefined;
+};
 
 describe('RecordPanelClient.load', () => {
   it('asks the host for the record by formKey, correlated by requestId', () => {
@@ -29,7 +42,7 @@ describe('RecordPanelClient.load', () => {
     const requestId = lastRequestId();
     expect(requestId).toBeTruthy();
     expect(vscode.postMessage).toHaveBeenCalledWith({
-      type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId, formKey: '000001:A.esp',
+      type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId, formKey: '000001:A.esp', columns: [],
     });
   });
 
@@ -127,5 +140,50 @@ describe('RecordPanelClient.load', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.result?.conflictAll).toBe('NoConflict');
+  });
+});
+
+describe('RecordPanelClient, the records a tab shows beside its document\'s own', () => {
+  const ammo = { formKey: '000002:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
+  const knife = { formKey: '000003:C.esp', plugin: { name: 'C.esp', origin: 'ModC' } };
+
+  it('reads them as the page was given them, and keeps them with the tab', () => {
+    vi.stubGlobal('mEditColumns', [ammo]);
+
+    void createRecordPanelClient().load('000001:A.esp');
+
+    expect(postedColumns()).toEqual([ammo]);
+    expect(tab.getState()).toEqual({ columns: [ammo] });
+  });
+
+  it('reads them as the tab kept them, which VS Code restores with the tab after a reload, over the page\'s', () => {
+    tab.setState({ columns: [knife] });
+    vi.stubGlobal('mEditColumns', []);
+
+    void createRecordPanelClient().load('000001:A.esp');
+
+    expect(postedColumns()).toEqual([knife]);
+  });
+
+  it('reads the ones shown since, and keeps them with the tab', () => {
+    vi.stubGlobal('mEditColumns', [ammo]);
+    const client = createRecordPanelClient();
+
+    client.showColumns([knife]);
+    void client.load('000001:A.esp');
+
+    expect(postedColumns()).toEqual([knife]);
+    expect(tab.getState()).toEqual({ columns: [knife] });
+  });
+
+  it('reads none once the host shows none, though the page gave some', () => {
+    vi.stubGlobal('mEditColumns', [ammo]);
+    const client = createRecordPanelClient();
+
+    client.showColumns([]);
+    void client.load('000001:A.esp');
+
+    expect(postedColumns()).toEqual([]);
+    expect(tab.getState()).toEqual({ columns: [] });
   });
 });

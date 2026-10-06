@@ -65,6 +65,7 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
   const columnsWhere = (p: (plugin: FixturePlugin) => boolean) =>
     new Set(plugins.filter(p).map(x => columnKey({ name: x.name, origin: x.origin ?? 'Data' })));
   return {
+    showColumns: vi.fn(),
     load: opts.load ?? vi.fn().mockImplementation(() => Promise.resolve({
       ok: true,
       // A fresh clone per load(): a fixture is one shared module-level object, and a test that

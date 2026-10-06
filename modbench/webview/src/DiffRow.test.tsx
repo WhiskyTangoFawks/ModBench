@@ -50,7 +50,7 @@ type RowProps = Omit<React.ComponentProps<typeof DiffRow>, 'row'> & {
   rowKey: string;
   parentRowKey: string | null;
   editableColumns: ReadonlySet<ColumnKey>;
-  recordLabel: string;
+  recordLabel: (copy: CompareOverride) => string;
   ownerPresent?: (column: ColumnKey) => boolean;
 };
 
@@ -65,7 +65,7 @@ function baseProps(overrides: Partial<RowProps> = {}): RowProps {
     columnStyle: () => ({}),
     collapsedColumns: new Set(),
     editableColumns: new Set(),
-    recordLabel: 'TestNPC [000001:Fallout4.esm]',
+    recordLabel: () => 'TestNPC [000001:Fallout4.esm]',
     context: { path: [], rootField: diffOfThisCallBehindTheDefaultContext.fieldName, depth: 0 },
     rowKey: 'Name',
     parentRowKey: null,

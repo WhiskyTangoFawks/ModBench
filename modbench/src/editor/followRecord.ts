@@ -26,6 +26,8 @@ interface Move { plugin: PluginAddress; from: string; to: string; asked: boolean
 export class EditsInFlight<Panel extends FollowedPanel> {
   private readonly inFlight = new Map<Panel, InFlight>();
   private readonly moves = new Map<Panel, Move[]>();
+  // The records each panel's last answered read showed beside its own.
+  private readonly columns = new Map<Panel, readonly string[]>();
   private clock = 0;
 
   constructor(private readonly tracker: FormKeyTracker<Panel>) {}
@@ -65,7 +67,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
       return;
     }
     const shown = this.tracker.formKeyOf(panel);
-    if (!shown || !keys.includes(shown)) return;
+    if (!shown || !this.shows(panel, shown, keys)) return;
     for (const move of this.moves.get(panel) ?? []) if (move.to === shown) move.asked = true;
     this.read(panel, shown);
   }
@@ -92,9 +94,10 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     if (this.waitingFor(panel) === formKey) this.reported(panel, [formKey]);
   }
 
-  /** The tab's read of `formKey` is answered: it shows that record from now on. Reading a chain's
-   *  last key ends every move in it, back to the key the tab last read. */
-  answered(panel: Panel, formKey: string): void {
+  /** The tab's read of `formKey` is answered: it shows that record from now on, and `columns`
+   *  beside it. Reading a chain's last key ends every move in it, back to the key the tab last read. */
+  answered(panel: Panel, formKey: string, columns: readonly string[]): void {
+    this.columns.set(panel, columns);
     const moves = this.moves.get(panel) ?? [];
     const readAt = ++this.clock;
     let ended = moves.filter(move => move.readAt === undefined && move.to === formKey);
@@ -110,6 +113,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   forget(panel: Panel): void {
     this.inFlight.delete(panel);
     this.moves.delete(panel);
+    this.columns.delete(panel);
   }
 
   private async edit(
@@ -144,8 +148,12 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   // The last answer in: what the held reports and refreshes asked for, once.
   private settle(panel: Panel, entry: InFlight): void {
     const shown = this.tracker.formKeyOf(panel);
-    if (shown && entry.reported.has(shown)) this.reported(panel, [shown]);
+    if (shown && this.shows(panel, shown, [...entry.reported])) this.reported(panel, [...entry.reported]);
     else if (entry.refreshed) this.refresh(panel);
+  }
+
+  private shows(panel: Panel, shown: string, keys: readonly string[]): boolean {
+    return [shown, ...this.columns.get(panel) ?? []].some(key => keys.includes(key));
   }
 
   private awaitsReport(panel: Panel): boolean {

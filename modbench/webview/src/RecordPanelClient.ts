@@ -2,6 +2,8 @@ import type { ColumnKey, CompareResult, PluginLoadFailure } from './types';
 import { columnKey } from '../../src/wire/columnKey';
 import { parseCompareResult } from './parseCompareResult';
 import { requestRecordLoad } from './nativeBridge';
+import { tabState } from './vscode';
+import { isColumnCopies, type ColumnCopy } from '../../src/wire/messages';
 
 // `load` asks the host for compare, plugins and status in one round trip: a compare failure fails
 // the whole load, while a plugins/status failure comes back as `null` so the panel leaves that
@@ -28,12 +30,27 @@ export interface RecordPanelClient {
   // lets a test hold a bare reference to it (`vi.mocked(client.load)`) without an
   // unbound-method warning.
   load: (formKey: string) => Promise<LoadResult>;
+  showColumns: (columns: ColumnCopy[]) => void;
 }
 
+const mEditWindow = window as Window & typeof globalThis & { mEditColumns?: unknown };
+
+// The columns are kept with the tab, so they outlive a reload.
+function keptColumns(): ColumnCopy[] | undefined {
+  const state = tabState.getState();
+  const kept = typeof state === 'object' && state !== null && 'columns' in state ? state.columns : undefined;
+  return isColumnCopies(kept) ? kept : undefined;
+}
+
+const keepColumns = (columns: ColumnCopy[]): void => { tabState.setState({ columns }); };
+
 export function createRecordPanelClient(): RecordPanelClient {
+  // The page states the columns only when the tab is new.
+  if (!keptColumns()) keepColumns(isColumnCopies(mEditWindow.mEditColumns) ? mEditWindow.mEditColumns : []);
   return {
+    showColumns: keepColumns,
     async load(formKey) {
-      const answer = await requestRecordLoad(formKey);
+      const answer = await requestRecordLoad(formKey, keptColumns() ?? []);
       if (!answer.ok) return { ok: false, error: answer.error };
       // Keyed by compound identity (ADR-0012), so one origin's mutability never wins for another
       // origin's plugin of the same filename.
