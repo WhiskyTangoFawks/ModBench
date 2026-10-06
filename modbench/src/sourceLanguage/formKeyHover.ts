@@ -13,7 +13,7 @@ const isPropertyName = (node: Node): boolean => node.parent?.type === 'property'
 
 interface FormKeyString { formKey: string; start: number; end: number }
 
-function formKeyAt(text: string, offset: number): FormKeyString | undefined {
+export function formKeyAt(text: string, offset: number): FormKeyString | undefined {
   const root = parseTree(text);
   const node = root && findNodeAtOffset(root, offset);
   const value: unknown = node?.value;

@@ -24,9 +24,11 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
-import { RENDERED_DOCUMENT_SCHEME, RenderedDocuments, renderedDocumentUri } from './renderedDocument';
-import { CHILD_RECORD_SCHEME, ChildRecordDocuments, childRecordUri } from './childRecordDocument';
-import { copyOf, holdsNoCopy, type RecordCopy } from './recordCopy';
+import { RenderedDocuments } from './renderedDocument';
+import { ChildRecordDocuments } from './childRecordDocument';
+import {
+  CHILD_RECORD_SCHEME, RENDERED_DOCUMENT_SCHEME, copyOf, recordDocument, type RecordCopy,
+} from '../drivingLib/recordDocument';
 import { errorMessage } from '../ports/errorMessage';
 
 export interface EditorCommandDeps {
@@ -250,29 +252,13 @@ async function openRecordTab(
 ): Promise<void> {
   const failMessage = `Failed to open "${recordTitle(address.formKey, undefined)}".`;
   await reportFailure(reporter, failMessage, async () => {
-    const tab = await tabOf(client, address);
+    const tab = await recordDocument(client, address) ?? { refused: `No active plugin holds ${address.formKey}.` };
     if ('refused' in tab) {
       reporter.report('error', failMessage, tab.refused);
       return;
     }
     await vscode.commands.executeCommand('vscode.openWith', tab.uri, RECORD_VIEW_TYPE, { viewColumn, preview });
   });
-}
-
-// A record given without a plugin opens its winning copy. A tracked copy opens as its own file, an
-// untracked one as mEdit's rendering, and one carried in another record's file as a child's tab.
-async function tabOf(client: OpenClient, { formKey, plugin: given }: RecordToOpen): Promise<{ uri: vscode.Uri } | { refused: string }> {
-  const plugin = given ?? await client.getRecordOwner(formKey);
-  if (!plugin) return { refused: `No active plugin holds ${formKey}.` };
-  const file = await client.getRecordFile(plugin, formKey);
-  if (file === null) return { refused: holdsNoCopy({ formKey, plugin }) };
-  if (!file.path) {
-    const rendered = await client.getRenderedDocument(plugin, formKey);
-    if (rendered === null) return { refused: holdsNoCopy({ formKey, plugin }) };
-    return { uri: renderedDocumentUri({ formKey, plugin }, rendered.fileName) };
-  }
-  if ((await client.getRecordOfFile(file.path)).formKey === formKey) return { uri: vscode.Uri.file(file.path) };
-  return { uri: childRecordUri({ formKey, plugin }, file.path) };
 }
 
 // `ViewColumn.Beside` resolves once: the first tab opened becomes active, so a second Beside call
