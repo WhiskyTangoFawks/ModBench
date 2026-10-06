@@ -38,6 +38,27 @@ public static class PluginEndpoints
             .Produces<IReadOnlyList<PluginDiagnosisReport>>()
             .ProducesProblem(503);
 
+        app.MapGet("/plugins/problems", (PluginProblemQueryService svc) =>
+        {
+            try
+            {
+                return svc.GetProblems() is { } problems
+                    ? Results.Ok(problems)
+                    : Results.Problem("mEdit has not finished indexing the plugins.", statusCode: 503);
+            }
+            catch (NoLoadOrderException ex)
+            {
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            }
+        })
+            .WithName("GetPluginProblems")
+            .WithTags(Tag)
+            .WithDescription(
+                "What is wrong in each tracked active plugin's source, on the file that holds the " +
+                "record: a reference to a record no active plugin holds. Answers only once the index is ready.")
+            .Produces<IReadOnlyList<PluginProblems>>()
+            .ProducesProblem(503);
+
         app.MapGet("/plugins/{plugin}/dependants", (string plugin, string? origin, PluginDependantsQueryService svc) =>
         {
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;

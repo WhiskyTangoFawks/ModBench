@@ -49,6 +49,10 @@ public interface IRecordReads
 
     IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey);
 
+    /// <summary>Every link an active plugin's record carries to a FormKey no active plugin holds,
+    /// except the engine-defined FormIds the grid's dangling warning also exempts.</summary>
+    IReadOnlyList<MissingReference> GetReferencesToMissingRecords();
+
     /// <summary>Every plugin at least one filtered record matches, restricted to
     /// <paramref name="tableNames"/> (plugins.md). Empty when no filter is active: every plugin
     /// already has matches.</summary>

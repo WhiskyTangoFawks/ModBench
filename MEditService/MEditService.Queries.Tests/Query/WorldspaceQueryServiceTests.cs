@@ -42,6 +42,7 @@ public class WorldspaceQueryServiceTests
         public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
         public IReadOnlySet<PluginAddress> GetTrackedPlugins() => new HashSet<PluginAddress>(PluginAddress.Comparer);
         public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey) => [];
+        public IReadOnlyList<MissingReference> GetReferencesToMissingRecords() => [];
         public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin)
         {
             LastGetInteriorCellsOrigin = plugin.Origin;

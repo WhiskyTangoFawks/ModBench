@@ -24,6 +24,8 @@
   <ItemGroup>
     <!-- Drawn: queries -> record index (target-architecture-references.d2). -->
     <ProjectReference Include="..\MEditService.Index\MEditService.Index.csproj" />
+    <!-- Drawn: the read model references the repositories (layers.d2); the source tree names a record's file. -->
+    <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />
     <!-- The kernel, by the band's rule (target-architecture.d2 medit_kernel). -->
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
     <!-- The kernel, by the band's rule (target-architecture.d2 medit_kernel). -->

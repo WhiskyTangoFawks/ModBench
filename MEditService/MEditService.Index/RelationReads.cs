@@ -263,6 +263,32 @@ internal sealed class RelationReads(
         return LinkResolution.ForLinksOf(connection, formKey, Resolve);
     }
 
+    public IReadOnlyList<MissingReference> GetReferencesToMissingRecords()
+    {
+        using var connection = store.OpenReadConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT fr.source_plugin, fr.source_origin, fr.source_form_key, fr.record_type, fr.editor_id,
+                   fr.target_form_key, fr.field_path
+            FROM form_references fr
+            WHERE NOT EXISTS (SELECT 1 FROM form_lookup l WHERE l.form_key = fr.target_form_key)
+            ORDER BY fr.source_plugin, fr.source_origin, fr.source_form_key, fr.field_path
+            """;
+
+        var release = store.Release;
+        var missing = new List<MissingReference>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var target = reader.GetString(5);
+            if (FormKeyResolution.From(target, null, [], release).State != FormKeyResolutionState.Unresolved) continue;
+            missing.Add(new MissingReference(
+                new PluginAddress(reader.GetString(0), reader.GetString(1)), reader.GetString(2), reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4), target, reader.GetString(6)));
+        }
+        return missing;
+    }
+
     public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)
     {
         using var connection = store.OpenReadConnection();
