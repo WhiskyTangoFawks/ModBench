@@ -80,18 +80,10 @@ internal static class Wire
         if (!response.IsSuccessStatusCode) return response;
 
         var changes = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        foreach (var move in changes.GetProperty("moves").EnumerateArray())
-        {
-            var (from, to) = (move.GetProperty("from").GetString().Require(), move.GetProperty("to").GetString().Require());
-            if (Directory.Exists(from)) Directory.Move(from, to);
-            else File.Move(from, to);
-        }
-        foreach (var document in changes.GetProperty("documents").EnumerateArray())
-        {
-            var at = document.GetProperty("path").GetString().Require();
-            Directory.CreateDirectory(Path.GetDirectoryName(at).Require());
-            await File.WriteAllTextAsync(at, document.GetProperty("text").GetString());
-        }
+        static string Text(JsonElement element, string name) => element.GetProperty(name).GetString().Require();
+        EditSaving.Save(
+            changes.GetProperty("moves").EnumerateArray().Select(move => (Text(move, "from"), Text(move, "to"))),
+            changes.GetProperty("documents").EnumerateArray().Select(document => (Text(document, "path"), Text(document, "text"))));
         return response;
     }
 
