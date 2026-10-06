@@ -6,7 +6,7 @@ export type {
   TrackStatus, TrackOutcome, PluginMetadata, PluginDiagnosisReport, RecordSummary,
   WorldspaceSummary, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords, CellSummary,
   ChildRecordSummary, ContainerChildSummary, CompileDiagnostic, CompileOutcome,
-  LoadOrderRefusal, PluginLoadFailure, CompareResult, RecordCopy,
+  LoadOrderRefusal, PluginLoadFailure, CompareResult, RecordCopy, CopyText,
 } from './MEditClient';
 export type { RecordEditEnvelope } from './MEditClient';
 export { isMEditGone, isRefused, UNLIMITED_RECORDS } from './MEditClient';
