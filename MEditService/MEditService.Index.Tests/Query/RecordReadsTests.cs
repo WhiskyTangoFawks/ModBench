@@ -67,6 +67,26 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(2, result.Total);
     }
 
+    [Theory]
+    [InlineData("Gun_", "Gun_Rifle")]
+    [InlineData("%", "Full%Auto")]
+    [InlineData("\\", "Back\\Slash")]
+    public void ASearch_MatchesItsTextLiterally(string search, string found)
+    {
+        using var fixture = new PluginFixtureBuilder("medit-search-literal")
+            .WithPlugin("Literal.esp", mod =>
+            {
+                foreach (var editorId in new[] { "Gun_Rifle", "GunXRifle", "Full%Auto", "Back\\Slash" })
+                    mod.Npcs.AddNew(editorId);
+            })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+
+        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Search: search, Limit: 10));
+
+        Assert.Equal([found], result.Items.Select(r => r.EditorId));
+    }
+
     [Fact]
     public void GetRecords_Pagination_RespectsLimitAndOffset()
     {
