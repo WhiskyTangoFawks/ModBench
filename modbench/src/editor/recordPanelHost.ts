@@ -20,10 +20,10 @@ import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { recordUri, recordTabAddressOf, formKeyOf, RECORD_EDITOR_VIEW_TYPE, RECORD_FILE_VIEW_TYPE } from './recordUri';
+import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE, RECORD_FILE_VIEW_TYPE } from './recordUri';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
-import { headerPluginNameOf } from '../wire/headerFormKey';
+import { RENDERED_DOCUMENT_SCHEME, RenderedDocuments, renderedCopyOf, renderedDocumentUri } from './renderedDocument';
 import { errorMessage } from '../ports/errorMessage';
 
 export interface EditorCommandDeps {
@@ -43,7 +43,7 @@ export interface EditorCommandDeps {
     | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations'
     | 'getComparison' | 'onNotification' | 'onStatusChanged' | 'onReconnected' | 'getRecordOwner'
-    | 'getRecordFile' | 'getRecordOfFile'>;
+    | 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
   // Each view's own selection, which that view's keys act on.
@@ -89,7 +89,7 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
   constructor(private readonly deps: RecordEditorProviderDeps) {}
 
   openCustomDocument(uri: vscode.Uri): RecordDocument {
-    return new RecordDocument(uri, formKeyOf(recordTabAddressOf(uri)));
+    return new RecordDocument(uri, formKeyOfRecordUri(uri));
   }
 
   resolveCustomEditor(document: RecordDocument, panel: vscode.WebviewPanel): void {
@@ -111,6 +111,10 @@ class RecordFileEditorProvider implements vscode.CustomTextEditorProvider {
   constructor(private readonly deps: RecordFileEditorProviderDeps) {}
 
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
+    if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
+      showRecord(this.deps, panel, renderedCopyOf(document.uri).formKey, () => undefined);
+      return;
+    }
     const { fsPath } = document.uri;
     let shownReason: string | undefined;
     const read = async (): Promise<void> => {
@@ -198,6 +202,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   return [
     { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, editsInFlight) },
     extendedFields,
+    new RenderedDocuments(meditClient),
     { dispose: () => { loadOrderStatusTracker.dispose(); } },
     vscode.window.registerCustomEditorProvider(RECORD_EDITOR_VIEW_TYPE, new RecordEditorProvider(providerDeps), keepsItsPlace),
     vscode.window.registerCustomEditorProvider(RECORD_FILE_VIEW_TYPE, recordFileEditorProvider, keepsItsPlace),
@@ -235,7 +240,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   ];
 }
 
-type OpenClient = Pick<MEditClient, 'getRecordFile' | 'getRecordOfFile'>;
+type OpenClient = Pick<MEditClient, 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
 
 async function openRecordTab(
   client: OpenClient, reporter: Reporter, address: RecordToOpen, viewColumn: vscode.ViewColumn, preview: boolean,
@@ -246,15 +251,20 @@ async function openRecordTab(
   });
 }
 
-// A tracked copy opens as its own file. A copy with no file of its own keeps the record's tab.
+// A tracked copy opens as its own file and an untracked one as mEdit's rendering of it. A copy
+// carried in another record's file keeps the record's tab.
 async function tabOf(client: OpenClient, { formKey, plugin }: RecordToOpen): Promise<[vscode.Uri, string]> {
-  if (!plugin) return [recordUri({ formKey }), RECORD_EDITOR_VIEW_TYPE];
+  if (!plugin) return [recordUri(formKey), RECORD_EDITOR_VIEW_TYPE];
+  const holdsNone = new Error(`${plugin.name} (${plugin.origin}) holds no ${formKey}, or its file is gone.`);
   const file = await client.getRecordFile(plugin, formKey);
-  if (file === null) throw new Error(`${plugin.name} (${plugin.origin}) holds no ${formKey}, or its file is gone.`);
-  if (file.path && (await client.getRecordOfFile(file.path)).formKey === formKey) {
-    return [vscode.Uri.file(file.path), RECORD_FILE_VIEW_TYPE];
+  if (file === null) throw holdsNone;
+  if (!file.path) {
+    const rendered = await client.getRenderedDocument(plugin, formKey);
+    if (rendered === null) throw holdsNone;
+    return [renderedDocumentUri({ formKey, plugin }, rendered.fileName), RECORD_FILE_VIEW_TYPE];
   }
-  return [recordUri(headerPluginNameOf(formKey) === undefined ? { formKey } : { header: plugin }), RECORD_EDITOR_VIEW_TYPE];
+  if ((await client.getRecordOfFile(file.path)).formKey === formKey) return [vscode.Uri.file(file.path), RECORD_FILE_VIEW_TYPE];
+  return [recordUri(formKey), RECORD_EDITOR_VIEW_TYPE];
 }
 
 // `ViewColumn.Beside` resolves once: the first tab opened becomes active, so a second Beside call
