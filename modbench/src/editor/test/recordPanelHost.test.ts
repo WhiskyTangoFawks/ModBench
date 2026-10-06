@@ -13,7 +13,9 @@ vi.mock('vscode', async () => ({
   TreeItem: (await import('../../test/vscodeMock')).TreeItem,
   TreeItemCollapsibleState: (await import('../../test/vscodeMock')).TreeItemCollapsibleState,
   EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { return undefined; } dispose() { return undefined; } },
-  Uri: { from: ({ path, query }: { path: string; query?: string }) => (query ? `${path}?${query}` : path), file: (path: string) => `file://${path}`, joinPath: vi.fn() },
+  Uri: { from: ({ path, query }: { path: string; query?: string }) => (query ? `${path}?${query}` : path), file: (path: string) => ({
+    toString: () => `file://${path}`, with: ({ scheme, query }: { scheme: string; query: string }) => `${scheme}:${path}?${query}`,
+  }), joinPath: vi.fn() },
   Disposable: class { constructor(public dispose: () => void) {} },
   ViewColumn: { Active: -1, One: 1, Beside: -2 },
   commands: {
@@ -92,11 +94,12 @@ describe('registerEditorCommands', () => {
   });
 });
 
-describe('the extended-field documents', () => {
-  it('are registered under a writable and a read-only scheme as soon as the Editor is', () => {
+describe('the Editor\'s file systems', () => {
+  it('are registered as soon as the Editor is: a field\'s, writable and read-only, and a child record\'s', () => {
     register();
 
-    expect(registerFileSystemProvider.mock.calls.map(([scheme]) => scheme)).toEqual(['modbench-field', 'modbench-field-readonly']);
+    expect(registerFileSystemProvider.mock.calls.map(([scheme]) => scheme))
+      .toEqual(['modbench-field', 'modbench-field-readonly', 'modbench-child-record']);
   });
 });
 
@@ -196,7 +199,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
     await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
 
-    expect(executeCommand.mock.calls).toEqual([
+    expect(executeCommand.mock.calls.map(([id, uri, ...rest]) => [id, String(uri), ...rest])).toEqual([
       ['vscode.openWith', `file://${FILE}`, 'modbench.recordFile', { viewColumn: -1, preview: true }],
     ]);
   });
@@ -226,12 +229,12 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     expect(opened()).toEqual([[renderedDocumentUri({ formKey: PLACED, plugin }, 'SharedRef - 000803_A.esp.json'), 'modbench.recordFile']]);
   });
 
-  it('opens a copy carried in another record\'s file, as a placed reference is in its cell\'s, in its own tab', async () => {
+  it('opens a copy carried in another record\'s file, as a placed reference is in its cell\'s, in a tab of its own on that file', async () => {
     registerAnswering({ path: FILE }, '000700:A.esp');
 
     await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
 
-    expect(opened()).toEqual([[`/${encodeURIComponent(GUN)}.modbench-record`, 'modbench.record']]);
+    expect(opened()).toEqual([[`modbench-child-record:${FILE}?formKey=000801%3AA.esp&name=A.esp&origin=ModA`, 'modbench.recordFile']]);
   });
 
   it('refuses a copy the plugin does not hold, naming it, and opens nothing', async () => {
