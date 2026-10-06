@@ -1,25 +1,8 @@
-import type * as vscode from 'vscode';
-import { findNodeAtLocation, parseTree, type Node } from 'jsonc-parser';
-import type { Reporter } from '../ports/reporter';
+import { parseTree } from 'jsonc-parser';
 import { errorMessage } from '../ports/errorMessage';
-import { recordDocument, type RecordDocumentClient } from '../drivingLib/recordDocument';
+import { recordDocument } from '../drivingLib/recordDocument';
 import { formKeyAt } from './formKeyHover';
-
-export interface TextSpan { start: number; end: number }
-
-export const ownFormKey = (node: Node): Node | undefined =>
-  node.type === 'object' ? findNodeAtLocation(node, ['FormKey']) : undefined;
-
-/** The object that is the record in a plugin source document: the document's own record, or a
- *  child record embedded in its owner's file. */
-export function recordObject(node: Node, formKey: string): Node | undefined {
-  if (ownFormKey(node)?.value === formKey) return node;
-  for (const child of node.children ?? []) {
-    const found = recordObject(child, formKey);
-    if (found) return found;
-  }
-  return undefined;
-}
+import { ownFormKey, recordObject, type RecordLocation, type RecordLocationDeps, type TextSpan } from './recordLocation';
 
 export function formKeyMember(text: string, formKey: string): TextSpan | undefined {
   const root = parseTree(text);
@@ -28,19 +11,11 @@ export function formKeyMember(text: string, formKey: string): TextSpan | undefin
   return member && { start: member.offset, end: member.offset + member.length };
 }
 
-export interface DefinitionDeps<Document> {
-  client: RecordDocumentClient;
-  reporter: Pick<Reporter, 'shownOnSurface'>;
-  open: (uri: vscode.Uri) => PromiseLike<Document>;
-}
-
-export interface Definition<Document> extends TextSpan { uri: vscode.Uri; document: Document }
-
 /** A refusal or a failure offers no definition, and is written to the Output once for each reason
  *  (common.md, Reporting). */
 export function definitionsOf<Document extends { getText(): string }>(
-  { client, reporter, open }: DefinitionDeps<Document>,
-): (text: string, offset: number) => Promise<Definition<Document> | undefined> {
+  { client, reporter, open }: RecordLocationDeps<Document>,
+): (text: string, offset: number) => Promise<RecordLocation<Document> | undefined> {
   const told = new Set<string>();
   const tell = (formKey: string, why: string) => {
     if (told.has(why)) return;

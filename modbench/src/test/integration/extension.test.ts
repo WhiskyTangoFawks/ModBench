@@ -281,6 +281,7 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify(decodeURIComponent(referenced) === HELD_FORM_KEY ? [
         row(TRACKED_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Model'), row(TRACKED_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Template'),
         row(CHILD_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Base'), row(RENDERED_REFERRER_FORM_KEY, 'Fallout4.esm', 'Data', 'Base'),
+        row(HELD_FORM_KEY, 'Fallout4.esm', 'Data', 'Template'),
       ] : []));
       return;
     }
@@ -389,7 +390,11 @@ describe('Mod sync', () => {
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 const renderedName = (formKey: string) => `${formKey.replace(':', '_')}.json`;
 function renderedText(formKey: string): string {
-  return JSON.stringify({ FormKey: formKey, ...(formKey === RENDERED_REFERRER_FORM_KEY && { Base: HELD_FORM_KEY }) });
+  return JSON.stringify({
+    FormKey: formKey,
+    ...(formKey === RENDERED_REFERRER_FORM_KEY && { Base: HELD_FORM_KEY }),
+    ...(formKey === HELD_FORM_KEY && { Template: HELD_FORM_KEY }),
+  });
 }
 
 describe('modbench.record.open', () => {
@@ -1114,7 +1119,7 @@ describe('A FormKey in plugin source', () => {
     assert.strictEqual(definition.range.start.character, fs.readFileSync(TRACKED_FILE, 'utf8').indexOf(`"FormKey":"${CHILD_FORM_KEY}"`));
   });
 
-  it('lists every record that references it, one entry for each plugin\'s copy at its reference, and never its own declaration', async () => {
+  it('lists every record that references it, one entry for each plugin\'s copy at its reference, a record referencing itself never at its declaration', async () => {
     await activated();
     const found = await vscode.commands.executeCommand<vscode.Location[]>('vscode.executeReferenceProvider', document.uri, positionIn(HELD_FORM_KEY));
     const entries = await Promise.all(found.map(async ({ uri, range }) =>
@@ -1127,6 +1132,8 @@ describe('A FormKey in plugin source', () => {
       [`modbench-child-record:${vscode.Uri.file(TRACKED_FILE).path}?formKey=000802%3ATracked.esp&name=Tracked.esp&origin=TrackedMod`, tracked.lastIndexOf(quoted)],
       [`modbench-rendered:/Data/Fallout4.esm/${renderedName(RENDERED_REFERRER_FORM_KEY)}?formKey=000803%3AFallout4.esm&name=Fallout4.esm&origin=Data`,
         renderedText(RENDERED_REFERRER_FORM_KEY).indexOf(quoted)],
+      [`modbench-rendered:/Data/Fallout4.esm/${renderedName(HELD_FORM_KEY)}?formKey=000801%3AHeld.esp&name=Fallout4.esm&origin=Data`,
+        renderedText(HELD_FORM_KEY).lastIndexOf(quoted)],
     ].sort());
   });
 

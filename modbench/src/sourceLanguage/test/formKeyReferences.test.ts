@@ -14,7 +14,8 @@ vi.mock('vscode', () => ({
 }));
 
 import type * as vscode from 'vscode';
-import { referencesOf, type ReferencesClient } from '../formKeyReferences';
+import { referencesOf } from '../formKeyReferences';
+import type { RecordLocationDeps } from '../recordLocation';
 import type { ReferenceResult } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
@@ -33,6 +34,8 @@ const row = (formKey: string, plugin: typeof modA, fieldPath: string): Reference
 const key = (formKey: string, { name, origin }: { name: string; origin: string }) => `${formKey} ${name} ${origin}`;
 
 interface Copy { file?: string; rendered?: string; text?: string }
+
+type ReferencesClient = RecordLocationDeps<unknown>['client'];
 
 function references(rows: ReferenceResult[], copies: Record<string, Copy>, answering: Partial<ReferencesClient> = {}) {
   const firstOnFile = (path: string) => Object.entries(copies).find(([, copy]) => copy.file === path);
@@ -131,41 +134,59 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
     ]);
   });
 
+  it('passes over a property name that spells the FormKey', async () => {
+    const keyed = `{ "FormKey": "${STAND}", "${GUN}": 1, "Model": "${GUN}" }`;
+    const { referencesAt } = references([row(STAND, modA, 'Model')], { [key(STAND, modA)]: { file: STAND_FILE, text: keyed } });
+
+    expect(listed(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([
+      { uri: `file:${STAND_FILE}`, text: `"${GUN}"`, start: keyed.lastIndexOf(GUN) - 1 },
+    ]);
+  });
+
   describe('when a copy cannot be listed', () => {
-    const told = (detail: string) => [{ severity: 'warning', message: `Find All References cannot list every reference to ${GUN}.`, detail }];
+    const LEFT_OUT = `Find All References on ${GUN} left out the copies it could not open.`;
     const tracked = { [key(STAND, modA)]: { file: STAND_FILE, text: `{ "FormKey": "${STAND}", "Model": "${GUN}" }` } };
     const uris = (found: Parameters<typeof listed>[0]) => listed(found).map(({ uri }) => uri);
 
-    it('lists the copies it can, and writes why to the Output, when a plugin holds no copy mEdit counted', async () => {
+    it('notifies nothing when every copy is listed', async () => {
+      const { reporter, referencesAt } = references([row(STAND, modA, 'Model')], tracked);
+
+      await referencesAt(ASKING, AT_GUN(ASKING));
+
+      expect([...reporter.reports, ...reporter.shownFailures]).toEqual([]);
+    });
+
+    it('lists the copies it can, and notifies the copy left out, when a plugin holds no copy mEdit counted', async () => {
       const { reporter, referencesAt } = references([row(STAND, modA, 'Model'), row(STAND, modB, 'Model')], tracked);
 
       expect(uris(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([`file:${STAND_FILE}`]);
-      expect(reporter.shownFailures).toEqual(told(`B.esp (ModB) holds no ${STAND}.`));
+      expect(reporter.reports).toEqual([{ severity: 'warning', message: LEFT_OUT, detail: `B.esp (ModB) holds no ${STAND}.` }]);
     });
 
-    it('lists the copies it can, and writes why to the Output, when a copy\'s document fails to open', async () => {
+    it('lists the copies it can, and notifies the copy left out and why, when a copy\'s document fails to open', async () => {
       const { reporter, referencesAt } = references(
         [row(STAND, modA, 'Model'), row(STAND, modB, 'Model')], { ...tracked, [key(STAND, modB)]: { rendered: STAND_RENDERED } },
       );
 
       expect(uris(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([`file:${STAND_FILE}`]);
-      expect(reporter.shownFailures).toEqual(told('The file is gone.'));
+      expect(reporter.reports).toEqual([{ severity: 'warning', message: LEFT_OUT, detail: `${STAND} in B.esp (ModB): The file is gone.` }]);
     });
 
-    it('lists nothing, and writes why to the Output, when mEdit cannot answer what references it', async () => {
+    it('lists nothing, and notifies why, when mEdit cannot answer what references it', async () => {
       const { reporter, referencesAt } = references([], {}, { getReferences: () => Promise.reject(new Error('mEdit is gone.')) });
 
       expect(await referencesAt(ASKING, AT_GUN(ASKING))).toEqual([]);
-      expect(reporter.shownFailures).toEqual(told('mEdit is gone.'));
+      expect(reporter.reports).toEqual([{ severity: 'error', message: `Find All References cannot list what references ${GUN}.`, detail: 'mEdit is gone.' }]);
     });
 
-    it('writes a reason once, however often it recurs', async () => {
+    it('notifies once for each time it is asked, naming every copy left out', async () => {
       const { reporter, referencesAt } = references([row(STAND, modB, 'Model'), row(GUN, modB, 'Template')], {});
+      const once = { severity: 'warning', message: LEFT_OUT, detail: `B.esp (ModB) holds no ${STAND}. B.esp (ModB) holds no ${GUN}.` };
 
       await referencesAt(ASKING, AT_GUN(ASKING));
       await referencesAt(ASKING, AT_GUN(ASKING));
 
-      expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual([`B.esp (ModB) holds no ${STAND}.`, `B.esp (ModB) holds no ${GUN}.`]);
+      expect(reporter.reports).toEqual([once, once]);
     });
   });
 
