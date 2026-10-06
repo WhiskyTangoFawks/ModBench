@@ -35,21 +35,15 @@ internal sealed class PluginIngest
         List<ContainerChildRow> ChildRows, List<PlacementRow> Placements, CellLocationRow? CellLocation,
         string? EditorId, string? ParseDiagnosis);
 
-    // A re-index replaces its own rows, the header's included. Called before
-    // DuckDbRecordIndex.Index creates the appender rather than resting on an unverified assumption
-    // about how an appender behaves relative to a later delete.
-    public void DeletePriorDocuments(string plugin, string origin)
-    {
-        DeleteExistingForOrigin("record_type_failure", plugin, origin);
-        DeleteExistingForOrigin("records", plugin, origin);
-    }
-
-    // ADR-0005, from the one stream that carries the documents. The appender is opened once per
-    // Index() call because `records` spans every type. DeletePriorDocuments must run first.
+    // ADR-0005, from the one stream that carries the documents. A DuckDB appender writes its rows
+    // when disposed, so each is disposed here, inside the caller's transaction.
     public IndexTiming IndexPlugin(
         IPluginDocuments documents, string plugin, string origin,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, DuckDBAppender documentAppender)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
+        DeleteExistingForOrigin("records", plugin, origin);
+        using var documentAppender = _connection.CreateAppender("mirror", "records");
+
         var refs = new List<FormReferenceRow>();
         var lookupRows = new List<(string FormKey, string RecordType, string? EditorId)>();
         var containerChildRows = new List<ContainerChildRow>();
