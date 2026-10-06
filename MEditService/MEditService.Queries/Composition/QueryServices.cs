@@ -10,6 +10,7 @@ public static class QueryServices
         services.AddSingleton<MalformedPluginQueryService>();
         services.AddSingleton<PluginDependantsQueryService>();
         services.AddSingleton<PluginExtensionsQueryService>();
+        services.AddSingleton<PluginProblemQueryService>();
         services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
         services.AddSingleton<ContainerChildQueryService>();
         services.AddSingleton<ChildRecordQueryService>();
