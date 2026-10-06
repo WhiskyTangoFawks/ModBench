@@ -335,6 +335,29 @@ public sealed class CopyAsDeepOverrideTests
     }
 
     [Fact]
+    public void AReplacingDeepCopyOfACellThatFailsToLand_PutsBackTheRefItTookOutOfThePersistentCell()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        var blocked = RelativeDocumentPathOfACellWrittenByADeepCopy(fixture.ExteriorCell.ToString());
+        Assert.True(fixture.CopyHandler.CopyAsOverride(fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin).Applied);
+        SourceEdits.Rewrite<Worldspace>(
+            TrackedTree.Repository(fixture.DestinationModFolder), fixture.DestinationPlugin,
+            new RecordIdentity(fixture.Worldspace.ToString(), "wrld", ContainerCopyFixture.WorldspaceEditorId),
+            GameRelease.Fallout4,
+            worldspace => worldspace.TopCell = new Cell(fixture.TopCell, Fallout4Release.Fallout4)
+            {
+                Temporary = { new PlacedObject(fixture.ExteriorTemporaryRef, Fallout4Release.Fallout4) { EditorID = "HeldInPersistentCell" } },
+            });
+        Directory.CreateDirectory(Path.Combine(fixture.DestinationModFolder, blocked + ".tmp"));
+
+        _ = Record.Exception(() => fixture.CopyHandler.CopyAsDeepOverride(
+            fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin, replace: true));
+
+        Assert.Contains(
+            fixture.ExteriorTemporaryRef.ToString(), fixture.Document(fixture.DestinationPlugin, fixture.Worldspace).Require().Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AReplacingDeepCopyOfAnInteriorCell_HoldsARefOnceWhenTheDestinationHasItInTheOtherGroup()
     {
         using var fixture = ContainerCopyFixture.Create();

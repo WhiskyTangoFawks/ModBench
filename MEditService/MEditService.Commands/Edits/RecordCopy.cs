@@ -316,17 +316,17 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
     internal static RecordEditResult LandWithoutHeldElsewhere(
         Destination destination, HeldElsewhere elsewhere, Func<RecordEditResult> land)
     {
-        foreach (var record in elsewhere.Records)
-        {
-            if (destination.Repository.Remove(destination.Plugin, record) == SourceRemoval.OwnerDoesNotCarryIt)
-            {
-                throw new InvalidOperationException(
-                    $"{destination.Plugin.Name}'s document holding {record.FormKey} does not carry it.");
-            }
-        }
-
         try
         {
+            foreach (var record in elsewhere.Records)
+            {
+                if (destination.Repository.Remove(destination.Plugin, record) == SourceRemoval.OwnerDoesNotCarryIt)
+                {
+                    throw new InvalidOperationException(
+                        $"{destination.Plugin.Name}'s document holding {record.FormKey} does not carry it.");
+                }
+            }
+
             var landed = land();
             if (!landed.Applied) PutBack(destination, elsewhere);
             return landed;
