@@ -11,7 +11,8 @@ const winners = (...entries: ConflictEntry[]): FileConflictLookup => {
 };
 
 describe('pluginSyncArgumentsOf', () => {
-  it('hands plugin sync the active profile, the plugins the instance provides, the Data folder and the plugins the game loads with no line', () => {
+  it('hands plugin sync the active profile, the plugins.txt lines read, the plugins the instance provides, the Data folder and the plugins the game loads with no line', () => {
+    const pluginLines = [{ name: 'Mine.esp', enabled: true }];
     const value = instanceValueFixture({
       activeProfile: 'Survival',
       gameName: 'Skyrim Special Edition',
@@ -25,8 +26,9 @@ describe('pluginSyncArgumentsOf', () => {
       }),
     });
 
-    expect(pluginSyncArgumentsOf(value)).toEqual({
+    expect(pluginSyncArgumentsOf({ ...value, pluginLines })).toEqual({
       profile: 'Survival',
+      lines: [{ name: 'Mine.esp', enabled: true }],
       provided: new Map([['mine.esp', 'Mine.esp']]),
       inData: { kind: 'listed', names: new Set(['skyrim.esm']) },
       loadedWithNoLine: ['Skyrim.esm'],

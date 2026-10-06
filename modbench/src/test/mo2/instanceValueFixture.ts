@@ -30,5 +30,5 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map() },
   };
   const value = { ...base, ...overrides };
-  return { ...value, modSyncArguments: modSyncArgumentsOf(value), pluginSyncArguments: pluginSyncArgumentsOf(value), ...overrides };
+  return { ...value, modSyncArguments: modSyncArgumentsOf(value), pluginSyncArguments: pluginSyncArgumentsOf({ ...value, pluginLines: [] }), ...overrides };
 }
