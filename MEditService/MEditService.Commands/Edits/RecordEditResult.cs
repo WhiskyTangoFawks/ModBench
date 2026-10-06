@@ -96,6 +96,10 @@ public enum RecordEditRefusal
     /// then supplies the replace Option; the way out is confirming the replacement.</summary>
     DestinationHoldsRecord,
 
+    /// <summary>The slot a copied child takes holds another record, as a worldspace's persistent cell
+    /// does; the way out is outside the copy.</summary>
+    ChildSlotHeldByAnotherRecord,
+
     /// <summary>A plugin cannot lose its header: the whole-mod door needs it, and its FormKey is synthetic.</summary>
     HeaderDeleteNotSupported,
 
