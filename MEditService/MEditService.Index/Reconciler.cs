@@ -418,21 +418,11 @@ internal sealed class Reconciler(
             token.ThrowIfCancellationRequested();
 
             PluginMetadata? metadata = null;
-            try
+            ReadOne(scope, plugin, state =>
             {
-                scope.Failed.Read(plugin, state =>
-                {
-                    metadata = held.Open(plugin, snapshot.RegistrationOf(plugin.Key));
-                    return metadata is not null && RegisterOrIndex(scope, metadata, state, token);
-                });
-            }
-            catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
-            {
-                // A single plugin with malformed record data must not abort the whole reconcile. Index()
-                // runs in its own DuckDB transaction, so the rollback on throw leaves no partial rows.
-                logger.LogWarning(ex, "Failed to index {Plugin}; its records will not be queryable", plugin.Name);
-                FailRead(scope, plugin.Key, PluginLoadFailure.ReasonFor(ex));
-            }
+                metadata = held.Open(plugin, snapshot.RegistrationOf(plugin.Key));
+                return metadata is not null && RegisterOrIndex(scope, metadata, state, token);
+            });
             if (metadata is null) continue;
             // A plugin is browsable the moment it lands, so the rows the filter matches in it must
             // answer then too, not only after the whole set (plugins.md, Order and view state).
@@ -482,17 +472,22 @@ internal sealed class Reconciler(
                     "{Plugin} ({Origin}) now reads from {Truth}; re-deriving it", plugin.Name, plugin.Origin,
                     holdsTree ? "its source tree" : "its binary");
             }
-            try
-            {
-                scope.Failed.Read(plugin, _ => IndexOnePlugin(scope, metadata, holdsTree, token));
-            }
-            catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
-            {
-                // plugins.md, A row, Plugin: one plugin that cannot be read is that row's "Failed to
-                // read", never the whole index's failure.
-                logger.LogWarning(ex, "Failed to re-derive {Plugin} ({Origin})", plugin.Name, plugin.Origin);
-                FailRead(scope, plugin.Key, PluginLoadFailure.ReasonFor(ex));
-            }
+            ReadOne(scope, plugin, _ => IndexOnePlugin(scope, metadata, holdsTree, token));
+        }
+    }
+
+    // plugins.md, A row, Plugin: one plugin that cannot be read is that row's "Failed to read", never
+    // the whole index's failure.
+    private void ReadOne(OpenScope scope, RegisteredPlugin plugin, Func<ReadState, bool> read)
+    {
+        try
+        {
+            scope.Failed.Read(plugin, read);
+        }
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        {
+            logger.LogWarning(ex, "Could not read {Plugin} ({Origin})", plugin.Name, plugin.Origin);
+            FailRead(scope, plugin.Key, PluginLoadFailure.ReasonFor(ex));
         }
     }
 
@@ -514,11 +509,10 @@ internal sealed class Reconciler(
                 logger.LogWarning("Validating {Plugin} at load: {Failure}", plugin.Name, failure);
             return !report.NeedsRebuild;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
-            or NotSupportedException)
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
-            // A tree that cannot be read is no evidence the rows are still true, and the ingest below
-            // reports its own failure properly (a source read is never degraded to the binary silently).
+            // A validation that failed is no evidence the rows are still true: the whole read below
+            // re-derives them and reports its own failure.
             logger.LogWarning(ex, "Could not validate {Plugin}'s source tree at load; re-deriving it", plugin.Name);
             return false;
         }

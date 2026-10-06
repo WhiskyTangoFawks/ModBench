@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Ports;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -247,6 +248,31 @@ public sealed class FailedReadStateTests : IDisposable
         index.NextSnapshotUntil(() => !Failed(index), "the binary opened again");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+    }
+
+    [Fact]
+    public void AWarmValidationThatThrows_ReadsThePluginWhole()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        Reconciled().Dispose();
+        var document = NpcDocument;
+        File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{NpcEditorId}\"", "\"EditedNpc\"", StringComparison.Ordinal));
+
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, loggerFactory: _loggerFactory, notifications: new RowsChangedFaultsOnce());
+
+        Assert.False(Failed(index));
+        Assert.Contains(index.RequireReads().GetDocuments(Plugin.KeyOf()), d => d.EditorId == "EditedNpc");
+    }
+
+    private sealed class RowsChangedFaultsOnce : INotificationPublisher
+    {
+        private int _faulted;
+
+        public void Publish(INotification notification)
+        {
+            if (notification is RowsChangedNotification && Interlocked.Exchange(ref _faulted, 1) == 0)
+                throw new TimeoutException("the stream could not take the push");
+        }
     }
 
     private sealed class HeldAtFirstRead : DelegatingPluginAdapter
