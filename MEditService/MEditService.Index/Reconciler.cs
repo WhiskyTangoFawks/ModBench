@@ -487,19 +487,18 @@ internal sealed class Reconciler(
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
             logger.LogWarning(ex, "Could not read {Plugin} ({Origin})", plugin.Name, plugin.Origin);
-            FailRead(scope, plugin.Key, ReadFailure(ex, scope.Index.DerivationOf(plugin.Key)));
+            FailRead(scope, plugin.Key, ReadFailure("this plugin", ex, scope.Index.DerivationOf(plugin.Key)));
         }
     }
 
     // common.md, Errors (ADR-0019): the rows a failed read leaves stand, and the reason says whose they are.
-    private static string ReadFailure(Exception ex, DerivedFrom? rowsFrom) => rowsFrom switch
-    {
-        DerivedFrom.Binary => $"Could not read this plugin ({PluginLoadFailure.ReasonFor(ex)}). Still showing what was " +
-            "last read from its compiled binary.",
-        DerivedFrom.SourceTree => $"Could not read this plugin ({PluginLoadFailure.ReasonFor(ex)}). Still showing what was " +
-            "last read from its source tree.",
-        _ => PluginLoadFailure.ReasonFor(ex),
-    };
+    private static string ReadFailure(string what, Exception ex, DerivedFrom? rowsFrom) =>
+        $"Could not read {what} ({PluginLoadFailure.ReasonFor(ex)})." + rowsFrom switch
+        {
+            DerivedFrom.Binary => " Still showing what was last read from its compiled binary.",
+            DerivedFrom.SourceTree => " Still showing what was last read from its source tree.",
+            _ => "",
+        };
 
     // Registers first: the index's reads are scoped by registration, so validate would otherwise
     // compare an empty row set against a full tree. False falls through to a full index.
@@ -606,7 +605,7 @@ internal sealed class Reconciler(
             // ways. A cancel is no source failure.
             logger.LogWarning(ex,
                 "Could not ingest {Plugin} from its source tree; falling back to the binary", plugin.Name);
-            scope.Held.SetFailure(plugin.Key, ReadFailure(ex, DerivedFrom.Binary));
+            scope.Held.SetFailure(plugin.Key, ReadFailure("this plugin's source tree", ex, DerivedFrom.Binary));
         }
 
         IndexFromBinary(scope, plugin);
@@ -833,7 +832,7 @@ internal sealed class Reconciler(
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Could not re-ingest {Plugin} from its source tree", metadata.Name);
-                FailRead(scope, key, ReadFailure(ex, index.DerivationOf(key)));
+                FailRead(scope, key, ReadFailure("this plugin's source tree", ex, index.DerivationOf(key)));
                 throw;
             }
 
@@ -876,7 +875,7 @@ internal sealed class Reconciler(
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            FailRead(scope, metadata.Key, ReadFailure(ex, index.DerivationOf(metadata.Key)));
+            FailRead(scope, metadata.Key, ReadFailure("this plugin's binary", ex, index.DerivationOf(metadata.Key)));
             throw;
         }
         if (scope.Held.ClearFailure(metadata.Key)) PublishStatus();
