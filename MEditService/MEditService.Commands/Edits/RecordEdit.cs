@@ -16,7 +16,8 @@ internal sealed class RecordEdit(WriteTargets targets, RecordTextCodec codec, Sc
     private readonly FormKeyChange _formKeyChange = new(codec, logger);
     private readonly CellLanding _cellLanding = new(targets, codec, schemaReflector, logger);
 
-    /// <summary><paramref name="given"/> stands in for the file of the document carrying the record.</summary>
+    /// <summary><paramref name="given"/> stands in for the file of the document carrying the record. Every path
+    /// answered is absolute, under the mod folder of the tree the plan read.</summary>
     internal RecordEditChanges Plan(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given) =>
         WriteFailure.Refused<RecordEditChanges>(
             () => EditSource(plugin, formKey, envelope, given), refused => refused, $"Could not read the source of {formKey}", logger);
@@ -25,6 +26,13 @@ internal sealed class RecordEdit(WriteTargets targets, RecordTextCodec codec, Sc
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
         if (!targets.TryResolveEditTarget(plugin, formKey, given, out var editTarget, out var document, out var blocked)) return blocked;
+        var (outcome, changes) = EditDocument(plugin, formKey, envelope, editTarget, document);
+        return new RecordEditChanges(outcome, changes.Under(editTarget.Repository));
+    }
+
+    private RecordEditChanges EditDocument(
+        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteTargets.EditTarget editTarget, SourceDocument document)
+    {
         var (release, identity, repository) = editTarget;
         var schemas = schemaReflector.GetSchemas(release);
         if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, document, envelope.Value);

@@ -29,7 +29,7 @@ public static class CommandHandlers
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(RecordEdit))));
 
-        services.AddSingleton(sp => new EditRecordChangesHandler(sp.GetRequiredService<RecordEdit>(), sp.GetRequiredService<LoadOrderHolder>()));
+        services.AddSingleton(sp => new EditRecordChangesHandler(sp.GetRequiredService<RecordEdit>()));
 
         services.AddSingleton(sp => new DeleteRecordHandler(
             sp.GetRequiredService<WriteTargets>(),
