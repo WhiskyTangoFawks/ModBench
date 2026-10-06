@@ -63,7 +63,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
 
     private static string Root => PluginSourceRoot.For(PluginName);
 
-    private string CellPath => Path.Combine(Root, "Cells", "0", "0", Leaf(_cell), "RecordData.json");
+    private string CellPath => PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", Leaf(_cell)));
 
     private string QuestPath => Path.Combine(Root, "Quests", Leaf(_quest) + ".json");
 

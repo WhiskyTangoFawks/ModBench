@@ -274,8 +274,10 @@ public sealed class SourceTransactionTests : IDisposable
     public void Rollback_PutsBackAContainerWhoseRekeyFailedAfterItsMove()
     {
         Seed(Fk("000900"), "wrld", "Home");
+        var directory = ContainerDirectory(Fk("000900"), "wrld", "Home");
+        var movedDirectory = Path.Combine(Path.GetDirectoryName(directory).Require(), Path.GetFileName(directory).Replace("000900", "000901", StringComparison.Ordinal));
         BlockTheWriteThenRenameWithADirectoryAtTheDestinationsTmpName(
-            Path.Combine(ContainerDirectory(Fk("000900"), "wrld", "Home"), "RecordData.json"));
+            Path.Combine(directory, Path.GetFileName(PluginSourceRoot.ContainerDocument(movedDirectory))));
         var before = TreeSnapshot.Of(_root);
 
         var transaction = new SourceTransaction();

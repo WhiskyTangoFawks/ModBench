@@ -14,12 +14,7 @@ namespace MEditService.SourceAdapter;
 /// a flat record. A null <see cref="SourceUnit.OwnerRecordType"/> means the document names its own
 /// type.</summary>
 internal readonly record struct SourceUnit(
-    string FullPath, string RelativePath, string OwnerFormKey, string? OwnerRecordType, bool IsEmbedded)
-{
-    /// <summary>A container's own field file, not a flat file.</summary>
-    internal bool IsDirectoryPerRecord =>
-        Path.GetFileName(FullPath).Equals(SourceRepositoryLayout.RecordDataFileName, StringComparison.Ordinal);
-}
+    string FullPath, string RelativePath, string OwnerFormKey, string? OwnerRecordType, bool IsEmbedded, bool IsDirectoryPerRecord);
 
 /// <summary>Which document in the tree holds a record, and what that document says. The listing memo
 /// and the tree scans are this locator's own per-operation state, and nothing outside it holds either.</summary>
@@ -193,8 +188,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         }
     }
 
-    // Every entry whose leaf name carries the FormKey, as the path of the document it stands for: a
-    // directory holds its record in RecordData.json, a file is the record.
+    // Every entry whose leaf name carries the FormKey, as the path of the document it stands for.
     private IEnumerable<string> DocumentsNaming(string sourceRoot, string spelled)
     {
         // Computed once rather than per entry: FilesafeFormKey reparses the FormKey on every call.
@@ -204,9 +198,15 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             var leaf = Path.GetFileName(entry);
             if (!SourceRepositoryLayout.NameCarries(leaf, filesafe) && !SourceRepositoryLayout.NameCarries(leaf, filesafe + SourceRepositoryLayout.JsonSuffix)) continue;
 
-            yield return Directory.Exists(entry) ? Path.Combine(entry, SourceRepositoryLayout.RecordDataFileName) : entry;
+            if (!Directory.Exists(entry) && IsAContainersDocument(entry)) continue;
+
+            yield return Directory.Exists(entry) ? SourceRepositoryLayout.ContainerDocumentHeldBy(entry) : entry;
         }
     }
+
+    private bool IsAContainersDocument(string file) =>
+        SourceRepositoryLayout.InAContainerGroup(Path.GetRelativePath(_modFolder, file), _release)
+        && SourceRepositoryLayout.ContainerDocumentHeldBy(PathShape.DirectoryOf(file)) == file;
 
     // A record with a document of its own, found as Locate finds it. A name the text contradicts is
     // stale, and the record it claims is elsewhere or gone.
@@ -320,7 +320,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         if (path.UnderGroupBlockLevels) return new CellPlacement(null, null, null, null, null, IsInterior: true);
         if (!path.UnderWorldspaceBlockLevels) return null;
 
-        var worldspaceDocument = Path.Combine(_modFolder, path.WorldspaceDirectory, SourceRepositoryLayout.RecordDataFileName);
+        var worldspaceDocument = SourceRepositoryLayout.ContainerDocumentHeldBy(Path.Combine(_modFolder, path.WorldspaceDirectory));
         var worldspace = DocumentText.FormKeyDeclaredBy(worldspaceDocument, plugin.Name)
             ?? throw new UnreadableSourceDocumentException(worldspaceDocument, "it declares no FormKey, so the worldspace its exterior cells sit in is unknown");
 
@@ -338,7 +338,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             PathShape.DirectoryOf(worldspaceDocument),
             SourceRepositoryLayout.BlockLevelName(placement.BlockX, placement.BlockY), SourceRepositoryLayout.BlockLevelName(placement.SubX, placement.SubY));
         if (!Directory.Exists(subBlock)) return null;
-        foreach (var document in Directory.EnumerateDirectories(subBlock).Select(cell => Path.Combine(cell, SourceRepositoryLayout.RecordDataFileName)))
+        foreach (var document in Directory.EnumerateDirectories(subBlock).Select(SourceRepositoryLayout.ContainerDocumentHeldBy))
         {
             if (!File.Exists(document)) continue;
             var text = File.ReadAllText(document);
@@ -369,7 +369,8 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     }
 
     internal SourceUnit Unit(string fullPath, string ownerFormKey, string? ownerRecordType, bool isEmbedded) =>
-        new(fullPath, Path.GetRelativePath(_modFolder, fullPath), ownerFormKey, ownerRecordType, isEmbedded);
+        new(fullPath, Path.GetRelativePath(_modFolder, fullPath), ownerFormKey, ownerRecordType, isEmbedded,
+            SourceRepositoryLayout.InAContainerGroup(Path.GetRelativePath(_modFolder, fullPath), _release));
 
     // Matches the FormKey alone, never the EditorID, which a caller may hold stale mid-rename. Every
     // directory-per-record group is searched, since a cell's directory sits in its own group's blocks

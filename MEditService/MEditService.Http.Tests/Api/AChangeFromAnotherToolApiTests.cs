@@ -189,7 +189,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"")).Require();
         var copy = OtherTool.Beside(original, "CopiedCell - 000950_Shared.esp");
         OtherTool.CopiesASourceDirectory(original, Path.GetFileName(copy));
-        var document = Path.Combine(copy, "RecordData.json");
+        var document = Directory.GetFiles(copy).Single();
         var text = File.ReadAllText(document);
         var at = text.IndexOf(cell, StringComparison.Ordinal);
         File.WriteAllText(document, text[..at] + "000950:Shared.esp" + text[(at + cell.Length)..]);

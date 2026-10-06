@@ -79,13 +79,13 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     private static string Root => PluginSourceRoot.For(PluginName);
 
     private string InteriorCellPath =>
-        Path.Combine(Root, "Cells", "0", "0", Leaf(_interiorCell), "RecordData.json");
+        PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", Leaf(_interiorCell)));
 
     private string WorldspacePath =>
-        Path.Combine(Root, "Worldspaces", Leaf(_worldspace), "RecordData.json");
+        PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Worldspaces", Leaf(_worldspace)));
 
     private string ExteriorCellPath =>
-        Path.Combine(Root, "Worldspaces", Leaf(_worldspace), "0, 0", "0, 0", Leaf(_exteriorCell), "RecordData.json");
+        PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Worldspaces", Leaf(_worldspace), "0, 0", "0, 0", Leaf(_exteriorCell)));
 
     private string QuestPath => Path.Combine(Root, "Quests", Leaf(_quest) + ".json");
 
@@ -571,7 +571,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         var cell = new Cell(_mod) { EditorID = "AddedCell" };
         cell.Temporary.Add(added);
-        var path = FullPath(Path.Combine(Root, "Cells", "0", "0", Leaf(cell), "RecordData.json"));
+        var path = FullPath(PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", Leaf(cell))));
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? throw new InvalidOperationException($"Expected '{path}' to have a parent directory."));
         File.WriteAllBytes(path, Serialize(cell));
 
@@ -620,7 +620,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Directory.Move(Path.GetDirectoryName(FullPath(InteriorCellPath)) ?? throw new InvalidOperationException("Expected the interior cell's document to sit in its own directory."), FullPath(moved));
 
         Assert.Equal(
-            Path.Combine(moved, "RecordData.json"),
+            PluginSourceRoot.ContainerDocument(moved),
             Repository.RelativePathOf(Plugin, Identity(_persistentRef, "refr")));
     }
 
