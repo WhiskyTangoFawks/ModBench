@@ -400,6 +400,27 @@ describe('an untracked copy\'s tab', () => {
   });
 });
 
+describe('a child record\'s tab', () => {
+  it('shows the child\'s record, not its container\'s, titled with the child\'s name once its read is answered', async () => {
+    const PLACED = '000803:A.esp';
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    client.setQueryAnswer('getComparison', comparisonOf(PLACED, [{ plugin: 'A.esp', isWinner: true, editorId: 'SharedRef' }]));
+    client.setQueryAnswer('getPlugins', []);
+    const { openDocument } = makeEditor(client);
+    const uri = { scheme: 'modbench-child-record', path: '/mods/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000803%3AA.esp&name=A.esp&origin=ModA' };
+
+    const tab = await openDocument(uri);
+    expect(pageGlobal(tab, 'mEditFormKey')).toBe(PLACED);
+    expect(tab.title).toBe(PLACED);
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED });
+    await settle();
+
+    expect(tab.title).toBe('SharedRef');
+    expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
+  });
+});
+
 describe('the Editor disposed', () => {
   it('lets go of what it registered once, however often it is disposed', () => {
     const { editor } = makeEditor();

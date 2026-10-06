@@ -23,9 +23,9 @@ import type { AskQuestion } from '../ports/dialog';
 import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE, RECORD_FILE_VIEW_TYPE } from './recordUri';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
-import {
-  RENDERED_DOCUMENT_SCHEME, RenderedDocuments, holdsNoCopy, renderedCopyOf, renderedDocumentUri,
-} from './renderedDocument';
+import { RENDERED_DOCUMENT_SCHEME, RenderedDocuments, renderedDocumentUri } from './renderedDocument';
+import { CHILD_RECORD_SCHEME, ChildRecordDocuments, childRecordUri } from './childRecordDocument';
+import { copyOf, holdsNoCopy } from './recordCopy';
 import { errorMessage } from '../ports/errorMessage';
 
 export interface EditorCommandDeps {
@@ -105,8 +105,8 @@ interface RecordFileEditorProviderDeps extends RecordEditorProviderDeps {
   channel: Pick<vscode.LogOutputChannel, 'warn'>;
 }
 
-// The grid as VS Code's editor for a record's file or rendered document, so the tab carries its
-// name. A file's tab restored before mEdit holds the load order asks again on each load-order status.
+// The grid as VS Code's editor for a record's file, a child's document or a rendered document, so
+// the tab carries its name. A file's tab restored before mEdit holds the load order asks again on each load-order status.
 class RecordFileEditorProvider implements vscode.CustomTextEditorProvider {
   private readonly unread = new Map<vscode.WebviewPanel, () => Promise<void>>();
 
@@ -114,7 +114,14 @@ class RecordFileEditorProvider implements vscode.CustomTextEditorProvider {
 
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
     if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
-      showRecord(this.deps, panel, renderedCopyOf(document.uri).formKey, () => undefined);
+      showRecord(this.deps, panel, copyOf(document.uri).formKey, () => undefined);
+      return;
+    }
+    if (document.uri.scheme === CHILD_RECORD_SCHEME) {
+      // The file is the container's, so its name is not the child's.
+      const { formKey } = copyOf(document.uri);
+      panel.title = recordTitle(formKey, undefined);
+      showRecord(this.deps, panel, formKey, (title) => { panel.title = title; });
       return;
     }
     const { fsPath } = document.uri;
@@ -205,6 +212,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, editsInFlight) },
     extendedFields,
     new RenderedDocuments(meditClient),
+    new ChildRecordDocuments(meditClient),
     { dispose: () => { loadOrderStatusTracker.dispose(); } },
     vscode.window.registerCustomEditorProvider(RECORD_EDITOR_VIEW_TYPE, new RecordEditorProvider(providerDeps), keepsItsPlace),
     vscode.window.registerCustomEditorProvider(RECORD_FILE_VIEW_TYPE, recordFileEditorProvider, keepsItsPlace),
@@ -254,7 +262,7 @@ async function openRecordTab(
 }
 
 // A tracked copy opens as its own file and an untracked one as mEdit's rendering of it. A copy
-// carried in another record's file keeps the record's tab.
+// carried in another record's file opens as a child's document of that file.
 async function tabOf(client: OpenClient, { formKey, plugin }: RecordToOpen): Promise<[vscode.Uri, string]> {
   if (!plugin) return [recordUri(formKey), RECORD_EDITOR_VIEW_TYPE];
   const file = await client.getRecordFile(plugin, formKey);
@@ -265,7 +273,7 @@ async function tabOf(client: OpenClient, { formKey, plugin }: RecordToOpen): Pro
     return [renderedDocumentUri({ formKey, plugin }, rendered.fileName), RECORD_FILE_VIEW_TYPE];
   }
   if ((await client.getRecordOfFile(file.path)).formKey === formKey) return [vscode.Uri.file(file.path), RECORD_FILE_VIEW_TYPE];
-  return [recordUri(formKey), RECORD_EDITOR_VIEW_TYPE];
+  return [childRecordUri({ formKey, plugin }, file.path), RECORD_FILE_VIEW_TYPE];
 }
 
 // `ViewColumn.Beside` resolves once: the first tab opened becomes active, so a second Beside call
