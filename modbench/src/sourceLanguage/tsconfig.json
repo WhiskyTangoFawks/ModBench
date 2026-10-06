@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/sourceLanguage",
+    // A language feature is a driving adapter: it answers VS Code's own hover, definition and
+    // completion requests, so the extension host is its whole reason to exist.
+    "types": ["node", "vscode"]
+  },
+  "references": [
+    { "path": "../client" },
+    { "path": "../instanceAdapter" },
+    { "path": "../wire" }
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

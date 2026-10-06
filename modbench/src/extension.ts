@@ -10,6 +10,7 @@ import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, type Editor } from './editor';
+import { createSourceLanguage } from './sourceLanguage';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand } from './drivingLib/copyValue';
 import { reportFailure } from './drivingLib/reportFailure';
@@ -373,6 +374,7 @@ export function activate(context: vscode.ExtensionContext): void {
     views,
     { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
     editor,
+    createSourceLanguage({ client: meditClient }),
     ...registerPluginRowCommands(pluginRowDeps),
     ...registerFilterCommands({
       client: meditClient, treeProvider,
