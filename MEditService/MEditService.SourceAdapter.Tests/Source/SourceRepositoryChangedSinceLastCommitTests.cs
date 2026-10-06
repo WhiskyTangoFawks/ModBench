@@ -128,14 +128,14 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     }
 
     [Fact]
-    public void AChangedFileThatCannotBeRead_Throws_NeverReadsAsADeletion()
+    public void AChangedFileAnotherProcessHolds_ThrowsTheHoldUnwrapped_NeverReadsAsADeletionOrAnUnreadableDocument()
     {
         var repository = Tracked();
         var path = Path.Combine(_modFolder, NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk);
         File.WriteAllText(path, EditedBody);
         using var held = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
 
-        Assert.Throws<UnreadableSourceDocumentException>(() => ChangesIn(repository));
+        Assert.IsType<IOException>(Record.Exception(() => ChangesIn(repository)));
     }
 
     [Fact]
