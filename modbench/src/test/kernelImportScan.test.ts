@@ -10,7 +10,7 @@ const boxRoot = (box: string): string => join(SRC, box);
 
 const FS_SPECIFIERS = new Set(['node:fs', 'node:fs/promises', 'fs', 'fs/promises']);
 
-const PACKAGE_IMPORTERS = new Set(['client']);
+const PACKAGE_IMPORTERS = new Set(['client', 'sourceLanguage']);
 
 const ADAPTER_WATCH = join(boxRoot('instanceAdapter'), 'mo2Watch.ts');
 
@@ -110,8 +110,9 @@ describe('what a box may import beyond its reference list, which the build holds
     }
   });
 
-  it('allows a package only in the client', () => {
+  it('allows a package only in the client and the Source language', () => {
     expect(isAllowedBoxSpecifier('openapi-fetch', join(boxRoot('client'), 'p.ts'), 'client')).toBe(true);
+    expect(isAllowedBoxSpecifier('jsonc-parser', join(boxRoot('sourceLanguage'), 'p.ts'), 'sourceLanguage')).toBe(true);
     expect(isAllowedBoxSpecifier('openapi-fetch', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
   });
 

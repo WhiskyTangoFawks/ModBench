@@ -5,8 +5,9 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, afterEach, describe, it } from 'mocha';
-import type { PluginMetadata } from '../../client';
+import type { CompareResult, PluginMetadata } from '../../client';
 import { present } from '../../ports/present';
+import { comparisonOf } from '../comparison';
 import { isRecord, requires } from '../manifest';
 
 const MANIFEST: unknown = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'));
@@ -203,10 +204,23 @@ function createMockBackend(): http.Server {
       res.end(loadOrderHeld ? JSON.stringify(MOCK_RECORD_TYPES) : 'No load order has been received.');
       return;
     }
+    const comparedFormKey = /^\/records\/([^/?]+)\/compare$/.exec(url)?.[1];
+    if (comparedFormKey !== undefined) {
+      const answer = MOCK_COMPARISONS.get(decodeURIComponent(comparedFormKey));
+      res.writeHead(answer ? 200 : 404, { 'Content-Type': 'application/json' });
+      res.end(answer ? JSON.stringify(answer) : undefined);
+      return;
+    }
     res.writeHead(404);
     res.end();
   });
 }
+
+const HELD_FORM_KEY = '000801:Held.esp';
+const MOCK_COMPARISONS = new Map<string, CompareResult>([[HELD_FORM_KEY, comparisonOf(HELD_FORM_KEY, [
+  { plugin: 'Held.esp', isWinner: false, editorId: 'OldGun' },
+  { plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun' },
+])]]);
 
 before(async function () {
   this.timeout(15000);
@@ -702,6 +716,90 @@ describe('Refresh rebuilds the index, then re-reads the instance', () => {
     } finally {
       Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
     }
+  });
+});
+
+const markdownText = (content: vscode.Hover['contents'][number]): string => (content instanceof vscode.MarkdownString ? content.value : '');
+
+describe('A FormKey in plugin source', () => {
+  const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
+  let folder = '';
+  let document: vscode.TextDocument;
+
+  before(async () => {
+    folder = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-plugin-source-'));
+    const file = path.join(folder, 'plugin-source', 'Held.esp', 'Gun.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY, Name: 'Rusty Gun' }, null, 2));
+    document = await vscode.workspace.openTextDocument(file);
+  });
+  after(() => fs.rmSync(folder, { recursive: true, force: true }));
+
+  const positionIn = (text: string) => document.positionAt(document.getText().indexOf(text) + 1);
+  const hoverTextsIn = async (doc: vscode.TextDocument, text: string): Promise<string[]> => {
+    const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+      'vscode.executeHoverProvider', doc.uri, doc.positionAt(doc.getText().indexOf(text) + 1));
+    return hovers.flatMap((hover) => hover.contents.map(markdownText));
+  };
+  const hoverTexts = (text: string) => hoverTextsIn(document, text);
+  const heldHover = [`\`NewGun [${HELD_FORM_KEY}]\`\n\nWeapon\n\nWinner: Patch.esp`];
+  const activated = () => waitFor('the FormKey hover', async () => {
+    const shown = await hoverTexts(HELD_FORM_KEY);
+    return shown.length > 0 && shown;
+  });
+  const documentAt = async (...segments: string[]) => {
+    const file = path.join(folder, ...segments);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY }));
+    return vscode.workspace.openTextDocument(file);
+  };
+
+  it('shows its record on hover: EditorID, FormKey, record type and the winning plugin', async () => {
+    assert.deepStrictEqual(await activated(), heldHover);
+  });
+
+  it('shows no hover for a FormKey no active plugin holds', async () => {
+    await activated();
+    const asked = requestLog.length;
+    const texts = await hoverTexts(NOT_HELD_FORM_KEY);
+
+    assert.deepStrictEqual(texts, []);
+    assert.ok(requestLog.slice(asked).some((line) => line.includes(encodeURIComponent(NOT_HELD_FORM_KEY))), 'sanity: mEdit was asked');
+  });
+
+  it('shows its record in a plugin source folder the adapter names in another case', async () => {
+    await activated();
+    const other = await documentAt('Mods', 'Plugin-Source', 'Held.esp', 'Gun.json');
+
+    assert.deepStrictEqual(await hoverTextsIn(other, '000801'), heldHover);
+  });
+
+  it('shows no hover in JSON outside the plugin source folder', async () => {
+    await activated();
+    const other = await documentAt('Other.json');
+
+    assert.deepStrictEqual(await hoverTextsIn(other, '000801'), []);
+  });
+
+  it('shows no hover for text that is not a FormKey', async () => {
+    await activated();
+    assert.deepStrictEqual(await hoverTexts('Rusty'), []);
+  });
+
+  it('offers no quick fix', async () => {
+    const position = positionIn(HELD_FORM_KEY);
+    const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+      'vscode.executeCodeActionProvider', document.uri, new vscode.Range(position, position), vscode.CodeActionKind.QuickFix.value);
+
+    assert.deepStrictEqual(actions, []);
+  });
+
+  it('offers no Rename Symbol', async () => {
+    const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit | undefined>(
+      'vscode.executeDocumentRenameProvider', document.uri, positionIn(HELD_FORM_KEY), '000802:Held.esp').then(
+      (renamed) => renamed, () => undefined);
+
+    assert.strictEqual(edit?.size ?? 0, 0);
   });
 });
 
