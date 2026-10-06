@@ -465,7 +465,7 @@ export interface paths {
         put?: never;
         /**
          * The changes an edit of a record makes to plugin source, writing nothing.
-         * @description Given the edit and the current text of the document carrying the record, the text each document the edit changes or creates holds afterwards, and each file or folder it moves. Moves come first, and each document's path is where it stands once moved, relative to the mod folder. Any other document the edit reads is read from disk. A refusal is the one the edit itself gives.
+         * @description Given the edit and the current text of the document carrying the record, the text each document the edit changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each against the tree the one before it left, and each document's path is where it stands once moved, relative to the mod folder. Any other document the edit reads is read from disk. A refusal is the one the edit itself gives.
          */
         post: operations["EditRecordChanges"];
         delete?: never;

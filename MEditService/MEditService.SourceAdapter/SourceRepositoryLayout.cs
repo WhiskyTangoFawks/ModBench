@@ -120,9 +120,8 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
             .Select(directory => ContainerDocumentAmong(directory.Key, directory))
             .ToHashSet(StringComparer.Ordinal);
 
-    /// <summary>The document a container's directory holds, among the record-carrying files in it: the one its
-    /// leaf names, else the only one, so a directory or file renamed outside Modbench still reads. Several and
-    /// none named for it is a tree nothing can read one record from, and throws.</summary>
+    /// <summary>The document a container's directory holds: the one its leaf names, else the only one. Several,
+    /// none so named, throw: no one record's document can be told.</summary>
     internal static string ContainerDocumentAmong(string directory, IEnumerable<string> documents)
     {
         var named = ContainerDocumentIn(directory);
