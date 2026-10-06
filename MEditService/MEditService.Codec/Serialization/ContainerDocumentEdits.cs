@@ -53,10 +53,9 @@ public static class ContainerDocumentEdits
         RecordTextCodec codec, string text, GameRelease release, string? recordType) =>
         [.. DescendantsOf(codec.Deserialize(text, release, recordType)).Select(child => child.FormKey.ToString())];
 
-    /// <summary>The destination's own fields, each source child record overwriting the one held anywhere
-    /// in its subtree or in <paramref name="carriedTexts"/>, or added. Throws
-    /// <see cref="ChildSlotHeldByAnotherRecordException"/> when a single-valued slot holds another
-    /// record.</summary>
+    /// <summary>The destination's own fields, each source child record overwriting the one held in its
+    /// subtree or in <paramref name="carriedTexts"/>, or added. Throws
+    /// <see cref="ChildSlotHeldByAnotherRecordException"/> when a single slot holds another.</summary>
     public static string WithChildRecordsMerged(
         RecordTextCodec codec, string destinationText, string? destinationRecordType,
         string sourceText, string? sourceRecordType, GameRelease release,
