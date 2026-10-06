@@ -190,7 +190,7 @@ internal sealed class WorkingTreeOverlay
         {
             var root = document.RootElement;
             refs = PluginIngest.Rows(
-                _containers, root, schema, formKey, DocumentNodes.At(root, "EditorID")?.GetString(), recordType);
+                _containers, root, schema, formKey, DocumentNodes.EditorIdOf(root).EditorId, recordType);
             children = [.. _containers.ChildrenOf(recordType, root)];
         }
 

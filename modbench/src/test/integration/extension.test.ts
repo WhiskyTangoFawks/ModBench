@@ -77,11 +77,14 @@ function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' 
     ...over,
   };
 }
+const TRACKED_PLUGIN = 'Tracked.esp';
+const TRACKED_ORIGIN = 'TrackedMod';
 const MOCK_PLUGINS: MockPlugin[] = [
   mockPlugin({ name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', inLoadOrder: true }),
   mockPlugin({ name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', inLoadOrder: true }),
   mockPlugin({ name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', inLoadOrder: false }),
   mockPlugin({ name: 'Second.esp', path: '/data/Second.esp', origin: 'Data', inLoadOrder: true }),
+  mockPlugin({ name: TRACKED_PLUGIN, path: `/mods/${TRACKED_ORIGIN}/${TRACKED_PLUGIN}`, origin: TRACKED_ORIGIN, inLoadOrder: true, isTracked: true }),
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
@@ -298,6 +301,14 @@ function createMockBackend(): http.Server {
       ] : []));
       return;
     }
+    if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.get('plugin') === TRACKED_PLUGIN) {
+      const summary = (formKey: string, editorId: string) => ({ formKey, plugin: TRACKED_PLUGIN, loadOrderIndex: 4, isWinner: true, editorId,
+        origin: TRACKED_ORIGIN, workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false });
+      const items = [summary(TRACKED_FORM_KEY, 'TrackedGun'), summary(CHILD_FORM_KEY, 'TrackedRef')];
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ items, total: items.length }));
+      return;
+    }
     if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.has('search')) {
       const items = [{ formKey: HELD_FORM_KEY, plugin: 'Patch.esp', loadOrderIndex: 1, isWinner: true, editorId: 'NewGun', origin: 'Data',
         workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false }];
@@ -310,8 +321,6 @@ function createMockBackend(): http.Server {
   });
 }
 
-const TRACKED_PLUGIN = 'Tracked.esp';
-const TRACKED_ORIGIN = 'TrackedMod';
 const TRACKED_FORM_KEY = '000801:Tracked.esp';
 const CHILD_FORM_KEY = '000802:Tracked.esp';
 const HELD_FORM_KEY = '000801:Held.esp';
@@ -324,6 +333,10 @@ fs.writeFileSync(TRACKED_FILE, JSON.stringify({
   FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun', Model: HELD_FORM_KEY, Placed: [{ FormKey: CHILD_FORM_KEY, EditorID: 'TrackedRef', Base: HELD_FORM_KEY }],
 }));
 const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
+const copyQuery = (formKey: string, plugin: string, origin: string) => `formKey=${encodeURIComponent(formKey)}&name=${plugin}&origin=${origin}`;
+const trackedChildUri = `modbench-child-record:${vscode.Uri.file(TRACKED_FILE).path}?${copyQuery(CHILD_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN)}`;
+const renderedUri = (formKey: string) =>
+  `modbench-rendered:/Data/Fallout4.esm/${renderedName(formKey)}?${copyQuery(formKey, 'Fallout4.esm', 'Data')}`;
 
 
 const UNTRACKED_FORM_KEY = '000801:Untracked.esp';
@@ -1227,18 +1240,17 @@ describe('A FormKey in plugin source', () => {
     const [definition, ...more] = await definitionsOf(HELD_FORM_KEY);
 
     assert.deepStrictEqual(more, []);
-    assert.strictEqual(definition?.uri.toString(true), `modbench-rendered:/Data/Fallout4.esm/${renderedName(HELD_FORM_KEY)}?formKey=000801%3AHeld.esp&name=Fallout4.esm&origin=Data`);
+    assert.strictEqual(definition?.uri.toString(true), renderedUri(HELD_FORM_KEY));
     assert.strictEqual(await definedText(definition), `"FormKey":"${HELD_FORM_KEY}"`);
   });
 
   it('goes to the definition of a FormKey whose winning copy is a child record: its own tab on its owner\'s file, at its own FormKey member', async () => {
     await activated();
-    const childUri = `modbench-child-record:${vscode.Uri.file(TRACKED_FILE).path}?formKey=000802%3ATracked.esp&name=Tracked.esp&origin=TrackedMod`;
     for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN, keys: [CHILD_FORM_KEY] });
 
     const definition = await waitFor('the definition on the child\'s own member', async () => {
       const [found, ...more] = await definitionsOf(CHILD_FORM_KEY);
-      return more.length === 0 && found?.uri.toString(true) === childUri && await definedText(found) === `"FormKey":"${CHILD_FORM_KEY}"` && found;
+      return more.length === 0 && found?.uri.toString(true) === trackedChildUri && await definedText(found) === `"FormKey":"${CHILD_FORM_KEY}"` && found;
     });
 
     assert.strictEqual(definition.range.start.character, fs.readFileSync(TRACKED_FILE, 'utf8').indexOf(`"FormKey":"${CHILD_FORM_KEY}"`));
@@ -1254,11 +1266,9 @@ describe('A FormKey in plugin source', () => {
 
     assert.deepStrictEqual(entries.sort(), [
       [vscode.Uri.file(TRACKED_FILE).toString(true), tracked.indexOf(quoted)],
-      [`modbench-child-record:${vscode.Uri.file(TRACKED_FILE).path}?formKey=000802%3ATracked.esp&name=Tracked.esp&origin=TrackedMod`, tracked.lastIndexOf(quoted)],
-      [`modbench-rendered:/Data/Fallout4.esm/${renderedName(RENDERED_REFERRER_FORM_KEY)}?formKey=000803%3AFallout4.esm&name=Fallout4.esm&origin=Data`,
-        renderedText(RENDERED_REFERRER_FORM_KEY).indexOf(quoted)],
-      [`modbench-rendered:/Data/Fallout4.esm/${renderedName(HELD_FORM_KEY)}?formKey=000801%3AHeld.esp&name=Fallout4.esm&origin=Data`,
-        renderedText(HELD_FORM_KEY).lastIndexOf(quoted)],
+      [trackedChildUri, tracked.lastIndexOf(quoted)],
+      [renderedUri(RENDERED_REFERRER_FORM_KEY), renderedText(RENDERED_REFERRER_FORM_KEY).indexOf(quoted)],
+      [renderedUri(HELD_FORM_KEY), renderedText(HELD_FORM_KEY).lastIndexOf(quoted)],
     ].sort());
   });
 
@@ -1286,6 +1296,21 @@ describe('A FormKey in plugin source', () => {
 
     assert.deepStrictEqual(await definitionsOf(NOT_HELD_FORM_KEY), []);
     assert.ok(requestLog.slice(asked).includes(`GET /records/${encodeURIComponent(NOT_HELD_FORM_KEY)}`), 'sanity: mEdit was asked');
+  });
+
+  it('finds a record across the tracked plugins by Go to Symbol in Workspace, each copy at its document', async () => {
+    await activated();
+    const asked = requestLog.length;
+    const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', 'Tracked');
+
+    assert.deepStrictEqual(found.map((symbol) => [symbol.name, symbol.containerName, symbol.location.uri.toString(true)]).sort(), [
+      [`TrackedGun [${TRACKED_FORM_KEY}]`, `${TRACKED_PLUGIN} (${TRACKED_ORIGIN})`, vscode.Uri.file(TRACKED_FILE).toString(true)],
+      [`TrackedRef [${CHILD_FORM_KEY}]`, `${TRACKED_PLUGIN} (${TRACKED_ORIGIN})`, trackedChildUri],
+    ].sort());
+    assert.deepStrictEqual(requestLog.slice(asked).filter((line) => line.startsWith('GET /records?')).map((line) => {
+      const query = new URL(line.slice('GET '.length), 'http://x').searchParams;
+      return [query.get('search'), query.get('plugin'), query.get('origin')];
+    }), [['Tracked', TRACKED_PLUGIN, TRACKED_ORIGIN]]);
   });
 
   const offeredIn = async (doc: vscode.TextDocument, text: string): Promise<string[]> => {

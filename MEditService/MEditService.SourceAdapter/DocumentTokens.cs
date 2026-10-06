@@ -72,12 +72,12 @@ internal static class DocumentTokens
 
     private static ReadOnlySpan<byte> FormKeyPropertyName => "FormKey"u8;
 
-    // Every EditorID member's string value the document's bytes carry, at its own root or an
-    // embedded child's: RecordMembers.EditorId is the one property name every record's document
-    // uses for it.
-    internal static List<string> EditorIdsIn(byte[] bytes)
+    // Every EditorID member's value the document's bytes carry, at its own root or an embedded
+    // child's, null for one that is no string: RecordMembers.EditorId is the one property name every
+    // record's document uses for it.
+    internal static List<string?> EditorIdsIn(byte[] bytes)
     {
-        var found = new List<string>();
+        var found = new List<string?>();
         var reader = new Utf8JsonReader(bytes);
         var atEditorId = false;
         try
@@ -89,8 +89,12 @@ internal static class DocumentTokens
                     case JsonTokenType.PropertyName:
                         atEditorId = reader.ValueTextEquals(EditorIdPropertyName);
                         continue;
-                    case JsonTokenType.String when atEditorId && reader.GetString() is { } editorId:
-                        found.Add(editorId);
+                    case JsonTokenType.String when atEditorId:
+                        found.Add(reader.GetString());
+                        break;
+                    case not JsonTokenType.Null when atEditorId:
+                        found.Add(null);
+                        reader.Skip();
                         break;
                 }
                 atEditorId = false;
@@ -127,7 +131,8 @@ internal static class DocumentTokens
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var document in documents)
         {
-            foreach (var editorId in EditorIdsIn(Encoding.UTF8.GetBytes(document.Body))) ids.Add(editorId);
+            foreach (var editorId in EditorIdsIn(Encoding.UTF8.GetBytes(document.Body)))
+                ids.Add(editorId ?? throw new InvalidOperationException($"{document.FormKey}'s document reached EditorIdsOf unread."));
         }
         return ids;
     }

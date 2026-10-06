@@ -49,6 +49,11 @@ public sealed class ContainerSlots
             ? _embeddedSlotNames.Contains(member)
             : _members.EmbeddedSlots.Contains((_category, containerTypeName, member));
 
+    /// <summary>Whether <paramref name="recordType"/> is a type the slot's own member declares it holds.</summary>
+    internal bool Holds(string containerTypeName, string slot, Type recordType) =>
+        _members.HeldTypesBySlot.TryGetValue((_category, containerTypeName, slot), out var held)
+        && held.Any(type => type.IsAssignableFrom(recordType));
+
     /// <summary>What a slot holds, for a document that does not spell its child's type. Falls back to
     /// the slot name alone when the owner's own type is not known.</summary>
     internal string? ElementTypeOf(string? containerTypeName, string slot) =>

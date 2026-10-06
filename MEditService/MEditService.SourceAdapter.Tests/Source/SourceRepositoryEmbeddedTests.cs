@@ -249,14 +249,81 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains("its root is not a JSON object", refused.Message, StringComparison.Ordinal);
     }
 
+    private void GiveANumberForTheEditorId(string relativePath, string editorId)
+    {
+        var path = FullPath(relativePath);
+        var text = File.ReadAllText(path);
+        var edited = text.Replace($"\"EditorID\": \"{editorId}\"", "\"EditorID\": 5", StringComparison.Ordinal);
+        Assert.NotEqual(text, edited);
+        File.WriteAllText(path, edited);
+    }
+
+    [Fact]
+    public void Get_ByFormKey_OfARecordWhoseEditorIdIsNoString_RefusesNamingItsFileAndTheField()
+    {
+        GiveANumberForTheEditorId(QuestPath, "Quest");
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.Get(Plugin, _quest.FormKey.ToString(), Schemas));
+
+        Assert.Equal((QuestPath, _quest.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
+        Assert.Contains("its 'EditorID' is not a string", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Get_ByFormKey_OfAChildWhoseEditorIdIsNoString_RefusesNamingItsOwnersFileAndTheField()
+    {
+        GiveANumberForTheEditorId(InteriorCellPath, "TempRef");
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas));
+
+        Assert.Equal((InteriorCellPath, _temporaryRef.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
+        Assert.Contains($"its 'Temporary' names '{_temporaryRef.FormKey}', whose 'EditorID' is not a string", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CarryingFromText_OfARecordWithADocumentOfItsOwn_WhoseEditorIdIsNoString_RefusesNamingItsFileAndTheField()
+    {
+        var text = File.ReadAllText(FullPath(QuestPath)).Replace("\"EditorID\": \"Quest\"", "\"EditorID\": 5", StringComparison.Ordinal);
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(
+            () => Repository.CarryingFromText(Plugin, _quest.FormKey.ToString(), text, Schemas));
+
+        Assert.Contains(QuestPath, refused.Message, StringComparison.Ordinal);
+        Assert.Contains("its 'EditorID' is not a string", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EditorIdsHeld_WhenADocumentsEditorIdIsNoString_RefusesNamingItsFileAndTheField()
+    {
+        GiveANumberForTheEditorId(QuestPath, "Quest");
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.EditorIdsHeld(Plugin));
+
+        Assert.Equal((QuestPath, _quest.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
+        Assert.Contains("its 'EditorID' is not a string", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EditorIdsHeld_WhenAnEmbeddedChildsEditorIdIsNoString_RefusesNamingItsOwnersFileAndTheField()
+    {
+        GiveANumberForTheEditorId(InteriorCellPath, "TempRef");
+
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.EditorIdsHeld(Plugin));
+
+        Assert.Equal(InteriorCellPath, refused.File?.SourceRelativePath);
+        Assert.Contains("a child it embeds has an 'EditorID' that is not a string", refused.Message, StringComparison.Ordinal);
+    }
+
     private string InteriorCellWithItsRefsTyped(string type) =>
         File.ReadAllText(FullPath(InteriorCellPath)).Replace("\"PlacedObject\"", $"\"{type}\"", StringComparison.Ordinal);
 
-    private void AssertNamesTheInteriorCellsUntypedRef(UnreadableSourceDocumentException refused)
+    private void AssertNamesTheInteriorCellsUntypedRef(string type, UnreadableSourceDocumentException refused)
     {
         Assert.Equal(
             (InteriorCellPath, _temporaryRef.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
-        Assert.Contains("a 'PlacedObjekt', and this game has no record type of that name", refused.Message, StringComparison.Ordinal);
+        Assert.Contains($"a '{type}', and its slot holds no record type of that name", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -264,51 +331,64 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     {
         File.WriteAllText(FullPath(InteriorCellPath), InteriorCellWithItsRefsTyped("PlacedObjekt"));
 
-        AssertNamesTheInteriorCellsUntypedRef(Assert.Throws<UnreadableSourceDocumentException>(
+        AssertNamesTheInteriorCellsUntypedRef("PlacedObjekt", Assert.Throws<UnreadableSourceDocumentException>(
             () => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas)));
     }
 
     [Fact]
     public void CarryingFromText_OfAChildNoTypeResolves_RefusesNamingItsOwnersFileAndWhy()
     {
-        AssertNamesTheInteriorCellsUntypedRef(Assert.Throws<UnreadableSourceDocumentException>(
+        AssertNamesTheInteriorCellsUntypedRef("PlacedObjekt", Assert.Throws<UnreadableSourceDocumentException>(
             () => Repository.CarryingFromText(
                 Plugin, _temporaryRef.FormKey.ToString(), InteriorCellWithItsRefsTyped("PlacedObjekt"), Schemas)));
     }
 
+    [Fact]
+    public void Get_ByFormKey_OfAChildNamingARecordTypeItsListSlotCannotHold_RefusesNamingItsOwnersFileAndWhy()
+    {
+        File.WriteAllText(FullPath(InteriorCellPath), InteriorCellWithItsRefsTyped("Npc"));
+
+        AssertNamesTheInteriorCellsUntypedRef(
+            "Npc", Assert.Throws<UnreadableSourceDocumentException>(() => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas)));
+    }
+
     private string TopCellFormKey => _worldspace.TopCell.Require().FormKey.ToString();
 
-    private void MisspellTheTopCellsType()
+    private void TypeTheTopCell(string type)
     {
         var path = FullPath(WorldspacePath);
         var text = File.ReadAllText(path);
-        var misspelt = text.Replace("\"TopCell\": {", "\"TopCell\": {\n    \"MutagenObjectType\": \"Cel\",", StringComparison.Ordinal);
-        Assert.NotEqual(text, misspelt);
-        File.WriteAllText(path, misspelt);
+        var typed = text.Replace("\"TopCell\": {", $"\"TopCell\": {{\n    \"MutagenObjectType\": \"{type}\",", StringComparison.Ordinal);
+        Assert.NotEqual(text, typed);
+        File.WriteAllText(path, typed);
     }
 
-    private void AssertNamesTheWorldspacesMisspeltTopCell(UnreadableSourceDocumentException refused)
+    private void AssertNamesTheWorldspacesTopCellTyped(string type, UnreadableSourceDocumentException refused)
     {
         Assert.Equal((WorldspacePath, TopCellFormKey), (refused.File?.SourceRelativePath, refused.File?.FormKey));
-        Assert.Contains("a 'Cel', and this game has no record type of that name", refused.Message, StringComparison.Ordinal);
+        Assert.Contains($"its 'TopCell' names '{TopCellFormKey}' a '{type}', and its slot holds no record type of that name", refused.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Get_ByFormKey_OfAChildInASingleTypeSlotWhoseTypeIsMisspelt_RefusesNamingItsOwnersFileAndWhy()
+    [Theory]
+    [InlineData("Cel")]
+    [InlineData("Npc")]
+    public void Get_ByFormKey_OfAChildInASingleTypeSlotTypedAsNothingTheSlotHolds_RefusesNamingItsOwnersFileAndWhy(string type)
     {
-        MisspellTheTopCellsType();
+        TypeTheTopCell(type);
 
-        AssertNamesTheWorldspacesMisspeltTopCell(Assert.Throws<UnreadableSourceDocumentException>(
+        AssertNamesTheWorldspacesTopCellTyped(type, Assert.Throws<UnreadableSourceDocumentException>(
             () => Repository.Get(Plugin, TopCellFormKey, Schemas)));
     }
 
-    [Fact]
-    public void ReadingTheTree_WhenAChildInASingleTypeSlotHasItsTypeMisspelt_IsRefusedNamingItsOwnersFileAndWhy()
+    [Theory]
+    [InlineData("Cel")]
+    [InlineData("Npc")]
+    public void ReadingTheTree_WhenAChildInASingleTypeSlotIsTypedAsNothingTheSlotHolds_IsRefusedNamingItsOwnersFileAndWhy(string type)
     {
-        MisspellTheTopCellsType();
+        TypeTheTopCell(type);
         using var tree = Repository.OpenDocuments(Plugin, Schemas);
 
-        AssertNamesTheWorldspacesMisspeltTopCell(Assert.Throws<UnreadableSourceDocumentException>(() => tree.Records.ToList()));
+        AssertNamesTheWorldspacesTopCellTyped(type, Assert.Throws<UnreadableSourceDocumentException>(() => tree.Records.ToList()));
     }
 
     private void HoldTheTemporaryRefTwiceInItsCell()
@@ -339,6 +419,64 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         using var tree = Repository.OpenDocuments(Plugin, Schemas);
 
         AssertClaimedTwiceByTheInteriorCell(Assert.Throws<AmbiguousSourceUnitException>(() => tree.Records.ToList()));
+    }
+
+    private void GiveTheTemporaryRefItsCellsOwnFormKey()
+    {
+        var path = FullPath(InteriorCellPath);
+        File.WriteAllText(
+            path, File.ReadAllText(path).Replace(_temporaryRef.FormKey.ToString(), _interiorCell.FormKey.ToString(), StringComparison.Ordinal));
+    }
+
+    private void AssertTheCellClaimedTwiceByItsOwnDocument(AmbiguousSourceUnitException refused) =>
+        Assert.Equal(new ClaimedFormKey(_interiorCell.FormKey.ToString(), [InteriorCellPath]), refused.Claim);
+
+    [Fact]
+    public void Get_OfAContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
+    {
+        GiveTheTemporaryRefItsCellsOwnFormKey();
+
+        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
+            () => Repository.Get(Plugin, Identity(_interiorCell, "cell"))));
+    }
+
+    [Fact]
+    public void Get_ByFormKey_OfAContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
+    {
+        GiveTheTemporaryRefItsCellsOwnFormKey();
+
+        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
+            () => Repository.Get(Plugin, _interiorCell.FormKey.ToString(), Schemas)));
+    }
+
+    [Fact]
+    public void CarryingFromText_OfAContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
+    {
+        GiveTheTemporaryRefItsCellsOwnFormKey();
+
+        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
+            () => Repository.CarryingFromText(
+                Plugin, _interiorCell.FormKey.ToString(), File.ReadAllText(FullPath(InteriorCellPath)), Schemas)));
+    }
+
+    [Fact]
+    public void ContainerDocument_OfAChildWhoseOwnerAnotherChildCarriesTheFormKeyOf_IsRefusedAsAClaimOfThatDocument()
+    {
+        GiveTheTemporaryRefItsCellsOwnFormKey();
+
+        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
+            () => Repository.ContainerDocument(Plugin, Identity(_persistentRef, "refr"), Schemas)));
+    }
+
+    [Fact]
+    public void Get_OfAFlatRecordOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
+    {
+        var path = FullPath(QuestPath);
+        File.WriteAllText(path, File.ReadAllText(path).Replace(_topic.FormKey.ToString(), _quest.FormKey.ToString(), StringComparison.Ordinal));
+
+        Assert.Equal(
+            new ClaimedFormKey(_quest.FormKey.ToString(), [QuestPath]),
+            Assert.Throws<AmbiguousSourceUnitException>(() => Repository.Get(Plugin, Identity(_quest, "qust"))).Claim);
     }
 
     [Fact]
