@@ -38,6 +38,14 @@ internal static class TreeTampering
     internal static void BlockWrite(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
         Directory.CreateDirectory(FileOf(modFolder, plugin, identity) + ".tmp");
 
+    /// <summary><see cref="BlockWrite"/> in <paramref name="to"/>'s tree, at the place the record's document has in
+    /// <paramref name="from"/>'s, so a copy of the record from one to the other fails on that document.</summary>
+    internal static void BlockWriteAsPlacedIn(
+        string fromModFolder, PluginAddress from, RecordIdentity identity, string toModFolder, PluginAddress to) =>
+        Directory.CreateDirectory(Path.Combine(
+            PluginSourceRoot.In(toModFolder, to.Name),
+            Path.GetRelativePath(PluginSourceRoot.In(fromModFolder, from.Name), FileOf(fromModFolder, from, identity))) + ".tmp");
+
     /// <summary>The record's document, held open so it cannot be read.</summary>
     internal static FileStream HoldOpen(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
         new(FileOf(modFolder, plugin, identity), FileMode.Open, FileAccess.Read, FileShare.None);
