@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using Mutagen.Bethesda;
@@ -23,6 +24,9 @@ public interface IRecordQueryService
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
     // Null when the plugin holds no such record.
     RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey);
+    // Null when the plugin holds no such record.
+    RecordFile? GetRecordFile(PluginAddress plugin, string formKey);
+    bool TryGetRecordOfFile(string path, [NotNullWhen(true)] out RecordAt? record, [NotNullWhen(false)] out string? whyNone);
 
     // Answered in every state, "no load order yet" included (ADR-0013).
     LoadOrderStatus GetStatus();
