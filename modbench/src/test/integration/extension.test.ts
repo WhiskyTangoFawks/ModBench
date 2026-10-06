@@ -262,6 +262,8 @@ fs.mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
 fs.writeFileSync(TRACKED_FILE, JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun' }));
 const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
 
+const CHILD_FORM_KEY = '000802:Tracked.esp';
+
 const UNTRACKED_FORM_KEY = '000801:Untracked.esp';
 const UNTRACKED_FILE_NAME = 'UntrackedGun - 000801_Untracked.esp.json';
 let untrackedText = '{ "EditorID": "UntrackedGun" }';
@@ -269,6 +271,8 @@ let untrackedText = '{ "EditorID": "UntrackedGun" }';
 const HELD_FORM_KEY = '000801:Held.esp';
 const MOCK_COMPARISONS = new Map<string, CompareResult>([[TRACKED_FORM_KEY, comparisonOf(TRACKED_FORM_KEY, [
   { plugin: TRACKED_PLUGIN, isWinner: true, editorId: 'TrackedGun' },
+])], [CHILD_FORM_KEY, comparisonOf(CHILD_FORM_KEY, [
+  { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN, isWinner: true, editorId: 'TrackedRef' },
 ])], [HELD_FORM_KEY, comparisonOf(HELD_FORM_KEY, [
   { plugin: 'Held.esp', isWinner: false, editorId: 'OldGun' },
   { plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun', fields: [
@@ -475,6 +479,67 @@ describe('a tracked copy of a record', () => {
 
     await waitFor('the file\'s tab in the record grid', () => fileTabs().length === 1);
     await waitFor('mEdit asked which record the file holds', () => requestLog.filter((line) => line === asked).length > readsBefore);
+  });
+});
+
+describe('a child record of a tracked plugin', () => {
+  const plugin = { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN };
+  const childCopy = { formKey: CHILD_FORM_KEY, plugin };
+  const containerText = fs.readFileSync(TRACKED_FILE, 'utf8');
+  const recordFileTabs = () => openTabs().filter((t) => t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.recordFile');
+  const childTab = () => recordFileTabs().find((t) => t.input instanceof vscode.TabInputCustom && t.input.uri.scheme !== 'file');
+  const childDocument = async () => {
+    const tab = await waitFor('the child\'s tab', childTab);
+    if (!(tab.input instanceof vscode.TabInputCustom)) throw new Error('expected a custom editor tab');
+    return vscode.workspace.openTextDocument(tab.input.uri);
+  };
+
+  before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
+  afterEach(async () => {
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    fs.writeFileSync(TRACKED_FILE, containerText);
+  });
+
+  it('opens in a tab of its own beside its container\'s, on its container\'s file, titled with its own name', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', [{ formKey: TRACKED_FORM_KEY, plugin }, childCopy]);
+
+    await waitFor('the child\'s tab titled with its EditorID', () => childTab()?.label === 'TrackedRef');
+    assert.deepStrictEqual(recordFileTabs().map((t) => t.label).sort(), ['TrackedGun.json', 'TrackedRef']);
+    assert.strictEqual((await childDocument()).getText(), containerText);
+  });
+
+  it('leaves its container\'s file, opened by the route VS Code opens any file by, to open the container\'s tab', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', childCopy);
+    await childDocument();
+    await vscode.commands.executeCommand('workbench.action.keepEditor');
+
+    await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(TRACKED_FILE));
+
+    await waitFor('the container\'s own tab', () => recordFileTabs().some((t) => t.input instanceof vscode.TabInputCustom && t.input.uri.scheme === 'file'));
+    assert.strictEqual(recordFileTabs().length, 2);
+  });
+
+  it('shows a change saved from its tab in its container\'s tab beside it, and one saved from the container\'s in its own', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: TRACKED_FORM_KEY, plugin });
+    await vscode.commands.executeCommand('modbench.record.open', { ...childCopy, placement: 'beside' });
+    const child = await childDocument();
+    const container = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    const replaceAll = async (document: vscode.TextDocument, text: string) => {
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)), text);
+      await vscode.workspace.applyEdit(edit);
+      await document.save();
+    };
+
+    const fromChild = JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'SavedFromChild' });
+    await replaceAll(child, fromChild);
+    assert.strictEqual(fs.readFileSync(TRACKED_FILE, 'utf8'), fromChild);
+    await waitFor('the container\'s file to show the child\'s save', () => container.getText() === fromChild);
+
+    const fromContainer = JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'SavedFromContainer' });
+    await replaceAll(container, fromContainer);
+    for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: plugin.name, origin: plugin.origin, keys: [TRACKED_FORM_KEY] });
+    await waitFor('the child\'s document to show the container\'s save', () => child.getText() === fromContainer);
   });
 });
 
