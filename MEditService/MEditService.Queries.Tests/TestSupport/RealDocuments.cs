@@ -61,7 +61,7 @@ internal static class RealDocuments
     {
         var release = GameRelease.Fallout4;
         var schema = SharedSchemaReflector.Instance.GetSchemas(release)[recordType];
-        var (read, editorId, parseDiagnosis) = DocumentText.Read(body);
+        var (read, editorId, parseDiagnosis) = CallerText.Read(body);
         if (parseDiagnosis is not null)
             return new RecordDocument(formKey, plugin, loadOrderIndex, false, null, recordType, read, [], ParseDiagnosis: parseDiagnosis);
         using var parsed = JsonDocument.Parse(read);

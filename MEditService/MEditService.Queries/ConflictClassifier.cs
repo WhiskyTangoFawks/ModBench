@@ -13,8 +13,7 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
 
     // resolveFormKey (ADR-0005), batched once per Classify so every formKey leaf's
     // Resolutions fills in this pass. loadOrderFormIds orders a keyed array's FormKeys.
-    // outsideTheComparison are columns shown beside the rest that take no part in it: they win no
-    // cell and carry no state.
+    // outsideTheComparison: columns shown that win no cell and carry no state.
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         GameRelease release,

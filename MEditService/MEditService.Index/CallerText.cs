@@ -5,7 +5,7 @@ namespace MEditService.Index;
 
 /// <summary>A record document's text as a caller gives it. Text that is no record document holds
 /// nothing to show: an empty body and the reason.</summary>
-public static class DocumentText
+public static class CallerText
 {
     public static (string Body, string? EditorId, string? ParseDiagnosis) Read(string text)
     {

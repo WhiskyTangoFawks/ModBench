@@ -38,7 +38,7 @@ internal sealed class RelationReads(
         using var connection = store.OpenReadConnection();
         var tableName = FindRecordTypeInAnyPlugin(connection, formKey);
         if (tableName == null) return null;
-        var (body, editorId, parseDiagnosis) = DocumentText.Read(text);
+        var (body, editorId, parseDiagnosis) = CallerText.Read(text);
         return DocumentFromBody(
             connection, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, body,
             store.Schemas[tableName], LinkResolution.ForLinksOf(connection, formKey, Resolve), parseDiagnosis);

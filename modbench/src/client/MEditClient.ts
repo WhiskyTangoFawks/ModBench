@@ -209,9 +209,9 @@ export interface MEditClient {
   getChildrenInDestinations(
     records: readonly RecordAddress[], destinations: readonly PluginAddress[],
   ): Promise<RecordChildHolders[]>;
-  /** One record as every active plugin has it, posted to the webview untransformed (target-architecture.d2
-   *  `modbench_driving.editor`). Null: no plugin holds it, or with `text` none indexes it. With `text`,
-   *  that plugin's column reads from its `documentText` and is left out of the conflict states. */
+  /** One record as every active plugin has it, untransformed (target-architecture.d2 `modbench_driving.editor`).
+   *  Null: no plugin holds it. With `text`, that plugin's column reads from it, outside the conflict
+   *  states if the plugin is inactive. */
   getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null>;
   /** Several records side by side: one column per copy, in the order given, with no conflict
    *  state on any cell or row. Null is a copy no plugin holds and no `documentText` gives. */
