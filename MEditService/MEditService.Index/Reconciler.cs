@@ -487,10 +487,7 @@ internal sealed class Reconciler(
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
             logger.LogWarning(ex, "Could not read {Plugin} ({Origin})", plugin.Name, plugin.Origin);
-            var rowsFrom = scope.Index.DerivationOf(plugin.Key);
-            FailRead(scope, plugin.Key, ex is SourceTreeUnreadableException { InnerException: { } cause }
-                ? TreeReadFailure(cause, rowsFrom)
-                : ReadFailure(ex, rowsFrom));
+            FailRead(scope, plugin.Key, ReadFailure(ex, scope.Index.DerivationOf(plugin.Key)));
         }
     }
 
@@ -503,26 +500,6 @@ internal sealed class Reconciler(
             "last read from its source tree.",
         _ => PluginLoadFailure.ReasonFor(ex),
     };
-
-    // An IOException, so FailedReads reads the plugin again; the reason names the tree, not the binary.
-    private sealed class SourceTreeUnreadableException : IOException
-    {
-        public SourceTreeUnreadableException()
-        {
-        }
-
-        public SourceTreeUnreadableException(string message) : base(message)
-        {
-        }
-
-        public SourceTreeUnreadableException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-
-        public SourceTreeUnreadableException(string message, int hresult) : base(message, hresult)
-        {
-        }
-    }
 
     // Registers first: the index's reads are scoped by registration, so validate would otherwise
     // compare an empty row set against a full tree. False falls through to a full index.
@@ -622,32 +599,19 @@ internal sealed class Reconciler(
             scope.Projector.Ingest(plugin, ModHoldingTree(plugin), token);
             return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            throw new SourceTreeUnreadableException(ex.Message, ex);
-        }
-        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException or IOException
+            or UnauthorizedAccessException))
         {
             // Every other exception, not a curated set: a third-party deserializer fails in open-ended
             // ways. A cancel is no source failure.
             logger.LogWarning(ex,
                 "Could not ingest {Plugin} from its source tree; falling back to the binary", plugin.Name);
-            scope.Held.SetFailure(plugin.Key, TreeReadFailure(ex, DerivedFrom.Binary));
+            scope.Held.SetFailure(plugin.Key, ReadFailure(ex, DerivedFrom.Binary));
         }
 
         IndexFromBinary(scope, plugin);
         return false;
     }
-
-    // The rows a failed tree read leaves stand, and the reason names what they were read from.
-    private static string TreeReadFailure(Exception ex, DerivedFrom? rowsFrom) => rowsFrom switch
-    {
-        DerivedFrom.Binary => $"Could not read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). " +
-            "Showing the compiled binary instead — edits made since the last compile are not reflected.",
-        DerivedFrom.SourceTree => $"Could not re-read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). " +
-            "Still showing what was last read from it — the compiled binary is not used for a tracked plugin.",
-        _ => $"Could not read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}).",
-    };
 
     private static PluginProvider.FromMod ModHoldingTree(PluginMetadata plugin) =>
         plugin.Provider is PluginProvider.FromMod mod ? mod : throw new InvalidOperationException(
@@ -869,7 +833,7 @@ internal sealed class Reconciler(
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Could not re-ingest {Plugin} from its source tree", metadata.Name);
-                FailRead(scope, key, TreeReadFailure(ex, index.DerivationOf(key)));
+                FailRead(scope, key, ReadFailure(ex, index.DerivationOf(key)));
                 throw;
             }
 
@@ -912,7 +876,7 @@ internal sealed class Reconciler(
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            FailRead(scope, metadata.Key, PluginLoadFailure.ReasonFor(ex));
+            FailRead(scope, metadata.Key, ReadFailure(ex, index.DerivationOf(metadata.Key)));
             throw;
         }
         if (scope.Held.ClearFailure(metadata.Key)) PublishStatus();

@@ -101,7 +101,7 @@ public sealed class FailedReadStateTests : IDisposable
         index.NextSnapshotUntil(() => Failed(index), "the tree's failure");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
-        Assert.Contains("Showing the compiled binary instead", Reason(index), StringComparison.Ordinal);
+        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class FailedReadStateTests : IDisposable
         index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the changed tree read again");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
-        Assert.Contains("Showing the compiled binary instead", Reason(index), StringComparison.Ordinal);
+        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -240,31 +240,6 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
-    public void AJustTrackedTreeHeldWhileItIsRead_SaysItsBinaryStillStandsIn()
-    {
-        using var index = Reconciled();
-        TrackedMods.Track(Plugin, _fixture.GameDirectory);
-        var document = NpcDocument;
-        string? reasonWhileHeld = null;
-        IReadOnlyList<string?>? servedWhileHeld = null;
-        ArmOn($"Ingesting {PluginName} from its source tree", () =>
-        {
-            var hold = File.Open(document, FileMode.Open, FileAccess.Read, FileShare.None);
-            ArmOn($"Re-ingesting {PluginName}", () =>
-            {
-                reasonWhileHeld = Reason(index);
-                servedWhileHeld = [.. index.RequireReads().GetDocuments(Plugin.KeyOf()).Select(d => d.EditorId)];
-                hold.Dispose();
-            });
-        });
-
-        index.NextSnapshotUntil(() => index.RequireReads().GetTrackedPlugins().Contains(Plugin.KeyOf()), "the released tree read");
-
-        Assert.Contains(NpcEditorId, servedWhileHeld.Require());
-        Assert.Contains("Showing the compiled binary instead", reasonWhileHeld.Require(), StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void AJustTrackedTreeWhoseBinaryAlsoFails_SaysTheBinarysLastReadStillShows()
     {
         using var index = Reconciled(new FailsToOpen(new InvalidOperationException("injected read failure"), atOpen: n => n == 2));
@@ -272,6 +247,18 @@ public sealed class FailedReadStateTests : IDisposable
         ClaimedTwice();
 
         index.NextSnapshotUntil(() => Failed(index), "the tree's and the binary's failure");
+
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ABinaryRewrittenThatFailsToRead_SaysItsLastReadStillShows()
+    {
+        using var index = Reconciled(new FailsToOpen(new InvalidOperationException("injected read failure"), atOpen: n => n == 2));
+        PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
+
+        index.NextSnapshotUntil(() => Failed(index), "the rewritten binary's failure");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
         Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
