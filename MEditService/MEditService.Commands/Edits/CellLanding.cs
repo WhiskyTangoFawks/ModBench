@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -128,7 +129,8 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
             GridCells.Holder.Plugins(var held) => new Step<Landed>.Done(IntoHeldCell(move, held, record)),
             GridCells.Holder.Unreadable(var why) => new Step<Landed>.Refused(why),
             GridCells.Holder.Masters(var copy, _) => New(copy),
-            _ => New(new LeftCopy.None()),
+            GridCells.Holder.Nobody => New(new LeftCopy.None()),
+            _ => throw new UnreachableException($"GridCells.At answered {holder}, which is no holder it names."),
         };
 
         Step<Landed> New(LeftCopy left) =>

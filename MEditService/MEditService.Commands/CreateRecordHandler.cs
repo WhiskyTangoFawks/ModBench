@@ -146,7 +146,7 @@ public sealed class CreateRecordHandler
         GameRelease release, string worldspace, (int X, int Y) grid)
     {
         var at = $"at {grid.X}, {grid.Y} of {worldspace}";
-        switch (GridCells.At(_targets, repository, plugin, schemas, worldspace, grid, worldspace, $"whether a cell sits {at}"))
+        switch (GridCells.At(_targets, repository, plugin, schemas, worldspace, grid, worldspace, $"whether a cell sits at {grid.X}, {grid.Y}"))
         {
             case GridCells.Holder.Unreadable(var why):
                 return why;
