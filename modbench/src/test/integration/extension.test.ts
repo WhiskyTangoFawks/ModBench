@@ -643,6 +643,52 @@ describe('a child record of a tracked plugin', () => {
   });
 });
 
+describe('a record opened from a column\'s header, in its tab\'s place', () => {
+  const copyOf = (formKey: string) => ({ formKey, plugin: { name: 'Fallout4.esm', origin: 'Data' } });
+  const shown = () => vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => `${t.label}${t.isPreview ? ' (preview)' : ''}`));
+  const openTab = async (formKey: string) => {
+    await vscode.commands.executeCommand('modbench.record.open', copyOf(formKey));
+    await waitFor(`${formKey}'s tab active`, () => vscode.window.tabGroups.activeTabGroup.activeTab?.label === renderedName(formKey));
+  };
+  const openPinned = async (formKey: string) => {
+    await openTab(formKey);
+    await vscode.commands.executeCommand('workbench.action.keepEditor');
+  };
+  const openInPlace = (formKey: string) =>
+    vscode.commands.executeCommand('modbench.record.open', [{ ...copyOf(formKey), placement: 'inPlace' }]);
+
+  before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
+  afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
+
+  it('takes a pinned tab\'s place, pinned, whichever side of the active tab VS Code opens a new one on', async () => {
+    const positioning = vscode.workspace.getConfiguration('workbench.editor');
+    await positioning.update('openPositioning', 'last', vscode.ConfigurationTarget.Workspace);
+    try {
+      for (const formKey of ['Fallout4.esm:000080', 'Fallout4.esm:000081', 'Fallout4.esm:000082']) await openPinned(formKey);
+      await openTab('Fallout4.esm:000081');
+
+      await openInPlace('Fallout4.esm:000083');
+
+      await waitFor('the opened record in the tab\'s place', () => JSON.stringify(shown()) === JSON.stringify([[
+        renderedName('Fallout4.esm:000080'), renderedName('Fallout4.esm:000083'), renderedName('Fallout4.esm:000082'),
+      ]]));
+    } finally {
+      await positioning.update('openPositioning', undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+
+  it('takes a preview tab\'s place, as a preview', async () => {
+    await openPinned('Fallout4.esm:000080');
+    await openTab('Fallout4.esm:000081');
+
+    await openInPlace('Fallout4.esm:000083');
+
+    await waitFor('the opened record in the tab\'s place', () => JSON.stringify(shown()) === JSON.stringify([[
+      renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000083')} (preview)`,
+    ]]));
+  });
+});
+
 describe('an untracked copy of a record', () => {
   const untrackedCopy = { formKey: UNTRACKED_FORM_KEY, plugin: { name: 'Untracked.esp', origin: 'UntrackedMod' } };
   const renderedTabs = () => openTabs().filter((t) =>

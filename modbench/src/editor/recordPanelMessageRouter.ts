@@ -90,6 +90,9 @@ const HANDLERS: {
   [WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER]: (deps, m) => replyFormKeyPicked(deps.formKeyPicker, m),
   [WEBVIEW_TO_EXTENSION.FOCUS_CELL]: (deps, m) => { deps.focusCell(m.context ?? undefined, m.entered); },
   [WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD]: answerRecordLoad,
+  [WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE]: async (_deps, m) => {
+    await vscode.commands.executeCommand('modbench.record.open', m.records.map((record) => ({ ...record, placement: 'inPlace' })));
+  },
 };
 
 // Each case below narrows `m` to its own variant, so calling its HANDLERS entry needs no
@@ -101,6 +104,7 @@ function dispatch(deps: RouteRecordPanelMessageDeps, m: WebviewToExtension): Pro
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return HANDLERS[m.type](deps, m);
+    case WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE: return HANDLERS[m.type](deps, m);
     default: {
       const unreachable: never = m;
       return unreachable;
@@ -169,6 +173,6 @@ async function answerRecordLoad(
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     compare: compare.value, plugins: plugins.status === 'fulfilled' ? plugins.value : null,
-    conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()],
+    conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
   });
 }

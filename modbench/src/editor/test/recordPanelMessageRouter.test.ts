@@ -126,6 +126,21 @@ describe('routeRecordPanelMessage — ADD_ELEMENT', () => {
   });
 });
 
+describe('routeRecordPanelMessage — OPEN_IN_PLACE', () => {
+  beforeEach(() => { executeCommand.mockReset(); });
+
+  it('fires open with the records a column\'s header names, each placed in the tab\'s place', async () => {
+    const knife = { formKey: '000803:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
+    const gun = { formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } };
+
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: [knife, gun] }, makeDeps());
+
+    expect(executeCommand.mock.calls).toEqual([
+      ['modbench.record.open', [{ ...knife, placement: 'inPlace' }, { ...gun, placement: 'inPlace' }]],
+    ]);
+  });
+});
+
 describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER', () => {
   const message = { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] };
 
@@ -167,7 +182,7 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdi
   const plugins = [pluginMetadataFixture({ name: 'A.esp', isImmutable: true })];
   const loadMessage = { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp', columns: [] };
 
-  it('answers with the comparison, the plugin list and the settled conflictsComputed', async () => {
+  it('answers with the comparison, the plugin list, the settled conflictsComputed and the plugin whose copy the tab\'s document holds', async () => {
     meditClient.setQueryAnswer('getComparison', compare);
     meditClient.setQueryAnswer('getPlugins', plugins);
     const reply = vi.fn();
@@ -176,6 +191,7 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdi
 
     expect(reply).toHaveBeenCalledWith({
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [],
+      documentPlugin: { name: 'A.esp', origin: 'ModA' },
     });
   });
 
@@ -199,6 +215,7 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdi
 
     expect(reply).toHaveBeenCalledWith({
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, plugins, conflictsComputed: true, loadFailures: [],
+      documentPlugin: { name: 'A.esp', origin: 'ModA' },
     });
   });
 
@@ -276,6 +293,7 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdi
 
     expect(reply).toHaveBeenCalledWith({
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [],
+      documentPlugin: { name: 'A.esp', origin: 'ModA' },
     });
   });
 });

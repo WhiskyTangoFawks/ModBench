@@ -20,7 +20,7 @@ function lastRequestId(): string {
 
 function answer(requestId: string, data: Record<string, unknown>): void {
   window.dispatchEvent(new MessageEvent('message', {
-    data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, ...data },
+    data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, documentPlugin: { name: 'A.esp', origin: 'ModA' }, ...data },
   }));
 }
 
@@ -125,6 +125,20 @@ describe('RecordPanelClient.load', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.conflictsComputed).toBe(false);
+  });
+
+  it('names the file\'s column by the copy of its record the tab\'s document holds, the first of several records compared', async () => {
+    const copy = (formKey: string, plugin: string, origin: string, column: string) => ({ formKey, plugin, origin, column });
+    const promise = createRecordPanelClient().load('000001:A.esp');
+    answer(lastRequestId(), {
+      ok: true, plugins: [], conflictsComputed: true, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' },
+      compare: { diffs: [], conflictAll: 'NoConflict', overrides: [
+        copy('000001:A.esp', 'A.esp', 'ModB', '0#A.esp|ModB'), copy('000002:A.esp', 'A.esp', 'ModA', '1#A.esp|ModA'),
+        copy('000001:A.esp', 'A.esp', 'ModA', '2#A.esp|ModA'), copy('000001:A.esp', 'A.esp', 'ModA', '3#A.esp|ModA'),
+      ] },
+    });
+
+    expect(await promise).toMatchObject({ ok: true, fileColumn: '2#A.esp|ModA' });
   });
 
   it('ignores an answer whose requestId does not match this load\'s own request', async () => {

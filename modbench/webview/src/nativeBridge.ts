@@ -63,7 +63,10 @@ export function requestRecordLoad(formKey: string, columns: ColumnCopy[]): Promi
     (msg): RecordLoadAnswer => {
       if (msg.type !== EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED) return { ok: false, error: 'Mismatched reply.' };
       return msg.ok
-        ? { ok: true, compare: msg.compare, plugins: msg.plugins, conflictsComputed: msg.conflictsComputed, loadFailures: msg.loadFailures }
+        ? {
+          ok: true, compare: msg.compare, plugins: msg.plugins, conflictsComputed: msg.conflictsComputed,
+          loadFailures: msg.loadFailures, documentPlugin: msg.documentPlugin,
+        }
         : { ok: false, error: msg.error };
     },
     requestId => ({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId, formKey, columns }),
@@ -74,6 +77,10 @@ export function requestRecordLoad(formKey: string, columns: ColumnCopy[]): Promi
 // answer to "what does the record say now" is a re-read, never this call's return.
 export function editField(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, envelope });
+}
+
+export function openInPlace(records: ColumnCopy[]): void {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records });
 }
 
 export function addElement(context: ArrayParentContext, value: unknown): void {

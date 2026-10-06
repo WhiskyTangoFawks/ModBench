@@ -3,7 +3,7 @@ import { act } from '@testing-library/react';
 import { WEBVIEW_TO_EXTENSION, hasSection, type ExtensionToWebview, type WebviewToExtension } from '../../../src/wire/messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
 import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
-import { columnKey } from '../../../src/wire/columnKey';
+import { columnKey, copyColumnKey } from '../../../src/wire/columnKey';
 
 // Nothing here imports a component: `vscode.ts` calls acquireVsCodeApi() at module load, so a
 // module that reached it would throw in every test file that does not mock it.
@@ -53,8 +53,16 @@ export interface PanelOpts {
   plugins?: FixturePlugin[];
   conflictsComputed?: boolean;
   loadFailures?: PluginLoadFailure[];
+  /** The column of the copy the tab's document holds. Unstated, the winning copy's, as a record
+   *  opened without a plugin opens it. */
+  fileColumn?: string;
   /** A whole `load` of the test's own — a rejection, or one that answers differently each call. */
   load?: RecordPanelClient['load'];
+}
+
+function winnerColumn({ overrides }: CompareResult): string | undefined {
+  const winner = overrides.find(o => o.isWinner);
+  return winner && copyColumnKey(winner);
 }
 
 // `compare` is a thunk so a test that edits and reloads gets the new document on the second load;
@@ -76,6 +84,7 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
       trackedSet: columnsWhere(p => p.isTracked === true),
       conflictsComputed: opts.conflictsComputed ?? true,
       loadFailures: opts.loadFailures ?? [],
+      fileColumn: opts.fileColumn ?? winnerColumn(compare()),
     })),
   };
 }

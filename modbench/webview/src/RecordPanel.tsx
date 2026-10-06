@@ -10,11 +10,11 @@ import type {
 import { LABEL_COLUMN } from './labelColumn';
 import { columnKey, copyColumnKey } from '../../src/wire/columnKey';
 import { pluginAddressOf } from '../../src/wire/pluginAddress';
-import { addElement, editField, focusCell } from './nativeBridge';
+import { addElement, editField, focusCell, openInPlace } from './nativeBridge';
 import { openEditor } from './DiskCell';
 import { EditorMounted } from './cellEditor';
 import { pastedValue } from './modelValue';
-import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview } from '../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview, type ColumnCopy } from '../../src/wire/messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
@@ -55,6 +55,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // lands, so it can never read as a false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
   const [loadFailures, setLoadFailures] = useState<PluginLoadFailure[]>([]);
+  const [fileColumn, setFileColumn] = useState<ColumnKey | undefined>(undefined);
   const [error, setError] = useState<string | null>(mEditWindow.mEditLoadError ?? null);
   const [collapsedRows, setCollapsedRows] = useState<Set<string>>(new Set());
   const toggleRow = (rowKey: string) => setCollapsedRows(prev => {
@@ -78,12 +79,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
   const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | typeof LABEL_COLUMN, number>>(new Map());
   const resizeColumn = (key: ColumnKey | typeof LABEL_COLUMN, width: number) => setColumnWidths(prev => new Map(prev).set(key, width));
-  // One definition of "this column can be written" (ADR-0007), computed for the whole grid at
-  // once, since per cell it would lag. The backend refuses every write to a parse-failed record,
-  // so a diagnosis vetoes it too.
+  // One definition of "this column can be written" (ADR-0007; editor.md, Columns, story 4): the
+  // file's, computed for the whole grid at once, since per cell it would lag. The backend refuses
+  // every write to a parse-failed record, so a diagnosis vetoes it too.
   const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, o =>
-    !immutableSet.has(pluginKeyOf(o)) && trackedSet?.has(pluginKeyOf(o)) === true && o.parseDiagnosis == null),
-    [result, immutableSet, trackedSet]);
+    copyColumnKey(o) === fileColumn && !immutableSet.has(pluginKeyOf(o)) && trackedSet?.has(pluginKeyOf(o)) === true
+      && o.parseDiagnosis == null),
+    [result, fileColumn, immutableSet, trackedSet]);
 
   // editor.md, A column's header: a Partial Form column is dimmed, header and cells alike. One
   // definition of a column's look, so the header and the cells cannot disagree.
@@ -126,6 +128,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       // still shows the banner rather than reading as settled.
       setConflictsComputed(loaded.conflictsComputed);
       setLoadFailures(loaded.loadFailures);
+      setFileColumn(loaded.fileColumn);
     } catch (e) {
       if (read === latestRead.current) setError(e instanceof Error ? e.message : String(e));
     }
@@ -245,6 +248,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const severalRecords = overrides.some(o => o.column != null);
   const incompleteMessage = severalRecords ? undefined : recordPanelIncompleteMessage(conflictsComputed);
 
+  // editor.md, Columns, story 8: one record's tab opens on its active copies again, and several
+  // records' on the same records, the opened one first as the file.
+  function openColumn(opened: CompareOverride) {
+    const copyOf = (o: CompareOverride): ColumnCopy => ({ formKey: o.formKey, plugin: pluginAddressOf(o) });
+    openInPlace([opened, ...(severalRecords ? overrides.filter(o => o !== opened) : [])].map(copyOf));
+  }
+
   const navColumns = columns.filter(c => !collapsedColumns.has(c.key)).map(c => c.key);
 
   function handleGridKey(e: React.KeyboardEvent<HTMLTableSectionElement>) {
@@ -315,6 +325,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                     override={col.override}
                     isImmutable={isImmutable}
                     isTracked={tracked}
+                    isFile={col.key === fileColumn}
+                    onOpen={() => openColumn(col.override)}
                     collapsed={collapsedColumns.has(col.key)}
                     onToggleCollapse={() => toggleColumnCollapse(col.key)}
                     onResize={width => resizeColumn(col.key, width)}

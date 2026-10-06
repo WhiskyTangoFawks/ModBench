@@ -40,18 +40,18 @@ describe('the record load request the webview asks of the host, because nothing 
     const compare = { overrides: [], diffs: [], conflictAll: 'OnlyOne' };
     const plugins = [{ name: 'A.esp', isImmutable: true, loadOrderIndex: 0 }];
     expect(parseExtensionToWebview({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [],
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' },
     })).toEqual({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [],
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' },
     });
   });
 
   it('carries null plugins when that read failed, and a string error when the load itself did', () => {
     const compare = { overrides: [], diffs: [], conflictAll: 'OnlyOne' };
     expect(parseExtensionToWebview({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [],
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' },
     })).toEqual({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [],
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' },
     });
 
     expect(parseExtensionToWebview({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: false, error: 'HTTP 404' }))
@@ -61,10 +61,27 @@ describe('the record load request the webview asks of the host, because nothing 
   it('carries the plugins mEdit cannot read, and rejects an answer without them', () => {
     const compare = { overrides: [], diffs: [], conflictAll: 'OnlyOne' };
     const loadFailures = [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }];
-    const answered = { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: true };
+    const answered = { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: true, documentPlugin: { name: 'A.esp', origin: 'ModA' } };
 
     expect(parseExtensionToWebview({ ...answered, loadFailures })).toEqual({ ...answered, loadFailures });
     expect(() => parseExtensionToWebview(answered)).toThrow();
+  });
+
+  it('rejects an answer that names no plugin whole as the one whose copy the tab\'s document holds', () => {
+    const answered = {
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, plugins: null, conflictsComputed: true, loadFailures: [],
+    };
+
+    expect(() => parseExtensionToWebview(answered)).toThrow();
+    expect(() => parseExtensionToWebview({ ...answered, documentPlugin: { name: 'A.esp' } })).toThrow();
+  });
+
+  it('carries the records a column\'s header opens in its tab\'s place, and rejects one that names no plugin whole', () => {
+    const records = [{ formKey: '000002:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }];
+
+    expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records }))
+      .toEqual({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records });
+    expect(() => parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: [{ formKey: '000002:B.esp', plugin: { name: 'B.esp' } }] })).toThrow();
   });
 
   it('rejects an answer whose ok is missing entirely', () => {

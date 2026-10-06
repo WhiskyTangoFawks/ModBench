@@ -24,6 +24,7 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
+import { inActiveTabsPlace } from './inTabsPlace';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from './childRecordDocument';
 import {
@@ -270,7 +271,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
         return;
       }
       const formKey = await pickRecord({ meditClient, reporter }, '', []);
-      if (formKey) await openRecords(meditClient, reporter, recordEditorProvider, { addresses: [{ formKey }], beside: false, preview: true });
+      if (formKey) await openRecords(meditClient, reporter, recordEditorProvider, { addresses: [{ formKey }], placement: 'active', preview: true });
     }),
     vscode.commands.registerCommand('modbench.record.openToSide', (row?: unknown, selection?: unknown) =>
       vscode.commands.executeCommand('modbench.record.open', besideArgument(row, selection))),
@@ -283,7 +284,7 @@ type OpenClient = Pick<MEditClient, 'getRecordOwner' | 'getRecordFile' | 'getRec
 // (editor.md, Opening, story 4).
 async function openRecords(
   client: OpenClient, reporter: Reporter, grid: Pick<RecordEditorProvider, 'open'>,
-  { addresses: [first, ...others], beside, preview }: RecordOpenPlan,
+  { addresses: [first, ...others], placement, preview }: RecordOpenPlan,
 ): Promise<void> {
   if (!first) return;
   const failMessage = `Failed to open "${recordTitle(first.formKey, undefined)}".`;
@@ -302,7 +303,10 @@ async function openRecords(
       }
       columns.push(copy);
     }
-    await grid.open(tab.uri, columns, { viewColumn: beside ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preview });
+    const show = (options: vscode.TextDocumentShowOptions) => grid.open(tab.uri, columns, options);
+    await (placement === 'inPlace'
+      ? inActiveTabsPlace(show)
+      : show({ viewColumn: placement === 'beside' ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preview }));
   });
 }
 

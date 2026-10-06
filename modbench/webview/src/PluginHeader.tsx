@@ -8,6 +8,8 @@ interface PluginHeaderProps {
   override: CompareOverride;
   isImmutable: boolean;
   isTracked: boolean;
+  isFile: boolean;
+  onOpen: () => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
   onResize: (width: number) => void;
@@ -40,7 +42,7 @@ function statusOf(o: CompareOverride, isImmutable: boolean, isTracked: boolean):
 }
 
 export function PluginHeader({
-  override: o, isImmutable, isTracked, collapsed, onToggleCollapse, onResize, style, vscodeContext,
+  override: o, isImmutable, isTracked, isFile, onOpen, collapsed, onToggleCollapse, onResize, style, vscodeContext,
 }: Readonly<PluginHeaderProps>) {
   const status = statusOf(o, isImmutable, isTracked);
 
@@ -48,10 +50,12 @@ export function PluginHeader({
     <th
       style={{ ...headerCell, position: 'relative', textAlign: 'left', ...style }}
       data-vscode-context={vscodeContext}
+      aria-current={isFile || undefined}
+      onClick={isFile ? undefined : onOpen}
       title={`${o.plugin}\n${o.origin}\n${status.reason}`}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <ExpandArrow expanded={!collapsed} onToggle={onToggleCollapse} />
+        <span onClick={e => e.stopPropagation()}><ExpandArrow expanded={!collapsed} onToggle={onToggleCollapse} /></span>
         <div>[{o.loadIndex}] <span>{o.plugin}</span></div>
       </div>
       {!collapsed && (
