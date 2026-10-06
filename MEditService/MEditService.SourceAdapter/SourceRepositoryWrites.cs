@@ -75,12 +75,18 @@ internal sealed class SourceRepositoryWrites(
             return Written(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, document.Body));
         }
 
-        // A file whose text is not a document is something else's, and writing over it drops what it wrote.
-        if (document.RecordType != PluginHeader.RecordType && File.Exists(unit.FullPath)
-            && SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
-            throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
-
         return Planned(LeafPlan(unit, document), document.Body);
+    }
+
+    // A file whose text is not a document is something else's, and writing over it drops what it wrote.
+    internal void RefuseOverwritingWhatIsNoDocument(PluginAddress plugin, SourceDocument document)
+    {
+        if (document.RecordType == PluginHeader.RecordType
+            || locator.LocateToPlace(plugin, document.Identity) is not { IsEmbedded: false } unit
+            || !File.Exists(unit.FullPath))
+            return;
+        if (SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
+            throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
     }
 
     /// <summary>What putting an exterior cell changes: a held cell's as <see cref="ChangesToPut"/> says, a new one
