@@ -126,4 +126,18 @@ public sealed class IngestOnlySourceFileFailureTests : IDisposable
             ContainerModPlugin.EmbedCellEditorId,
             index.RequireReads().GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)?.EditorId);
     }
+
+    [Fact]
+    public void AChildEditedToCarryItsOwnersFormKeyOnceRead_NamesTheOwnersFile_WhileItsLastGoodRowsStand()
+    {
+        using var index = Reloaded();
+        var cell = CellFile;
+        EditTheCell(TemporaryRef, _fixture.EmbedCell.ToString());
+
+        index.NextSnapshotUntil(() => index.SourceFileFailures.Count > 0, "the re-read's failure");
+
+        var failure = Assert.Single(index.SourceFileFailures);
+        Assert.Equal((Relative(cell), _fixture.EmbedCell.ToString()), (failure.SourceRelativePath, failure.FormKey));
+        Assert.NotNull(index.RequireReads().GetDocument(TemporaryRef, _fixture.Plugin));
+    }
 }

@@ -388,6 +388,73 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         AssertClaimedTwiceByTheInteriorCell(Assert.Throws<AmbiguousSourceUnitException>(() => tree.Records.ToList()));
     }
 
+    private void GiveTheTemporaryRefItsCellsOwnFormKey()
+    {
+        var path = FullPath(InteriorCellPath);
+        File.WriteAllText(
+            path, File.ReadAllText(path).Replace(_temporaryRef.FormKey.ToString(), _interiorCell.FormKey.ToString(), StringComparison.Ordinal));
+    }
+
+    private void AssertTheCellClaimedTwiceByItsOwnDocument(AmbiguousSourceUnitException refused) =>
+        Assert.Equal(new ClaimedFormKey(_interiorCell.FormKey.ToString(), [InteriorCellPath]), refused.Claim);
+
+    [Fact]
+    public void ReadingTheTree_WhenAChildCarriesItsOwnersFormKey_IsRefusedAsAClaimOfThatDocument()
+    {
+        GiveTheTemporaryRefItsCellsOwnFormKey();
+        using var tree = Repository.OpenDocuments(Plugin, Schemas);
+
+        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(() => tree.Records.ToList()));
+    }
+
+    [Fact]
+    public void Get_OfAContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
+    {
+        GiveTheTemporaryRefItsCellsOwnFormKey();
+
+        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
+            () => Repository.Get(Plugin, Identity(_interiorCell, "cell"))));
+    }
+
+    [Fact]
+    public void Get_ByFormKey_OfAContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
+    {
+        GiveTheTemporaryRefItsCellsOwnFormKey();
+
+        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
+            () => Repository.Get(Plugin, _interiorCell.FormKey.ToString(), Schemas)));
+    }
+
+    [Fact]
+    public void CarryingFromText_OfAContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
+    {
+        GiveTheTemporaryRefItsCellsOwnFormKey();
+
+        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
+            () => Repository.CarryingFromText(
+                Plugin, _interiorCell.FormKey.ToString(), File.ReadAllText(FullPath(InteriorCellPath)), Schemas)));
+    }
+
+    [Fact]
+    public void ContainerDocument_OfAChildWhoseOwnerAnotherChildCarriesTheFormKeyOf_IsRefusedAsAClaimOfThatDocument()
+    {
+        GiveTheTemporaryRefItsCellsOwnFormKey();
+
+        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
+            () => Repository.ContainerDocument(Plugin, Identity(_persistentRef, "refr"), Schemas)));
+    }
+
+    [Fact]
+    public void Get_OfAFlatRecordOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
+    {
+        var path = FullPath(QuestPath);
+        File.WriteAllText(path, File.ReadAllText(path).Replace(_topic.FormKey.ToString(), _quest.FormKey.ToString(), StringComparison.Ordinal));
+
+        Assert.Equal(
+            new ClaimedFormKey(_quest.FormKey.ToString(), [QuestPath]),
+            Assert.Throws<AmbiguousSourceUnitException>(() => Repository.Get(Plugin, Identity(_quest, "qust"))).Claim);
+    }
+
     [Fact]
     public void ContainerOf_APlacedReferenceInsideItsCell_NamesTheCellAndTheSlot()
     {

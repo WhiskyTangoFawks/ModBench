@@ -125,7 +125,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         }
 
         var named = DocumentsNaming(sourceRoot, spelled).Where(File.Exists).ToList();
-        if (OneDocumentPerFormKey.TheOne(named.Count > 0 ? named : DocumentsDeclaring(sourceRoot, spelled), spelled, _modFolder) is { } own)
+        if (TheOneHolding(named.Count > 0 ? named : DocumentsDeclaring(sourceRoot, spelled), spelled) is { } own)
         {
             var document = DeclaredIn(own, text, plugin.Name, schemas);
             if (!FormKey.TryFactory(document.FormKey, out var declared) || declared != parsed)
@@ -251,7 +251,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             RememberFoundByText(pluginFileName, spelled, [.. identified.Select(i => i.Path)]);
         }
 
-        return OneDocumentPerFormKey.TheOne([.. identified.Select(i => i.Path)], spelled, _modFolder) is { } path
+        return TheOneHolding([.. identified.Select(i => i.Path)], spelled) is { } path
             ? identified.Single(i => i.Path == path).Identity
             : null;
     }
@@ -317,8 +317,20 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             RememberFoundByText(pluginFileName, formKey, documents);
         }
 
-        return OneDocumentPerFormKey.TheOne(documents, formKey, _modFolder);
+        return TheOneHolding(documents, formKey);
     }
+
+    // A document holds the record at its root once, and once more for every embedded child carrying
+    // the same key, as the whole read claims them.
+    private string? TheOneHolding(IReadOnlyList<string> documents, string formKey) =>
+        OneDocumentPerFormKey.TheOne(
+            [.. documents.SelectMany(document => Enumerable.Repeat(document, 1 + ChildrenCarrying(document, formKey)))],
+            formKey, _modFolder);
+
+    private int ChildrenCarrying(string document, string formKey) =>
+        DocumentText.BytesOrNull(document) is { } bytes
+            ? DocumentTokens.FormKeysIn(bytes, _release).Count(key => key.InAnEmbedSlot && key.FormKey == formKey)
+            : 0;
 
     // Every read that finds a document by its text remembers it, so no put later in this operation
     // misses it by name and writes a second document beside it.
