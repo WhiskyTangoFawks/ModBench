@@ -229,6 +229,7 @@ const MOCK_COMPARISONS = new Map<string, CompareResult>([[HELD_FORM_KEY, compari
   { plugin: 'Patch.esp', isWinner: true, editorId: 'NewGun', fields: [
     fieldOf({ name: 'Armor', type: 'formKey', validFormKeyTypes: ['WEAP'] }),
     fieldOf({ name: 'Name', type: 'string' }),
+    fieldOf({ name: 'Mode', type: 'enum', enumMembers: [{ value: 'Auto' }, { value: 'Single' }] }),
   ] },
 ])]]);
 
@@ -740,7 +741,7 @@ describe('A FormKey in plugin source', () => {
     folder = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-plugin-source-'));
     const file = path.join(folder, 'plugin-source', 'Held.esp', 'Gun.json');
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY, Name: 'Rusty Gun' }, null, 2));
+    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY, Name: 'Rusty Gun', Mode: 'Auto' }, null, 2));
     document = await vscode.workspace.openTextDocument(file);
   });
   after(() => fs.rmSync(folder, { recursive: true, force: true }));
@@ -760,7 +761,7 @@ describe('A FormKey in plugin source', () => {
   const documentAt = async (...segments: string[]) => {
     const file = path.join(folder, ...segments);
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY }));
+    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY, Mode: 'Auto' }));
     return vscode.workspace.openTextDocument(file);
   };
 
@@ -805,6 +806,23 @@ describe('A FormKey in plugin source', () => {
   it('completes a reference field by EditorID, inserting the FormKey', async () => {
     await activated();
     assert.deepStrictEqual(await offeredIn(document, NOT_HELD_FORM_KEY), ['NewGun']);
+  });
+
+  const labelsIn = async (doc: vscode.TextDocument, text: string): Promise<string[]> => {
+    const list = await vscode.commands.executeCommand<vscode.CompletionList>(
+      'vscode.executeCompletionItemProvider', doc.uri, doc.positionAt(doc.getText().indexOf(text) + 1));
+    return list.items.flatMap((item) => item.kind === vscode.CompletionItemKind.EnumMember ? [typeof item.label === 'string' ? item.label : item.label.label] : []);
+  };
+
+  it('completes an enum field with its values', async () => {
+    await activated();
+    assert.deepStrictEqual(await labelsIn(document, 'Auto'), ['Auto', 'Single']);
+  });
+
+  it('completes no enum values in JSON outside the plugin source folder', async () => {
+    await activated();
+    const other = await documentAt('Other.json');
+    assert.deepStrictEqual(await labelsIn(other, 'Auto'), []);
   });
 
   it('completes no field that is not a reference', async () => {
