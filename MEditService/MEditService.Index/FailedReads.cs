@@ -27,30 +27,22 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
     }
 
     /// <summary>Runs one read of <paramref name="plugin"/> over what it reads from, taken first, as a
-    /// file can change during the read. A read that answers false or throws is remembered against
-    /// that state.</summary>
+    /// file can change during the read. A failure is remembered against that state, unless a file
+    /// could not be read.</summary>
     public void Read(RegisteredPlugin plugin, Func<ReadState, bool> read)
     {
-        var state = ReadStateOf(plugin);
-        bool succeeded;
+        ReadState? state = null;
         try
         {
-            succeeded = read(state);
+            state = ReadStateOf(plugin);
+            if (read(state)) Forget(plugin.Key);
+            else Remember(plugin.Key, state);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
-            Remember(plugin.Key, state);
+            Remember(plugin.Key, ex is IOException or UnauthorizedAccessException ? null : state);
             throw;
         }
-        if (succeeded) Forget(plugin.Key);
-        else Remember(plugin.Key, state);
-    }
-
-    /// <summary>Remembers a failure that vouches for nothing: a file another process held is read
-    /// again at the next snapshot, whatever it reads from.</summary>
-    public void RememberUntilTheNextSnapshot(PluginAddress key)
-    {
-        lock (_lock) _failed[key] = null;
     }
 
     public void Forget(PluginAddress key)
@@ -58,9 +50,9 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
         lock (_lock) _failed.Remove(key);
     }
 
-    private void Remember(PluginAddress key, ReadState state)
+    private void Remember(PluginAddress key, ReadState? state)
     {
-        lock (_lock) _failed[key] = state.Vouches ? state : null;
+        lock (_lock) _failed[key] = state is { Vouches: true } ? state : null;
     }
 
     private ReadState ReadStateOf(RegisteredPlugin plugin)
