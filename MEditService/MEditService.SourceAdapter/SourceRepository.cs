@@ -157,13 +157,17 @@ public sealed class SourceRepository
 
     /// <summary>The worldspace carrying the cell <paramref name="identity"/> names; null for an interior
     /// cell or one the plugin does not hold. A cell filed under neither refuses with the reader's words.</summary>
-    public string? WorldspaceOf(PluginAddress plugin, RecordIdentity identity)
+    public string? WorldspaceOf(PluginAddress plugin, RecordIdentity identity) =>
+        CellStructureOf(plugin, identity)?.ParentWorldspace;
+
+    /// <summary>Where the GRUP hierarchy puts the cell <paramref name="identity"/> names; null for one the
+    /// plugin does not hold. A cell filed under neither a cell group nor a worldspace refuses with the reader's words.</summary>
+    public CellStructure? CellStructureOf(PluginAddress plugin, RecordIdentity identity)
     {
         if (Locator.Locate(plugin, identity) is null) return null;
-        if (Locator.CellPlacementOf(plugin, identity) is { } placement) return placement.ParentWorldspace;
-
-        throw new UnreadableSourceDocumentException(
-            $"{identity.FormKey} sits under neither a cell group nor a worldspace's blocks, so the tree names no worldspace for it.");
+        return Locator.CellPlacementOf(plugin, identity)?.Structure
+            ?? throw new UnreadableSourceDocumentException(
+                $"{identity.FormKey} sits under neither a cell group nor a worldspace's blocks, so the tree names no place for it.");
     }
 
     /// <summary>The exterior cell this plugin's tree holds at grid (<paramref name="x"/>,

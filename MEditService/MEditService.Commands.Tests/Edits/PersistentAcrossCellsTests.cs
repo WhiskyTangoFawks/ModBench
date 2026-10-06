@@ -50,7 +50,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
             Grid = new CellGrid { Point = new P2Int(3, 3) },
         };
         grid.Temporary.Add(new PlacedObject(mod) { EditorID = "MastersTemp" });
-        world.SubCells.Add(BlockHolding(grid));
+        world.SubCells.Add(CellBlocks.Exterior(grid));
         mod.Worldspaces.Add(world);
     });
 
@@ -65,7 +65,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         var bystander = new Static(mod) { EditorID = "Bystander" };
         _keys["Bystander"] = bystander.FormKey;
         mod.Statics.Add(bystander);
-        world.SubCells.Add(BlockHolding(here));
+        world.SubCells.Add(CellBlocks.Exterior(here));
         mod.Worldspaces.Add(world);
     });
 
@@ -79,16 +79,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         };
         _keys[editorId] = placed.FormKey;
         return placed;
-    }
-
-    private static WorldspaceBlock BlockHolding(Cell cell)
-    {
-        var (x, y) = (cell.Grid?.Point.X ?? 0, cell.Grid?.Point.Y ?? 0);
-        var subBlock = new WorldspaceSubBlock { BlockNumberX = (short)(x / 8), BlockNumberY = (short)(y / 8) };
-        subBlock.Items.Add(cell);
-        var block = new WorldspaceBlock { BlockNumberX = (short)(x / 32), BlockNumberY = (short)(y / 32) };
-        block.Items.Add(subBlock);
-        return block;
     }
 
     private static Fallout4Mod Middle(Action<Fallout4Mod, Worldspace> holds) => Plugin("Middle.esp", mod =>
@@ -249,7 +239,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     public void ClearingPersistent_WhereOnlyAPluginThatIsNoMasterHoldsTheCellAtItsPosition_CreatesOne()
     {
         Load(masterTracked: false, middle: Middle((mod, world) =>
-            world.SubCells.Add(BlockHolding(new Cell(mod) { EditorID = "MiddlesCell", Grid = new CellGrid { Point = new P2Int(9, 9) } }))));
+            world.SubCells.Add(CellBlocks.Exterior(new Cell(mod) { EditorID = "MiddlesCell", Grid = new CellGrid { Point = new P2Int(9, 9) } }))));
 
         SetFlags("Wanderer", 0);
 
@@ -261,7 +251,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     [Fact]
     public void ClearingPersistent_WhereAMasterHoldsTheCellAndAPluginThatIsNoMasterOverridesIt_CopiesTheMastersCell()
     {
-        Load(masterTracked: false, middle: Middle((_, world) => world.SubCells.Add(BlockHolding(
+        Load(masterTracked: false, middle: Middle((_, world) => world.SubCells.Add(CellBlocks.Exterior(
             new Cell(MasterGridCell, Fallout4Release.Fallout4)
             {
                 EditorID = "MiddlesGrid",

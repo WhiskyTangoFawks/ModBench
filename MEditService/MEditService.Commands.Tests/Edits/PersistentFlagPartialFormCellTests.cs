@@ -31,7 +31,7 @@ public sealed class PersistentFlagPartialFormCellTests : IDisposable
 
         var master = new Fallout4Mod(ModKey.FromFileName("Master.esm"), Fallout4Release.Fallout4);
         var masterCell = new Cell(master) { EditorID = "Inside", Flags = Cell.Flag.IsInteriorCell };
-        master.Cells.Records.Add(InteriorBlockHolding(masterCell));
+        master.Cells.Records.Add(CellBlocks.Interior(masterCell));
         var masterPath = Path.Combine(masterFolder, "Master.esm");
         master.WriteToBinary(masterPath);
 
@@ -42,7 +42,7 @@ public sealed class PersistentFlagPartialFormCellTests : IDisposable
         var persistent = new PlacedObject(copy) { EditorID = "PartialPersist", MajorRecordFlagsRaw = Persistent };
         partialCell.Temporary.Add(temporary);
         partialCell.Persistent.Add(persistent);
-        copy.Cells.Records.Add(InteriorBlockHolding(partialCell));
+        copy.Cells.Records.Add(CellBlocks.Interior(partialCell));
         var overridePath = Path.Combine(overrideFolder, _override.Name);
         copy.WriteToBinary(overridePath);
         (_cell, _temporary, _persistent) = (masterCell.FormKey, temporary.FormKey, persistent.FormKey);
@@ -60,15 +60,6 @@ public sealed class PersistentFlagPartialFormCellTests : IDisposable
     }
 
     public void Dispose() => _root.Dispose();
-
-    private static CellBlock InteriorBlockHolding(Cell cell)
-    {
-        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        return block;
-    }
 
     private RecordEditResult SetFlags(FormKey placed, int raw) =>
         _handler.Edit(

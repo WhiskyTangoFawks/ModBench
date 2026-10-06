@@ -1,3 +1,5 @@
+using MEditService.Codec.Serialization;
+
 namespace MEditService.SourceAdapter;
 
 /// <summary>Where the tree puts a cell: the worldspace whose subtree carries it and the block
@@ -9,6 +11,10 @@ internal readonly record struct CellPlacement(
     // Every game's GRUP layout: a sub-block spans 8 cells a side, and a block 4 sub-blocks.
     private const int CellsPerSubBlock = 8;
     private const int SubBlocksPerBlock = 4;
+
+    internal static CellPlacement TopCellOf(string worldspace) => new(worldspace, null, null, null, null, IsInterior: false);
+
+    internal CellStructure Structure => new(ParentWorldspace, BlockX, BlockY, SubX, SubY, IsInterior);
 
     /// <summary>Where the exterior cell at grid (<paramref name="x"/>, <paramref name="y"/>) of
     /// <paramref name="worldspace"/> sits.</summary>

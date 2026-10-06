@@ -58,8 +58,8 @@ public sealed class PersistentFlagEditTests : IDisposable
             holding.Grid = new CellGrid { Point = new P2Int(2, -1) };
             holding.Persistent.Add(Placed(plugin, "HoldingWithin", Persistent, 2.5f * CellWidth, -0.5f * CellWidth));
             holding.Persistent.Add(Placed(plugin, "HoldingBeyond", Persistent, 1.5f * CellWidth, 1.5f * CellWidth));
-            world.SubCells.Add(BlockHolding(outside, 0));
-            world.SubCells.Add(BlockHolding(holding, -1));
+            world.SubCells.Add(CellBlocks.Exterior(outside));
+            world.SubCells.Add(CellBlocks.Exterior(holding));
         });
     }
 
@@ -70,15 +70,6 @@ public sealed class PersistentFlagEditTests : IDisposable
         var cell = new Cell(plugin) { EditorID = editorId, Flags = flags };
         _keys[editorId] = cell.FormKey;
         return cell;
-    }
-
-    private static WorldspaceBlock BlockHolding(Cell cell, short y)
-    {
-        var subBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = y };
-        subBlock.Items.Add(cell);
-        var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = y };
-        block.Items.Add(subBlock);
-        return block;
     }
 
     private PlacedObject Placed(Fallout4Mod plugin, string editorId, int flags, float x, float y)
