@@ -50,7 +50,7 @@ public enum RecordEditRefusal
     FormKeySpaceExhausted,
 
     /// <summary>The gesture does not reach the record yet: a type held only inside another record's
-    /// document, a record created in a worldspace, or a placed record in a grid cell of unknown width.</summary>
+    /// document, or a placed record in a grid cell of unknown width.</summary>
     HeldInAnotherRecordNotYetSupported,
 
     /// <summary>The index and the working tree disagree (a file moved outside Modbench). Not recreated at
@@ -101,7 +101,7 @@ public enum RecordEditRefusal
     DestinationHoldsRecord,
 
     /// <summary>The single slot a copied or created child takes holds another record, as a worldspace's
-    /// persistent cell or a cell's landscape does; the way out is outside the gesture.</summary>
+    /// persistent cell, a worldspace's grid position or a cell's landscape does; the way out is outside the gesture.</summary>
     ChildSlotHeldByAnotherRecord,
 
     /// <summary>A plugin cannot lose its header: the whole-mod door needs it, and its FormKey is synthetic.</summary>

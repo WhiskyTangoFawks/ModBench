@@ -22,6 +22,9 @@ internal sealed class WriteTargets(
     /// naming a command the user cannot find is worse than none.</summary>
     internal const string TrackCommandTitle = "Modbench: Track Mod\u2026";
 
+    /// <summary>The palette title verbatim, as <see cref="TrackCommandTitle"/>.</summary>
+    internal const string CopyCommandTitle = "Modbench: Copy Record\u2026";
+
     internal readonly record struct EditTarget(GameRelease Release, RecordIdentity Identity, SourceRepository Repository);
 
     // The working tree is the only thing asked (ADR-0015), so a second edit builds on
