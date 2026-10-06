@@ -153,7 +153,6 @@ function makeEditor(client = new InMemoryMEditClient(), viewSelections = new Map
     return panel;
   };
   const openFile = (fsPath: string, document?: object): Promise<FakePanel> => openDocument({ scheme: 'file', fsPath }, document);
-  // VS Code opens a document's tab, or shows the one already open.
   const tabs = new Map<string, FakePanel>();
   const vsCodeOpensTabs = () => {
     h.commands.set('vscode.openWith', async (uri: unknown) => {
@@ -186,11 +185,9 @@ const pageGlobal = (panel: FakePanel, name: string): unknown => {
   const html = panel.webview.html ?? '';
   const at = html.indexOf(`window.${name} = `);
   if (at < 0) return undefined;
-  const assigned = html.slice(at + `window.${name} = `.length, html.indexOf('</script>', at));
-  for (let end = assigned.indexOf(';'); end >= 0; end = assigned.indexOf(';', end + 1)) {
-    try { return JSON.parse(assigned.slice(0, end)); } catch { /* the `;` was inside the value */ }
-  }
-  throw new Error(`window.${name} is assigned no JSON value`);
+  const start = at + `window.${name} = `.length;
+  const nextAssignment = html.indexOf('; window.', start);
+  return JSON.parse(html.slice(start, nextAssignment >= 0 ? nextAssignment : html.indexOf(';</script>', start)));
 };
 
 const comparisonsAsked = (client: InMemoryMEditClient) =>
