@@ -122,6 +122,10 @@ public record CopyText(PluginAddress Plugin, string DocumentText);
 
 public record RenderedDocument(string FileName, string Text);
 
+/// <summary>The absolute path of the file holding a copy of a record; null for an untracked plugin's copy, which
+/// has none.</summary>
+public record RecordFile(string? Path);
+
 // ADR-0012.
 public record ReferenceResult(
     string FormKey, string Plugin, string Origin, string FieldPath, string RecordType, string RecordTypeName, string? EditorId);

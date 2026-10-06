@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -171,6 +172,40 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             if (DocumentText.ReadOrNull(documentPath) is { } text && NotADocument(text) is { } why) return why;
         }
         return null;
+    }
+
+    /// <summary>The FormKey the file at <paramref name="fullPath"/>, under the plugin's source, declares for its own
+    /// record, as the index reads it; otherwise why it is no record's document.</summary>
+    internal bool TryFormKeyOfFile(
+        string pluginFileName, string fullPath,
+        [NotNullWhen(true)] out string? formKey, [NotNullWhen(false)] out string? whyNone)
+    {
+        var relativePath = Path.Combine(
+            SourceRepositoryLayout.RootFor(pluginFileName),
+            Path.GetRelativePath(SourceRepositoryLayout.RootIn(_modFolder, pluginFileName), fullPath));
+        var text = SourceRepositoryLayout.CarriesNoRecord(relativePath) ? null : DocumentText.ReadOrNull(fullPath);
+        var declared = text is null || NotADocument(text) is not null
+            ? null
+            : DocumentText.FormKeyDeclaredIn(text, relativePath, pluginFileName);
+        if (FormKey.TryFactory(declared, out var parsed))
+        {
+            (formKey, whyNone) = (parsed.ToString(), null);
+            return true;
+        }
+
+        (formKey, whyNone) = (null, WhyNoRecordIn(relativePath, text));
+        return false;
+    }
+
+    private static string WhyNoRecordIn(string relativePath, string? text)
+    {
+        if (Path.GetFileName(relativePath).Equals(SourceRepositoryLayout.GroupRecordDataFileName, StringComparison.Ordinal))
+            return $"{relativePath} is a group's metadata file, which holds no record.";
+        if (SourceRepositoryLayout.CarriesNoRecord(relativePath)) return $"{relativePath} is no JSON document, so it holds no record.";
+        if (text is null) return $"{relativePath} could not be read.";
+        return NotADocument(text) is { } why
+            ? $"{relativePath} is no record document: {why}"
+            : $"{relativePath} declares no FormKey, so it is no record's document.";
     }
 
     // Its root has to be a JSON object before any member of it can be read; anything else is a file

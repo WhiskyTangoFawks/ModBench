@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index;
@@ -233,6 +234,24 @@ public sealed class RecordQueryService(
         var tree = SourceRepository.TrackedModOf(snapshot, plugin) is { } mod ? SourceRepository.Over(mod, snapshot.GameRelease) : null;
         return new RenderedDocument(tree?.FileNameOf(plugin, identity) ?? SourceRepository.FileNameOf(identity), body);
     }
+
+    // A tracked plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
+    public RecordFile? GetRecordFile(PluginAddress plugin, string formKey)
+    {
+        if (RequireReads().GetDocument(formKey, plugin) is not { } copy) return null;
+        var snapshot = _loadOrder.Require();
+        if (snapshot.ProviderOf(plugin) is not PluginProvider.FromMod mod || !SourceRepository.HoldsTreeFor(mod.Folder, plugin.Name))
+            return new RecordFile(null);
+        return SourceRepository.Over(mod, snapshot.GameRelease).FullPathOf(plugin, new RecordIdentity(formKey, copy.RecordType, copy.EditorId))
+            is { } path
+            ? new RecordFile(path)
+            : null;
+    }
+
+    public bool TryGetRecordOfFile(
+        string path,
+        [NotNullWhen(true)] out (PluginAddress Plugin, string FormKey)? record, [NotNullWhen(false)] out string? whyNone) =>
+        SourceRepository.TryRecordOfFile(_loadOrder.Require(), path, out record, out whyNone);
 
     public LoadOrderStatus GetStatus() => _index.Status;
 

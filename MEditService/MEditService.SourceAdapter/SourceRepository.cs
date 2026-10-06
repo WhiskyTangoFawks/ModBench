@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -145,6 +146,39 @@ public sealed class SourceRepository
     /// diagnostic's path for the Problems panel. Null when nothing there holds it.</summary>
     public string? RelativePathOf(PluginAddress plugin, RecordIdentity identity) =>
         Locator.Locate(plugin, identity)?.RelativePath;
+
+    /// <summary>The file holding <paramref name="identity"/>: its own document, the root header document for the
+    /// header, or the document of the record carrying it. Null when no file holds it.</summary>
+    public string? FullPathOf(PluginAddress plugin, RecordIdentity identity) =>
+        Locator.Locate(plugin, identity) is { } unit && File.Exists(unit.FullPath) ? unit.FullPath : null;
+
+    /// <summary>The plugin and FormKey of the record whose own document the file at <paramref name="path"/> is, read
+    /// from its text as the index reads it; otherwise why the file holds none.</summary>
+    public static bool TryRecordOfFile(
+        LoadOrderSnapshot loadOrder, string path,
+        [NotNullWhen(true)] out (PluginAddress Plugin, string FormKey)? record, [NotNullWhen(false)] out string? whyNone)
+    {
+        record = null;
+        var fullPath = Path.GetFullPath(path);
+        if (loadOrder.Plugins.FirstOrDefault(plugin => plugin.Provider is PluginProvider.FromMod mod
+                && IsUnder(SourceRepositoryLayout.RootIn(mod.Folder, plugin.Name), fullPath)
+                && HoldsTreeFor(mod.Folder, plugin.Name)) is not { Provider: PluginProvider.FromMod source } holder)
+        {
+            whyNone = $"{path} is under no tracked plugin's source.";
+            return false;
+        }
+
+        if (!Over(source, loadOrder.GameRelease).Locator.TryFormKeyOfFile(holder.Name, fullPath, out var formKey, out whyNone))
+            return false;
+        record = (holder.Key, formKey);
+        return true;
+    }
+
+    // Windows names a file without regard to case, and VS Code spells a drive letter in lower case.
+    private static bool IsUnder(string directory, string fullPath) =>
+        fullPath.StartsWith(
+            Path.GetFullPath(directory) + Path.DirectorySeparatorChar,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     /// <summary>The name the layout gives the file of the record's own document.</summary>
     public static string FileNameOf(RecordIdentity identity) =>

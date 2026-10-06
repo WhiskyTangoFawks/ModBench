@@ -133,6 +133,45 @@ public static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(503);
 
+        app.MapGet("/plugins/{plugin}/records/{formKey}/file", (
+            string plugin, string formKey, string? origin, IRecordQueryService svc) =>
+            PluginRecordAnswer(plugin, formKey, origin, svc.GetRecordFile))
+            .WithName("GetRecordFile")
+            .WithTags(Tag)
+            .WithDescription(
+                "The absolute path of the file in plugin source holding the plugin's copy of a record: its own document, the " +
+                "root header document for the Plugin Header record, or the document of the record carrying a child record. " +
+                "Null for an untracked plugin's copy, which has no file.")
+            .Produces<RecordFile>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(503);
+
+        app.MapGet("/plugin-source/record", (string? path, IRecordQueryService svc) =>
+        {
+            if (path is null || !Path.IsPathFullyQualified(path))
+                return Results.Problem("Name the file by its absolute path.", statusCode: 400);
+            try
+            {
+                return svc.TryGetRecordOfFile(path, out var record, out var whyNone)
+                    ? Results.Ok(new RecordAddress(record.Value.FormKey, record.Value.Plugin.Name, record.Value.Plugin.Origin))
+                    : Results.Problem(whyNone, statusCode: 422);
+            }
+            catch (NoLoadOrderException ex)
+            {
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            }
+        })
+            .WithName("GetRecordOfFile")
+            .WithTags(Tag)
+            .WithDescription(
+                "The record whose own document the file at an absolute path is, read from the file's text: its plugin and " +
+                "FormKey. A file that is no record's own document refuses, saying why.")
+            .Produces<RecordAddress>()
+            .ProducesProblem(400)
+            .ProducesProblem(422)
+            .ProducesProblem(503);
+
         app.MapGet("/plugins/creatable-extensions", (PluginExtensionsQueryService svc) =>
         {
             try
