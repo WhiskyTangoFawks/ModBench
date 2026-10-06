@@ -50,7 +50,7 @@ public sealed class RecordSummaryContainerChildrenTests
         using var index = Indexes.Reconciled(fixture);
         index.SetFilter($"SELECT '{quest}' AS form_key", "filter.sql");
 
-        var page = index.RequireReads().Search(new RecordQuery(RecordTypes: ["qust"], Search: "QuestWithChildren", Limit: 50));
+        var page = index.RequireReads().Search(new RecordQuery(RecordTypes: ["qust"], Search: "QuestWithChildren", Limit: 50, Scope: RecordQueryScope.Search));
 
         Assert.True(SummaryFor(page, quest.ToString()).HasContainerChildren);
     }

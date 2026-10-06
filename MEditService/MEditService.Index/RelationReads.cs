@@ -117,10 +117,9 @@ internal sealed class RelationReads(
     public PagedResult<RecordSummary> Search(RecordQuery query)
     {
         using var connection = store.OpenReadConnection();
-        // plugins.md scopes the record filter to the Plugins view's listings, and a search lists for no view of it.
-        var listing = query.Search is null;
+        var filter = query.Scope == RecordQueryScope.Navigator ? store.Filter : null;
         var (where, paramValues) = BuildWhere(
-            query.Plugin?.Name, query.Search, listing ? store.Filter.Listing : null, query.Origin, query.RecordTypes,
+            query.Plugin?.Name, query.Search, filter?.Listing, query.Origin, query.RecordTypes,
             query.GroupOnly ? NavigatorSql.NotHeld("r") : null, query.SearchFormKey);
         var dataParams = new List<string>(paramValues);
         var holdings = HoldingsOf(query.Plugin?.Name, query.Origin, dataParams);
@@ -129,7 +128,7 @@ internal sealed class RelationReads(
             EXISTS (
                 SELECT 1 FROM container_child cc
                 WHERE cc.parent_form_key = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
-                  {(listing ? store.Filter.AlsoKeeps("cc", "child_form_key") : "")}
+                  {filter?.AlsoKeeps("cc", "child_form_key")}
             ) AS has_container_children,
             r.parse_diagnosis,
             r.parse_diagnosis IS NOT NULL OR EXISTS (

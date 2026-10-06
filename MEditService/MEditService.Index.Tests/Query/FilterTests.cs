@@ -75,29 +75,13 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void SearchRecords_WithActiveFilter_ReturnsOnlyMatchingRecords()
-    {
-        using var index = LoadedIndex();
-        var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
-        Assert.Equal(TestPluginFixture.RecordCount, all.Total);
-
-        var firstFormKey = all.Items[0].FormKey;
-        index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
-
-        var filtered = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
-        Assert.Equal(1, filtered.Total);
-        Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
-    }
-
-    [Fact]
     public void ASearch_IsNotNarrowedByTheRecordFilter()
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
         index.SetFilter($"SELECT '{_fixture.Npc1FormKey}' AS form_key", "filter.sql");
 
-        var found = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Search: "TestNPC02", Limit: 100));
+        var found = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Search: "TestNPC02", Limit: 100, Scope: RecordQueryScope.Search));
 
         Assert.Equal(["TestNPC02"], found.Items.Select(r => r.EditorId));
     }

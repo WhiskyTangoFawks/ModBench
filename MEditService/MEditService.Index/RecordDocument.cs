@@ -41,7 +41,12 @@ public sealed record RecordQuery(
     string? SearchFormKey = null,
     int Limit = 50,
     int Offset = 0,
-    bool GroupOnly = false);
+    bool GroupOnly = false,
+    RecordQueryScope Scope = RecordQueryScope.Navigator);
+
+/// <summary>The record filter narrows the navigator and never a search: plugins.md says of it, "It never
+/// narrows the Editor or Referenced By".</summary>
+public enum RecordQueryScope { Navigator, Search }
 
 /// <summary>One record type's row count for one plugin, from one grouped query.</summary>
 public record RecordTypeCount(string Type, int Count, bool HasParseFailure);
