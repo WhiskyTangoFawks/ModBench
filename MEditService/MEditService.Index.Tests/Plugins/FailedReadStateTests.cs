@@ -240,6 +240,55 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
+    public void AJustTrackedTreeHeldWhileItIsRead_SaysItsBinaryStillStandsIn()
+    {
+        using var index = Reconciled();
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        var document = NpcDocument;
+        string? reasonWhileHeld = null;
+        IReadOnlyList<string?>? servedWhileHeld = null;
+        ArmOn($"Ingesting {PluginName} from its source tree", () =>
+        {
+            var hold = File.Open(document, FileMode.Open, FileAccess.Read, FileShare.None);
+            ArmOn($"Re-ingesting {PluginName}", () =>
+            {
+                reasonWhileHeld = Reason(index);
+                servedWhileHeld = [.. index.RequireReads().GetDocuments(Plugin.KeyOf()).Select(d => d.EditorId)];
+                hold.Dispose();
+            });
+        });
+
+        index.NextSnapshotUntil(() => index.RequireReads().GetTrackedPlugins().Contains(Plugin.KeyOf()), "the released tree read");
+
+        Assert.Contains(NpcEditorId, servedWhileHeld.Require());
+        Assert.Contains("Showing the compiled binary instead", reasonWhileHeld.Require(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AJustTrackedTreeWhoseBinaryAlsoFails_SaysTheBinarysLastReadStillShows()
+    {
+        using var index = Reconciled(new FailsToOpen(new InvalidOperationException("injected read failure"), atOpen: n => n == 2));
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        ClaimedTwice();
+
+        index.NextSnapshotUntil(() => Failed(index), "the tree's and the binary's failure");
+
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ABinaryHeldWhenAWarmLoadOpensIt_SaysItsLastReadStillShows()
+    {
+        Reconciled().Dispose();
+
+        using var index = Reconciled(new HeldAtFirstRead());
+
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ABinaryThatHashesButIsHeldWhenItOpens_IsOpenedAtTheNextSnapshot()
     {
         using var index = Reconciled(new HeldAtFirstRead());

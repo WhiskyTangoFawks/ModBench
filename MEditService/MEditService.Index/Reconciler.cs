@@ -487,7 +487,40 @@ internal sealed class Reconciler(
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
             logger.LogWarning(ex, "Could not read {Plugin} ({Origin})", plugin.Name, plugin.Origin);
-            FailRead(scope, plugin.Key, PluginLoadFailure.ReasonFor(ex));
+            var rowsFrom = scope.Index.DerivationOf(plugin.Key);
+            FailRead(scope, plugin.Key, ex is SourceTreeUnreadableException { InnerException: { } cause }
+                ? TreeReadFailure(cause, rowsFrom)
+                : ReadFailure(ex, rowsFrom));
+        }
+    }
+
+    // common.md, Errors (ADR-0019): the rows a failed read leaves stand, and the reason says whose they are.
+    private static string ReadFailure(Exception ex, DerivedFrom? rowsFrom) => rowsFrom switch
+    {
+        DerivedFrom.Binary => $"Could not read this plugin ({PluginLoadFailure.ReasonFor(ex)}). Still showing what was " +
+            "last read from its compiled binary.",
+        DerivedFrom.SourceTree => $"Could not read this plugin ({PluginLoadFailure.ReasonFor(ex)}). Still showing what was " +
+            "last read from its source tree.",
+        _ => PluginLoadFailure.ReasonFor(ex),
+    };
+
+    // An IOException, so FailedReads reads the plugin again; the reason names the tree, not the binary.
+    private sealed class SourceTreeUnreadableException : IOException
+    {
+        public SourceTreeUnreadableException()
+        {
+        }
+
+        public SourceTreeUnreadableException(string message) : base(message)
+        {
+        }
+
+        public SourceTreeUnreadableException(string message, Exception innerException) : base(message, innerException)
+        {
+        }
+
+        public SourceTreeUnreadableException(string message, int hresult) : base(message, hresult)
+        {
         }
     }
 
@@ -513,7 +546,7 @@ internal sealed class Reconciler(
         {
             // A validation that failed is no evidence the rows are still true: the whole read below
             // re-derives them and reports its own failure.
-            logger.LogWarning(ex, "Could not validate {Plugin}'s source tree at load; re-deriving it", plugin.Name);
+            logger.LogWarning(ex, "Validating {Plugin} ({Origin}) at load failed; reading it whole", plugin.Name, plugin.Origin);
             return false;
         }
     }
@@ -567,8 +600,8 @@ internal sealed class Reconciler(
 
     // ADR-0007; HeldPlugins still reads a tracked plugin's metadata off its binary.
 
-    // A failed source read degrades to the binary and answers false, with a real PluginLoadFailure: a
-    // silent fallback would leave the user reading pre-Track binary content believing it was their source.
+    // A tree that fails to parse degrades to the binary and answers false, saying so: a silent fallback
+    // would show pre-Track binary content as the user's source. A tree that cannot be read throws.
     private bool IndexOnePlugin(OpenScope scope, PluginMetadata plugin, bool holdsTree, CancellationToken token)
     {
         // One advance for the whole plugin, whichever door it came through (ADR-0015).
@@ -589,11 +622,14 @@ internal sealed class Reconciler(
             scope.Projector.Ingest(plugin, ModHoldingTree(plugin), token);
             return true;
         }
-        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException or IOException
-            or UnauthorizedAccessException))
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new SourceTreeUnreadableException(ex.Message, ex);
+        }
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
             // Every other exception, not a curated set: a third-party deserializer fails in open-ended
-            // ways. A cancel is no source failure, and a file that cannot be read is read again, not stood in for.
+            // ways. A cancel is no source failure.
             logger.LogWarning(ex,
                 "Could not ingest {Plugin} from its source tree; falling back to the binary", plugin.Name);
             scope.Held.SetFailure(plugin.Key, TreeReadFailure(ex, DerivedFrom.Binary));
