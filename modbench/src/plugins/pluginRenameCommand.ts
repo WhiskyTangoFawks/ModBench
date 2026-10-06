@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
-import { renamePlugin, type PluginRenameAccess } from '../pluginsCommands/renamePlugin';
+import { confirmRename, renamePlugin, type PluginRenameAccess, type PluginRenameConfirmation } from '../pluginsCommands/renamePlugin';
 import { registerGesture, singularArgument } from '../drivingLib/gestureEntry';
 import { promptRename } from '../drivingLib/promptRename';
 import type { Reporter } from '../ports/reporter';
@@ -10,16 +10,15 @@ import { lightPluginsSupportedOf, pluginNameRefusal } from './pluginName';
 import { holdsPlugin } from './pluginPlaces';
 import type { PluginsTreeNode } from './PluginsTreeProvider';
 
-export interface RenamePluginDeps {
-  client: Pick<MEditClient, 'renameSource' | 'getLightPluginsSupported'>;
-  access: Omit<PluginRenameAccess, 'client'>;
+export interface RenamePluginDeps extends PluginRenameAccess, PluginRenameConfirmation {
+  client: PluginRenameAccess['client'] & PluginRenameConfirmation['client'] & Pick<MEditClient, 'getLightPluginsSupported'>;
   instance: Pick<Instance, 'value' | 'quiet'>;
   reporter: Reporter;
 }
 
 /** commands.md, `rename` under Plugin. */
 export function registerRenamePluginCommand(
-  { client, access, instance, reporter }: RenamePluginDeps, viewSelection: () => readonly PluginsTreeNode[],
+  { client, adapter, ask, instance, reporter }: RenamePluginDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   return registerGesture('modbench.plugin.rename', viewSelection, async (entry) => {
     const row = singularArgument(entry, 'plugin');
@@ -36,9 +35,15 @@ export function registerRenamePluginCommand(
     const newName = await promptRename('Rename plugin', plugin.name, refusal);
     if (newName === undefined) return;
 
+    const confirmed = await confirmRename({ adapter, client, ask }, plugin, newName, instance.value.gameRelease);
+    if (!confirmed.confirmed) {
+      if (confirmed.refusal !== undefined) reporter.report('error', confirmed.refusal);
+      return;
+    }
+
     await vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
       instance.quiet(async () => {
-        const result = await renamePlugin({ ...access, client }, plugin, newName, instance.value.gameRelease);
+        const result = await renamePlugin({ adapter, client }, plugin, newName, instance.value.gameRelease);
         if (result.applied) return;
         if (!result.sourceRenamed) {
           reporter.report('error', result.refusal);

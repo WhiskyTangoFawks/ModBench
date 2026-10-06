@@ -386,7 +386,16 @@ export class PluginsTreeProvider
   private async rows(): Promise<(PluginListNode | ErrorNode)[]> {
     await this.firstRead.settled; // never claim "No plugins" before the Instance has actually read one
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
+    return this.shownRows();
+  }
 
+  /** The row the tree now shows under the id of `row`, which VS Code may still hold from before a
+   *  rebuild; undefined when the plugin is gone or the name filter hides it. */
+  shownRow(row: PluginsTreeNode): PluginListNode | undefined {
+    return isRow(row) ? this.shownRows().find((shown) => shown.id === row.id) : undefined;
+  }
+
+  private shownRows(): PluginListNode[] {
     const losingFirst = this.builtRows();
     const built = this.direction === 'winningAtTop' ? [...losingFirst].reverse() : losingFirst;
     const named = this.filterText
