@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using Microsoft.Extensions.Logging;
@@ -9,7 +10,7 @@ namespace MEditService.Queries;
 /// hydrated through the ordinary Search path so IsWinner/WorkingTreeState/LoadOrderIndex derive
 /// exactly as every other listing does — no second derivation to keep in step.</summary>
 public sealed class ContainerChildQueryService(
-    IQueryIndex index, ILogger<ContainerChildQueryService>? logger = null)
+    IQueryIndex index, LoadOrderHolder loadOrder, ILogger<ContainerChildQueryService>? logger = null)
 {
     private const int UnlimitedRecords = int.MaxValue;
 
@@ -35,6 +36,7 @@ public sealed class ContainerChildQueryService(
             .Where(r => SlotRecordTypes.ContainsKey(r.SlotName))
             .ToList();
         if (rows.Count == 0) return [];
+        var release = loadOrder.Require().GameRelease;
 
         // One Search per record type present, so hydration shares every other listing's derivation.
         var byFormKey = new Dictionary<string, RecordSummary>(StringComparer.Ordinal);
@@ -62,7 +64,8 @@ public sealed class ContainerChildQueryService(
             result.Add(new ContainerChildSummary(
                 record.FormKey, record.EditorId, record.Plugin, record.Origin,
                 record.LoadOrderIndex, record.IsWinner, record.WorkingTreeState, SlotRecordTypes[row.SlotName],
-                record.HasContainerChildren, record.ParseDiagnosis, record.HasParseFailure, record.FullName));
+                record.HasContainerChildren, record.ParseDiagnosis, record.HasParseFailure, record.FullName,
+                ContainerChildFields.HasChildFields(SlotRecordTypes[row.SlotName], release)));
         }
         return result;
     }

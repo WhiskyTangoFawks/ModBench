@@ -17,7 +17,9 @@ public interface IRecordQueryService
     CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies);
 
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(PluginAddress plugin);
-    IReadOnlyList<CreatableRecordType> GetCreatableRecordTypes();
+    IReadOnlyList<RecordTypeChoice> GetCreatableRecordTypes();
+    // Null when the plugin holds no such record.
+    IReadOnlyList<RecordTypeChoice>? GetChildRecordTypes(PluginAddress plugin, string formKey);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 
     // Answered in every state, "no load order yet" included (ADR-0013).

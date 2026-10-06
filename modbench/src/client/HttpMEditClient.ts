@@ -12,7 +12,7 @@ import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
-  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type CreatableRecordType,
+  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice,
   type RebuildIndexOutcome, type CopyItem, type CopyMode, type RecordChildHolders,
   type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditChangesOutcome, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
@@ -508,10 +508,21 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getCreatableRecordTypes(): Promise<CreatableRecordType[]> {
+  async getCreatableRecordTypes(): Promise<RecordTypeChoice[]> {
     return this.withTimeout('getCreatableRecordTypes', async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/record-types/creatable', { signal });
       this.ensureOk('getCreatableRecordTypes', response, error);
+      return data ?? [];
+    });
+  }
+
+  async getChildRecordTypes({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RecordTypeChoice[]> {
+    return this.withTimeout(`getChildRecordTypes(${plugin}, ${formKey})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/child-record-types', {
+        params: { path: { plugin, formKey }, query: { origin } },
+        signal,
+      });
+      this.ensureOk(`getChildRecordTypes(${plugin}, ${formKey})`, response, error);
       return data ?? [];
     });
   }

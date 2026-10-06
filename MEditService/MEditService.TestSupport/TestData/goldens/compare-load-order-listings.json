@@ -72,6 +72,7 @@
         "count": 1,
         "displayName": "Constructible Object",
         "hasParseFailure": false,
+        "isContainer": false,
         "isCreatable": true,
         "type": "cobj"
       },
@@ -79,6 +80,7 @@
         "count": 2,
         "displayName": "Non-Player Character",
         "hasParseFailure": false,
+        "isContainer": false,
         "isCreatable": true,
         "type": "npc_"
       },
@@ -86,6 +88,7 @@
         "count": 1,
         "displayName": "Weapon",
         "hasParseFailure": false,
+        "isContainer": false,
         "isCreatable": true,
         "type": "weap"
       }
@@ -95,6 +98,7 @@
         "count": 2,
         "displayName": "Non-Player Character",
         "hasParseFailure": false,
+        "isContainer": false,
         "isCreatable": true,
         "type": "npc_"
       },
@@ -102,6 +106,7 @@
         "count": 1,
         "displayName": "Weapon",
         "hasParseFailure": false,
+        "isContainer": false,
         "isCreatable": true,
         "type": "weap"
       }
@@ -111,6 +116,7 @@
         "count": 1,
         "displayName": "Constructible Object",
         "hasParseFailure": false,
+        "isContainer": false,
         "isCreatable": true,
         "type": "cobj"
       },
@@ -118,6 +124,7 @@
         "count": 1,
         "displayName": "Non-Player Character",
         "hasParseFailure": false,
+        "isContainer": false,
         "isCreatable": true,
         "type": "npc_"
       }

@@ -231,6 +231,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/{plugin}/records/{formKey}/child-record-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The record types the plugin's copy of a container record can hold, in name order. */
+        get: operations["GetChildRecordTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/creatable-extensions": {
         parameters: {
             query?: never;
@@ -728,16 +745,13 @@ export interface components {
             parseDiagnosis?: string | null;
             hasParseFailure: boolean;
             fullName?: string | null;
+            isContainer: boolean;
         };
         /** @enum {string} */
         CopyMode: "New" | "Override" | "DeepOverride";
         CopyText: {
             plugin: components["schemas"]["PluginAddress"];
             documentText: string;
-        };
-        CreatableRecordType: {
-            type: string;
-            displayName: string;
         };
         CreatePluginRequest: {
             origin: string;
@@ -960,6 +974,7 @@ export interface components {
             displayName: string;
             hasParseFailure: boolean;
             isCreatable: boolean;
+            isContainer: boolean;
         };
         PluginResponse: {
             name: string;
@@ -1115,6 +1130,10 @@ export interface components {
             items: components["schemas"]["RecordSummary"][];
             /** Format: int32 */
             total: number;
+        };
+        RecordTypeChoice: {
+            type: string;
+            displayName: string;
         };
         RecordsWithChildrenRequest: {
             records: components["schemas"]["RecordAddress"][];
@@ -1687,7 +1706,59 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreatableRecordType"][];
+                    "application/json": components["schemas"]["RecordTypeChoice"][];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetChildRecordTypes: {
+        parameters: {
+            query?: {
+                origin?: string;
+            };
+            header?: never;
+            path: {
+                plugin: string;
+                formKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordTypeChoice"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Service Unavailable */
