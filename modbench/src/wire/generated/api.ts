@@ -165,6 +165,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/problems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description What is wrong in each tracked active plugin's source, on the file that holds the record: a reference to a record no active plugin holds. Answers only once the index is ready. */
+        get: operations["GetPluginProblems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/{plugin}/dependants": {
         parameters: {
             query?: never;
@@ -923,6 +940,11 @@ export interface components {
             origin: string;
             reason: string;
         };
+        PluginProblems: {
+            plugin: components["schemas"]["PluginAddress"];
+            problems: components["schemas"]["SourceProblem"][];
+            failure?: string | null;
+        };
         /** @enum {string} */
         PluginProviderKind: "Mod" | "Game" | "None";
         PluginProviderRequest: {
@@ -1118,6 +1140,11 @@ export interface components {
         SourceMove: {
             from: string;
             to: string;
+        };
+        SourceProblem: {
+            formKey: string;
+            sourceRelativePath: string;
+            message: string;
         };
         /** @enum {string} */
         TrackPhase: "Idle" | "Parsing" | "Serializing" | "Committing";
@@ -1526,6 +1553,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginDiagnosisReport"][];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetPluginProblems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginProblems"][];
                 };
             };
             /** @description Service Unavailable */

@@ -119,6 +119,9 @@ export const UNLIMITED_RECORDS = 2147483647;
 /** The plugins that list a plugin's file name as a master, and the plugins whose masters mEdit could
  *  not read. */
 export type PluginDependants = components['schemas']['PluginDependantsResponse'];
+/** What is wrong in a tracked active plugin's source, per plugin: each problem names the referring
+ *  record and its source file relative to the mod folder. */
+export type PluginProblems = components['schemas']['PluginProblems'];
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 export type CreatableRecordType = components['schemas']['CreatableRecordType'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
@@ -202,6 +205,8 @@ export interface MEditClient {
   getDiagnoses(): Promise<PluginDiagnosisReport[]>;
   // Rejects while mEdit has not finished indexing: a plugin it has not opened would read as no dependant.
   getPluginDependants(plugin: PluginAddress): Promise<PluginDependants>;
+  // Rejects while mEdit has not finished indexing: a plugin it has not reached would read as clean.
+  getPluginProblems(): Promise<PluginProblems[]>;
   getRecordTypes(plugin: PluginAddress): Promise<PluginRecordTypeCount[]>;
   // The game's, not a plugin's: every plugin of the load order shares it.
   getCreatableRecordTypes(): Promise<CreatableRecordType[]>;

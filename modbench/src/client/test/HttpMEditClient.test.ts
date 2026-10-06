@@ -999,6 +999,36 @@ describe('HttpMEditClient — the plugins that list a plugin as a master', () =>
   });
 });
 
+describe('HttpMEditClient — the problems in each tracked plugin\'s source', () => {
+  it('answers each plugin with its problems, on the file that holds the record', async () => {
+    const answer = [{
+      plugin: { name: 'Refers.esp', origin: 'ReferringMod' },
+      problems: [{ formKey: '000800:Refers.esp', sourceRelativePath: 'Refers.esp/Npcs/Npc.json', message: 'Race: 000ABC:Absent.esp is held by no active plugin' }],
+    }];
+    let asked: Request | undefined;
+    const client = makeClient(vi.fn((req: Request) => {
+      asked = req;
+      return Promise.resolve(jsonResponse(200, answer));
+    }));
+
+    await expect(client.getPluginProblems()).resolves.toEqual(answer);
+    expect(new URL(asked?.url ?? '').pathname).toBe('/plugins/problems');
+  });
+
+  it('rejects a response with no body, so no plugin reads as clean on no answer', async () => {
+    const client = makeClient(vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 200 }))));
+
+    await expect(client.getPluginProblems()).rejects.toThrow(/no answer/);
+  });
+
+  it('rejects, naming the reason, while mEdit has not finished indexing', async () => {
+    const client = makeClient(vi.fn((_req: Request) =>
+      Promise.resolve(jsonResponse(503, { detail: 'mEdit has not finished indexing the plugins.' }))));
+
+    await expect(client.getPluginProblems()).rejects.toThrow(/not finished indexing/);
+  });
+});
+
 describe('HttpMEditClient — read timeout, checked through getRecordTypes, standing in for the read verbs that share the race', () => {
   it('rejects a hung read after the configured timeout, aborting the request', async () => {
     let sawSignal: AbortSignal | undefined;
