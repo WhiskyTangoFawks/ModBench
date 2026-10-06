@@ -213,8 +213,9 @@ public static class PluginEndpoints
             .WithName("CreateRecord")
             .WithSummary("Create a new record as a working-tree change.")
             .WithDescription(
-                "Mints a new record and writes it as a new source file in the plugin's working tree — " +
-                "a git-native create, answering at Effective only until committed and compiled.")
+                "Mints a new record in the plugin's working tree: a new source file of its own, or, for a record created " +
+                "in a container, an entry in the container's document. A git-native create, answering at Effective only " +
+                "until committed and compiled.")
             .WithTags(Tag)
             .Produces<RecordCreateResponse>()
             .ProducesProblem(400)
