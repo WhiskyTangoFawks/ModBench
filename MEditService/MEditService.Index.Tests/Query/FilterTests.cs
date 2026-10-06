@@ -91,6 +91,18 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
+    public void ASearch_IsNotNarrowedByTheRecordFilter()
+    {
+        using var index = LoadedIndex();
+        var reads = index.RequireReads();
+        index.SetFilter($"SELECT '{_fixture.Npc1FormKey}' AS form_key", "filter.sql");
+
+        var found = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Search: "TestNPC02", Limit: 100));
+
+        Assert.Equal(["TestNPC02"], found.Items.Select(r => r.EditorId));
+    }
+
+    [Fact]
     public void CountRecordsForPlugin_WithActiveFilter_CountsOnlyMatching()
     {
         using var index = LoadedIndex();

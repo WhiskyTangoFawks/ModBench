@@ -34,4 +34,24 @@ public sealed class RecordSummaryContainerChildrenTests
         Assert.True(SummaryFor(page, withChildren.ToString()).HasContainerChildren);
         Assert.False(SummaryFor(page, withoutChildren.ToString()).HasContainerChildren);
     }
+
+    [Fact]
+    public void ASearch_ReportsChildrenTheRecordFilterHides()
+    {
+        FormKey quest = default;
+        using var fixture = new PluginFixtureBuilder("container-children-search")
+            .WithPlugin(Key.Name, mod =>
+            {
+                var withChildren = mod.Quests.AddNew("QuestWithChildren");
+                withChildren.DialogTopics.Add(new DialogTopic(mod) { EditorID = "Topic0" });
+                quest = withChildren.FormKey;
+            })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+        index.SetFilter($"SELECT '{quest}' AS form_key", "filter.sql");
+
+        var page = index.RequireReads().Search(new RecordQuery(RecordTypes: ["qust"], Search: "QuestWithChildren", Limit: 50));
+
+        Assert.True(SummaryFor(page, quest.ToString()).HasContainerChildren);
+    }
 }
