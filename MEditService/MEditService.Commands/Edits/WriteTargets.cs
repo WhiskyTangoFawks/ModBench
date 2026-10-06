@@ -79,7 +79,7 @@ internal sealed class WriteTargets(
         return false;
     }
 
-    private static RecordEditResult RecordNotFound(PluginAddress plugin, string formKey) =>
+    internal static RecordEditResult RecordNotFound(PluginAddress plugin, string formKey) =>
         RecordEditResult.Refused(
             RecordEditRefusal.RecordNotFound,
             $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document carries it.");

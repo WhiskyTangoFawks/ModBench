@@ -49,6 +49,19 @@ public static class ChildRecordTypes
             .Select(add => add.Type)];
     }
 
+    /// <summary>The members of <paramref name="containerType"/> a record of <paramref name="recordType"/>
+    /// can sit in. A placed reference has two in a cell: its persistent and its temporary children.</summary>
+    public static IReadOnlyList<string> SlotsFor(string containerType, string recordType, GameRelease release)
+    {
+        var dispatch = RecordTypeDispatch.For(release);
+        if (dispatch.ConcreteFor(containerType) is not { } container || dispatch.ConcreteFor(recordType) is not { } held) return [];
+        var category = release.ToCategory();
+        return [.. ContainerMembers.Derived.HeldTypesBySlot
+            .Where(slot => slot.Key.Game == category && slot.Key.ParentType == container.Name)
+            .Where(slot => slot.Value.Any(type => type.IsAssignableFrom(held)))
+            .Select(slot => slot.Key.Slot)];
+    }
+
     private static bool Allows(Narrowing narrowing, CellPlace? place) => narrowing switch
     {
         Narrowing.NotPersistent => place is not CellPlace.PersistentWorldspaceCell,
