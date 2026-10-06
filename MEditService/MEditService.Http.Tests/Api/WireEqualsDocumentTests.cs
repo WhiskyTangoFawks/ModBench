@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -12,46 +11,41 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
     private static readonly JsonSerializerOptions MetaOptions = new(JsonSerializerDefaults.Web);
     private readonly HttpClient _client = loaded.Client;
 
-    [Fact]
-    public async Task EveryCompareValue_IsTheOverridesOwnField()
+    [Theory]
+    [MemberData(nameof(GoldenFormKeys))]
+    public async Task EveryCompareValue_IsTheOverridesOwnField(string formKey)
     {
-        var formKeys = GoldenFormKeys();
-        Assert.NotEmpty(formKeys);
+        var compare = await _client.Compare(formKey);
+        var independentRecordRead = await _client.Record(formKey);
+        var fields = independentRecordRead.GetProperty("fields");
 
-        var mismatches = new List<string>();
-        foreach (var formKey in formKeys)
+        var metadata = new Dictionary<string, FieldMetadata>(StringComparer.Ordinal);
+        var fieldsByName = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var field in fields.EnumerateArray())
         {
-            var compare = await _client.Compare(formKey);
-            var independentRecordRead = await _client.Record(formKey);
-            var fields = independentRecordRead.GetProperty("fields");
-
-            var metadata = new Dictionary<string, FieldMetadata>(StringComparer.Ordinal);
-            var fieldsByName = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
-            foreach (var field in fields.EnumerateArray())
-            {
-                var name = field.GetProperty("metadata").GetProperty("name").GetString().Require();
-                metadata[name] = field.GetProperty("metadata").Deserialize<FieldMetadata>(MetaOptions).Require();
-                fieldsByName[name] = field.GetProperty("value");
-            }
-
-            foreach (var diff in compare.GetProperty("diffs").EnumerateArray())
-            {
-                var name = diff.GetProperty("fieldName").GetString().Require();
-                var root = fieldsByName.TryGetValue(name, out var value) && value.ValueKind != JsonValueKind.Null
-                    ? value : (JsonElement?)null;
-                Collect(diff, root, metadata.GetValueOrDefault(name), formKey, mismatches);
-            }
-
-            var onTheWire = compare.GetProperty("diffs").EnumerateArray()
-                .Select(d => d.GetProperty("fieldName").GetString().Require()).ToHashSet(StringComparer.Ordinal);
-            foreach (var (name, value) in fieldsByName)
-                if (value.ValueKind != JsonValueKind.Null && !onTheWire.Contains(name))
-                    mismatches.Add($"{formKey}.{name}: the field read carries this node and compare has no such field");
+            var name = field.GetProperty("metadata").GetProperty("name").GetString().Require();
+            metadata[name] = field.GetProperty("metadata").Deserialize<FieldMetadata>(MetaOptions).Require();
+            fieldsByName[name] = field.GetProperty("value");
         }
 
+        var mismatches = new List<string>();
+        foreach (var diff in compare.GetProperty("diffs").EnumerateArray())
+        {
+            var name = diff.GetProperty("fieldName").GetString().Require();
+            var root = fieldsByName.TryGetValue(name, out var value) && value.ValueKind != JsonValueKind.Null
+                ? value : (JsonElement?)null;
+            Collect(diff, root, metadata.GetValueOrDefault(name), formKey, mismatches);
+        }
+
+        var onTheWire = compare.GetProperty("diffs").EnumerateArray()
+            .Select(d => d.GetProperty("fieldName").GetString().Require()).ToHashSet(StringComparer.Ordinal);
+        foreach (var (name, value) in fieldsByName)
+            if (value.ValueKind != JsonValueKind.Null && !onTheWire.Contains(name))
+                mismatches.Add($"{formKey}.{name}: the field read carries this node and compare has no such field");
+
         Assert.True(mismatches.Count == 0,
-            $"{mismatches.Count} compare values across {formKeys.Count} records are not the "
-            + $"field read's own nodes:\n{string.Join("\n", mismatches.Take(20))}");
+            $"{mismatches.Count} compare values of {formKey} are not the field read's own nodes:\n"
+            + string.Join("\n", mismatches.Take(20)));
     }
 
     private static void Collect(
@@ -83,7 +77,7 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
                 if (column.Value.ValueKind != JsonValueKind.Null) mismatches.Add($"{here2}: the field read has no such node");
                 continue;
             }
-            if (!JsonEquals(column.Value, n))
+            if (!JsonElement.DeepEquals(column.Value, n))
                 mismatches.Add($"{here2}: diff {Short(column.Value)} vs field {Short(n)}");
         }
     }
@@ -103,18 +97,15 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
         return index < p.GetArrayLength() ? p[index] : null;
     }
 
-    private static bool JsonEquals(JsonElement a, JsonElement b) =>
-        JsonNode.DeepEquals(JsonNode.Parse(a.GetRawText()), JsonNode.Parse(b.GetRawText()));
-
-    private static IReadOnlyList<string> GoldenFormKeys()
+    public static TheoryData<string> GoldenFormKeys()
     {
         var golden = Path.Combine(AppContext.BaseDirectory, "TestData", "goldens", "realdata-record-detail.json");
         using var document = JsonDocument.Parse(File.ReadAllText(golden));
-        return [.. document.RootElement.EnumerateObject()
+        return new(document.RootElement.EnumerateObject()
             .SelectMany(recordType => recordType.Value.EnumerateArray())
             .Select(record => DocumentNodes.StringValueOf(record.GetProperty("FormKey")))
             .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)];
+            .Order(StringComparer.Ordinal));
     }
 
     private static string Short(JsonElement node)
