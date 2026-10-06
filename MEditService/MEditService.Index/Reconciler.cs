@@ -616,11 +616,14 @@ internal sealed class Reconciler(
     }
 
     // The rows a failed tree read leaves stand, and the reason names what they were read from.
-    private static string TreeReadFailure(Exception ex, DerivedFrom? rowsFrom) => rowsFrom == DerivedFrom.Binary
-        ? $"Could not read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). Showing the compiled " +
-          "binary instead — edits made since the last compile are not reflected."
-        : $"Could not re-read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). Still showing what " +
-          "was last read from it — the compiled binary is not used for a tracked plugin.";
+    private static string TreeReadFailure(Exception ex, DerivedFrom? rowsFrom) => rowsFrom switch
+    {
+        DerivedFrom.Binary => $"Could not read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). " +
+            "Showing the compiled binary instead — edits made since the last compile are not reflected.",
+        DerivedFrom.SourceTree => $"Could not re-read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). " +
+            "Still showing what was last read from it — the compiled binary is not used for a tracked plugin.",
+        _ => $"Could not read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}).",
+    };
 
     private static PluginProvider.FromMod ModHoldingTree(PluginMetadata plugin) =>
         plugin.Provider is PluginProvider.FromMod mod ? mod : throw new InvalidOperationException(
