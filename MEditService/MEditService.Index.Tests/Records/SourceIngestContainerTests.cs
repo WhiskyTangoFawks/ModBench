@@ -102,6 +102,27 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.NotNull(reloaded.RequireReads().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
     }
 
+    [Fact]
+    public void AnEmbeddedChildNamingATypeTheGameLacks_FailsTheSourceRead_NamingTheChild()
+    {
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
+        var original = File.ReadAllText(file);
+        var temporaryChild = ObjectEnclosingTheLineNaming(original, ContainerModPlugin.TemporaryRefEditorId);
+        var misspelt = original.Replace(
+            temporaryChild,
+            temporaryChild.Replace("\"PlacedObject\"", "\"PlacedObjekt\"", StringComparison.Ordinal),
+            StringComparison.Ordinal);
+        Assert.NotEqual(original, misspelt);
+        File.WriteAllText(file, misspelt);
+
+        using var reloaded = Reloaded();
+
+        var failure = Assert.Single(reloaded.Status.Failures);
+        Assert.Equal(ContainerMod.PluginName, failure.Name);
+        Assert.Contains("source tree", failure.Reason, StringComparison.Ordinal);
+        Assert.Contains(_fixture.TemporaryRef.ToString(), failure.Reason, StringComparison.Ordinal);
+    }
+
     private static string ObjectEnclosingTheLineNaming(string document, string editorId)
     {
         var at = document.IndexOf($"\"{editorId}\"", StringComparison.Ordinal);
