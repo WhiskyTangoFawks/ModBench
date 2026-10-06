@@ -82,7 +82,8 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
             MasterColumn: columns[0],
             RecordWinnerColumn: columns[winner],
             Columns: columns,
-            ColumnOrder: OrderOf([.. records.Take(comparedCount ?? records.Count)], columns),
+            ColumnOrder: OrderOf(records, columns),
+            ComparedOrder: OrderOf([.. records.Take(comparedCount ?? records.Count)], columns),
             PartialFormColumns: records.Select((r, i) => (r, i)).Where(t => t.r.IsPartialForm).Select(t => columns[t.i]).ToHashSet(StringComparer.Ordinal),
             ShadowedColumns: shadowed,
             StatesOf: cellStates,
@@ -103,6 +104,7 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
         string RecordWinnerColumn,
         IReadOnlyList<string> Columns,
         IReadOnlyList<(string Column, int LoadOrderIndex)> ColumnOrder,
+        IReadOnlyList<(string Column, int LoadOrderIndex)> ComparedOrder,
         IReadOnlySet<string> PartialFormColumns,
         IReadOnlySet<string> ShadowedColumns,
         CellStatesOf StatesOf,
@@ -127,7 +129,7 @@ internal sealed class ConflictClassifier(ILogger? logger = null)
         DiffContext ctx,
         bool ignoredInConflicts = false)
     {
-        var carrying = ctx.ColumnOrder.Where(c => values.GetValueOrDefault(c.Column) != null).ToList();
+        var carrying = ctx.ComparedOrder.Where(c => values.GetValueOrDefault(c.Column) != null).ToList();
         var winnerColumn = carrying.Count > 0 ? carrying.MaxBy(c => c.LoadOrderIndex).Column : ctx.RecordWinnerColumn;
         var shape = shapes[winnerColumn];
 

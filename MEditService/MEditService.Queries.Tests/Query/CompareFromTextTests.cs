@@ -87,13 +87,15 @@ public sealed class CompareFromTextTests
 
         Assert.Equal([BasePlugin, ModPlugin, InactivePlugin], compare.Overrides.Select(AddressOf));
         var items = compare.Diffs.Single(d => d.FieldName == "Items");
-        Assert.NotNull(items.Values[KeyOf(InactivePlugin)]);
+        var ownElement = Assert.Single(items.Children ?? [], r => r.Values[KeyOf(InactivePlugin)] is not null);
+        Assert.Null(ownElement.Values[KeyOf(BasePlugin)]);
+        Assert.Contains("000901", ownElement.Values[KeyOf(InactivePlugin)]?.ToString(), StringComparison.Ordinal);
         Assert.All(Flatten(compare.Diffs), d => Assert.DoesNotContain(KeyOf(InactivePlugin), d.CellStates.Keys));
         Assert.Null(compare.Overrides[^1].ConflictThis);
         Assert.Equal(without.ConflictAll, compare.ConflictAll);
         Assert.Equal(
             without.Overrides.Select(o => o.ConflictThis), compare.Overrides.Take(2).Select(o => o.ConflictThis));
-        Assert.Equal(StatesOf(without.Diffs), StatesOf(compare.Diffs));
+        Assert.Equal(StatesOf(without.Diffs).Where(r => r.States != ""), StatesOf(compare.Diffs).Where(r => r.States != ""));
     }
 
     [Fact]
