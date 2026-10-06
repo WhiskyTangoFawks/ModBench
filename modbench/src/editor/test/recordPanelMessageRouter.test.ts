@@ -40,7 +40,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     formKeyPicker: undefined,
     focusCell: vi.fn(),
     reply: vi.fn(),
-    setTitle: vi.fn(),
+    titleFromRead: vi.fn(),
     readAnswered: vi.fn(),
     conflictsComputed: () => true,
     loadFailures: () => [],
@@ -200,24 +200,24 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdi
     });
   });
 
-  it('titles the tab from the record it read, by recordTitle', async () => {
+  it('hands the tab the record it read and its copies, to title itself by', async () => {
     meditClient.setQueryAnswer('getComparison', compare);
     meditClient.setQueryAnswer('getPlugins', plugins);
-    const setTitle = vi.fn();
+    const titleFromRead = vi.fn();
 
-    await routeRecordPanelMessage(loadMessage, makeDeps({ setTitle }));
+    await routeRecordPanelMessage(loadMessage, makeDeps({ titleFromRead }));
 
-    expect(setTitle).toHaveBeenCalledWith('000001:A.esp');
+    expect(titleFromRead).toHaveBeenCalledWith('000001:A.esp', compare.overrides);
   });
 
   it('leaves the title alone when the read fails', async () => {
     meditClient.setQueryFailure('getComparison', new Error('ECONNREFUSED'));
     meditClient.setQueryAnswer('getPlugins', plugins);
-    const setTitle = vi.fn();
+    const titleFromRead = vi.fn();
 
-    await routeRecordPanelMessage(loadMessage, makeDeps({ setTitle }));
+    await routeRecordPanelMessage(loadMessage, makeDeps({ titleFromRead }));
 
-    expect(setTitle).not.toHaveBeenCalled();
+    expect(titleFromRead).not.toHaveBeenCalled();
   });
 
   it('tells the tab\'s read answered under the FormKey it read, and not when the read fails', async () => {

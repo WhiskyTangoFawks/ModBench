@@ -9,7 +9,9 @@ import { pickRecord, type RecordPickerDeps } from './recordPicker';
 import type { EditsInFlight, FollowedPanel } from './followRecord';
 import type { FocusedCellContext, FocusedCells } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
-import { recordTitle } from './recordTitle';
+import type { TitledColumn } from './recordTitle';
+
+export type TitleFromRead = (formKey: string, columns: readonly TitledColumn[] | undefined) => void;
 
 export interface RouteRecordPanelMessageDeps {
   // The FormKey picker's search and the panel's own read — one client serves both, and the
@@ -26,7 +28,7 @@ export interface RouteRecordPanelMessageDeps {
   // per panel like `formKeyPicker.reply`.
   reply: (msg: ExtensionToWebview) => void;
   // Titles the panel from the record its read answered (editor.md, Opening, story 5).
-  setTitle: (title: string) => void;
+  titleFromRead: TitleFromRead;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
   readAnswered: (formKey: string) => void;
   // The latest load-order status, read rather than fetched.
@@ -35,7 +37,7 @@ export interface RouteRecordPanelMessageDeps {
 }
 
 /** What every panel's messages share: the rest is the panel's own. */
-export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | 'setTitle' | 'readAnswered'>;
+export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | 'titleFromRead' | 'readAnswered'>;
 
 /** The router's bundle for one panel's messages: the picker and the record load both reply to it. */
 export function routerDepsForPanel<Panel extends FollowedPanel>(
@@ -43,14 +45,14 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
   panel: Panel,
   focusedCells: FocusedCells<Panel>,
   editsInFlight: Pick<EditsInFlight<Panel>, 'answered'>,
-  setTitle: (title: string) => void,
+  titleFromRead: TitleFromRead,
 ): RouteRecordPanelMessageDeps {
   return {
     ...shared,
     formKeyPicker: { meditClient: shared.meditClient, reporter: shared.reporter, reply: (m) => { void panel.webview.postMessage(m); } },
     focusCell: (context, userFocus) => { focusedCells.setCell(panel, context, userFocus); },
     reply: (m) => { void panel.webview.postMessage(m); },
-    setTitle,
+    titleFromRead,
     readAnswered: (formKey) => { editsInFlight.answered(panel, formKey); },
   };
 }
@@ -145,7 +147,7 @@ async function answerRecordLoad(
     });
     return;
   }
-  deps.setTitle(recordTitle(m.formKey, compare.value?.overrides));
+  deps.titleFromRead(m.formKey, compare.value?.overrides);
   deps.readAnswered(m.formKey);
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
