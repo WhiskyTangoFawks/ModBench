@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
@@ -25,8 +26,7 @@ function sourceProblems(deps: SourceLanguageDeps): vscode.Disposable {
     collection.clear();
     collection.set([...problems].map(([file, onFile]) => [vscode.Uri.file(file), onFile.map(diagnosticOf)]));
   };
-  const readFile = async (file: string) => new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.file(file)));
-  const unsubscribe = feedSourceProblems({ ...deps, readFile, publish });
+  const unsubscribe = feedSourceProblems({ ...deps, readText: (file) => readFile(file, 'utf8'), publish });
   return new vscode.Disposable(() => { unsubscribe(); collection.dispose(); });
 }
 

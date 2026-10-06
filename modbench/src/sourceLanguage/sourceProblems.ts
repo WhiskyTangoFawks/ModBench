@@ -15,7 +15,7 @@ export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 export interface SourceProblemsDeps {
   client: Pick<MEditClient, 'getPluginProblems' | 'onNotification' | 'onReconnected'>;
   originFiles: OriginFilesOf;
-  readFile: (path: string) => Promise<string>;
+  readText: (path: string) => Promise<string>;
   reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
   /** Replaces every problem published before. */
   publish: (problems: ProblemsByFile) => void;
@@ -55,7 +55,7 @@ function onText(text: string, problem: SourceProblem): ProblemOnFile {
 
 interface Unplaced { plugin: PluginAddress; why: string }
 
-async function placed(answer: PluginProblems[], { originFiles, readFile }: SourceProblemsDeps): Promise<{ byFile: ProblemsByFile; unplaced: Unplaced[] }> {
+async function placed(answer: PluginProblems[], { originFiles, readText }: SourceProblemsDeps): Promise<{ byFile: ProblemsByFile; unplaced: Unplaced[] }> {
   const unplaced: Unplaced[] = [];
   const byPath = new Map<string, SourceProblem[]>();
   for (const { plugin, problems, failure } of answer) {
@@ -68,7 +68,7 @@ async function placed(answer: PluginProblems[], { originFiles, readFile }: Sourc
     }
   }
   const byFile = new Map(await Promise.all([...byPath].map(async ([path, onPath]) => {
-    const text = await readFile(path).catch(() => '');
+    const text = await readText(path).catch(() => '');
     return [path, onPath.map((problem) => onText(text, problem))] as const;
   })));
   return { byFile, unplaced };

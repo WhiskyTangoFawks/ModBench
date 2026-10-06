@@ -28,7 +28,7 @@ function feed(files: Record<string, string>, originFiles = modFolders) {
   feedSourceProblems({
     client,
     originFiles,
-    readFile: (path) => path in files ? Promise.resolve(files[path] ?? '') : Promise.reject(new Error(`no ${path}`)),
+    readText: (path) => path in files ? Promise.resolve(files[path] ?? '') : Promise.reject(new Error(`no ${path}`)),
     reporter,
     publish: (problems) => published.push(problems),
   });

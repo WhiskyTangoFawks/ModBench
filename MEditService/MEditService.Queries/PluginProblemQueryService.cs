@@ -7,9 +7,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
 
-/// <summary>What is wrong in a record of a plugin's source, on the file that holds it: a reference to a
-/// record no active plugin holds. <paramref name="FormKey"/> is the referring record's,
-/// <paramref name="TargetFormKey"/> the one no active plugin holds.</summary>
+/// <summary>What is wrong in a record of a plugin's source, on the file that holds it: a reference
+/// from the record <paramref name="FormKey"/> to <paramref name="TargetFormKey"/>, which no active
+/// plugin holds.</summary>
 public sealed record SourceProblem(string FormKey, string TargetFormKey, string SourceRelativePath, string Message);
 
 /// <summary><paramref name="Failure"/> is set when the plugin's problems could not be placed on files,
