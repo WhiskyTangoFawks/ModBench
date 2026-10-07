@@ -3,8 +3,8 @@ import type { MEditClient, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
-/** Each plugin's tracked folder, by `pluginAddressKey`; a plugin whose origin is not a tracked mod
- *  has no entry. A lookup over the Instance value's own two facts, never a fresh disk check. */
+// Each plugin's tracked folder, by `pluginAddressKey`; a plugin whose origin is not a tracked mod
+// has no entry. A lookup over the Instance value's own two facts, never a fresh disk check.
 function trackedFoldersOf(
   plugins: readonly Pick<PluginMetadata, 'name' | 'origin'>[],
   trackedMods: ReadonlySet<string>,
@@ -19,9 +19,9 @@ function trackedFoldersOf(
   return folders;
 }
 
-/** Deduplicates its input as a contract of its own, not as a property of one caller. A folder
- *  whose `openRepository` resolves `null` is omitted, so a later `.status()` can never land on a
- *  null handle. */
+// Deduplicates its input as a contract of its own, not as a property of one caller. A folder
+// whose `openRepository` resolves `null` is omitted, so a later `.status()` can never land on a
+// null handle.
 async function registerTrackedRepositories<T>(
   openRepository: (modFolder: string) => Promise<T | null | undefined>,
   modFolders: readonly string[],
@@ -35,7 +35,7 @@ async function registerTrackedRepositories<T>(
   return repositories;
 }
 
-/** Reindexed by plugin because a field edit knows the plugin it edited, never the folder. */
+// Reindexed by plugin because a field edit knows the plugin it edited, never the folder.
 function pluginRepositoriesOf<T>(
   folders: ReadonlyMap<string, string>, folderRepositories: ReadonlyMap<string, T>,
 ): Map<string, T> {

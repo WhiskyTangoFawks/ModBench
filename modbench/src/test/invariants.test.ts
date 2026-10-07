@@ -17,7 +17,7 @@ describe('every MO2 text-file write command has a corpus test', () => {
   it('finds the write verbs', () => {
     expect(writeVerbs).toContain('setModsEnabled');
     expect(writeVerbs).toContain('switchProfile');
-    expect(writeVerbs).toContain('excludeDownload');
+    expect(writeVerbs).toContain('excludeDownloads');
     expect(writeVerbs).toContain('deleteDownloads');
     expect(writeVerbs).toContain('markDownloadInstalled');
   });

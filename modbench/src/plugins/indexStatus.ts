@@ -21,9 +21,9 @@ interface ReconciledDeps {
   applyReconciled: (failures: PluginLoadFailure[], totalPlugins: number) => Promise<void>;
 }
 
-/** A reconcile that reached Ready, whoever started it, reported and then handed to the views.
- *  Ready is only published once the snapshot is indexed (common.md, The status bar, story 1),
- *  so conflicts are computed. */
+// A reconcile that reached Ready, whoever started it, reported and then handed to the views.
+// Ready is only published once the snapshot is indexed (common.md, The status bar, story 1),
+// so conflicts are computed.
 async function settleReconciled(status: LoadOrderProgress, deps: ReconciledDeps): Promise<void> {
   reportSkippedPlugins(status.failures, deps);
   deps.statusBar.ready(status.activePlugins);
@@ -35,8 +35,8 @@ async function settleReconciled(status: LoadOrderProgress, deps: ReconciledDeps)
   await deps.applyReconciled(status.failures, status.totalPlugins);
 }
 
-/** A read failure logs and warns, and never throws (ADR-0019). The filter clears only on purpose
- *  (plugins.md, Order and view state, story 3), so a failed read leaves the view as it was. */
+// A read failure logs and warns, and never throws (ADR-0019). The filter clears only on purpose
+// (plugins.md, Order and view state, story 3), so a failed read leaves the view as it was.
 async function syncActiveFilter(
   getActiveFilter: () => Promise<RecordFilter | null>,
   deps: { log: (msg: string) => void; warn: (msg: string) => void; showRecordFilter: (filter: RecordFilter | null) => void },

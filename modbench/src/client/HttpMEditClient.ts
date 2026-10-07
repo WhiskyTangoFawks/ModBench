@@ -72,8 +72,8 @@ function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
   };
 }
 
-/** The HTTP adapter the mEdit client hides (target-architecture.d2): the generated client,
- *  `openapi-fetch`, `undici` and the notification stream live only here. */
+// The HTTP adapter the mEdit client hides (target-architecture.d2): the generated client,
+// `openapi-fetch`, `undici` and the notification stream live only here.
 class HttpMEditClient implements MEditClient {
   private api?: { port: number; client: ApiClient };
   private readonly fetchImpl: (input: Request) => Promise<Response>;
