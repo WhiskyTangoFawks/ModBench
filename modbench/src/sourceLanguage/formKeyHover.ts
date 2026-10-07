@@ -4,7 +4,7 @@ import { recordLabel } from './recordText';
 
 const FORM_KEY = /^[0-9A-F]{6}:.+$/i;
 
-export interface SourceHover {
+interface SourceHover {
   start: number;
   end: number;
   markdown: string;

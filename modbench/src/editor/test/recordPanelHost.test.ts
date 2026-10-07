@@ -53,7 +53,6 @@ import * as vscode from 'vscode';
 import { createEditor } from '..';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { renderedDocumentUri } from '../../drivingLib/recordDocument';
 
 const reporter = { report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() };
 
@@ -113,7 +112,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
     await open();
 
     expect(executed().filter(([id]) => id === 'vscode.openWith')).toEqual([[
-      'vscode.openWith', renderedDocumentUri({ formKey: '000801:A.esp', plugin: winner }, 'Gun.json'), 'modbench.record',
+      'vscode.openWith', '/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record',
       { viewColumn: -1, preview: false },
     ]]);
   });
@@ -126,7 +125,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
     expect(pickRecord.mock.calls).toEqual([[{ meditClient: expect.any(InMemoryMEditClient) as unknown, reporter }, '', []]]);
     expect(executeCommand).toHaveBeenCalledWith(
-      'vscode.openWith', renderedDocumentUri({ formKey: '000801:A.esp', plugin: winner }, 'Gun.json'), 'modbench.record',
+      'vscode.openWith', '/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record',
       { viewColumn: -1, preview: true });
   });
 
@@ -198,7 +197,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
     await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
 
-    expect(opened()).toEqual([[renderedDocumentUri({ formKey: GUN, plugin }, 'Gun.json'), 'modbench.record']]);
+    expect(opened()).toEqual([['/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
   });
 
   it('opens an untracked plugin\'s header as the document mEdit renders it as', async () => {
@@ -206,7 +205,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
     await commandHandlers.get('modbench.record.open')?.({ header: plugin });
 
-    expect(opened()).toEqual([[renderedDocumentUri({ formKey: '000000:A.esp', plugin }, 'A.esp.json'), 'modbench.record']]);
+    expect(opened()).toEqual([['/ModA/A.esp/A.esp.json?formKey=000000%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
   });
 
   it('opens an untracked placed reference as its own rendered document, named by its own EditorID', async () => {
@@ -215,7 +214,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
     await commandHandlers.get('modbench.record.open')?.({ kind: 'placed', formKey: PLACED, plugin: plugin.name, origin: plugin.origin });
 
-    expect(opened()).toEqual([[renderedDocumentUri({ formKey: PLACED, plugin }, 'SharedRef - 000803_A.esp.json'), 'modbench.record']]);
+    expect(opened()).toEqual([['/ModA/A.esp/SharedRef - 000803_A.esp.json?formKey=000803%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
   });
 
   it('opens a copy carried in another record\'s file, as a placed reference is in its cell\'s, in a tab of its own on that file', async () => {
@@ -236,7 +235,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
     await commandHandlers.get('modbench.record.open')?.({ formKey: GUN });
 
-    expect(opened()).toEqual([[renderedDocumentUri({ formKey: GUN, plugin: winner }, 'Gun.json'), 'modbench.record']]);
+    expect(opened()).toEqual([['/ModB/B.esp/Gun.json?formKey=000801%3AA.esp&name=B.esp&origin=ModB', 'modbench.record']]);
   });
 
   it('refuses a record given without a plugin that no active plugin holds, naming it, and opens nothing', async () => {

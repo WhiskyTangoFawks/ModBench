@@ -4,10 +4,7 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 
-/** `instance` is `undefined` with no instance open. The view still registers then — it is the
- *  container's first view and must never be a hole — but the commands its rows activate do not
- *  exist, so it renders no rows. */
-export type ToolboxDeps =
+type ToolboxDeps =
   | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'> }
   | { instance: undefined };
 

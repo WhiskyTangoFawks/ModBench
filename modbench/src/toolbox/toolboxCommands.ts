@@ -8,7 +8,7 @@ import type { Reporter } from '../ports/reporter';
 
 const TOOLBOX_VIEW = 'modbench.toolbox';
 
-export interface ToolboxCommandDeps {
+interface ToolboxCommandDeps {
   access: ProfileAccess;
   /** The profiles and the active one, from the instance value (ADR-0015); `refresh` ends each gesture. */
   instance: Pick<Instance, 'value' | 'refresh'>;
@@ -38,7 +38,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
   ];
 }
 
-export interface RefreshGestureDeps {
+interface RefreshGestureDeps {
   /** instance commands' refresh, bound by the root to the mEdit client and the current value. */
   refresh: () => Promise<RefreshResult>;
   /** Armed before the rebuild is asked for: `ended` settles once mEdit's refill ends, since the

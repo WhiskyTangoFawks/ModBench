@@ -11,15 +11,13 @@ export const MODS_KEY_ARGS = { view: 'modbench.modList' } as const;
 export const runModsWriting = (instance: Pick<Instance, 'refresh'>, command: () => Promise<void>): Promise<void> =>
   runWritingGesture(MODS_KEY_ARGS.view, instance, command);
 
-export const isRowOf = kindGuard<ModlistNode>();
+const isRowOf = kindGuard<ModlistNode>();
 
 const OPEN_FOLDER_KINDS = ['mod', OVERWRITE_ORIGIN, 'folder', 'file'] as const;
 
 export const openFolderArgument = (entry: GestureEntry<ModlistNode>) => singularArgument(entry, ...OPEN_FOLDER_KINDS);
 
-/** What the Mods keys' and palette entries' `when` clauses read off the selection, since neither
- *  is handed a row. */
-export interface ModsKeyContext {
+interface ModsKeyContext {
   readonly selectionToggle?: 'enable' | 'disable';
   readonly selectionKind?: ModlistNode['kind'];
   readonly singleRow: boolean;

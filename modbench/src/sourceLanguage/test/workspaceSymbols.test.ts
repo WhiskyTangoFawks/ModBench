@@ -14,7 +14,7 @@ vi.mock('vscode', () => ({
 }));
 
 import type * as vscode from 'vscode';
-import { workspaceSymbolsOf, type WorkspaceSymbolDeps } from '../workspaceSymbols';
+import { workspaceSymbolsOf } from '../workspaceSymbols';
 import type { PluginMetadata, RecordSummary } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
@@ -35,7 +35,7 @@ const summary = (formKey: string, address: typeof modA, editorId?: string): Reco
   workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false,
 });
 
-type Client = WorkspaceSymbolDeps<unknown>['client'];
+type Client = Parameters<typeof workspaceSymbolsOf<{ getText(): string }>>[0]['client'];
 
 function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Record<string, { file: string; text: string }>, answering: Partial<Client> = {}) {
   const client: Client = {

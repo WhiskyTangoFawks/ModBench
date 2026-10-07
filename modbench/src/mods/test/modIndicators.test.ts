@@ -16,10 +16,12 @@ import type { InstanceValue } from '../../instanceLoader/instance';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
 import { ModListProvider, ModNode } from '../ModListProvider';
-import { indicatorSetting, MOD_INDICATORS, ModIndicatorDecorations, modIndicators, type ModIndicator } from '../modIndicators';
+import { indicatorSetting, MOD_INDICATORS, ModIndicatorDecorations, modRowUri, type ModIndicator } from '../modIndicators';
 import { file, indexedValueOf, mod } from './indexedValue';
 
-const carriedBy = (value: InstanceValue, name: string) => modIndicators(value).get(name) ?? [];
+const carriedBy = (value: InstanceValue, name: string): ModIndicator[] =>
+  decorationsOn(new ModIndicatorDecorations(new FakeInstance(value), settingsOf(allOn).settings), modRowUri(name))
+    .flatMap((decoration, at) => (decoration === undefined ? [] : [present(MOD_INDICATORS[at], 'an indicator').id]));
 
 describe('the indicators each mod carries (mods.md, Indicators)', () => {
   it('a mod whose file wins over another copy overwrites loose files, and one whose file loses to it is overwritten', async () => {

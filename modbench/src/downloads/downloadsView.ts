@@ -16,7 +16,7 @@ import { downloadsFolderUnresolvedLine } from './downloadsFolderUnresolvedLog';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { downloadsKeyContext } from './keyContext';
 
-export interface DownloadsViewDeps {
+interface DownloadsViewDeps {
   access: DownloadsAccess & InstallAccess;
   instance: InstanceView & Pick<Instance, 'refresh'>;
   reporter: Reporter;
@@ -26,7 +26,7 @@ export interface DownloadsViewDeps {
   logUnresolved: (line: string) => void;
 }
 
-export interface DownloadsView extends vscode.Disposable {
+interface DownloadsView extends vscode.Disposable {
   provider: DownloadsProvider;
   view: vscode.TreeView<DownloadsTreeNode>;
   nameFilter: NameFilter;

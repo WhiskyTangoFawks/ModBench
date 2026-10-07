@@ -49,7 +49,7 @@ async function readOr(path: string, ifMissing: string | undefined): Promise<stri
   }
 }
 
-export interface PutOptions {
+interface PutOptions {
   /** A missing file reads as this text rather than rejecting. Omit to have a missing file
    *  refuse the write. */
   ifMissing?: string;
@@ -67,7 +67,7 @@ export async function exists(path: string): Promise<boolean> {
   }
 }
 
-export interface PathFacts {
+interface PathFacts {
   readonly size: number;
   readonly mtimeMs: number;
   /** `other` covers a non-regular target (a socket, FIFO or device node) — a caller's own

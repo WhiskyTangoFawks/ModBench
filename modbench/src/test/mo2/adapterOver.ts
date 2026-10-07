@@ -4,7 +4,7 @@ import type {
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
 import { providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
-import type { InstanceOptions } from '../../instanceLoader/instance';
+import type { Instance } from '../../instanceLoader/instance';
 
 /** The adapter's answers a test fixes in place of asking the machine it runs on. */
 export interface AdapterAnswers {
@@ -17,7 +17,7 @@ export interface AdapterAnswers {
 export const NO_DOWNLOADS: DownloadedFiles = { kind: 'unresolved', reason: 'this test reads no downloads' };
 
 /** A window whose focus never changes, for a test whose subject is not the recompute's triggers. */
-export const STEADY_WINDOW: InstanceOptions['window'] = {
+export const STEADY_WINDOW: ConstructorParameters<typeof Instance>[0]['window'] = {
   state: { focused: true },
   onDidChangeWindowState: () => ({ dispose: () => {} }),
 };

@@ -22,7 +22,7 @@ vi.mock('vscode', () => ({
   ThemeIcon: class { constructor(public id: string) {} },
 }));
 
-import { registerFilterCommands, registerNameFilter, type NameFilterDeps } from '../nameFilter';
+import { registerFilterCommands, registerNameFilter } from '../nameFilter';
 import { present } from '../../ports/present';
 
 const OBJECT = 'test.thing';
@@ -36,7 +36,7 @@ interface Harness {
 
 let current: ReturnType<typeof registerNameFilter>;
 
-function setup(overrides: Partial<NameFilterDeps> = {}): Harness {
+function setup(overrides: Partial<Parameters<typeof registerNameFilter>[0]> = {}): Harness {
   const view: { description?: string; message?: string } = {};
   const applied: { text: string; toggleOn: boolean }[] = [];
   const filter = current = registerNameFilter({

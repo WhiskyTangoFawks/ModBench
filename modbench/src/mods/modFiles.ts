@@ -80,9 +80,7 @@ export const FILE_MARKS = {
   Included: { verb: 'include', state: 'included' },
 } as const satisfies Record<OriginFileMark, { verb: string; state: string }>;
 
-/** The file's own name, as the reference tool reads it to offer one of the pair: excluded offers
- *  include, and included offers exclude, whatever its folder. */
-export type FileExclusion = (typeof FILE_MARKS)[OriginFileMark]['state'];
+type FileExclusion = (typeof FILE_MARKS)[OriginFileMark]['state'];
 
 /** How a message names a file: its mod or Overwrite, and its path there. */
 export const fileLabel = ({ origin, relativePath }: OriginFileRef): string => `${originLabel(origin)}/${relativePath}`;

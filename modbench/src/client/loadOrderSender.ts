@@ -10,7 +10,7 @@ export interface LoadOrderSnapshot {
   readonly gameRelease: string;
 }
 
-export type LoadOrderSendClient = Pick<MEditClient, 'putLoadOrder' | 'status' | 'onStatusChanged'>;
+type LoadOrderSendClient = Pick<MEditClient, 'putLoadOrder' | 'status' | 'onStatusChanged'>;
 
 /** The one sender of ADR-0013's snapshot. It connects before the first PUT, sends one PUT at a
  *  time, and lands the newest snapshot. */

@@ -42,6 +42,16 @@ describe('createSync: settled', () => {
 
     expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('New'));
   });
+
+  it('resolves for a run whose Output write threw', async () => {
+    const channel = { error: vi.fn(), info: vi.fn(() => { throw new Error('the Output is gone'); }) };
+    const sync = createSync(() => Promise.resolve<Outcome>({ applied: true, added: ['New'], dropped: [] }), channel, LABELS);
+
+    const run = sync.run({});
+
+    await expect(sync.settled()).resolves.toBeUndefined();
+    await expect(run).rejects.toThrow('the Output is gone');
+  });
 });
 
 describe('createSync: outcome handling', () => {

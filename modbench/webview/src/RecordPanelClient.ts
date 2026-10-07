@@ -9,7 +9,7 @@ import { isColumnCopies, type ColumnCopy } from '../../src/wire/messages';
 // `load` asks the host for compare, plugins and status in one round trip: a compare failure fails
 // the whole load, while a plugins/status failure comes back as `null` so the panel leaves that
 // slice of state untouched.
-export type LoadResult =
+type LoadResult =
   | {
       // Null is a record held by no active plugin.
       ok: true; result: CompareResult | null; immutableSet: Set<ColumnKey> | null;

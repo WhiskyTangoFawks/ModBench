@@ -14,7 +14,7 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { childRecordUri, copyOf, renderedDocumentUri } from '../recordDocument';
+import { copyDocument, copyOf, type RecordCopy, type RecordDocumentClient } from '../recordDocument';
 
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
@@ -22,18 +22,37 @@ const copy = { formKey: GUN, plugin: modA };
 const NAME = 'Gun - 000801_A.esp.json';
 const CELL_FILE = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
 
+const untracked = (fileName: string): RecordDocumentClient => ({
+  getRecordOwner: () => Promise.resolve(undefined),
+  getRecordFile: () => Promise.resolve({ path: null }),
+  getRecordOfFile: () => Promise.reject(new Error('an untracked copy has no file')),
+  getRenderedDocument: () => Promise.resolve({ fileName }),
+});
+
+const carriedIn = (file: string): RecordDocumentClient => ({
+  ...untracked(NAME),
+  getRecordFile: () => Promise.resolve({ path: file }),
+  getRecordOfFile: () => Promise.resolve({ formKey: '000700:A.esp' }),
+});
+
+const uriOf = async (client: RecordDocumentClient, of: RecordCopy): Promise<vscode.Uri> => {
+  const document = await copyDocument(client, of);
+  if (!('uri' in document)) throw new Error(document.refused);
+  return document.uri;
+};
+
 describe('a rendered document\'s address', () => {
-  it('names the copy by its FormKey and plugin, and ends in the name its file would have', () => {
-    const uri = renderedDocumentUri(copy, NAME);
+  it('names the copy by its FormKey and plugin, and ends in the name its file would have', async () => {
+    const uri = await uriOf(untracked(NAME), copy);
 
     expect(copyOf(uri)).toEqual(copy);
     expect(uri.path.split('/').at(-1)).toBe(NAME);
   });
 
-  it('survives a plugin address containing "/"', () => {
+  it('survives a plugin address containing "/"', async () => {
     const odd = { formKey: '000801:Mod/A.esp', plugin: { name: 'Mod/A.esp', origin: 'Mods/A' } };
 
-    expect(copyOf(renderedDocumentUri(odd, NAME))).toEqual(odd);
+    expect(copyOf(await uriOf(untracked(NAME), odd))).toEqual(odd);
   });
 
   it('refuses an address that states no plugin name, naming what it lacks', () => {
@@ -42,16 +61,16 @@ describe('a rendered document\'s address', () => {
     expect(() => copyOf(uri)).toThrow('The document /ModA/A.esp/Gun.json states no name.');
   });
 
-  it('tells apart the copies of two plugins of one file name from different origins', () => {
-    expect(renderedDocumentUri(copy, NAME))
-      .not.toEqual(renderedDocumentUri({ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModB' } }, NAME));
+  it('tells apart the copies of two plugins of one file name from different origins', async () => {
+    expect(await uriOf(untracked(NAME), copy))
+      .not.toEqual(await uriOf(untracked(NAME), { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModB' } }));
   });
 });
 
 describe('a child record\'s address', () => {
-  it('is apart from its sibling\'s, which shares its file', () => {
+  it('is apart from its sibling\'s, which shares its file', async () => {
     const placed = { formKey: '000803:A.esp', plugin: modA };
 
-    expect(childRecordUri(placed, CELL_FILE)).not.toEqual(childRecordUri({ formKey: '000804:A.esp', plugin: modA }, CELL_FILE));
+    expect(await uriOf(carriedIn(CELL_FILE), placed)).not.toEqual(await uriOf(carriedIn(CELL_FILE), { formKey: '000804:A.esp', plugin: modA }));
   });
 });

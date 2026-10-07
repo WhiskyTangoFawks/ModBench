@@ -10,9 +10,7 @@ import { errorMessage } from '../ports/errorMessage';
 
 const BASE_DIR_VARIABLE = '%BASE_DIR%';
 
-/** The folder MO2 is actually configured to use, or why Modbench could not tell — never a
- *  guess: a folder Modbench cannot resolve is not the folder MO2 names. */
-export type DownloadsDirectoryResolution =
+type DownloadsDirectoryResolution =
   | { readonly kind: 'resolved'; readonly downloadsDir: string }
   | { readonly kind: 'unresolved'; readonly reason: string };
 

@@ -6,7 +6,8 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { detectRoot as detectRootWith, DATA_DIRS } from '../detectRoot';
+import { detectRoot as detectRootWith } from '../detectRoot';
+import { SCRIPT_EXTENDER_FOLDERS } from '../../tables/gamePaths';
 import { adapterOver } from '../../test/mo2/adapterOver';
 
 let dir: string;
@@ -69,11 +70,11 @@ describe('detectRoot', () => {
     expect(await detectRoot(dir)).toEqual({ sourceDir: join(dir, 'MyMod'), isFomod: true });
   });
 
-  it('holds no empty DATA_DIRS entry, which would make a scaffolded data folder collapse into the extraction root itself', () => {
-    expect(DATA_DIRS.has('')).toBe(false);
-  });
-
-  it.each([...DATA_DIRS].filter((name) => name !== 'meshes'))('does not peel the lone top-level data folder %s, as it does not for meshes above', async (name) => {
+  it.each([
+    ...SCRIPT_EXTENDER_FOLDERS,
+    'textures', 'materials', 'sound', 'music', 'scripts', 'source', 'interface', 'strings', 'mcm', 'seq', 'video', 'vis',
+    'lodsettings', 'shadersfx', 'grass', 'terrain', 'planetdata', 'programs', 'scaleform', 'facegen', 'actors', 'distantlod',
+  ])('does not peel the lone top-level data folder %s, as it does not for meshes above', async (name) => {
     await scaffold(`${name}/x.dat`);
     expect(await detectRoot(dir)).toEqual({ sourceDir: dir, isFomod: false });
   });

@@ -96,10 +96,10 @@ vi.mock('vscode', () => ({
   },
 }));
 
+import * as vscode from 'vscode';
 import { createEditor } from '..';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createFocusedView } from '../../drivingLib/focusedView';
-import { renderedDocumentUri } from '../../drivingLib/recordDocument';
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { ReferencedByTreeProvider } from '../ReferencedByTreeProvider';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
@@ -107,6 +107,9 @@ import { comparisonOf } from '../../test/comparison';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 const COPY_PLUGIN = { name: 'A.esp', origin: 'ModA' };
+const renderedUri = (formKey: string, fileName: string) => vscode.Uri.from({
+  scheme: 'modbench-rendered', path: `/ModA/A.esp/${fileName}`, query: `formKey=${formKey.replace(':', '%3A')}&name=A.esp&origin=ModA`,
+});
 const isShowColumns = (message: unknown) => typeof message === 'object' && message !== null && 'type' in message && message.type === 'showColumns';
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -168,7 +171,7 @@ function makeEditor(client = new InMemoryMEditClient(), viewSelections = new Map
   if (!referencedBy) throw new Error('no Referenced By view');
   const open = (formKey: string): FakePanel => {
     const panel = fakePanel();
-    void provider.resolveCustomTextEditor({ uri: renderedDocumentUri({ formKey, plugin: COPY_PLUGIN }, `${formKey}.json`) }, panel);
+    void provider.resolveCustomTextEditor({ uri: renderedUri(formKey, `${formKey}.json`) }, panel);
     return panel;
   };
   const openDocument = async (uri: unknown, document: object = {}): Promise<FakePanel> => {
@@ -496,7 +499,7 @@ describe('a record gesture from the palette', () => {
     await h.commands.get('modbench.record.open')?.();
 
     expect(h.contextKeys.get('modbench.record.selectionIn')).toBe('modbench.pluginListTree');
-    expect(opened()).toEqual([renderedDocumentUri({ formKey: '000803:A.esp', plugin: COPY_PLUGIN }, 'Placed.json')]);
+    expect(opened()).toEqual([renderedUri('000803:A.esp', 'Placed.json')]);
   });
 });
 
@@ -837,7 +840,7 @@ describe('what a record tab\'s webview posts', () => {
       const mEdit = client();
       mEdit.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
       const { openDocument } = makeEditor(mEdit);
-      const tab = await openDocument(renderedDocumentUri({ formKey: GUN, plugin: COPY_PLUGIN }, 'Gun.json'), { getText: () => '{}' });
+      const tab = await openDocument(renderedUri(GUN, 'Gun.json'), { getText: () => '{}' });
 
       tab.receive(loadRequest);
       await settle();
@@ -867,7 +870,7 @@ describe('a click on a column\'s header', () => {
   it('opens the records it names in the place of the tab it was clicked in, as that tab stood when the click arrived', async () => {
     const gun = { formKey: '000801:A.esp', plugin: COPY_PLUGIN };
     const { openDocument } = makeEditor();
-    const uri = renderedDocumentUri(gun, 'Gun.json');
+    const uri = renderedUri(gun.formKey, 'Gun.json');
     const tab = await openDocument(uri);
     const knife = { formKey: '000803:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
 
@@ -881,7 +884,7 @@ describe('a click on a column\'s header', () => {
 
 describe('an untracked copy\'s tab', () => {
   const GUN = '000801:A.esp';
-  const RENDERED = renderedDocumentUri({ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' } }, 'Gun.json');
+  const RENDERED = renderedUri(GUN, 'Gun.json');
 
   it('shows the copy\'s record, followed by Referenced By, with no file for mEdit to name it by', async () => {
     const client = new InMemoryMEditClient();
@@ -986,7 +989,7 @@ describe('several records opened at once', () => {
   const [GUN, AMMO, KNIFE] = ['000801:A.esp', '000802:A.esp', '000803:C.esp'];
   const winner = { name: 'B.esp', origin: 'ModB' };
   const knifeIn = { name: 'C.esp', origin: 'ModC' };
-  const gunDocument = renderedDocumentUri({ formKey: GUN, plugin: COPY_PLUGIN }, 'Gun.json');
+  const gunDocument = renderedUri(GUN, 'Gun.json');
   const columnsPosted = (tab: FakePanel | undefined) => tab?.webview.postMessage.mock.calls.filter(([message]) => isShowColumns(message));
   const firstRead = { type: 'requestRecordLoad', requestId: 'r0', formKey: GUN, columns: [] };
   const openSeveral = (placement?: 'beside') => h.commands.get('modbench.record.open')?.(

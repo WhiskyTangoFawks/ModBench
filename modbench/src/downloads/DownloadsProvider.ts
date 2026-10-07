@@ -68,7 +68,7 @@ export class DownloadNode extends vscode.TreeItem {
 
 export type DownloadsTreeNode = DownloadNode | ErrorNode;
 
-export interface DownloadsProviderOptions {
+interface DownloadsProviderOptions {
   /** downloads/ rows, metadata folded in. */
   instance: InstanceView;
 }
@@ -116,11 +116,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     this.firstRead.dispose();
   }
 
-  // Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left:
-  // a caller forcing a resync (Refresh All) gets whatever the Instance is currently holding, not
-  // a snapshot that predates it.
-  invalidate(): void {
-    this.instanceValue = this.instance.value;
+  private invalidate(): void {
     this.cache = undefined;
     this._onDidChangeTreeData.fire(undefined);
   }

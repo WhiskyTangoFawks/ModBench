@@ -9,9 +9,7 @@ export type Runner = (bin: string, args: string[]) => Promise<void>;
 
 const CANDIDATES = ['7z', '7za', '7zz'] as const;
 
-// Exported only as a test seam: any real executable exercises the resolve/reject
-// wiring without a 7z binary or archive fixture.
-export const defaultRunner: Runner = (bin, args) =>
+const defaultRunner: Runner = (bin, args) =>
   new Promise((resolve, reject) => {
     const child = spawn(bin, args, { stdio: 'ignore' });
     child.on('error', reject); // ENOENT when the binary isn't on PATH

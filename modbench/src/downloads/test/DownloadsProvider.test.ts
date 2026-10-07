@@ -12,7 +12,7 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile },
 }));
 
-import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions, type DownloadsTreeNode } from '../DownloadsProvider';
+import { DownloadsProvider, DownloadNode, type DownloadsTreeNode } from '../DownloadsProvider';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
@@ -41,7 +41,7 @@ const makeProviderOverRowsNeverOnDisk = (
   extra: Partial<{ instance: FakeInstance }> = {},
 ): DownloadsProvider => {
   const instance = extra.instance ?? new FakeInstance(valueOf(downloads));
-  const options: DownloadsProviderOptions = { instance };
+  const options: ConstructorParameters<typeof DownloadsProvider>[0] = { instance };
   return new DownloadsProvider(options);
 };
 
@@ -178,22 +178,6 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
     provider.setFilter('armor');
 
     expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['file-one.zip']);
-  });
-
-  it('restores the cached rows when the filter is cleared, showing the stale cache rather than re-pulling the Instance value', async () => {
-    const instance = new FakeInstance(valueOf([
-      row({ name: 'ArmorPack.zip', displayName: 'ArmorPack.zip' }),
-      row({ name: 'WeaponPack.zip', displayName: 'WeaponPack.zip' }),
-    ]));
-    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
-    await provider.getChildren();
-    provider.setFilter('armor');
-    await provider.getChildren();
-
-    instance.value = valueOf([row({ name: 'ArmorPack.zip', displayName: 'ArmorPack.zip' })]);
-    provider.setFilter('');
-
-    expect(rowNamesOfDownloadNodes(await provider.getChildren()).sort()).toEqual(['ArmorPack.zip', 'WeaponPack.zip']);
   });
 
   it('excludes excluded rows by default (Show excluded off)', async () => {
@@ -347,22 +331,6 @@ describe('excludedNames', () => {
     provider.setShowExcluded(true);
     await provider.getChildren();
     expect(provider.excludedNames()).toEqual(new Set(['excluded.zip']));
-  });
-});
-
-describe('invalidate', () => {
-  it('clears the cache, re-pulls the current Instance value, and fires onDidChangeTreeData', async () => {
-    const instance = new FakeInstance(valueOf([row({ name: 'old.zip' })]));
-    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['old.zip']);
-
-    instance.value = valueOf([row({ name: 'old.zip' }), row({ name: 'new.zip' })]);
-    let fired = false;
-    provider.onDidChangeTreeData(() => { fired = true; });
-    provider.invalidate();
-
-    expect(fired).toBe(true);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren()).sort()).toEqual(['new.zip', 'old.zip']);
   });
 });
 

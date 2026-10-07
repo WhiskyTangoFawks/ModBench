@@ -7,33 +7,25 @@ import { modOrigin, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileCon
 import { fileRowUri } from './modFiles';
 import type { WorkspaceSettings } from './workspaceSettings';
 
-/** Why the game does not get a file: another copy wins its path, it is excluded, or its mod is
- *  disabled. A folder never loses: the game merges folders. */
-export type InactiveReason = 'loses' | 'excluded' | 'modDisabled';
-
 /** The setting that switches the grey, on by default (mods.md, Indicators). */
 export const GREY_INACTIVE_FILES_SETTING = 'modbench.mods.greyInactiveFiles';
 
 type FilesValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod' | 'foldersByMod' | 'overwriteFiles' | 'overwriteFolders'>;
 
-function whyNotDeployed(enabled: boolean, entry: OriginFolder): InactiveReason | undefined {
-  if (!enabled) return 'modDisabled';
-  return entry.excluded ? 'excluded' : undefined;
-}
+const isNotDeployed = (enabled: boolean, entry: OriginFolder): boolean => !enabled || entry.excluded;
 
-function whyFileNotGotten(value: FilesValue, origin: FileOrigin, enabled: boolean, file: OriginFile): InactiveReason | undefined {
+function isFileNotGotten(value: FilesValue, origin: FileOrigin, enabled: boolean, file: OriginFile): boolean {
   const winner = value.files.get(file.relativePath)?.winnerOrigin;
-  return whyNotDeployed(enabled, file) ?? (winner !== undefined && !sameOrigin(winner, origin) ? 'loses' : undefined);
+  return isNotDeployed(enabled, file) || (winner !== undefined && !sameOrigin(winner, origin));
 }
 
-/** Each file and folder the game does not get, and why, by the URI of its row in the Mods tree and
- *  by its own, where the Explorer shows it. */
-export function inactiveFiles(value: FilesValue): ReadonlyMap<string, InactiveReason> {
-  const reasons = new Map<string, InactiveReason>();
-  const add = (origin: FileOrigin, entry: OriginFolder, why: InactiveReason | undefined) => {
-    if (why === undefined) return;
-    reasons.set(fileRowUri(origin, entry.relativePath).toString(), why);
-    reasons.set(vscode.Uri.file(entry.path).toString(), why);
+// A folder never loses: the game merges folders.
+function inactiveFiles(value: FilesValue): ReadonlySet<string> {
+  const inactive = new Set<string>();
+  const add = (origin: FileOrigin, entry: OriginFolder, isInactive: boolean) => {
+    if (!isInactive) return;
+    inactive.add(fileRowUri(origin, entry.relativePath).toString());
+    inactive.add(vscode.Uri.file(entry.path).toString());
   };
   const origins = [
     ...value.mods.flatMap((entry) => (entry.kind === 'mod' ? [{
@@ -43,10 +35,10 @@ export function inactiveFiles(value: FilesValue): ReadonlyMap<string, InactiveRe
     { origin: RUNTIME_OUTPUT, enabled: true, files: value.overwriteFiles, folders: value.overwriteFolders },
   ];
   for (const { origin, enabled, files, folders } of origins) {
-    for (const folder of folders) add(origin, folder, whyNotDeployed(enabled, folder));
-    for (const file of files) add(origin, file, whyFileNotGotten(value, origin, enabled, file));
+    for (const folder of folders) add(origin, folder, isNotDeployed(enabled, folder));
+    for (const file of files) add(origin, file, isFileNotGotten(value, origin, enabled, file));
   }
-  return reasons;
+  return inactive;
 }
 
 /** VS Code never re-queries a decoration provider on its own, so this one fires on every new
@@ -54,13 +46,13 @@ export function inactiveFiles(value: FilesValue): ReadonlyMap<string, InactiveRe
 export class InactiveFileDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
   private readonly changed = new vscode.EventEmitter<undefined>();
   readonly onDidChangeFileDecorations = this.changed.event;
-  private reasons: ReadonlyMap<string, InactiveReason> | undefined;
+  private inactive: ReadonlySet<string> | undefined;
   private readonly subscriptions: readonly vscode.Disposable[];
 
   constructor(private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>, private readonly setting: WorkspaceSettings) {
     this.subscriptions = [
       instance.subscribe(() => {
-        this.reasons = undefined;
+        this.inactive = undefined;
         this.changed.fire(undefined);
       }),
       setting.onDidChangeConfiguration((change) => {
@@ -71,8 +63,8 @@ export class InactiveFileDecorationProvider implements vscode.FileDecorationProv
 
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
     if (this.setting.getConfiguration().get(GREY_INACTIVE_FILES_SETTING) === false) return undefined;
-    this.reasons ??= inactiveFiles(this.instance.value);
-    return this.reasons.has(uri.toString()) ? { color: new vscode.ThemeColor('disabledForeground') } : undefined;
+    this.inactive ??= inactiveFiles(this.instance.value);
+    return this.inactive.has(uri.toString()) ? { color: new vscode.ThemeColor('disabledForeground') } : undefined;
   }
 
   dispose(): void {
