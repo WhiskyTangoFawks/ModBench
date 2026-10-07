@@ -5,17 +5,14 @@ import type {
 import { lastGoodReadMessage, type Instance, type InstanceValue, type InstanceView, type PluginEntry } from '../instanceLoader/instance';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
-import type { Reporter } from '../ports/reporter';
 import type { PluginsDrop } from '../pluginsCommands/plugins';
-import { moveOrderRefusal, type PluginOrderFactsOf } from '../pluginsCommands/pluginOrder';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
 import { PluginFacts, placeOf, type PluginWarning } from './pluginFacts';
-import { isRecordRow, PLUGINS_KEY_ARGS } from './gestureEntry';
-import { runWritingGesture } from '../drivingLib/writingGesture';
+import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
@@ -36,7 +33,7 @@ function listedPlugins(value: InstanceValue): (InstanceValue['plugins'][number] 
 // `DataTransferItem.value` is `any` — handleDrag, above `handleDrop` below, is this provider's
 // only writer of it. Exported so a test narrows the same payload the same way, instead of a
 // second cast of its own.
-function isAddress(value: unknown): value is PluginAddress {
+export function isAddress(value: unknown): value is PluginAddress {
   return typeof value === 'object' && value !== null && 'name' in value && typeof value.name === 'string'
     && 'origin' in value && typeof value.origin === 'string';
 }
@@ -53,13 +50,6 @@ const noRecordBrowser = (): [ErrorNode] => [new ErrorNode(NO_RECORD_BROWSER)];
 
 // Hoisted out of the constructor so an omitted dependency is not a fresh closure per instance.
 const NO_DATA_FOLDER_FILE = (): string | undefined => undefined;
-
-/** `reorderPlugins`, bound to the instance and the active profile by the composition root;
- *  a refused command reaches this provider as a rejection. Enable/disable reaches its own core
- *  directly, never through the tree. */
-export interface PluginListSource {
-  reorderPlugins(pluginNames: string[], drop: PluginsDrop): Promise<void>;
-}
 
 /** The mEdit reads every plugin-keyed fact comes from — the port narrowed to what this tree
  *  calls. Pulled once per reconcile, never per rendered row; and its attaching, which makes the
@@ -78,7 +68,6 @@ export type { PluginWarning };
 export interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin: the row input. */
   instance: PluginsInstance;
-  source: PluginListSource;
   /** A row's children. Absent in tests that exercise rows alone. */
   records?: RecordBrowser;
   /** Every plugin-keyed fact. Absent in tests that exercise rows alone. */
@@ -92,7 +81,6 @@ export interface PluginsTreeProviderOptions {
   /** This provider states the severity (ADR-0019), so a background blip and a failed
    *  read land on different channel levels. */
   log?: (level: 'info' | 'warn' | 'error', msg: string) => void;
-  reporter?: Reporter;
   /** The Instance adapter's path of a file at the root of the Data folder, read fresh at each
    *  call: the game folder setting is editable while Modbench runs. `undefined` while the folder
    *  is not found. */
@@ -196,9 +184,7 @@ export class PluginsTreeProvider
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginsTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private readonly source: PluginListSource;
   private readonly log: (level: 'info' | 'warn' | 'error', msg: string) => void;
-  private readonly reporter?: Reporter;
   private readonly dataFolderFile: (name: string) => string | undefined;
   private readonly instance: PluginsInstance;
   private readonly records?: RecordBrowser;
@@ -208,9 +194,6 @@ export class PluginsTreeProvider
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
-  // The plugin rows' plugins.txt lines as last rendered, which a drop's order check reads: the
-  // order the user dragged against.
-  private lastOrder: { name: string; origin: string }[] = [];
   private filterText = '';
   private filterLower = '';
   private direction: SortDirection = 'losingAtTop';
@@ -223,9 +206,7 @@ export class PluginsTreeProvider
   private lastLockedRowUris: ReadonlySet<string> = new Set();
 
   constructor(options: PluginsTreeProviderOptions) {
-    this.source = options.source;
     this.log = options.log ?? (() => {});
-    this.reporter = options.reporter;
     this.dataFolderFile = options.dataFolderFile ?? NO_DATA_FOLDER_FILE;
     this.instance = options.instance;
     this.records = options.records;
@@ -465,7 +446,6 @@ export class PluginsTreeProvider
       shown.add(key);
       return true;
     });
-    this.lastOrder = dedupedOrder.map(({ name, origin }) => ({ name, origin }));
     const lockedRows = loadedWithNoLine.map(({ name, origin }) => new ImplicitMasterNode(name, origin, this.dataFolderFile(name)));
     this.lastLockedRowUris = new Set(lockedRows.flatMap((row) => (row.resourceUri ? [row.resourceUri.toString()] : [])));
     return [
@@ -646,8 +626,6 @@ export class PluginsTreeProvider
     dataTransfer.set(DND_MIME, new vscode.DataTransferItem({ plugins }));
   }
 
-  /** The order check reads the same drop the write applies to plugins.txt's order, whichever end
-   *  the view shows at the top. */
   async handleDrop(
     target: PluginsTreeNode | undefined,
     dataTransfer: vscode.DataTransfer,
@@ -655,30 +633,10 @@ export class PluginsTreeProvider
   ): Promise<void> {
     const payload = dataTransfer.get(DND_MIME);
     if (!payload || !isDropPayload(payload.value)) return;
-    const { plugins: moved } = payload.value;
-    const names = moved.map((p) => p.name);
-    const drop = this.dropFor(target, names);
+    const { plugins } = payload.value;
+    const drop = this.dropFor(target, plugins.map((p) => p.name));
     if (drop === undefined) return;
-    try {
-      const refusal = moveOrderRefusal(this.lastOrder.map((line) => line.name), names, drop, this.orderFacts());
-      if (refusal !== undefined) {
-        this.reporter?.report('error', 'Could not move plugins.', refusal);
-        return;
-      }
-      await runWritingGesture(PLUGINS_KEY_ARGS.view, this.instance, () => this.source.reorderPlugins(names, drop));
-    } catch (e) {
-      this.log('info', `[PluginsTreeProvider] reorderPlugins failed: ${errorMessage(e)}`);
-      this.reporter?.report('error', 'Failed to move plugins.', errorMessage(e));
-    }
-  }
-
-  // Only the line's own plugin, by its origin (ADR-0012).
-  private orderFacts(): PluginOrderFactsOf {
-    const originOf = new Map(this.lastOrder.map((line) => [line.name, line.origin] as const));
-    return (name) => {
-      const origin = originOf.get(name);
-      return origin === undefined ? undefined : this.facts.orderFacts({ name, origin });
-    };
+    await vscode.commands.executeCommand('modbench.plugin.move', plugins, drop);
   }
 
   // plugins.md, Drag and drop, story 2: a drop lands as shown in either direction, and the locked

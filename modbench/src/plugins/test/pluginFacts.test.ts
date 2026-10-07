@@ -246,15 +246,6 @@ describe('PluginFacts — what a row states about its plugin', () => {
     facts.reconciled([held(), held({ name: 'B.esp', isTracked: true, isImmutable: true })], []);
     expect(facts.anyCompilable()).toBe(true);
   });
-
-  it('answers the masters and blueprint flag the drop\'s order check reads, by origin', () => {
-    const facts = new PluginFacts();
-    facts.reconciled([held({ masters: ['M.esm'], isBlueprint: true }), held({ origin: 'OtherMod' })], []);
-
-    expect(facts.orderFacts(A)).toEqual({ masters: ['M.esm'], blueprint: true });
-    expect(facts.orderFacts({ name: 'A.esp', origin: 'OtherMod' })).toEqual({ masters: [], blueprint: false });
-    expect(facts.orderFacts({ name: 'B.esp', origin: 'SomeMod' })).toBeUndefined();
-  });
 });
 
 describe('PluginFacts — which plugins mEdit holds and the record filter', () => {
