@@ -31,7 +31,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
         document.EditorId ?? throw new InvalidOperationException("The fixture record has no EditorID.");
 
     [Fact]
-    public void RefreshKeys_EffectiveServesTheNewBody()
+    public void AnEdit_MakesTheEffectiveDocumentServeTheNewBody()
     {
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
@@ -48,7 +48,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
     }
 
     [Fact]
-    public void RefreshKeys_MarksTheOverrideStackEntryAsCarryingAWorkingTreeChange()
+    public void AnEdit_MarksTheOverrideStackEntryAsCarryingAWorkingTreeChange()
     {
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
@@ -67,7 +67,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
     }
 
     [Fact]
-    public void RefreshKeys_EditingBackToTheCommittedBytes_ConvergesToClean()
+    public void EditingBackToTheCommittedBytes_ConvergesToClean()
     {
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();

@@ -19,7 +19,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     private OpenedIndex LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
 
     [Fact]
-    public void GetRecords_ByTable_ReturnsAllRecords()
+    public void ATypeListing_ReturnsEveryRecordOfTheType()
     {
         using var index = LoadedIndex();
         var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 100, Offset: 0));
@@ -28,7 +28,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_WithPluginFilter_ReturnsMatchingOnly()
+    public void APluginFilter_ListsOnlyThatPluginsRecords()
     {
         using var index = LoadedIndex();
         var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: TestPluginFixture.PluginName, Limit: 100, Offset: 0));
@@ -37,7 +37,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_WithPluginFilter_WrongPlugin_ReturnsEmpty()
+    public void APluginFilter_NamingAnUnknownPlugin_ListsNothing()
     {
         using var index = LoadedIndex();
         var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "NonExistent.esp", Limit: 100, Offset: 0));
@@ -46,7 +46,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_WithSearch_FiltersOnEditorId()
+    public void ASearch_MatchesTheEditorId()
     {
         using var index = LoadedIndex();
         var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_"], Search: "TestNPC01", Limit: 100, Offset: 0));
@@ -55,7 +55,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_WithSearchFormKey_AlsoOffersTheRecordsWhoseEditorIdMatches()
+    public void ASearchWithAFormKey_AlsoOffersTheRecordsWhoseEditorIdMatches()
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
@@ -88,7 +88,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_Pagination_RespectsLimitAndOffset()
+    public void APage_RespectsLimitAndOffset()
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
@@ -101,7 +101,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_SearchByFormKey_ResolvesExactRecord()
+    public void ASearchByFormKey_FindsThatRecord()
     {
         using var index = LoadedIndex();
         var formKey = _fixture.Npc1FormKey.ToString();
@@ -113,7 +113,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_SearchByFormKey_IsCaseInsensitive()
+    public void ASearchByFormKey_IgnoresCase()
     {
         using var index = LoadedIndex();
         var formKey = _fixture.Npc1FormKey.ToString();
@@ -125,7 +125,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_SearchByMalformedFormKeyLikeString_FallsBackToEditorIdMatch_NoResults()
+    public void ASearchByAMalformedFormKey_FallsBackToEditorIdMatch_FindingNothing()
     {
         using var index = LoadedIndex();
 
@@ -185,7 +185,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_WinnerOnly_ReturnsWinner()
+    public void AFormKeyAlone_ReadsTheWinningDocument()
     {
         using var index = LoadedIndex();
         var formKey = _fixture.Npc1FormKey.ToString();
@@ -199,7 +199,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_ReturnsFieldForEveryColumnInSchema()
+    public void ADocument_HasAFieldForEveryColumnInItsSchema()
     {
         using var index = LoadedIndex();
         var formKey = _fixture.Npc1FormKey.ToString();
@@ -214,7 +214,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_ScalarFormLinkColumn_ReturnsExactStoredValue()
+    public void AFormLinkField_ReadsItsExactFormKey()
     {
         FormKey npcFormKey = default, raceFormKey = default;
         using var fixture = new PluginFixtureBuilder("medit-columnlist-value")
@@ -237,7 +237,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetAllOverrides_SameFilenameDifferentOrigin_ReturnsTheWinningOrigin()
+    public void AnOverrideStack_OfAFilenameInTwoOrigins_HoldsOnlyTheWinningOrigin()
     {
         FormKey npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("medit-two-origins")
@@ -256,7 +256,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_WithPlugin_ReturnsMatchingPlugin()
+    public void APluginAddress_ReadsThatPluginsDocument()
     {
         using var index = LoadedIndex();
         var formKey = _fixture.Npc1FormKey.ToString();
@@ -269,7 +269,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_BitmaskField_AboveSafeInteger_SerializesAsMemberNames()
+    public void ABitmaskAboveTheSafeInteger_SerializesAsMemberNames()
     {
         const long combined = 9007199254740993;
         FormKey raceFormKey = default;
@@ -293,7 +293,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_UnknownFormKey_ReturnsNull()
+    public void AFormKeyInNoPlugin_ReadsNoDocument()
     {
         using var index = LoadedIndex();
 
@@ -318,7 +318,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_WinnerOnly_True_ReturnsWinnerNotEarlierOverride()
+    public void TheLaterProvider_IsTheWinningDocument()
     {
         using var fixture = TwoProviders("medit-winner", out var npcKey);
         using var index = Indexes.Reconciled(fixture);
@@ -331,7 +331,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetAllOverrides_TwoPlugins_OrderedByLoadOrderIndex_WinnerIsHigher()
+    public void TheOverrideStack_IsOrderedByLoadOrderIndex_WithTheLaterPluginTheWinner()
     {
         using var fixture = TwoProviders("medit-duckdb", out var npcKey);
         using var index = Indexes.Reconciled(fixture);
@@ -348,7 +348,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void CountRecordsForPlugin_ReturnsCorrectCount()
+    public void ACountOfAPluginsType_IsItsRecordCount()
     {
         using var index = LoadedIndex();
         var count = index.RequireReads().CountOf(new PluginAddress(TestPluginFixture.PluginName, "Data"), "npc_");
@@ -356,7 +356,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void CountRecordsForPlugin_UnknownPlugin_ReturnsZero()
+    public void ACountOfAnUnknownPlugin_IsZero()
     {
         using var index = LoadedIndex();
         var count = index.RequireReads().CountOf(new PluginAddress("NonExistent.esp", "Data"), "npc_");
@@ -364,7 +364,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetDocument_KnownFormKey_ResolvesRecordType()
+    public void AKnownFormKey_ReadsItsRecordType()
     {
         using var index = LoadedIndex();
         var document = index.RequireReads().GetDocument(_fixture.Npc1FormKey.ToString());
@@ -372,7 +372,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetDocument_UnknownFormKey_ReturnsNull()
+    public void AnUnknownFormKey_ReadsNoDocument()
     {
         using var index = LoadedIndex();
         var document = index.RequireReads().GetDocument("FFFFFF:Unknown.esp");
@@ -380,7 +380,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void ResolveFormKey_KnownFormKey_ReturnsRecordTypeAndEditorId()
+    public void AKnownFormKey_ResolvesToItsRecordTypeAndEditorId()
     {
         using var index = LoadedIndex();
         var entry = index.RequireReads().Resolve(_fixture.Npc1FormKey.ToString());
@@ -390,7 +390,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void ResolveFormKey_UnknownFormKey_ReturnsNull()
+    public void AnUnknownFormKey_ResolvesToNothing()
     {
         using var index = LoadedIndex();
         var entry = index.RequireReads().Resolve("FFFFFF:Unknown.esp");
@@ -398,7 +398,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void UpdateWinners_SinglePlugin_AllRecordsAreWinners()
+    public void ALoneProvidersListing_MarksEveryRecordAWinner()
     {
         using var index = LoadedIndex();
         var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 100, Offset: 0));
@@ -406,7 +406,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_ArrayField_ValueIsJsonArrayNotString()
+    public void AnArrayField_ReadsAsAJsonArray()
     {
         FormKey npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("medit-array")
@@ -434,7 +434,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_WithPluginAndSearchFilter_AnUnknownPluginWithAMatchingSearchYieldsNothing()
+    public void APluginFilterNamingAnUnknownPlugin_FindsNothingEvenWhenTheSearchMatches()
     {
         using var index = LoadedIndex();
         var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["npc_"], Plugin: "NonExistent.esp", Search: "TestNPC", Limit: 100, Offset: 0));
@@ -442,7 +442,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void SearchRecords_WithPluginFilter_ReturnsMatchingOnly()
+    public void APluginFilter_ExcludesTheOtherPluginsRecords()
     {
         using var fixture = new PluginFixtureBuilder("medit-search")
             .WithPlugin("SearchA.esm", mod => mod.Npcs.AddNew("NPC_A"))
@@ -457,7 +457,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_NullEditorId_ReturnsNullEditorId()
+    public void ARecordWithoutAnEditorId_ReadsANullEditorId()
     {
         FormKey npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("medit-null-edid")
@@ -479,14 +479,14 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void RequireReads_BeforeAnyReconcile_ThrowsNoLoadOrder()
+    public void ReadsBeforeAnyReconcile_ThrowNoLoadOrder()
     {
         using var index = Indexes.Open(new LoadOrderHolder());
         Assert.Throws<NoLoadOrderException>(() => index.RequireReads());
     }
 
     [Fact]
-    public void GetDocument_SqlInjectionAttempt_ReturnsNull()
+    public void AFormKeyOfSqlText_ReadsNoDocument()
     {
         using var index = LoadedIndex();
         var result = index.RequireReads().GetDocument("' OR '1'='1");
@@ -494,7 +494,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_UnsetFormLinkField_ReturnsNull()
+    public void AnUnsetFormLinkField_ReadsNull()
     {
         using var index = LoadedIndex();
         var formKey = _fixture.Npc1FormKey.ToString();
@@ -505,7 +505,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_DanglingKeywordReference_CheckErrorOnKeywordsField()
+    public void ADanglingKeywordReference_FlagsCheckErrorOnTheKeywordsField()
     {
         FormKey npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("medit-checkerror-dangling")
@@ -526,7 +526,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_KeywordReferenceResolvesInLoadOrder_CheckErrorIsNull()
+    public void AKeywordReferenceResolvingInTheLoadOrder_HasNoCheckError()
     {
         FormKey npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("medit-checkerror-clean")
@@ -548,7 +548,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetAllOverrides_SharedKeywordRef_CheckErrorConsistentAcrossOverrides()
+    public void ASharedKeywordReference_HasNoCheckErrorInAnyOverride()
     {
         FormKey npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("medit-checkerror-shared")

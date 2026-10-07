@@ -108,7 +108,7 @@ public sealed class ContainerChildIndexingTests : IDisposable
     }
 
     [Fact]
-    public async Task Unindex_RemovesContainerChildRows()
+    public async Task ADeletedPlugin_LeavesNoContainerChildren()
     {
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();

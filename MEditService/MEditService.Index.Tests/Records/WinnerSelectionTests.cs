@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-public sealed class WinnersDerivedTableTests : IDisposable
+public sealed class WinnerSelectionTests : IDisposable
 {
     private static readonly PluginAddress BaseKey = new("Base.esm", "BaseMod");
     private static readonly PluginAddress OverKey = new("Over.esp", "OverMod");
@@ -19,7 +19,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
     private readonly OpenedIndex _index;
     private readonly string _npc;
 
-    public WinnersDerivedTableTests()
+    public WinnerSelectionTests()
     {
         FormKey npc = default;
         _fixture = new PluginFixtureBuilder("winners-derived-table")
@@ -50,7 +50,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
     private PluginAddress? WinnerOf(string formKey) => Reads.GetDocument(formKey)?.Plugin;
 
     [Fact]
-    public void TheSweep_NamesTheLatestParticipatingPlugin_OncePerFormKey_AndAgainAfterAReconcileOfTheSameSnapshot()
+    public void TheLatestParticipatingPlugin_IsTheWinner_OncePerFormKey_AndAgainAfterAReconcileOfTheSameSnapshot()
     {
         Assert.Equal(OverKey, WinnerOf(_npc));
 

@@ -10,7 +10,7 @@ namespace MEditService.Index.Tests.Records;
 public sealed class RowsChangedNotificationTests
 {
     [Fact]
-    public void RefreshKeys_PublishesRowsChanged_WithTheKeyAndTheSequenceAfterTheWrite()
+    public void AHandEditedDocument_PublishesRowsChanged_WithTheKeyAndTheSequenceAfterTheWrite()
     {
         FormKey npc = default;
         using var fixture = new PluginFixtureBuilder("rows-changed")
@@ -56,7 +56,7 @@ public sealed class RowsChangedNotificationTests
     }
 
     [Fact]
-    public void RefreshKeys_ForAKeyNeitherRefHolds_NamesItAndEveryRowThatMoved_AndNoOtherRow()
+    public void ValidatingAKeyNeitherRefHolds_NamesItAndEveryRowThatMoved_AndNoOtherRow()
     {
         var (fixture, entry, notifications, index, moved, still) = TwoNpcs("rows-changed-gained");
         using var _ = fixture;

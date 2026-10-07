@@ -69,7 +69,7 @@ public sealed class ReconcileDiffTests
     }
 
     [Fact]
-    public void Reorder_IsSqlOnly_AndWinnersFollowTheNewOrder()
+    public void Reorder_OpensNoPlugin_AndWinnersFollowTheNewOrder()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-reorder");
@@ -91,7 +91,7 @@ public sealed class ReconcileDiffTests
     }
 
     [Fact]
-    public void Disable_IsSqlOnly_TheDisabledPluginIsReadNowhere_AndTheOtherProviderWins()
+    public void Disable_OpensNoPlugin_TheDisabledPluginIsReadNowhere_AndTheOtherProviderWins()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-disable");
@@ -115,7 +115,7 @@ public sealed class ReconcileDiffTests
     }
 
     [Fact]
-    public void OverriddenPlugin_IsRegisteredBesideTheWinner_NeverWins_AndReprioritisingFlipsTheWinnerSqlOnly()
+    public void OverriddenPlugin_IsHeldBesideTheWinner_NeverWins_AndReprioritisingFlipsTheWinnerWithoutOpeningAPlugin()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("reconcile-losing")

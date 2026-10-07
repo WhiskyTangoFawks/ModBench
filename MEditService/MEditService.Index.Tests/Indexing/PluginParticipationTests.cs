@@ -44,7 +44,7 @@ public class PluginParticipationTests
     }
 
     [Fact]
-    public void SetPluginParticipation_FlipToDisabled_MatchesLoadingDisabledFromStart()
+    public void DisablingAPluginByReconcile_MatchesIndexingItDisabledFromStart()
     {
         using var fixtureX = SharedNpcFixture("participation-flip-x", out var npcKeyX);
         using var fixtureY = SharedNpcFixture("participation-flip-y", out var npcKeyY, pluginBEnabled: false);
