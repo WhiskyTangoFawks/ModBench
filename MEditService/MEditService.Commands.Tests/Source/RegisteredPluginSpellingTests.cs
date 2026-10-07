@@ -36,9 +36,7 @@ public sealed class RegisteredPluginSpellingTests
         using var scratch = new ModFolderUnderAnInstanceRootScratch();
         scratch.TrackWithoutTheTrackDoor();
 
-        var result = await CompileServices.Over(scratch.LoadOrder).CompileOneAsync(scratch.Plugin);
-
-        Assert.True(result.Succeeded, result.RefusalReason);
+        await CompileServices.Over(scratch.LoadOrder).CompileLandedAsync(scratch.Plugin);
     }
 
     private sealed class ModFolderUnderAnInstanceRootScratch : IDisposable

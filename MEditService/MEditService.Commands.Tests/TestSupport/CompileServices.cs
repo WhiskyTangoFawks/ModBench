@@ -1,4 +1,3 @@
-using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 
@@ -15,12 +14,11 @@ public static class CompileServices
         return TestEditService.CompileHandler(holder, adapter);
     }
 
-    /// <summary>A selection of one: its one answer as a <see cref="CompileResult"/>.</summary>
-    public static async Task<CompileResult> CompileOneAsync(this CompilePluginHandler handler, PluginAddress plugin)
+    /// <summary>Compiles a selection of one and fails with the refusal's message unless it landed.</summary>
+    public static async Task CompileLandedAsync(this CompilePluginHandler handler, PluginAddress plugin)
     {
         var answer = await handler.CompileAsync([plugin]);
-        if (answer.SelectionRefusal is { } whole) return CompileResult.Refused(whole.Refusal, whole.Message);
-        if (answer.Refused.SingleOrDefault() is { } refused) return CompileResult.Refused(refused.Refusal, refused.Message);
-        return CompileResult.Success(answer.Landed.Single().Outcome);
+        var refusal = answer.SelectionRefusal?.Message ?? answer.Refused.SingleOrDefault()?.Message;
+        Assert.True(refusal is null && answer.Landed.Count == 1, refusal);
     }
 }

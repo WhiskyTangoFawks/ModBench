@@ -31,9 +31,7 @@ public sealed class HeaderFlagEditTests : IDisposable
 
         Assert.Contains("Small", _fixture.Document(HeaderFormKey).Require().Body, StringComparison.Ordinal);
 
-        var compile = await CompileServices.Over(_fixture.LoadOrder)
-            .CompileOneAsync(_fixture.Plugin);
-        Assert.True(compile.Succeeded, compile.RefusalReason);
+        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.Plugin);
 
         using var written = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(SourceEditFixture.PluginName),
@@ -48,13 +46,14 @@ public sealed class HeaderFlagEditTests : IDisposable
         TrackedTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
-        var compile = await CompileService().CompileOneAsync(_fixture.Plugin);
+        var answer = await CompileService().CompileAsync([_fixture.Plugin]);
 
-        Assert.False(compile.Succeeded);
-        Assert.Contains("001000", compile.RefusalReason, StringComparison.Ordinal);
+        Assert.Empty(answer.Landed);
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains("001000", refused.Message, StringComparison.Ordinal);
         Assert.EndsWith(
             "Clear the light flag, rename the plugin off .esl, or change the records' FormIDs.",
-            compile.RefusalReason, StringComparison.Ordinal);
+            refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -64,9 +63,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false)).Applied);
 
-        var compile = await CompileService().CompileOneAsync(_fixture.Plugin);
-
-        Assert.True(compile.Succeeded, compile.RefusalReason);
+        await CompileService().CompileLandedAsync(_fixture.Plugin);
     }
 
     private CompilePluginHandler CompileService() =>
@@ -102,8 +99,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     {
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "Author", JsonDocument.Parse("\"Someone\"").RootElement).Applied);
 
-        var compile = await CompileService().CompileOneAsync(_fixture.Plugin);
-        Assert.True(compile.Succeeded, compile.RefusalReason);
+        await CompileService().CompileLandedAsync(_fixture.Plugin);
 
         using var written = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(SourceEditFixture.PluginName),
