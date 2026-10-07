@@ -110,21 +110,16 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     [Fact]
     public void ReplaceSourceFrom_WhenOneRollbackStepFails_StillPutsBackTheRest_AndKeepsTheCause()
     {
-        var made = Path.Combine(Root, "armo", "A.esp");
-        var removed = Path.Combine(Root, "npc_", "A.esp", "000001.json");
+        Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("npc_/A.esp/000002.json", "{\"was\":2}")], Sha);
+        var first = Path.Combine(Root, "npc_", "A.esp", "000001.json");
+        var second = Path.Combine(Root, "npc_", "A.esp", "000002.json");
 
-        try
-        {
-            var failure = FailAfterWritingWhile($"chmod 555 '{made}'", [File("armo/A.esp/000003.json", "{}")]);
+        var failure = FailAfterWritingWhile(
+            $"mkdir -p '{second}'\necho theirs > '{second}/theirs.txt'", [File("armo/A.esp/000003.json", "{}")]);
 
-            Assert.Contains("000003.json could not be taken back", failure.Message);
-            Assert.NotNull(failure.InnerException);
-            Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(removed));
-        }
-        finally
-        {
-            FileModes.Set(made, "755");
-        }
+        Assert.Contains("000002.json could not be taken back", failure.Message);
+        Assert.NotNull(failure.InnerException);
+        Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(first));
     }
 
     private Exception FailAfterWritingWhile(string script, TreeFile[] files) =>
