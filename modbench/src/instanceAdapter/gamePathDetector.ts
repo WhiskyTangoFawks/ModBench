@@ -41,13 +41,27 @@ export async function detectGamePaths(platform: NodeJS.Platform, game: GameAutod
   return detectLinux(game);
 }
 
-async function findSteamLibrary(steamAppId: string): Promise<string | null> {
-  const vdfPath = path.join(os.homedir(), '.steam', 'steam', 'config', 'libraryfolders.vdf');
-  try {
-    return parseLibraryFoldersVdf(await fs.readFile(vdfPath, 'utf-8'), steamAppId);
-  } catch {
-    return null;
+async function findLibraryInVdfs(vdfPaths: string[], steamAppId: string): Promise<string | null> {
+  for (const vdfPath of vdfPaths) {
+    try {
+      const library = parseLibraryFoldersVdf(await fs.readFile(vdfPath, 'utf-8'), steamAppId);
+      if (library !== null) return library;
+    } catch {
+      continue;
+    }
   }
+  return null;
+}
+
+function windowsVdfPaths(steamPath: string): string[] {
+  return [
+    path.join(steamPath, 'steamapps', 'libraryfolders.vdf'),
+    path.join(steamPath, 'config', 'libraryfolders.vdf'),
+  ];
+}
+
+function findSteamLibrary(steamAppId: string): Promise<string | null> {
+  return findLibraryInVdfs([path.join(os.homedir(), '.steam', 'steam', 'config', 'libraryfolders.vdf')], steamAppId);
 }
 
 async function detectLinux(game: GameAutodetect): Promise<GamePaths | null> {
@@ -86,7 +100,8 @@ export async function detectWindowsGamePaths(
     const steamPath = parseRegQuerySteamPath(stdout);
     if (!steamPath) return null;
 
-    const dataFolder = path.join(steamPath, 'steamapps', 'common', game.steamFolderName, 'Data');
+    const library = (await findLibraryInVdfs(windowsVdfPaths(steamPath), game.steamAppId)) ?? steamPath;
+    const dataFolder = path.join(library, 'steamapps', 'common', game.steamFolderName, 'Data');
     await fs.access(dataFolder);
     return { dataFolder };
   } catch {

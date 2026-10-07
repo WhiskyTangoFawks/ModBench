@@ -169,3 +169,56 @@ describe('detectWindowsGamePaths', () => {
     expect(result).toBeNull();
   });
 });
+
+describe('detectWindowsGamePaths in a second Steam library', () => {
+  const runRegQuery = () => Promise.resolve('    SteamPath    REG_SZ    C:/Steam\r\n');
+  const vdfNaming = (library: string) => `"libraryfolders"
+{
+  "0"
+  {
+    "path"    "C:\\\\Steam"
+    "apps"
+    {
+      "220"    "1"
+    }
+  }
+  "1"
+  {
+    "path"    "${library}"
+    "apps"
+    {
+      "${FO4_APP_ID}"    "2"
+    }
+  }
+}
+`;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+  });
+
+  it('finds the game in the library the steamapps vdf names', async () => {
+    vi.mocked(fs.readFile).mockImplementation((file: unknown) =>
+      (file as string).endsWith('steamapps/libraryfolders.vdf')
+        ? Promise.resolve(vdfNaming('D:/Games/SteamLibrary'))
+        : Promise.reject(new Error('ENOENT')),
+    );
+
+    const result = await detectWindowsGamePaths(runRegQuery, FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK);
+
+    expect(result).toEqual({ dataFolder: 'D:/Games/SteamLibrary/steamapps/common/Fallout 4/Data' });
+  });
+
+  it('finds the game through the older config vdf layout', async () => {
+    vi.mocked(fs.readFile).mockImplementation((file: unknown) =>
+      (file as string).endsWith('config/libraryfolders.vdf')
+        ? Promise.resolve(vdfNaming('D:/Games/SteamLibrary'))
+        : Promise.reject(new Error('ENOENT')),
+    );
+
+    const result = await detectWindowsGamePaths(runRegQuery, FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK);
+
+    expect(result).toEqual({ dataFolder: 'D:/Games/SteamLibrary/steamapps/common/Fallout 4/Data' });
+  });
+});
