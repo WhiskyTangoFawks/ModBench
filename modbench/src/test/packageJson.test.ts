@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { present } from '../ports/present';
-import { FOLDER_KEY, INSTANCE_READ_KEY } from '../toolbox/folderContext';
+import { FOLDER_KEY, INSTANCE_READ_KEY } from '../drivingLib/folderContext';
 import { IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom,
@@ -269,9 +269,6 @@ describe('package.json outside an instance', () => {
     expect(holds('view == modbench.pluginListTree && (viewItem == plugin || viewItem == other)', { ...on, viewItem: 'plugin' })).toBe(true);
     expect(holds("webviewId == 'modbench' && compilable", { webviewId: 'modbench', compilable: true })).toBe(true);
     expect(holds("webviewId == 'modbench' && compilable", { webviewId: 'modbench' })).toBe(false);
-    expect(holds('origin in modbench.mod.tracked', { origin: 'A', 'modbench.mod.tracked': ['A'] })).toBe(true);
-    expect(holds('origin in modbench.mod.tracked', { origin: 'B', 'modbench.mod.tracked': ['A'] })).toBe(false);
-    expect(holds('origin in modbench.mod.tracked', { origin: 'A' })).toBe(false);
   });
 
   it('refuses a clause it cannot read, rather than reading it as ungated', () => {
@@ -990,7 +987,7 @@ describe('package.json menus and keys on an editor tab', () => {
 describe('package.json record tab menus', () => {
   const menu = (): MenuEntry[] => present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']")
     .filter((e) => requires(e.when, "webviewId == 'modbench.record'"));
-  const tab = { webviewId: 'modbench.record', 'modbench.mod.tracked': ['Tracked'], 'modbench.mod.untracked': ['Untracked'] };
+  const tab = { webviewId: 'modbench.record' };
   const offered = (facts: Record<string, unknown>): string[] =>
     placed(menu().filter((e) => holds(e.when, { ...tab, ...facts }))).map(([command]) => command);
 
@@ -1026,16 +1023,17 @@ describe('package.json record tab menus', () => {
   });
 
   it.each([
-    ['an untracked mod', 'Untracked', false, false, ['modbench.mod.track', 'modbench.record.copy']],
-    ['a tracked mod', 'Tracked', false, false, ['modbench.plugin.decompile', 'modbench.record.copy']],
-    ['a tracked mod, compilable but not editable', 'Tracked', true, false, [
+    ['an untracked mod', 'untracked', false, false, ['modbench.mod.track', 'modbench.record.copy']],
+    ['a tracked mod', 'tracked', false, false, ['modbench.plugin.decompile', 'modbench.record.copy']],
+    ['a tracked mod, compilable but not editable', 'tracked', true, false, [
       'modbench.plugin.decompile', 'modbench.plugin.compile', 'modbench.record.copy',
     ]],
-    ['a tracked mod, editable', 'Tracked', true, true, [
+    ['a tracked mod, editable', 'tracked', true, true, [
       'modbench.plugin.decompile', 'modbench.plugin.compile', 'modbench.record.copy', 'modbench.record.delete',
     ]],
-  ])('offers on the column of a plugin in %s only what applies', (_what, origin, compilable, editable, commands) => {
-    expect(offered({ webviewSection: 'recordHeader', origin, compilable, editable })).toEqual(commands);
+    ['the game or Overwrite, in no mod', 'none', false, false, ['modbench.record.copy']],
+  ])('offers on the column of a plugin in %s only what applies', (_what, inMod, compilable, editable, commands) => {
+    expect(offered({ webviewSection: 'recordHeader', inMod, compilable, editable })).toEqual(commands);
   });
 
   it('hides the internal command that follows a reference from the palette', () => {

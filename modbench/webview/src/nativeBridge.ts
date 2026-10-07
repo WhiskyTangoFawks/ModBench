@@ -66,7 +66,7 @@ export function requestRecordLoad(formKey: string, columns: ColumnCopy[]): Promi
       return msg.ok
         ? {
           ok: true, compare: msg.compare, plugins: msg.plugins, conflictsComputed: msg.conflictsComputed,
-          loadFailures: msg.loadFailures, documentPlugin: msg.documentPlugin,
+          loadFailures: msg.loadFailures, documentPlugin: msg.documentPlugin, modsByOrigin: msg.modsByOrigin,
         }
         : { ok: false, error: msg.error };
     },
