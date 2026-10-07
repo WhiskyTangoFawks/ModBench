@@ -1,7 +1,9 @@
 // Where the game is: the setting first, then the instance's own ini, then Steam and Wine detection.
 // The user's overrides arrive from the composition root as values; nothing here reads a setting itself.
 
+import { exec } from 'node:child_process';
 import { dirname, join } from 'node:path';
+import { promisify } from 'node:util';
 import { readGameName, readGamePath } from './codecs/modOrganizerIni';
 import { gamePathInfoForRelease, gameReleaseForGame } from '../tables/gamePaths';
 import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths } from './gamePathDetector';
@@ -23,8 +25,13 @@ export interface GameDetectors {
   winePrefix: (steamAppId: string) => Promise<string | null>;
 }
 
+const execAsync = promisify(exec);
+
 const STEAM: GameDetectors = {
-  paths: (game) => detectGamePaths(process.platform, game),
+  paths: (game) =>
+    detectGamePaths(process.platform, game, () =>
+      execAsync('reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath').then((r) => r.stdout),
+    ),
   winePrefix: detectWinePrefix,
 };
 

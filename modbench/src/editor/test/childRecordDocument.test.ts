@@ -37,7 +37,6 @@ vi.mock('vscode', () => ({
 }));
 
 import { ChildRecordDocuments } from '../childRecordDocument';
-import { childRecordUri } from '../../drivingLib/recordDocument';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 interface FileSystem {
@@ -52,6 +51,8 @@ const isFileSystem = (value: unknown): value is FileSystem =>
 const CELL_FILE = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
 const modA = { name: 'A.esp', origin: 'ModA' };
 const placed = { formKey: '000803:A.esp', plugin: modA };
+const childUri = (path: string, query: string) => h.uri('modbench-child-record', path, query);
+const PLACED_URI = childUri(CELL_FILE, 'formKey=000803%3AA.esp&name=A.esp&origin=ModA');
 
 function childDocuments(client = new InMemoryMEditClient()) {
   const documents = new ChildRecordDocuments(client);
@@ -73,7 +74,7 @@ describe('a child record\'s document', () => {
     h.files.set(`file:${CELL_FILE}?`, new TextEncoder().encode('{ "EditorID": "Cell" }'));
     const { files } = childDocuments();
 
-    const text = new TextDecoder().decode(await files.readFile(childRecordUri(placed, CELL_FILE)));
+    const text = new TextDecoder().decode(await files.readFile(PLACED_URI));
 
     expect(text).toBe('{ "EditorID": "Cell" }');
   });
@@ -83,20 +84,20 @@ describe('a child record\'s document', () => {
     h.files.set(`file:${CELL_FILE}?`, withBom);
     const { files } = childDocuments();
 
-    expect([...await files.readFile(childRecordUri(placed, CELL_FILE))]).toEqual([0xef, 0xbb, 0xbf, 0x7b, 0x7d]);
+    expect([...await files.readFile(PLACED_URI)]).toEqual([0xef, 0xbb, 0xbf, 0x7b, 0x7d]);
   });
 
   it('refuses a container\'s file that is not UTF-8 text, so no save writes it back altered', async () => {
     h.files.set(`file:${CELL_FILE}?`, Uint8Array.from([0x7b, 0xff, 0x7d]));
     const { files } = childDocuments();
 
-    await expect(files.readFile(childRecordUri(placed, CELL_FILE))).rejects.toThrow(TypeError);
+    await expect(files.readFile(PLACED_URI)).rejects.toThrow(TypeError);
   });
 
   it('saves to its container\'s file', async () => {
     const { files } = childDocuments();
 
-    await files.writeFile(childRecordUri(placed, CELL_FILE), new TextEncoder().encode('{ "EditorID": "Saved" }'), { create: true, overwrite: true });
+    await files.writeFile(PLACED_URI, new TextEncoder().encode('{ "EditorID": "Saved" }'), { create: true, overwrite: true });
 
     expect(new TextDecoder().decode(h.files.get(`file:${CELL_FILE}?`))).toBe('{ "EditorID": "Saved" }');
   });
@@ -107,7 +108,7 @@ describe('an open child record\'s document, when mEdit reports a change', () => 
 
   it('changes when any record of its plugin changed, as a sibling\'s change changes its container\'s file', () => {
     const { client, changed } = childDocuments();
-    const uri = childRecordUri(placed, CELL_FILE);
+    const uri = PLACED_URI;
     open(uri, h.uri('file', CELL_FILE));
 
     client.emit({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: ['000804:A.esp'], sequence: 1 });
@@ -117,7 +118,7 @@ describe('an open child record\'s document, when mEdit reports a change', () => 
 
   it('stays as it is when another plugin\'s records changed', () => {
     const { client, changed } = childDocuments();
-    open(childRecordUri(placed, CELL_FILE));
+    open(PLACED_URI);
 
     client.emit({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModB', keys: [placed.formKey], sequence: 1 });
 
@@ -126,7 +127,7 @@ describe('an open child record\'s document, when mEdit reports a change', () => 
 
   it('changes when mEdit read its plugin again whole', () => {
     const { client, changed } = childDocuments();
-    const uri = childRecordUri(placed, CELL_FILE);
+    const uri = PLACED_URI;
     open(uri);
 
     client.emit({ kind: 'plugin-changed', plugin: 'A.esp', origin: 'ModA', keys: [], sequence: 1 });
@@ -136,7 +137,7 @@ describe('an open child record\'s document, when mEdit reports a change', () => 
 
   it('changes, every one, when the stream of mEdit\'s reports opens again', () => {
     const { client, changed } = childDocuments();
-    const [a, b] = [childRecordUri(placed, CELL_FILE), childRecordUri({ formKey: '000901:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }, '/b.json')];
+    const [a, b] = [PLACED_URI, childUri('/b.json', 'formKey=000901%3AB.esp&name=B.esp&origin=ModB')];
     open(a, b);
 
     client.reconnected();

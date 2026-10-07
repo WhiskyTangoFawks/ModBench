@@ -5,7 +5,7 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn() }));
 vi.mock('vscode', () => ({ commands: { executeCommand } }));
 
-import { modRepositoryContext, showModRepositories } from '../modRepositories';
+import { showModRepositories } from '../modRepositories';
 
 beforeEach(() => executeCommand.mockClear());
 
@@ -38,8 +38,13 @@ describe('the lists published as context keys', () => {
 const pluginIn = (origin: string, name: string) => ({ name, origin, path: `/instance/mods/${origin}/${name}`, slot: 0, enabled: true, winning: true });
 
 describe('which plugin origins have a repository, for the column header', () => {
+  const published = (value: ReturnType<typeof instanceValueFixture>) => {
+    showModRepositories(new FakeInstance(value));
+    return Object.fromEntries(executeCommand.mock.calls.map(([, key, origins]) => [String(key), origins]));
+  };
+
   it('names each origin by whether its mod has one, and no origin that is not a mod', () => {
-    expect(modRepositoryContext(instanceValueFixture({
+    expect(published(instanceValueFixture({
       mods: [
         { kind: 'mod', name: 'Tracked', enabled: true },
         { kind: 'separator', name: 'Group', enabled: true },
@@ -47,14 +52,14 @@ describe('which plugin origins have a repository, for the column header', () => 
       ],
       trackedMods: new Set(['Tracked']),
       plugins: [pluginIn('Tracked', 'A.esp'), pluginIn('Tracked', 'B.esp'), pluginIn('Untracked', 'C.esp'), pluginIn('overwrite', 'D.esp')],
-    }))).toEqual({ tracked: ['Tracked'], untracked: ['Untracked'] });
+    }))).toEqual({ 'modbench.mod.tracked': ['Tracked'], 'modbench.mod.untracked': ['Untracked'] });
   });
 
   it('carries the origin as the plugins spell it when it differs in case from the mod', () => {
-    expect(modRepositoryContext(instanceValueFixture({
+    expect(published(instanceValueFixture({
       mods: [{ kind: 'mod', name: 'Harder VATS', enabled: true }, { kind: 'mod', name: 'Other', enabled: true }],
       trackedMods: new Set(['Harder VATS']),
       plugins: [pluginIn('harder vats', 'A.esp'), pluginIn('OTHER', 'B.esp')],
-    }))).toEqual({ tracked: ['harder vats'], untracked: ['OTHER'] });
+    }))).toEqual({ 'modbench.mod.tracked': ['harder vats'], 'modbench.mod.untracked': ['OTHER'] });
   });
 });

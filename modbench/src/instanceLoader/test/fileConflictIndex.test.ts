@@ -118,7 +118,7 @@ describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine 
   it('resolves case-variant paths from two mods to a single conflict entry with both providers', async () => {
     const index = await buildFileConflictIndex([mod('ModA'), mod('ModB')], [], caseFixture, () => {});
 
-    expect(index.files.size).toBe(1);
+    expect([...index.files]).toHaveLength(1);
     const entry = index.files.get('Textures/Foo.dds');
     expect(entry?.providers).toEqual([modOrigin('ModA'), modOrigin('ModB')]);
     const entryOtherCasing = index.files.get('textures/foo.dds');

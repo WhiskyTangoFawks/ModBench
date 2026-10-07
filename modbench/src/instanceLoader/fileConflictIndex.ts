@@ -78,10 +78,6 @@ export class FileConflictLookup {
   [Symbol.iterator](): IterableIterator<ConflictEntry> {
     return this.values();
   }
-
-  get size(): number {
-    return this.byFoldedPath.size;
-  }
 }
 
 /** The winner lookup minus its one mutator (ADR-0015).

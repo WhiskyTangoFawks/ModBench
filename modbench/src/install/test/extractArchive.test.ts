@@ -1,5 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
-import { extractArchive, defaultRunner } from '../extractArchive';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { extractArchive } from '../extractArchive';
 
 const enoent = () => Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' });
 
@@ -34,20 +37,33 @@ describe('extractArchive', () => {
   });
 });
 
-describe('defaultRunner', () => {
-  it('resolves when the spawned process exits 0', async () => {
-    await expect(defaultRunner(process.execPath, ['-e', 'process.exit(0)'])).resolves.toBeUndefined();
+describe('extractArchive, spawning the binary itself', () => {
+  let bin: string;
+  let originalPath: string | undefined;
+  beforeEach(async () => {
+    bin = await mkdtemp(join(tmpdir(), 'fake-7z-'));
+    originalPath = process.env.PATH;
+    process.env.PATH = bin;
+  });
+  afterEach(async () => {
+    process.env.PATH = originalPath;
+    await rm(bin, { recursive: true, force: true });
+  });
+  const installFake7z = (exitCode: number) => writeFile(join(bin, '7z'), `#!/bin/sh\nexit ${exitCode}\n`, { mode: 0o755 });
+
+  it.skipIf(process.platform === 'win32')('resolves when the binary exits 0', async () => {
+    await installFake7z(0);
+
+    await expect(extractArchive('/tmp/mod.7z', '/tmp/stage')).resolves.toBeUndefined();
   });
 
-  it('rejects with the exit code in the message when the process exits non-zero', async () => {
-    await expect(defaultRunner(process.execPath, ['-e', 'process.exit(3)'])).rejects.toThrow(
-      /exited with code 3/,
-    );
+  it.skipIf(process.platform === 'win32')('rejects with the exit code in the message when the binary exits non-zero', async () => {
+    await installFake7z(3);
+
+    await expect(extractArchive('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(/exited with code 3/);
   });
 
-  it('rejects with ENOENT when the binary is absent', async () => {
-    await expect(defaultRunner('/definitely-not-a-real-binary-xyz123', [])).rejects.toMatchObject({
-      code: 'ENOENT',
-    });
+  it('names every candidate when no binary is on the path', async () => {
+    await expect(extractArchive('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(/No 7z binary found/);
   });
 });

@@ -13,8 +13,7 @@ export interface SyncRuns {
   settled(): Promise<void>;
 }
 
-/** Tracks the runs a trigger begins, for its `settled`. */
-export function trackSyncRuns(): SyncRuns & { begin(run: Promise<void>): void } {
+function trackSyncRuns(): SyncRuns & { begin(run: Promise<void>): void } {
   const inFlight = new Set<Promise<void>>();
   return {
     begin: (run) => {

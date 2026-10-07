@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { CELL_VALUE_SETTING, CONFLICT_TABLE_VIEW_TYPE, conflictTableUri, registerConflictTable } from '../conflictTableEditor';
+import { CELL_VALUE_SETTING, CONFLICT_TABLE_VIEW_TYPE, registerConflictTable } from '../conflictTableEditor';
 import type { WorkspaceSettings } from '../workspaceSettings';
 import { ModNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -24,6 +24,8 @@ import { file, indexedValueOf, mod } from './indexedValue';
 import { CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN, parseConflictTableShown } from '../../wire/conflictTable';
 import type { FileCopies, FileOrigin } from '../../instanceLoader/instance';
 import { recordingReporter } from '../../test/surfacingDoubles';
+
+const conflictTableUri = (mod: string) => uriFrom({ scheme: 'modbench-conflicts', path: `/${mod}.modbench-conflicts` });
 
 const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 
@@ -80,11 +82,6 @@ describe('open conflicts', () => {
     await openConflicts({ webviewSection: 'recordHeader', plugin: 'A.esp', origin: 'A' });
 
     expect(opened()).toEqual([]);
-  });
-
-  it('addresses a mod\'s table by the mod alone: the same mod the same way every time, two mods apart', () => {
-    expect(conflictTableUri('Textures')).toEqual(conflictTableUri('Textures'));
-    expect(conflictTableUri('Textures')).not.toEqual(conflictTableUri('Meshes'));
   });
 
   it('reports a table VS Code could not open, naming the mod', async () => {

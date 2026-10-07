@@ -22,7 +22,7 @@ export const CELL_VALUE_SETTING = 'modbench.mods.conflictTable.cellValue';
 const SCHEME = 'modbench-conflicts';
 const SUFFIX = '.modbench-conflicts';
 
-export const conflictTableUri = (mod: string): vscode.Uri =>
+const conflictTableUri = (mod: string): vscode.Uri =>
   vscode.Uri.from({ scheme: SCHEME, path: `/${encodeURIComponent(mod)}${SUFFIX}` });
 
 const modOfUri = (uri: vscode.Uri): string => decodeURIComponent(uri.path.slice(1, -SUFFIX.length));
