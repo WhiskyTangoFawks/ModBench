@@ -7,7 +7,7 @@ import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import { keyArgsView } from '../drivingLib/copyValue';
-import { gestureEntry, isArgumentCarrier } from '../drivingLib/gestureEntry';
+import { gestureEntry, isClickedRow } from '../drivingLib/gestureEntry';
 import { rowLabelOf, rowNameOf } from '../drivingLib/argument';
 import { recordArgumentOf } from '../drivingLib/recordArgument';
 import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from './ReferencedByTreeProvider';
@@ -56,7 +56,7 @@ export interface ViewSelections {
 function rowsOf(clicked: unknown, selected: readonly unknown[] | undefined, selections: ViewSelections): readonly unknown[] {
   const keyView = keyArgsView(clicked);
   const viewSelection = () => (keyView === undefined ? selections.focused() : selections.of(keyView));
-  return gestureEntry(keyView === undefined ? clicked : undefined, selected, viewSelection, isArgumentCarrier).selection;
+  return gestureEntry(keyView === undefined ? clicked : undefined, selected, viewSelection, isClickedRow).selection;
 }
 
 function selectedRecords(nodes: readonly unknown[]): Selection {

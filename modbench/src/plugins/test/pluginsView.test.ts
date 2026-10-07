@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   state: { commands: new Map<string, (...args: unknown[]) => unknown>(), boxes: [] as FakeInputBox[] },
   lenses: [] as SqlLens[],
   views: [] as { description?: string; message?: string }[],
+  providers: [] as vscode.TreeDataProvider<unknown>[],
   decorations: [] as { provideFileDecoration(uri: unknown): { badge?: string } | undefined }[],
   diagnostics: new Map<string, FakeDiagnosticCollection>(),
   commands: new Map<string, (...args: unknown[]) => unknown>(),
@@ -41,7 +42,7 @@ vi.mock('vscode', () => {
     Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
     window: {
       ...filterBoxWindowMock(state),
-      createTreeView: () => {
+      createTreeView: (_id: string, options: { treeDataProvider: vscode.TreeDataProvider<unknown> }) => {
         const selectionListeners: ((event: { selection: unknown[] }) => unknown)[] = [];
         const view: { description?: string; message?: string } & Record<string, unknown> = {
           selection: [], onDidChangeCheckboxState: disposable, dispose: () => undefined,
@@ -49,6 +50,7 @@ vi.mock('vscode', () => {
         };
         h.selectRows = (rows) => { view.selection = rows; selectionListeners.forEach((listener) => listener({ selection: rows })); };
         h.views.push(view);
+        h.providers.push(options.treeDataProvider);
         return view;
       },
       registerFileDecorationProvider: (provider: (typeof h.decorations)[number]) => {
@@ -118,6 +120,17 @@ const workspaceUri = (name: string) => ({ scheme: 'file', path: `/workspace/${na
 
 const rowsChanged: NotificationEvent = { kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys: [], sequence: 1 };
 
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+const pluginReads = (client: InMemoryMEditClient) => client.calls.filter((call) => call.method === 'getPlugins').length;
+
+const tick = (over: Partial<NonNullable<NotificationEvent['loadOrderStatus']>> = {}): NotificationEvent => ({
+  kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
+  loadOrderStatus: {
+    state: 'Reconciling', totalPlugins: 3, activePlugins: 3, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1,
+    ...over,
+  },
+});
+
 const silentChannel = { error: vi.fn(), info: vi.fn() };
 
 function syncRefusing() {
@@ -151,12 +164,15 @@ function pluginsView(
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, conflictsComputed: () => Promise.resolve(),
     ask: scriptedDialog(), recordWrite: (command) => command(), trackSelection: () => [], modsView: 'modbench.modList',
   });
-  return { client, recordBrowser, plugins, reporters, instance, view: () => present(h.views[0], 'the Plugins tree view') };
+  const provider = () => present(h.providers[0], 'the Plugins tree data provider');
+  const rows = async () => (await provider().getChildren()) ?? [];
+  return { client, recordBrowser, plugins, reporters, instance, rows, provider, view: () => present(h.views[0], 'the Plugins tree view') };
 }
 
 beforeEach(() => {
   h.lenses.length = 0;
   h.views.length = 0;
+  h.providers.length = 0;
   h.decorations.length = 0;
   h.diagnostics.clear();
   h.contexts.length = 0;
@@ -178,6 +194,27 @@ describe('the Plugins view registers its own gestures', () => {
     expect(h.commands.has(command)).toBe(true);
   });
 
+  it('runs plugin sync with the instance\'s sync arguments', async () => {
+    const sync = vi.fn(() => Promise.resolve({ applied: true as const, wrote: false, added: [], dropped: [] }));
+    pluginsView(instanceValueFixture(), { pluginSync: createPluginSync(sync, silentChannel) });
+    const value = instanceValueFixture();
+
+    await present(h.commands.get('modbench.plugin.sync'), 'the modbench.plugin.sync handler')(value);
+
+    expect(sync).toHaveBeenCalledWith(value.pluginSyncArguments);
+  });
+
+  it.each([
+    ['modbench.plugin.compile', 'plugin.compile', 'Could not list the plugins to compile.'],
+    ['modbench.plugin.create', 'newPlugin', 'Could not look up which extensions a plugin may take.'],
+  ])('runs %s under its own reporter', async (command, tag, message) => {
+    const { reporters } = pluginsView();
+
+    await present(h.commands.get(command), `the ${command} handler`)();
+
+    expect(present(reporters.get(tag), `the ${tag} reporter`).reports.map((report) => report.message)).toEqual([message]);
+  });
+
   it('hears its copy value in the Plugins view\'s key, and defers for any other', () => {
     const { plugins } = pluginsView();
     expect(plugins.copyValue.reporterTag).toBe('pluginListTree.copyValue');
@@ -188,12 +225,12 @@ describe('the Plugins view registers its own gestures', () => {
 
 describe('the Plugins view\'s selection for a key', () => {
   it('still holds a selected row the rebuilt tree shows, though VS Code reports none until the tree hands its rows back', async () => {
-    const { plugins, view } = pluginsView(instanceValueFixture({
+    const { plugins, view, rows } = pluginsView(instanceValueFixture({
       plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', slot: 0, enabled: true, winning: true }], gameFolder: FOUND,
     }));
     const focused = createFocusedView();
     focused.follow('modbench.pluginListTree', plugins.followed);
-    const [row] = await plugins.tree.getChildren();
+    const [row] = await rows();
 
     h.selectRows([present(row, 'the plugin row')]);
     Object.assign(view(), { selection: [] });
@@ -202,27 +239,27 @@ describe('the Plugins view\'s selection for a key', () => {
   });
 });
 
-describe('the Plugins view follows mEdit\'s pushes and shows the record filter', () => {
-  it('re-reads the record browser and the plugin facts on mEdit\'s changed rows', () => {
-    const { client, recordBrowser, plugins } = pluginsView();
+describe('the Plugins view follows mEdit\'s pushes', () => {
+  it('re-reads the record browser and the plugin facts on mEdit\'s changed rows', async () => {
+    const { client, recordBrowser } = pluginsView();
     const refresh = vi.spyOn(recordBrowser, 'refresh');
-    const refreshFacts = vi.spyOn(plugins.tree, 'refreshFacts');
 
     client.emit(rowsChanged);
 
     expect(refresh).toHaveBeenCalledTimes(1);
-    expect(refreshFacts).toHaveBeenCalledTimes(1);
+    await settle();
+    expect(pluginReads(client)).toBe(1);
   });
 
-  it('re-reads the record browser and the plugin facts on a changed plugin', () => {
-    const { client, recordBrowser, plugins } = pluginsView();
+  it('re-reads the record browser and the plugin facts on a changed plugin', async () => {
+    const { client, recordBrowser } = pluginsView();
     const refresh = vi.spyOn(recordBrowser, 'refresh');
-    const refreshFacts = vi.spyOn(plugins.tree, 'refreshFacts');
 
     client.emit({ ...rowsChanged, kind: 'plugin-changed' });
 
     expect(refresh).toHaveBeenCalledTimes(1);
-    expect(refreshFacts).toHaveBeenCalledTimes(1);
+    await settle();
+    expect(pluginReads(client)).toBe(1);
   });
 
   it('hears no push once disposed', () => {
@@ -235,32 +272,15 @@ describe('the Plugins view follows mEdit\'s pushes and shows the record filter',
 
     expect(refresh).not.toHaveBeenCalled();
   });
-
-  it('shows the record filter on its SQL document\'s lens and in the view\'s description', () => {
-    const { plugins } = pluginsView();
-
-    plugins.showRecordFilter({ sql: ARMOR_SQL, source: 'armor.sql' });
-
-    const [lens] = present(h.lenses[0], 'the registered code lens provider').provideCodeLenses({ getText: () => ARMOR_SQL });
-    expect(lens?.command?.command).toBe('modbench.record.clearFilter');
-    expect(present(h.views[0], 'the Plugins tree view').description).toBe('records: armor.sql');
-  });
 });
 
 describe('the Plugins view re-renders for a reconcile tick only when it landed something new, since a re-render re-fetches record types for every expanded row', () => {
-  const tick = (over: Partial<NonNullable<NotificationEvent['loadOrderStatus']>> = {}): NotificationEvent => ({
-    kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-    loadOrderStatus: {
-      state: 'Reconciling', totalPlugins: 3, activePlugins: 3, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1,
-      ...over,
-    },
-  });
   const A = { name: 'A.esp', origin: 'SomeMod' };
 
   function reconciling() {
-    const { client, plugins } = pluginsView();
+    const { client, provider } = pluginsView();
     const rerenders: unknown[] = [];
-    plugins.tree.onDidChangeTreeData((changed) => rerenders.push(changed));
+    provider().onDidChangeTreeData?.((changed) => rerenders.push(changed));
     return { client, rerenders };
   }
 
@@ -615,13 +635,23 @@ describe('the Plugins view\'s message line and name filter', () => {
   });
   const NO_MATCH = 'No matches for "zzznomatch".';
   const currentBox = currentBoxOf(h.state);
-  const settle = () => new Promise((resolve) => setImmediate(resolve));
   const messageIs = (expected: string | undefined, label: string) =>
     waitForMessage(h.views[0] ?? {}, (m) => m === expected, label);
 
+  async function applyFilter(client: InMemoryMEditClient, source: string | undefined) {
+    if (source === undefined) {
+      client.emit(rowsChanged);
+    } else {
+      client.setQueryAnswer('setFilter', null);
+      h.files.set(source, ARMOR_SQL);
+      await present(h.commands.get('modbench.record.filter'), 'the modbench.record.filter handler')(workspaceUri(source));
+    }
+    await settle();
+  }
+
   async function shown(value: InstanceValue, extra: Parameters<typeof pluginsView>[1] = {}) {
     const result = pluginsView(value, { instance: new FakeInstance(value), ...extra });
-    await result.plugins.tree.getChildren();
+    await result.rows();
     return result;
   }
 
@@ -648,12 +678,12 @@ describe('the Plugins view\'s message line and name filter', () => {
 
   describe('given the game folder not found', () => {
     it('says so, and keeps its rows', async () => {
-      const { plugins, instance } = await shown(found('TestMod.esp'));
+      const { rows, instance } = await shown(found('TestMod.esp'));
 
       instance.publish(notFound('TestMod.esp'));
 
       await messageIs(GAME_FOLDER_MESSAGE, 'the game folder message');
-      expect(await plugins.tree.getChildren()).toHaveLength(1);
+      expect(await rows()).toHaveLength(1);
     });
 
     it('clears the message on the next value with the game folder found', async () => {
@@ -689,18 +719,18 @@ describe('the Plugins view\'s message line and name filter', () => {
 
   describe('given no lines and no locked plugins', () => {
     it('says so, and shows no row', async () => {
-      const { plugins } = await shown(found());
+      const { rows } = await shown(found());
 
       await messageIs(NO_PLUGINS_MESSAGE, 'the empty-list message');
-      expect(await plugins.tree.getChildren()).toEqual([]);
+      expect(await rows()).toEqual([]);
     });
 
     it('clears the message once a line lands', async () => {
-      const { plugins, instance } = await shown(found());
+      const { rows, instance } = await shown(found());
       await messageIs(NO_PLUGINS_MESSAGE, 'the empty-list message');
 
       instance.publish(found('TestMod.esp'));
-      await plugins.tree.getChildren();
+      await rows();
 
       await messageIs(undefined, 'the message clearing');
     });
@@ -713,8 +743,7 @@ describe('the Plugins view\'s message line and name filter', () => {
       client.setQueryAnswer('getDiagnoses', []);
       const sync = syncRefusing();
       const result = await shown(found('Other.esp', 'TestMod.esp'), { client, pluginSync: sync.pluginSync });
-      result.plugins.tree.setRecordFilterSource(source);
-      await result.plugins.tree.refreshFacts();
+      await applyFilter(client, source);
       return { ...result, client, sync };
     }
 
@@ -745,12 +774,13 @@ describe('the Plugins view\'s message line and name filter', () => {
     });
 
     it('takes the message back once the filter clears', async () => {
-      const { client, plugins } = await filteredView(false, 'armor.sql');
+      const { client } = await filteredView(false, 'armor.sql');
       await messageIs('No records match armor.sql.', 'the no-match message');
 
-      plugins.tree.setRecordFilterSource(undefined);
       client.setQueryAnswer('getPlugins', [heldPlugin('Other.esp', true), heldPlugin('TestMod.esp', true)]);
-      await plugins.tree.refreshFacts();
+      client.setQueryAnswer('clearFilter', null);
+      await present(h.commands.get('modbench.record.clearFilter'), 'the modbench.record.clearFilter handler')();
+      await settle();
 
       await messageIs(undefined, 'the message clearing');
     });
@@ -767,8 +797,7 @@ describe('the Plugins view\'s message line and name filter', () => {
       client.setQueryAnswer('getDiagnoses', []);
       const sync = syncRefusing();
       const result = await shown(found('TestMod.esp'), { client, pluginSync: sync.pluginSync });
-      result.plugins.tree.setRecordFilterSource(recordFilter);
-      await result.plugins.tree.refreshFacts();
+      await applyFilter(client, recordFilter);
       return { ...result, sync };
     }
 
@@ -797,12 +826,12 @@ describe('the Plugins view\'s message line and name filter', () => {
 
   describe('while a load holds it', () => {
     it('keeps the load\'s message when a reconcile tick still matches nothing', async () => {
-      const { plugins, view } = await shown(found('TestMod.esp'));
+      const { plugins, view, client } = await shown(found('TestMod.esp'));
       typeNoMatch(plugins);
       await messageIs(NO_MATCH, 'the message after the keystroke');
 
       plugins.progress.say('Starting backend…');
-      plugins.tree.applyIndexed([{ name: 'TestMod.esp', origin: 'SomeMod' }], []);
+      client.emit(tick({ indexedPlugins: [{ name: 'TestMod.esp', origin: 'SomeMod' }] }));
       await settle();
 
       expect(view().message).toBe('Starting backend…');
@@ -833,11 +862,11 @@ describe('the Plugins view\'s message line and name filter', () => {
     });
 
     it('gives the line back to the empty-list message once the load clears it', async () => {
-      const { plugins, view, instance } = await shown(found('TestMod.esp'));
+      const { plugins, rows, view, instance } = await shown(found('TestMod.esp'));
 
       plugins.progress.say('Starting backend…');
       instance.publish(found());
-      await plugins.tree.getChildren();
+      await rows();
       await settle();
       expect(view().message).toBe('Starting backend…');
 
