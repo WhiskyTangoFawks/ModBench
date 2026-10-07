@@ -10,7 +10,7 @@ vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleS
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import { wireModSync, wirePluginSync } from './syncWiring';
-import { pluginSyncOver, syncPlugins, setPluginsEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
+import { pluginSyncOver, setPluginsEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
@@ -90,7 +90,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   const loadedWithNoLine: (readonly string[] | undefined)[] = [];
   wirePluginSync(instance, (args) => {
     loadedWithNoLine.push(args.loadedWithNoLine);
-    const run = syncPlugins(accessTo(root), args);
+    const run = pluginSyncOver(accessTo(root))(args);
     syncs.push(run);
     return run;
   }, { error: () => {}, info: () => {} });

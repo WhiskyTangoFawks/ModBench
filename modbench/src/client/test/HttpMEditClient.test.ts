@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { HttpMEditClient, type HttpMEditClientDeps } from '../HttpMEditClient';
-import type { RecordEditEnvelope } from '../MEditClient';
+import { createMEditClient } from '../HttpMEditClient';
+import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import { Readable } from 'node:stream';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -17,9 +17,9 @@ const fakeLogChannel = () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), er
 
 function makeClient(
   fetch: (input: Request) => Promise<Response>,
-  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Pick<HttpMEditClientDeps, 'timeoutMs' | 'reconnectDelayMs'> = {},
+  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs'> = {},
 ) {
-  return new HttpMEditClient({
+  return createMEditClient({
     backend: {
       attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
       checkHealth: () => Promise.resolve(health === 'up'),
@@ -368,8 +368,8 @@ describe('HttpMEditClient — child records', () => {
   });
 
   it.each([
-    ['getRecordsWithChildren', (c: HttpMEditClient) => c.getRecordsWithChildren([quest])],
-    ['getChildrenInDestinations', (c: HttpMEditClient) => c.getChildrenInDestinations([quest], [patch])],
+    ['getRecordsWithChildren', (c: MEditClient) => c.getRecordsWithChildren([quest])],
+    ['getChildrenInDestinations', (c: MEditClient) => c.getChildrenInDestinations([quest], [patch])],
   ])('fails %s when the service refuses, naming the call', async (name, call) => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'The index is not ready.' })));
 
@@ -1130,7 +1130,7 @@ describe('HttpMEditClient, the backend process it hides', () => {
       state.healthy = true;
       return { kill: vi.fn(), on: vi.fn(), stdout: Readable.from(['[10:00:00 WRN] slow\n']), stderr: null };
     });
-    const client = new HttpMEditClient({
+    const client = createMEditClient({
       backend: {
         freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x/backend',
         checkHealth: () => Promise.resolve(state.healthy),
@@ -1168,7 +1168,7 @@ describe('HttpMEditClient — onNotification', () => {
 describe('HttpMEditClient — a plugin address on the wire', () => {
   const plugin = { name: 'Shared.esp', origin: 'ModA' };
 
-  async function requestOf(call: (client: HttpMEditClient) => Promise<unknown>, answer: unknown = []): Promise<Request> {
+  async function requestOf(call: (client: MEditClient) => Promise<unknown>, answer: unknown = []): Promise<Request> {
     let seen: Request | undefined;
     const fetch = vi.fn((req: Request) => { seen = req; return Promise.resolve(jsonResponse(200, answer)); });
     await call(makeClient(fetch));
@@ -1177,13 +1177,13 @@ describe('HttpMEditClient — a plugin address on the wire', () => {
   }
 
   it.each([
-    ['getRecordTypes', (c: HttpMEditClient) => c.getRecordTypes(plugin), []],
-    ['getPluginDependants', (c: HttpMEditClient) => c.getPluginDependants(plugin), { dependants: [], unreadable: [] }],
-    ['getWorldspaces', (c: HttpMEditClient) => c.getWorldspaces(plugin), []],
-    ['getWorldspaceBlocks', (c: HttpMEditClient) => c.getWorldspaceBlocks(plugin, '000800:Shared.esp'), { topCells: [], blocks: [] }],
-    ['getCellChildRecords', (c: HttpMEditClient) => c.getCellChildRecords(plugin, '000800:Shared.esp'), { persistent: [], temporary: [] }],
-    ['getInteriorCells', (c: HttpMEditClient) => c.getInteriorCells(plugin), []],
-    ['getContainerChildren', (c: HttpMEditClient) => c.getContainerChildren(plugin, '000800:Shared.esp'), []],
+    ['getRecordTypes', (c: MEditClient) => c.getRecordTypes(plugin), []],
+    ['getPluginDependants', (c: MEditClient) => c.getPluginDependants(plugin), { dependants: [], unreadable: [] }],
+    ['getWorldspaces', (c: MEditClient) => c.getWorldspaces(plugin), []],
+    ['getWorldspaceBlocks', (c: MEditClient) => c.getWorldspaceBlocks(plugin, '000800:Shared.esp'), { topCells: [], blocks: [] }],
+    ['getCellChildRecords', (c: MEditClient) => c.getCellChildRecords(plugin, '000800:Shared.esp'), { persistent: [], temporary: [] }],
+    ['getInteriorCells', (c: MEditClient) => c.getInteriorCells(plugin), []],
+    ['getContainerChildren', (c: MEditClient) => c.getContainerChildren(plugin, '000800:Shared.esp'), []],
   ])('%s asks for the plugin by filename in the path and by origin in the query', async (_name, call, answer) => {
     const request = await requestOf(call, answer);
 

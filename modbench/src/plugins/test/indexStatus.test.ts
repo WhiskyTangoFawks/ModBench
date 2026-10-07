@@ -14,11 +14,8 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { followIndexStatus, settleReconciled, syncActiveFilter, type IndexStatusDeps } from '../indexStatus';
+import { followIndexStatus, type IndexStatusDeps } from '../indexStatus';
 import { createStatusBar } from '../statusBar';
-import {
-  type LoadOrderProgress, type PluginLoadFailure,
-} from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -26,102 +23,6 @@ import { present } from '../../ports/present';
 const statusBarText = (): string => present(h.items.at(-1), 'the status bar item').text;
 
 beforeEach(() => { h.items.length = 0; });
-
-const readyStatus: LoadOrderProgress = {
-  totalPlugins: 3, activePlugins: 2, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
-};
-
-describe('settleReconciled, a reconcile that reached Ready being reported and then applied whoever started it', () => {
-  const settleDeps = () => ({
-    log: vi.fn(), warn: vi.fn(), statusBar: createStatusBar(new InMemoryMEditClient()), refreshTree: vi.fn(),
-    notifyConflictsComputed: vi.fn(),
-    syncFilterState: vi.fn().mockResolvedValue(undefined),
-    applyReconciled: vi.fn().mockResolvedValue(undefined),
-  });
-
-  it('says Ready on the status bar counting the active plugins, not every plugin indexed', async () => {
-    const deps = settleDeps();
-
-    await settleReconciled(readyStatus, deps);
-
-    expect(statusBarText()).toBe('$(check) mEdit: Ready (2 plugins)');
-  });
-
-  it('refreshes the record browser, whose page, interior and reference caches would otherwise show stale records, and announces that conflicts are computed', async () => {
-    const deps = settleDeps();
-
-    await settleReconciled(readyStatus, deps);
-
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-    expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
-  });
-
-  it('warns and logs a skipped plugin by name', async () => {
-    const deps = settleDeps();
-    const failures: PluginLoadFailure[] = [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }];
-
-    await settleReconciled({ ...readyStatus, failures }, deps);
-
-    expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('Bad.esp'));
-    expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('Bad.esp'));
-  });
-
-  it('does not warn about skipped plugins when there are none', async () => {
-    const deps = settleDeps();
-
-    await settleReconciled(readyStatus, deps);
-
-    expect(deps.warn).not.toHaveBeenCalled();
-  });
-
-  it('syncs the filter state, then hands the tree the status\'s own failures and count', async () => {
-    const deps = settleDeps();
-    const order: string[] = [];
-    deps.syncFilterState.mockImplementation(() => { order.push('syncFilterState'); return Promise.resolve(); });
-    deps.applyReconciled.mockImplementation(() => { order.push('applyReconciled'); return Promise.resolve(); });
-    const failures: PluginLoadFailure[] = [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }];
-
-    await settleReconciled({ ...readyStatus, totalPlugins: 42, failures }, deps);
-
-    expect(order).toEqual(['syncFilterState', 'applyReconciled']);
-    expect(deps.applyReconciled).toHaveBeenCalledWith(failures, 42);
-  });
-});
-
-describe('syncActiveFilter', () => {
-  function makeSyncDeps() {
-    return { log: vi.fn(), warn: vi.fn(), showRecordFilter: vi.fn() };
-  }
-
-  it('shows the filter mEdit holds, with its source', async () => {
-    const deps = makeSyncDeps();
-
-    await syncActiveFilter(() => Promise.resolve({ sql: 'SELECT form_key FROM "npc_"', source: 'npcs.sql' }), deps);
-
-    expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: 'SELECT form_key FROM "npc_"', source: 'npcs.sql' });
-    expect(deps.log).not.toHaveBeenCalled();
-  });
-
-  it('shows no filter when mEdit holds none', async () => {
-    const deps = makeSyncDeps();
-
-    await syncActiveFilter(() => Promise.resolve(null), deps);
-
-    expect(deps.showRecordFilter).toHaveBeenCalledWith(null);
-    expect(deps.warn).not.toHaveBeenCalled();
-  });
-
-  it('logs and warns a read failure, and keeps showing the last known filter, since a failed read says nothing about whether mEdit still filters', async () => {
-    const deps = makeSyncDeps();
-
-    await syncActiveFilter(() => Promise.reject(new Error('boom')), deps);
-
-    expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('boom'));
-    expect(deps.warn).toHaveBeenCalledWith(
-      "Could not read the record filter — the Plugins view shows it as it last was. boom");
-    expect(deps.showRecordFilter).not.toHaveBeenCalled();
-  });
-});
 
 type WireStatus = NonNullable<NotificationEvent['loadOrderStatus']>;
 
@@ -157,10 +58,10 @@ function followed() {
 const flushed = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('the Plugins view following the index status and mEdit\'s own', () => {
-  it('says Ready on the status bar once the stream\'s Ready is handed to the tree', async () => {
+  it('says Ready on the status bar counting the active plugins, not every plugin indexed, once the stream\'s Ready is handed to the tree', async () => {
     const { client, deps } = followed();
 
-    client.emit(statusEvent({ activePlugins: 2 }));
+    client.emit(statusEvent({ totalPlugins: 5, activePlugins: 2 }));
     await flushed();
 
     expect(deps.tree.applyReconciled).toHaveBeenCalledOnce();
@@ -265,5 +166,79 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
 
     expect(deps.tree.applyReconciled).not.toHaveBeenCalled();
     expect(deps.tree.applyBackendUnreachable).not.toHaveBeenCalled();
+  });
+});
+
+describe('a reconcile that reached Ready, reported and then applied whoever started it', () => {
+  const badFailure = { name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' };
+
+  it('refreshes the record browser, whose page, interior and reference caches would otherwise show stale records, and announces that conflicts are computed', async () => {
+    const { client, deps } = followed();
+
+    client.emit(statusEvent());
+    await flushed();
+
+    expect(deps.recordBrowser.refresh).toHaveBeenCalledOnce();
+    expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
+  });
+
+  it('warns and logs a skipped plugin by name', async () => {
+    const { client, deps } = followed();
+
+    client.emit(statusEvent({ failures: [badFailure] }));
+    await flushed();
+
+    expect(deps.reporter.reports.map((report) => report.severity)).toEqual(['warning']);
+    expect(deps.reporter.reports[0]?.message).toContain('Bad.esp');
+    expect(deps.log).toHaveBeenCalledWith('info', expect.stringContaining('Bad.esp'));
+  });
+
+  it('does not warn about skipped plugins when there are none', async () => {
+    const { client, deps } = followed();
+
+    client.emit(statusEvent());
+    await flushed();
+
+    expect(deps.reporter.reports).toEqual([]);
+  });
+
+  it('syncs the filter state, then hands the tree the status\'s own failures and counts the snapshot\'s total in the log', async () => {
+    const { client, deps } = followed();
+    client.setQueryAnswer('getActiveFilter', { sql: 'SELECT form_key FROM "npc_"', source: 'npcs.sql' });
+    const order: string[] = [];
+    deps.showRecordFilter.mockImplementation(() => { order.push('showRecordFilter'); });
+    deps.tree.applyReconciled.mockImplementation(() => { order.push('applyReconciled'); return Promise.resolve(1); });
+
+    client.emit(statusEvent({ totalPlugins: 42, failures: [badFailure] }));
+    await flushed();
+
+    expect(order).toEqual(['showRecordFilter', 'applyReconciled']);
+    expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: 'SELECT form_key FROM "npc_"', source: 'npcs.sql' });
+    expect(deps.tree.applyReconciled).toHaveBeenCalledWith([badFailure]);
+    expect(deps.log).toHaveBeenCalledWith('info', expect.stringContaining('1 failed, of 42 plugins'));
+  });
+
+  it('shows no filter when mEdit holds none', async () => {
+    const { client, deps } = followed();
+
+    client.emit(statusEvent());
+    await flushed();
+
+    expect(deps.showRecordFilter).toHaveBeenCalledWith(null);
+    expect(deps.reporter.reports).toEqual([]);
+  });
+
+  it('logs and warns a filter read failure, keeps showing the last known filter, and still applies the reconcile, since a failed read says nothing about whether mEdit still filters', async () => {
+    const { client, deps } = followed();
+    client.setQueryFailure('getActiveFilter', new Error('boom'));
+
+    client.emit(statusEvent());
+    await flushed();
+
+    expect(deps.log).toHaveBeenCalledWith('info', expect.stringContaining('boom'));
+    expect(deps.reporter.reports[0]?.message).toBe(
+      "Could not read the record filter — the Plugins view shows it as it last was. boom");
+    expect(deps.showRecordFilter).not.toHaveBeenCalled();
+    expect(deps.tree.applyReconciled).toHaveBeenCalledOnce();
   });
 });

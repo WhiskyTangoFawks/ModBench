@@ -3,9 +3,7 @@ import type { MEditClient, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
-/** Each plugin's tracked folder, by `pluginAddressKey`; a plugin whose origin is not a tracked mod
- *  has no entry. A lookup over the Instance value's own two facts, never a fresh disk check. */
-export function trackedFoldersOf(
+function trackedFoldersOf(
   plugins: readonly Pick<PluginMetadata, 'name' | 'origin'>[],
   trackedMods: ReadonlySet<string>,
   modDirs: ReadonlyMap<string, string>,
@@ -19,31 +17,23 @@ export function trackedFoldersOf(
   return folders;
 }
 
-/** Deduplicates its input as a contract of its own, not as a property of one caller. A folder
- *  whose `openRepository` resolves `null` is omitted, so a later `.status()` can never land on a
- *  null handle. */
-export async function registerTrackedRepositories<T>(
-  openRepository: (modFolder: string) => Promise<T | null | undefined>,
+async function registerTrackedRepositories<T>(
+  openRepository: (modFolder: string) => Promise<T | null>,
   modFolders: readonly string[],
-): Promise<Map<string, T>> {
+): Promise<Map<string, T | null>> {
   const distinct = [...new Set(modFolders)];
-  const repositories = new Map<string, T>();
+  const repositories = new Map<string, T | null>();
   for (const folder of distinct) {
-    const repository = await openRepository(folder);
-    if (repository != null) repositories.set(folder, repository);
+    repositories.set(folder, await openRepository(folder));
   }
   return repositories;
 }
 
-/** Reindexed by plugin because a field edit knows the plugin it edited, never the folder. */
-export function pluginRepositoriesOf<T>(
-  folders: ReadonlyMap<string, string>, folderRepositories: ReadonlyMap<string, T>,
-): Map<string, T> {
-  const byPlugin = new Map<string, T>();
-  for (const [plugin, folder] of folders) {
-    const repository = folderRepositories.get(folder);
-    if (repository) byPlugin.set(plugin, repository);
-  }
+function pluginRepositoriesOf<T>(
+  folders: ReadonlyMap<string, string>, folderRepositories: ReadonlyMap<string, T | null>,
+): Map<string, T | null> {
+  const byPlugin = new Map<string, T | null>();
+  for (const [plugin, folder] of folders) byPlugin.set(plugin, folderRepositories.get(folder) ?? null);
   return byPlugin;
 }
 
@@ -82,7 +72,7 @@ export interface TrackedRepositories {
 
 /** The session's tracked repositories by plugin, held here and refilled by each registration. */
 export function trackedRepositoriesOver(deps: TrackedRepositoriesDeps): TrackedRepositories {
-  let byPlugin = new Map<string, MinimalRepository>();
+  let byPlugin = new Map<string, MinimalRepository | null>();
 
   // One `openRepository` per distinct tracked folder (ADR-0007). A logged no-op when `vscode.git` is
   // unavailable: this only narrows the native UI, never blocks reading or editing.

@@ -6,18 +6,12 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
-  deleteDownloads, excludeDownload, excludeDownloads, includeDownload, includeDownloads,
-  type DownloadsAccess, type DownloadsCommandResult,
+  deleteDownloads, excludeDownloads, includeDownloads, type DownloadsAccess,
 } from '../downloads';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import { accessTo, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 import type { MoveToTrash } from '../../ports/trash';
-
-function assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(result: DownloadsCommandResult, expectedSubstring: string): void {
-  if (result.applied) throw new Error('expected a refusal, got applied:true');
-  expect(result.refusal).toContain(expectedSubstring);
-}
 
 let root: string;
 let access: DownloadsAccess;
@@ -49,36 +43,36 @@ const recordingTrash = (fail: (path: string) => Error | undefined = () => undefi
   return { trash, trashed };
 };
 
-describe('excludeDownload / includeDownload', () => {
+describe('excludeDownloads / includeDownloads — one name', () => {
+  const landed = (name: string) => ({ landed: [name], refused: [] });
+  const refusedFor = (name: string, reasonContains: string) => ({ landed: [], refused: [{ item: name, reasonContains }] });
+
   it('exclude marks the file excluded, and include marks it included again', async () => {
     await writeArchive('foo.7z');
 
-    expect(await excludeDownload(access, 'foo.7z')).toEqual({ applied: true, wrote: true });
+    assertSelectionOutcome(await excludeDownloads(access, ['foo.7z']), landed('foo.7z'));
     expect(await statusOf('foo.7z')).toMatchObject({ excluded: true });
 
-    expect(await includeDownload(access, 'foo.7z')).toEqual({ applied: true, wrote: true });
+    assertSelectionOutcome(await includeDownloads(access, ['foo.7z']), landed('foo.7z'));
     expect(await statusOf('foo.7z')).toMatchObject({ excluded: false });
   });
 
-  it('a file already at rest is applied, and says nothing was written', async () => {
+  it('a file already at rest is landed, and no metadata is written', async () => {
     await writeArchive('manual.7z');
 
-    expect(await includeDownload(access, 'manual.7z')).toEqual({ applied: true, wrote: false });
+    assertSelectionOutcome(await includeDownloads(access, ['manual.7z']), landed('manual.7z'));
+    await expect(readFile(metaPath('manual.7z'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('excluding a file gone from disk is refused, naming it, and writes it no metadata', async () => {
-    const outcome = await excludeDownload(access, 'foo.7z');
-
-    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(outcome, 'foo.7z');
+    assertSelectionOutcome(await excludeDownloads(access, ['foo.7z']), refusedFor('foo.7z', 'foo.7z'));
     await expect(readFile(metaPath('foo.7z'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('including a file gone from disk is refused, naming it, and leaves its stale metadata alone', async () => {
     await writeFile(metaPath('foo.7z'), '[General]\r\nremoved=true\r\n');
 
-    const outcome = await includeDownload(access, 'foo.7z');
-
-    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(outcome, 'foo.7z');
+    assertSelectionOutcome(await includeDownloads(access, ['foo.7z']), refusedFor('foo.7z', 'foo.7z'));
     expect(await readFile(metaPath('foo.7z'), 'utf8')).toBe('[General]\r\nremoved=true\r\n');
   });
 
@@ -86,13 +80,13 @@ describe('excludeDownload / includeDownload', () => {
     await writeArchive('foo.7z');
     await mkdir(metaPath('foo.7z'));
 
-    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(await excludeDownload(access, 'foo.7z'), 'EISDIR');
+    assertSelectionOutcome(await excludeDownloads(access, ['foo.7z']), refusedFor('foo.7z', 'EISDIR'));
   });
 
   it('an exclude racing an installed mark leaves both marks set, rather than the second writer dropping the first key', async () => {
     await writeArchive('foo.7z');
 
-    await Promise.all([excludeDownload(access, 'foo.7z'), access.adapter.markDownloadedFile('foo.7z', 'Installed')]);
+    await Promise.all([excludeDownloads(access, ['foo.7z']), access.adapter.markDownloadedFile('foo.7z', 'Installed')]);
 
     expect(await statusOf('foo.7z')).toMatchObject({ excluded: true, status: 'Installed' });
   });

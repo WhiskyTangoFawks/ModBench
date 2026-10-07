@@ -18,8 +18,8 @@ import {
   moveSeparators,
   renameMod,
   renameSeparator,
+  modSyncOver,
   setModsEnabled,
-  syncMods,
   uninstallMods,
 } from '../modlist';
 import { accessTo, adapterOver, readModlistEntries } from '../../test/mo2/adapterOver';
@@ -490,7 +490,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       await deleteSeparators(accessWith(dir, () => refusingWrite('disk full')), 'Default', [UNASSIGNED], trash);
       expect(await order()).toContain(`separator:${UNASSIGNED}`);
 
-      const outcome = await syncMods(accessTo(dir), 'Default', await foldersAsAValueListsThem(dir, await readdir(join(dir, 'mods'))));
+      const outcome = await modSyncOver(accessTo(dir))({ profile: 'Default', modFolders: await foldersAsAValueListsThem(dir, await readdir(join(dir, 'mods'))) });
 
       expect(outcome.applied && outcome.dropped).toContain(`${UNASSIGNED} (separator)`);
       expect(await order()).not.toContain(`separator:${UNASSIGNED}`);
@@ -806,7 +806,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     it('lands whole when mod sync dropped the line after the folder went, not reporting a landed uninstall as part failed', async () => {
       const syncingTrash = async (path: string) => {
         await trash(path);
-        await syncMods(accessTo(dir), 'Default', []);
+        await modSyncOver(accessTo(dir))({ profile: 'Default', modFolders: [] });
       };
 
       const outcome = await uninstallMods(accessTo(dir), 'Default', [{ name: 'Harder VATS' }], syncingTrash);
@@ -962,7 +962,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   const modlistPath = () => join(dir, 'profiles', 'Default', 'modlist.txt');
   const readModlist = () => readModlistEntries(dir);
   const mtime = async () => (await stat(modlistPath())).mtime;
-  const sync = async (folders: readonly string[]) => syncMods(accessTo(dir), 'Default', await foldersAsAValueListsThem(dir, folders));
+  const sync = async (folders: readonly string[]) => modSyncOver(accessTo(dir))({ profile: 'Default', modFolders: await foldersAsAValueListsThem(dir, folders) });
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'modlist-sync-'));
@@ -974,7 +974,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     await mkdir(join(dir, 'mods', 'Hand Extracted Mod'));
     const { access, calls } = watchedAccess(dir);
 
-    const outcome = await syncMods(access, 'Default', await foldersAsAValueListsThem(dir, [...FIXTURE_MOD_FOLDERS, 'Hand Extracted Mod']));
+    const outcome = await modSyncOver(access)({ profile: 'Default', modFolders: await foldersAsAValueListsThem(dir, [...FIXTURE_MOD_FOLDERS, 'Hand Extracted Mod']) });
 
     expect(outcome).toEqual({
       applied: true, added: ['Hand Extracted Mod'],
@@ -991,7 +991,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     await writeFile(join(dir, 'profiles', 'Other', 'modlist.txt'), '+Gone Mod\r\n');
     const active = await readFile(modlistPath(), 'utf8');
 
-    const outcome = await syncMods(accessTo(dir), 'Other', await foldersAsAValueListsThem(dir, []));
+    const outcome = await modSyncOver(accessTo(dir))({ profile: 'Other', modFolders: await foldersAsAValueListsThem(dir, []) });
 
     expect(outcome).toEqual({ applied: true, added: [], dropped: ['Gone Mod'] });
     expect(await readFile(join(dir, 'profiles', 'Other', 'modlist.txt'), 'utf8')).toBe('');
@@ -1033,7 +1033,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     await rm(join(dir, 'mods'), { recursive: true });
     await writeFile(join(dir, 'mods'), 'not a folder');
 
-    assertRefusalNarrowedByHandSinceExpectMatchersAreTypedAny(await syncMods(accessTo(dir), 'Default', folders), 'ENOTDIR');
+    assertRefusalNarrowedByHandSinceExpectMatchersAreTypedAny(await modSyncOver(accessTo(dir))({ profile: 'Default', modFolders: folders }), 'ENOTDIR');
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
@@ -1088,7 +1088,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     await writeFile(modlistPath(), '-Weapons/Armor_separator\r\n+Harder VATS\r\n');
     const folders = await foldersAsAValueListsThem(dir, FIXTURE_MOD_FOLDERS);
 
-    expect(await syncMods(accessTo(dir), 'Default', folders)).toMatchObject({ applied: true, dropped: ['Weapons/Armor (separator)'] });
+    expect(await modSyncOver(accessTo(dir))({ profile: 'Default', modFolders: folders })).toMatchObject({ applied: true, dropped: ['Weapons/Armor (separator)'] });
     expect(await readFile(modlistPath(), 'utf8')).not.toContain('Weapons/Armor');
   });
 
@@ -1098,7 +1098,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     await writeFile(modlistPath(), '+../Escaped\r\n+Harder VATS\r\n');
     const folders = await foldersAsAValueListsThem(dir, FIXTURE_MOD_FOLDERS);
 
-    expect(await syncMods(accessTo(dir), 'Default', folders)).toMatchObject({ applied: true, dropped: ['../Escaped'] });
+    expect(await modSyncOver(accessTo(dir))({ profile: 'Default', modFolders: folders })).toMatchObject({ applied: true, dropped: ['../Escaped'] });
   });
 
   it('matches a line to its folder without case, for a mod and a separator (MO2 keys both without case), dropping neither line and adding no second line for either', async () => {
@@ -1166,7 +1166,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
       },
     }));
 
-    const outcome = await syncMods(folderBackAtTheWrite, 'Default', folders);
+    const outcome = await modSyncOver(folderBackAtTheWrite)({ profile: 'Default', modFolders: folders });
 
     expect(outcome.applied && outcome.dropped).not.toContain('Harder VATS');
     expect(await readModlist()).toContainEqual({ kind: 'mod', name: 'Harder VATS', enabled: false });
