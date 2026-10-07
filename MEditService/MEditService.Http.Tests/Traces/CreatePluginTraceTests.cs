@@ -2,9 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
@@ -25,11 +23,8 @@ public sealed class CreatePluginTraceTests : HostedTests
     private static Task<HttpResponseMessage> Create(HttpClient client, string name, string folder) =>
         client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name, folder });
 
-    private (LoadOrderSnapshot Snapshot, long Version) HeldReadOffTheHostsOwnHolder()
-    {
-        var holder = Services.GetRequiredService<LoadOrderHolder>();
-        return (holder.Current, holder.Version);
-    }
+    private async Task<string> HeldAsTheServiceReportsIt() =>
+        await Client.GetStringAsync(new Uri("/load-order/status", UriKind.Relative));
 
     [Fact]
     public async Task CreatingAPluginOverAFileAlreadyThere_IsRefused_AndChangesNothing()
@@ -38,14 +33,14 @@ public sealed class CreatePluginTraceTests : HostedTests
         var folder = OtherTool.ModFolderOf(fx, Origin);
         OtherTool.WritesTheFile(Path.Combine(folder, "Occupied.esp"), "not a plugin");
         var disk = TreeSnapshot.Of(fx.Root);
-        var held = HeldReadOffTheHostsOwnHolder();
+        var held = await HeldAsTheServiceReportsIt();
 
         var created = await Create(Client, "Occupied.esp", folder);
 
         Assert.Equal(HttpStatusCode.Conflict, created.StatusCode);
         Assert.Equal("FileExists", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
         Assert.Equal(disk, TreeSnapshot.Of(fx.Root));
-        Assert.Equal(held, HeldReadOffTheHostsOwnHolder());
+        Assert.Equal(held, await HeldAsTheServiceReportsIt());
     }
 
     [Fact]
@@ -54,14 +49,14 @@ public sealed class CreatePluginTraceTests : HostedTests
         var fx = Owned(await Loaded());
         var gone = Path.Combine(fx.Root, "GoneMod");
         var disk = TreeSnapshot.Of(fx.Root);
-        var held = HeldReadOffTheHostsOwnHolder();
+        var held = await HeldAsTheServiceReportsIt();
 
         var created = await Create(Client, "Created.esp", gone);
 
         Assert.Equal(HttpStatusCode.NotFound, created.StatusCode);
         Assert.Equal("FolderGone", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
         Assert.Equal(disk, TreeSnapshot.Of(fx.Root));
-        Assert.Equal(held, HeldReadOffTheHostsOwnHolder());
+        Assert.Equal(held, await HeldAsTheServiceReportsIt());
     }
 
     [Fact]

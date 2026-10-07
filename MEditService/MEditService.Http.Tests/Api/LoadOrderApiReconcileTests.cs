@@ -28,6 +28,7 @@ public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixtur
         var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
         var byName = plugins.EnumerateArray().ToDictionary(p => DocumentNodes.StringValueOf(p.GetProperty("name")));
         Assert.True(byName["Active.esp"].GetProperty("inLoadOrder").GetBoolean());
+        Assert.Equal(0, byName["Active.esp"].GetProperty("loadOrderIndex").GetInt32());
         Assert.False(byName["Dormant.esp"].GetProperty("inLoadOrder").GetBoolean());
         Assert.Equal(JsonValueKind.Null, byName["Dormant.esp"].GetProperty("loadOrderIndex").ValueKind);
         Assert.True(byName["Dormant.esp"].GetProperty("isImmutable").GetBoolean());
