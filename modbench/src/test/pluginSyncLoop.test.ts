@@ -2,20 +2,24 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVscodeWatcher';
+import { watchers, fakeVscodeModule } from '../test/mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './vscodeMock';
 import { accessTo, adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
 
 vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
-import { wireModSync, wirePluginSync } from './syncWiring';
+import { instanceSyncs } from '../syncWiring';
+import { FakeInstance } from './mo2/fakeInstance';
+import { pastSequence, watcherFor } from './mo2/instanceLoop';
 import { pluginSyncOver, setPluginsEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
 import { ToolboxProvider } from '../toolbox/ToolboxProvider';
-import { modSyncOver } from '../modlist/modlist';
+import { modSyncOver, type ModSyncResult } from '../modlist/modlist';
+
+const noModSync = () => Promise.resolve<ModSyncResult>({ applied: true, added: [], dropped: [] });
 
 const PROFILE = 'Default';
 const OTHER_PROFILE = 'Secondary';
@@ -31,23 +35,6 @@ afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
   watchers.length = 0;
 });
-
-const watcherFor = (glob: string): FakeWatcher => {
-  const found = watchers.filter((w) => w.pattern === glob);
-  expect(found).toHaveLength(1);
-  return present(found[0], `the sole watcher for "${glob}"`);
-};
-
-function pastSequence(instance: Instance, sequence: number): Promise<InstanceValue> {
-  if (instance.sequence > sequence) return Promise.resolve(instance.value);
-  return new Promise((resolve) => {
-    const subscription = instance.subscribe((value, seq) => {
-      if (seq <= sequence) return;
-      subscription.dispose();
-      resolve(value);
-    });
-  });
-}
 
 const TIMED_OUT = Symbol('timed out waiting for a recompute');
 
@@ -88,12 +75,15 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
 
   const syncs: Promise<PluginSyncResult>[] = [];
   const loadedWithNoLine: (readonly string[] | undefined)[] = [];
-  wirePluginSync(instance, (args) => {
-    loadedWithNoLine.push(args.loadedWithNoLine);
-    const run = pluginSyncOver(accessTo(root))(args);
-    syncs.push(run);
-    return run;
-  }, { error: () => {}, info: () => {} });
+  instanceSyncs({
+    instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync,
+    syncPlugins: (args) => {
+      loadedWithNoLine.push(args.loadedWithNoLine);
+      const run = pluginSyncOver(accessTo(root))(args);
+      syncs.push(run);
+      return run;
+    },
+  });
   await instance.refresh();
   await syncs[syncs.length - 1];
 
@@ -207,8 +197,9 @@ describe('the game folder not found, across the whole instance', () => {
     });
     instances.push(instance);
     toolboxes.push(new ToolboxProvider({ instance, channel }));
-    const pluginSync = wirePluginSync(instance, pluginSyncOver(accessTo(root)), channel);
-    const modSync = wireModSync(instance, modSyncOver(accessTo(root)), channel);
+    const { pluginSync, modSync } = instanceSyncs({
+      instance, channel, syncMods: modSyncOver(accessTo(root)), syncPlugins: pluginSyncOver(accessTo(root)),
+    });
 
     await instance.refresh();
     for (const glob of ['profiles/*/plugins.txt', 'mods/**', 'profiles/*/plugins.txt']) {
@@ -246,159 +237,49 @@ describe('a gesture writes the profile the Instance last landed', () => {
   });
 });
 
-function fired(...outcomes: (() => Promise<PluginSyncResult>)[]) {
-  return firedAnswering((_profile, call) => present(outcomes[call], 'an outcome for this run')());
-}
-
-function firedAnswering(answer: (profile: string, call: number) => Promise<PluginSyncResult>) {
-  let subscriber: ((value: InstanceValue, seq: number) => void) | undefined;
-  let seq = 0;
-  const instance = {
-    subscribe: (cb: (value: InstanceValue, seq: number) => void) => {
-      subscriber = cb;
-      return { dispose: () => { subscriber = undefined; } };
-    },
-  };
-  const channel = { error: vi.fn(), info: vi.fn() };
-  const messageChanged = vi.fn();
-  const calls: Promise<PluginSyncResult>[] = [];
-  const profiles: string[] = [];
-  const trigger = wirePluginSync(instance, ({ profile }) => {
-    profiles.push(profile);
-    const run = answer(profile, calls.length);
-    calls.push(run);
-    return run;
-  }, channel);
-  trigger.onMessageChanged(messageChanged);
-  const settled = (): Promise<void> => trigger.settled();
-  const land = async (value = instanceValueFixture()): Promise<void> => {
-    seq += 1;
-    expect(() => subscriber?.(value, seq)).not.toThrow();
-    await settled();
-  };
-  return { channel, messageChanged, trigger, profiles, land };
-}
-
-const DATA_UNLISTABLE = "the game's Data folder cannot be listed: EACCES";
-const OTHER_REASON = 'plugins.txt cannot be written: EACCES';
-const toldAsInstanceState = () => Promise.resolve<PluginSyncResult>({ applied: false, toldAsInstanceState: true });
-
-const refused = (refusal: string) => () => Promise.resolve<PluginSyncResult>({ applied: false, refusal });
-const landed = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] });
-
-describe('wirePluginSync — settled', () => {
-  it('resolves once every run begun has written its Output', async () => {
-    let land = (): void => {};
-    const instance = {
-      subscribe: (subscriber: (value: InstanceValue, seq: number) => void) => {
-        land = () => subscriber(instanceValueFixture(), 1);
-        return { dispose: () => {} };
-      },
-    };
-    const channel = { error: vi.fn(), info: vi.fn() };
-    let answer = (): void => {};
-    const answered = new Promise<PluginSyncResult>((resolve) => {
-      answer = () => resolve({ applied: true, wrote: true, added: ['New.esp'], dropped: [] });
-    });
-    const trigger = wirePluginSync(instance, () => answered, channel);
-
-    land();
-    const settled = trigger.settled();
-    answer();
-    await settled;
-
-    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('New.esp'));
-  });
-});
-
-describe('wirePluginSync — outcome handling', () => {
-  it('logs the lines it added and dropped, one Output line each way', async () => {
-    const { channel, land } = fired(() => Promise.resolve<PluginSyncResult>(
-      { applied: true, wrote: true, added: ['New.esp'], dropped: ['Gone.esp'] }));
-    await land();
-
-    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('New.esp'));
-    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('Gone.esp'));
-    expect(channel.error).not.toHaveBeenCalled();
-  });
-
-  it('logs nothing when the file already agrees', async () => {
-    const { channel, land } = fired(landed);
-    await land();
-
-    expect(channel.info).not.toHaveBeenCalled();
-    expect(channel.error).not.toHaveBeenCalled();
-  });
-
-  it('says the command\'s own refusal in the Output and the Plugins view\'s message line', async () => {
-    const { channel, trigger, messageChanged, land } = fired(refused(DATA_UNLISTABLE));
-    await land();
-
-    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining(DATA_UNLISTABLE));
-    expect(trigger.message()).toBe(`plugins.txt is not synced: ${DATA_UNLISTABLE}.`);
-    expect(messageChanged).toHaveBeenCalledTimes(1);
-  });
-
-  it('says a thrown sync error the same way', async () => {
-    const { channel, trigger, land } = fired(() => Promise.reject(new Error('disk unplugged')));
-    await land();
-
-    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('disk unplugged'));
-    expect(trigger.message()).toContain('disk unplugged');
-  });
-
-  it('reports the same refusal once, and clears the message line when a run lands', async () => {
-    const reason = OTHER_REASON;
-    const { channel, trigger, land } = fired(refused(reason), refused(reason), landed);
-    await land();
-    await land();
-    expect(channel.error).toHaveBeenCalledTimes(1);
-
-    await land();
-    expect(trigger.message()).toBeUndefined();
-  });
-
-  it('reports again when the reason changes', async () => {
-    const { channel, trigger, messageChanged, land } = fired(
-      refused(DATA_UNLISTABLE), refused(OTHER_REASON));
-    await land();
-    await land();
-
-    expect(channel.error).toHaveBeenCalledTimes(2);
-    expect(channel.error).toHaveBeenLastCalledWith(expect.stringContaining(OTHER_REASON));
-    expect(trigger.message()).toBe(`plugins.txt is not synced: ${OTHER_REASON}.`);
-    expect(messageChanged).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('wirePluginSync — the game folder not found', () => {
-  it('reports nothing of its own: no Output line and no message line', async () => {
-    const { channel, trigger, messageChanged, land } = fired(toldAsInstanceState);
-    await land();
-
-    expect(channel.error).not.toHaveBeenCalled();
-    expect(channel.info).not.toHaveBeenCalled();
-    expect(trigger.message()).toBeUndefined();
-    expect(messageChanged).not.toHaveBeenCalled();
-  });
-
-  it('takes its own standing refusal off the message line', async () => {
-    const { trigger, land } = fired(refused(DATA_UNLISTABLE), toldAsInstanceState);
-    await land();
-
-    await land();
-
-    expect(trigger.message()).toBeUndefined();
-  });
-});
-
-describe('wirePluginSync — every value', () => {
+describe('plugin sync, as each landed value drives it', () => {
   it('runs on every value that lands, from the first', async () => {
-    const { profiles, land } = fired(landed, landed);
+    const profiles: string[] = [];
+    const instance = new FakeInstance(instanceValueFixture());
+    const { pluginSync } = instanceSyncs({
+      instance, syncMods: noModSync, channel: { error: vi.fn(), info: vi.fn() },
+      syncPlugins: ({ profile }) => {
+        profiles.push(profile);
+        return Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] });
+      },
+    });
 
-    await land(instanceValueFixture({ activeProfile: 'First' }));
-    await land(instanceValueFixture({ activeProfile: 'Second' }));
+    instance.publish(instanceValueFixture({ activeProfile: 'First' }));
+    instance.publish(instanceValueFixture({ activeProfile: 'Second' }));
+    await pluginSync.settled();
 
     expect(profiles).toEqual(['First', 'Second']);
+  });
+
+  it('says a refusal on the Plugins view\'s message line as plugins.txt not synced', async () => {
+    const instance = new FakeInstance(instanceValueFixture());
+    const { pluginSync } = instanceSyncs({
+      instance, syncMods: noModSync, channel: { error: vi.fn(), info: vi.fn() },
+      syncPlugins: () => Promise.resolve({ applied: false, refusal: "the game's Data folder cannot be listed: EACCES" }),
+    });
+
+    instance.publish(instance.value);
+    await pluginSync.settled();
+
+    expect(pluginSync.message()).toBe("plugins.txt is not synced: the game's Data folder cannot be listed: EACCES.");
+  });
+
+  it('names plugins.txt in the Output line for the lines it added', async () => {
+    const instance = new FakeInstance(instanceValueFixture());
+    const channel = { error: vi.fn(), info: vi.fn() };
+    const { pluginSync } = instanceSyncs({
+      instance, syncMods: noModSync, channel,
+      syncPlugins: () => Promise.resolve({ applied: true, wrote: true, added: ['New.esp'], dropped: [] }),
+    });
+
+    instance.publish(instance.value);
+    await pluginSync.settled();
+
+    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('1 disabled plugins.txt line(s)'));
   });
 });

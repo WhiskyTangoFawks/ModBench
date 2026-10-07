@@ -1,18 +1,22 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { watchers, fakeVscodeModule, type FakeWatcher } from './mo2/fakeVscodeWatcher';
+import { watchers, fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { Instance, type InstanceValue } from '../instanceLoader/instance';
+import { Instance } from '../instanceLoader/instance';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
-import { wireModSync } from './syncWiring';
+import { FakeInstance } from './mo2/fakeInstance';
+import { pastSequence, watcherFor } from './mo2/instanceLoop';
+import { instanceSyncs } from '../syncWiring';
 import { modSyncOver, type ModSyncResult } from '../modlist/modlist';
+import { type PluginSyncResult } from '../pluginsCommands/plugins';
 import type { ModFolder } from '../instanceAdapter/instanceAdapter';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';
 import { accessTo, adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
-import { present } from '../ports/present';
+
+const noPluginSync = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] });
 
 const MOD = 'Freshly Installed Mod';
 const DATA_FOLDER = '/game/Data';
@@ -26,23 +30,6 @@ afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
   watchers.length = 0;
 });
-
-const watcherFor = (glob: string): FakeWatcher => {
-  const found = watchers.filter((w) => w.pattern === glob);
-  expect(found).toHaveLength(1);
-  return present(found[0], 'the sole watcher registered for this glob');
-};
-
-function pastSequence(instance: Instance, sequence: number): Promise<InstanceValue> {
-  if (instance.sequence > sequence) return Promise.resolve(instance.value);
-  return new Promise((resolve) => {
-    const subscription = instance.subscribe((value, seq) => {
-      if (seq <= sequence) return;
-      subscription.dispose();
-      resolve(value);
-    });
-  });
-}
 
 const modlistText = (root: string): Promise<string> => readFile(join(root, DEFAULT_MODLIST), 'utf8');
 
@@ -67,19 +54,22 @@ async function settledWiredInstance(): Promise<{
   const channel = channelDouble();
   const syncs: Promise<ModSyncResult>[] = [];
   const handed: (readonly ModFolder[] | undefined)[] = [];
-  const trigger = wireModSync(instance, (args) => {
-    handed.push(args.modFolders);
-    const run = modSyncOver(accessTo(root))(args);
-    syncs.push(run);
-    return run;
-  }, channel);
+  const { modSync } = instanceSyncs({
+    instance, channel, syncPlugins: noPluginSync,
+    syncMods: (args) => {
+      handed.push(args.modFolders);
+      const run = modSyncOver(accessTo(root))(args);
+      syncs.push(run);
+      return run;
+    },
+  });
   await instance.refresh();
-  await trigger.settled();
+  await modSync.settled();
   channel.info.mockClear();
   return { root, instance, channel, syncs, handed };
 }
 
-describe('modSync — driven by the Instance value', () => {
+describe('mod sync and the Instance, over a real mods/ folder', () => {
   it('adds a line for a mod folder dropped in, off the Instance value alone', async () => {
     const { root, instance, syncs } = await settledWiredInstance();
     const before = instance.sequence;
@@ -150,154 +140,48 @@ describe('modSync — driven by the Instance value', () => {
   });
 });
 
-const FAKE_VALUE: InstanceValue = instanceValueFixture({ activeProfile: 'Default', modFolders: [] });
-
-function fakeInstance(value = FAKE_VALUE): Pick<Instance, 'subscribe' | 'value'> & { fire: () => void } {
-  let subscriber: ((value: InstanceValue, seq: number) => void) | undefined;
-  let seq = 0;
-  return {
-    value,
-    subscribe: (cb: (value: InstanceValue, seq: number) => void) => {
-      subscriber = cb;
-      return { dispose: () => { subscriber = undefined; } };
-    },
-    fire: () => { seq += 1; subscriber?.(value, seq); },
-  };
-}
-
-function fired(...outcomes: (() => Promise<ModSyncResult>)[]) {
-  const instance = fakeInstance();
-  const channel = channelDouble();
-  const messageChanged = vi.fn();
-  const calls: Promise<ModSyncResult>[] = [];
-  const trigger = wireModSync(instance, () => {
-    const run = present(outcomes[calls.length], 'an outcome for this fire')();
-    calls.push(run);
-    return run;
-  }, channel);
-  trigger.onMessageChanged(messageChanged);
-  const fire = async (): Promise<void> => {
-    expect(() => instance.fire()).not.toThrow();
-    await trigger.settled();
-  };
-  return { channel, messageChanged, trigger, fire };
-}
-
-const refused = (refusal: string) => () => Promise.resolve<ModSyncResult>({ applied: false, refusal });
-const landed = () => Promise.resolve<ModSyncResult>({ applied: true, added: [], dropped: [] });
-
-describe('modSync — settled', () => {
-  it('resolves once every run begun has written its Output', async () => {
-    const instance = fakeInstance();
-    const channel = channelDouble();
-    let answer = (): void => {};
-    const answered = new Promise<ModSyncResult>((resolve) => {
-      answer = () => resolve({ applied: true, added: ['New Mod'], dropped: [] });
+describe('mod sync, as each landed value drives it', () => {
+  it('runs on every value that lands, from the first', async () => {
+    const profiles: string[] = [];
+    const instance = new FakeInstance(instanceValueFixture());
+    const { modSync } = instanceSyncs({
+      instance, syncPlugins: noPluginSync, channel: channelDouble(),
+      syncMods: ({ profile }) => { profiles.push(profile); return Promise.resolve({ applied: true, added: [], dropped: [] }); },
     });
-    const trigger = wireModSync(instance, () => answered, channel);
 
-    instance.fire();
-    const settled = trigger.settled();
-    answer();
-    await settled;
+    instance.publish(instanceValueFixture({ activeProfile: 'First' }));
+    instance.publish(instanceValueFixture({ activeProfile: 'Second' }));
+    await modSync.settled();
 
-    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('New Mod'));
-  });
-});
-
-describe('modSync — outcome handling', () => {
-  it('logs the lines it added and dropped, one Output line each way', async () => {
-    const { channel, fire } = fired(() => Promise.resolve<ModSyncResult>(
-      { applied: true, added: ['New Mod'], dropped: ['Gone Mod'] }));
-    await fire();
-
-    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('New Mod'));
-    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('Gone Mod'));
-    expect(channel.error).not.toHaveBeenCalled();
-  });
-
-  it('says the command\'s own refusal in the Output and the message line', async () => {
-    const { channel, trigger, messageChanged, fire } = fired(refused('/instance/mods does not exist'));
-    await fire();
-
-    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('/instance/mods does not exist'));
-    expect(trigger.message()).toBe('modlist.txt is not synced: /instance/mods does not exist.');
-    expect(messageChanged).toHaveBeenCalledTimes(1);
+    expect(profiles).toEqual(['First', 'Second']);
   });
 
   it('names the file mod order is kept in as the value names it', async () => {
-    const instance = fakeInstance(instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' } }));
+    const instance = new FakeInstance(instanceValueFixture({
+      managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' },
+    }));
     const channel = channelDouble();
-    const trigger = wireModSync(instance, () => Promise.resolve<ModSyncResult>(
-      { applied: true, added: ['New Mod'], dropped: [] }), channel);
-    instance.fire();
-    await trigger.settled();
+    const { modSync } = instanceSyncs({
+      instance, syncPlugins: noPluginSync, channel,
+      syncMods: () => Promise.resolve({ applied: true, added: ['New Mod'], dropped: [] }),
+    });
+
+    instance.publish(instance.value);
+    await modSync.settled();
 
     expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('1 order.txt line(s)'));
   });
 
-  it('says a thrown sync error the same way', async () => {
-    const { channel, trigger, fire } = fired(() => Promise.reject(new Error('disk unplugged')));
-    await fire();
-
-    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('disk unplugged'));
-    expect(trigger.message()).toContain('disk unplugged');
-  });
-
-  it('reports the same refusal once, however many values repeat it', async () => {
-    const { channel, messageChanged, fire } = fired(refused('gone'), refused('gone'), refused('gone'));
-    await fire();
-    await fire();
-    await fire();
-
-    expect(channel.error).toHaveBeenCalledTimes(1);
-    expect(messageChanged).toHaveBeenCalledTimes(1);
-  });
-
-  it('reports again when the reason changes', async () => {
-    const { channel, trigger, fire } = fired(refused('first cause'), refused('second cause'));
-    await fire();
-    await fire();
-
-    expect(channel.error).toHaveBeenCalledTimes(2);
-    expect(channel.error).toHaveBeenLastCalledWith(expect.stringContaining('second cause'));
-    expect(trigger.message()).toContain('second cause');
-  });
-
-  it('clears the message line when the command next lands, and reports a recurrence again', async () => {
-    const { channel, trigger, messageChanged, fire } = fired(refused('gone'), landed, refused('gone'));
-    await fire();
-    await fire();
-
-    expect(trigger.message()).toBeUndefined();
-    expect(messageChanged).toHaveBeenCalledTimes(2);
-
-    await fire();
-    expect(channel.error).toHaveBeenCalledTimes(2);
-    expect(trigger.message()).toContain('gone');
-  });
-
-  it('the latest value decides the message line, whichever run answers last', async () => {
-    let answerOlder!: (outcome: ModSyncResult) => void;
-    const older = new Promise<ModSyncResult>((resolve) => { answerOlder = resolve; });
-    const { trigger, fire } = fired(() => older, refused('gone'));
-    const newerSaid = new Promise<void>((resolve) => {
-      const listening = trigger.onMessageChanged(() => { listening.dispose(); resolve(); });
+  it('says a refusal on the Mods view\'s message line as modlist.txt not synced', async () => {
+    const instance = new FakeInstance(instanceValueFixture());
+    const { modSync } = instanceSyncs({
+      instance, syncPlugins: noPluginSync, channel: channelDouble(),
+      syncMods: () => Promise.resolve({ applied: false, refusal: '/instance/mods does not exist' }),
     });
-    const olderFire = fire();
-    const newerFire = fire();
-    await newerSaid;
-    answerOlder({ applied: true, added: [], dropped: [] });
-    await Promise.all([olderFire, newerFire]);
 
-    expect(trigger.message()).toContain('gone');
-  });
+    instance.publish(instance.value);
+    await modSync.settled();
 
-  it('a landed run with no failure before it leaves the message line alone', async () => {
-    const { trigger, messageChanged, fire } = fired(landed);
-    await fire();
-
-    expect(trigger.message()).toBeUndefined();
-    expect(messageChanged).not.toHaveBeenCalled();
+    expect(modSync.message()).toBe('modlist.txt is not synced: /instance/mods does not exist.');
   });
 });

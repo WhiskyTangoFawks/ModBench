@@ -1,17 +1,31 @@
-import type { Sync } from './drivingLib/syncFailureReport';
-import type { Instance, InstanceValue, ModSyncArguments, PluginSyncArguments } from './instanceLoader/instance';
+import type { SyncChannel } from './drivingLib/syncFailureReport';
+import type { Instance, InstanceValue } from './instanceLoader/instance';
+import { createModSync, type ModSync } from './mods/modSync';
+import { createPluginSync, type PluginSync } from './plugins/pluginSync';
 
-type ModSync = Pick<Sync<ModSyncArguments>, 'run'>;
-type PluginSync = Pick<Sync<PluginSyncArguments>, 'run'>;
+export interface InstanceSyncs {
+  dispose(): void;
+  modSync: ModSync;
+  pluginSync: PluginSync;
+}
+
+interface InstanceSyncsDeps {
+  instance: Pick<Instance, 'subscribe' | 'value'>;
+  syncMods: Parameters<typeof createModSync>[0];
+  syncPlugins: Parameters<typeof createPluginSync>[0];
+  channel: SyncChannel;
+}
 
 // Termination: a write re-enters through the Instance adapter's signal. The next value agrees with
 // disk, so the sync writes nothing and the loop stops; a sync that wrote unconditionally never would.
-export function modSyncOnEachValue(instance: Pick<Instance, 'subscribe'>, modSync: ModSync) {
-  return instance.subscribe((value) => { void modSync.run(value.modSyncArguments); });
-}
-
-export function pluginSyncOnEachValue(instance: Pick<Instance, 'subscribe'>, pluginSync: PluginSync) {
-  return instance.subscribe((value) => { void pluginSync.run(value.pluginSyncArguments); });
+export function instanceSyncs({ instance, syncMods, syncPlugins, channel }: InstanceSyncsDeps): InstanceSyncs {
+  const modSync = createModSync(syncMods, channel, instance.value.managerNames.modOrderFile);
+  const pluginSync = createPluginSync(syncPlugins, channel);
+  const subscription = instance.subscribe((value) => {
+    void modSync.run(value.modSyncArguments);
+    void pluginSync.run(value.pluginSyncArguments);
+  });
+  return { modSync, pluginSync, dispose: () => { subscription.dispose(); } };
 }
 
 type LoadOrderPut = (value: InstanceValue) => void;
