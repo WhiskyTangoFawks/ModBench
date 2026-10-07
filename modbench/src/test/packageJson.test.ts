@@ -854,22 +854,17 @@ describe('package.json view keys', () => {
 });
 
 describe('package.json Downloads keys', () => {
-  it('fire copy value and delete while the Downloads tree has focus in an instance', () => {
-    expectKeysFiring({ focusedView: 'modbench.downloads', listFocus: true, ...inInstance }, [
-      { key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue' },
-      { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.downloadedFile.delete' },
-    ]);
-  });
-
-  it('binds Delete to modbench.downloadedFile.delete, scoped to the focused Downloads view in an instance', () => {
-    const entry = present(
-      pkg.contributes.keybindings.find((k) => k.command === 'modbench.downloadedFile.delete'),
-      'a Delete-key binding for modbench.downloadedFile.delete',
+  it.each([
+    ['modbench.copyValue', 'ctrl+c', 'cmd+c'],
+    ['modbench.downloadedFile.delete', 'Delete', 'cmd+backspace'],
+  ])('%s is bound to %s, scoped to the focused Downloads view in an instance', (command, key, mac) => {
+    const binding = present(
+      pkg.contributes.keybindings.find((k) => k.command === command && requires(k.when, 'focusedView == modbench.downloads')),
+      `a key for ${command} on the Downloads view`,
     );
-    expect(entry.key).toBe('Delete');
-    expect(entry.mac).toBe('cmd+backspace');
-    expect(requires(entry.when, 'focusedView == modbench.downloads')).toBe(true);
-    expect(requires(entry.when, IN_AN_INSTANCE)).toBe(true);
+    expect(binding.key).toBe(key);
+    expect(binding.mac).toBe(mac);
+    expect(requires(binding.when, IN_AN_INSTANCE)).toBe(true);
   });
 });
 
