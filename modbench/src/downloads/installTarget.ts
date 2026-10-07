@@ -7,22 +7,22 @@ import { archiveKey } from '../instanceLoader/downloadRows';
 import { defaultModName, type InstallTarget } from '../install/install';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 
-type UpgradeTier = 'fileId' | 'installationFile';
+type UpgradeTier = 'fileId' | 'archiveFilename';
 
 interface UpgradeCandidate {
   readonly modName: string;
   readonly version?: string;
-  /** `fileId` beats `installationFile`; absent, the mod shares only the Nexus mod id. */
+  /** `fileId` beats `archiveFilename`; absent, the mod shares only the Nexus mod id. */
   readonly tier?: UpgradeTier;
 }
 
 const isFileIdMatch = (mod: Mod, fileID: string | undefined): boolean =>
-  fileID !== undefined && mod.installedFiles?.some((pair) => pair.fileid === fileID) === true;
+  fileID !== undefined && mod.installedFiles?.some((pair) => pair.fileId === fileID) === true;
 
 const isInstallationFileMatch = (mod: Mod, downloadName: string): boolean =>
   mod.archiveFilename !== undefined && archiveKey(mod.archiveFilename) === archiveKey(downloadName);
 
-const TIER_RANK: Record<'fileId' | 'installationFile' | 'none', number> = { fileId: 0, installationFile: 1, none: 2 };
+const TIER_RANK: Record<'fileId' | 'archiveFilename' | 'none', number> = { fileId: 0, archiveFilename: 1, none: 2 };
 
 // The pool is the mods sharing the mod id, so no mod id empties it. The tiers rank within the
 // pool; a file-id match drops the installation-file tier for every other mod.
@@ -35,7 +35,7 @@ function selectUpgradeCandidates(
   const hasFileIdMatch = pool.some((mod) => isFileIdMatch(mod, download.fileID));
   const tierOf = (mod: Mod): UpgradeTier | undefined => {
     if (isFileIdMatch(mod, download.fileID)) return 'fileId';
-    if (!hasFileIdMatch && isInstallationFileMatch(mod, download.name)) return 'installationFile';
+    if (!hasFileIdMatch && isInstallationFileMatch(mod, download.name)) return 'archiveFilename';
     return undefined;
   };
   const candidates = pool.map((mod) => ({ modName: mod.name, version: mod.version, tier: tierOf(mod) }));
@@ -52,7 +52,7 @@ interface UpgradePickItem extends vscode.QuickPickItem {
 
 const TIER_LABEL: Record<UpgradeTier, string> = {
   fileId: 'File ID match',
-  installationFile: 'Installed from this file',
+  archiveFilename: 'Installed from this file',
 };
 
 const NEW_MOD_ITEM: UpgradePickItem = { label: 'Install as a new mod…', choice: { kind: 'new' } };
