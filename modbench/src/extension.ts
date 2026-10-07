@@ -13,7 +13,6 @@ import { createEditor, type Editor } from './editor';
 import { createSourceLanguage } from './sourceLanguage';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand } from './drivingLib/copyValue';
-import { reportFailure } from './drivingLib/reportFailure';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderFile } from './tables/gamePaths';
@@ -60,7 +59,6 @@ import { refreshOnGameDirectoryChange } from './toolbox/gameDirectorySetting';
 import { launchBackend } from './toolbox/autoLaunch';
 import { pluginSyncOver } from './pluginsCommands/plugins';
 import { modSyncOver } from './modlist/modlist';
-import { installNameRefusal } from './install/install';
 import { warnIfFomod } from './install/fomodWarning';
 import { refresh } from './instanceCommands/loadOrder';
 import { editingFlow, exitEditing } from './instanceCommands/editing';
@@ -183,12 +181,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   own(modSyncOnEachValue(instance, modSync));
   own(pluginSyncOnEachValue(instance, plugins.pluginSync));
   own(showModRepositories(instance));
-  const runModAction = (logLabel: string, failMessage: string, action: () => Promise<void>) =>
-    reportFailure(reporterFor(logLabel), failMessage, action);
-  const promptModName = (
-    defaultName: string, validateInput?: (value: string) => Thenable<string | undefined> | string | undefined,
-  ) =>
-    vscode.window.showInputBox({ prompt: 'Mod name', value: defaultName, validateInput });
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const view = editingView({
     narrator: plugins.narrator, progress: plugins.progress, log: outputChannel, revealLog: () => outputChannel.show(true), loadOrderPut: plugins.loadOrderPut,
@@ -230,13 +222,12 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   const { view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
     access, instance, reporter: reporterFor('downloadList'), ask, trash,
     install: {
-      nameNewMod: (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)),
       warnIfFomod: fomodWarning,
       log: (line) => outputChannel.warn(`[downloads] ${line}`),
     },
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
-  ownAll(own, registerModInstallCommands({ access, instance, runModAction, promptModName, warnIfFomod: fomodWarning, installDownloaded }));
+  ownAll(own, registerModInstallCommands({ access, instance, reporterFor, warnIfFomod: fomodWarning, installDownloaded }));
   own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), nexusRowInFocusedView(
     own, deps.focusedView, ['modbench.modList', 'modbench.downloads'], 'modbench.mod.nexusRowIn')));
   own(deps.focusedView.follow('modbench.modList', modListView));

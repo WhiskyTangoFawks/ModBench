@@ -65,7 +65,7 @@ import { accessTo } from '../../test/mo2/adapterOver';
 const downloadsViewDeps = (instanceRoot: string, instance: InstanceView & Pick<Instance, 'refresh'>): DownloadsViewDeps => ({
   access: accessTo(instanceRoot), instance, reporter: recordingReporter(),
   ask: () => Promise.resolve(undefined), trash: () => Promise.resolve(),
-  install: { nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => undefined, log: () => undefined },
+  install: { warnIfFomod: () => undefined, log: () => undefined },
   logUnresolved: () => undefined,
 });
 const command = commandInvoker(h.state);

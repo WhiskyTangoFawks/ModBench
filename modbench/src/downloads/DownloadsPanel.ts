@@ -3,11 +3,13 @@ import type { DownloadSortColumn } from './downloadRows';
 import {
   deleteDownloads, excludeDownloads, includeDownloads, type DeletedDownload, type DownloadsAccess,
 } from '../downloadsCommands/downloads';
-import { installFromArchive, type InstallAccess } from '../install/install';
+import { installFromArchive, installNameRefusal, type InstallAccess } from '../install/install';
 import type { DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS } from './keyContext';
 import { pluralArgument, registerGesture, singularArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
+import { promptModName } from '../drivingLib/promptModName';
+import { reportFailure } from '../drivingLib/reportFailure';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 
 const runDownloadsWriting = <T>(instance: Pick<Instance, 'refresh'>, command: () => Promise<T>): Promise<T> =>
@@ -21,11 +23,9 @@ import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 
-/** The composition root's answers, which is what lets this view call install itself: the name
- *  only the user can give a new mod, the FOMOD notice, and an Output line. */
+/** The composition root's answers, which is what lets this view call install itself: the FOMOD
+ *  notice and an Output line. */
 export interface DownloadInstallDeps {
-  /** `undefined` is the user declining to name it, which installs nothing. */
-  nameNewMod: (defaultName: string) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
   /** Install's failed-mark line, and delete's left-behind metadata line — no notification either way. */
   log: (line: string) => void;
@@ -40,7 +40,7 @@ export async function installDownloadedFile(
   const { name } = row;
   let downloadRefusal: string | undefined;
   try {
-    const target = await chooseInstallTarget(instance.value, row, deps.nameNewMod);
+    const target = await chooseInstallTarget(instance.value, row, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)));
     if (!target) return false;
     await runDownloadsWriting(instance, async () => {
       const outcome = await installFromArchive(access, target, row.path, {
@@ -60,21 +60,6 @@ export async function installDownloadedFile(
   // row still shows Installed, straight off meta.ini, and the failed mark is one Output line.
   deps.log(`"${name}" was installed, but its Downloads status could not be updated: ${downloadRefusal}`);
   return true;
-}
-
-// Every nav action can reject — a file raced away, an OS with no handler — so none may be
-// fire-and-forget. Failure surfacing is ADR-0019.
-async function runRowAction(
-  label: string,
-  name: string,
-  reporter: Reporter,
-  action: () => Promise<void>,
-): Promise<void> {
-  try {
-    await action();
-  } catch (err) {
-    reporter.report('error', `${label} for "${name}" failed.`, errorMessage(err));
-  }
 }
 
 // One question for the whole selection: an N-file selection must not stack N modal dialogs.
@@ -129,14 +114,14 @@ export function registerDownloadsSingleRowCommands(
     registerGesture('modbench.downloadedFile.open', viewSelection, async (entry) => {
       const row = singularArgument(entry, 'download')?.row;
       if (!row) return;
-      await runRowAction('Open File', row.name, reporter, async () => {
+      await reportFailure(reporter, `Open File for "${row.name}" failed.`, async () => {
         await vscode.env.openExternal(vscode.Uri.file(row.path));
       });
     }),
     registerGesture('modbench.downloadedFile.openMeta', viewSelection, async (entry) => {
       const row = singularArgument(entry, 'download')?.row;
       if (!row) return;
-      await runRowAction('Open Meta File', row.name, reporter, async () => {
+      await reportFailure(reporter, `Open Meta File for "${row.name}" failed.`, async () => {
         await vscode.window.showTextDocument(vscode.Uri.file(row.sidecarPath));
       });
     }),

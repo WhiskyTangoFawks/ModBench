@@ -6,6 +6,9 @@ import {
   ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder, installNameRefusal,
   type InstallAccess,
 } from '../install/install';
+import { promptModName } from '../drivingLib/promptModName';
+import { reportFailure } from '../drivingLib/reportFailure';
+import type { Reporter } from '../ports/reporter';
 import { runModsWriting } from './gestureEntry';
 
 /** What the gesture answers its invoker: whether a mod landed. A cancelled picker, a cancelled
@@ -18,10 +21,7 @@ const NOT_INSTALLED: InstallOutcome = { installed: false };
 export interface ModInstallDeps {
   access: InstallAccess;
   instance: Pick<Instance, 'value' | 'refresh'>;
-  runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>;
-  promptModName: (
-    defaultName: string, validate?: (value: string) => Thenable<string | undefined> | string | undefined,
-  ) => Thenable<string | undefined>;
+  reporterFor: (tag: string) => Reporter;
   warnIfFomod: (name: string, isFomod: boolean) => void;
   /** The Downloads view's flow for a downloaded file: the target pick, the name and the installed mark.
    *  Answers whether a mod landed. */
@@ -44,13 +44,13 @@ interface SourceKindItem extends vscode.QuickPickItem {
 // modbench.mod.install: with no source, as from the Mods menu, it asks archive-or-folder first,
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { access, instance, runModAction, promptModName, warnIfFomod, installDownloaded } = deps;
+  const { access, instance, reporterFor, warnIfFomod, installDownloaded } = deps;
   const validateName = (name: string) => installNameRefusal(access, name);
   const installArchive = async (archivePath: string): Promise<InstallOutcome> => {
     const name = await promptModName(defaultModName(archivePath), validateName);
     if (!name) return NOT_INSTALLED;
     let succeeded = false;
-    await runModsWriting(instance, () => runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
+    await runModsWriting(instance, () => reportFailure(reporterFor('installFromArchive'), `Failed to install "${name}".`, async () => {
       const outcome = await installFromArchive(access, { kind: 'new', name }, archivePath, { gameName: instance.value.gameName });
       if (!outcome.applied) throw new Error(outcome.refusal);
       warnIfFomod(name, outcome.isFomod);
@@ -62,7 +62,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     const name = await promptModName(defaultModNameForFolder(folder), validateName);
     if (!name) return NOT_INSTALLED;
     let succeeded = false;
-    await runModsWriting(instance, () => runModAction('installFromFolder', `Failed to install "${name}".`, async () => {
+    await runModsWriting(instance, () => reportFailure(reporterFor('installFromFolder'), `Failed to install "${name}".`, async () => {
       const outcome = await installFromFolder(access, { kind: 'new', name }, folder, { gameName: instance.value.gameName });
       if (!outcome.applied) throw new Error(outcome.refusal);
       warnIfFomod(name, outcome.isFomod);

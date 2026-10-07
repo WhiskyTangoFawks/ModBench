@@ -44,6 +44,7 @@ import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import { progressSteps } from '../../test/recordedProgress';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
@@ -59,8 +60,7 @@ function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     access: ACCESS,
     instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE }), refresh: () => Promise.resolve() },
-    runModAction: async (_label, _fail, action) => action(),
-    promptModName: vi.fn(),
+    reporterFor: () => recordingReporter(),
     installDownloaded: vi.fn(),
     warnIfFomod: vi.fn(),
     ...over,
@@ -108,12 +108,12 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   });
 
   it('archive: the OS picker offers install\'s own archive extensions rather than a list of its own that would drift', async () => {
-    const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
+    showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/foo.zip' }]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerModInstallCommands(deps({ promptModName }));
+    registerModInstallCommands(deps());
     await invoke('modbench.mod.install');
 
     expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
@@ -122,15 +122,15 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   });
 
   it('archive: installs as a new mod under the name prompted, prefilled from the archive', async () => {
-    const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
+    showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/archive/foo.7z' }]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerModInstallCommands(deps({ promptModName }));
+    registerModInstallCommands(deps());
     const succeeded = await invoke('modbench.mod.install');
 
-    expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
+    expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'foo' }));
     expect(installFromArchive).toHaveBeenCalledWith(
       ACCESS, { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', { gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE },
     );
@@ -138,11 +138,11 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   });
 
   it('archive: a cancelled name prompt installs nothing', async () => {
-    const promptModName = vi.fn().mockResolvedValueOnce(undefined);
+    showInputBox.mockResolvedValueOnce(undefined);
     showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/archive/foo.7z' }]);
 
-    registerModInstallCommands(deps({ promptModName }));
+    registerModInstallCommands(deps());
     const succeeded = await invoke('modbench.mod.install');
 
     expect(installFromArchive).not.toHaveBeenCalled();
@@ -161,18 +161,18 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   });
 
   it('folder: installs as a new mod under the name prompted, prefilled from the folder', async () => {
-    const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
+    showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ sourceKind: 'folder' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/Loose Files' }]);
     installFromFolder.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerModInstallCommands(deps({ promptModName }));
+    registerModInstallCommands(deps());
     const succeeded = await invoke('modbench.mod.install');
 
     expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
       canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
     }));
-    expect(promptModName).toHaveBeenCalledWith('Loose Files', expect.any(Function));
+    expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'Loose Files' }));
     expect(installFromFolder).toHaveBeenCalledWith(
       ACCESS, { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE },
     );
@@ -225,7 +225,7 @@ describe('an install ends on the Instance loader\'s read, with the Mods progress
     showQuickPick.mockResolvedValueOnce({ sourceKind });
     showOpenDialog.mockResolvedValueOnce([picked]);
 
-    registerModInstallCommands(deps({ instance, promptModName: vi.fn().mockResolvedValueOnce('New Mod') }));
+    registerModInstallCommands(deps({ instance }));
     await invoke('modbench.mod.install');
 
     expect(progressSteps).toEqual(ends);
