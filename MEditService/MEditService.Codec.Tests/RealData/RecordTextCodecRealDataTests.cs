@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -47,7 +48,8 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
         swSerializeDeep.Stop();
 
         var swDeserialize = Stopwatch.StartNew();
-        var roundTripped = (Weapon)codec.DeserializeFromBytes(deepParsedBytes, GameRelease.Fallout4, "weap");
+        var roundTripped = (Weapon)RecordTextCodec.DeserializeText(
+            typeof(Weapon), codec.RoundTrip(Encoding.UTF8.GetString(deepParsedBytes), GameRelease.Fallout4, "weap"), GameRelease.Fallout4);
         swDeserialize.Stop();
 
         output.WriteLine($"AC4: serialize (overlay) {swSerializeOverlay.ElapsedMilliseconds} ms, " +

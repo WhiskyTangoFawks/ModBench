@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Schema;
 
@@ -13,16 +12,13 @@ public static class PartialFormFlag
 {
     public const int Bit = 0x0000_4000;
 
-    /// <summary>The container-record gate both IsSet overloads read the bit through.</summary>
+    /// <summary>The container-record gate the bit is read through.</summary>
     public static bool IsPartialFormable(Type recordType) =>
         ContainerChildFields.EnumerateChildFieldsFor(recordType) != null;
 
     /// <summary>The plugin that alone defines a cell a Partial Form copy can override, or null where any can.</summary>
     public static ModKey? CellsDefinedIn(GameRelease release) =>
         SchemaAnnotations.For(release.ToCategory()).PartialFormCellsDefinedIn is { } plugin ? ModKey.FromFileName(plugin) : (ModKey?)null;
-
-    public static bool IsSet(IMajorRecordGetter record) =>
-        IsPartialFormable(record.GetType()) && (record.MajorRecordFlagsRaw & Bit) != 0;
 
     /// <summary>The same bit read off a stored document, whose header flags travel as
     /// <c>MajorRecordFlagsRaw</c> (omitted when zero).</summary>

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Codec.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -53,9 +54,8 @@ public sealed class RecordTextCodecEmbedTests
     public void RoundTrip_OfAnEmbeddedCell_IsChildFaithful_WithTheParentsOwnFieldsUntouchedSoEmbedsChildrenNeverReadsAsSerializesChildrenInsteadOfItself()
     {
         var codec = Codec();
-        var bytes = codec.SerializeToBytes(MakePopulatedCell(), GameRelease.Fallout4);
 
-        var roundTripped = (Cell)codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, "cell");
+        var roundTripped = ReadBack.Of<Cell>(codec, MakePopulatedCell(), GameRelease.Fallout4, "cell");
 
         Assert.Equal(["PersistentRef"], roundTripped.Persistent.Select(RequireEditorID).ToArray());
         Assert.Equal(["TemporaryRef"], roundTripped.Temporary.Select(RequireEditorID).ToArray());

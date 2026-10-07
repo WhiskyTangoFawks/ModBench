@@ -18,7 +18,7 @@ public sealed class ContainerDocumentEditsTests
     private static string Text(IMajorRecordGetter record) => Codec.SerializeToText(record, GameRelease.Fallout4);
 
     private static IMajorRecord Read(string text, string recordType) =>
-        Codec.DeserializeFromBytes(System.Text.Encoding.UTF8.GetBytes(text), GameRelease.Fallout4, recordType);
+        (IMajorRecord)RecordTextCodec.DeserializeText(RecordTypeDispatch.For(GameRelease.Fallout4).ConcreteFor(recordType).Require(), text, GameRelease.Fallout4);
 
     private static string? Appended(Worldspace worldspace, Cell cell) =>
         ContainerDocumentEdits.WithChildAppended(

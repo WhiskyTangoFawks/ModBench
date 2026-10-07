@@ -1,11 +1,9 @@
-using System.Text;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -59,11 +57,10 @@ public sealed class RecordEditTests : IDisposable
     {
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var reparsed = codec.DeserializeFromBytes(
-            Encoding.UTF8.GetBytes(_mod.Document(_mod.Npc.ToString()).Require().Body), GameRelease.Fallout4, "npc_");
+        var reparsed = (Mutagen.Bethesda.Fallout4.Npc)RecordTextCodec.DeserializeText(
+            typeof(Mutagen.Bethesda.Fallout4.Npc), _mod.Document(_mod.Npc.ToString()).Require().Body, GameRelease.Fallout4);
         Assert.Equal(_mod.Npc, reparsed.FormKey);
-        Assert.Equal(0.75f, ((Mutagen.Bethesda.Fallout4.INpcGetter)reparsed).HeightMax);
+        Assert.Equal(0.75f, reparsed.HeightMax);
     }
 
     [Fact]

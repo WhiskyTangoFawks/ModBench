@@ -4,7 +4,6 @@ using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -96,8 +95,7 @@ public sealed class TrackModTests
         Assert.Equal("FirstNpc", first.EditorId);
         Assert.Equal("SecondNpc", second.EditorId);
 
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var roundTripped = codec.DeserializeFromBytes(System.Text.Encoding.UTF8.GetBytes(first.Body), GameRelease.Fallout4, "npc_");
+        var roundTripped = (Npc)RecordTextCodec.DeserializeText(typeof(Npc), first.Body, GameRelease.Fallout4);
         Assert.Equal(npc1.FormKey, roundTripped.FormKey);
 
         Assert.DoesNotContain(

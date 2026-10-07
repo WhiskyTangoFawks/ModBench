@@ -25,7 +25,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
     private string CellBodyAfterCodecRoundTripThrough(Action<IMajorRecord> change)
     {
-        var cell = Codec.DeserializeFromBytes(Encoding.UTF8.GetBytes(CellBody()), GameRelease.Fallout4, "cell");
+        var cell = (IMajorRecord)RecordTextCodec.DeserializeText(typeof(Cell), CellBody(), GameRelease.Fallout4);
         change(cell);
         return Encoding.UTF8.GetString(Codec.SerializeToBytes(cell, GameRelease.Fallout4));
     }

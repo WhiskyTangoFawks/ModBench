@@ -1,5 +1,4 @@
 using System.Reflection;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -64,7 +63,6 @@ public sealed class DerivedContainerMembersTests
     {
         var quest = RecordTypes().First(t => t.Name == "Quest");
 
-        Assert.Contains((GameCategory.Fallout4, "Quest"), ContainerMembers.Derived.ChildFieldsByType.Keys);
         Assert.NotNull(ContainerChildFields.EnumerateChildFieldsFor(quest));
         var typeFromNoReferencedGamesAssemblyResolvesToNoCategoryAndSoNoFields = typeof(object);
         Assert.Null(ContainerChildFields.EnumerateChildFieldsFor(typeFromNoReferencedGamesAssemblyResolvesToNoCategoryAndSoNoFields));
@@ -75,8 +73,6 @@ public sealed class DerivedContainerMembersTests
     {
         var quest = RecordTypes().First(t => t.Name == "Quest");
 
-        Assert.Contains((GameCategory.Fallout4, "Quest", "Scenes"), ContainerMembers.Derived.EmbeddedSlots);
-        Assert.Contains((GameCategory.Fallout4, "Quest", "Scenes"), ContainerMembers.Derived.ElementTypeBySlot.Keys);
         Assert.Contains(("Quest", "Scenes"), ContainerChildFields.EmbeddedSlotsFor(quest));
         Assert.Empty(ContainerChildFields.EmbeddedSlotsFor(typeof(object)));
     }
