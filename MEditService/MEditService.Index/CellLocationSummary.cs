@@ -5,4 +5,5 @@ namespace MEditService.Index;
 public record CellLocationSummary(
     string FormKey, string? EditorId,
     int? BlockX, int? BlockY, int? SubX, int? SubY, int? CellX, int? CellY,
-    string? FullName = null, bool HasParseFailure = false, string? ParseDiagnosis = null, bool HasChildren = false);
+    string? FullName = null, bool HasParseFailure = false, string? ParseDiagnosis = null, bool HasChildren = false,
+    WorkingTreeState WorkingTreeState = WorkingTreeState.None);

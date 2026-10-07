@@ -7,7 +7,7 @@ namespace MEditService.Queries;
 // holds a cell.
 public record WorldspaceSummary(
     string FormKey, string? EditorId, bool HasParseFailure = false, string? FullName = null, string? ParseDiagnosis = null,
-    bool HasChildren = false);
+    bool HasChildren = false, WorkingTreeState WorkingTreeState = WorkingTreeState.None);
 
 public record WorldspaceSubBlockDto(
     int X, int Y, IReadOnlyList<CellSummary> Cells, bool HasParseFailure = false);

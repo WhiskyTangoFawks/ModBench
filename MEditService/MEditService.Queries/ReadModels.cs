@@ -39,7 +39,8 @@ public record CellChildRecords(
 
 public record ChildRecordSummary(
     string FormKey, string? EditorId, string? BaseFormKey, string RecordType, bool HasParseFailure = false,
-    string? FullName = null, string? BaseEditorId = null, string? ParseDiagnosis = null);
+    string? FullName = null, string? BaseEditorId = null, string? ParseDiagnosis = null,
+    WorkingTreeState WorkingTreeState = WorkingTreeState.None);
 
 // IsPersistentWorldspaceCell is the cell a Worldspace's TopCell slot names (xEdit's "<Persistent
 // Worldspace Cell>"). FullName stays a separate fact: xEdit's GetDisplayName checks FULL first,
@@ -47,4 +48,5 @@ public record ChildRecordSummary(
 public record CellSummary(
     string FormKey, string? EditorId, int? CellX, int? CellY,
     bool IsPersistentWorldspaceCell = false, string? FullName = null, bool HasParseFailure = false,
-    string? ParseDiagnosis = null, bool HasChildren = false);
+    string? ParseDiagnosis = null, bool HasChildren = false,
+    WorkingTreeState WorkingTreeState = WorkingTreeState.None);

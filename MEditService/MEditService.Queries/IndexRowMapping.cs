@@ -26,5 +26,5 @@ internal static class IndexRowMapping
 
     private static ChildRecordSummary ToQuery(Index.ChildRecordSummary row) =>
         new(row.FormKey, row.EditorId, row.BaseFormKey, row.RecordType, row.HasParseFailure, row.FullName,
-            row.BaseEditorId, row.ParseDiagnosis);
+            row.BaseEditorId, row.ParseDiagnosis, row.WorkingTreeState.ToQuery());
 }
