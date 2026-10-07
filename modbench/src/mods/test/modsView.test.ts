@@ -77,6 +77,7 @@ import type { ModlistEntry } from '../../instanceLoader/instance';
 import { mod } from './indexedValue';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
+import { Uri } from 'vscode';
 import { createModSync } from '../modSync';
 import { present } from '../../ports/present';
 import { accessTo } from '../../test/mo2/adapterOver';
@@ -88,7 +89,7 @@ const currentBox = currentBoxOf(h.state);
 
 const otherDeps = () => ({
   access: accessTo('/instance'), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
-  extensionUri: uriFile('/extension'), warnIfFomod: vi.fn(), installDownloaded: () => Promise.resolve(false), nexusRow: () => undefined,
+  extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), installDownloaded: () => Promise.resolve(false), nexusRow: () => undefined,
 });
 
 const silentChannel = { error: () => undefined, info: () => undefined };
