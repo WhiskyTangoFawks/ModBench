@@ -237,10 +237,15 @@ export function registerSeparatorCommands(
         const oldName = node.separator.name;
         const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(access, instance, oldName));
         if (newName === undefined) return;
-        await runModsWriting(instance, () => reportFailure(reporter, 'Failed to rename separator.', async () => {
-          const result = await renameSeparator(access, instance.value.activeProfile, oldName, newName);
-          if (!result.applied) reporter.report('error', 'Failed to rename separator.', result.refusal);
-        }));
+        const failed = 'Failed to rename separator.';
+        await runModsWriting(instance, async () => {
+          try {
+            const result = await renameSeparator(access, instance.value.activeProfile, oldName, newName);
+            if (!result.applied) reporter.report('error', failed, result.refusal);
+          } catch (err) {
+            reporter.report('error', failed, errorMessage(err));
+          }
+        });
       }),
       registerGesture('modbench.separator.add', viewSelection, async (entry) => {
         const node = singularArgument(entry, 'mod', 'separator');
@@ -250,11 +255,16 @@ export function registerSeparatorCommands(
         });
         if (!name) return;
         const anchor = node.kind === 'mod' ? node.mod : node.separator;
-        await runModsWriting(instance, () => reportFailure(reporter, 'Failed to add separator.', async () => {
-          const result = await insertSeparator(
-            access, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name });
-          if (!result.applied) reporter.report('error', 'Failed to add separator.', result.refusal);
-        }));
+        const failed = 'Failed to add separator.';
+        await runModsWriting(instance, async () => {
+          try {
+            const result = await insertSeparator(
+              access, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name });
+            if (!result.applied) reporter.report('error', failed, result.refusal);
+          } catch (err) {
+            reporter.report('error', failed, errorMessage(err));
+          }
+        });
       }),
       registerGesture('modbench.separator.delete', viewSelection, async (entry) => {
         const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
