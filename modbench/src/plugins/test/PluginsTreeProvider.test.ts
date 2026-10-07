@@ -39,8 +39,7 @@ import {
   PluginsTreeProvider, PluginNode, ImplicitMasterNode, NO_PLUGINS_MESSAGE, pluginFileOf, isDropPayload,
   type PluginsTreeNode, type PluginsTreeProviderOptions,
 } from '../PluginsTreeProvider';
-import { PluginTreeProvider, IndexingNode } from '../PluginTreeProvider';
-import { ErrorNode } from '../../drivingLib/errorNode';
+import { PluginTreeProvider } from '../PluginTreeProvider';
 import { pluginsTreeOver } from './pluginsTreeOver';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -245,16 +244,26 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header'
 });
 
 describe('leading slot — rows outside the load order render neither checkbox nor lock', () => {
-  it('ErrorNode has no checkbox and no lock', () => {
-    const node = new ErrorNode('boom');
-    expect(node.checkboxState).toBeUndefined();
-    expect(node.iconPath).not.toEqual({ id: 'lock' });
+  it('an error row has no checkbox and no lock', async () => {
+    const instance = new FakeInstance(valueOf([]), 0);
+    const { tree } = makeTree([], { instance });
+    const pending = tree.getChildren();
+    instance.fail('boom');
+
+    const [error] = await pending;
+
+    expect(present(error, 'the error row').checkboxState).toBeUndefined();
+    expect(error?.iconPath).not.toEqual({ id: 'lock' });
   });
 
-  it('IndexingNode has no checkbox and no lock', () => {
-    const node = new IndexingNode();
-    expect(node.checkboxState).toBeUndefined();
-    expect(node.iconPath).not.toEqual({ id: 'lock' });
+  it('a still-indexing row has no checkbox and no lock', async () => {
+    const { tree } = makeTree([A_ROW()]);
+    const [row] = await tree.getChildren();
+
+    const [indexing] = await tree.getChildren(row);
+
+    expect(present(indexing, 'the indexing row').checkboxState).toBeUndefined();
+    expect(indexing?.iconPath).not.toEqual({ id: 'lock' });
   });
 });
 
@@ -420,7 +429,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     const rows = await failIfNotSettledWithin(pending, 500);
 
     expect(rows).toHaveLength(1);
-    const error = expectInstanceOf(rows[0], ErrorNode);
+    const error = present(rows[0], 'the error row');
     expect(error.label).toBe('Failed to load: EISDIR: illegal operation on a directory, read plugins.txt');
     expect(error.tooltip).toBe('EISDIR: illegal operation on a directory, read plugins.txt');
     expect(error.iconPath).toEqual(new ThemeIcon('error'));
@@ -1320,7 +1329,7 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
 
     const [child] = await h.tree.getChildren(row);
 
-    expect(expectInstanceOf(child, ErrorNode).tooltip).toBe('ECONNREFUSED');
+    expect(present(child, 'the error row').tooltip).toBe('ECONNREFUSED');
   });
 
   it('renders no backend-derived badge on any row, only the file name and mod as its tooltip', async () => {
@@ -1362,7 +1371,7 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     const children = await h.tree.getChildren(row);
 
     expect(children).toHaveLength(1);
-    expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe(heldElsewhere.message);
+    expect(present(children[0], 'the error row').tooltip).toBe(heldElsewhere.message);
   });
 
   it("a heldElsewhere refusal overrides an already-held plugin's records too, not only the unindexed rows", async () => {
@@ -1374,7 +1383,7 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     h.tree.applyRefused(heldElsewhere);
     const children = await h.tree.getChildren(row);
 
-    expect(children).toEqual([expect.any(ErrorNode)]);
+    expect(children.map(c => c.contextValue)).toEqual(['error']);
   });
 
   it("a failed refusal names the failure on the view's message line until the next reconcile ticks", async () => {
@@ -1410,7 +1419,7 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
     h.tree.applyBackendUnreachable('mEdit is disconnected.');
     const children = await h.tree.getChildren(row);
 
-    expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('mEdit is disconnected.');
+    expect(present(children[0], 'the error row').tooltip).toBe('mEdit is disconnected.');
   });
 
   it('keeps hidden the row a record filter hid, as no reason to un-narrow a view the user narrowed', async () => {
@@ -1757,7 +1766,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const children = await h.tree.getChildren(row);
 
     expect(children).toHaveLength(1);
-    expect(expectInstanceOf(children[0], ErrorNode).label).toBe('Failed to load: boom');
+    expect(present(children[0], 'the error row').label).toBe('Failed to load: boom');
   });
 
   it('forwards the record browser change events', () => {
@@ -2248,8 +2257,8 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
     expect((await rowItem(h)).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
     const [row] = await h.tree.getChildren();
     const children = await h.tree.getChildren(row);
-    expect(children).toEqual([expect.any(ErrorNode)]);
-    expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('Malformed record');
+    expect(children.map(c => c.contextValue)).toEqual(['error']);
+    expect(present(children[0], 'the error row').tooltip).toBe('Malformed record');
   });
 
   it('flags a row the moment a load tick reports its plugin failed, before the load completes', async () => {

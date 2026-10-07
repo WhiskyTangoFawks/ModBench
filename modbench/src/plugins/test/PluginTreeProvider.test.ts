@@ -10,6 +10,7 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
+import { childrenOf, recordRow, soleChild, soleGroup } from './browserRows';
 import { PluginTreeProvider, type PluginTreeNode } from '../PluginTreeProvider';
 import type { PluginConditions } from '../pluginFacts';
 import { recordResourceUri } from '../recordResourceUri';
@@ -55,40 +56,15 @@ function makeClient(overrides: Partial<{
 
 const PLUGIN0: PluginAddress = { name: 'Plugin0.esp', origin: 'Data' };
 
-async function soleGroup(
-  provider: PluginTreeProvider, plugin: PluginAddress = PLUGIN0, conditions?: PluginConditions,
-): Promise<PluginTreeNode> {
-  return present((await provider.getPluginChildren(plugin, conditions))[0], 'the sole group');
-}
-
-async function childrenOf(provider: PluginTreeProvider, row: PluginTreeNode | undefined, what: string): Promise<PluginTreeNode[]> {
-  return provider.getChildren(present(row, what));
-}
-
-async function soleChild(provider: PluginTreeProvider, row: PluginTreeNode | undefined, what: string): Promise<PluginTreeNode> {
-  return present((await childrenOf(provider, row, what))[0], `the sole child of ${what}`);
-}
-
 function openedArguments(row: PluginTreeNode): unknown {
   return row.command?.arguments;
 }
 
-async function recordRowOver(
-  records: RecordSummary[], origin = 'Data', conditions?: PluginConditions, recordType = 'weap',
-): Promise<{ provider: PluginTreeProvider; repo: InMemoryMEditClient; rows: PluginTreeNode[] }> {
-  const repo = makeClient({ recordTypes: [{ type: recordType, count: records.length }], records: { items: records, total: records.length } });
-  const provider = new PluginTreeProvider(repo);
-  const rows = await childrenOf(provider, await soleGroup(provider, { name: 'Plugin0.esp', origin }, conditions), 'the group');
-  return { provider, repo, rows };
-}
-
 async function containerRowOver(
-  record: RecordSummary, origin = 'Data', repo = makeClient(), provider = new PluginTreeProvider(repo),
+  record: RecordSummary, origin = 'Data', client = makeClient(), provider = new PluginTreeProvider(client),
 ) {
-  repo.setQueryAnswer('getRecordTypes', [recordTypeCountFixture({ type: 'qust', count: 1 })]);
-  repo.setQueryAnswer('getRecords', { items: [record], total: 1 });
-  const row = await soleChild(provider, await soleGroup(provider, { name: record.plugin, origin }), 'the qust group');
-  return { provider, repo, row };
+  const row = await recordRow(record, origin, undefined, 'qust', { client, provider });
+  return { provider, repo: client, row };
 }
 
 const FAILED_TO_LOAD = [['error', 'Failed to load: boom']];
@@ -151,7 +127,7 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
     });
     const provider = new PluginTreeProvider(repo);
 
-    const typeNode = await soleGroup(provider);
+    const typeNode = await soleGroup(provider, PLUGIN0);
 
     expect(typeNode.label).toBe('Activator');
   });
@@ -189,7 +165,7 @@ describe('PluginTreeProvider.getChildren of a record-type group', () => {
     const records = [makeRecord(0), makeRecord(1), makeRecord(2)];
     const repo = makeClient({ records: { items: records, total: 3 } });
     const provider = new PluginTreeProvider(repo);
-    const typeNode = await soleGroup(provider);
+    const typeNode = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(typeNode);
 
@@ -201,7 +177,7 @@ describe('PluginTreeProvider.getChildren of a record-type group', () => {
     const records = Array.from({ length: FALLOUT4_ESM_INFO_COUNT }, (_, i) => makeRecord(i));
     const repo = makeClient({ records: { items: records, total: FALLOUT4_ESM_INFO_COUNT } });
     const provider = new PluginTreeProvider(repo);
-    const typeNode = await soleGroup(provider);
+    const typeNode = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(typeNode);
 
@@ -225,7 +201,7 @@ describe('PluginTreeProvider.getChildren of a record-type group', () => {
       },
     });
     const provider = new PluginTreeProvider(repo);
-    const typeNode = await soleGroup(provider);
+    const typeNode = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(typeNode);
 
@@ -243,7 +219,7 @@ describe('PluginTreeProvider.getChildren of a record-type group — no per-row f
       { length: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT }, (_, i) => makeRecord(i, 'None', i % 2 === 0));
     const repo = makeClient({ recordTypes: [{ type: 'qust', count: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT }], records: { items: records, total: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT } });
     const provider = new PluginTreeProvider(repo);
-    const typeNode = await soleGroup(provider);
+    const typeNode = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(typeNode);
 
@@ -256,7 +232,7 @@ describe('PluginTreeProvider.getChildren of a record-type group — no per-row f
 describe('a record-type group row', () => {
   const groupOf = async (type: { type: string; count: number; displayName?: string; isCreatable?: boolean }) => {
     const provider = new PluginTreeProvider(makeClient({ recordTypes: [type] }));
-    return soleGroup(provider);
+    return soleGroup(provider, PLUGIN0);
   };
 
   it('uses the xEdit display name as label', async () => {
@@ -278,7 +254,7 @@ describe('a record-type group row', () => {
 
 describe('a record row', () => {
   const rowOf = async (record: RecordSummary, origin = 'Data', conditions?: PluginConditions) =>
-    present((await recordRowOver([record], origin, conditions)).rows[0], 'the record row');
+    recordRow(record, origin, conditions);
 
   it('wires .command to modbench.record.open with its own copy: its record\'s plugin in the row\'s origin', async () => {
     const record = makeRecord(0);
@@ -325,7 +301,7 @@ describe('a record row', () => {
 describe('onDidReadRecords / workingTreeStateOf', () => {
   async function readGroup(repo: InMemoryMEditClient) {
     const provider = new PluginTreeProvider(repo);
-    const typeNode = await soleGroup(provider);
+    const typeNode = await soleGroup(provider, PLUGIN0);
     const read: (readonly unknown[])[] = [];
     provider.onDidReadRecords((uris) => read.push(uris));
     return { provider, typeNode, read };
@@ -491,7 +467,7 @@ describe('PluginTreeProvider.refresh', () => {
   it('asks the view to render again, and the group then lists what mEdit now holds', async () => {
     const repo = makeClient({ records: { items: [makeRecord(0)], total: 1 } });
     const provider = new PluginTreeProvider(repo);
-    const typeNode = await soleGroup(provider);
+    const typeNode = await soleGroup(provider, PLUGIN0);
     const labelsBeneath = async () => (await provider.getChildren(typeNode)).map((n) => n.label);
     expect(await labelsBeneath()).toEqual(['Record0']);
 
@@ -607,7 +583,7 @@ describe('PluginTreeProvider worldspace tree', () => {
     ]);
     const provider = new PluginTreeProvider(repo);
 
-    const worldspaces = await childrenOf(provider, await soleGroup(provider), 'the worldspace group');
+    const worldspaces = await childrenOf(provider, await soleGroup(provider, PLUGIN0), 'the worldspace group');
 
     expect(worldspaces.map(w => [w.label, w.collapsibleState])).toEqual([
       ['Holding', TreeItemCollapsibleState.Collapsed],
@@ -623,7 +599,7 @@ describe('PluginTreeProvider worldspace tree', () => {
     ]));
     const provider = new PluginTreeProvider(repo);
 
-    const cells = await interiorCellsBeneath(provider, await soleGroup(provider));
+    const cells = await interiorCellsBeneath(provider, await soleGroup(provider, PLUGIN0));
 
     expect(cells.map(c => [c.label, c.collapsibleState])).toEqual([
       ['Holding', TreeItemCollapsibleState.Collapsed],
@@ -681,7 +657,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient();
     repo.setQueryFailure('getRecords', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = await soleGroup(provider);
+    const node = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(node);
 
@@ -692,7 +668,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
     repo.setQueryFailure('getWorldspaces', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = await soleGroup(provider);
+    const node = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(node);
 
@@ -704,7 +680,7 @@ describe('PluginTreeProvider fetch failures', () => {
     repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryFailure('getWorldspaceBlocks', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = await soleChild(provider, await soleGroup(provider), 'the worldspace group');
+    const node = await soleChild(provider, await soleGroup(provider, PLUGIN0), 'the worldspace group');
 
     const children = await provider.getChildren(node);
 
@@ -726,7 +702,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient({ recordTypes: [{ type: 'cell', count: 1 }] });
     repo.setQueryFailure('getInteriorCells', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = await soleGroup(provider);
+    const node = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(node);
 
@@ -1051,7 +1027,7 @@ describe('the failure prefix', () => {
     const unreadable = { ...makeRecord(0), parseDiagnosis: 'Perk 0000EF — unknown: bad flag', hasParseFailure: true };
     const repo = makeClient({ records: { items: [unreadable, makeRecord(1)], total: 2 } });
     const provider = new PluginTreeProvider(repo);
-    const typeNode = await soleGroup(provider);
+    const typeNode = await soleGroup(provider, PLUGIN0);
 
     const recordRows = await provider.getChildren(typeNode);
     const failed = present(recordRows[0], 'the unreadable record row');
@@ -1150,7 +1126,7 @@ describe('the failure prefix', () => {
         parseDiagnosis: 'INFO 12 — unknown: bad', hasParseFailure: true },
     ]);
     const provider = new PluginTreeProvider(repo);
-    const typeNode = await soleGroup(provider);
+    const typeNode = await soleGroup(provider, PLUGIN0);
     const [questRowOrUndefined] = await provider.getChildren(typeNode);
     const questRow = present(questRowOrUndefined, 'the qust row');
 
