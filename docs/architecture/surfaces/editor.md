@@ -68,8 +68,8 @@ As a user, I want:
 | `(read-only)` | the game folder provides the plugin | that the game's plugins are not edited | ruling |
 | `(in Overwrite)` | the plugin is in Overwrite | that Overwrite is not a mod, and a plugin moved into a mod can be tracked | ruling |
 | `(untracked)` | the plugin is not tracked | that Track, in this header's menu, makes it editable | ADR-0007 |
-| `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
 | `(plugin source unreadable)` | the plugin is tracked, and its plugin source is missing or cannot be read | why, and that decompile, in this header's menu, makes it editable | Never silently wrong |
+| `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
 | `(tracked)` | the plugin is tracked | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007 |
 
 A column shows one status, the first in this table that applies. A Partial Form column is dimmed, header and cells alike, so it reads as outside the conflict after the header scrolls away.

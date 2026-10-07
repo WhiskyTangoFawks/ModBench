@@ -36,7 +36,7 @@ instancecommands -> client: snapshot {class: loadorder}
 client -> http: snapshot {class: loadorder}
 http -> commands: put load order {class: loadorder}
 pluginadapter -> commands: "each tracked plugin's hash" {class: query}
-sourceadapter -> commands: "what Modbench last wrote" {class: query}
+sourceadapter -> commands: "what Modbench last wrote · which plugins hold plugin source" {class: query}
 commands."each tracked plugin's hash against what Modbench last wrote"
 commands -> port: "external change: the mod, its changed plugins · plugins whose plugin source is unreadable" {class: push}
 port -> http: publish {class: push}
