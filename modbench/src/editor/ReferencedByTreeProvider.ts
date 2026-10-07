@@ -30,7 +30,6 @@ export class ReferencedByHolderNode extends vscode.TreeItem {
 function referrerName(formKey: string, editorId: string | undefined): string {
   return editorId ? `${editorId} [${formKey}]` : formKey;
 }
-
 /** One row for a referrer, however many plugins hold the reference. */
 class ReferencedByReferrerNode extends vscode.TreeItem {
   readonly copyText: string;
@@ -64,7 +63,6 @@ export type ReferencedByTreeNode = ReferencedByReferrerNode | ReferencedByHolder
 
 export type ReferrerDirection = 'ascending' | 'descending';
 
-/** One line per selected referrer. A row beneath a referrer adds nothing. */
 function referencedByCopyText(nodes: readonly ReferencedByTreeNode[]): string {
   return nodes
     .filter((n): n is ReferencedByReferrerNode => n instanceof ReferencedByReferrerNode)
