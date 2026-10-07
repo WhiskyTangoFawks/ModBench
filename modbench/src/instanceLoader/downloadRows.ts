@@ -35,9 +35,9 @@ export interface DownloadFile extends DownloadRow {
 export const archiveKey = (filename: string): string => filename.toLowerCase();
 
 /** Which mods each download was installed into, keyed by the download's folded filename: the
- *  reverse of every mod's installation file, many to many. A mod naming no file claims nothing,
+ *  reverse of every mod's archive filename, many to many. A mod naming no file claims nothing,
  *  which is unknown rather than an uninstall. */
-export function modsByInstallationFile(
+export function modsByArchiveFilename(
   mods: readonly { name: string; archiveFilename?: string }[],
 ): Map<string, string[]> {
   const byFile = new Map<string, string[]>();

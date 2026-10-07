@@ -19,13 +19,13 @@ interface UpgradeCandidate {
 const isFileIdMatch = (mod: Mod, fileID: string | undefined): boolean =>
   fileID !== undefined && mod.installedFiles?.some((pair) => pair.fileId === fileID) === true;
 
-const isInstallationFileMatch = (mod: Mod, downloadName: string): boolean =>
+const isArchiveFilenameMatch = (mod: Mod, downloadName: string): boolean =>
   mod.archiveFilename !== undefined && archiveKey(mod.archiveFilename) === archiveKey(downloadName);
 
 const TIER_RANK: Record<'fileId' | 'archiveFilename' | 'none', number> = { fileId: 0, archiveFilename: 1, none: 2 };
 
 // The pool is the mods sharing the mod id, so no mod id empties it. The tiers rank within the
-// pool; a file-id match drops the installation-file tier for every other mod.
+// pool; a file-id match drops the archive-filename tier for every other mod.
 function selectUpgradeCandidates(
   value: { mods: InstanceValue['mods'] },
   download: Pick<DownloadRow, 'modID' | 'fileID' | 'name'>,
@@ -35,7 +35,7 @@ function selectUpgradeCandidates(
   const hasFileIdMatch = pool.some((mod) => isFileIdMatch(mod, download.fileID));
   const tierOf = (mod: Mod): UpgradeTier | undefined => {
     if (isFileIdMatch(mod, download.fileID)) return 'fileId';
-    if (!hasFileIdMatch && isInstallationFileMatch(mod, download.name)) return 'archiveFilename';
+    if (!hasFileIdMatch && isArchiveFilenameMatch(mod, download.name)) return 'archiveFilename';
     return undefined;
   };
   const candidates = pool.map((mod) => ({ modName: mod.name, version: mod.version, tier: tierOf(mod) }));
