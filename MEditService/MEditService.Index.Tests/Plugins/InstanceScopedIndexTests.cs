@@ -22,7 +22,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
 
     private string GameDirectory => Directory.CreateDirectory(Path.Combine(_root, "GameDir")).FullName;
 
-    private static OpenedIndex MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static OpenedIndex OpenIndex(LoadOrderHolder holder) => Indexes.Open(holder);
 
     private string AnInstance(string name, string editorId)
     {
@@ -37,8 +37,8 @@ public sealed class InstanceScopedIndexTests : IDisposable
     private static IReadOnlyList<LoadOrderEntry> OrderIn(string instanceRoot) =>
         [new(Plugin, Path.Combine(instanceRoot, "mods", Origin, Plugin), Origin, Slot: 0, Enabled: true, Winning: true)];
 
-    private static IReadOnlyList<string?> EditorIdsIn(OpenedIndex manager) =>
-        [.. manager.RequireReads().DocumentsOf(Key)
+    private static IReadOnlyList<string?> EditorIdsIn(OpenedIndex index) =>
+        [.. index.RequireReads().DocumentsOf(Key)
             .Where(d => d.RecordType != PluginHeader.RecordType)
             .Select(d => d.EditorId)];
 
@@ -50,16 +50,16 @@ public sealed class InstanceScopedIndexTests : IDisposable
         var a = AnInstance("instance-a", "NpcFromA");
         var b = AnInstance("instance-b", "NpcFromB");
 
-        using (var first = MakeIndexer(holder)) first.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
-        using (var second = MakeIndexer(holder)) second.Reconcile(holder, gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
+        using (var first = OpenIndex(holder)) first.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
+        using (var second = OpenIndex(holder)) second.Reconcile(holder, gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
 
-        using (var warmB = MakeIndexer(holder))
+        using (var warmB = OpenIndex(holder))
         {
             warmB.Reconcile(holder, gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
             Assert.Equal(["NpcFromB"], EditorIdsIn(warmB));
         }
 
-        using var warmA = MakeIndexer(holder);
+        using var warmA = OpenIndex(holder);
         warmA.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
         Assert.Equal(["NpcFromA"], EditorIdsIn(warmA));
     }
@@ -71,9 +71,9 @@ public sealed class InstanceScopedIndexTests : IDisposable
         var gameDirectory = GameDirectory;
         var a = AnInstance("instance-warm", "NpcFromA");
 
-        using (var cold = MakeIndexer(holder)) cold.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
+        using (var cold = OpenIndex(holder)) cold.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
 
-        using var warm = MakeIndexer(holder);
+        using var warm = OpenIndex(holder);
         warm.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
         Assert.Equal(["NpcFromA"], EditorIdsIn(warm));
     }

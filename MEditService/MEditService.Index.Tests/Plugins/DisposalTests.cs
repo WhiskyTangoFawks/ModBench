@@ -14,9 +14,9 @@ public class DisposalTests(TestPluginFixture fixture)
 
     private OpenedIndex ReconciledIndex(LoadOrderHolder holder)
     {
-        var m = OpenIndex(holder);
-        m.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        return m;
+        var index = OpenIndex(holder);
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        return index;
     }
 
     [Fact]

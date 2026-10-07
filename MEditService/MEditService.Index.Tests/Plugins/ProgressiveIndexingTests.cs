@@ -9,7 +9,7 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class ProgressiveIndexingTests
 {
-    private static (OpenedIndex Manager, GatedPluginAdapter Gate) MakeGatedManager(LoadOrderHolder holder, string gateBefore)
+    private static (OpenedIndex Index, GatedPluginAdapter Gate) OpenGatedIndex(LoadOrderHolder holder, string gateBefore)
     {
         var gate = new GatedPluginAdapter(gateBefore);
         return (Indexes.Open(holder, gate), gate);
@@ -27,21 +27,21 @@ public sealed class ProgressiveIndexingTests
     {
         var holder = new LoadOrderHolder();
         using var fx = ThreePlugins("sm-progressive-queryable");
-        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
-        using var _ = manager;
+        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
+        using var _ = index;
         using var __ = gate;
 
-        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        var reads = manager.RequireReads();
+        var reads = index.RequireReads();
         Assert.Equal(1, reads.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
         Assert.Equal(0, reads.CountOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory), "npc_"));
 
         gate.Release();
         await load;
 
-        var readsAfterLoad = manager.RequireReads();
+        var readsAfterLoad = index.RequireReads();
         Assert.Equal(1, readsAfterLoad.CountOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
@@ -50,16 +50,16 @@ public sealed class ProgressiveIndexingTests
     {
         var holder = new LoadOrderHolder();
         using var fx = ThreePlugins("sm-progressive-status");
-        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
-        using var _ = manager;
+        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
+        using var _ = index;
         using var __ = gate;
 
-        Assert.Equal(LoadOrderState.None, manager.Status.State);
+        Assert.Equal(LoadOrderState.None, index.Status.State);
 
-        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        var loading = manager.Status;
+        var loading = index.Status;
         Assert.Equal(LoadOrderState.Reconciling, loading.State);
         Assert.Equal(3, loading.TotalPlugins);
         Assert.Equal(["Master.esm", "A.esp"], loading.IndexedPlugins.Select(p => p.Name));
@@ -68,14 +68,14 @@ public sealed class ProgressiveIndexingTests
         gate.Release();
         await load;
 
-        var ready = manager.Status;
+        var ready = index.Status;
         Assert.Equal(LoadOrderState.Ready, ready.State);
         Assert.Equal(["Master.esm", "A.esp", "B.esp"], ready.IndexedPlugins.Select(p => p.Name));
         Assert.True(ready.ConflictsComputed);
         Assert.Empty(ready.Failures);
 
-        manager.Dispose();
-        Assert.Equal(LoadOrderState.None, manager.Status.State);
+        index.Dispose();
+        Assert.Equal(LoadOrderState.None, index.Status.State);
     }
 
     [Fact]
@@ -90,12 +90,12 @@ public sealed class ProgressiveIndexingTests
             .BuildScattered();
 
         using var gate = new GatedPluginAdapter(gateBefore: "B.esp", poisonPlugin: "A.esp");
-        using var manager = Indexes.Open(holder, gate);
+        using var index = Indexes.Open(holder, gate);
 
-        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        var status = manager.Status;
+        var status = index.Status;
         Assert.Equal(LoadOrderState.Reconciling, status.State);
         var failure = Assert.Single(status.Failures);
         Assert.Equal("A.esp", failure.Name);
@@ -104,7 +104,7 @@ public sealed class ProgressiveIndexingTests
         gate.Release();
         await load;
 
-        Assert.Contains(manager.Status.Failures, f => f.Name == "A.esp");
+        Assert.Contains(index.Status.Failures, f => f.Name == "A.esp");
     }
 
     [Fact]
@@ -112,16 +112,16 @@ public sealed class ProgressiveIndexingTests
     {
         var holder = new LoadOrderHolder();
         using var fx = ThreePlugins("sm-progressive-status-origin");
-        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
-        using var _ = manager;
+        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
+        using var _ = index;
         using var __ = gate;
 
-        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
         gate.Release();
         await load;
 
-        Assert.All(manager.Status.IndexedPlugins, p => Assert.False(string.IsNullOrWhiteSpace(p.Origin)));
+        Assert.All(index.Status.IndexedPlugins, p => Assert.False(string.IsNullOrWhiteSpace(p.Origin)));
     }
 
     [Fact]
@@ -134,14 +134,14 @@ public sealed class ProgressiveIndexingTests
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
             .BuildScattered();
-        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
-        using var _ = manager;
+        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
+        using var _ = index;
         using var __ = gate;
 
-        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        var reads = manager.RequireReads();
+        var reads = index.RequireReads();
         var opened = reads.OpenedPlugins;
         using var enumerator = opened.GetEnumerator();
         Assert.True(enumerator.MoveNext());
@@ -167,8 +167,8 @@ public sealed class ProgressiveIndexingTests
     {
         var holder = new LoadOrderHolder();
         using var fx = FourPlugins("sm-progressive-unload");
-        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
-        using var _ = manager;
+        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
+        using var _ = index;
         using var __ = gate;
         var order = new ConcurrentQueue<string>();
 
@@ -179,7 +179,7 @@ public sealed class ProgressiveIndexingTests
         var unload = Task.Run(() =>
         {
             unloadAttempting.Set();
-            manager.Dispose();
+            index.Dispose();
             order.Enqueue("unload-done");
         });
         Assert.True(unloadAttempting.Wait(TimeSpan.FromSeconds(5)));
@@ -189,8 +189,8 @@ public sealed class ProgressiveIndexingTests
         await unload;
 
         Assert.Equal(["gate-released", "unload-done"], order);
-        Assert.Throws<NoLoadOrderException>(() => manager.RequireReads());
-        Assert.Equal(LoadOrderState.None, manager.Status.State);
+        Assert.Throws<NoLoadOrderException>(() => index.RequireReads());
+        Assert.Equal(LoadOrderState.None, index.Status.State);
         Assert.DoesNotContain("C.esp", gate.Opened);
     }
 
@@ -199,20 +199,20 @@ public sealed class ProgressiveIndexingTests
     {
         var holder = new LoadOrderHolder();
         using var fx = FourPlugins("sm-progressive-supersede");
-        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
-        using var _ = manager;
+        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
+        using var _ = index;
         using var __ = gate;
         var order = new ConcurrentQueue<string>();
 
-        var first = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var first = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
-        var readsWhileParked = manager.RequireReads();
+        var readsWhileParked = index.RequireReads();
 
         using var secondAttempting = new ManualResetEventSlim();
         var second = Task.Run(() =>
         {
             secondAttempting.Set();
-            manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+            index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
             order.Enqueue("second-done");
         });
         Assert.True(secondAttempting.Wait(TimeSpan.FromSeconds(5)));
@@ -223,12 +223,12 @@ public sealed class ProgressiveIndexingTests
         await second;
 
         Assert.Equal(["gate-released", "second-done"], order);
-        Assert.Same(readsWhileParked, manager.RequireReads());
-        Assert.Equal(LoadOrderState.Ready, manager.Status.State);
-        Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp"], manager.Status.IndexedPlugins.Select(p => p.Name));
-        Assert.True(manager.Status.ConflictsComputed);
+        Assert.Same(readsWhileParked, index.RequireReads());
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp"], index.Status.IndexedPlugins.Select(p => p.Name));
+        Assert.True(index.Status.ConflictsComputed);
         Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp"], gate.Opened);
-        Assert.Equal(1, manager.RequireReads().CountOf(new PluginAddress("C.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, index.RequireReads().CountOf(new PluginAddress("C.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -243,34 +243,34 @@ public sealed class ProgressiveIndexingTests
             .WithPlugin("Minted.esp", mod => mod.Npcs.AddNew("FromMinted"))
             .BuildScattered();
         var beforeTheCreate = fx.Plugins.Where(p => p.Name != "Minted.esp").ToList();
-        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
-        using var _ = manager;
+        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
+        using var _ = index;
         using var __ = gate;
 
-        var first = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, beforeTheCreate, GameRelease.Fallout4));
+        var first = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, beforeTheCreate, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
-        var readsWhileParked = manager.RequireReads();
+        var readsWhileParked = index.RequireReads();
 
-        var second = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var second = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         Assert.True(
             await Waits.Until(() => holder.Current.Plugins.Count == 5),
             "the arriving snapshot never reached the holder");
-        Assert.Equal(LoadOrderState.Reconciling, manager.Status.State);
+        Assert.Equal(LoadOrderState.Reconciling, index.Status.State);
         Assert.Equal(0, readsWhileParked.CountOf(new PluginAddress("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
 
         gate.Release();
         await first;
         await second;
 
-        Assert.Same(readsWhileParked, manager.RequireReads());
-        Assert.Equal(LoadOrderState.Ready, manager.Status.State);
-        Assert.True(manager.Status.ConflictsComputed);
+        Assert.Same(readsWhileParked, index.RequireReads());
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.True(index.Status.ConflictsComputed);
         Assert.Equal(
             ["Master.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"],
-            manager.Status.IndexedPlugins.Select(p => p.Name));
+            index.Status.IndexedPlugins.Select(p => p.Name));
         Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"], gate.Opened);
-        Assert.Equal(1, manager.RequireReads().CountOf(new PluginAddress("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
-        Assert.Equal(1, manager.RequireReads().CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, index.RequireReads().CountOf(new PluginAddress("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, index.RequireReads().CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -287,14 +287,14 @@ public sealed class ProgressiveIndexingTests
             })
             .WithPlugin("Late.esp")
             .BuildScattered();
-        var (manager, gate) = MakeGatedManager(holder, gateBefore: "Late.esp");
-        using var _ = manager;
+        var (index, gate) = OpenGatedIndex(holder, gateBefore: "Late.esp");
+        using var _ = index;
         using var __ = gate;
 
-        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        var listed = manager.RequireReads().Search(
+        var listed = index.RequireReads().Search(
             new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["acti"], Plugin: "Patch.esp", Limit: 10, GroupOnly: true)).Items.Select(r => r.EditorId);
 
         Assert.Equal(["CZuluLever", "BBetaLever", "AAlphaLever"], listed);
@@ -308,14 +308,14 @@ public sealed class ProgressiveIndexingTests
     {
         var holder = new LoadOrderHolder();
         using var fx = ThreePlugins("sm-progressive-nonblocking");
-        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
-        using var _ = manager;
+        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
+        using var _ = index;
         using var __ = gate;
 
-        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        var read = Task.Run(() => manager.RequireReads().CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
+        var read = Task.Run(() => index.RequireReads().CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
         var finished = await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(5)));
 
         Assert.Same(read, finished);
