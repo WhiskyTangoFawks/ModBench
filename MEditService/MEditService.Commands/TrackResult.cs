@@ -27,14 +27,13 @@ public enum TrackRefusal
     /// <summary>The plugin passed its gate, and the file system refused its source files, or git refused the track's one commit.</summary>
     CommitFailed,
 
-    /// <summary>Every plugin of the mod was refused, each for its own reason, which the message names.</summary>
+    /// <summary>The mod refused for more than one reason, which the message names plugin by plugin.</summary>
     NoPluginTracked,
 
     /// <summary>git is not on PATH, so no repository can be created at all (ADR-0007).</summary>
     GitUnavailable,
 }
 
-/// <summary>A mod of the selection that tracked: the plugins whose source landed in its commit, and the
-/// plugins of it that wrote nothing, each with its reason. A mod none of whose plugins tracked is
-/// refused instead.</summary>
+/// <summary>A mod of the selection that tracked whole: every plugin whose source landed in its commit. A mod
+/// with any plugin refused is refused instead, and writes nothing.</summary>
 public sealed record TrackedMod(IReadOnlyList<PluginAddress> Tracked, IReadOnlyList<ItemRefused<PluginAddress, TrackRefusal>> Refused);

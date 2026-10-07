@@ -82,7 +82,7 @@ public sealed class TrackCommitShapeTests : IDisposable
     }
 
     [Fact]
-    public async Task Track_OfASelectionWhereOnePluginFailsItsRoundTripGate_CommitsTheOthers_AndRefusesItOnceWithItsReason()
+    public async Task Track_OfAModWhereOnePluginFailsItsRoundTripGate_RefusesTheWholeMod_WritingNothing()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
@@ -90,14 +90,28 @@ public sealed class TrackCommitShapeTests : IDisposable
 
         var result = await Track(new RoundTripFailsFor("Second.esp"));
 
-        var landed = Assert.Single(result.Landed);
-        Assert.Equal([Key("First.esp"), Key("Third.esp")], landed.Outcome.Tracked);
-        var refused = Assert.Single(landed.Outcome.Refused);
-        Assert.Equal((Key("Second.esp"), TrackRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
-        Assert.Contains("SecondNpc", refused.Message, StringComparison.Ordinal);
-        Assert.NotEmpty(HeldBy("First.esp"));
-        Assert.NotEmpty(HeldBy("Third.esp"));
-        Assert.Empty(HeldBy("Second.esp"));
+        Assert.Empty(result.Landed);
+        var refusedMod = Assert.Single(result.Refused);
+        Assert.Equal(TrackRefusal.RoundTripFailed, refusedMod.Refusal);
+        Assert.Contains("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
+        Assert.False(SourceRepository.IsTracked(_modFolder));
+        Assert.Empty(HeldBy("First.esp"));
+        Assert.Empty(HeldBy("Third.esp"));
+    }
+
+    [Fact]
+    public async Task Track_OfAModWhereTwoPluginsFailForDifferentReasons_NamesEachRefusedPlugin()
+    {
+        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
+        WritePluginReturningItsBinarySha256("Third.esp", "ThirdNpc");
+
+        var result = await Track(new RoundTripFailsForEvery("First.esp", "Third.esp"));
+
+        var refusedMod = Assert.Single(result.Refused);
+        Assert.Contains("FirstNpc", refusedMod.Message, StringComparison.Ordinal);
+        Assert.Contains("ThirdNpc", refusedMod.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
     }
 
     [Fact]

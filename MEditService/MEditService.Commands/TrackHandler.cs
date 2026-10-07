@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands;
 
 /// <summary>The Track gesture's handler (ADR-0007, ADR-0014). The mod is the item of the selection:
-/// it lands with one commit, `Track &lt;mod&gt;`, holding the source of the plugins that passed their gate.</summary>
+/// it lands with one commit, `Track &lt;mod&gt;`, holding the source of every plugin of the mod, or no commit when any plugin is refused.</summary>
 public sealed class TrackHandler
 {
     private readonly LoadOrderHolder _loadOrder;
@@ -103,21 +103,22 @@ public sealed class TrackHandler
             SetProgress(modName, TrackPhase.Serializing, done, total);
         }
 
-        SetProgress(modName, TrackPhase.Committing, total, total);
-        var landed = Commit(modFolder, verified, refused);
-        if (landed.Count > 0) return ItemAnswer<TrackRefusal, TrackedMod>.Landed(new TrackedMod(landed, refused));
+        if (refused.Count == 0)
+        {
+            SetProgress(modName, TrackPhase.Committing, total, total);
+            refused = Commit(modFolder, verified);
+        }
+
+        if (refused.Count == 0) return ItemAnswer<TrackRefusal, TrackedMod>.Landed(new TrackedMod([.. plugins.Select(p => p.Key)], []));
 
         var cause = refused.Select(r => r.Refusal).Distinct().ToList() is [var shared] ? shared : TrackRefusal.NoPluginTracked;
         return ItemAnswer<TrackRefusal, TrackedMod>.Refused(cause, string.Join('\n', refused.Select(r => r.Message)));
     }
 
-    // One commit holding the plugins that passed their gate; those the commit failed are refused too.
-    private List<PluginAddress> Commit(
-        string modFolder, List<(RegisteredPlugin Plugin, IReadOnlyList<TreeFile> Files)> verified,
-        List<ItemRefused<PluginAddress, TrackRefusal>> refused)
+    // One commit holding every plugin; the adapter writes nothing when any plugin's files fail (plugins.md, Track, story 5).
+    private List<ItemRefused<PluginAddress, TrackRefusal>> Commit(
+        string modFolder, List<(RegisteredPlugin Plugin, IReadOnlyList<TreeFile> Files)> verified)
     {
-        if (verified.Count == 0) return [];
-
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("Tracking {PluginCount} plugin(s) into {ModFolder}: {FileCount} source files",
@@ -132,12 +133,11 @@ public sealed class TrackHandler
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            // The track's one commit failed and Track took back what it made: no plugin landed (plugins.md, Track, story 5).
             _logger.LogError(ex, "Could not finish tracking into {ModFolder}", modFolder);
             failed = [.. verified.Select(v => (v.Plugin.Name, ex.Message))];
         }
 
-        var landed = new List<PluginAddress>();
+        var refused = new List<ItemRefused<PluginAddress, TrackRefusal>>();
         foreach (var plugin in verified.Select(v => v.Plugin))
         {
             if (failed.FirstOrDefault(f => string.Equals(f.Plugin, plugin.Name, StringComparison.OrdinalIgnoreCase)) is { Reason: { } reason })
@@ -146,13 +146,9 @@ public sealed class TrackHandler
                 refused.Add(new ItemRefused<PluginAddress, TrackRefusal>(
                     plugin.Key, TrackRefusal.CommitFailed, $"{plugin.Name}'s source could not be tracked: {reason}"));
             }
-            else
-            {
-                landed.Add(plugin.Key);
-            }
         }
 
-        return landed;
+        return refused;
     }
 
     private void SetProgress(string? mod, TrackPhase phase, int pluginsDone, int pluginsTotal) =>
