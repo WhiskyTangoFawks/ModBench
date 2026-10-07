@@ -22,6 +22,7 @@ public sealed class MEditHost(Action<IServiceCollection>? replacing = null) : We
         {
             services.AddSerilog(
                 new LoggerConfiguration().WriteTo.Sink(new CollectingSink(Logged)).CreateLogger(), dispose: true);
+            services.AddSingleton(SharedSchemaReflector.Instance);
             replacing?.Invoke(services);
         });
 
