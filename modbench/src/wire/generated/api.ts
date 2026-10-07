@@ -695,12 +695,12 @@ export interface components {
             cellX?: number | null;
             /** Format: int32 */
             cellY?: number | null;
+            workingTreeState: components["schemas"]["WorkingTreeState"];
             isPersistentWorldspaceCell: boolean;
             fullName?: string | null;
             hasParseFailure: boolean;
             parseDiagnosis?: string | null;
             hasChildren: boolean;
-            workingTreeState: components["schemas"]["WorkingTreeState"];
         };
         ChangedPlugin: {
             name: string;
@@ -711,11 +711,11 @@ export interface components {
             editorId?: string | null;
             baseFormKey?: string | null;
             recordType: string;
+            workingTreeState: components["schemas"]["WorkingTreeState"];
             hasParseFailure: boolean;
             fullName?: string | null;
             baseEditorId?: string | null;
             parseDiagnosis?: string | null;
-            workingTreeState: components["schemas"]["WorkingTreeState"];
         };
         ChildrenInDestinationsRequest: {
             records: components["schemas"]["RecordAddress"][];
@@ -1256,11 +1256,11 @@ export interface components {
         WorldspaceSummary: {
             formKey: string;
             editorId?: string | null;
+            workingTreeState: components["schemas"]["WorkingTreeState"];
             hasParseFailure: boolean;
             fullName?: string | null;
             parseDiagnosis?: string | null;
             hasChildren: boolean;
-            workingTreeState: components["schemas"]["WorkingTreeState"];
         };
     };
     responses: never;
