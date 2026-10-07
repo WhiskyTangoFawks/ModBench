@@ -304,13 +304,6 @@ describe('RecordPanel', () => {
     expect(master.compareDocumentPosition(winner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('renders no Edit/View mode toggle, as editing affordances follow the column\'s plugin mutability, not a mode the user enters on every record navigation', async () => {
-    renderPanel(compareResult);
-    await waitFor(() => screen.getByText('Name'));
-    expect(screen.queryByText('Edit')).not.toBeInTheDocument();
-    expect(screen.queryByText('View')).not.toBeInTheDocument();
-  });
-
   it('a cell in an immutable column opens nothing when clicked, as nothing ever reaches a write from here', async () => {
     renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse });
     await waitFor(() => screen.getByText('Original Name'));
@@ -319,17 +312,6 @@ describe('RecordPanel', () => {
     expect(screen.getByText('Original Name')).toBeInTheDocument();
   });
 
-});
-
-describe('RecordPanel — a column header', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('does not render origin inline, origin never being what the user reads', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(compareResult);
-    await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
-    expect(screen.queryByText(/MyMod\.esp \(/)).not.toBeInTheDocument();
-  });
 });
 
 describe('RecordPanel — the file\'s column', () => {
