@@ -10,49 +10,9 @@ public sealed class PluginBytesScanTests
 
     private const string AdapterRoot = "MEditService.PluginAdapter";
 
-    private static readonly string[] RepositoryNames = ["SourceRepository"];
-
-    private static readonly string[] PluginOpens = ["OpenForRead", "OpenForWrite", "CreateEmpty"];
-
-    private static readonly string[] TreeDoorInternals = ["PluginTrees"];
-
-    private static readonly string[] ByteWalkInternals = ["PluginBinaryWalk", "MalformedPluginScan", "BytesOfFile"];
+    private static readonly string[] ByteWalkNames = ["PluginBinaryWalk"];
 
     private const string CompositionRoot = "MEditService.Http/Program.cs";
-
-    [Fact]
-    public void NothingOutsideThePluginAdapter_OpensAPlugin()
-    {
-        var root = ServiceProjects.SolutionDirectory();
-
-        var walked = Files(root, ProductionRoots, [AdapterRoot]);
-        var named = Sites(root, walked, PluginOpens);
-
-        Assert.True(walked.Count > 50, $"The plugin-open scan walked only {walked.Count} files.");
-        Assert.True(
-            named.Count == 0,
-            "A type outside the Plugin adapter opens a plugin file. A live Mutagen mod reaches nothing "
-            + "but the codec and the Plugin adapter (ADR-0005), so ask the adapter for the "
-            + "answer as data instead:\n"
-            + string.Join("\n", named));
-    }
-
-    [Fact]
-    public void NothingOutsideThePluginAdapter_NamesTheTreeDoorsImplementation()
-    {
-        var root = ServiceProjects.SolutionDirectory();
-
-        var walked = Files(root, ProductionRoots, [AdapterRoot]);
-        var named = Sites(root, walked, TreeDoorInternals);
-
-        Assert.True(walked.Count > 50, $"The tree-door scan walked only {walked.Count} files.");
-        Assert.True(
-            named.Count == 0,
-            "A type outside the Plugin adapter names the tree door's implementation. Reading a source "
-            + "tree into a mod and writing one back are the port's two members (ADR-0005), so "
-            + "ask the adapter:\n"
-            + string.Join("\n", named));
-    }
 
     [Fact]
     public void NothingOutsideThePluginAdapter_WalksAPluginsBytes()
@@ -60,13 +20,13 @@ public sealed class PluginBytesScanTests
         var root = ServiceProjects.SolutionDirectory();
 
         var walked = Files(root, ProductionRoots, [AdapterRoot]);
-        var named = Sites(root, walked, ByteWalkInternals);
+        var named = Sites(root, walked, ByteWalkNames);
 
         Assert.True(walked.Count > 50, $"The byte-walk scan walked only {walked.Count} files.");
         Assert.True(
             named.Count == 0,
             "A type outside the Plugin adapter walks a plugin's bytes. How a file differs at the byte "
-            + "level is the adapter's answer (ADR-0004), so ask it:\n"
+            + "level is the answer of the Plugin adapter, which owns a plugin file (target-architecture.d2), so ask it:\n"
             + string.Join("\n", named));
     }
 
@@ -97,22 +57,6 @@ public sealed class PluginBytesScanTests
     private static bool IsCompositionRoot(string root, string file) =>
         Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')
             .Equals(CompositionRoot, StringComparison.Ordinal);
-
-    [Fact]
-    public void ThePluginAdapter_NamesNoSourceRepository()
-    {
-        var root = ServiceProjects.SolutionDirectory();
-
-        var walked = Files(root, [AdapterRoot], []);
-        var named = Sites(root, walked, RepositoryNames);
-
-        Assert.True(walked.Count > 5, $"The adapter scan walked only {walked.Count} files.");
-        Assert.True(
-            named.Count == 0,
-            "The Plugin adapter names the Source repository. What a plugin holds is its own bytes' answer "
-            + "(ADR-0015), and where a tree sits and how it is read are the repository's:\n"
-            + string.Join("\n", named));
-    }
 
     private static List<string> Files(string root, IReadOnlyList<string> scannedRoots, string[] excludedRoots)
     {

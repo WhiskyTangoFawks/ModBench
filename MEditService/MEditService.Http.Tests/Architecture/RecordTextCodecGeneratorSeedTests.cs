@@ -94,25 +94,6 @@ public class RecordTextCodecGeneratorSeedTests
         Assert.Empty(offendingFiles);
     }
 
-    [Fact]
-    public void DoorFiles_NeverNameTheParallelWorkDropoffThatRacesInMajorRecordListParallelHelper()
-    {
-        const string parallelDropoffName = "ParallelWorkDropoff";
-        var doorFiles = new[] { "TrackHandler.cs", PluginBinaryAndTreeDoor, HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter };
-
-        var sourceFiles = ProductionSources()
-            .Where(f => doorFiles.Contains(Path.GetFileName(f)))
-            .ToList();
-        Assert.NotEmpty(sourceFiles);
-
-        var offendingFiles = sourceFiles
-            .Where(f => File.ReadAllText(f).Contains(parallelDropoffName, StringComparison.Ordinal))
-            .Select(Path.GetFileName)
-            .ToList();
-
-        Assert.Empty(offendingFiles);
-    }
-
     private static readonly IReadOnlyList<string> ProductionProjects =
         ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 

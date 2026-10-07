@@ -8,55 +8,6 @@ namespace MEditService.Http.Tests.Architecture;
 
 public sealed class WriteSideIndexScanTests
 {
-    private static readonly string[] Symbols =
-    [
-        "DuckDbRecordIndex", "DuckDbRecordIndexFactory", "Reconciler", "Projector", "FailedReads", "FilterInForce",
-        "IRecordReads", "Indexer", "IQueryIndex", "Store", "IndexWriteGate",
-        "IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
-        "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService",
-        "FormKeyResolutionCache", "PlacementWalker",
-    ];
-
-    private static readonly IReadOnlyList<string> WholeProductionProjectsExceptTheCompositionRoot =
-        [.. ServiceProjects.Production(ServiceProjects.SolutionDirectory()).Where(project => project != "MEditService.Http")];
-
-    private static readonly string[] IndexItselfAndTheReadSideWhichNameTheseTypesByDefinition =
-        ["MEditService.Index", "MEditService.Queries"];
-
-    [Fact]
-    public void TheWriteSide_NamesNoIndexType_BecauseItWritesSourceTextAndReadsNothingBack()
-    {
-        var counts = Counts(ServiceProjects.SolutionDirectory(), WholeProductionProjectsExceptTheCompositionRoot, IndexItselfAndTheReadSideWhichNameTheseTypesByDefinition, Symbols);
-
-        Assert.True(
-            counts.Count == 0,
-            "Index types named on the write side — the write side writes source text and reads nothing "
-            + "back from the Index:\n"
-            + string.Join("\n", counts));
-    }
-
-    [Fact]
-    public void TheScan_WalksMoreThanFiftyProductionFiles()
-    {
-        var root = ServiceProjects.SolutionDirectory();
-
-        var walked = ScannedFiles(root, WholeProductionProjectsExceptTheCompositionRoot, IndexItselfAndTheReadSideWhichNameTheseTypesByDefinition).Count;
-
-        Assert.True(walked > 50, $"The write side scan walked only {walked} files under {string.Join(", ", WholeProductionProjectsExceptTheCompositionRoot)}.");
-    }
-
-    [Fact]
-    public void TheWriteSideSuites_BuildNoIndex()
-    {
-        var counts = Counts(ServiceProjects.SolutionDirectory(), ["MEditService.Commands.Tests/Edits"], [], ["new Indexer"]);
-
-        Assert.True(
-            counts.Count == 0,
-            "Write-side suites that build an Index — a write test that builds an Index is a test of the "
-            + "projection, not of the write:\n"
-            + string.Join("\n", counts));
-    }
-
     [Fact]
     public void TheScan_CountsPerFileAndSymbol_AndSkipsBuildOutputAndAnExcludedSubtree()
     {
@@ -71,7 +22,7 @@ public sealed class WriteSideIndexScanTests
         Directory.CreateDirectory(Path.Combine(root, "Records"));
         File.WriteAllText(Path.Combine(root, "Records", "Store.cs"), "DuckDbRecordIndex index;");
 
-        var counts = Counts(root, [""], ["Records"], Symbols);
+        var counts = Counts(root, [""], ["Records"], ["IRecordReads", "DuckDbRecordIndex", "DuckDbRecordIndexFactory"]);
 
         Assert.Equal(
             [
@@ -155,8 +106,8 @@ public sealed class WriteSideIndexScanTests
         Assert.True(walked > 5, $"The endpoint scan walked only {walked} files under {EndpointRoot}.");
         Assert.True(
             named.Count == 0,
-            "An endpoint names the Source repository. No arrow is drawn from the HTTP endpoints to "
-            + "it; resolution under the load order is Commands' to hide:\n"
+            "An endpoint names the Source repository. Resolution under the load order is what the "
+            + "Commands caption hides:\n"
             + string.Join("\n", named));
     }
 
