@@ -111,24 +111,6 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
 
     [Theory]
     [MemberData(nameof(Variants))]
-    public void AVariant_IsPlacedInItsCell_AtItsPosition(string table)
-    {
-        var placement = built.Reads.GetPlacement(Of(table).FormKey.ToString(), Key);
-
-        Assert.NotNull(placement);
-        Assert.Equal(built.Cell.ToString(), placement.Value.ParentCell);
-        Assert.Equal(Of(table).X, placement.Value.PosX);
-    }
-
-    [Theory]
-    [MemberData(nameof(Variants))]
-    public void AVariant_IsPlacedInThePlacementGroupItsCellHoldsItIn(string table)
-    {
-        Assert.Equal(Of(table).Group, built.Reads.GetPlacement(Of(table).FormKey.ToString(), Key)?.PlacementGroup);
-    }
-
-    [Theory]
-    [MemberData(nameof(Variants))]
     public void AVariant_ReferencesTheRecordItPlaces(string table)
     {
         Assert.Contains(

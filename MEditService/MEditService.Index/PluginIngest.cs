@@ -208,7 +208,7 @@ internal sealed class PluginIngest
         var refused = document.ParseDiagnosis is not null;
         JsonElement? carried = refused ? null : root;
         var containerType = _containers.ContainerTypeOf(document.RecordType);
-        var placements = Placements(document, containerType, carried);
+        var placements = PlacementRowsOf(document, containerType);
         CellLocationRow? cellLocation = document.Cell is { } structure
             ? PlacementWalker.CellLocation(document.FormKey, carried, structure)
             : null;
@@ -232,27 +232,13 @@ internal sealed class PluginIngest
             placements, cellLocation, editorId, document.ParseDiagnosis);
     }
 
-    // One row per placed record the cell's groups hold, parentage from beside the document and
-    // position from the child node the document carries — null where it carries none.
-    private List<PlacementRow> Placements(PluginDocument document, string containerType, JsonElement? root)
-    {
-        var placed = (document.Contents ?? [])
+    // One row per placed record the cell's groups hold, parentage from beside the document.
+    private static List<PlacementRow> PlacementRowsOf(PluginDocument document, string containerType) =>
+    [
+        .. (document.Contents ?? [])
             .Where(c => PlacementWalker.TableFor(containerType, c.SlotName) == ParentageTable.Placement)
-            .ToList();
-        if (placed.Count == 0) return [];
-
-        var nodes = root is { } carried
-            ? _containers.ChildrenOf(document.RecordType, carried)
-                .GroupBy(c => c.FormKey, StringComparer.Ordinal)
-                .ToDictionary(g => g.Key, g => g.First().Node, StringComparer.Ordinal)
-            : [];
-
-        return [.. placed.Select(child => PlacementWalker.Placement(
-            child.FormKey,
-            nodes.TryGetValue(child.FormKey, out var node) ? node : null,
-            document.FormKey,
-            PlacementWalker.PlacementGroupOf(child.SlotName)))];
-    }
+            .Select(c => new PlacementRow(c.FormKey, document.FormKey, PlacementWalker.PlacementGroupOf(c.SlotName))),
+    ];
 
     private static void AppendPrepared(
         DuckDBAppender documentAppender, PreparedRecord prepared, string plugin, string origin)
@@ -373,9 +359,6 @@ internal sealed class PluginIngest
         r.AppendValue(origin);
         r.AppendValue(row.ParentCell);
         r.AppendValue(row.PlacementGroup);
-        DuckDbAppend.Nullable(r, row.PosX);
-        DuckDbAppend.Nullable(r, row.PosY);
-        DuckDbAppend.Nullable(r, row.PosZ);
         r.EndRow();
     }
 

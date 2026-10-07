@@ -46,21 +46,13 @@ public sealed class DiagnosedContainerTests : IDisposable
     }
 
     [Fact]
-    public void ACellTheCodecRefuses_StillLandsAPlacementRowPerRefItHolds_WithPositionsUnknown()
+    public void ACellTheCodecRefuses_StillListsEachRefItHolds_InItsPlacementGroup()
     {
         using var index = Indexed(cellDiagnosis: "the codec refused this cell");
         var reads = index.RequireReads();
 
-        var persistent = reads.GetPlacement(PersistentRef, Key);
-        Assert.NotNull(persistent);
-        Assert.Equal(CellFormKey, persistent.Value.ParentCell);
-        Assert.Equal("persistent", persistent.Value.PlacementGroup);
-        Assert.Null(persistent.Value.PosX);
-
-        var temporary = reads.GetPlacement(TemporaryRef, Key);
-        Assert.NotNull(temporary);
-        Assert.Equal(CellFormKey, temporary.Value.ParentCell);
-        Assert.Equal("temporary", temporary.Value.PlacementGroup);
+        Assert.Equal("persistent", reads.PlacementGroupIn(Key, CellFormKey, PersistentRef));
+        Assert.Equal("temporary", reads.PlacementGroupIn(Key, CellFormKey, TemporaryRef));
     }
 
     [Fact]
@@ -97,7 +89,7 @@ public sealed class DiagnosedContainerTests : IDisposable
     }
 
     [Fact]
-    public void TheSameCellReadable_LandsTheSameRows_WithItsGridAndPositions()
+    public void TheSameCellReadable_LandsItsGrid()
     {
         using var index = Indexed(cellDiagnosis: null);
         var reads = index.RequireReads();
@@ -106,24 +98,6 @@ public sealed class DiagnosedContainerTests : IDisposable
         Assert.NotNull(location);
         Assert.Equal(12, location.Value.GridX);
         Assert.Equal(-5, location.Value.GridY);
-
-        var persistent = reads.GetPlacement(PersistentRef, Key);
-        Assert.NotNull(persistent);
-        Assert.Equal(10f, persistent.Value.PosX);
-        Assert.Equal(30f, persistent.Value.PosZ);
-    }
-
-    [Fact]
-    public void ARefWhoseDocumentSpellsNoPosition_LandsWithNullCoordinates()
-    {
-        using var index = Indexed(cellDiagnosis: null);
-
-        var row = index.RequireReads().GetPlacement(TemporaryRef, Key);
-
-        Assert.NotNull(row);
-        Assert.Null(row.Value.PosX);
-        Assert.Null(row.Value.PosY);
-        Assert.Null(row.Value.PosZ);
     }
 
     private sealed class StubbedDocumentsAdapter(string? cellDiagnosis) : DelegatingPluginAdapter(TestAdapters.Mutagen())
@@ -184,6 +158,7 @@ public sealed class DiagnosedContainerTests : IDisposable
                     new ChildRecord(PersistentRef, "Persistent", 0), new ChildRecord(TemporaryRef, "Temporary", 0),
                     new ChildRecord(Landscape, "Landscape", 0), new ChildRecord(Navmesh, "NavigationMeshes", 0),
                 ]),
+            new PluginDocument("refr", PersistentRef, $$"""{"FormKey": "{{PersistentRef}}"}"""),
             new PluginDocument("refr", TemporaryRef, $$"""{"FormKey": "{{TemporaryRef}}"}"""),
             new PluginDocument("land", Landscape, $$"""{"FormKey": "{{Landscape}}"}"""),
             new PluginDocument("navm", Navmesh, $$"""{"FormKey": "{{Navmesh}}"}""", NavmeshDiagnosis),

@@ -13,8 +13,11 @@ public class MissingReferenceTests
     private static readonly FormKey EngineDefined = FormKey.Factory("000007:Fallout4.esm");
     private static readonly FormKey FirstHeldRangeFormId = FormKey.Factory("000800:Fallout4.esm");
 
+    private static IReadOnlyList<MissingReference> MissingReferencesOf(OpenedIndex index) =>
+        [.. index.RequireReads().GetReferencesToMissingRecordsOnFiles(_ => null).Select(placed => placed.Reference)];
+
     [Fact]
-    public void GetReferencesToMissingRecords_ALinkToARecordNoPluginHolds_NamesTheReferrerAndTheTarget()
+    public void GetReferencesToMissingRecordsOnFiles_ALinkToARecordNoPluginHolds_NamesTheReferrerAndTheTarget()
     {
         FormKey npc = default;
         using var fixture = new PluginFixtureBuilder("missing-ref-absent")
@@ -27,7 +30,7 @@ public class MissingReferenceTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var missing = Assert.Single(index.RequireReads().GetReferencesToMissingRecords());
+        var missing = Assert.Single(MissingReferencesOf(index));
 
         Assert.Equal(
             (new PluginAddress("Refers.esp", PluginOrigin.DataDirectory), npc.ToString(), "npc_", "Referrer", AbsentRecord.ToString(), "Race"),
@@ -35,7 +38,7 @@ public class MissingReferenceTests
     }
 
     [Fact]
-    public void GetReferencesToMissingRecords_ALinkToARecordAnActivePluginHolds_IsNotReported()
+    public void GetReferencesToMissingRecordsOnFiles_ALinkToARecordAnActivePluginHolds_IsNotReported()
     {
         using var fixture = new PluginFixtureBuilder("missing-ref-held")
             .WithPlugin("Refers.esp", mod =>
@@ -46,11 +49,11 @@ public class MissingReferenceTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.Empty(index.RequireReads().GetReferencesToMissingRecords());
+        Assert.Empty(MissingReferencesOf(index));
     }
 
     [Fact]
-    public void GetReferencesToMissingRecords_AnEngineDefinedFormIdInABaseMaster_IsNotReported_ButTheFirstHeldRangeFormIdIs()
+    public void GetReferencesToMissingRecordsOnFiles_AnEngineDefinedFormIdInABaseMaster_IsNotReported_ButTheFirstHeldRangeFormIdIs()
     {
         using var fixture = new PluginFixtureBuilder("missing-ref-engine")
             .WithPlugin("Refers.esp", mod =>
@@ -61,13 +64,13 @@ public class MissingReferenceTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var missing = Assert.Single(index.RequireReads().GetReferencesToMissingRecords());
+        var missing = Assert.Single(MissingReferencesOf(index));
 
         Assert.Equal(FirstHeldRangeFormId.ToString(), missing.TargetFormKey);
     }
 
     [Fact]
-    public void GetReferencesToMissingRecords_ALinkToARecordOnlyAnInactivePluginHolds_IsReported()
+    public void GetReferencesToMissingRecordsOnFiles_ALinkToARecordOnlyAnInactivePluginHolds_IsReported()
     {
         FormKey inactiveRace = default;
         using var fixture = new PluginFixtureBuilder("missing-ref-inactive")
@@ -80,6 +83,6 @@ public class MissingReferenceTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.Equal(inactiveRace.ToString(), Assert.Single(index.RequireReads().GetReferencesToMissingRecords()).TargetFormKey);
+        Assert.Equal(inactiveRace.ToString(), Assert.Single(MissingReferencesOf(index)).TargetFormKey);
     }
 }

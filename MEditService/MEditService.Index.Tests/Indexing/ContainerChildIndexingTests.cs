@@ -103,9 +103,8 @@ public sealed class ContainerChildIndexingTests : IDisposable
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
 
-        Assert.NotNull(reads.GetPlacement(_placedFk, Key));
+        Assert.NotNull(reads.PlacementGroupIn(Key, _cellFk, _placedFk));
         Assert.DoesNotContain(Children(reads, _cellFk), r => r.SlotName is "Persistent" or "Temporary" or "TopCell" or "SubCells");
-        Assert.Null(reads.GetContainerParent(Key, _placedFk));
     }
 
     [Fact]
@@ -120,6 +119,5 @@ public sealed class ContainerChildIndexingTests : IDisposable
 
         Assert.Empty(reads.GetContainerChildren(Key, _questFk));
         Assert.Empty(reads.GetContainerChildren(Key, _topic0Fk));
-        Assert.Null(reads.GetContainerParent(Key, _topic0Fk));
     }
 }

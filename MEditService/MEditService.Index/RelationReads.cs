@@ -43,48 +43,6 @@ internal sealed class RelationReads(
             store.Schemas[tableName], LinkResolution.ForLinksOf(connection, formKey, Resolve), parseDiagnosis);
     }
 
-    // One query rather than two point queries per record. Rows are materialized before
-    // reconstitution: resolving a FormKey opens its own command on this connection, which would
-    // interleave two readers.
-    public IReadOnlyList<RecordDocument> GetDocuments(PluginAddress plugin)
-    {
-        using var connection = store.OpenReadConnection();
-        var schemas = store.Schemas;
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"""
-            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, record_type, parse_diagnosis
-            FROM records
-            WHERE plugin = $1 AND origin = $2
-            """;
-        DuckDbSql.AddParams(cmd, [plugin.Name, plugin.Origin]);
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<(string FormKey, string Plugin, string Origin, int LoadOrderIndex,
-            bool IsWinner, string? EditorId, string Body, string RecordType, string? ParseDiagnosis)>();
-        while (reader.Read())
-        {
-            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2),
-                LoadOrderSortKey(reader, 3), reader.GetBoolean(4),
-                reader.IsDBNull(5) ? null : reader.GetString(5),
-                reader.GetString(6), reader.GetString(7), reader.IsDBNull(8) ? null : reader.GetString(8)));
-        }
-        reader.Close();
-
-        var resolve = LinkResolution.ForLinksOf(connection, plugin);
-
-        var documents = new List<RecordDocument>(rows.Count);
-        foreach (var row in rows)
-        {
-            // Same defensive skip as RederiveIndexRowsForRecord: a record_type no schema claims
-            // has no reconstitution path.
-            if (!schemas.TryGetValue(row.RecordType, out var schema)) continue;
-            documents.Add(DocumentFromBody(
-                connection, row.FormKey, row.Plugin, row.Origin, row.LoadOrderIndex, row.IsWinner,
-                row.EditorId, row.Body, schema, resolve, row.ParseDiagnosis));
-        }
-        return documents;
-    }
-
     public RecordOverrides? GetOverrideStack(string formKey)
     {
         using var connection = store.OpenReadConnection();
@@ -263,7 +221,7 @@ internal sealed class RelationReads(
         return LinkResolution.ForLinksOf(connection, formKey, Resolve);
     }
 
-    public IReadOnlyList<MissingReference> GetReferencesToMissingRecords()
+    private List<MissingReference> GetReferencesToMissingRecords()
     {
         using var connection = store.OpenReadConnection();
         using var cmd = connection.CreateCommand();
@@ -506,12 +464,6 @@ internal sealed class RelationReads(
         return new CellChildRecords(persistent, temporary);
     }
 
-    public PlacementRow? GetPlacement(string formKey, PluginAddress plugin)
-    {
-        using var connection = store.OpenReadConnection();
-        return GetPlacement(connection, formKey, plugin.Name, plugin.Origin);
-    }
-
     public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey)
     {
         using var connection = store.OpenReadConnection();
@@ -557,12 +509,6 @@ internal sealed class RelationReads(
         var holders = new HashSet<PluginAddress>(PluginAddress.Comparer);
         while (reader.Read()) holders.Add(new PluginAddress(reader.GetString(0), reader.GetString(1)));
         return holders;
-    }
-
-    public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey)
-    {
-        using var connection = store.OpenReadConnection();
-        return GetContainerParent(connection, plugin.Name, plugin.Origin, childFormKey);
     }
 
     // Column 6 is the row's working_tree_state, 7 the correlated container_child EXISTS Search's
@@ -687,32 +633,6 @@ internal sealed class RelationReads(
 
     // ── Worldspace tree reads (plugins.md, The tree, story 6) ───────────────────
 
-    private static PlacementRow? GetPlacement(DuckDBConnection connection, string formKey, string plugin, string origin)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT parent_cell, placement_group, pos_x, pos_y, pos_z
-            FROM placement
-            WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """;
-        DuckDbSql.AddParams(cmd, [formKey, plugin, origin]);
-        using var reader = cmd.ExecuteReader();
-
-        // Local function so the merged conditional expression below doesn't nest a ternary per
-        // coordinate (SonarS3358) while still collapsing the guard clause per IDE0046.
-        float? NullableFloat(int i) => reader.IsDBNull(i) ? null : reader.GetFloat(i);
-
-        return !reader.Read()
-            ? null
-            : new PlacementRow(
-                formKey,
-                reader.GetString(0),
-                reader.GetString(1),
-                NullableFloat(2),
-                NullableFloat(3),
-                NullableFloat(4));
-    }
-
     private static CellLocationRow? GetCellLocation(DuckDBConnection connection, string cellFormKey, string plugin, string origin)
     {
         using var cmd = connection.CreateCommand();
@@ -756,23 +676,6 @@ internal sealed class RelationReads(
         return result;
     }
 
-    private static ContainerChildRow? GetContainerParent(DuckDBConnection connection, string plugin, string origin, string childFormKey)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT parent_form_key, parent_record_type, slot_name, slot_index
-            FROM container_child
-            WHERE child_form_key = $1 AND plugin = $2 AND origin = $3
-            """;
-        DuckDbSql.AddParams(cmd, [childFormKey, plugin, origin]);
-        using var reader = cmd.ExecuteReader();
-
-        return reader.Read()
-            ? new ContainerChildRow(
-                childFormKey, reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3))
-            : null;
-    }
-
     private RecordDocument? ReadDocument(DuckDBConnection connection, string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
     {
         var schema = store.Schemas[tableName];
@@ -808,8 +711,7 @@ internal sealed class RelationReads(
             reader.GetBoolean(4), reader.IsDBNull(5) ? null : reader.GetString(5),
             reader.GetString(6), schema, resolveFormKey, reader.IsDBNull(7) ? null : reader.GetString(7));
 
-    // The construction half of ReadDocumentFromBody, split out so the bulk read can build documents
-    // from rows materialized first. The fields are the document's own nodes (ADR-0005), except a
+    // The construction half of ReadDocumentFromBody. The fields are the document's own nodes (ADR-0005), except a
     // header's masters, which no document holds (ADR-0008).
     private RecordDocument DocumentFromBody(
         DuckDBConnection connection, string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
