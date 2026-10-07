@@ -1,7 +1,7 @@
 using System.Data.Common;
 using MEditService.LoadOrder;
-using Microsoft.Extensions.Logging;
 using MEditService.Ports;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index;
@@ -63,9 +63,8 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
         }
     }
 
-    /// <summary>Materializes the filter again after rows moved. A filter that cannot apply again is
-    /// cleared and published: the write it follows is durable, and a filtered table left over the old
-    /// rows would answer wrongly while the filter still showed as active.</summary>
+    /// <summary>Materializes the filter again after rows moved. One that cannot apply again is cleared and
+    /// published, never left answering from the old rows.</summary>
     public void Reapply(DuckDbRecordIndex index)
     {
         if (ReapplyOrClear(index) is { } cleared) notifications?.Publish(cleared);
