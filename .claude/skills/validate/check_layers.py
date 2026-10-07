@@ -144,11 +144,12 @@ def load_boxes(zoom_out: Path):
 
 
 def modbench_projects(root: Path):
-    """(project file, box name, [referenced box names]) for the composition root and every box
-    folder under modbench/src that holds a tsconfig; a test folder is no box."""
+    """(project file, box name, [referenced box names]) for the composition root, every box
+    folder under modbench/src that holds a tsconfig, and the webview project; a test folder is
+    no box."""
     src = root / 'modbench' / 'src'
     projects = []
-    for path in sorted(src.glob('*/tsconfig.json')) + [src / 'tsconfig.json']:
+    for path in sorted(src.glob('*/tsconfig.json')) + [src / 'tsconfig.json', root / 'modbench' / 'webview' / 'tsconfig.json']:
         if not path.exists() or path.parent.name == 'test':
             continue
         name = ROOT_BOX if path.parent == src else path.parent.name.lower()
