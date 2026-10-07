@@ -18,9 +18,8 @@ internal sealed class PluginCompileService(
 {
     private readonly CompileLinks _links = new(adapter, schemaReflector, logger);
 
-    // The palette entry verbatim; a tracked mod refuses Track, so decompile is the way back
-    // (ADR-0007).
-    private const string RegenerateTheSource = "Run \"Modbench: Decompile Plugin\" to regenerate the source.";
+    // A tracked mod refuses Track, so decompile is the way back (ADR-0007).
+    private const string RegenerateTheSource = "Decompile the plugin to regenerate the source.";
 
     public async Task<CompileResult> CompileAsync(PluginAddress plugin)
     {

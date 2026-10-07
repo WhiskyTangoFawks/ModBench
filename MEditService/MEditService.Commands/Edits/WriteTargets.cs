@@ -18,13 +18,6 @@ internal sealed class WriteTargets(
     RecordTextCodec codec,
     SchemaReflector schemaReflector)
 {
-    /// <summary>The palette title verbatim (package.json's "Track…" under category "Modbench"); a signpost
-    /// naming a command the user cannot find is worse than none.</summary>
-    internal const string TrackCommandTitle = "Modbench: Track Mod\u2026";
-
-    /// <summary>The palette title verbatim, as <see cref="TrackCommandTitle"/>.</summary>
-    internal const string CopyCommandTitle = "Modbench: Copy Record\u2026";
-
     internal readonly record struct EditTarget(GameRelease Release, RecordIdentity Identity, SourceRepository Repository);
 
     // The working tree is the only thing asked (ADR-0015), so a second edit builds on
@@ -232,8 +225,7 @@ internal sealed class WriteTargets(
             : RecordEditResult.Refused(
                 RecordEditRefusal.PluginNotTracked,
                 $"{plugin.Name} is not tracked, so it is read-only. " +
-                // The palette entry verbatim; naming a command that does not exist is its own dead end.
-                $"Run \"{TrackCommandTitle}\" on it once to start editing.");
+                "Track its mod once to start editing.");
 
     // Neither origin's way out is the other's.
     private static string NoModFolderMessage(PluginAddress plugin, PluginProvider provider) =>
