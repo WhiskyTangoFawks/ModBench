@@ -425,17 +425,12 @@ public sealed class VmadEditTests : IDisposable
             .First(s => s.Require()["Name"].Require().GetValue<string>() == script).Require()["Properties"].Require().AsArray()
             .Select(p => p.Require()["Name"].Require().GetValue<string>())];
 
-    private sealed class VmadFixture : IDisposable
+    private sealed class VmadFixture : TestInstance
     {
         private const string PluginName = "Vmad694.esp";
         private const string Origin = "Vmad694Mod";
 
-        private readonly ScratchDirectory _modFolder = new("medit-694-mod-");
-        private readonly ScratchDirectory _gameDirectory = new("medit-694-game-");
-
-        public PluginAddress Plugin { get; } = new(PluginName, Origin);
-        public LoadOrderSnapshot LoadOrder { get; }
-        public TestEditor EditHandler { get; }
+        public PluginAddress Plugin { get; }
         public FormKey Npc { get; }
         public FormKey Quest { get; }
         public FormKey Perk { get; }
@@ -444,8 +439,6 @@ public sealed class VmadEditTests : IDisposable
 
         public VmadFixture()
         {
-            var holder = new LoadOrderHolder();
-            var pluginPath = Path.Combine(_modFolder, PluginName);
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
             var npc = mod.Npcs.AddNew("Vmad694Npc");
@@ -503,14 +496,7 @@ public sealed class VmadEditTests : IDisposable
             scene.VirtualMachineAdapter = sceneAdapter;
             Scene = scene.FormKey;
 
-            TrackedTemplates.WriteTracked(_modFolder, mod);
-
-            LoadOrder = SnapshotPlugins.Snapshot(
-                _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-                [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-
-            holder.Apply(LoadOrder);
-            EditHandler = TestEditService.EditHandler(holder);
+            Plugin = Add(mod, Origin);
         }
 
         private static ScriptEntry AlphaScript()
@@ -542,15 +528,9 @@ public sealed class VmadEditTests : IDisposable
         public TestEditor Service() => EditHandler;
 
         public string Body(FormKey formKey) =>
-            TrackedTree.Body(_modFolder, Plugin, formKey.ToString());
+            TrackedTree.Body(ModFolderOf(Plugin), Plugin, formKey.ToString());
 
         public JsonObject Adapter(FormKey formKey) =>
             JsonNode.Parse(Body(formKey)).Require().AsObject()[Field].Require().AsObject();
-
-        public void Dispose()
-        {
-            _modFolder.Dispose();
-            _gameDirectory.Dispose();
-        }
     }
 }

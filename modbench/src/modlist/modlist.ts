@@ -3,9 +3,10 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
-  entryNotFound, goneFromDisk, newModNameRefusal, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
+  entryNotFound, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
   type ModFolder, type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
+import { goneFromDisk, newModNameRefusal } from '../coreLib/commandRefusals';
 
 /** What a modlist command reaches the instance through. */
 export interface ModlistAccess {

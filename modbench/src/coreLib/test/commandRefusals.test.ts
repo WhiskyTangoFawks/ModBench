@@ -4,8 +4,9 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { newModNameRefusal, type InstanceAdapter } from '../instanceAdapter';
-import { mo2InstanceAdapter } from '../mo2Instance';
+import { newModNameRefusal } from '../commandRefusals';
+import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
+import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 
 describe('newModNameRefusal', () => {

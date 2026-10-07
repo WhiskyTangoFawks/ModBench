@@ -4,7 +4,8 @@ import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
-import { goneFromDisk, type DownloadedFile, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { DownloadedFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { goneFromDisk } from '../coreLib/commandRefusals';
 
 /** What a downloads command reaches the instance through. */
 export interface DownloadsAccess {

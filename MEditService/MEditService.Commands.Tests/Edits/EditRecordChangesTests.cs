@@ -171,14 +171,15 @@ public sealed class EditRecordChangesTests : IDisposable
     }
 
     [Fact]
-    public void APlacedRecordCrossingIntoAGridCellThePluginLacks_AnswersTheCellsDocumentAndItsNewSubBlocks()
+    public void APlacedRecordCrossingIntoAGridCellThePluginLacks_IsAnsweredInADocumentOfThatCellApart_FromTheCellItLeft()
     {
         using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
 
         var answer = Changes(world, world.Plugin, keys["Wanderer"].ToString(), Flags(0));
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        Assert.Equal(3, answer.Changes.Documents.Count);
+        var arrived = Assert.Single(answer.Changes.Documents, document => document.Text.Contains("\"Wanderer\"", StringComparison.Ordinal));
+        Assert.DoesNotContain("\"Mover\"", arrived.Text, StringComparison.Ordinal);
     }
 
     private static SourceModFixture WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out Dictionary<string, FormKey> keys)

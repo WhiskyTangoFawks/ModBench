@@ -224,17 +224,12 @@ public sealed class ConditionEditTests : IDisposable
         if (!string.Equals(left, right, StringComparison.Ordinal)) diffs.Add($"{path}: {left} -> {right}");
     }
 
-    private sealed class ConditionFixture : IDisposable
+    private sealed class ConditionFixture : TestInstance
     {
         private const string PluginName = "Conditions692.esp";
         private const string Origin = "Conditions692Mod";
 
-        private readonly ScratchDirectory _modFolder = new("medit-692-mod-");
-        private readonly ScratchDirectory _gameDirectory = new("medit-692-game-");
-
-        public PluginAddress Plugin { get; } = new(PluginName, Origin);
-        public LoadOrderSnapshot LoadOrder { get; }
-        public TestEditor EditHandler { get; }
+        public PluginAddress Plugin { get; }
         public FormKey Cobj { get; }
         public FormKey Perk { get; }
         public FormKey Message { get; }
@@ -243,8 +238,6 @@ public sealed class ConditionEditTests : IDisposable
 
         public ConditionFixture()
         {
-            var holder = new LoadOrderHolder();
-            var pluginPath = Path.Combine(_modFolder, PluginName);
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
             var glob = mod.Globals.AddNewFloat("Cond692Global");
@@ -294,28 +287,15 @@ public sealed class ConditionEditTests : IDisposable
             message.MenuButtons.Add(button);
             Message = message.FormKey;
 
-            TrackedTemplates.WriteTracked(_modFolder, mod);
-
-            LoadOrder = SnapshotPlugins.Snapshot(
-                _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-                [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-
-            holder.Apply(LoadOrder);
-            EditHandler = TestEditService.EditHandler(holder);
+            Plugin = Add(mod, Origin);
         }
 
         public TestEditor Service() => EditHandler;
 
         public string Body(FormKey formKey) =>
-            TrackedTree.Body(_modFolder, Plugin, formKey.ToString());
+            TrackedTree.Body(ModFolderOf(Plugin), Plugin, formKey.ToString());
 
         public JsonArray Field(FormKey formKey, string name) =>
             JsonNode.Parse(Body(formKey)).Require().AsObject()[name].Require().AsArray();
-
-        public void Dispose()
-        {
-            _modFolder.Dispose();
-            _gameDirectory.Dispose();
-        }
     }
 }
