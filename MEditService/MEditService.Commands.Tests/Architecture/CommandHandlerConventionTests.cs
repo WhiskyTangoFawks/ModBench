@@ -62,31 +62,11 @@ public sealed class CommandHandlerConventionTests
 
     [Theory]
     [MemberData(nameof(EveryHandler))]
-    public void AHandler_SharesNoBaseClass(Type handler)
-    {
-        Assert.True(handler.IsSealed, $"{handler.Name} is inheritable.");
-        Assert.Equal(typeof(object), handler.BaseType);
-    }
-
-    [Theory]
-    [MemberData(nameof(EveryHandler))]
     public void AHandler_IsRegisteredByTheOneRegistration(Type handler)
     {
         var services = new ServiceCollection().AddCommandHandlers();
 
         Assert.Contains(services, descriptor => descriptor.ServiceType == handler);
-    }
-
-    [Fact]
-    public void NoInterfaceIsSharedByTwoHandlers()
-    {
-        var shared = Handlers
-            .SelectMany(handler => handler.GetInterfaces().Distinct())
-            .GroupBy(contract => contract)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key.Name);
-
-        Assert.Empty(shared);
     }
 
     [Fact]

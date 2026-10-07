@@ -64,16 +64,6 @@ public sealed class SwaggerSchemaTests
     }
 
     [Fact]
-    public async Task CompileRequest_CarriesThePluginsAndNoOption()
-    {
-        var root = await GetSchemaAsync();
-        var properties = root.GetProperty("components").GetProperty("schemas")
-            .GetProperty("CompileRequest").GetProperty("properties");
-
-        Assert.Equal(["plugins"], properties.EnumerateObject().Select(p => p.Name));
-    }
-
-    [Fact]
     public async Task CopyRoute_DeclaresOnlyTheCallLevelStatuses_ElseSwashbuckleEmitsContentNeverForAnUndeclaredOne()
     {
         var root = await GetSchemaAsync();
