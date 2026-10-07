@@ -31,14 +31,13 @@ function listedPlugins(value: InstanceValue): (InstanceValue['plugins'][number] 
 }
 
 // `DataTransferItem.value` is `any` — handleDrag, above `handleDrop` below, is this provider's
-// only writer of it. Exported so a test narrows the same payload the same way, instead of a
-// second cast of its own.
+// only writer of it.
 export function isAddress(value: unknown): value is PluginAddress {
   return typeof value === 'object' && value !== null && 'name' in value && typeof value.name === 'string'
     && 'origin' in value && typeof value.origin === 'string';
 }
 
-export function isDropPayload(value: unknown): value is { plugins: PluginAddress[] } {
+function isDropPayload(value: unknown): value is { plugins: PluginAddress[] } {
   return typeof value === 'object' && value !== null && 'plugins' in value && Array.isArray(value.plugins)
     && value.plugins.every(isAddress);
 }
@@ -55,14 +54,12 @@ export type RecordBrowser = Pick<
   'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData'
 >;
 
-export type { PluginWarning };
-
-export interface PluginsTreeProviderOptions {
+interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin: the row input. */
   instance: PluginsInstance;
-  /** A row's children. Absent in tests that exercise rows alone. */
+  /** A row's children. */
   records: RecordBrowser;
-  /** Every plugin-keyed fact. Absent in tests that exercise rows alone. */
+  /** Every plugin-keyed fact. */
   client: PluginFactsClient;
   /** The malformed-plugin scan's other surface, the Problems panel, which needs an instance root
    *  this provider has no business knowing. */
@@ -146,8 +143,7 @@ export type PluginsTreeNode = PluginListNode | PluginTreeNode;
 // The view is shared, so a drop must be able to tell these rows from another provider's.
 const OWN_ROW_KINDS = new Set<string>(['plugin', 'implicitMaster']);
 
-/** The plugin file a row stands for, and its label. */
-export function pluginFileOf(node: PluginListNode): string {
+function pluginFileOf(node: PluginListNode): string {
   return node.kind === 'plugin' ? node.plugin.name : node.name;
 }
 
@@ -209,7 +205,8 @@ export class PluginsTreeProvider
     this.firstRead = firstReadOf(options.instance);
     this.subscriptions.push(this.firstRead, options.instance.subscribe((value) => {
       this.instanceValue = value;
-      this.invalidate();
+      this.cache = undefined;
+      this._onDidChangeTreeData.fire(undefined);
     }), options.instance.onReadFailure(() => this.render()));
     this.subscriptions.push(options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)));
     const unsubscribeChanges = options.client.onNotification('external-change', (change) => this.applyExternalChange(change));
@@ -228,15 +225,6 @@ export class PluginsTreeProvider
   }
 
   // ── rows ──────────────────────────────────────────────────────────────────
-
-  // Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left:
-  // a caller forcing a resync (a failed write) gets whatever the Instance is
-  // currently holding, not a snapshot that predates it.
-  invalidate(): void {
-    this.instanceValue = this.instance.value;
-    this.cache = undefined;
-    this._onDidChangeTreeData.fire(undefined);
-  }
 
   // A filter keystroke changes nothing on disk, so it must not force a re-render off a stale cache.
   private render(): void {

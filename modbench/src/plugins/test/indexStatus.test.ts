@@ -14,7 +14,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { followIndexStatus, type IndexStatusDeps } from '../indexStatus';
+import { followIndexStatus } from '../indexStatus';
 import { createStatusBar } from '../statusBar';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -51,7 +51,7 @@ function followed() {
     notifyConflictsComputed: vi.fn(),
     log: vi.fn(),
     reporter: recordingReporter(),
-  } satisfies IndexStatusDeps;
+  } satisfies Parameters<typeof followIndexStatus>[0];
   return { client, deps, followed: followIndexStatus(deps) };
 }
 

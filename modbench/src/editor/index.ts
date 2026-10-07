@@ -1,1 +1,1 @@
-export { createEditor, type Editor, type EditorDeps } from './editor';
+export { createEditor, type Editor } from './editor';

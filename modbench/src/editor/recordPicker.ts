@@ -27,7 +27,7 @@ function failureItem(err: unknown): PickItem {
 // A user can paste a whole "EditorID [FormKey]" label into a picker, where searching the literal
 // would find nothing. The *first* bracketed segment wins: a VMAD object reference's trailing
 // bracket is an alias index, not identity.
-export function normalizeFormKeyQuery(query: string): string {
+function normalizeFormKeyQuery(query: string): string {
   const bracketed = /\[([^\]]*)\]/.exec(query)?.[1]?.trim();
   return bracketed || query;
 }

@@ -20,11 +20,13 @@ import type { FieldAddress, OpenExtendedFieldEditorParams } from '../extendedFie
 const openExtendedFieldEditor =
   vi.fn<(params: OpenExtendedFieldEditorParams) => Promise<void>>();
 
-import { commitField, registerRecordPanelContextCommands, type FieldCommitDeps, type RecordPanelContextCommandDeps } from '../recordPanelContextCommands';
+import { commitField, registerRecordPanelContextCommands, type FieldCommitDeps } from '../recordPanelContextCommands';
 import type { ArrayElementContext, ArrayParentContext, StringValueContext } from '../../wire/messages';
 import { present } from '../../ports/present';
 
 beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); showInputBox.mockReset(); executeCommand.mockReset(); });
+
+type RecordPanelContextCommandDeps = Parameters<typeof registerRecordPanelContextCommands>[0];
 
 const gateSendingEachWriteWhereItWasAddressed: RecordPanelContextCommandDeps['editGateOf'] =
   () => async (address, write) => { await write(address.formKey); };

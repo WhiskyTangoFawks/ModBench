@@ -5,11 +5,14 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
   DiagnosticSeverity, FakeDiagnosticCollection, uriFile, uriFrom,
 } from '../../test/vscodeMock';
-import { filterBoxCommandsMock, filterBoxWindowMock, makeFilterBoxState } from '../../drivingLib/test/nameFilterViewHarness';
+import {
+  filterBoxCommandsMock, filterBoxWindowMock, currentBoxOf, waitForMessage, type FakeInputBox,
+} from '../../drivingLib/test/nameFilterViewHarness';
 
 type SqlLens = { provideCodeLenses(document: Pick<vscode.TextDocument, 'getText'>): vscode.CodeLens[] };
 
 const h = vi.hoisted(() => ({
+  state: { commands: new Map<string, (...args: unknown[]) => unknown>(), boxes: [] as FakeInputBox[] },
   lenses: [] as SqlLens[],
   views: [] as { description?: string; message?: string }[],
   decorations: [] as { provideFileDecoration(uri: unknown): { badge?: string } | undefined }[],
@@ -27,7 +30,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock('vscode', () => {
   const disposable = () => ({ dispose: () => undefined });
-  const state = makeFilterBoxState();
+  const { state } = h;
   h.commands = state.commands;
   return {
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
@@ -88,18 +91,23 @@ vi.mock('vscode', () => {
   };
 });
 
-import { createPluginsView, pluginsViewProgress } from '../pluginsView';
-import { createPluginSync } from '../pluginSync';
+import { createPluginsView } from '../pluginsView';
+import { createPluginSync, type PluginSync } from '../pluginSync';
+import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
 import { PluginTreeProvider, type PluginTreeNode } from '../PluginTreeProvider';
-import type { RecordSummary } from '../../client';
+import type { PluginMetadata, RecordSummary } from '../../client';
 import { recordTypeCountFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
+import type { InstanceValue } from '../../instanceLoader/instance';
+import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 
+const FOUND = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
 const ARMOR_SQL = 'SELECT form_key FROM "armo"';
 const workspaceUri = (name: string) => ({ scheme: 'file', path: `/workspace/${name}` });
 
@@ -107,19 +115,37 @@ const rowsChanged: NotificationEvent = { kind: 'rows-changed', plugin: 'Test.esp
 
 const silentChannel = { error: vi.fn(), info: vi.fn() };
 
-function pluginsView(value = instanceValueFixture()) {
-  const client = new InMemoryMEditClient();
+function syncRefusing() {
+  let refusal: string | undefined;
+  const pluginSync = createPluginSync(
+    () => Promise.resolve(refusal === undefined
+      ? { applied: true, wrote: false, added: [], dropped: [] }
+      : { applied: false, refusal }),
+    silentChannel);
+  const run = () => pluginSync.run(instanceValueFixture().pluginSyncArguments);
+  return {
+    pluginSync,
+    refuse: async (reason: string) => { refusal = reason; await run(); },
+    land: async () => { refusal = undefined; await run(); },
+  };
+}
+
+function pluginsView(
+  value = instanceValueFixture(),
+  { instance = new FakeInstance(value), client = new InMemoryMEditClient(), pluginSync = syncRefusing().pluginSync }:
+    { instance?: FakeInstance; client?: InMemoryMEditClient; pluginSync?: PluginSync } = {},
+) {
   const recordBrowser = new PluginTreeProvider(client);
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
-    instance: new FakeInstance(value), access: accessTo('/instance'), recordBrowser, client,
-    pluginSync: createPluginSync(() => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }), silentChannel),
+    instance, access: accessTo('/instance'), recordBrowser, client,
+    pluginSync,
     channel: silentChannel,
     dataFolderFile: () => undefined, log: () => undefined,
     reporterFor: (tag) => { const reporter = recordingReporter(); reporters.set(tag, reporter); return reporter; },
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, notifyConflictsComputed: vi.fn(),
   });
-  return { client, recordBrowser, plugins, reporters };
+  return { client, recordBrowser, plugins, reporters, instance, view: () => present(h.views[0], 'the Plugins tree view') };
 }
 
 beforeEach(() => {
@@ -134,6 +160,7 @@ beforeEach(() => {
   h.picked.length = 0;
   h.opened.length = 0;
   h.shown.length = 0;
+  h.state.boxes.length = 0;
 });
 
 describe('modbench.plugin.move', () => {
@@ -289,36 +316,37 @@ describe('a record row\'s badge, from mEdit\'s stream', () => {
 
 describe('the Plugins view\'s progress', () => {
   const held = () => {
-    const view: { message?: string } = { message: 'Indexing 3/100…' };
-    const nameFilter = { refresh: vi.fn() };
-    return { view, nameFilter, progress: pluginsViewProgress(view, nameFilter) };
+    const { plugins, view } = pluginsView(instanceValueFixture({ gameFolder: FOUND }));
+    view().message = 'Indexing 3/100…';
+    const refresh = vi.spyOn(plugins.nameFilter, 'refresh');
+    return { view, refresh, progress: plugins.progress };
   };
 
   it('takes the message line without asking the name filter', () => {
-    const { view, nameFilter, progress } = held();
+    const { view, refresh, progress } = held();
 
     progress.say('Starting backend…');
 
-    expect(view.message).toBe('Starting backend…');
-    expect(nameFilter.refresh).not.toHaveBeenCalled();
+    expect(view().message).toBe('Starting backend…');
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('gives a cleared line back to the name filter', () => {
-    const { view, nameFilter, progress } = held();
+    const { view, refresh, progress } = held();
 
     progress.say(undefined);
 
-    expect(view.message).toBeUndefined();
-    expect(nameFilter.refresh).toHaveBeenCalledOnce();
+    expect(view().message).toBeUndefined();
+    expect(refresh).toHaveBeenCalledOnce();
   });
 
   it('clears the line when the work it runs fails', async () => {
-    const { view, nameFilter, progress } = held();
+    const { view, refresh, progress } = held();
 
     await expect(progress.while(() => Promise.reject(new Error('boom')))).rejects.toThrow('boom');
 
-    expect(view.message).toBeUndefined();
-    expect(nameFilter.refresh).toHaveBeenCalledOnce();
+    expect(view().message).toBeUndefined();
+    expect(refresh).toHaveBeenCalledOnce();
   });
 });
 
@@ -472,6 +500,253 @@ describe('the record filter, from the commands that set and clear it', () => {
       expect(view.description()).toBe('records: a');
       expect(view.filterActive()).toEqual([true]);
       expect(view.recordBrowserRefreshes).toEqual([]);
+    });
+  });
+});
+
+describe('the Plugins view\'s message line and name filter', () => {
+  const loadOrderPlugin = (name: string): LoadOrderPlugin | LoadOrderPluginLine => (
+    { name, path: `/fixture/${name}`, origin: 'SomeMod', slot: 0, enabled: true, winning: true });
+  const found = (...names: string[]): InstanceValue => instanceValueFixture({ plugins: names.map(loadOrderPlugin), gameFolder: FOUND });
+  const notFound = (...names: string[]): InstanceValue =>
+    instanceValueFixture({ plugins: names.map(loadOrderPlugin), gameFolder: GAME_FOLDER_NOT_FOUND });
+  const GAME_FOLDER_MESSAGE =
+    "Game folder not found: set modbench.mods.gameDirectory. The Toolbox's Game row names each place Modbench looked.";
+  const heldPlugin = (name: string, hasMatchingRecords: boolean): PluginMetadata => ({
+    name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0,
+    isImmutable: false, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, hasMatchingRecords, isTracked: false,
+    hasParseFailure: false,
+  });
+  const NO_MATCH = 'No matches for "zzznomatch".';
+  const currentBox = currentBoxOf(h.state);
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  const messageIs = (expected: string | undefined, label: string) =>
+    waitForMessage(h.views[0] ?? {}, (m) => m === expected, label);
+
+  async function shown(value: InstanceValue, extra: Parameters<typeof pluginsView>[1] = {}) {
+    const result = pluginsView(value, { instance: new FakeInstance(value), ...extra });
+    await result.plugins.tree.getChildren();
+    return result;
+  }
+
+  function typeNoMatch(plugins: { nameFilter: { open(): void } }) {
+    plugins.nameFilter.open();
+    currentBox().type('zzznomatch');
+  }
+
+  describe('a row change with no keystroke', () => {
+    it('recomputes the no-match message off a reconcile, in both directions', async () => {
+      const { plugins, view, instance } = await shown(found('TestMod.esp'));
+
+      typeNoMatch(plugins);
+      await messageIs(NO_MATCH, 'the message after the keystroke');
+
+      instance.publish(found('TestMod.esp', 'zzznomatch.esp'));
+      await messageIs(undefined, 'the message clearing once a matching plugin lands');
+
+      instance.publish(found('TestMod.esp'));
+      await messageIs(NO_MATCH, 'the message returning once the plugin is gone');
+      expect(view().message).toBe(NO_MATCH);
+    });
+  });
+
+  describe('given the game folder not found', () => {
+    it('says so, and keeps its rows', async () => {
+      const { plugins, instance } = await shown(found('TestMod.esp'));
+
+      instance.publish(notFound('TestMod.esp'));
+
+      await messageIs(GAME_FOLDER_MESSAGE, 'the game folder message');
+      expect(await plugins.tree.getChildren()).toHaveLength(1);
+    });
+
+    it('clears the message on the next value with the game folder found', async () => {
+      const { instance } = await shown(found('TestMod.esp'));
+      instance.publish(notFound('TestMod.esp'));
+      await messageIs(GAME_FOLDER_MESSAGE, 'the game folder message');
+
+      instance.publish(found('TestMod.esp'));
+
+      await messageIs(undefined, 'the message clearing');
+    });
+
+    it('says nothing before the first read lands', async () => {
+      const value = notFound();
+      const { plugins, view } = pluginsView(value, { instance: new FakeInstance(value, 0) });
+
+      plugins.nameFilter.refresh();
+      await settle();
+
+      expect(view().message).toBeUndefined();
+    });
+
+    it('gives the line to the filter\'s no-match message, and takes it back once the filter clears', async () => {
+      const { plugins } = await shown(notFound('TestMod.esp'));
+
+      typeNoMatch(plugins);
+      await messageIs(NO_MATCH, 'the no-match message');
+
+      plugins.nameFilter.clear();
+      await messageIs(GAME_FOLDER_MESSAGE, 'the game folder message returning');
+    });
+  });
+
+  describe('given no lines and no locked plugins', () => {
+    it('says so, and shows no row', async () => {
+      const { plugins } = await shown(found());
+
+      await messageIs(NO_PLUGINS_MESSAGE, 'the empty-list message');
+      expect(await plugins.tree.getChildren()).toEqual([]);
+    });
+
+    it('clears the message once a line lands', async () => {
+      const { plugins, instance } = await shown(found());
+      await messageIs(NO_PLUGINS_MESSAGE, 'the empty-list message');
+
+      instance.publish(found('TestMod.esp'));
+      await plugins.tree.getChildren();
+
+      await messageIs(undefined, 'the message clearing');
+    });
+  });
+
+  describe('given a record filter that matches nothing', () => {
+    async function filteredView(testModMatches: boolean, source?: string) {
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswer('getPlugins', [heldPlugin('Other.esp', false), heldPlugin('TestMod.esp', testModMatches)]);
+      client.setQueryAnswer('getDiagnoses', []);
+      const sync = syncRefusing();
+      const result = await shown(found('Other.esp', 'TestMod.esp'), { client, pluginSync: sync.pluginSync });
+      result.plugins.tree.setRecordFilterSource(source);
+      await result.plugins.tree.refreshFacts();
+      return { ...result, client, sync };
+    }
+
+    const LAST_SYNC_MESSAGE = 'plugins.txt is not synced: sentinel.';
+    async function lineOnceRendersHaveLanded(view: () => { message?: string }, sync: ReturnType<typeof syncRefusing>) {
+      await sync.refuse('sentinel');
+      await waitForMessage(view(), (m) => m?.endsWith(LAST_SYNC_MESSAGE) === true, 'the sync message reaching the line');
+      return view().message;
+    }
+
+    it('says so in its message line, naming the source', async () => {
+      const { view } = await filteredView(false, 'armor.sql');
+
+      await messageIs('No records match armor.sql.', 'the no-match message');
+      expect(view().message).toBe('No records match armor.sql.');
+    });
+
+    it('says nothing while the filter matches a record in any plugin', async () => {
+      const { view, sync } = await filteredView(true, 'armor.sql');
+
+      expect(await lineOnceRendersHaveLanded(view, sync)).toBe(LAST_SYNC_MESSAGE);
+    });
+
+    it('says nothing while no record filter is in force, whatever the facts say', async () => {
+      const { view, sync } = await filteredView(false);
+
+      expect(await lineOnceRendersHaveLanded(view, sync)).toBe(LAST_SYNC_MESSAGE);
+    });
+
+    it('takes the message back once the filter clears', async () => {
+      const { client, plugins } = await filteredView(false, 'armor.sql');
+      await messageIs('No records match armor.sql.', 'the no-match message');
+
+      plugins.tree.setRecordFilterSource(undefined);
+      client.setQueryAnswer('getPlugins', [heldPlugin('Other.esp', true), heldPlugin('TestMod.esp', true)]);
+      await plugins.tree.refreshFacts();
+
+      await messageIs(undefined, 'the message clearing');
+    });
+  });
+
+  describe('given a plugin sync that refused', () => {
+    const SYNC_REASON = "the game's Data folder cannot be listed: EACCES";
+    const SYNC_MESSAGE = `plugins.txt is not synced: ${SYNC_REASON}.`;
+    const NO_RECORD_MATCH = 'No records match armor.sql.';
+
+    async function refusedView(recordFilter?: string) {
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswer('getPlugins', [heldPlugin('TestMod.esp', false)]);
+      client.setQueryAnswer('getDiagnoses', []);
+      const sync = syncRefusing();
+      const result = await shown(found('TestMod.esp'), { client, pluginSync: sync.pluginSync });
+      result.plugins.tree.setRecordFilterSource(recordFilter);
+      await result.plugins.tree.refreshFacts();
+      return { ...result, sync };
+    }
+
+    it('says it beside the view\'s own message, and drops only its own once the sync lands', async () => {
+      const { sync } = await refusedView('armor.sql');
+
+      await sync.refuse(SYNC_REASON);
+      await messageIs(`${NO_RECORD_MATCH} ${SYNC_MESSAGE}`, 'both messages');
+
+      await sync.land();
+      await messageIs(NO_RECORD_MATCH, 'the view\'s own message alone');
+    });
+
+    it('gives the line to the filter\'s no-match message, and takes it back once the filter clears', async () => {
+      const { plugins, sync } = await refusedView();
+      await sync.refuse(SYNC_REASON);
+      await messageIs(SYNC_MESSAGE, 'the sync message');
+
+      typeNoMatch(plugins);
+      await messageIs(NO_MATCH, 'the no-match message');
+
+      plugins.nameFilter.clear();
+      await messageIs(SYNC_MESSAGE, 'the sync message returning');
+    });
+  });
+
+  describe('while a load holds it', () => {
+    it('keeps the load\'s message when a reconcile tick still matches nothing', async () => {
+      const { plugins, view } = await shown(found('TestMod.esp'));
+      typeNoMatch(plugins);
+      await messageIs(NO_MATCH, 'the message after the keystroke');
+
+      plugins.progress.say('Starting backend…');
+      plugins.tree.applyIndexed([{ name: 'TestMod.esp', origin: 'SomeMod' }], []);
+      await settle();
+
+      expect(view().message).toBe('Starting backend…');
+    });
+
+    it('keeps the load\'s message when a fresh Instance value would otherwise have cleared it', async () => {
+      const { plugins, view, instance } = await shown(found('TestMod.esp'));
+      typeNoMatch(plugins);
+      await messageIs(NO_MATCH, 'the message after the keystroke');
+
+      plugins.progress.say('Starting backend…');
+      instance.publish(found('TestMod.esp', 'zzznomatch.esp'));
+      await settle();
+
+      expect(view().message).toBe('Starting backend…');
+    });
+
+    it('gives the line back to the game folder message once the load clears it', async () => {
+      const { plugins, view, instance } = await shown(notFound('TestMod.esp'));
+
+      plugins.progress.say('Starting backend…');
+      instance.publish(notFound('TestMod.esp'));
+      await settle();
+      expect(view().message).toBe('Starting backend…');
+
+      plugins.progress.say(undefined);
+      await messageIs(GAME_FOLDER_MESSAGE, 'the game folder message returning');
+    });
+
+    it('gives the line back to the empty-list message once the load clears it', async () => {
+      const { plugins, view, instance } = await shown(found('TestMod.esp'));
+
+      plugins.progress.say('Starting backend…');
+      instance.publish(found());
+      await plugins.tree.getChildren();
+      await settle();
+      expect(view().message).toBe('Starting backend…');
+
+      plugins.progress.say(undefined);
+      await messageIs(NO_PLUGINS_MESSAGE, 'the empty-list message returning');
     });
   });
 });

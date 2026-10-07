@@ -67,9 +67,6 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     facts.reconciled([held({ hasParseFailure: true, masterIssues: ['Ghost.esm'] })], [failure('Malformed record')]);
 
     expect(facts.description(A)).toBe('failed to read, 1 master issue, unreadable records, changed outside Modbench, malformed');
-    expect(facts.statuses(A).map((s) => s.kind)).toEqual(
-      ['failedToRead', 'masterIssues', 'unreadableRecords', 'changedOutside', 'malformed'],
-    );
   });
 
   it('carries the read-only line between the origin and the status lines', () => {
@@ -86,7 +83,7 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     const facts = new PluginFacts();
     scenes(failed, masters('Ghost.esm'), unreadable, changed, malformed)(facts);
 
-    expect(facts.statuses(address)).toEqual([]);
+    expect(facts.description(address)).toBeUndefined();
   });
 
   it.each([
@@ -99,7 +96,7 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     const facts = new PluginFacts();
     scene(facts);
 
-    expect(facts.statuses(A)).toHaveLength(1);
+    expect(facts.description(A)).toBeDefined();
   });
 });
 
@@ -108,7 +105,7 @@ describe('PluginFacts — which statuses stay and which land (plugins.md, A row,
     const facts = new PluginFacts();
     facts.reconciled([held({ masterIssues: null })], []);
 
-    expect(facts.statuses(A)).toEqual([]);
+    expect(facts.description(A)).toBeUndefined();
   });
 
   it.each([
@@ -131,7 +128,7 @@ describe('PluginFacts — which statuses stay and which land (plugins.md, A row,
     facts.refreshed([]);
     facts.refreshed([held({ masterIssues: null })]);
 
-    expect(facts.statuses(A)).toEqual([]);
+    expect(facts.description(A)).toBeUndefined();
   });
 
   it('keeps a failed plugin failed through a tick that does not name it, until a reconcile lands', () => {
@@ -150,8 +147,8 @@ describe('PluginFacts — which statuses stay and which land (plugins.md, A row,
     facts.indexed([], [failure('first')]);
     facts.indexed([], [failure('second', B)]);
 
-    expect(facts.statuses(A).map((s) => s.words)).toEqual(['failed to read']);
-    expect(facts.statuses(B).map((s) => s.words)).toEqual(['failed to read']);
+    expect(facts.description(A)).toBe('failed to read');
+    expect(facts.description(B)).toBe('failed to read');
     expect(facts.expansion(A)).toEqual({ kind: 'indexing' });
     expect(facts.expansion(B)).toEqual({ kind: 'error', message: 'second' });
   });
@@ -217,7 +214,7 @@ describe('PluginFacts — the Problems panel reads the answers the rows read', (
 
     const warned = facts.problems().changedOutside.map((w) => ({ name: w.plugin, origin: w.origin }));
     expect(warned).toHaveLength(2);
-    expect(warned.every((address) => facts.statuses(address).some((s) => s.kind === 'changedOutside'))).toBe(true);
+    expect(warned.every((address) => facts.description(address) === 'changed outside Modbench')).toBe(true);
   });
 });
 
@@ -253,11 +250,11 @@ describe('PluginFacts — which plugins mEdit holds and the record filter', () =
     const facts = new PluginFacts();
     facts.indexed([A], []);
 
-    expect(facts.isHeld(A)).toBe(true);
-    expect(facts.isHeld({ name: 'A.esp', origin: 'OtherMod' })).toBe(false);
+    expect(facts.expansion(A)).toEqual(RECORDS);
+    expect(facts.expansion({ name: 'A.esp', origin: 'OtherMod' })).toEqual(INDEXING);
 
     facts.indexed([], []);
-    expect(facts.isHeld(A)).toBe(false);
+    expect(facts.expansion(A)).toEqual(INDEXING);
   });
 
   it.each([
@@ -269,17 +266,18 @@ describe('PluginFacts — which plugins mEdit holds and the record filter', () =
     facts.refreshed(answers.map((hasMatchingRecords, i) => held({ name: `P${i}.esp`, hasMatchingRecords })));
 
     expect(answers.map((_, i) => facts.hiddenByRecordFilter({ name: `P${i}.esp`, origin: 'SomeMod' }))).toEqual(hidden);
-    expect(facts.recordFilterMatchesNothing()).toBe(matchesNothing);
+    expect(facts.heldMessage({ ...noInputs, recordFilterSource: 'weapon' })).toBe(matchesNothing ? 'No records match weapon.' : undefined);
   });
 
   it('hides nothing and matches something while mEdit has not said', () => {
     const facts = new PluginFacts();
 
     expect(facts.hiddenByRecordFilter(A)).toBe(false);
-    expect(facts.recordFilterMatchesNothing()).toBe(false);
+    expect(facts.heldMessage({ ...noInputs, recordFilterSource: 'weapon' })).toBeUndefined();
   });
 });
 
+const noInputs = { gameFolderMessage: undefined, noRowsMessage: undefined };
 const heldElsewhere = { kind: 'heldElsewhere', message: 'another window holds this instance' } as const;
 const failedIndex = { kind: 'failed', message: 'the index threw' } as const;
 const B = { name: 'B.esp', origin: 'SomeMod' };
