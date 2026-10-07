@@ -144,13 +144,14 @@ internal sealed record SchemaAnnotations(
 
     private static readonly ContainmentMember CellGrid = new(
         "ICellGetter", RecordTypeDispatch.CellGridMember,
-        "it is an exterior cell's own place in the world — its source directory is named after these coordinates, " +
-        "so moving it restructures the tree rather than rewriting one file. That is a structural gesture, not a field edit");
+        "it is an exterior cell's own place in the world — it decides the block and sub-block directories that hold " +
+        "the cell's source, so moving it restructures the tree rather than rewriting one file. That is a structural " +
+        "gesture, not a field edit");
 
     private static readonly ContainmentMember PlacedPosition = new(
         "IPlacedGetter", PlacedCell.PositionMember,
-        "it is copied into the placement index (which cell a reference is in, and where) — nothing on this path " +
-        "re-derives that side table, so a placed reference's position is not writable through a field edit");
+        "it decides which cell holds a temporary reference in a worldspace, so moving it can move the reference " +
+        "into another cell's document. That is a structural gesture, not a field edit");
 
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
     [

@@ -33,7 +33,9 @@ public sealed class ContainmentReadOnlySchemaTests
     [Fact]
     public void ACellsGrid_IsReadOnly_AsItsPlaceInTheWorld()
     {
-        Assert.Contains("own place in the world", Column("cell", "Grid").ReadOnlyReason, StringComparison.Ordinal);
+        Assert.Contains(
+            "it decides the block and sub-block directories that hold the cell's source",
+            Column("cell", "Grid").ReadOnlyReason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -42,7 +44,7 @@ public sealed class ContainmentReadOnlySchemaTests
         Assert.Contains("refr", PlacedRecordTables.Names);
         var writable = PlacedRecordTables.Fallout4
             .Where(schema => schema.RecordColumns.Single(c => c.Name == "Position").ReadOnlyReason?
-                .Contains("placement index", StringComparison.Ordinal) != true)
+                .Contains("which cell holds", StringComparison.Ordinal) != true)
             .Select(schema => schema.TableName);
         Assert.Empty(writable);
 

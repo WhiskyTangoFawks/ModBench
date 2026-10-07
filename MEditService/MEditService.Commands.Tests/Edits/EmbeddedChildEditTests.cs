@@ -66,7 +66,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void APlacedRefsPosition_IsRefused_SoItsPlacementRowCannotGoStale()
+    public void APlacedRefsPosition_IsRefused_AsItDecidesWhichCellHoldsIt()
     {
         var before = _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body;
 
@@ -75,7 +75,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains("placement", result.Message, StringComparison.Ordinal);
+        Assert.Contains("which cell holds", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body);
         Assert.Empty(_fixture.ChangedFormKeys());
     }
