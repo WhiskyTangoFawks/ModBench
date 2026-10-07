@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { CELL_VALUE_SETTING, CONFLICT_TABLE_VIEW_TYPE, registerConflictTable } from '../conflictTableEditor';
+import { CELL_VALUE_SETTING, registerConflictTable } from '../conflictTableEditor';
 import type { WorkspaceSettings } from '../workspaceSettings';
 import { ModNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -55,7 +55,7 @@ describe('open conflicts', () => {
 
     await openConflicts(modRow('Textures'));
 
-    expect(opened()).toEqual([['vscode.openWith', conflictTableUri('Textures'), CONFLICT_TABLE_VIEW_TYPE, { preview: true }]]);
+    expect(opened()).toEqual([['vscode.openWith', conflictTableUri('Textures'), 'modbench.conflicts', { preview: true }]]);
   });
 
   it('opens a column header\'s mod\'s table', async () => {
@@ -131,7 +131,7 @@ function isResolvingProvider(value: unknown): value is ResolvingProvider {
 function openTable(instance: FakeInstance, modName: string, reporter = recordingReporter()): FakePanel {
   setup(instance, [], reporter);
   const [viewType, provider, options] = registerCustomEditorProvider.mock.calls.at(-1) ?? [];
-  expect(viewType).toBe(CONFLICT_TABLE_VIEW_TYPE);
+  expect(viewType).toBe('modbench.conflicts');
   expect(options).toEqual({ webviewOptions: { retainContextWhenHidden: true } });
   if (!isResolvingProvider(provider)) throw new Error('no custom editor provider was registered');
   const panel = fakePanel();

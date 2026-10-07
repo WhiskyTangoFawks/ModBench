@@ -129,7 +129,8 @@ export class ImplicitMasterNode extends vscode.TreeItem {
 const LOSING_END: PluginsDrop = { kind: 'losingEnd' };
 const WINNING_END: PluginsDrop = { kind: 'winningEnd' };
 
-/** plugins.md, States, story 1: an empty list says so on the message line, never as a row. */
+/** plugins.md, States, story 1: an empty list says so on the message line, never as a row.
+ *  @public Read by packageJson.test, which holds package.json to it. */
 export const NO_PLUGINS_MESSAGE =
   'No plugins: plugins.txt lists none, and mEdit names none the game loads on its own. Create Plugin…, in the title bar, adds one.';
 

@@ -16,7 +16,8 @@ import { reportFailure } from '../drivingLib/reportFailure';
 import { errorMessage } from '../ports/errorMessage';
 import type { WorkspaceSettings } from './workspaceSettings';
 
-export const CONFLICT_TABLE_VIEW_TYPE = 'modbench.conflicts';
+const CONFLICT_TABLE_VIEW_TYPE = 'modbench.conflicts';
+/** @public Read by packageJson.test, which holds package.json to it. */
 export const CELL_VALUE_SETTING = 'modbench.mods.conflictTable.cellValue';
 
 const SCHEME = 'modbench-conflicts';

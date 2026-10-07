@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  SETTING_SETTLE_MS, refreshOnGameDirectoryChange,
+  refreshOnGameDirectoryChange,
   type ConfigChangeEvent, type Subscription,
 } from '../gameDirectorySetting';
 const GAME_FOLDER_SETTING = 'modbench.mods.gameDirectory';
+const SETTLE_MS = 200;
 
 function fakeConfigChange() {
   let listener: ((e: ConfigChangeEvent) => void) | undefined;
@@ -31,7 +32,7 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
     config.fire(GAME_FOLDER_SETTING);
     expect(refresh).not.toHaveBeenCalled();
 
-    await vi.advanceTimersByTimeAsync(SETTING_SETTLE_MS);
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
 
     expect(refresh).toHaveBeenCalledTimes(1);
   });
@@ -44,11 +45,11 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
     refreshOnGameDirectoryChange(GAME_FOLDER_SETTING, config.subscribe, refresh);
     for (let i = 0; i < 5; i++) {
       config.fire(GAME_FOLDER_SETTING);
-      await vi.advanceTimersByTimeAsync(SETTING_SETTLE_MS / 2);
+      await vi.advanceTimersByTimeAsync(SETTLE_MS / 2);
     }
     expect(refresh).not.toHaveBeenCalled();
 
-    await vi.advanceTimersByTimeAsync(SETTING_SETTLE_MS);
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
 
     expect(refresh).toHaveBeenCalledTimes(1);
   });
@@ -60,7 +61,7 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
 
     refreshOnGameDirectoryChange(GAME_FOLDER_SETTING, config.subscribe, refresh);
     config.fire('modbench.attachToBackendPort');
-    await vi.advanceTimersByTimeAsync(SETTING_SETTLE_MS * 5);
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 5);
 
     expect(refresh).not.toHaveBeenCalled();
   });
@@ -73,7 +74,7 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
     const subscription = refreshOnGameDirectoryChange(GAME_FOLDER_SETTING, config.subscribe, refresh);
     config.fire(GAME_FOLDER_SETTING);
     subscription.dispose();
-    await vi.advanceTimersByTimeAsync(SETTING_SETTLE_MS * 5);
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 5);
 
     expect(refresh).not.toHaveBeenCalled();
     expect(config.disposed).toBe(true);

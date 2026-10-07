@@ -7,7 +7,8 @@ import { modOrigin, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileCon
 import { fileRowUri } from './modFiles';
 import type { WorkspaceSettings } from './workspaceSettings';
 
-/** The setting that switches the grey, on by default (mods.md, Indicators). */
+/** The setting that switches the grey, on by default (mods.md, Indicators).
+ *  @public Read by packageJson.test, which holds package.json to it. */
 export const GREY_INACTIVE_FILES_SETTING = 'modbench.mods.greyInactiveFiles';
 
 type FilesValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod' | 'foldersByMod' | 'overwriteFiles' | 'overwriteFolders'>;

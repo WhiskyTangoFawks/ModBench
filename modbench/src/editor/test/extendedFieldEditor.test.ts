@@ -49,7 +49,7 @@ vi.mock('vscode', () => ({
   ViewColumn: { Beside: -2 },
 }));
 
-import { ExtendedFieldDocuments, EDITABLE_FIELD_SCHEME, READONLY_FIELD_SCHEME, type OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
+import { ExtendedFieldDocuments, type OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type CompareResult } from '../../client';
 import type { Reporter } from '../../ports/reporter';
@@ -101,12 +101,12 @@ const registration = (scheme: string): Registration => {
   if (!reg) throw new Error(`no provider for ${scheme}`);
   return reg;
 };
-const provider = (scheme = EDITABLE_FIELD_SCHEME): Provider => registration(scheme).provider;
-const textOf = async (uri: FakeUri, scheme = EDITABLE_FIELD_SCHEME): Promise<string> =>
+const provider = (scheme = 'modbench-field'): Provider => registration(scheme).provider;
+const textOf = async (uri: FakeUri, scheme = 'modbench-field'): Promise<string> =>
   new TextDecoder().decode(await provider(scheme).readFile(uri));
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
 const closeTab = (uri: FakeUri): void => closeListeners.forEach(listener => listener({ uri }));
-function recordChanges(scheme = EDITABLE_FIELD_SCHEME): ChangeEvent[][] {
+function recordChanges(scheme = 'modbench-field'): ChangeEvent[][] {
   const seen: ChangeEvent[][] = [];
   provider(scheme).onDidChangeFile(events => seen.push(events));
   return seen;
@@ -192,8 +192,8 @@ describe('the extended-field documents', () => {
     await documents.open({ ...deacon, readOnly: true });
     const [editable, readOnly] = [shownUri(0), shownUri(1)];
     await textOf(editable);
-    await textOf(readOnly, READONLY_FIELD_SCHEME);
-    const changes = [recordChanges(), recordChanges(READONLY_FIELD_SCHEME)];
+    await textOf(readOnly, 'modbench-field-readonly');
+    const changes = [recordChanges(), recordChanges('modbench-field-readonly')];
 
     client.reconnected();
 
@@ -322,16 +322,16 @@ describe('the extended-field documents', () => {
     it('opens under the read-only scheme, registered read-only, and the editable one is not', async () => {
       await documents.open({ ...deacon, readOnly: true });
 
-      expect(shownUri().scheme).toBe(READONLY_FIELD_SCHEME);
-      expect(registration(READONLY_FIELD_SCHEME).options).toEqual({ isReadonly: true });
-      expect(registration(EDITABLE_FIELD_SCHEME).options).toBeUndefined();
+      expect(shownUri().scheme).toBe('modbench-field-readonly');
+      expect(registration('modbench-field-readonly').options).toEqual({ isReadonly: true });
+      expect(registration('modbench-field').options).toBeUndefined();
     });
 
     it('shows the value, refuses a write and commits nothing', async () => {
       await documents.open({ ...deacon, readOnly: true });
 
-      expect(await textOf(shownUri(), READONLY_FIELD_SCHEME)).toBe('a long description');
-      await expect(provider(READONLY_FIELD_SCHEME).writeFile(shownUri(), encode('x'))).rejects.toThrow('NoPermissions');
+      expect(await textOf(shownUri(), 'modbench-field-readonly')).toBe('a long description');
+      await expect(provider('modbench-field-readonly').writeFile(shownUri(), encode('x'))).rejects.toThrow('NoPermissions');
       expect(commit).not.toHaveBeenCalled();
     });
   });

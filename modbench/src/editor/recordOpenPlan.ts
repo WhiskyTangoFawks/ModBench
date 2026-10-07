@@ -7,7 +7,7 @@ export interface RecordToOpen { formKey: string; plugin?: PluginAddress }
 
 export interface TabPlace { document: string; viewColumn: ViewColumn }
 
-export type Placement = 'active' | 'beside' | TabPlace;
+type Placement = 'active' | 'beside' | TabPlace;
 
 export interface RecordOpenPlan {
   addresses: RecordToOpen[];
