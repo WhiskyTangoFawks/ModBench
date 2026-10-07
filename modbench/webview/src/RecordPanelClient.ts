@@ -16,6 +16,8 @@ export type LoadResult =
       // Null exactly when immutableSet is, but degrading the opposite way: to "nothing is
       // editable" (commands.md, No dead entries). Read fail-closed.
       trackedSet: Set<ColumnKey> | null;
+      // Tracked plugins whose records are read from the plugin file; no edit lands in a copy of one.
+      sourceUnreadableSet: Set<ColumnKey> | null;
       // Whether the winner sweep has run (editor.md, States, story 3). Fails *closed*: an absent
       // answer reads as "not computed", never as "settled", or a status-fetch blip would render a
       // settled-looking grid over a comparison nothing checked.
@@ -67,6 +69,7 @@ export function createRecordPanelClient(): RecordPanelClient {
         result,
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p))) : null,
         trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p))) : null,
+        sourceUnreadableSet: pluginList ? new Set(pluginList.filter(p => p.pluginSourceUnreadable).map(p => columnKey(p))) : null,
         conflictsComputed: answer.conflictsComputed,
         loadFailures: answer.loadFailures,
         fileColumn: fileCopy && copyColumnKey(fileCopy),

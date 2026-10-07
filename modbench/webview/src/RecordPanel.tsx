@@ -57,6 +57,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // Null until /plugins answers, and null again when it fails: fail-closed, so a panel that has
   // not heard from /plugins offers no editing, compile or track (commands.md, No dead entries).
   const [trackedSet, setTrackedSet] = useState<Set<ColumnKey> | null>(null);
+  const [sourceUnreadableSet, setSourceUnreadableSet] = useState<Set<ColumnKey> | null>(null);
   // Whether the winner sweep has run. Initial `true` only matters until the first load
   // lands, so it can never read as a false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
@@ -102,8 +103,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // whole grid at once, since per cell it would lag. mEdit refuses every write to a parse-failed record.
   const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, o =>
     copyColumnKey(o) === fileColumn && !immutableSet.has(pluginKeyOf(o)) && trackedSet?.has(pluginKeyOf(o)) === true
+      && sourceUnreadableSet?.has(pluginKeyOf(o)) === false
       && o.parseDiagnosis == null),
-    [result, fileColumn, immutableSet, trackedSet]);
+    [result, fileColumn, immutableSet, trackedSet, sourceUnreadableSet]);
 
   // editor.md, A column's header: a Partial Form column is dimmed, header and cells alike. One
   // definition of a column's look, so the header and the cells cannot disagree.
@@ -142,6 +144,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       // Unguarded, unlike the two above: a null must replace a previous record's answer, so an
       // unknown state reads as neither tracked nor untracked.
       setTrackedSet(loaded.trackedSet);
+      setSourceUnreadableSet(loaded.sourceUnreadableSet);
       // No `?? true` fallback: `undefined` is falsy, so a fixture that omits `conflictsComputed`
       // still shows the banner rather than reading as settled.
       setConflictsComputed(loaded.conflictsComputed);
@@ -355,12 +358,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                 // resize apart; a status is the plugin's, by its compound key.
                 const isImmutable = immutableSet.has(pluginKeyOf(col.override));
                 const tracked = trackedSet?.has(pluginKeyOf(col.override)) === true;
+                const sourceUnreadable = sourceUnreadableSet?.has(pluginKeyOf(col.override)) === true;
                 return (
                   <PluginHeader
                     key={col.key}
                     override={col.override}
                     isImmutable={isImmutable}
                     isTracked={tracked}
+                    sourceUnreadable={sourceUnreadable}
                     isFile={col.key === fileColumn}
                     onOpen={() => openColumn(col.override)}
                     collapsed={collapsedColumns.has(col.key)}
@@ -370,7 +375,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                     // Copy… is offered on every column: copying from a read-only plugin is the
                     // ordinary case.
                     vscodeContext={JSON.stringify(headerCellContext(
-                      col.override.formKey, col.override.plugin, col.override.origin, tracked && !isImmutable,
+                      col.override.formKey, col.override.plugin, col.override.origin, tracked && !sourceUnreadable && !isImmutable,
                     ))}
                   />
                 );

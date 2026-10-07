@@ -8,6 +8,7 @@ interface PluginHeaderProps {
   override: CompareOverride;
   isImmutable: boolean;
   isTracked: boolean;
+  sourceUnreadable: boolean;
   isFile: boolean;
   onOpen: () => void;
   collapsed: boolean;
@@ -21,7 +22,7 @@ interface PluginHeaderProps {
 interface Status { label: string; reason: string }
 
 // editor.md, A column's header, the Status table: the first row that applies.
-function statusOf(o: CompareOverride, isImmutable: boolean, isTracked: boolean): Status {
+function statusOf(o: CompareOverride, isImmutable: boolean, isTracked: boolean, sourceUnreadable: boolean): Status {
   if (o.parseDiagnosis != null) return { label: '(parse failure)', reason: o.parseDiagnosis };
   if (isImmutable) return { label: '(read-only)', reason: 'The game’s plugins are not edited.' };
   if (o.isInOverwrite) {
@@ -37,14 +38,21 @@ function statusOf(o: CompareOverride, isImmutable: boolean, isTracked: boolean):
         + 'makes it editable.',
     };
   }
+  if (sourceUnreadable) {
+    return {
+      label: '(plugin source unreadable)',
+      reason: 'Its plugin source is missing or cannot be read, so its records are its plugin file’s. '
+        + '“Decompile Plugin”, in this header’s menu, makes it editable.',
+    };
+  }
   if (o.isPartialForm) return { label: '(Partial Form)', reason: 'The game ignores this copy’s own fields.' };
   return { label: '(tracked)', reason: 'An edit lands in the mod’s working tree, for review in Source Control.' };
 }
 
 export function PluginHeader({
-  override: o, isImmutable, isTracked, isFile, onOpen, collapsed, onToggleCollapse, onResize, style, vscodeContext,
+  override: o, isImmutable, isTracked, sourceUnreadable, isFile, onOpen, collapsed, onToggleCollapse, onResize, style, vscodeContext,
 }: Readonly<PluginHeaderProps>) {
-  const status = statusOf(o, isImmutable, isTracked);
+  const status = statusOf(o, isImmutable, isTracked, sourceUnreadable);
 
   return (
     <th

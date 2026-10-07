@@ -432,6 +432,7 @@ describe('RecordPanel — column header native right-click menu', () => {
   it.each([
     ['a tracked, editable', { isTracked: true, isImmutable: false }, true],
     ['an untracked', { isTracked: false, isImmutable: false }, false],
+    ['a tracked, plugin-source-unreadable', { isTracked: true, pluginSourceUnreadable: true }, false],
     ['a read-only', { isTracked: true, isImmutable: true }, false],
     ['an untracked read-only', { isTracked: false, isImmutable: true }, false],
   ])('the header of %s plugin says whether compile applies to it: on a tracked column, not on an untracked or a read-only one', async (_what, facts, editable) => {
@@ -473,7 +474,7 @@ describe('RecordPanel — column header native right-click menu', () => {
       })],
     });
     const load = vi.fn().mockResolvedValue({
-      ok: true, result: compare, immutableSet: null, trackedSet: null, conflictsComputed: true, loadFailures: [],
+      ok: true, result: compare, immutableSet: null, trackedSet: null, sourceUnreadableSet: null, conflictsComputed: true, loadFailures: [],
     });
     const { container } = renderPanel(compare, { load });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
@@ -557,6 +558,16 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 
     fireEvent.doubleClick(screen.getByText('Override Name'));
     expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  it('opens no input on a cell of a tracked column whose plugin source is unreadable', async () => {
+    renderPanel(flagsCompareResult, {
+      plugins: trackedMyModPluginsForTheRealEditableColumnsGate.map(p => ({ ...p, pluginSourceUnreadable: true })),
+    });
+    await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
+
+    fireEvent.doubleClick(screen.getByText('Override Name'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('a flags row opens expanded with its checkboxes; collapsing shows the summary and expanding restores them', async () => {
@@ -1008,6 +1019,7 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
   it('goes once a read lands with the plugin readable again', async () => {
     const answered = (loadFailures: PluginLoadFailure[]) => ({
       ok: true as const, result: compareResult, immutableSet: new Set<string>(), trackedSet: new Set<string>(),
+      sourceUnreadableSet: new Set<string>(),
       conflictsComputed: true, loadFailures,
     });
     const load = vi.fn()
@@ -1113,7 +1125,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 });
 
 const loaded = (result: CompareResult | null, conflictsComputed = true) => ({
-  ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), conflictsComputed, loadFailures: [],
+  ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableSet: new Set<string>(), conflictsComputed, loadFailures: [],
 });
 
 function deferred<T>() {
