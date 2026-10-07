@@ -10,7 +10,7 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class ReconcileScatteredTests
 {
-    private static OpenedIndex MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static OpenedIndex OpenIndex(LoadOrderHolder holder) => Indexes.Open(holder);
 
     [Fact]
     public void Reconcile_PopulatesLoadOrderAndIndexesScatteredPlugins()
@@ -22,10 +22,10 @@ public sealed class ReconcileScatteredTests
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .BuildScattered();
 
-        using var manager = MakeIndexer(holder);
-        manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        using var index = OpenIndex(holder);
+        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var reads = manager.RequireReads();
+        var reads = index.RequireReads();
         Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("A.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("B.esp", "Data"))
@@ -46,10 +46,10 @@ public sealed class ReconcileScatteredTests
             })
             .BuildScattered();
 
-        using var manager = MakeIndexer(holder);
-        manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        using var index = OpenIndex(holder);
+        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var reads = manager.RequireReads();
+        var reads = index.RequireReads();
         var winner = reads.GetDocument(shared.ToString());
         Assert.NotNull(winner);
         Assert.True(winner.IsWinner);
@@ -65,14 +65,14 @@ public sealed class ReconcileScatteredTests
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .BuildScattered();
 
-        using var manager = MakeIndexer(holder);
-        manager.Reconcile(holder, fx.GameDirectory, [fx.Plugins[0]], GameRelease.Fallout4);
-        var firstRepo = manager.RequireReads();
+        using var index = OpenIndex(holder);
+        index.Reconcile(holder, fx.GameDirectory, [fx.Plugins[0]], GameRelease.Fallout4);
+        var firstReads = index.RequireReads();
 
-        manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        Assert.Same(firstRepo, manager.RequireReads());
-        Assert.NotEmpty(firstRepo.GetRecordTypeCounts(new PluginAddress("A.esp", "Data")));
+        Assert.Same(firstReads, index.RequireReads());
+        Assert.NotEmpty(firstReads.GetRecordTypeCounts(new PluginAddress("A.esp", "Data")));
     }
 
     [Fact]
@@ -86,16 +86,16 @@ public sealed class ReconcileScatteredTests
             .BuildScattered();
 
         using var adapter = new GatedPluginAdapter(poisonPlugin: "Bad.esp");
-        using var manager = Indexes.Open(holder, adapter);
+        using var index = Indexes.Open(holder, adapter);
 
-        manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var reads = manager.RequireReads();
-        Assert.Contains(manager.Status.Failures, f => f.Name == "Bad.esp");
+        var reads = index.RequireReads();
+        Assert.Contains(index.Status.Failures, f => f.Name == "Bad.esp");
         Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("Good.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         Assert.Equal(0, reads.GetRecordTypeCounts(new PluginAddress("Bad.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.DoesNotContain(manager.Status.IndexedPlugins, p => p.Name == "Bad.esp");
+        Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "Bad.esp");
     }
 }

@@ -11,7 +11,7 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class WarmReconcileTests
 {
-    private static OpenedIndex MakeIndexer(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
+    private static OpenedIndex OpenIndex(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Indexes.Open(holder, adapter);
 
     [Fact]
@@ -22,10 +22,10 @@ public sealed class WarmReconcileTests
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
             .Build();
-        using (var cold = MakeIndexer(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = OpenIndex(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         using var opens = new GatedPluginAdapter();
-        using var warm = MakeIndexer(holder, opens);
+        using var warm = OpenIndex(holder, opens);
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Empty(opens.Opened);
@@ -43,7 +43,7 @@ public sealed class WarmReconcileTests
         using var data = new PluginFixtureBuilder("warm-during")
             .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
             .Build();
-        using (var cold = MakeIndexer(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = OpenIndex(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         var observed = new List<int>();
         var watching = new ProgressWatchingAdapter(observed);
@@ -76,9 +76,9 @@ public sealed class WarmReconcileTests
         using var data = new PluginFixtureBuilder("warm-progress")
             .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
             .Build();
-        using (var cold = MakeIndexer(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = OpenIndex(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        using var warm = MakeIndexer(holder);
+        using var warm = OpenIndex(holder);
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(3, warm.Status.TotalPlugins);
@@ -95,14 +95,14 @@ public sealed class WarmReconcileTests
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
             .Build();
-        using (var cold = MakeIndexer(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = OpenIndex(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         var edited = new Fallout4Mod(ModKey.FromFileName("B.esp"), Fallout4Release.Fallout4);
         edited.Npcs.AddNew("NpcBEdited");
         edited.WriteToBinary(Path.Combine(data.DataFolder, "B.esp"));
 
         using var opens = new GatedPluginAdapter();
-        using var warm = MakeIndexer(holder, opens);
+        using var warm = OpenIndex(holder, opens);
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(["B.esp"], opens.Opened);
@@ -121,12 +121,12 @@ public sealed class WarmReconcileTests
             .WithPlugin("A.esp")
             .WithPlugin("B.esp", listed: false)
             .Build();
-        using (var cold = MakeIndexer(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = OpenIndex(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         var withB = data.Plugins.Append(new LoadOrderEntry("B.esp", Path.Combine(data.DataFolder, "B.esp"), PluginOrigin.DataDirectory, Slot: 99, Enabled: true, Winning: true)).ToList();
 
         using var opens = new GatedPluginAdapter();
-        using var warm = MakeIndexer(holder, opens);
+        using var warm = OpenIndex(holder, opens);
         warm.Reconcile(holder, data.DataFolder, withB, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(["B.esp"], opens.Opened);
@@ -146,14 +146,14 @@ public sealed class WarmReconcileTests
         var entry = fixture.Plugins.Single();
 
         string npcSourceFile;
-        using (var second = MakeIndexer(holder))
+        using (var second = OpenIndex(holder))
         {
             second.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
             npcSourceFile = entry.SourceFileOf(
                 second.RequireReads().DocumentsOf(entry.KeyOf()).Single(d => d.EditorId == "TrackedNpc"));
         }
 
-        using var third = MakeIndexer(holder);
+        using var third = OpenIndex(holder);
         third.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
 
         Assert.Empty(third.Status.Failures);
@@ -161,7 +161,7 @@ public sealed class WarmReconcileTests
         var text = await File.ReadAllTextAsync(npcSourceFile);
         await File.WriteAllTextAsync(
             npcSourceFile, text.Replace("\"TrackedNpc\"", "\"EditedBetweenLoads\"", StringComparison.Ordinal));
-        using var fourth = MakeIndexer(holder);
+        using var fourth = OpenIndex(holder);
         fourth.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
         Assert.Contains(
             fourth.RequireReads().DocumentsOf(entry.KeyOf()), d => d.EditorId == "EditedBetweenLoads");
