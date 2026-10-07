@@ -222,14 +222,14 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header'
   it('PluginNode opens the header at the plugin and origin its row stands for', () => {
     const node = new PluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod');
     expect(node.command).toEqual({
-      command: 'modbench.record.open', title: 'Open Record', arguments: [{ header: { name: 'TestMod.esp', origin: 'SomeMod' } }],
+      command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey: '000000:TestMod.esp', plugin: { name: 'TestMod.esp', origin: 'SomeMod' } } }],
     });
   });
 
   it('ImplicitMasterNode opens the header at the plugin and origin its row stands for', () => {
     const node = new ImplicitMasterNode('Fallout4.esm', 'Data');
     expect(node.command).toEqual({
-      command: 'modbench.record.open', title: 'Open Record', arguments: [{ header: { name: 'Fallout4.esm', origin: 'Data' } }],
+      command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey: '000000:Fallout4.esm', plugin: { name: 'Fallout4.esm', origin: 'Data' } } }],
     });
   });
 
@@ -237,6 +237,15 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header'
     const a = new PluginNode({ name: 'Same.esp', enabled: true }, 'ModA');
     const b = new PluginNode({ name: 'Same.esp', enabled: true }, 'ModB');
     expect(a.command?.arguments).not.toEqual(b.command?.arguments);
+  });
+});
+
+describe('a plugin row carries its plugin as its Argument', () => {
+  it.each([
+    ['a plugin line', new PluginNode({ name: 'A.esp', enabled: true }, 'ModA')],
+    ['a plugin the game loads with none', new ImplicitMasterNode('A.esp', 'ModA')],
+  ])('%s', (_what, node) => {
+    expect(node.argument).toEqual({ kind: 'plugin', plugin: { name: 'A.esp', origin: 'ModA' } });
   });
 });
 
@@ -1642,7 +1651,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
 
     expect(client.calls.filter((c) => c.method === 'getRecordTypes' || c.method === 'getRecords').map((c) => c.args))
       .toEqual([[{ name: 'Shared.esp', origin: 'ModB' }], [{ name: 'Shared.esp', origin: 'ModB' }, 'weap', 0, expect.any(Number)]]);
-    expect(record.command?.arguments?.[0]).toEqual({ formKey: '000001:Shared.esp', plugin: { name: 'Shared.esp', origin: 'ModB' } });
+    expect(record.command?.arguments?.[0]).toEqual({ argument: { kind: 'record', formKey: '000001:Shared.esp', plugin: { name: 'Shared.esp', origin: 'ModB' } } });
   });
 
   it('renders the records under a record type', async () => {

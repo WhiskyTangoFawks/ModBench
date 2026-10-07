@@ -7,7 +7,7 @@ export interface KindedRow extends vscode.TreeItem {
 export type RowOf<Row extends KindedRow, K extends Row['kind']> = Extract<Row, { kind: K }>;
 
 /** The rows a gesture's Argument is taken from. */
-export interface GestureEntry<Row extends KindedRow> {
+export interface GestureEntry<Row> {
   readonly clicked?: Row;
   readonly focused?: Row;
   readonly selection: readonly Row[];
@@ -17,14 +17,24 @@ export const kindGuard = <Row extends KindedRow>() =>
   <K extends Row['kind']>(kinds: readonly K[]) =>
     (row: unknown): row is RowOf<Row, K> => row instanceof vscode.TreeItem && 'kind' in row && kinds.some((kind) => kind === row.kind);
 
+/** A tree row, or a webview context, that carries an Argument. */
+export const isArgumentCarrier = (value: unknown): value is unknown => typeof value === 'object' && value !== null;
+
 // No stable API names the focused row, so from a key or the palette a selection of one row
 // stands for it.
 export function gestureEntry<Row extends KindedRow>(
+  clicked: unknown, selected: readonly Row[] | undefined, viewSelection: () => readonly Row[],
+): GestureEntry<Row>;
+export function gestureEntry<Row>(
+  clicked: unknown, selected: readonly Row[] | undefined, viewSelection: () => readonly Row[],
+  isRow: (value: unknown) => value is Row,
+): GestureEntry<Row>;
+export function gestureEntry<Row>(
   clicked: unknown,
   selected: readonly Row[] | undefined,
   viewSelection: () => readonly Row[],
+  isRow: (value: unknown) => value is Row = (value): value is Row => value instanceof vscode.TreeItem,
 ): GestureEntry<Row> {
-  const isRow = (value: unknown): value is Row => value instanceof vscode.TreeItem;
   if (isRow(clicked)) return { clicked, selection: selected ?? [clicked] };
   const selection = viewSelection();
   const [only] = selection;

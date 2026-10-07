@@ -34,6 +34,18 @@ describe('the focused view', () => {
     expect(focused.selection()).toEqual([]);
   });
 
+  it('has the selection of a followed view by its id, whichever view was selected in last', () => {
+    const focused = createFocusedView();
+    const mods = fakeView();
+    const plugins = fakeView();
+    focused.follow('modbench.modList', mods);
+    focused.follow('modbench.pluginListTree', plugins);
+    plugins.select(['First.esp']);
+    mods.select(['ModB']);
+    expect(focused.selectionOf('modbench.pluginListTree')).toEqual(['First.esp']);
+    expect(focused.selectionOf('modbench.downloads')).toEqual([]);
+  });
+
   it('tells a listener the focused view and its selection each time they change', () => {
     const focused = createFocusedView();
     const mods = fakeView();

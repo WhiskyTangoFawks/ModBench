@@ -3,24 +3,28 @@ import type { MEditClient, PluginAddress, ReferenceResult } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import { ErrorNode } from '../drivingLib/errorNode';
+import type { RecordArgument } from '../drivingLib/recordArgument';
 import { isKeyArgs } from '../drivingLib/copyValue';
 import { recordTitle } from './recordTitle';
 
 /** One plugin's copy of a referrer, with the fields that hold the reference. */
 export class ReferencedByHolderNode extends vscode.TreeItem {
-  readonly plugin: string;
-  readonly origin: string;
+  readonly argument: RecordArgument;
+  readonly plugin: PluginAddress;
+  /** What confirmations call the record this copy holds. */
+  readonly name: string;
 
   constructor(
     target: string,
-    readonly formKey: string,
-    readonly editorId: string | undefined,
+    formKey: string,
+    editorId: string | undefined,
     address: PluginAddress,
     fieldPaths: readonly string[],
   ) {
     super(address.name, vscode.TreeItemCollapsibleState.None);
-    this.plugin = address.name;
-    this.origin = address.origin;
+    this.plugin = address;
+    this.name = editorId ?? formKey;
+    this.argument = { kind: 'record', plugin: address, formKey };
     this.id = JSON.stringify([target, formKey, address.origin, address.name]);
     this.description = fieldPaths.join(', ');
     this.contextValue = 'referencedByHolder';
@@ -33,6 +37,7 @@ function referrerName(formKey: string, editorId: string | undefined): string {
 
 class ReferencedByReferrerNode extends vscode.TreeItem {
   readonly copyText: string;
+  readonly argument: RecordArgument;
 
   readonly name: string;
 
@@ -45,16 +50,17 @@ class ReferencedByReferrerNode extends vscode.TreeItem {
   ) {
     super(editorId ?? formKey, vscode.TreeItemCollapsibleState.Collapsed);
     this.name = editorId ?? formKey;
+    this.argument = { kind: 'record', formKey };
     this.copyText = referrerName(formKey, editorId);
     // The target is in the id so a referrer collapses again when the list follows a new record.
     this.id = JSON.stringify([target, formKey]);
     this.description = holders.length > 1 ? `${recordTypeName} · ${holders.length} plugins` : recordTypeName;
-    this.tooltip = [this.copyText, recordTypeName, holders.map(h => h.plugin).join(', ')].join('\n');
+    this.tooltip = [this.copyText, recordTypeName, holders.map(h => h.plugin.name).join(', ')].join('\n');
     this.contextValue = 'referencedByReferrer';
     this.command = {
       command: 'modbench.record.open',
       title: 'Open Record',
-      arguments: [{ formKey }],
+      arguments: [{ argument: this.argument }],
     };
   }
 }

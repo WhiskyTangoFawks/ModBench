@@ -10,9 +10,14 @@ export interface CopyValueAdapter {
   reporterTag: string;
 }
 
-/** Whether `value` is the `args` the view's own Ctrl+C passes. */
-export const isKeyArgs = (value: unknown, view: string): boolean =>
-  typeof value === 'object' && value !== null && Reflect.get(value, 'view') === view;
+/** The view whose key passed `value` as its `args`, since a key cannot name the rows it acts on. */
+export function keyArgsView(value: unknown): string | undefined {
+  const view: unknown = typeof value === 'object' && value !== null ? Reflect.get(value, 'view') : undefined;
+  return typeof view === 'string' ? view : undefined;
+}
+
+/** Whether `value` is the `args` the view's own key passes. */
+export const isKeyArgs = (value: unknown, view: string): boolean => keyArgsView(value) === view;
 
 /** A tree view's text for the catalog's copy value: the whole view selection for its key, the
  *  selected rows for a right-clicked row, one line each. `undefined` for anything else, so another

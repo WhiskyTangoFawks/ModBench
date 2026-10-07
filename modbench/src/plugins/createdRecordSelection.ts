@@ -35,7 +35,7 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
   const selectAndOpen = async (plugin: PluginAddress, place: RecordPlace<Row>, formKey: string): Promise<void> => {
     const row = await deps.rowOf(place, formKey);
     if (row !== undefined) await deps.view.reveal(row, { select: true, focus: true });
-    void vscode.commands.executeCommand('modbench.record.open', { formKey, plugin });
+    void vscode.commands.executeCommand('modbench.record.open', { argument: { kind: 'record', formKey, plugin } });
   };
 
   return {

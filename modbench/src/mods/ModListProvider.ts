@@ -11,6 +11,7 @@ import {
   anyNamed, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode,
   type ChildrenShown,
 } from './modFiles';
+import type { ModArgument } from '../drivingLib/argument';
 import { modRowUri } from './modIndicators';
 import { filesInConflict } from './conflictTable';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
@@ -69,6 +70,7 @@ export class SeparatorNode extends vscode.TreeItem {
 
 export class ModNode extends vscode.TreeItem {
   readonly kind = 'mod' as const;
+  readonly argument: ModArgument;
   readonly nexusModId: string | undefined;
   constructor(
     public readonly mod: Mod, public readonly facts?: ModFacts,
@@ -77,6 +79,7 @@ export class ModNode extends vscode.TreeItem {
     public readonly shown: ChildrenShown = 'all',
   ) {
     super(mod.name, expanderOver([...files, ...folders], shown));
+    this.argument = { kind: 'mod', name: mod.name };
     this.id = rowIdentity(this.kind, mod.name);
     this.resourceUri = modRowUri(mod.name);
     this.nexusModId = mod.nexusId;
