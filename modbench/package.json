@@ -1335,12 +1335,12 @@
         },
         {
           "command": "modbench.mod.track",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && origin in modbench.mod.untracked",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && inMod == untracked",
           "group": "4_sourceControl@1"
         },
         {
           "command": "modbench.plugin.decompile",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && origin in modbench.mod.tracked",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && inMod == tracked",
           "group": "4_sourceControl@2"
         },
         {

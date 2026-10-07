@@ -38,7 +38,6 @@ import type { RecordWrite } from './drivingLib/writingGesture';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import type { ModlistNode } from './mods/ModListProvider';
 import { registerModDecorations } from './mods/modDecorations';
-import { showModRepositories } from './mods/modRepositories';
 import { createModsView } from './mods/modsView';
 import { registerModInstallCommands } from './mods/installCommands';
 import { registerCompareFileCommand } from './mods/compareFile';
@@ -53,7 +52,8 @@ import { downloadsCopyValueText } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
-import { openedFolder, whenOpened, markFirstReadLanded } from './toolbox/instanceCheck';
+import { openedFolder, whenOpened } from './drivingLib/instanceCheck';
+import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { launchBackend } from './toolbox/autoLaunch';
 import { pluginSyncOver } from './pluginsCommands/plugins';
 import { modSyncOver } from './modlist/modlist';
@@ -178,7 +178,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   const { provider: modListProvider, view: modListView, nameFilter: modListFilter } = own(createModsView({
     instance, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync,
   }));
-  own(showModRepositories(instance));
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const view = editingView({
     narrator: plugins.narrator, progress: plugins.progress, log: outputChannel, revealLog: () => outputChannel.show(true), loadOrderPut: plugins.loadOrderPut,

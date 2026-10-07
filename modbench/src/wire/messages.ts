@@ -141,6 +141,9 @@ export interface ColumnHeaderContext {
   compilable: boolean;
   // commands.md, delete: compilable, and the plugin source reads.
   editable: boolean;
+  // editor.md, Menus and keys: track is offered on a plugin in an untracked mod, decompile on one in
+  // a tracked mod. None is the game's plugin, Overwrite's, and one whose tracked state is unknown.
+  inMod: 'tracked' | 'untracked' | 'none';
   preventDefaultContextMenuItems: true;
 }
 

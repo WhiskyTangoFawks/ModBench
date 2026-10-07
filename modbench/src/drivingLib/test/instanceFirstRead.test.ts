@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { firstReadOf } from '../instanceFirstRead';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+
+const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn() }));
+vi.mock('vscode', () => ({ commands: { executeCommand } }));
+
+import { firstReadOf, markFirstReadLanded } from '../instanceFirstRead';
+import { INSTANCE_READ_KEY } from '../folderContext';
 import type { InstanceSubscriber, ReadFailureListener } from '../../instanceLoader/instance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
@@ -46,3 +52,41 @@ const explicitFailureIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): 
   pending,
   new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`did not settle within ${ms} ms`)), ms)),
 ]);
+
+beforeEach(() => { executeCommand.mockClear(); });
+
+const writesOfTheReadKey = () =>
+  executeCommand.mock.calls.filter(([command, key]) => command === 'setContext' && key === INSTANCE_READ_KEY);
+
+describe("the instance's first read", () => {
+  const unread = () => new FakeInstance(instanceValueFixture(), 0);
+
+  it('leaves the key unset until a value lands', () => {
+    markFirstReadLanded(unread());
+    expect(writesOfTheReadKey()).toEqual([]);
+  });
+
+  it('leaves the key unset through a failed read, and sets it when the next read lands', () => {
+    const instance = unread();
+    markFirstReadLanded(instance);
+    instance.fail('ModOrganizer.ini is empty');
+    expect(writesOfTheReadKey()).toEqual([]);
+    instance.publish(instanceValueFixture());
+    expect(writesOfTheReadKey()).toEqual([['setContext', INSTANCE_READ_KEY, true]]);
+  });
+
+  it('sets the key once the first value lands, and never again', () => {
+    const instance = unread();
+    markFirstReadLanded(instance);
+    instance.publish(instanceValueFixture());
+    instance.publish(instanceValueFixture());
+    expect(writesOfTheReadKey()).toEqual([['setContext', INSTANCE_READ_KEY, true]]);
+  });
+
+  it('stops listening when disposed before any value lands', () => {
+    const instance = unread();
+    markFirstReadLanded(instance).dispose();
+    instance.publish(instanceValueFixture());
+    expect(writesOfTheReadKey()).toEqual([]);
+  });
+});

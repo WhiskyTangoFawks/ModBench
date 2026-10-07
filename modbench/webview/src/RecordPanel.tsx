@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { PluginHeader } from './PluginHeader';
 import { ColumnEdge } from './ColumnEdge';
 import { DiffRow } from './DiffRow';
-import { buildColumns, headerCellContext, recordLabel } from './recordUtils';
+import { buildColumns, headerCellContext, modOfColumn, recordLabel } from './recordUtils';
 import { mono, fg, headerCell, headerBackground, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
 import type {
   ColumnKey, CompareOverride, CompareResult, PathHop, PluginLoadFailure, RecordEditEnvelope,
@@ -357,7 +357,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                 // Keyed by col.key (ADR-0012), so two columns that share a file name collapse and
                 // resize apart; a status is the plugin's, by its compound key.
                 const isImmutable = immutableSet.has(pluginKeyOf(col.override));
-                const tracked = trackedSet?.has(pluginKeyOf(col.override)) === true;
+                const trackedKnown = trackedSet?.has(pluginKeyOf(col.override));
+                const tracked = trackedKnown === true;
                 const sourceUnreadable = sourceUnreadableSet?.has(pluginKeyOf(col.override)) === true;
                 return (
                   <PluginHeader
@@ -375,7 +376,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                     // Copy… is offered on every column: copying from a read-only plugin is the
                     // ordinary case.
                     vscodeContext={JSON.stringify(headerCellContext(
-                      col.override.formKey, col.override.plugin, col.override.origin, tracked && !isImmutable, tracked && !sourceUnreadable && !isImmutable,
+                      col.override.formKey, col.override.plugin, col.override.origin,
+                      {
+                        compilable: tracked && !isImmutable,
+                        editable: tracked && !sourceUnreadable && !isImmutable,
+                        inMod: modOfColumn({ isTracked: trackedKnown, isImmutable, isInOverwrite: col.override.isInOverwrite }),
+                      },
                     ))}
                   />
                 );

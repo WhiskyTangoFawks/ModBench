@@ -8,6 +8,7 @@ import {
   arrayElementContext,
   arrayParentContext,
   headerCellContext,
+  modOfColumn,
   cellContext,
   referenceContext,
   stringValueContext,
@@ -187,10 +188,23 @@ describe('cellContext, every cell\'s own items and every menu its cell is the ta
 
 describe('headerCellContext, unconditional on the column\'s read-only-ness, as copying from an immutable column is the headline use case', () => {
   it('identifies the header cell, carrying the column\'s own record identity', () => {
-    expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', true, true)).toEqual({
+    expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', { compilable: true, editable: true, inMod: 'tracked' })).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      compilable: true, editable: true, preventDefaultContextMenuItems: true,
+      compilable: true, editable: true, inMod: 'tracked', preventDefaultContextMenuItems: true,
     });
+  });
+});
+
+describe('modOfColumn, which repository state a column offers track or decompile on', () => {
+  it.each([
+    ['a plugin in a tracked mod', { isTracked: true, isImmutable: false, isInOverwrite: false }, 'tracked'],
+    ['a plugin in a tracked mod that the game does not load', { isTracked: true, isImmutable: true, isInOverwrite: false }, 'tracked'],
+    ['a plugin in an untracked mod', { isTracked: false, isImmutable: false, isInOverwrite: false }, 'untracked'],
+    ['a plugin the game provides', { isTracked: false, isImmutable: true, isInOverwrite: false }, 'none'],
+    ['a plugin in Overwrite', { isTracked: false, isImmutable: false, isInOverwrite: true }, 'none'],
+    ['a plugin whose tracked state is unknown', { isTracked: undefined, isImmutable: false, isInOverwrite: false }, 'none'],
+  ] as const)('reads %s as %s', (_what, facts, expected) => {
+    expect(modOfColumn(facts)).toBe(expected);
   });
 });
 

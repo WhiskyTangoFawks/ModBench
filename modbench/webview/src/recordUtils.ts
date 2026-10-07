@@ -69,10 +69,18 @@ export function arrayParentContext(
   return { webviewSection: 'arrayParent', formKey, plugin, origin, path, preventDefaultContextMenuItems: true };
 }
 
+export function modOfColumn(
+  { isTracked, isImmutable, isInOverwrite }: { isTracked: boolean | undefined; isImmutable: boolean; isInOverwrite: boolean },
+): ColumnHeaderContext['inMod'] {
+  if (isTracked === undefined || isInOverwrite) return 'none';
+  if (isTracked) return 'tracked';
+  return isImmutable ? 'none' : 'untracked';
+}
+
 export function headerCellContext(
-  formKey: string, plugin: string, origin: string, compilable: boolean, editable: boolean,
+  formKey: string, plugin: string, origin: string, menu: Pick<ColumnHeaderContext, 'compilable' | 'editable' | 'inMod'>,
 ): ColumnHeaderContext {
-  return { webviewSection: 'recordHeader', formKey, plugin, origin, compilable, editable, preventDefaultContextMenuItems: true };
+  return { webviewSection: 'recordHeader', formKey, plugin, origin, ...menu, preventDefaultContextMenuItems: true };
 }
 
 /** A cell's `data-vscode-context`: what its right-click hands a command, and what the host's keys
