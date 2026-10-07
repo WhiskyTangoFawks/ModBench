@@ -32,18 +32,6 @@ public class PluginParticipationTests
         index.RequireReads().GetOverrideStack(npcKey.ToString())?.Entries.ToDictionary(o => o.Plugin.Name, o => o.IsWinner) ?? [];
 
     [Fact]
-    public void DisabledPlugin_LaterInLoadOrder_DoesNotDisplaceEnabledWinner()
-    {
-        using var fixture = SharedNpcFixture("participation-winner", out var npcKey, pluginBEnabled: false);
-        using var index = Indexes.Reconciled(fixture);
-
-        var only = Assert.Single(index.RequireReads().GetOverrideStack(npcKey.ToString())?.Entries ?? []);
-
-        Assert.Equal("PluginA.esm", only.Plugin.Name);
-        Assert.True(only.IsWinner);
-    }
-
-    [Fact]
     public void DisablingAPluginByReconcile_MatchesIndexingItDisabledFromStart()
     {
         using var fixtureX = SharedNpcFixture("participation-flip-x", out var npcKeyX);

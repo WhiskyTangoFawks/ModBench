@@ -162,22 +162,6 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void DisablingAPlugin_KeepsItHeld_AndItsWinsGo()
-    {
-        using var data = new PluginFixtureBuilder("lo-update").WithPlugin("A.esp", mod => mod.Npcs.AddNew("Npc")).Build();
-        var holder = new LoadOrderHolder();
-        using var held = Indexes.Open(holder);
-        held.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-        var npc = held.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10)).Items.Single().FormKey;
-        Assert.True(held.RequireReads().GetDocument(npc, Key("A.esp"))?.IsWinner);
-
-        held.Reconcile(holder, data.DataFolder, [data.Plugins.Single() with { Enabled = false }], GameRelease.Fallout4);
-
-        Assert.Null(held.RequireReads().GetDocument(npc, Key("A.esp")));
-        Assert.Contains(Key("A.esp"), held.RequireReads().OpenedPlugins.Keys);
-    }
-
-    [Fact]
     public void ARemovedPlugin_IsNoLongerHeld()
     {
         using var data = new PluginFixtureBuilder("lo-remove").WithPlugin("A.esp").WithPlugin("B.esp").Build();

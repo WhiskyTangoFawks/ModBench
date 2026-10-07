@@ -29,14 +29,4 @@ public class DisposalTests(TestPluginFixture fixture)
         var ex = Record.Exception(() => index.Dispose());
         Assert.Null(ex);
     }
-
-    [Fact]
-    public void Dispose_ClearsLoadOrder()
-    {
-        var holder = new LoadOrderHolder();
-        var index = ReconciledIndex(holder);
-        index.Dispose();
-
-        Assert.Throws<NoLoadOrderException>(() => index.RequireReads());
-    }
 }

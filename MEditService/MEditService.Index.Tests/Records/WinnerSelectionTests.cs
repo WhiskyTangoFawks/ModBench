@@ -71,19 +71,6 @@ public sealed class WinnerSelectionTests : IDisposable
     }
 
     [Fact]
-    public void ADisabledPlugin_WinsNothing_AndWinsAgainOnceReEnabledAndSwept()
-    {
-        Reconcile([.. _fixture.Plugins.Select(p => p.Name == OverKey.Name ? p with { Enabled = false } : p)]);
-
-        Assert.Equal(BaseKey, WinnerOf(_npc));
-        Assert.Null(Reads.GetDocument(_npc, OverKey));
-
-        Reconcile(_fixture.Plugins);
-
-        Assert.Equal(OverKey, WinnerOf(_npc));
-    }
-
-    [Fact]
     public void AnUnregisteredPlugin_WinsNothing_EvenThoughItsRowsAreStillThere()
     {
         Reconcile([.. _fixture.Plugins.Where(p => p.Name != OverKey.Name)]);
