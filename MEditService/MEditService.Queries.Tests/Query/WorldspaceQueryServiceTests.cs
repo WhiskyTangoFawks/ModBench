@@ -7,60 +7,30 @@ namespace MEditService.Queries.Tests.Query;
 
 public class WorldspaceQueryServiceTests
 {
-    private sealed class StubReader(
-        IReadOnlyList<CellLocationSummary> cells,
-        IReadOnlyList<Index.RecordSummary>? records = null,
-        Index.CellChildRecords? cellRefs = null) : IRecordReads
+    private static readonly PluginAddress Plugin = new("M.esp", "Data");
+    private static readonly PluginAddress OtherOrigin = new("M.esp", "ModB");
+    private const string World = "wrld:M.esp";
+
+    private static IWorldspaceQueryService Service(FakeReads reads) => QueryHost.Worldspaces(new StubIndex(reads));
+
+    private static FakeReads Reads(params FakeRow[] rows) => new(new Dictionary<PluginAddress, PluginContent>(), rows);
+
+    private static IWorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) => Service(WorldAndInteriorCells((Plugin, cells)));
+
+    private static FakeReads WorldAndInteriorCells(params (PluginAddress Plugin, IReadOnlyList<CellLocationSummary> Cells)[] holdings)
     {
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey)
-        {
-            LastGetWorldspaceCellsOrigin = plugin.Origin;
-            return cells;
-        }
-
-        public string? LastSearchOrigin { get; private set; }
-        public string? LastGetWorldspaceCellsOrigin { get; private set; }
-        public string? LastGetInteriorCellsOrigin { get; private set; }
-        public string? LastGetCellChildRecordsOrigin { get; private set; }
-
-        public Index.PagedResult<Index.RecordSummary> Search(RecordQuery query)
-        {
-            LastSearchOrigin = query.Origin;
-            return new(records ?? [], (records ?? []).Count);
-        }
-        public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins =>
-            new Dictionary<PluginAddress, PluginContent>();
-        public RecordDocument? GetDocument(string formKey) => null;
-        public RecordDocument? GetDocument(string formKey, PluginAddress plugin) => null;
-        public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text) => null;
-        public RecordOverrides? GetOverrideStack(string formKey) => null;
-        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin) => [];
-        public RecordLookupEntry? Resolve(string formKey) => null;
-        public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<PluginAddress>();
-        public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
-        public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
-        public IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations() => new Dictionary<PluginAddress, DerivedFrom>();
-        public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey) => [];
-        public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(Func<PluginAddress, PluginProvider.FromMod?> modOf) => [];
-        public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin)
-        {
-            LastGetInteriorCellsOrigin = plugin.Origin;
-            return cells;
-        }
-        public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();
-        public Index.CellChildRecords GetCellChildRecords(PluginAddress plugin, string fk)
-        {
-            LastGetCellChildRecordsOrigin = plugin.Origin;
-            return cellRefs ?? new([], []);
-        }
-        public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
-        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey) => [];
-        public bool HasChildRecords(PluginAddress plugin, string formKey) => false;
-        public IReadOnlySet<PluginAddress> PluginsHoldingChildRecords(PluginAddress plugin, string formKey) => new HashSet<PluginAddress>();
+        var reads = Reads();
+        reads.WorldspaceCells = holdings.ToDictionary(h => new RecordAt(h.Plugin, World), h => h.Cells);
+        reads.InteriorCells = holdings.ToDictionary(h => h.Plugin, h => h.Cells);
+        return reads;
     }
 
-    private static IWorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>
-        QueryHost.Worldspaces(new StubIndex(new StubReader(cells)));
+    private static CellLocationSummary Cell(string editorId) =>
+        new($"{editorId}:M.esp", editorId, 0, 0, 0, 0, 1, 1, Index.WorkingTreeState.None);
+
+    private static FakeRow Worldspace(string formKey, string? editorId, PluginAddress? plugin = null, bool holdsAnUnreadableRecord = false) =>
+        new(new RecordDocument(formKey, plugin ?? Plugin, 0, IsWinner: false, editorId, "wrld", null, []),
+            HoldsAnUnreadableRecord: holdsAnUnreadableRecord);
 
     [Fact]
     public void GetCellChildRecords_AnswersEveryChildFact_InQueriesOwnTypes()
@@ -71,7 +41,12 @@ public class WorldspaceQueryServiceTests
         var temporary = new Index.ChildRecordSummary(
             "t1:M.esp", "TemporaryEditor", "base2:M.esp", "ACHR", Index.WorkingTreeState.None, HasParseFailure: false,
             FullName: "TemporaryFull", BaseEditorId: "TemporaryBase", ParseDiagnosis: "temporary diagnosis");
-        var svc = QueryHost.Worldspaces(new StubIndex(new StubReader([], cellRefs: new Index.CellChildRecords([persistent], [temporary]))));
+        var reads = Reads();
+        reads.CellChildren = new Dictionary<RecordAt, Index.CellChildRecords>
+        {
+            [new RecordAt(Plugin, "cell:M.esp")] = new([persistent], [temporary]),
+        };
+        var svc = Service(reads);
 
         var result = svc.GetCellChildRecords(new PluginAddress("M.esp", "Data"), "cell:M.esp");
 
@@ -136,51 +111,44 @@ public class WorldspaceQueryServiceTests
     [Fact]
     public void GetWorldspaces_MapsRecordsToSummaries()
     {
-        var reader = new StubReader([], [
-            new Index.RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
-            new Index.RecordSummary("0002:M.esp", "M.esp", 0, true, null, "Data"),
-        ]);
-        var svc = QueryHost.Worldspaces(new StubIndex(reader));
+        var svc = Service(Reads(Worldspace("000801:M.esp", "WorldA"), Worldspace("000802:M.esp", null)));
 
         var result = svc.GetWorldspaces(new PluginAddress("M.esp", "Data"));
 
         Assert.Equal(2, result.Count);
-        Assert.Equal("0001:M.esp", result[0].FormKey);
+        Assert.Equal("000801:M.esp", result[0].FormKey);
         Assert.Equal("WorldA", result[0].EditorId);
         Assert.Null(result[1].EditorId);
     }
 
     [Fact]
-    public void GetWorldspaces_PassesGivenOriginToSearch_UntouchedOneHopFurtherThanTheOtherWorldspaceTreeReads()
+    public void GetWorldspaces_ListsTheWorldspacesOfTheGivenOrigin()
     {
-        var reader = new StubReader([]);
-        var svc = QueryHost.Worldspaces(new StubIndex(reader));
+        var svc = Service(Reads(Worldspace("000801:M.esp", "InData"), Worldspace("000802:M.esp", "InModB", OtherOrigin)));
 
-        svc.GetWorldspaces(new PluginAddress("M.esp", "ModB"));
+        var result = svc.GetWorldspaces(OtherOrigin);
 
-        Assert.Equal("ModB", reader.LastSearchOrigin);
+        Assert.Equal(["InModB"], result.Select(w => w.EditorId));
     }
 
     [Fact]
-    public void GetWorldspaceBlocks_PassesGivenOriginToReads()
+    public void GetWorldspaceBlocks_ReadsTheCellsOfTheGivenOrigin()
     {
-        var reader = new StubReader([]);
-        var svc = QueryHost.Worldspaces(new StubIndex(reader));
+        var svc = Service(WorldAndInteriorCells((Plugin, [Cell("InData")]), (OtherOrigin, [Cell("InModB")])));
 
-        svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "ModB"), "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks(OtherOrigin, World);
 
-        Assert.Equal("ModB", reader.LastGetWorldspaceCellsOrigin);
+        Assert.Equal("InModB", Assert.Single(Assert.Single(Assert.Single(result.Blocks).SubBlocks).Cells).EditorId);
     }
 
     [Fact]
-    public void GetInteriorCells_PassesGivenOriginToReads()
+    public void GetInteriorCells_ReadsTheCellsOfTheGivenOrigin()
     {
-        var reader = new StubReader([]);
-        var svc = QueryHost.Worldspaces(new StubIndex(reader));
+        var svc = Service(WorldAndInteriorCells((Plugin, [Cell("InData")]), (OtherOrigin, [Cell("InModB")])));
 
-        svc.GetInteriorCells(new PluginAddress("M.esp", "ModB"));
+        var result = svc.GetInteriorCells(OtherOrigin);
 
-        Assert.Equal("ModB", reader.LastGetInteriorCellsOrigin);
+        Assert.Equal("InModB", Assert.Single(Assert.Single(Assert.Single(result).SubBlocks).Cells).EditorId);
     }
 
     [Fact]
@@ -264,15 +232,11 @@ public class WorldspaceQueryServiceTests
     [Fact]
     public void GetWorldspaces_MarksOnlyTheWorldspaceTheIndexFindsAFailureBeneath()
     {
-        var reader = new StubReader([], [
-            new Index.RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data", HasParseFailure: true),
-            new Index.RecordSummary("0002:M.esp", "M.esp", 0, true, "WorldB", "Data"),
-        ]);
-        var svc = QueryHost.Worldspaces(new StubIndex(reader));
+        var svc = Service(Reads(Worldspace("000801:M.esp", "WorldA", holdsAnUnreadableRecord: true), Worldspace("000802:M.esp", "WorldB")));
 
         var result = svc.GetWorldspaces(new PluginAddress("M.esp", "Data"));
 
-        Assert.True(result.Single(w => w.FormKey == "0001:M.esp").HasParseFailure);
-        Assert.False(result.Single(w => w.FormKey == "0002:M.esp").HasParseFailure);
+        Assert.True(result.Single(w => w.FormKey == "000801:M.esp").HasParseFailure);
+        Assert.False(result.Single(w => w.FormKey == "000802:M.esp").HasParseFailure);
     }
 }

@@ -18,7 +18,7 @@ internal static class IndexRowMapping
         _ => throw new ArgumentOutOfRangeException(nameof(state), state, "No Queries counterpart."),
     };
 
-    public static FieldValue ToQuery(this Index.FieldValue field) =>
+    public static FieldValue ToQuery(this Codec.Schema.FieldValue field) =>
         new(field.Metadata, field.Value, field.CheckError);
 
     public static CellChildRecords ToQuery(this Index.CellChildRecords children) =>

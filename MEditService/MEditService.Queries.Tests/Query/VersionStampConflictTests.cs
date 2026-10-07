@@ -12,7 +12,6 @@ public sealed class VersionStampConflictTests
     private static readonly GameRelease Release = GameRelease.Fallout4;
     private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
     private static readonly PluginAddress OverridePlugin = new("Over.esp", "Data");
-    private static readonly string[] Members = ["VersionControl", "FormVersion", "Version2", "MajorRecordFlagsRaw", "WaterHeight"];
 
     [Theory]
     [InlineData("VersionControl")]
@@ -80,8 +79,8 @@ public sealed class VersionStampConflictTests
 
         var rows = new[]
         {
-            new FakeRow(BasePlugin, 0, IsWinner: false, RealDocuments.Of(baseCell, BasePlugin, 0, isWinner: false, Release, "cell", Members)),
-            new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(overrideCell, OverridePlugin, 1, isWinner: true, Release, "cell", Members)),
+            new FakeRow(RealDocuments.Of(baseCell, BasePlugin, 0, Release)),
+            new FakeRow(RealDocuments.Of(overrideCell, OverridePlugin, 1, Release)),
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
         {

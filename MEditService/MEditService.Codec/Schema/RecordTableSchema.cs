@@ -1,4 +1,7 @@
 
+using System.Text.Json;
+using Mutagen.Bethesda;
+
 namespace MEditService.Codec.Schema;
 
 /// <summary>A member the document never spells: the flag FlagName of the flags member at BackingPath.</summary>
@@ -56,4 +59,27 @@ public sealed class RecordTableSchema
     /// rather than a major record's, so its columns sit under a nested path and it carries no
     /// record-header flags.</summary>
     public bool IsHeader { get; init; }
+
+    /// <summary>Every column's node in <paramref name="document"/>, null where the document omits it,
+    /// checked against what <paramref name="resolve"/> answers. No document holds a header's masters
+    /// (ADR-0008), so their column reads null here.</summary>
+    public List<FieldValue> FieldsOf(JsonElement document, Func<string, ResolvedFormKey?> resolve, GameRelease release)
+    {
+        var fields = new List<FieldValue>(RecordColumns.Count);
+        foreach (var col in RecordColumns)
+        {
+            // A synthetic member is the bit it stands for, read off the member the document spells.
+            var value = col.Synthetic is { } bit
+                ? JsonSerializer.SerializeToElement(SyntheticBits.IsSet(document, bit))
+                : DocumentNodes.At(document, col.PropertyName);
+            var meta = col.ToFieldMetadata();
+            // The check reads the shape this record's own class gives the column; the wire keeps the
+            // column's whole metadata, variants included, so the editor can pick the same.
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, document), value, resolve, release)));
+        }
+        return fields;
+    }
+
+    // A ModHeader cannot carry the Partial Form flag.
+    public bool IsPartialForm(JsonElement document) => !IsHeader && PartialFormFlag.IsSet(document, RecordType);
 }

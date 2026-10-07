@@ -21,7 +21,7 @@ public sealed class RecordFileQueryTests : IDisposable
         QueryHost.Records(
             new FakeIndex(new FakeReads(
                 new Dictionary<PluginAddress, PluginContent>(),
-                [new FakeRow(Plugin, 0, IsWinner: true, new RecordDocument(Npc, Plugin, 0, IsWinner: true, "FiledNpc", "npc_", "{}", []))])),
+                [new FakeRow(new RecordDocument(Npc, Plugin, 0, IsWinner: true, "FiledNpc", "npc_", "{}", []))])),
             FakeLoadOrder.Of(
                 GameRelease.Fallout4,
                 new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)));

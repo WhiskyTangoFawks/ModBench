@@ -11,75 +11,40 @@ public class ContainerChildQueryServiceTests
 {
     private static readonly LoadOrderHolder Fallout4 = FakeLoadOrder.Of(GameRelease.Fallout4);
 
-    private sealed class StubReader(
-        IReadOnlyList<ContainerChildRow> containerChildren,
-        IReadOnlyDictionary<string, IReadOnlyList<Index.RecordSummary>>? searchByType = null) : IRecordReads
+    private static readonly PluginAddress Plugin = new("M.esp", "Data");
+
+    private static ContainerChildQueryService Service(
+        IReadOnlyList<ContainerChildRow> children, IReadOnlyList<FakeRow> records, ILoggerFactory? loggerFactory = null)
     {
-        public string? LastGetContainerChildrenOrigin { get; private set; }
-        public readonly List<string?> SearchedRecordTypes = [];
-
-        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey)
+        var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent>(), records)
         {
-            LastGetContainerChildrenOrigin = plugin.Origin;
-            return containerChildren;
-        }
-
-        public Index.PagedResult<Index.RecordSummary> Search(RecordQuery query)
-        {
-            var type = query.RecordTypes?.SingleOrDefault();
-            SearchedRecordTypes.Add(type);
-            var items = type != null && searchByType != null && searchByType.TryGetValue(type, out var found)
-                ? found
-                : [];
-            return new(items, items.Count);
-        }
-
-        public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins =>
-            new Dictionary<PluginAddress, PluginContent>();
-        public RecordDocument? GetDocument(string formKey) => null;
-        public RecordDocument? GetDocument(string formKey, PluginAddress plugin) => null;
-        public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text) => null;
-        public RecordOverrides? GetOverrideStack(string formKey) => null;
-        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin) => [];
-        public RecordLookupEntry? Resolve(string formKey) => null;
-        public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<PluginAddress>();
-        public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
-        public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
-        public IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations() => new Dictionary<PluginAddress, DerivedFrom>();
-        public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey) => [];
-        public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(Func<PluginAddress, PluginProvider.FromMod?> modOf) => [];
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) => [];
-        public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin) => [];
-        public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();
-        public Index.CellChildRecords GetCellChildRecords(PluginAddress plugin, string fk) => new([], []);
-        public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
-        public bool HasChildRecords(PluginAddress plugin, string formKey) => false;
-        public IReadOnlySet<PluginAddress> PluginsHoldingChildRecords(PluginAddress plugin, string formKey) => new HashSet<PluginAddress>();
+            ContainerChildren = children.GroupBy(c => c.ParentFormKey)
+                .ToDictionary(g => new RecordAt(Plugin, g.Key), g => (IReadOnlyList<ContainerChildRow>)[.. g]),
+        };
+        return QueryHost.Containers(new StubIndex(reads), Fallout4, loggerFactory);
     }
+
+    private static FakeRow Record(string formKey, string recordType, string? editorId = null, PluginAddress? plugin = null) =>
+        new(new RecordDocument(formKey, plugin ?? Plugin, 0, IsWinner: false, editorId, recordType, null, []));
 
     [Fact]
     public void GetChildren_Quest_KeepsTheIndexsOrder_WhateverTheChildrensTypes()
     {
-        var reader = new StubReader(
+        var svc = Service(
             [
                 new ContainerChildRow("dlbr1:M.esp", "qust1:M.esp", "Quest", "DialogBranches", 0),
                 new ContainerChildRow("dial2:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 1),
                 new ContainerChildRow("scen1:M.esp", "qust1:M.esp", "Quest", "Scenes", 0),
                 new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
             ],
-            new Dictionary<string, IReadOnlyList<Index.RecordSummary>>
-            {
-                ["dial"] =
-                [
-                    new Index.RecordSummary("dial1:M.esp", "M.esp", 0, true, "TopicA", "Data"),
-                    new Index.RecordSummary("dial2:M.esp", "M.esp", 0, true, "TopicB", "Data"),
-                ],
-                ["dlbr"] = [new Index.RecordSummary("dlbr1:M.esp", "M.esp", 0, true, "BranchA", "Data")],
-                ["scen"] = [new Index.RecordSummary("scen1:M.esp", "M.esp", 0, true, "SceneA", "Data")],
-            });
-        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4);
+            [
+                Record("dial1:M.esp", "dial", "TopicA"),
+                Record("dial2:M.esp", "dial", "TopicB"),
+                Record("dlbr1:M.esp", "dlbr", "BranchA"),
+                Record("scen1:M.esp", "scen", "SceneA"),
+            ]);
 
-        var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
+        var result = svc.GetChildren(Plugin, "qust1:M.esp");
 
         Assert.Equal(
             ["dlbr1:M.esp", "dial2:M.esp", "scen1:M.esp", "dial1:M.esp"],
@@ -88,24 +53,17 @@ public class ContainerChildQueryServiceTests
     }
 
     [Fact]
-    public void GetChildren_HydratesHasContainerChildren_FromRecordSummary_ForADialChildIsItselfAContainerThePluginsTreeExpands()
+    public void GetChildren_SaysWhichChildHoldsChildrenOfItsOwn_ForADialChildIsItselfAContainerThePluginsTreeExpands()
     {
-        var reader = new StubReader(
+        var svc = Service(
             [
                 new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
                 new ContainerChildRow("dial2:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 1),
+                new ContainerChildRow("info1:M.esp", "dial1:M.esp", "DialogTopic", "Responses", 0),
             ],
-            new Dictionary<string, IReadOnlyList<Index.RecordSummary>>
-            {
-                ["dial"] =
-                [
-                    new Index.RecordSummary("dial1:M.esp", "M.esp", 0, true, "TopicA", "Data", HasContainerChildren: true),
-                    new Index.RecordSummary("dial2:M.esp", "M.esp", 0, true, "TopicB", "Data", HasContainerChildren: false),
-                ],
-            });
-        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4);
+            [Record("dial1:M.esp", "dial", "TopicA"), Record("dial2:M.esp", "dial", "TopicB"), Record("info1:M.esp", "info")]);
 
-        var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
+        var result = svc.GetChildren(Plugin, "qust1:M.esp");
 
         Assert.True(result.Single(r => r.FormKey == "dial1:M.esp").HasContainerChildren);
         Assert.False(result.Single(r => r.FormKey == "dial2:M.esp").HasContainerChildren);
@@ -114,19 +72,14 @@ public class ContainerChildQueryServiceTests
     [Fact]
     public void GetChildren_SaysWhichChildIsAContainer_AnEmptyTopicIncluded()
     {
-        var reader = new StubReader(
+        var svc = Service(
             [
                 new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
                 new ContainerChildRow("dlbr1:M.esp", "qust1:M.esp", "Quest", "DialogBranches", 0),
             ],
-            new Dictionary<string, IReadOnlyList<Index.RecordSummary>>
-            {
-                ["dial"] = [new Index.RecordSummary("dial1:M.esp", "M.esp", 0, true, "Topic", "Data", HasContainerChildren: false)],
-                ["dlbr"] = [new Index.RecordSummary("dlbr1:M.esp", "M.esp", 0, true, "Branch", "Data")],
-            });
-        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4);
+            [Record("dial1:M.esp", "dial", "Topic"), Record("dlbr1:M.esp", "dlbr", "Branch")]);
 
-        var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
+        var result = svc.GetChildren(Plugin, "qust1:M.esp");
 
         Assert.True(result.Single(r => r.FormKey == "dial1:M.esp").IsContainer);
         Assert.False(result.Single(r => r.FormKey == "dlbr1:M.esp").IsContainer);
@@ -135,55 +88,58 @@ public class ContainerChildQueryServiceTests
     [Fact]
     public void GetChildren_DialogTopic_ReturnsItsResponses_TaggedInfo()
     {
-        var reader = new StubReader(
+        var svc = Service(
             [
                 new ContainerChildRow("info2:M.esp", "dial1:M.esp", "DialogTopic", "Responses", 1),
                 new ContainerChildRow("info1:M.esp", "dial1:M.esp", "DialogTopic", "Responses", 0),
             ],
-            new Dictionary<string, IReadOnlyList<Index.RecordSummary>>
-            {
-                ["info"] =
-                [
-                    new Index.RecordSummary("info1:M.esp", "M.esp", 0, true, null, "Data"),
-                    new Index.RecordSummary("info2:M.esp", "M.esp", 0, true, null, "Data"),
-                ],
-            });
-        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4);
+            [Record("info1:M.esp", "info"), Record("info2:M.esp", "info")]);
 
-        var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "dial1:M.esp");
+        var result = svc.GetChildren(Plugin, "dial1:M.esp");
 
         Assert.Equal(["info2:M.esp", "info1:M.esp"], result.Select(r => r.FormKey).ToArray());
         Assert.All(result, r => Assert.Equal("info", r.RecordType));
     }
 
     [Fact]
-    public void GetChildren_PassesGivenOriginToReads()
+    public void GetChildren_ReadsTheChildrenOfTheGivenOrigin()
     {
-        var reader = new StubReader([]);
-        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4);
+        var modB = new PluginAddress("M.esp", "ModB");
+        var reads = new FakeReads(
+            new Dictionary<PluginAddress, PluginContent>(),
+            [
+                Record("dial1:M.esp", "dial", "DataTopic"),
+                Record("dial2:M.esp", "dial", "FromTheDataOrigin"),
+                Record("dial2:M.esp", "dial", "FromModB", modB),
+            ])
+        {
+            ContainerChildren = new Dictionary<RecordAt, IReadOnlyList<ContainerChildRow>>
+            {
+                [new RecordAt(Plugin, "qust1:M.esp")] = [new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0)],
+                [new RecordAt(modB, "qust1:M.esp")] = [new ContainerChildRow("dial2:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0)],
+            },
+        };
+        var svc = QueryHost.Containers(new StubIndex(reads), Fallout4);
 
-        svc.GetChildren(new PluginAddress("M.esp", "ModB"), "qust1:M.esp");
+        var result = svc.GetChildren(modB, "qust1:M.esp");
 
-        Assert.Equal("ModB", reader.LastGetContainerChildrenOrigin);
+        Assert.Equal(["FromModB"], result.Select(r => r.EditorId));
     }
 
     [Fact]
     public void GetChildren_ContainerChildRowSearchDidNotReturn_SkipsItInsteadOfThrowingKeyNotFound_ReturnsSurvivors_LogsWarning()
     {
-        var reader = new StubReader(
+        var entries = new List<LogEntry>();
+        using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(entries)));
+        var svc = Service(
             [
                 new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
                 new ContainerChildRow("dial-missing:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 1),
             ],
-            new Dictionary<string, IReadOnlyList<Index.RecordSummary>>
-            {
-                ["dial"] = [new Index.RecordSummary("dial1:M.esp", "M.esp", 0, true, "TopicA", "Data")],
-            });
-        var entries = new List<LogEntry>();
-        using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(entries)));
-        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4, loggerFactory);
+            [Record("dial1:M.esp", "dial", "TopicA")],
+            loggerFactory);
 
-        var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
+        var result = svc.GetChildren(Plugin, "qust1:M.esp");
 
         Assert.Equal(["dial1:M.esp"], result.Select(r => r.FormKey).ToArray());
         var warning = Assert.Single(entries, e => e.Level == LogLevel.Warning);
@@ -194,15 +150,13 @@ public class ContainerChildQueryServiceTests
     }
 
     [Fact]
-    public void GetChildren_NoContainerChildRows_ReturnsEmpty_WithoutSearching()
+    public void GetChildren_OfARecordHoldingNone_IsEmpty()
     {
-        var reader = new StubReader([]);
-        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4);
+        var svc = Service([], [Record("dial1:M.esp", "dial", "Topic")]);
 
-        var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
+        var result = svc.GetChildren(Plugin, "qust1:M.esp");
 
         Assert.Empty(result);
-        Assert.Empty(reader.SearchedRecordTypes);
     }
 
     [Fact]
