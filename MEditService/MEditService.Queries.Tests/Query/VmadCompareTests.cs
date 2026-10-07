@@ -43,10 +43,10 @@ public sealed class VmadCompareTests
 
         var rows = new[]
         {
-            Row(baseNpc, BasePlugin, 0, isWinner: false),
-            Row(topNpcKeepingOnlyGuardMastersAmbushAbsentNotRenamed, TopPlugin, 1, isWinner: true),
-            Row(baseQuest, BasePlugin, 0, isWinner: false),
-            Row(topQuestDisagreeingOnlyInAnAliasScriptsOwnProperty, TopPlugin, 1, isWinner: true),
+            Row(baseNpc, BasePlugin, 0),
+            Row(topNpcKeepingOnlyGuardMastersAmbushAbsentNotRenamed, TopPlugin, 1),
+            Row(baseQuest, BasePlugin, 0),
+            Row(topQuestDisagreeingOnlyInAnAliasScriptsOwnProperty, TopPlugin, 1),
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
@@ -62,8 +62,8 @@ public sealed class VmadCompareTests
         _service = QueryHost.Records(new FakeIndex(new FakeReads(opened, rows)), holder);
     }
 
-    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, bool isWinner) =>
-        new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, Release));
+    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex) =>
+        new(RealDocuments.Of(record, plugin, loadOrderIndex, Release));
 
     private static ScriptEntry NamedScript(string name, string property, int value)
     {

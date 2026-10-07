@@ -99,15 +99,6 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_MultiplePlugins_NoWinnerMarked_Throws_NamingTheRecordsFormKey()
-    {
-        var a = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
-        var b = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
-        var ex = Assert.Throws<InvalidOperationException>(() => CompareQuery.Classify([a, b]));
-        Assert.Contains("000001:Test.esp", ex.Message);
-    }
-
-    [Fact]
     public void Classify_SameFilenameDifferentOrigin_DoesNotCollide_WhereBarePluginDictionaryKeysWouldThrowOnTheDuplicate()
     {
         var modA = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, false, ("Name", "FromModA"));

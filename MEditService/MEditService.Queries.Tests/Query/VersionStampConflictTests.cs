@@ -79,8 +79,8 @@ public sealed class VersionStampConflictTests
 
         var rows = new[]
         {
-            new FakeRow(BasePlugin, 0, IsWinner: false, RealDocuments.Of(baseCell, BasePlugin, 0, isWinner: false, Release)),
-            new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(overrideCell, OverridePlugin, 1, isWinner: true, Release)),
+            new FakeRow(RealDocuments.Of(baseCell, BasePlugin, 0, Release)),
+            new FakeRow(RealDocuments.Of(overrideCell, OverridePlugin, 1, Release)),
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
         {

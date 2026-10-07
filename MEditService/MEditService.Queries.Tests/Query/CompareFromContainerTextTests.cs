@@ -70,7 +70,7 @@ public sealed class CompareFromContainerTextTests : IDisposable
     private static byte[] Bytes(IMajorRecordGetter record) => Encoding.UTF8.GetBytes(RealDocuments.BodyOf(record, Release));
 
     private static FakeRow Row(IMajorRecordGetter record) =>
-        new(Plugin, 0, true, RealDocuments.Of(record, Plugin, 0, true, Release));
+        new(RealDocuments.Of(record, Plugin, 0, Release));
 
     private CompareOverride ColumnReadFrom(IMajorRecordGetter record, string text) =>
         (_service.GetCompare(record.FormKey.ToString(), new CopyText(Plugin, text))

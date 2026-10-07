@@ -15,7 +15,7 @@ public sealed class RenderedDocumentQueryTests
         QueryHost.Records(
             new FakeIndex(new FakeReads(
                 new Dictionary<PluginAddress, PluginContent>(),
-                [.. copies.Select(c => new FakeRow(c.Plugin, 0, IsWinner: false, c))])),
+                [.. copies.Select(c => new FakeRow(c))])),
             FakeLoadOrder.Of(GameRelease.Fallout4));
 
     private static RecordDocument Copy(PluginAddress plugin, string body, string? parseDiagnosis = null) =>

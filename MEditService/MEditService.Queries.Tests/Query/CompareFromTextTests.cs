@@ -49,7 +49,7 @@ public sealed class CompareFromTextTests
         new() { Item = new ContainerItem { Item = new FormLink<IItemGetter>(item), Count = 1 } };
 
     private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex) =>
-        new(plugin, loadOrderIndex, true, RealDocuments.Of(record, plugin, loadOrderIndex, true, Release));
+        new(RealDocuments.Of(record, plugin, loadOrderIndex, Release));
 
     private CompareResult Compare(PluginAddress plugin, string text) =>
         _service.GetCompare(_chest.FormKey.ToString(), new CopyText(plugin, text))

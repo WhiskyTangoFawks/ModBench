@@ -49,7 +49,7 @@ public sealed class CompareRecordsTests
         new() { Item = new ContainerItem { Item = new FormLink<IItemGetter>(item), Count = 1 } };
 
     private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex) =>
-        new(plugin, loadOrderIndex, true, RealDocuments.Of(record, plugin, loadOrderIndex, true, Release));
+        new(RealDocuments.Of(record, plugin, loadOrderIndex, Release));
 
     private static RecordCopy Copy(IMajorRecordGetter record, PluginAddress plugin, string? text = null) =>
         new(record.FormKey.ToString(), plugin, text);

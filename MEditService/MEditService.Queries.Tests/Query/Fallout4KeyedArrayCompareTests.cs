@@ -74,8 +74,8 @@ public sealed class Fallout4KeyedArrayCompareTests
     {
         var rows = Records.SelectMany(r => new[]
         {
-            Row(r.Build(false), BasePlugin, 0, isWinner: false),
-            Row(r.Build(true), TopPlugin, 1, isWinner: true),
+            Row(r.Build(false), BasePlugin, 0),
+            Row(r.Build(true), TopPlugin, 1),
         }).ToArray();
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
@@ -369,8 +369,8 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static LayerHeader Layer(Quadrant quadrant, ushort number) =>
         new() { Texture = new FormLink<ILandscapeTextureGetter>(A), Quadrant = quadrant, LayerNumber = number };
 
-    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, bool isWinner) =>
-        new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, Release));
+    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex) =>
+        new(RealDocuments.Of(record, plugin, loadOrderIndex, Release));
 
     private void AssertTopCopyIsIdenticalToMaster(FormKey record)
     {

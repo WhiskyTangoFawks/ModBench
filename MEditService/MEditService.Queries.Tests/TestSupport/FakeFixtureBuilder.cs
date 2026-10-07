@@ -74,19 +74,16 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
                 perPlugin.Add((key, slot, records));
             }
 
-            var winners = Winners(perPlugin);
+            // A link's check reads only its target's record type, which every copy of a FormKey shares.
+            var recordTypes = perPlugin.SelectMany(p => p.Records)
+                .GroupBy(r => r.Record.FormKey.ToString(), StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First().RecordType, StringComparer.Ordinal);
             RecordLookupEntry? Resolve(string formKey) =>
-                winners.TryGetValue(formKey, out var winner) ? new RecordLookupEntry(winner.RecordType, winner.Record.EditorID) : null;
+                recordTypes.TryGetValue(formKey, out var recordType) ? new RecordLookupEntry(recordType, null) : null;
 
-            var rows = new List<FakeRow>();
-            foreach (var (key, slot, records) in perPlugin)
-            {
-                foreach (var (record, recordType) in records)
-                {
-                    var isWinner = winners.TryGetValue(record.FormKey.ToString(), out var winner) && winner.Slot == slot;
-                    rows.Add(new FakeRow(key, slot, isWinner, RealDocuments.Of(record, key, slot, isWinner, release, Resolve)));
-                }
-            }
+            var rows = perPlugin
+                .SelectMany(p => p.Records.Select(r => new FakeRow(RealDocuments.Of(r.Record, p.Key, p.Slot, release, Resolve))))
+                .ToList();
 
             return new FakeFixtureData(release, registered, opened, rows);
         }
@@ -94,23 +91,5 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
         {
             foreach (var overlay in overlays) overlay.Dispose();
         }
-    }
-
-    // ADR-0013's rule, applied the same way the Indexer's own sweep applies it: the winner of a
-    // FormKey is the highest-slot active plugin, and every plugin here is active.
-    private static Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)> Winners(
-        List<(PluginAddress Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)> perPlugin)
-    {
-        var winners = new Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)>(StringComparer.Ordinal);
-        foreach (var (_, slot, records) in perPlugin)
-        {
-            foreach (var (record, recordType) in records)
-            {
-                var formKey = record.FormKey.ToString();
-                if (!winners.TryGetValue(formKey, out var current) || slot > current.Slot)
-                    winners[formKey] = (slot, record, recordType);
-            }
-        }
-        return winners;
     }
 }

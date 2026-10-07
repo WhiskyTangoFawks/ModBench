@@ -34,7 +34,7 @@ public sealed class LoadOrderFormIdKeyOrderTests
             p => p.Plugin,
             p => new PluginContent(p.Light, IsMaster: p.Plugin.Name.EndsWith(".esm", StringComparison.Ordinal), IsBlueprint: false, Masters: [], RecordCount: 1, IsMedium: p.Medium));
         var rows = placed.Select((p, slot) => Row(
-            new Container(ContainerKey, Fallout4Release.Fallout4) { Items = [.. p.Items] }, p.Plugin, slot, isWinner: slot == placed.Length - 1));
+            new Container(ContainerKey, Fallout4Release.Fallout4) { Items = [.. p.Items] }, p.Plugin, slot));
         var plugins = placed.Select((p, slot) => new LoadOrderEntry(p.Plugin.Name, p.Plugin.Name, "Data", slot, Enabled: true, Winning: true));
         var service = QueryHost.Records(
             new FakeIndex(new FakeReads(opened, [.. rows])), FakeLoadOrder.Of(GameRelease.Fallout4, [.. plugins]));
@@ -48,8 +48,8 @@ public sealed class LoadOrderFormIdKeyOrderTests
     private static IReadOnlyList<FieldDiff> ItemRows(params Placed[] placed) =>
         CompareOf(placed).Diffs.Single(d => d.FieldName == "Items").Children ?? [];
 
-    private static FakeRow Row(Container record, PluginAddress plugin, int loadOrderIndex, bool isWinner) =>
-        new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, GameRelease.Fallout4));
+    private static FakeRow Row(Container record, PluginAddress plugin, int loadOrderIndex) =>
+        new(RealDocuments.Of(record, plugin, loadOrderIndex, GameRelease.Fallout4));
 
     private static ContainerEntry Entry(FormKey item, FormKey? owner = null) => new()
     {
