@@ -21,7 +21,6 @@ interface ReconciledDeps {
   applyReconciled: (failures: PluginLoadFailure[], totalPlugins: number) => Promise<void>;
 }
 
-// A reconcile that reached Ready, whoever started it, reported and then handed to the views.
 // Ready is only published once the snapshot is indexed (common.md, The status bar, story 1),
 // so conflicts are computed.
 async function settleReconciled(status: LoadOrderProgress, deps: ReconciledDeps): Promise<void> {
