@@ -39,20 +39,16 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
     }
 
     [Fact]
-    public void ParkingTheWorkingTree_WhileTheUsersCommitHoldsTheIndexLock_ParksTheEditedDocument()
+    public void ParkingTheBinary_WhileTheUsersCommitHoldsTheIndexLock_RecordsItAndLeavesTheirLock()
     {
         using var modFolder = TrackedMod();
-        File.WriteAllText(Path.Combine(modFolder, Document), "{\"a\":2}");
         var usersLock = IndexOf(modFolder) + ".lock";
         File.WriteAllText(usersLock, "");
 
-        string? parked = null;
-        SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4).WriteBinary(
-            new PluginAddress(Plugin, "TestMod"), "DEADBEEF",
-            () => parked = GitProbe.Run(
-                Path.Combine(modFolder, ".git"), modFolder, "cat-file", "-p",
-                $"{LastWriteRecord.RefOfTheOnlyPlugin(modFolder)}:{Document}"));
-        Assert.Equal("{\"a\":2}", parked);
+        var repository = SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4);
+        var address = new PluginAddress(Plugin, "TestMod");
+        repository.WriteBinary(address, "DEADBEEF", () => { });
+        Assert.Equal(["DEADBEEF"], repository.LastWrittenBinarySha256s(address));
         Assert.True(File.Exists(usersLock), "the user's own lock is theirs to release");
     }
 }

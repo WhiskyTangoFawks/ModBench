@@ -28,7 +28,7 @@ internal static class GitCli
 
     internal static string Run(string gitDir, string workTree, params string[] args)
     {
-        var (exitCode, stdout, stderr) = Execute(gitDir, workTree, null, args);
+        var (exitCode, stdout, stderr) = Execute(gitDir, workTree, args);
         if (exitCode != 0) throw Failed(args, exitCode, stderr);
         return stdout;
     }
@@ -42,18 +42,9 @@ internal static class GitCli
     /// matched".</summary>
     internal static int RunForExitCode(string gitDir, string workTree, out string stdout, params string[] args)
     {
-        var (exitCode, output, _) = Execute(gitDir, workTree, null, args);
+        var (exitCode, output, _) = Execute(gitDir, workTree, args);
         stdout = output;
         return exitCode;
-    }
-
-    /// <summary>Against a scratch index instead of <c>$GIT_DIR/index</c>: building a tree object must not
-    /// disturb the checked-out branch's real index, which may carry the user's own staged dirt.</summary>
-    internal static string RunWithIndex(string gitDir, string workTree, string indexFile, params string[] args)
-    {
-        var (exitCode, stdout, stderr) = Execute(gitDir, workTree, indexFile, args);
-        if (exitCode != 0) throw Failed(args, exitCode, stderr);
-        return stdout;
     }
 
     // Only the subcommand and the exit code are named: the arguments and git's stderr can carry paths
@@ -64,7 +55,7 @@ internal static class GitCli
         return new GitCommandFailedException($"git {args[0]} failed ({exitCode})");
     }
 
-    private static ProcessStartInfo StartInfo(string gitDir, string workTree, string? indexFile, string[] args)
+    private static ProcessStartInfo StartInfo(string gitDir, string workTree, string[] args)
     {
         var psi = new ProcessStartInfo("git")
         {
@@ -76,16 +67,15 @@ internal static class GitCli
         foreach (var arg in args) psi.ArgumentList.Add(arg);
         psi.Environment["GIT_DIR"] = gitDir;
         psi.Environment["GIT_WORK_TREE"] = workTree;
-        if (indexFile != null) psi.Environment["GIT_INDEX_FILE"] = indexFile;
         // A read that refreshes the index takes index.lock, which fails the commit or rebase the
         // user is running in the same repository at that moment (ADR-0003).
         psi.Environment["GIT_OPTIONAL_LOCKS"] = "0";
         return psi;
     }
 
-    private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string? indexFile, string[] args)
+    private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string[] args)
     {
-        using var process = Process.Start(StartInfo(gitDir, workTree, indexFile, args))
+        using var process = Process.Start(StartInfo(gitDir, workTree, args))
             ?? throw new InvalidOperationException("Failed to start the git process.");
         // Closed at once: git otherwise inherits this process's stdin, and a socket never reaches EOF.
         process.StandardInput.Close();
