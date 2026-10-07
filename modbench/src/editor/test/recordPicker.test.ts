@@ -6,7 +6,7 @@ vi.mock('vscode', () => ({
   window: { createQuickPick: (...args: unknown[]) => createQuickPick(...args) },
 }));
 
-import { pickRecord, normalizeFormKeyQuery, type RecordPickerDeps } from '../recordPicker';
+import { pickRecord, type RecordPickerDeps } from '../recordPicker';
 import type { RecordSummary } from '../../client';
 
 beforeEach(() => { createQuickPick.mockReset(); });
@@ -48,38 +48,6 @@ function makeFakeQuickPick() {
   };
 }
 
-describe('normalizeFormKeyQuery', () => {
-  it('searches on the bracketed FormKey when a whole composite label is pasted', () => {
-    expect(normalizeFormKeyQuery('DogmeatRace [000019:Fallout4.esm]')).toBe('000019:Fallout4.esm');
-  });
-
-  it('lets the FormKey win when the label and the bracketed FormKey disagree', () => {
-    expect(normalizeFormKeyQuery('WrongName [000019:Fallout4.esm]')).toBe('000019:Fallout4.esm');
-  });
-
-  it('takes the first bracketed segment, so a VMAD alias suffix does not win over the FormKey', () => {
-    expect(normalizeFormKeyQuery('SomeNPC [000123:Foo.esp] [2]')).toBe('000123:Foo.esp');
-  });
-
-  it('trims whitespace inside the brackets', () => {
-    expect(normalizeFormKeyQuery('DogmeatRace [ 000019:Fallout4.esm ]')).toBe('000019:Fallout4.esm');
-  });
-
-  it('passes an unbracketed query through untouched', () => {
-    expect(normalizeFormKeyQuery('Dogmeat')).toBe('Dogmeat');
-    expect(normalizeFormKeyQuery('000019:Fallout4.esm')).toBe('000019:Fallout4.esm');
-  });
-
-  it('falls back to the query as typed when the brackets are empty', () => {
-    expect(normalizeFormKeyQuery('Foo []')).toBe('Foo []');
-    expect(normalizeFormKeyQuery('Foo [  ]')).toBe('Foo [  ]');
-  });
-
-  it('passes an unclosed bracket through as typed', () => {
-    expect(normalizeFormKeyQuery('Foo [000019')).toBe('Foo [000019');
-  });
-});
-
 describe('pickRecord', () => {
   function openPicker(seed: string, validTypes: string[], deps: RecordPickerDeps): Promise<string | null> {
     return pickRecord(deps, seed, validTypes);
@@ -106,6 +74,28 @@ describe('pickRecord', () => {
     expect(searchRecords).toHaveBeenCalledWith(record.formKey, ['npc_']);
     expect(qp.items).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey }]);
     expect(qp.activeItems).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey }]);
+
+    qp.hide();
+    await dispatchPromise;
+  });
+
+  it.each([
+    ['searches on the bracketed FormKey when a whole composite label is pasted', 'DogmeatRace [000019:Fallout4.esm]', '000019:Fallout4.esm'],
+    ['lets the FormKey win when the label and the bracketed FormKey disagree', 'WrongName [000019:Fallout4.esm]', '000019:Fallout4.esm'],
+    ['takes the first bracketed segment, so a VMAD alias suffix does not win over the FormKey', 'SomeNPC [000123:Foo.esp] [2]', '000123:Foo.esp'],
+    ['trims whitespace inside the brackets', 'DogmeatRace [ 000019:Fallout4.esm ]', '000019:Fallout4.esm'],
+    ['passes an unbracketed name through untouched', 'Dogmeat', 'Dogmeat'],
+    ['passes an unbracketed FormKey through untouched', '000019:Fallout4.esm', '000019:Fallout4.esm'],
+    ['falls back to the query as typed when the brackets are empty', 'Foo []', 'Foo []'],
+    ['falls back to the query as typed when the brackets hold only space', 'Foo [  ]', 'Foo [  ]'],
+    ['passes an unclosed bracket through as typed', 'Foo [000019', 'Foo [000019'],
+  ])('seeded with a label that %s', async (_label, seed, searched) => {
+    const { deps, searchRecords } = fakeDeps();
+    const { qp } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const dispatchPromise = openPicker(seed, [], deps);
+    await vi.waitFor(() => expect(searchRecords).toHaveBeenCalledWith(searched, []));
 
     qp.hide();
     await dispatchPromise;

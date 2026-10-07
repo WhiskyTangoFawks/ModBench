@@ -3,18 +3,18 @@ import {
   ReferencedByTreeProvider, type ReferencedByTreeNode, type ReferrerDirection,
 } from './ReferencedByTreeProvider';
 
-export function referencedByTitle(count: number | undefined): string {
+function referencedByTitle(count: number | undefined): string {
   return count === undefined ? 'Referenced By' : `Referenced By (${count.toLocaleString()})`;
 }
 
-export interface ReferencedByFilter extends vscode.Disposable {
+interface ReferencedByFilter extends vscode.Disposable {
   setBaseDescription(text: string | undefined): void;
   refresh(): void;
   open(): void;
   clear(): void;
 }
 
-export interface ReferencedByFilterDeps {
+interface ReferencedByFilterDeps {
   view: { description?: string; message?: string };
   object: string;
   placeholder: string;
