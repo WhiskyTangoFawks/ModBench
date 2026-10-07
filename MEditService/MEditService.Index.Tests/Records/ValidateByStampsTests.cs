@@ -41,9 +41,10 @@ public sealed class ValidateByStampsTests : IDisposable
     private void ValidateUntilEditorId(string editorId) =>
         _index.NextSnapshotUntil(() => Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId == editorId, $"the record named {editorId}");
 
-    private void ValidateUntilFailed() => _index.NextSnapshotUntil(() => PluginFailed, "the plugin's failure");
+    private void ValidateUntilSourceUnreadable() =>
+        _index.NextSnapshotUntil(() => SourceUnreadable, "the plugin file read in place of its source");
 
-    private bool PluginFailed => _index.Status.Failures.Any(f => f.Name == _mod.Name);
+    private bool SourceUnreadable => Reads.DerivationOf(_mod.KeyOf()) == DerivedFrom.BinaryForUnreadableSource;
 
     private string NpcFile => _mod.SourceFileOf(Reads.DocumentOf(_npc, _mod.KeyOf()));
 
@@ -118,13 +119,14 @@ public sealed class ValidateByStampsTests : IDisposable
     }
 
     [Fact]
-    public void ADocumentTheHandEditedToDeclareNoFormKey_FailsThePlugin_AndKeepsItsRows()
+    public void ADocumentTheHandEditedToDeclareNoFormKey_LeavesThePluginFilesRowsInItsPlace()
     {
         File.WriteAllText(NpcFile, "{\"EditorID\":\"NoFormKey\"}");
 
-        ValidateUntilFailed();
+        ValidateUntilSourceUnreadable();
 
         Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
+        Assert.Empty(_index.Status.Failures);
     }
 
     [Fact]
@@ -134,8 +136,8 @@ public sealed class ValidateByStampsTests : IDisposable
         Validate();
         Assert.True(Reads.StackEntry(_npc, _mod.KeyOf()).Require().HasWorkingTreeChange);
         using (new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None))
-            ValidateUntilFailed();
-        Assert.True(PluginFailed);
+            ValidateUntilSourceUnreadable();
+        Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
 
         Validate();
 
@@ -143,16 +145,15 @@ public sealed class ValidateByStampsTests : IDisposable
     }
 
     [Fact]
-    public void ADocumentDeclaringNoRecord_FailsThePlugin_AndStillFailsItOnTheNextValidation()
+    public void ADocumentDeclaringNoRecord_LeavesThePluginSourceUnreadable_AtTheNextValidationToo()
     {
         var stray = Path.Combine(Path.GetDirectoryName(NpcFile).Require(), "Stray - 000A00_Fixture.esp.json");
         File.WriteAllText(stray, "{\"EditorID\":\"Stray\"}");
-        ValidateUntilFailed();
-        Assert.True(PluginFailed);
+        ValidateUntilSourceUnreadable();
 
         _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(Reads));
 
-        Assert.True(PluginFailed);
+        Assert.True(SourceUnreadable);
     }
 
     [Fact]
@@ -192,12 +193,12 @@ public sealed class ValidateByStampsTests : IDisposable
         var copy = Path.Combine(Path.GetDirectoryName(document).Require(), copyNamedWithTheFormKeySuffix);
         File.Copy(document, copy);
 
-        ValidateUntilFailed();
+        ValidateUntilSourceUnreadable();
 
         Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
-        var failure = Assert.Single(_index.Status.Failures);
-        Assert.Contains(Path.GetRelativePath(_mod.ModFolderOf(), document), failure.Reason, StringComparison.Ordinal);
-        Assert.Contains(Path.GetRelativePath(_mod.ModFolderOf(), copy), failure.Reason, StringComparison.Ordinal);
+        Assert.Equivalent(
+            new[] { Path.GetRelativePath(_mod.ModFolderOf(), document), Path.GetRelativePath(_mod.ModFolderOf(), copy) },
+            _index.SourceFileFailures.Select(f => f.SourceRelativePath), strict: true);
     }
 
     [Fact]
@@ -219,10 +220,11 @@ public sealed class ValidateByStampsTests : IDisposable
         File.Copy(brokenDocument, backup);
         sound.HandEdit(index.RequireReads().DocumentOf(other.ToString(), sound.KeyOf()), "\"SoundNpc\"", "\"EditedSoundNpc\"");
 
-        index.NextSnapshot();
+        index.NextSnapshotUntil(
+            () => index.RequireReads().DerivationOf(broken.KeyOf()) == DerivedFrom.BinaryForUnreadableSource,
+            "the broken plugin's file read in place of its source");
 
         Assert.Equal("EditedSoundNpc", index.RequireReads().DocumentOf(other.ToString(), sound.KeyOf()).EditorId);
-        Assert.Contains(index.Status.Failures, f => f.Name == "Broken.esp");
     }
 
 }

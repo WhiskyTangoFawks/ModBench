@@ -40,7 +40,7 @@ public class WorldspaceQueryServiceTests
         public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<PluginAddress>();
         public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
         public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
-        public IReadOnlySet<PluginAddress> GetTrackedPlugins() => new HashSet<PluginAddress>(PluginAddress.Comparer);
+        public IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations() => new Dictionary<PluginAddress, DerivedFrom>();
         public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey) => [];
         public IReadOnlyList<MissingReference> GetReferencesToMissingRecords() => [];
         public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(Func<PluginAddress, PluginProvider.FromMod?> modOf) => [];

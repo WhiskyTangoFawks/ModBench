@@ -177,7 +177,7 @@ public sealed class SourceIngestTests : IDisposable
     }
 
     [Fact]
-    public void AnUnreadableSourceTree_FallsBackToTheBinary_AndSaysSoInTheFailures()
+    public void AnUnreadableSourceTree_ReadsTheBinaryInItsPlace_MarkedAsSuch()
     {
         const string halfWrittenRootHeaderTheWholeModDoorReadsFirst = "{ this is not json";
         File.WriteAllText(RootDocument, halfWrittenRootHeaderTheWholeModDoorReadsFirst);
@@ -185,14 +185,12 @@ public sealed class SourceIngestTests : IDisposable
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         Assert.NotNull(reloaded.RequireReads().GetDocument(_npc, Plugin));
-
-        var failure = Assert.Single(reloaded.Status.Failures);
-        Assert.Equal(PluginName, failure.Name);
-        Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(DerivedFrom.BinaryForUnreadableSource, reloaded.RequireReads().DerivationOf(Plugin));
+        Assert.Empty(reloaded.Status.Failures);
     }
 
     [Fact]
-    public void AnUnreadableSourceDocument_AtValidation_KeepsTheSourceDerivedRows_AndSaysSoInTheFailures()
+    public void AnUnreadableSourceDocument_AtValidation_ReadsTheBinaryInPlaceOfTheSourceDerivedRows()
     {
         using var index = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
         var document = index.RequireReads().DocumentOf(_npc, Plugin);
@@ -202,29 +200,27 @@ public sealed class SourceIngestTests : IDisposable
 
         File.WriteAllText(RootDocument, "{ this is not json");
 
-        index.NextSnapshotUntil(() => index.Status.Failures.Count > 0, "the plugin's failure");
+        index.NextSnapshotUntil(
+            () => index.RequireReads().DerivationOf(Plugin) == DerivedFrom.BinaryForUnreadableSource, "the binary read in the tree's place");
 
-        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.RequireReads().DocumentOf(_npc, Plugin)));
-
-        var failure = Assert.Single(index.Status.Failures);
-        Assert.Equal(PluginName, failure.Name);
-        Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(BaselineHeightMax, HeightMaxOf(index.RequireReads().DocumentOf(_npc, Plugin)));
+        Assert.Empty(index.Status.Failures);
     }
 
     private static float HeightMaxOf(RecordDocument document) =>
         Assert.IsType<JsonElement>(document.Fields.Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle();
 
     [Fact]
-    public void ADirtyFileThatDeclaresNoFormKey_DegradesToTheBinary_AndSaysSoInTheFailures()
+    public void ADirtyFileThatDeclaresNoFormKey_DegradesToTheBinary_NamingTheFile()
     {
-        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
-            File.WriteAllText(NpcSourceFile(live), """{"EditorID": "HalfWritten"}""");
+        string document;
+        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing()) document = NpcSourceFile(live);
+        File.WriteAllText(document, """{"EditorID": "HalfWritten"}""");
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        var failure = Assert.Single(reloaded.Status.Failures);
-        Assert.Equal(PluginName, failure.Name);
-        Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(DerivedFrom.BinaryForUnreadableSource, reloaded.RequireReads().DerivationOf(Plugin));
+        Assert.Equal(Path.GetRelativePath(ModFolder, document), Assert.Single(reloaded.SourceFileFailures).SourceRelativePath);
     }
 
     [Fact]
@@ -238,9 +234,9 @@ public sealed class SourceIngestTests : IDisposable
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         Assert.Equal(NpcEditorId, reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
-        var failure = Assert.Single(reloaded.Status.Failures);
-        Assert.Contains(Path.GetRelativePath(ModFolder, document), failure.Reason, StringComparison.Ordinal);
-        Assert.Contains(Path.GetRelativePath(ModFolder, backup), failure.Reason, StringComparison.Ordinal);
+        Assert.Equivalent(
+            new[] { Path.GetRelativePath(ModFolder, document), Path.GetRelativePath(ModFolder, backup) },
+            reloaded.SourceFileFailures.Select(f => f.SourceRelativePath), strict: true);
     }
 
     [Fact]

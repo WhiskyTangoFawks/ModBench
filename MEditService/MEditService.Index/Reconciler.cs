@@ -3,7 +3,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
-using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda.Plugins;
 
@@ -369,8 +368,8 @@ internal sealed class Reconciler(
         // ADR-0007: which truth a plugin reads is its folder's answer, and the stamp
         // records the one its rows came from. Tracking and untracking move the first alone, and no
         // load-order difference above names them.
-        var stampedFromSource = index.Reads.GetTrackedPlugins();
-        var reDerived = resolved.Where(r => open.ContainsKey(r.Key) && TruthMoved(scope, r, stampedFromSource)).ToList();
+        var derivations = index.Reads.GetDerivations();
+        var reDerived = resolved.Where(r => open.ContainsKey(r.Key) && TruthMoved(scope, r, derivations)).ToList();
 
         bool conflictsComputed;
         lock (_lock) conflictsComputed = _conflictsComputed;
@@ -454,15 +453,14 @@ internal sealed class Reconciler(
         return true;
     }
 
-    // A plugin that failed the last re-derivation is not read again until what it reads from changes.
-    private static bool TruthMoved(OpenScope scope, RegisteredPlugin plugin, IReadOnlySet<PluginAddress> stampedFromSource)
-    {
-        var holdsTree = SourceRepository.SourceReads(plugin);
-        return holdsTree != stampedFromSource.Contains(plugin.Key) && !scope.Failed.StillFailing(plugin);
-    }
+    // A plugin whose last read failed is the validation's to read again, once what it reads from changes.
+    // A plugin with no rows has no truth to move from.
+    private static bool TruthMoved(OpenScope scope, RegisteredPlugin plugin, IReadOnlyDictionary<PluginAddress, DerivedFrom> derivations) =>
+        derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom != Projector.TruthOf(plugin)
+        && !scope.Failed.Holds(plugin.Key);
 
-    // A plugin whose folder was tracked or untracked since it was indexed. Nothing here has compared
-    // the two truths, so the plugin is re-derived whole from the one its folder now offers.
+    // A plugin whose folder gained or lost its repository or its tree since it was indexed. Nothing here
+    // has compared the two truths, so the plugin is re-derived whole from the one its folder now offers.
     private void ReDeriveMovedTruths(OpenScope scope, IReadOnlyList<RegisteredPlugin> plugins, CancellationToken token)
     {
         foreach (var plugin in plugins)
@@ -470,14 +468,13 @@ internal sealed class Reconciler(
             token.ThrowIfCancellationRequested();
             if (scope.Held.Find(plugin.Key) is not { } metadata) continue;
 
-            var holdsTree = SourceRepository.SourceReads(plugin);
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation(
-                    "{Plugin} ({Origin}) now reads from {Truth}; re-deriving it", plugin.Name, plugin.Origin,
-                    holdsTree ? "its source tree" : "its binary");
+                    "{Plugin} ({Origin}) now reads as {Truth}; re-deriving it", plugin.Name, plugin.Origin,
+                    Projector.TruthOf(plugin));
             }
-            ReadOne(scope, plugin, _ => IndexOnePlugin(scope, metadata, holdsTree, token));
+            ReadOne(scope, plugin, state => IndexOnePlugin(scope, metadata, state, token));
         }
     }
 
@@ -492,29 +489,30 @@ internal sealed class Reconciler(
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
             logger.LogWarning(ex, "Could not read {Plugin} ({Origin})", plugin.Name, plugin.Origin);
-            FailRead(scope, plugin.Key, ReadFailure("this plugin", ex, scope.Index.DerivationOf(plugin.Key)));
+            FailRead(scope, plugin.Key, ReadFailure(ex, scope.Index.DerivationOf(plugin.Key)));
         }
     }
 
     // common.md, Errors (ADR-0019): the rows a failed read leaves stand, and the reason says whose they are.
-    private static string ReadFailure(string what, Exception ex, DerivedFrom? rowsFrom) =>
-        $"Could not read {what} ({PluginLoadFailure.ReasonFor(ex)})." + rowsFrom switch
+    private static string ReadFailure(Exception ex, DerivedFrom? rowsFrom) =>
+        $"Could not read this plugin ({PluginLoadFailure.ReasonFor(ex)})." + rowsFrom switch
         {
-            DerivedFrom.Binary => " Still showing what was last read from its compiled binary.",
+            null => "",
             DerivedFrom.SourceTree => " Still showing what was last read from its source tree.",
-            _ => "",
+            _ => " Still showing what was last read from its compiled binary.",
         };
 
     // Registers first: the index's reads are scoped by registration, so validate would otherwise
     // compare an empty row set against a full tree. False falls through to a full index.
-    private bool WarmRegister(OpenScope scope, PluginMetadata plugin, bool holdsTree, ReadState state)
+    private bool WarmRegister(OpenScope scope, PluginMetadata plugin, ReadState state)
     {
         scope.Index.Register(plugin);
 
-        // An untracked plugin's binary was already hashed against its stored claim when the index file
-        // opened (Store.ValidateAgainstDisk), so a second hash of every binary here would pay
-        // that whole cost twice for no new answer.
-        if (!holdsTree) return true;
+        // A binary was already hashed against its stored claim when the index file opened
+        // (Store.ValidateAgainstDisk), so a second hash of every binary here would pay that whole cost
+        // twice for no new answer.
+        var truth = Projector.TruthOf(plugin.Registered);
+        if (truth != DerivedFrom.SourceTree) return scope.Index.DerivationOf(plugin.Key) == truth;
 
         try
         {
@@ -543,8 +541,7 @@ internal sealed class Reconciler(
     private ReadOutcome RegisterOrIndex(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
         var key = plugin.Key;
-        var holdsTree = SourceRepository.SourceReads(plugin.Registered);
-        if (scope.Index.IndexedContentHash(key) != null && WarmRegister(scope, plugin, holdsTree, state))
+        if (scope.Index.IndexedContentHash(key) != null && WarmRegister(scope, plugin, state))
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -564,7 +561,7 @@ internal sealed class Reconciler(
             logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
         }
         var indexTimer = Stopwatch.StartNew();
-        var outcome = IndexOnePlugin(scope, plugin, holdsTree, token);
+        var outcome = IndexOnePlugin(scope, plugin, state, token);
         if (logger.IsEnabled(LogLevel.Debug))
         {
             logger.LogDebug("Indexed {Plugin} in {ElapsedMs} ms", plugin.Name, indexTimer.ElapsedMilliseconds);
@@ -580,21 +577,19 @@ internal sealed class Reconciler(
 
     // ADR-0007; HeldPlugins still reads a tracked plugin's metadata off its binary.
 
-    // A tree that fails to parse degrades to the binary and answers what stopped it, saying so: a
-    // silent fallback would show pre-Track binary content as the user's source. A tree that cannot be
-    // read throws.
-    private ReadOutcome IndexOnePlugin(OpenScope scope, PluginMetadata plugin, bool holdsTree, CancellationToken token)
+    // plugins.md, A row, Plugin: a tree that fails to read leaves the binary's rows, marked as standing
+    // in for it, and answers what stopped it. Only the binary's own failure throws.
+    private ReadOutcome IndexOnePlugin(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
         // One advance for the whole plugin, whichever door it came through (ADR-0015).
         using var _ = scope.Index.BeginProjection();
 
-        if (!holdsTree)
+        var truth = Projector.TruthOf(plugin.Registered);
+        if (truth != DerivedFrom.SourceTree)
         {
-            IndexFromBinary(scope, plugin);
+            IndexFromBinary(scope, plugin, truth);
             return ReadOutcome.Read;
         }
-
-        Exception stoppedBy;
 
         try
         {
@@ -605,27 +600,27 @@ internal sealed class Reconciler(
             scope.Projector.Ingest(plugin, token);
             return ReadOutcome.Read;
         }
-        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException or IOException
-            or UnauthorizedAccessException))
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
-            // Every other exception, not a curated set: a third-party deserializer fails in open-ended
-            // ways. A cancel is no source failure.
-            logger.LogWarning(ex,
-                "Could not ingest {Plugin} from its source tree; falling back to the binary", plugin.Name);
-            scope.Held.SetFailure(plugin.Key, ReadFailure("this plugin's source tree", ex, DerivedFrom.Binary));
-            stoppedBy = ex;
+            // Every exception, not a curated set: a third-party deserializer fails in open-ended ways.
+            logger.LogWarning(ex, "Could not ingest {Plugin} from its source tree; reading its binary", plugin.Name);
+            if (!BinaryStandsIn(scope.Index, plugin.Key, state))
+                IndexFromBinary(scope, plugin, DerivedFrom.BinaryForUnreadableSource);
+            return ReadOutcome.StoppedAt(ex);
         }
-
-        IndexFromBinary(scope, plugin);
-        return new ReadOutcome(false, stoppedBy);
     }
+
+    // A tree that fails at every snapshot reads its binary once per change of its bytes.
+    private static bool BinaryStandsIn(DuckDbRecordIndex index, PluginAddress key, ReadState state) =>
+        index.DerivationOf(key) == DerivedFrom.BinaryForUnreadableSource
+        && state.Binary is { } binary && index.IndexedContentHash(key) == binary;
 
     // ADR-0005: the binary reaches the index as documents, through the adapter's own door,
     // never as a mod this side holds.
-    private void IndexFromBinary(OpenScope scope, PluginMetadata plugin)
+    private void IndexFromBinary(OpenScope scope, PluginMetadata plugin, DerivedFrom derivedFrom)
     {
         using var documents = OpenDocuments(scope, plugin);
-        scope.Index.Index(documents, plugin, plugin.Path, DerivedFrom.Binary);
+        scope.Index.Index(documents, plugin, plugin.Path, derivedFrom);
     }
 
     private IPluginDocuments OpenDocuments(OpenScope scope, PluginMetadata plugin) =>
@@ -661,7 +656,7 @@ internal sealed class Reconciler(
     {
         var (held, index) = (scope.Held, scope.Index);
         var key = plugin.Key;
-        var holdsTree = SourceRepository.SourceReads(plugin.Registered);
+        var holdsTree = Projector.TruthOf(plugin.Registered) == DerivedFrom.SourceTree;
         try
         {
             if (!holdsTree && !File.Exists(plugin.Path))
@@ -671,19 +666,19 @@ internal sealed class Reconciler(
             }
 
             // Rows a failed read left say nothing of what the plugin now reads from.
-            if (held.IsHeldWithAFailure(key))
+            if (held.IsHeldWithAFailure(key) || scope.Failed.Holds(key))
             {
                 if (!scope.Failed.StillFailing(plugin.Registered)) ReindexHeldPlugin(key);
                 return;
             }
 
-            var validation = Validation.Failed;
+            var readWhole = false;
             scope.Failed.Read(plugin.Registered, state =>
             {
-                validation = ValidateAgainst(scope, plugin, holdsTree, state);
-                return validation != Validation.Failed ? ReadOutcome.Read : ReadOutcome.Unread;
+                readWhole = MustReadWhole(scope, plugin, holdsTree, state);
+                return ReadOutcome.Read;
             });
-            if (validation == Validation.ReadWhole) ReindexHeldPlugin(key);
+            if (readWhole) ReindexHeldPlugin(key);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
@@ -693,33 +688,31 @@ internal sealed class Reconciler(
         }
     }
 
-    private enum Validation
-    {
-        Failed,
-        RowsTrue,
-        ReadWhole,
-    }
-
-    // Failed when the validation could not read what the plugin reads from; ReadWhole when its rows
-    // cannot be brought true here.
-    private Validation ValidateAgainst(OpenScope scope, PluginMetadata plugin, bool holdsTree, ReadState state)
+    // When the rows cannot be brought true here. A tree that cannot be read is read whole, which reads
+    // the binary in its place and names what stopped it.
+    private bool MustReadWhole(OpenScope scope, PluginMetadata plugin, bool holdsTree, ReadState state)
     {
         var key = plugin.Key;
-        var report = scope.Projector.Validate(plugin.Registered, state);
-        if (report.Failures.Count > 0)
+        try
         {
+            var report = scope.Projector.Validate(plugin.Registered, state);
             foreach (var failure in report.Failures)
                 logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
-            FailRead(scope, key, ValidationFailure(holdsTree, string.Join("; ", report.Failures)));
-            return Validation.Failed;
-        }
 
-        // Gained records are refreshed by key so the rows that moved are named (ADR-0015).
-        var readWhole = report.NeedsRebuild && report.ChangedKeys.Count > 0 && plugin.Provider is PluginProvider.FromMod
-            ? !RefreshedByKeys(scope, plugin.Registered, report.ChangedKeys)
+            // Gained records are refreshed by key so the rows that moved are named (ADR-0015).
+            if (report.NeedsRebuild && report.ChangedKeys.Count > 0 && plugin.Provider is PluginProvider.FromMod)
+            {
+                scope.Projector.RefreshByKeys(plugin.Registered, report.ChangedKeys);
+                return false;
+            }
             // An untracked plugin's rows went with its file, and the file is back.
-            : report.NeedsRebuild || (!holdsTree && scope.Index.IndexedContentHash(key) is null);
-        return readWhole ? Validation.ReadWhole : Validation.RowsTrue;
+            return report.NeedsRebuild || (!holdsTree && scope.Index.IndexedContentHash(key) is null);
+        }
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        {
+            logger.LogWarning(ex, "Reconciling {Plugin}: its rows cannot be validated, so it is read whole", key.Name);
+            return true;
+        }
     }
 
     // editor.md, States, story 6: the rows stay the last good read, and say why.
@@ -756,26 +749,12 @@ internal sealed class Reconciler(
         }
     }
 
-    // False when the keys cannot be read from the tree, which the whole read then diagnoses on the
-    // plugin, as a first ingest would diagnose it.
-    private static bool RefreshedByKeys(
-        OpenScope scope, RegisteredPlugin plugin, IReadOnlyList<string> formKeys)
-    {
-        try
-        {
-            scope.Projector.RefreshByKeys(plugin, formKeys);
-            return true;
-        }
-        catch (Exception ex) when (ex is AmbiguousSourceUnitException or UnreadableSourceDocumentException)
-        {
-            return false;
-        }
-    }
-
     // ADR-0013, read whole rather than per plugin.
     private IReadOnlyList<RegisteredPlugin> Active() => holder.Current.Active;
 
-    // ADR-0007.
+    // ADR-0007: the read a first index runs, so a re-read produces the same rows by construction. A
+    // failed read is recorded with what it read from and rethrown, so it is not read again until that
+    // changes.
     private void ReindexHeldPlugin(PluginAddress key)
     {
         // Taken before anything reaches _lock. IndexWriteGate is a Lock, thread-affine, so nothing
@@ -783,61 +762,23 @@ internal sealed class Reconciler(
         using var _ = WriteGate.Enter();
 
         var (metadata, scope) = RequireHeldPlugin(key);
-        // ADR-0015: a whole plugin re-derived is one projection, so it is one advance
-        // whichever branch below runs.
-        using var projection = scope.Index.BeginProjection();
-
-        // A tracked plugin's truth is its source tree, so it is re-derived from there and its binary
-        // is never opened.
-
-        if (SourceRepository.SourceReads(metadata.Registered))
-            IngestFromSourceTree(key);
-        else
-            ReindexOne(metadata, scope);
-    }
-
-    // The same Projector.Ingest the reconcile's tracked branch runs, so a re-ingest and a first
-    // ingest produce the same rows by construction. A failed read is recorded and rethrown, never
-    // degraded to the binary.
-    private void IngestFromSourceTree(PluginAddress key)
-    {
-        // Outside _lock, always. It takes the gate for itself rather than trusting its caller; the
-        // reentrant gate makes that free.
-        using var _ = WriteGate.Enter();
-
-        var (metadata, scope) = RequireHeldPlugin(key);
         var index = scope.Index;
+        // ADR-0015: a whole plugin re-derived is one projection, so it is one advance.
         using var projection = index.BeginProjection();
-        if (!SourceRepository.SourceReads(metadata.Registered))
+
+        // Outside _lock, as the reconcile's own read is: every read takes _lock, and is served meanwhile.
+        try
         {
-            throw new InvalidOperationException(
-                $"Plugin '{key.Name}' from '{key.Origin}' has no source tree to re-ingest; it is not tracked.");
+            scope.Failed.Read(metadata.Registered, state => IndexOnePlugin(scope, metadata, state, CancellationToken.None));
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            FailRead(scope, key, ReadFailure(ex, index.DerivationOf(key)));
+            throw;
         }
 
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Re-ingesting {Plugin} from its source tree", metadata.Name);
-        }
-
-        // Under _lock, unlike the reconcile's own ingest: this fires against a live index that every
-        // other mutation door is serialized against by this same lock.
         lock (_lock)
         {
-            try
-            {
-                scope.Failed.Read(metadata.Registered, _ =>
-                {
-                    scope.Projector.Ingest(metadata);
-                    return ReadOutcome.Read;
-                });
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Could not re-ingest {Plugin} from its source tree", metadata.Name);
-                FailRead(scope, key, ReadFailure("this plugin's source tree", ex, index.DerivationOf(key)));
-                throw;
-            }
-
             index.UpdateWinners(Active());
             filter.Reapply(index);
         }
@@ -854,34 +795,6 @@ internal sealed class Reconciler(
                 ?? throw new KeyNotFoundException($"Plugin '{key.Name}' from '{key.Origin}' is not held.");
             return (metadata, scope);
         }
-    }
-
-    // A failed read is recorded with the bytes it failed on and rethrown, so those bytes are not
-    // read again until they change.
-    private void ReindexOne(PluginMetadata metadata, OpenScope scope)
-    {
-        var index = scope.Index;
-        try
-        {
-            scope.Failed.Read(metadata.Registered, _ =>
-            {
-                using var documents = OpenDocuments(scope, metadata);
-                lock (_lock)
-                {
-                    index.Index(documents, metadata, metadata.Path, DerivedFrom.Binary);
-                    index.UpdateWinners(Active());
-                    filter.Reapply(index);
-                }
-                return ReadOutcome.Read;
-            });
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            FailRead(scope, metadata.Key, ReadFailure("this plugin's binary", ex, index.DerivationOf(metadata.Key)));
-            throw;
-        }
-        if (scope.Held.ClearFailure(metadata.Key)) PublishStatus();
-        AnnouncePluginChanged(index, metadata.Key);
     }
 
     // The file is gone, so its rows go with it. A no-op while the held plugin still exists or with no

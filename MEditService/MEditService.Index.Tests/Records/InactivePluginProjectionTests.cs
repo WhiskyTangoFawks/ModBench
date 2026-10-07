@@ -83,7 +83,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     {
         Reconcile(active: false);
 
-        Assert.Contains(_mod.KeyOf(), Reads.GetTrackedPlugins());
+        Assert.Equal(DerivedFrom.SourceTree, Reads.DerivationOf(_mod.KeyOf()));
     }
 
     [Fact]

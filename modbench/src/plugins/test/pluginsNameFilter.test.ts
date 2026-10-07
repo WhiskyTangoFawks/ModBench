@@ -172,7 +172,7 @@ function held(name: string, hasMatchingRecords: boolean): PluginMetadata {
   return {
     name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0,
     isImmutable: false, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, hasMatchingRecords, isTracked: false,
-    hasParseFailure: false,
+    hasParseFailure: false, pluginSourceUnreadable: false,
   };
 }
 
