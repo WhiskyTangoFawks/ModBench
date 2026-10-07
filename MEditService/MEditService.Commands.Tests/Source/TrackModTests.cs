@@ -57,8 +57,8 @@ public sealed class TrackModTests
         var refused = Assert.Single(tracked.Outcome.Refused);
         Assert.Equal((new PluginAddress("Locked.esp", "FixtureMod"), TrackRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
         Assert.Contains("cannot be read", refused.Message, StringComparison.Ordinal);
-        Assert.True(SourceRepository.SourceReads(new PluginAddress("Fixture.esp", "Mod"), new PluginProvider.FromMod("Mod", modFolder)));
-        Assert.False(SourceRepository.SourceReads(new PluginAddress("Locked.esp", "Mod"), new PluginProvider.FromMod("Mod", modFolder)));
+        Assert.True(SourceRepository.SourceReads(new RegisteredPlugin("Fixture.esp", "FixtureMod", "", new PluginProvider.FromMod("FixtureMod", modFolder))));
+        Assert.False(SourceRepository.SourceReads(new RegisteredPlugin("Locked.esp", "FixtureMod", "", new PluginProvider.FromMod("FixtureMod", modFolder))));
     }
 
     private sealed class LockedPluginAdapter(string lockedName) : DelegatingPluginAdapter(TestAdapters.Mutagen())

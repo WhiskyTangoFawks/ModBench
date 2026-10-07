@@ -49,13 +49,12 @@ public sealed class SourceRepository
     /// exists.</summary>
     public static bool IsTracked(string modFolder) => SourceRepositoryGit.IsTracked(modFolder);
 
-    /// <summary>Whether the mod providing a plugin is tracked: its folder holds the repository.</summary>
-    public static bool IsTracked(PluginProvider provider) => provider is PluginProvider.FromMod mod && IsTracked(mod.Folder);
+    public static bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.Folder);
 
     /// <summary>Whether the plugin's source reads: its mod is tracked and holds the plugin's tree. A tracked mod
     /// can hold none for a plugin another tool put there, or whose source was deleted.</summary>
-    public static bool SourceReads(PluginAddress plugin, PluginProvider provider) =>
-        provider is PluginProvider.FromMod mod && HoldsTreeFor(mod.Folder, plugin.Name);
+    public static bool SourceReads(RegisteredPlugin plugin) =>
+        plugin.Provider is PluginProvider.FromMod mod && HoldsTreeFor(mod.Folder, plugin.Name);
 
     private static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
         IsTracked(modFolder) && Directory.Exists(SourceRepositoryLayout.RootIn(modFolder, pluginFileName));
@@ -184,7 +183,7 @@ public sealed class SourceRepository
         var fullPath = Path.GetFullPath(path);
         if (loadOrder.Plugins.FirstOrDefault(plugin => plugin.Provider is PluginProvider.FromMod mod
                 && SourceRepositoryLocator.IsUnder(Path.GetFullPath(SourceRepositoryLayout.RootIn(mod.Folder, plugin.Name)), fullPath)
-                && SourceReads(plugin.Key, mod)) is not { Provider: PluginProvider.FromMod source } holder)
+                && SourceReads(plugin)) is not { Provider: PluginProvider.FromMod source } holder)
         {
             whyNone = $"{fullPath} is under no tracked plugin's source.";
             return false;

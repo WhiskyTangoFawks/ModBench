@@ -39,13 +39,13 @@ public sealed class DecompilePluginHandler
                 $"{key.Name} from '{key.Origin}' is not in the load order, so there is nothing to decompile.");
         }
 
-        if (plugin.Provider is not PluginProvider.FromMod mod
-            || SourceRepository.Open(mod, loadOrder.GameRelease) is not { } repository)
+        if (plugin.Provider is not PluginProvider.FromMod mod || !SourceRepository.IsTracked(plugin))
         {
             return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.NotInTrackedMod,
                 $"{plugin.Name} is not in a tracked mod, so there is no working tree to decompile it into.");
         }
 
+        var repository = SourceRepository.Over(mod, loadOrder.GameRelease);
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, cancel);
         if (decompiled.Files is not { } files) return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(decompiled.Refusal, decompiled.Message);
 
