@@ -16,8 +16,8 @@ public sealed record SourceProblem(
 /// its <paramref name="Problems"/> are not a clean bill (ADR-0019).</summary>
 public sealed record PluginProblems(PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null);
 
-/// <summary>The Problems panel's source, per active plugin with a tree, in load order. A plugin whose
-/// read failed is answered with the files that stopped it and the links its standing rows hold.</summary>
+/// <summary>The Problems panel's source, per active tracked plugin, in load order. A plugin whose read
+/// failed is answered with the files that stopped it, and the links of rows its tree gave.</summary>
 public sealed class PluginProblemQueryService(IQueryIndex index, LoadOrderHolder loadOrder)
 {
     /// <summary>Null until the index is ready: a plugin it has not reached holds no record yet, so
@@ -28,7 +28,7 @@ public sealed class PluginProblemQueryService(IQueryIndex index, LoadOrderHolder
         if (index.Status.State != LoadOrderState.Ready) return null;
 
         var reads = index.RequireReads();
-        var tracked = reads.GetTrackedPlugins();
+        var derivations = reads.GetDerivations();
         var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
         var held = snapshot.Active.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var missing = reads
@@ -37,9 +37,11 @@ public sealed class PluginProblemQueryService(IQueryIndex index, LoadOrderHolder
         return
         [
             .. snapshot.Active
-                .Where(plugin => tracked.Contains(plugin.Key) || stopped.Contains(plugin.Key))
+                .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsTracked() || stopped.Contains(plugin.Key))
                 .Select(plugin => ProblemsOf(
-                    plugin.Key, snapshot.GameRelease, [.. stopped[plugin.Key].Select(Problem)], missing[plugin.Key].ToList())),
+                    plugin.Key, snapshot.GameRelease, [.. stopped[plugin.Key].Select(Problem)],
+                    // A binary's links are not its tree's, whose files the panel shows them on.
+                    derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom == DerivedFrom.SourceTree ? [.. missing[plugin.Key]] : [])),
         ];
     }
 

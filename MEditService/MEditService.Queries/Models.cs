@@ -33,9 +33,12 @@ public sealed record PluginRow(
     // HasParseFailure: whether this plugin holds a record Mutagen could not read. The plugin-level
     // load failure (LoadOrderResponse.Failures) stays its own channel for a file that never indexed.
     bool HasParseFailure,
-    // IsTracked (ADR-0007), as the Index holds it. Whether a .git is on disk now is the Source
-    // adapter's.
-    bool IsTracked);
+    // IsTracked (ADR-0007): its mod was tracked when the Index last read it. Whether a .git is on disk
+    // now is the Source adapter's.
+    bool IsTracked,
+    // plugins.md, A row, Plugin: tracked, and its rows read from its plugin file because its plugin
+    // source is missing or cannot be read.
+    bool PluginSourceUnreadable);
 
 public record RecordDetail(
     string FormKey,

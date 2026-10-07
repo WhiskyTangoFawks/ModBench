@@ -46,6 +46,9 @@ internal static class TrackedMods
 
     internal static PluginAddress KeyOf(this LoadOrderEntry entry) => new(entry.Name, entry.Origin);
 
+    internal static DerivedFrom? DerivationOf(this IRecordReads reads, PluginAddress plugin) =>
+        reads.GetDerivations().TryGetValue(plugin, out var derivedFrom) ? derivedFrom : null;
+
     internal static string ModFolderOf(this LoadOrderEntry entry) =>
         Path.GetDirectoryName(entry.Path) ?? throw new ArgumentException("A tracked entry sits in a mod folder.", nameof(entry));
 

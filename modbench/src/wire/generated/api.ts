@@ -1029,6 +1029,7 @@ export interface components {
             hasMatchingRecords: boolean;
             isTracked: boolean;
             hasParseFailure: boolean;
+            pluginSourceUnreadable: boolean;
         };
         PluginTrackRefusal: {
             item: components["schemas"]["PluginAddress"];

@@ -7,4 +7,6 @@ internal sealed record ReadOutcome(bool Served, Exception? StoppedBy = null)
     public static readonly ReadOutcome Read = new(true);
 
     public static readonly ReadOutcome Unread = new(false);
+
+    public static ReadOutcome StoppedAt(Exception stoppedBy) => new(Served: false, stoppedBy);
 }

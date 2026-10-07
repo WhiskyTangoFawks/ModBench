@@ -105,7 +105,7 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Theory]
     [InlineData("\"PlacedObject\"", "\"PlacedObjekt\"", "a 'PlacedObjekt'")]
     [InlineData("\"MutagenObjectType\"", "\"MutagenObjectTypo\"", "with no 'MutagenObjectType'")]
-    public void AnEmbeddedChildNoTypeResolves_FailsTheSourceRead_NamingTheChild_AndTheBinaryStillAnswersForIt(
+    public void AnEmbeddedChildNoTypeResolves_LeavesThePluginSourceUnreadable_NamingTheChild_AndTheBinaryStillAnswersForIt(
         string spelled, string handEdited, string why)
     {
         var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
@@ -118,27 +118,29 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.NotNull(reads.GetDocument(child, _fixture.Plugin));
         Assert.NotNull(reads.StackEntry(child, _fixture.Plugin));
         Assert.NotNull(reads.GetPlacement(child, _fixture.Plugin));
-        var failure = Assert.Single(reloaded.Status.Failures);
-        Assert.Equal(ContainerMod.PluginName, failure.Name);
-        Assert.Contains("source tree", failure.Reason, StringComparison.Ordinal);
-        Assert.Contains(child, failure.Reason, StringComparison.Ordinal);
-        Assert.Contains(why, failure.Reason, StringComparison.Ordinal);
-        Assert.Contains(file, failure.Reason, StringComparison.Ordinal);
+        Assert.Equal(DerivedFrom.BinaryForUnreadableSource, reads.DerivationOf(_fixture.Plugin));
+        Assert.Empty(reloaded.Status.Failures);
+        var failure = Assert.Single(reloaded.SourceFileFailures);
+        Assert.Equal(Path.GetRelativePath(_fixture.Entry.ModFolderOf(), file), failure.SourceRelativePath);
+        Assert.Contains(child, failure.Message, StringComparison.Ordinal);
+        Assert.Contains(why, failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AContainerEditedAfterTheReadToNameATypeTheGameLacks_FailsTheSourceRead_AndKeepsTheContainersLastGoodRows()
+    public void AContainerEditedAfterTheReadToNameATypeTheGameLacks_LeavesThePluginSourceUnreadable_AndTheBinaryAnswersForIt()
     {
         using var index = Reloaded();
         var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         File.WriteAllText(file, WithTemporaryRefMisspelt(File.ReadAllText(file)));
 
-        index.NextSnapshotUntil(() => index.Status.Failures.Count > 0, "the plugin's failure");
+        index.NextSnapshotUntil(
+            () => index.RequireReads().DerivationOf(_fixture.Plugin) == DerivedFrom.BinaryForUnreadableSource,
+            "the plugin file read in place of its source");
 
-        var failure = Assert.Single(index.Status.Failures);
-        Assert.Contains(_fixture.TemporaryRef.ToString(), failure.Reason, StringComparison.Ordinal);
-        Assert.Contains("a 'PlacedObjekt'", failure.Reason, StringComparison.Ordinal);
-        Assert.Contains(file, failure.Reason, StringComparison.Ordinal);
+        Assert.Empty(index.Status.Failures);
+        var failure = Assert.Single(index.SourceFileFailures);
+        Assert.Equal(_fixture.TemporaryRef.ToString(), failure.FormKey);
+        Assert.Contains("a 'PlacedObjekt'", failure.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "PlacedObjekt",
             index.RequireReads().DocumentOf(_fixture.EmbedCell.ToString(), _fixture.Plugin).BodyOf(),

@@ -74,6 +74,7 @@ function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' 
     masterIssues: [], hasMatchingRecords: true,
     isTracked: false,
     hasParseFailure: false,
+    pluginSourceUnreadable: false,
     ...over,
   };
 }

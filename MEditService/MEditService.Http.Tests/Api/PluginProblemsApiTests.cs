@@ -66,7 +66,7 @@ public sealed class PluginProblemsApiTests : HostedTests
     private static string PathOf(JsonElement problem) => problem.GetProperty("sourceRelativePath").GetString().Require();
 
     [Fact]
-    public async Task GetProblems_AFileSavedThatCompileCannotRead_IsAProblemOnThatFile_BesideTheLinksTheLastGoodReadHolds_UntilItIsMended()
+    public async Task GetProblems_AFileSavedThatCompileCannotRead_IsTheProblemOnItsPluginsSource_UntilItIsMended()
     {
         var fx = await TrackedLoad();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
@@ -77,10 +77,9 @@ public sealed class PluginProblemsApiTests : HostedTests
 
         var problems = await ProblemsOnceTheyAre(
             problems => problems.Any(p => PathOf(p) == Path.GetRelativePath(modFolder, stray)), "the unreadable file");
-        var problem = Assert.Single(problems, p => PathOf(p) == Path.GetRelativePath(modFolder, stray));
+        var problem = Assert.Single(problems);
         Assert.Equal(JsonValueKind.Null, problem.GetProperty("formKey").ValueKind);
         Assert.Equal(JsonValueKind.Null, problem.GetProperty("targetFormKey").ValueKind);
-        Assert.Single(problems, p => p.GetProperty("targetFormKey").GetString() == AbsentRecord.ToString());
 
         OtherTool.DeletesTheFile(stray);
         await Client.NextSnapshot(fx);

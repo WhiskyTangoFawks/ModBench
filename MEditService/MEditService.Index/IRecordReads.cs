@@ -67,9 +67,8 @@ public interface IRecordReads
     /// binary was hashed and gone with its rows: the malformed-plugin read.</summary>
     IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses();
 
-    /// <summary>The registered plugins whose rows were derived from a source tree: tracked, as the
-    /// Index knows it. A plugin derived from its binary is absent.</summary>
-    IReadOnlySet<PluginAddress> GetTrackedPlugins();
+    /// <summary>What each registered plugin's rows were derived from. A plugin with no rows is absent.</summary>
+    IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations();
 
     /// <summary>Every plugin holding at least one record Mutagen could not read, as
     /// <c>ColumnKey.Of(name, origin)</c> values: the tree's "has a failure below it" for a plugin

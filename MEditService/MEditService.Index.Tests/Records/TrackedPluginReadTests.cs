@@ -32,21 +32,21 @@ public sealed class TrackedPluginReadTests : IDisposable
     private static readonly PluginAddress Plain = new("Plain.esp", "PlainMod");
 
     [Fact]
-    public void APluginIngestedFromItsSourceTree_ReadsAsTracked()
+    public void APluginIngestedFromItsSourceTree_ReadsAsDerivedFromIt()
     {
-        Assert.Contains(Tracked, _index.RequireReads().GetTrackedPlugins());
+        Assert.Equal(DerivedFrom.SourceTree, _index.RequireReads().DerivationOf(Tracked));
     }
 
     [Fact]
-    public void APluginIngestedFromItsBytes_ReadsAsUntracked()
+    public void APluginIngestedFromItsBytes_ReadsAsDerivedFromThem()
     {
-        Assert.DoesNotContain(Plain, _index.RequireReads().GetTrackedPlugins());
+        Assert.Equal(DerivedFrom.Binary, _index.RequireReads().DerivationOf(Plain));
     }
 
     [Fact]
-    public void TheTrackedSet_FindsAPluginWhoseNameAndOriginDifferInCaseFromTheAskedKey()
+    public void TheDerivations_FindAPluginWhoseNameAndOriginDifferInCaseFromTheAskedKey()
     {
-        Assert.Contains(new PluginAddress("TRACKED.ESP", "trackedmod"), _index.RequireReads().GetTrackedPlugins());
+        Assert.Equal(DerivedFrom.SourceTree, _index.RequireReads().DerivationOf(new PluginAddress("TRACKED.ESP", "trackedmod")));
     }
 
     [Fact]
@@ -54,6 +54,6 @@ public sealed class TrackedPluginReadTests : IDisposable
     {
         _index.Reconcile(_holder, _fixture.GameDirectory, [.. _fixture.Plugins.Where(p => p.Name != Tracked.Name)], GameRelease.Fallout4);
 
-        Assert.DoesNotContain(Tracked, _index.RequireReads().GetTrackedPlugins());
+        Assert.Null(_index.RequireReads().DerivationOf(Tracked));
     }
 }
