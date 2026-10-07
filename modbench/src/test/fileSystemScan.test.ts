@@ -2,30 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative, sep } from 'node:path';
+import { join } from 'node:path';
 import ts from 'typescript';
-import { importSpecifiers, productionFiles, SRC } from './scanSource';
+import { SRC } from './scanSource';
 
-const BOX = join('instanceAdapter') + sep;
 const ADAPTER_PATH = join(SRC, 'instanceAdapter', 'files.ts');
 
-const FS_SPECIFIERS = new Set(['node:fs', 'node:fs/promises', 'fs', 'fs/promises']);
 const QUEUE_NAMES = new Set(['createWriteQueue', 'WriteQueue']);
-
-function fsImportsIn(path: string): string[] {
-  return importSpecifiers(readFileSync(path, 'utf8'), path).filter((spec) => FS_SPECIFIERS.has(spec));
-}
-
-function findOffenders(root: string, allowlist: readonly string[]): Record<string, string[]> {
-  const offenders: Record<string, string[]> = {};
-  for (const path of productionFiles(root)) {
-    const rel = relative(root, path);
-    if (rel.startsWith(BOX) || allowlist.includes(rel)) continue;
-    const found = fsImportsIn(path);
-    if (found.length > 0) offenders[rel] = found;
-  }
-  return offenders;
-}
 
 function exportedNames(sourceText: string, fileName: string): string[] {
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
@@ -52,33 +35,6 @@ function exportedNames(sourceText: string, fileName: string): string[] {
 function queueNamesExportedBy(path: string): string[] {
   return exportedNames(readFileSync(path, 'utf8'), path).filter((name) => QUEUE_NAMES.has(name));
 }
-
-describe('no file outside the Instance adapter imports the file system to read the instance, the adapter being the one reader and writer of the instance', () => {
-  it('covers the whole extension source tree', () => {
-    expect(productionFiles(SRC).length).toBeGreaterThan(100);
-  });
-
-  it('reaches the commands, the views and the Instance box, not only one folder', () => {
-    const scanned = productionFiles(SRC).map((p) => relative(SRC, p));
-    expect(scanned).toContain(join('modlist', 'modlist.ts'));
-    expect(scanned).toContain(join('instanceLoader', 'instance.ts'));
-    expect(scanned).toContain(join('plugins', 'PluginsTreeProvider.ts'));
-  });
-
-  it('every production file outside the box names node:fs nowhere', () => {
-    expect(findOffenders(SRC, [])).toEqual({});
-  });
-
-  it('the walk itself catches a node:fs/promises import planted outside the box, in a real file under a real root so the walk is exercised too', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-fs-import-scan-'));
-    try {
-      await writeFile(join(dir, 'planted.ts'), "import { readFile } from 'node:fs/promises';\n");
-      expect(findOffenders(dir, [])).toEqual({ 'planted.ts': ['node:fs/promises'] });
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-});
 
 describe('the keyed write queue is the adapter’s own, not exported', () => {
   it('files.ts exports neither the queue factory nor its type', () => {

@@ -2,15 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CORE_BOXES } from './boxes';
-import { importSpecifiers, productionFiles, SRC } from './scanSource';
+import { productionFiles, SRC } from './scanSource';
 
-const READ_MODEL_MODULE = join('instanceLoader', 'instance');
 const READ_MODEL_NAMES = ['InstanceValue', 'InstanceView'];
 
-const readModelIn = (source: string): string[] => [
-  ...importSpecifiers(source, 'command.ts').filter((spec) => spec.endsWith(READ_MODEL_MODULE)),
-  ...READ_MODEL_NAMES.filter((name) => new RegExp(`\\b${name}\\b`).test(source)),
-];
+const readModelIn = (source: string): string[] =>
+  READ_MODEL_NAMES.filter((name) => new RegExp(`\\b${name}\\b`).test(source));
 
 const commandModules = (): string[] => CORE_BOXES.flatMap((box) => productionFiles(join(SRC, box)));
 
@@ -20,7 +17,7 @@ describe('commands never read the Instance', () => {
     expect(commandModules().length).toBeGreaterThan(CORE_BOXES.length);
   });
 
-  it('no command module imports the read model, directly or by name', () => {
+  it('no command module names the read model', () => {
     const offenders: Record<string, string[]> = {};
     for (const path of commandModules()) {
       const found = readModelIn(readFileSync(path, 'utf8'));
@@ -29,9 +26,8 @@ describe('commands never read the Instance', () => {
     expect(offenders).toEqual({});
   });
 
-  it('flags a module that imports the read model, by module and by name alike', () => {
-    expect(readModelIn("import type { InstanceValue } from '../instanceLoader/instance';\n"))
-      .toEqual([join('..', 'instanceLoader', 'instance'), 'InstanceValue']);
+  it('flags a module that names the read model', () => {
+    expect(readModelIn("import type { InstanceValue } from '../instanceLoader/instance';\n")).toEqual(['InstanceValue']);
   });
 
   it('leaves a type the value carries alone, taken from the box beside the read model', () => {

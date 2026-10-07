@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { basename, join, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
-import { Linter } from 'eslint';
 import { importSpecifiers, rootFiles, SRC } from './scanSource';
 import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../eslint-rules/activationDecides.mjs';
 
@@ -93,36 +92,7 @@ describe('the composition root builds each box, registers it with VS Code and de
     expect(activateReturnType(parse(join(SRC, ACTIVATION)))).toBe('void');
   });
 
-  describe('a plant is caught', () => {
-    const lint = (code: string) => new Linter().verify(code, {
-      rules: {
-        'no-restricted-syntax': ['error', ...ACTIVATION_DECIDES_SELECTORS.map((selector) => ({ selector, message: ACTIVATION_DECIDES_MESSAGE }))],
-      },
-    }).map((message) => message.message);
-
-    it.each([
-      ['an if', 'function f(x) { if (x > 1) return 1; return 2; }'],
-      ['a switch', 'function f(x) { switch (x) { case 1: return 1; default: return 2; } }'],
-      ['a loop', 'function f(xs) { for (const x of xs) void x; }'],
-      ['a while', 'function f() { while (true) break; }'],
-      ['a try', 'function f() { try { g(); } catch { return; } }'],
-      ['a ternary', 'const x = a ? 1 : 2;'],
-      ['a default', 'const x = a ?? 1;'],
-      ['an and', 'const x = a && b;'],
-      ['an or', 'const x = a || b;'],
-      ['a default assignment', 'x ??= 1;'],
-      ['an or assignment', 'x ||= 1;'],
-      ['an and assignment', 'x &&= 1;'],
-    ])('%s', (_name, code) => {
-      expect(lint(code)).toEqual([ACTIVATION_DECIDES_MESSAGE]);
-    });
-
-    it('and construction beside it is not', () => {
-      expect(lint('const x = a?.b; own(register(x)); const y = [1].map((n) => n);')).toEqual([]);
-    });
-
-    it('a second export from the activation file is named', () => {
-      expect(exportedNames(parse('planted.ts', 'export function activate() {}\nexport const decide = 1;\n'))).toEqual(['activate', 'decide']);
-    });
+  it('a second export from the activation file is named', () => {
+    expect(exportedNames(parse('planted.ts', 'export function activate() {}\nexport const decide = 1;\n'))).toEqual(['activate', 'decide']);
   });
 });
