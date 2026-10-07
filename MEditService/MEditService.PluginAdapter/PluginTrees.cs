@@ -10,10 +10,6 @@ using Noggog.WorkEngine;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>How a source tree becomes a live mod. Only a negative test substitutes one; the real
-/// deserialize is the codec's whole-mod door.</summary>
-public delegate Task<IMod> TreeDeserializer(string treeRoot, CancellationToken cancel);
-
 /// <summary>A plugin's binary and its source tree, composed: the codec's whole-mod door on one side
 /// and this adapter's open and write on the other, so no caller holds the live mod between
 /// them.</summary>
@@ -34,13 +30,6 @@ internal static class PluginTrees
             ? ([], missing)
             : (await SerializeTree(mod, cancel), null);
     }
-
-    /// <summary>A plugin's binary re-serialized as its whole source tree, with no localization
-    /// check.</summary>
-    internal static Task<IReadOnlyList<TreeFile>> ReadPristineFilesAsync(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings,
-        CancellationToken cancel = default) =>
-        SerializeTree(OpenFor(modPath, gameRelease, strings), cancel);
 
     private static IMod OpenFor(ModPath modPath, GameRelease gameRelease, PluginStrings strings) =>
         MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings);
@@ -87,12 +76,12 @@ internal static class PluginTrees
     /// replacement of the real plugin.</summary>
     internal static async Task WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
-        TreeDeserializer? deserialize = null, CancellationToken cancel = default)
+        CancellationToken cancel = default)
     {
         var scratchDir = Directory.CreateTempSubdirectory("medit-writetree-").FullName;
         try
         {
-            var recompiled = await (deserialize ?? DeserializeTree)(
+            var recompiled = await DeserializeTree(
                 await MaterializeTree(files, scratchDir, cancel), cancel);
             await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder);
         }
@@ -155,11 +144,9 @@ internal static class PluginTrees
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005).</summary>
     internal static async Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files, RecordTextCodec codec, GameRelease gameRelease,
-        string? scratchRoot = null, CancellationToken cancel = default)
+        CancellationToken cancel = default)
     {
-        var scratchDir = scratchRoot is null
-            ? Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName
-            : Directory.CreateDirectory(Path.Combine(scratchRoot, ReadScratchPrefix + Path.GetRandomFileName())).FullName;
+        var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
         try
         {
             // Outside the catch below: a scratch folder this filesystem cannot write is not a source

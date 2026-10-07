@@ -80,7 +80,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
     private static readonly Lazy<IReadOnlyList<Gesture>> EveryGesture = new(() =>
     {
         var modPath = new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath);
-        var strings = PluginStrings.In(Path.GetDirectoryName(CutDownPluginFixture.PluginPath)
+        var strings = new PluginStrings(null, Path.GetDirectoryName(CutDownPluginFixture.PluginPath)
             ?? throw new InvalidOperationException("Expected the cut-down plugin's path to sit in a directory."));
         using var documents = TestAdapters.Mutagen().OpenDocuments(modPath, GameRelease.Fallout4, Schemas, strings);
         return [.. documents.Records.Prepend(documents.Header).SelectMany(GesturesOn)];

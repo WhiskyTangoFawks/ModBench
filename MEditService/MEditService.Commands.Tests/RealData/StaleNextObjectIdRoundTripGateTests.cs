@@ -137,7 +137,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             Holder.Apply(_loadOrder);
         }
 
-        public async Task<PluginTrack> TrackAsync(TreeDeserializer? deserialize = null) =>
+        public async Task<PluginTrack> TrackAsync(Func<string, CancellationToken, Task<IMod>>? deserialize = null) =>
             (await TrackEveryPluginOf.ModAsync(
                 _loadOrder, Plugin.Origin,
                 deserialize is { } forged ? new ForgedTreeWriteAdapter(Plugin.Name, forged) : null)).Only();

@@ -15,7 +15,7 @@ public sealed class ScriptStructListPropertyLinkGapTests
     {
         var modKey = ModKey.FromFileName("SpaDia_AMR.esp");
         var modPath = new ModPath(modKey, FixturePath);
-        var mod = ModFactory.ImportSetter(modPath, GameRelease.Fallout4, FixtureReadParameters.For(PluginStrings.In(Path.GetDirectoryName(FixturePath) ?? throw new InvalidOperationException($"Expected '{FixturePath}' to have a parent directory."))));
+        var mod = ModFactory.ImportSetter(modPath, GameRelease.Fallout4, FixtureReadParameters.For(new PluginStrings(null, Path.GetDirectoryName(FixturePath) ?? throw new InvalidOperationException($"Expected '{FixturePath}' to have a parent directory."))));
 
         var quest = mod.EnumerateMajorRecords().OfType<IQuestGetter>()
             .Single(q => q.EditorID == "DiaQ_LLInjector_SpadeyAMR");
