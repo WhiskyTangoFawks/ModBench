@@ -58,6 +58,8 @@ try
         o.SupportNonNullableReferenceTypes();
         o.SchemaFilter<MEditService.Http.Swagger.NullabilitySchemaFilter>();
     });
+    builder.Services.AddProblemDetails();
+    builder.Services.AddExceptionHandler<NoLoadOrderExceptionHandler>();
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddSingleton<SchemaReflector>();
     // One publisher instance (ADR-0014), resolved as both types: the concrete type for
@@ -90,6 +92,7 @@ try
         _ => LogEventLevel.Debug,
     };
 
+    app.UseExceptionHandler();
     app.UseCors();
     app.UseSwagger();
     app.UseSwaggerUI(c =>

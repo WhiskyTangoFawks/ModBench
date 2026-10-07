@@ -103,6 +103,16 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [InlineData("getPluginDiagnoses", 503)]
     [InlineData("decompilePlugin", 503)]
     [InlineData("copyRecord", 503)]
+    [InlineData("getContainerChildren", 503)]
+    [InlineData("getPlugins", 503)]
+    [InlineData("getRecords", 503)]
+    [InlineData("getRecord", 503)]
+    [InlineData("compareRecord", 503)]
+    [InlineData("getPluginRecordTypes", 503)]
+    [InlineData("getWorldspaces", 503)]
+    [InlineData("getWorldspaceBlocks", 503)]
+    [InlineData("getCellChildRecords", 503)]
+    [InlineData("getInteriorCells", 503)]
     public async Task Endpoint_WithAValidRequestAndNoLoadOrder_ReturnsProblemDetails(string op, int expectedStatus)
     {
         await using var app = new MEditHost();
@@ -120,6 +130,16 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "getPluginDiagnoses" => await client.GetAsync("/plugins/diagnoses"),
             "decompilePlugin" => await client.Decompile([("New.esp", "NoLoadOrderMod")]),
             "copyRecord" => await client.Copy("000800:New.esp", ("New.esp", "NoLoadOrderMod"), "Override", ("Dest.esp", "DestMod")),
+            "getContainerChildren" => await client.GetAsync("/plugins/New.esp/records/000800%3ANew.esp/children?origin=NoLoadOrderMod"),
+            "getPlugins" => await client.GetAsync("/plugins"),
+            "getRecords" => await client.GetAsync("/records"),
+            "getRecord" => await client.GetAsync("/records/000800%3ANew.esp"),
+            "compareRecord" => await client.GetAsync("/records/000800%3ANew.esp/compare"),
+            "getPluginRecordTypes" => await client.GetAsync("/plugins/New.esp/record-types?origin=NoLoadOrderMod"),
+            "getWorldspaces" => await client.GetAsync("/plugins/New.esp/worldspaces?origin=NoLoadOrderMod"),
+            "getWorldspaceBlocks" => await client.GetAsync("/plugins/New.esp/worldspaces/000800%3ANew.esp/blocks?origin=NoLoadOrderMod"),
+            "getCellChildRecords" => await client.GetAsync("/plugins/New.esp/cells/000800%3ANew.esp/children?origin=NoLoadOrderMod"),
+            "getInteriorCells" => await client.GetAsync("/plugins/New.esp/interior-cells?origin=NoLoadOrderMod"),
             "track" => await client.PostAsJsonAsync("/plugins/track", new { mods = new[] { "NoLoadOrderMod" } }),
             "deleteRecord" => await client.PostAsJsonAsync("/records/delete", new
             {
@@ -132,4 +152,16 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         Assert.Contains("load order", problem.GetProperty("detail").GetString(), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task ANoLoadOrderAnswer_StillCarriesTheCorsHeaders()
+    {
+        await using var app = new MEditHost();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/plugins");
+        request.Headers.Add("Origin", "https://example.test");
+
+        var response = await app.CreateClient().SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.True(response.Headers.Contains("Access-Control-Allow-Origin"));
+    }
 }

@@ -158,13 +158,6 @@ internal static class WriteEndpointMapping
             ["path"] = path,
         });
 
-    /// <summary>The load order's own failure, which no typed refusal names.</summary>
-    internal static IResult WriteFailure(string detail) => Results.Problem(detail, statusCode: 500);
-
-    /// <summary>The load order went away underneath the request — a "not right now", never a bad
-    /// request.</summary>
-    internal static IResult NoLoadOrder(NoLoadOrderException ex) => Results.Problem(ex.Message, statusCode: 503);
-
     /// <summary>No Index gate here (ADR-0015): the Index serializes its own projections
     /// afterwards, so a source write never queues behind one and never answers "busy".</summary>
     internal static IResult Execute(
