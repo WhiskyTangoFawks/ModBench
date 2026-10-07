@@ -1,9 +1,10 @@
-import type { MEditClient, NotificationKind, NotificationPayloads, BackendStatus } from '../MEditClient';
+import type {
+  MEditClient, NotificationKind, NotificationPayloads, BackendStatus, LoadOrderOutcome, LoadOrderSnapshot,
+} from '../MEditClient';
 import type { NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
+import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 
-// Every query and command a test can script; `putLoadOrder` counts as a command here — the
-// distinction is architectural, not behavioural.
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
   | 'getRecords' | 'searchRecords'
@@ -15,7 +16,7 @@ type QueryMethod =
 
 type CommandMethod =
   | 'createPlugin' | 'renameSource' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecords'
-  | 'copyRecords' | 'decompile' | 'compile' | 'putLoadOrder';
+  | 'copyRecords' | 'decompile' | 'compile';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
 // write — stays exactly `Answer<K>`/`Handlers[K]` for the checker, never a wider or narrower type.
@@ -64,6 +65,54 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private readonly reconnectListeners = new Set<() => void>();
   private _status: BackendStatus = 'starting';
+  private putAnswer: LoadOrderWire['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
+  private startAnswer: () => Promise<void> = () => { this.setStatus('running'); return Promise.resolve(); };
+  private stopAnswer: () => void = () => undefined;
+  private readonly snapshotsPut: LoadOrderSnapshot[] = [];
+  private readonly sender = createLoadOrderSender({
+    status: () => this.status,
+    onStatusChanged: (listener) => this.onStatusChanged(listener),
+    onReconnected: (listener) => this.onReconnected(listener),
+    start: () => { this.record('start', []); return this.startAnswer(); },
+    stop: () => {
+      this.record('stop', []);
+      this.stopAnswer();
+      this.setStatus('stopped');
+      return Promise.resolve();
+    },
+    put: (snapshot, signal) => {
+      this.record('put', [snapshot]);
+      this.snapshotsPut.push(snapshot);
+      return this.putAnswer(snapshot, signal);
+    },
+    log: (message) => { this.log(message); },
+  });
+
+  constructor(private readonly options: { log?: (message: string) => void } = {}) {}
+
+  private log(message: string): void {
+    this.options.log?.(message);
+  }
+
+  /** Answers each PUT of a snapshot, as the backend would, from the snapshot and its abort signal. */
+  answerPuts(answer: LoadOrderWire['put']): void {
+    this.putAnswer = answer;
+  }
+
+  /** How a launch goes; by default mEdit comes up running. */
+  answerStart(answer: () => Promise<void>): void {
+    this.startAnswer = answer;
+  }
+
+  /** Runs as mEdit is taken down, before it reports stopped. */
+  answerStop(answer: () => void): void {
+    this.stopAnswer = answer;
+  }
+
+  /** Each snapshot PUT, in order. */
+  puts(): readonly LoadOrderSnapshot[] {
+    return this.snapshotsPut;
+  }
 
   setQueryAnswer<K extends QueryMethod>(method: K, answer: Answer<K>): void {
     const boxed: ScriptedAnswers[K] = [];
@@ -143,8 +192,14 @@ export class InMemoryMEditClient implements MEditClient {
     for (const listener of [...this.reconnectListeners]) listener();
   }
 
-  start(): Promise<void> { this.record('start', []); return Promise.resolve(); }
-  stop(): Promise<void> { this.record('stop', []); return Promise.resolve(); }
+  start(): Promise<void> { return this.sender.launch(); }
+  stop(): Promise<void> { return this.sender.stop(); }
+
+  sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.sender.send(snapshot); }
+  latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.sender.latest(); }
+  onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
+    return this.sender.onResent(listener);
+  }
 
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
     this.record('onNotification', [kind]);
@@ -185,10 +240,6 @@ export class InMemoryMEditClient implements MEditClient {
       return Promise.reject(new Error(`InMemoryMEditClient: no scripted result for command "${method}"`));
     }
     return Promise.resolve(scripted.value);
-  }
-
-  putLoadOrder(...args: Parameters<MEditClient['putLoadOrder']>): ReturnType<MEditClient['putLoadOrder']> {
-    return this.command('putLoadOrder', args);
   }
 
   createPlugin(...args: Parameters<MEditClient['createPlugin']>): ReturnType<MEditClient['createPlugin']> {

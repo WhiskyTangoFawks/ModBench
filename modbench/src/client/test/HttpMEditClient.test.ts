@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMEditClient } from '../HttpMEditClient';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import { Readable } from 'node:stream';
+import { EventEmitter } from 'node:events';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -747,11 +748,12 @@ describe('HttpMEditClient — searchRecords', () => {
   });
 });
 
-describe('HttpMEditClient — putLoadOrder', () => {
+describe('HttpMEditClient — sendLoadOrder', () => {
   const plugins = [{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', provider: { kind: 'Mod' as const, mod: 'A', folder: '/mods/A' } }];
   const active = [{ name: 'Foo.esp', origin: 'A' }];
   const loadedWithNoLine = [{ name: 'Foo.esp', origin: 'A' }];
   const appliedBody = { applied: true, version: 1 };
+  const snapshot = { plugins, active, loadedWithNoLine, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' };
 
   it('PUTs every plugin, the active plugins, the game directory and the instance root', async () => {
     let putBody: unknown;
@@ -763,7 +765,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
+    const load = client.sendLoadOrder(snapshot);
     await vi.waitFor(() => expect(putBody).toBeDefined());
     push(readyTickThatSettlesPutLoadOrder());
     await load;
@@ -783,7 +785,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
+    const load = client.sendLoadOrder(snapshot);
     expect(putFetch).not.toHaveBeenCalled();
 
     const { response, push } = pushableStreamResponse();
@@ -817,7 +819,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await vi.waitFor(() => expect(streams).toHaveLength(2));
 
     let settled = false;
-    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4').then((r) => { settled = true; return r; });
+    const load = client.sendLoadOrder(snapshot).then((r) => { settled = true; return r; });
     await vi.waitFor(() => expect(puts).toBe(1));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(settled).toBe(false);
@@ -837,7 +839,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    await expect(client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4'))
+    await expect(client.sendLoadOrder(snapshot))
       .resolves.toMatchObject({ outcome: 'applied', status: { version: 1, conflictsComputed: true } });
   });
 
@@ -858,7 +860,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await client.start();
     await vi.waitFor(() => expect(streams).toHaveLength(1));
 
-    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
+    const load = client.sendLoadOrder(snapshot);
     await new Promise((resolve) => setTimeout(resolve, 20));
     status = { ...status, state: 'Ready', conflictsComputed: true, version: 1 };
     streams[0]?.end();
@@ -879,7 +881,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
+    const load = client.sendLoadOrder(snapshot);
     await vi.waitFor(() => expect(answerPut).toBeDefined());
     push(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 0 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -888,23 +890,34 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
-  it('reports a deliberately aborted PUT as abandoned, not a failure', async () => {
-    const controller = new AbortController();
+  it('aborts the PUT in flight before it kills the mEdit it spawned, and answers it abandoned, not a failure', async () => {
+    let putSignal: AbortSignal | undefined;
+    let abortedAtKill: boolean | undefined;
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/load-order', () => {
-        controller.abort();
-        return Promise.reject(new DOMException('This operation was aborted', 'AbortError'));
-      }],
+      ['/load-order', (req) => new Promise<Response>((_resolve, reject) => {
+        putSignal = req.signal;
+        req.signal.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')));
+      })],
     ]);
-    const client = makeClient(fetch);
+    const child = Object.assign(new EventEmitter(), {
+      kill: () => { abortedAtKill = putSignal?.aborted; child.emit('exit', 0); },
+    });
+    const client = createMEditClient({
+      backend: {
+        freePort: () => Promise.resolve(5172), spawn: () => child, executablePath: '/x/backend',
+        pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(true),
+      },
+      backendLog: fakeLogChannel(), fetch,
+    });
     await client.start();
+    const sent = client.sendLoadOrder(snapshot);
+    await vi.waitFor(() => expect(putSignal).toBeDefined());
 
-    const result = await client.putLoadOrder(
-      plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4', { signal: controller.signal },
-    );
+    await client.stop();
 
-    expect(result).toEqual({ outcome: 'abandoned' });
+    expect(abortedAtKill).toBe(true);
+    await expect(sent).resolves.toEqual({ outcome: 'abandoned' });
   });
 });
 

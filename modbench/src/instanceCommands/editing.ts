@@ -1,8 +1,7 @@
-// Entering editing and put load order (ADR-0013). Nothing is put while detached; a stream reopen
-// is a start, the process behind it perhaps another. What happened comes back through `tell`.
+// Put load order (ADR-0013) at every recompute. The client owns the process the snapshot goes to;
+// what came of each put comes back through `tell`.
 
-import type { LoadOrderSender, MEditClient } from '../client';
-import { enterEditingAcrossRestarts } from '../client';
+import type { LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { putLoadOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
@@ -13,91 +12,45 @@ export type Told =
   | { kind: 'backendFailed' };
 
 export interface EditingDeps {
-  client: Pick<MEditClient, 'status' | 'start' | 'onStatusChanged' | 'onReconnected'>;
-  sender: Pick<LoadOrderSender, 'arm' | 'send'>;
+  client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent'>;
   instanceRoot: string;
-  exitEditing: () => void;
   around: (entry: () => Promise<void>) => Promise<void>;
   tell: (told: Told) => Promise<void>;
-  log: (message: string) => void;
 }
 
 export interface EditingFlow {
-  /** The source arrives as a promise so the backend starts while the first read lands. */
-  enter(source: Promise<LoadOrderSource>): Promise<void>;
-  put(source: LoadOrderSource): Promise<void>;
+  /** Shown until the first read settles and the value it landed, if any, is told. */
+  enter(firstRead: Promise<unknown>): Promise<void>;
   onRecompute(source: LoadOrderSource): void;
   dispose(): void;
 }
 
+function toldOf(put: PutLoadOrderResult): Told {
+  return put.sent && put.outcome.outcome === 'backendFailed' ? { kind: 'backendFailed' } : { kind: 'put', put };
+}
+
 export function editingFlow(deps: EditingDeps): EditingFlow {
-  const { client, sender, instanceRoot, exitEditing, around, tell, log } = deps;
-  let startPutRan = false;
-  let held: Promise<LoadOrderSource> | undefined;
+  const { client, instanceRoot, around, tell } = deps;
+  let lastTold = Promise.resolve();
 
-  const put = async (source: LoadOrderSource): Promise<void> => {
-    await tell({ kind: 'put', put: await putLoadOrder(sender, instanceRoot, source) });
+  const tellPut = (put: Promise<PutLoadOrderResult>): void => {
+    lastTold = put
+      .then((result) => tell(toldOf(result)))
+      .catch((e: unknown) => tell({ kind: 'putThrew', message: errorMessage(e) }));
   };
 
-  const putHeld = (): void => {
-    void held?.then(put).catch((e: unknown) => tell({ kind: 'putThrew', message: errorMessage(e) }));
+  const resent = (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome): void => {
+    tellPut(Promise.resolve({ sent: true, snapshot, outcome }));
   };
-
-  const enterOnce = async (): Promise<void> => {
-    const { abandoned } = sender.arm();
-    const source = held;
-    await client.start();
-    // A close stops the backend, so an abandoned launch would fail the status gate below and
-    // report the stop it asked for as a startup failure.
-    if (abandoned()) return tell({ kind: 'abandoned' });
-    if (client.status !== 'running') {
-      exitEditing();
-      return tell({ kind: 'backendFailed' });
-    }
-    const value = await source;
-    startPutRan = true;
-    if (value) await put(value);
-  };
-
-  const statusSubscription = client.onStatusChanged((status) => {
-    if (status !== 'running') startPutRan = false;
-  });
-  const reconnectSubscription = client.onReconnected(() => {
-    if (startPutRan) putHeld();
-  });
-  const entry = enterEditingAcrossRestarts(
-    client, () => around(enterOnce), (message) => log(`[instanceCommands] ${message}`));
+  const unsubscribe = client.onLoadOrderResent(resent);
 
   return {
-    enter: (source) => {
-      held = source;
-      return entry.enter();
-    },
-    put,
-    onRecompute: (source) => {
-      held = Promise.resolve(source);
-      if (startPutRan) putHeld();
-    },
-    dispose: () => {
-      statusSubscription();
-      reconnectSubscription();
-      entry.dispose();
-      startPutRan = false;
-    },
+    // A landed read reached `onRecompute` before `firstRead` settles, so `lastTold` is its put.
+    enter: (firstRead) => around(async () => {
+      await firstRead;
+      await lastTold;
+    }),
+    onRecompute: (source) => { tellPut(putLoadOrder(client, instanceRoot, source)); },
+    dispose: unsubscribe,
   };
-}
-
-/** The session as far as teardown reads it, so the composition root's own session satisfies it by shape. */
-export interface TeardownSession {
-  loadOrderSender?: { abandon(): void };
-}
-
-/** Abandons the reconcile in flight and takes the backend down (ADR-0002). */
-export function exitEditing(session: TeardownSession, client: { stop(): Promise<void> }): void {
-  // Abandon any reconcile still in flight *first*: it aborts the PUT, so the reconcile returns
-  // 'abandoned' rather than reporting a killed backend to the user as a network failure.
-  session.loadOrderSender?.abandon();
-  // stop()'s body runs to completion whether or not the returned promise is awaited, so
-  // fire-and-forget still defers the 'stopped' status correctly.
-  void client.stop();
 }

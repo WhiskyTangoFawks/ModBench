@@ -1,8 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import {
-  createLoadOrderSender, type LoadOrderOutcome, type LoadOrderProgress,
-} from '../../client';
-import type { LoadOrderPluginInput } from '../../client/MEditClient';
+import { describe, it, expect } from 'vitest';
+import type { LoadOrderOutcome, LoadOrderProgress } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { editingFlow, type Told } from '../editing';
 import type { LoadOrderSource } from '../loadOrder';
@@ -13,6 +10,7 @@ const STATUS: LoadOrderProgress = {
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: STATUS };
 
 const NO_SNAPSHOT: LoadOrderSource = { gameName: 'Fallout 4', gameRelease: 'Fallout4', loadOrderSnapshot: undefined };
+const REFUSED: LoadOrderSource = { ...NO_SNAPSHOT, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } };
 
 function valueWith(name: string): LoadOrderSource {
   const plugin = { name, path: `/game/Data/${name}`, origin: 'Data', provider: { kind: 'Game' as const } };
@@ -22,317 +20,142 @@ function valueWith(name: string): LoadOrderSource {
   };
 }
 
-function isPluginInputs(value: unknown): value is LoadOrderPluginInput[] {
-  return Array.isArray(value) && value.every((v) => typeof v === 'object' && v !== null && 'name' in v);
-}
-
-function wired(status: 'running' | 'starting', first: LoadOrderSource) {
+function wired(status: 'running' | 'stopped' = 'running') {
   const client = new InMemoryMEditClient();
-  client.setCommandResult('putLoadOrder', APPLIED);
+  client.answerPuts(() => Promise.resolve(APPLIED));
   client.setStatus(status);
-  const sender = createLoadOrderSender(client);
-  let held = first;
-  let sendFails = false;
-  const exitEditing = vi.fn();
   const told: Told[] = [];
   const tellListeners: (() => void)[] = [];
+  let tellFailure: Error | undefined;
   const tell = (what: Told): Promise<void> => {
     told.push(what);
     for (const listener of tellListeners.splice(0)) listener();
-    return Promise.resolve();
+    const failure = tellFailure;
+    tellFailure = undefined;
+    return failure ? Promise.reject(failure) : Promise.resolve();
   };
   const toldCount = (count: number): Promise<void> => new Promise((resolve) => {
     const check = (): void => { if (told.length >= count) resolve(); else tellListeners.push(check); };
     check();
   });
-  const editing = editingFlow({
-    client, instanceRoot: '/instance', exitEditing, tell, log: () => undefined,
-    sender: { arm: () => sender.arm(), send: (snapshot) => (sendFails ? Promise.reject(new Error('boom')) : sender.send(snapshot)) },
-    around: (entry) => entry(),
+  const around: { entered: number; settled: boolean } = { entered: 0, settled: false };
+  const flow = editingFlow({
+    client, instanceRoot: '/instance', tell,
+    around: async (entry) => { around.entered++; await entry(); around.settled = true; },
   });
-  const flow = { ...editing, enter: () => editing.enter(Promise.resolve(held)) };
-  const putPluginNames = (): string[] => client.calls
-    .filter((c) => c.method === 'putLoadOrder')
-    .map((c) => {
-      const plugins = c.args[0];
-      if (!isPluginInputs(plugins)) throw new Error('expected putLoadOrder args[0] to be a plugin array');
-      return plugins.map((p) => p.name).join(',');
-    });
-  const land = (value: LoadOrderSource): void => { held = value; flow.onRecompute(value); };
-  return {
-    client, flow, editing, sender, exitEditing, told, toldCount, putPluginNames, land,
-    failSends: () => { sendFails = true; },
-  };
+  const putPluginNames = (): string[] => client.puts().map((put) => put.plugins.map((p) => p.name).join());
+  const land = (value: LoadOrderSource): void => { flow.onRecompute(value); };
+  const failNextTell = (error: Error): void => { tellFailure = error; };
+  return { client, flow, told, toldCount, putPluginNames, land, around, failNextTell };
 }
 
-const REFUSED: LoadOrderSource = { ...NO_SNAPSHOT, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } };
+describe('the load order is put at every recompute', () => {
+  it('hands the client each snapshot and tells what came of it', async () => {
+    const { told, toldCount, land, putPluginNames } = wired();
 
-describe('a load order the loader refused', () => {
-  it('is told on entering, with nothing sent, and editing kept', async () => {
-    const { flow, told, exitEditing, putPluginNames } = wired('running', REFUSED);
+    land(valueWith('A.esp'));
+    await toldCount(1);
+    land(valueWith('A.esp'));
+    await toldCount(2);
 
-    await flow.enter();
+    expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
+    expect(told[1]).toMatchObject({ kind: 'put', put: { sent: true, outcome: APPLIED } });
+  });
+
+  it('tells a value without a snapshot as nothing sent, and hands the client nothing', async () => {
+    const { client, told, toldCount, land } = wired();
+
+    land(NO_SNAPSHOT);
+    await toldCount(1);
+
+    expect(told).toEqual([{ kind: 'put', put: { sent: false } }]);
+    expect(client.calls).toEqual([]);
+  });
+
+  it('tells a load order the loader refused, with nothing sent', async () => {
+    const { told, toldCount, land, putPluginNames } = wired();
+
+    land(REFUSED);
+    await toldCount(1);
 
     expect(told).toEqual([{ kind: 'put', put: { sent: false, refusal: 'a.esp has no mod folder' } }]);
     expect(putPluginNames()).toEqual([]);
-    expect(exitEditing).not.toHaveBeenCalled();
   });
 
-  it('is cleared when a later recompute puts a buildable load order', async () => {
-    const { flow, told, toldCount, land, putPluginNames } = wired('running', REFUSED);
-    await flow.enter();
+  it('tells mEdit not coming up to take the snapshot as the backend failing', async () => {
+    const { client, told, toldCount, land } = wired('stopped');
+    client.answerStart(() => Promise.resolve());
 
     land(valueWith('A.esp'));
-    await toldCount(2);
-
-    expect(told[1]).toMatchObject({ kind: 'put', put: { sent: true } });
-    expect(putPluginNames()).toEqual(['A.esp']);
-  });
-
-  it('is told at a later recompute, with nothing sent and editing kept', async () => {
-    const { flow, told, toldCount, exitEditing, land, putPluginNames } = wired('running', valueWith('A.esp'));
-    await flow.enter();
     await toldCount(1);
 
-    land(REFUSED);
-    await toldCount(2);
-
-    expect(told[1]).toEqual({ kind: 'put', put: { sent: false, refusal: 'a.esp has no mod folder' } });
-    expect(putPluginNames()).toEqual(['A.esp']);
-    expect(exitEditing).not.toHaveBeenCalled();
-  });
-});
-
-describe('entering editing', () => {
-  it('starts the backend while the first read lands, then puts the load order it carries', async () => {
-    const { client, editing, told, putPluginNames } = wired('running', valueWith('A.esp'));
-    let land!: (value: LoadOrderSource) => void;
-    const firstRead = new Promise<LoadOrderSource>((resolve) => { land = resolve; });
-    const started = new Promise<void>((resolve) => {
-      client.start = () => { resolve(); return Promise.resolve(); };
-    });
-
-    const entering = editing.enter(firstRead);
-    await started;
-    expect(putPluginNames()).toEqual([]);
-    land(valueWith('A.esp'));
-    await entering;
-
-    expect(putPluginNames()).toEqual(['A.esp']);
-    expect(told.map((t) => t.kind)).toEqual(['put']);
-  });
-
-  it('stays in editing, putting nothing, when the value carries no snapshot', async () => {
-    const { flow, exitEditing, told, putPluginNames } = wired('running', NO_SNAPSHOT);
-
-    await flow.enter();
-
-    expect(exitEditing).not.toHaveBeenCalled();
-    expect(putPluginNames()).toEqual([]);
-    expect(told).toEqual([{ kind: 'put', put: { sent: false } }]);
-  });
-
-  it('puts the snapshot a later recompute can build after an entry that could not', async () => {
-    const { flow, toldCount, land, putPluginNames } = wired('running', NO_SNAPSHOT);
-    await flow.enter();
-
-    land(valueWith('A.esp'));
-    await toldCount(2);
-
-    expect(putPluginNames()).toEqual(['A.esp']);
-  });
-
-  it('puts on a stream reopen the snapshot entry could not build, once it can', async () => {
-    const { client, flow, toldCount, land, putPluginNames } = wired('running', NO_SNAPSHOT);
-    await flow.enter();
-    land(valueWith('A.esp'));
-    await toldCount(2);
-
-    client.reconnected();
-    await toldCount(3);
-
-    expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
-  });
-
-  it('exits editing and tells when the backend did not come up', async () => {
-    const { flow, exitEditing, told, putPluginNames } = wired('starting', valueWith('A.esp'));
-
-    await flow.enter();
-
-    expect(exitEditing).toHaveBeenCalledOnce();
     expect(told).toEqual([{ kind: 'backendFailed' }]);
-    expect(putPluginNames()).toEqual([]);
   });
 
-  it('tells an abandoned launch, and neither exits editing nor puts', async () => {
-    const { client, flow, sender, exitEditing, told, putPluginNames } = wired('running', valueWith('A.esp'));
-    client.start = () => { sender.abandon(); return Promise.resolve(); };
-
-    await flow.enter();
-
-    expect(told).toEqual([{ kind: 'abandoned' }]);
-    expect(exitEditing).not.toHaveBeenCalled();
-    expect(putPluginNames()).toEqual([]);
-  });
-
-  it('enters again with the last value handed it when the backend restarts after a crash', async () => {
-    const { client, flow, land, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
-    await flow.enter();
-    land(valueWith('B.esp'));
-    await toldCount(2);
-
-    client.setStatus('disconnected');
-    client.setStatus('running');
-    await toldCount(3);
-
-    expect(putPluginNames()).toEqual(['A.esp', 'B.esp', 'B.esp']);
-  });
-
-  it('enters again with a value that landed while the backend was gone', async () => {
-    const { client, flow, land, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
-    await flow.enter();
-
-    client.setStatus('disconnected');
-    land(valueWith('B.esp'));
-    client.setStatus('running');
-    await toldCount(2);
-
-    expect(putPluginNames()).toEqual(['A.esp', 'B.esp']);
-  });
-
-  it('enters no more once disposed', async () => {
-    const { client, flow, putPluginNames } = wired('running', valueWith('A.esp'));
-    await flow.enter();
-
-    flow.dispose();
-    client.setStatus('disconnected');
-    client.setStatus('running');
-    await flow.put(valueWith('Z.esp'));
-
-    expect(putPluginNames()).toEqual(['A.esp', 'Z.esp']);
-  });
-});
-
-describe('put load order', () => {
-  it('tells the put it made', async () => {
-    const { flow, told } = wired('running', valueWith('A.esp'));
-
-    await flow.put(valueWith('A.esp'));
-
-    expect(told).toMatchObject([{ kind: 'put', put: { sent: true, outcome: APPLIED } }]);
-  });
-
-  it('tells a value without a snapshot as nothing sent', async () => {
-    const { flow, told, putPluginNames } = wired('running', valueWith('A.esp'));
-
-    await flow.put(NO_SNAPSHOT);
-
-    expect(told).toEqual([{ kind: 'put', put: { sent: false } }]);
-    expect(putPluginNames()).toEqual([]);
-  });
-});
-
-describe('the load order is put at every recompute', () => {
-  it('puts a load order equal to the last one put', async () => {
-    const { flow, land, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
-    await flow.enter();
+  it('tells a put whose telling threw, since no caller is left to hear it', async () => {
+    const { told, toldCount, land, failNextTell } = wired();
+    failNextTell(new Error('boom'));
 
     land(valueWith('A.esp'));
-    await toldCount(2);
-    land(valueWith('B.esp'));
-    await toldCount(3);
-
-    expect(putPluginNames()).toEqual(['A.esp', 'A.esp', 'B.esp']);
-  });
-
-  it('puts nothing without a game folder, and keeps what mEdit holds', async () => {
-    const { flow, land, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
-    await flow.enter();
-
-    land(NO_SNAPSHOT);
-    await toldCount(2);
-
-    expect(putPluginNames()).toEqual(['A.esp']);
-  });
-
-  it('tells a put that threw, since no caller is left to hear it', async () => {
-    const { flow, land, failSends, told, toldCount } = wired('running', valueWith('A.esp'));
-    await flow.enter();
-    failSends();
-
-    land(valueWith('B.esp'));
     await toldCount(2);
 
     expect(told[1]).toEqual({ kind: 'putThrew', message: 'boom' });
   });
+});
 
-  it('puts a value that arrived before mEdit started only when it starts, once', async () => {
-    const { client, flow, land, putPluginNames, told } = wired('starting', valueWith('A.esp'));
-
-    land(valueWith('B.esp'));
-    client.setStatus('running');
-    await flow.enter();
-
-    expect(putPluginNames()).toEqual(['B.esp']);
-    expect(told).toHaveLength(1);
-  });
-
-  it('puts nothing between the backend going and mEdit next starting', async () => {
-    const { client, flow, land, told, putPluginNames } = wired('running', valueWith('A.esp'));
-    await flow.enter();
-
-    client.setStatus('stopped');
-    client.setStatus('running');
-    land(valueWith('B.esp'));
-    await flow.put(valueWith('C.esp'));
-
-    expect(told).toHaveLength(2);
-    expect(putPluginNames()).toEqual(['A.esp', 'C.esp']);
-  });
-
-  it('puts the last value handed in on a stream reopen, with no value landing after it', async () => {
-    const { client, flow, land, toldCount, putPluginNames } = wired('running', valueWith('A.esp'));
-    await flow.enter();
-    land(valueWith('B.esp'));
-    await toldCount(2);
-
-    client.reconnected();
-    await toldCount(3);
-
-    expect(putPluginNames()).toEqual(['A.esp', 'B.esp', 'B.esp']);
-  });
-
-  it('tells a reopen whose held first read failed, rather than leaving it unhandled', async () => {
-    const { client, flow, editing, toldCount, told } = wired('running', valueWith('A.esp'));
-    await flow.enter();
-    await editing.enter(Promise.reject(new Error('read failed'))).catch(() => undefined);
+describe('a put the client makes again on its own', () => {
+  it('is told as the snapshot it put', async () => {
+    const { client, told, toldCount, land } = wired();
+    land(valueWith('A.esp'));
+    await toldCount(1);
 
     client.reconnected();
     await toldCount(2);
 
-    expect(told[1]).toEqual({ kind: 'putThrew', message: 'read failed' });
+    expect(told[1]).toMatchObject({ kind: 'put', put: { sent: true, snapshot: { gameDirectory: '/game/Data' }, outcome: APPLIED } });
   });
 
-  it('puts nothing on a stream reopen before mEdit started', async () => {
-    const { client, flow, told, putPluginNames } = wired('running', valueWith('A.esp'));
-
-    client.reconnected();
-    await flow.put(valueWith('Z.esp'));
-
-    expect(told).toHaveLength(1);
-    expect(putPluginNames()).toEqual(['Z.esp']);
-  });
-
-  it('puts nothing once disposed', async () => {
-    const { client, flow, land, told, putPluginNames } = wired('running', valueWith('A.esp'));
-    await flow.enter();
+  it('is told no more once the flow is disposed', async () => {
+    const { client, flow, told, toldCount, land, putPluginNames } = wired();
+    land(valueWith('A.esp'));
+    await toldCount(1);
 
     flow.dispose();
-    land(valueWith('B.esp'));
     client.reconnected();
-    await flow.put(valueWith('Z.esp'));
+    await client.latestLoadOrder();
 
-    expect(told).toHaveLength(2);
-    expect(putPluginNames()).toEqual(['A.esp', 'Z.esp']);
+    expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
+    expect(told).toHaveLength(1);
   });
 });
+
+describe('entering editing', () => {
+  it('shows the entry until the value the first read landed is told', async () => {
+    const { client, flow, around, land } = wired('stopped');
+    const launched = pending();
+    client.answerStart(() => launched.promise.then(() => { client.setStatus('running'); }));
+
+    const entering = flow.enter(Promise.resolve().then(() => { land(valueWith('A.esp')); }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(around).toEqual({ entered: 1, settled: false });
+    launched.resolve();
+    await entering;
+
+    expect(around).toEqual({ entered: 1, settled: true });
+  });
+
+  it('ends the entry when the first read lands no value', async () => {
+    const { flow, around, told } = wired();
+
+    await flow.enter(Promise.resolve());
+
+    expect(around).toEqual({ entered: 1, settled: true });
+    expect(told).toEqual([]);
+  });
+});
+
+function pending() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => { resolve = r; });
+  return { promise, resolve };
+}
