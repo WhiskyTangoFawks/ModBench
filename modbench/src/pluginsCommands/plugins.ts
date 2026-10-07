@@ -93,7 +93,7 @@ async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsO
 
 export async function reorderPlugins(
   access: PluginsAccess, masters: PluginMasters, profile: string, plugins: readonly PluginAddress[], drop: Drop,
-  loadedWithNoLine: readonly string[] = [],
+  loadedWithNoLine: readonly string[],
 ): Promise<PluginsCommandResult> {
   const pluginNames = plugins.map((plugin) => plugin.name);
   const noLine = new Set(loadedWithNoLine.map(pluginKey));
