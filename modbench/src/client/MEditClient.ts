@@ -70,8 +70,8 @@ export function isNotificationKind(kind: string): kind is NotificationKind {
  *  type the caller happens to see. */
 export type LoadOrderProgress = LoadOrderStatus;
 
-/** Restated rather than imported from Mod Management's own snapshot type: this module belongs
- *  to Editing, which imports nothing from Mod Management. */
+// Restated rather than imported from Mod Management's own snapshot type: this module belongs
+// to Editing, which imports nothing from Mod Management.
 interface LoadOrderPluginInput {
   name: string;
   path: string;
