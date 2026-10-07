@@ -164,15 +164,10 @@ public sealed class DocumentEditRealDataTests : IDisposable
 
     private static readonly ConcurrentDictionary<string, (ColumnSpec Column, FieldMetadata Meta)[]> GesturableColumns = new();
 
-    private static (ColumnSpec Column, FieldMetadata Meta)[] GesturableColumnsOf(RecordTableSchema schema)
-    {
-        var childSlotsTheEditServiceRefuses = RecordTypeDispatch.For(GameRelease.Fallout4).ConcreteFor(schema.TableName) is { } concrete
-            ? ContainerChildFields.EnumerateChildFieldsFor(concrete) ?? []
-            : [];
-        return [.. schema.RecordColumns
-            .Where(c => c.Field.IsArray && c.Synthetic == null && c.ReadOnlyReason == null && !childSlotsTheEditServiceRefuses.Contains(c.Name))
+    private static (ColumnSpec Column, FieldMetadata Meta)[] GesturableColumnsOf(RecordTableSchema schema) =>
+        [.. schema.RecordColumns
+            .Where(c => c.Field.IsArray && c.Synthetic == null && c.ReadOnlyReason == null)
             .Select(c => (c, c.ToFieldMetadata()))];
-    }
 
     private static IEnumerable<string> Strays(string gesture, string before, string after, string path)
     {

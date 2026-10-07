@@ -117,6 +117,10 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         Assert.Contains("structural gesture", result.Message, StringComparison.Ordinal);
+
+        var point = EditService().Edit(
+            _fixture.Plugin, _fixture.EmbedCell.ToString(), SetAt(Json("\"9, 9\""), Member("Grid"), Member("Point")));
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, point.Refusal);
         Assert.Empty(_fixture.ChangedFormKeys());
     }
 
