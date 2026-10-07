@@ -92,6 +92,14 @@ describe('the record load request the webview asks of the host, because nothing 
     expect(() => parseExtensionToWebview({ ...answered, documentPlugin: { name: 'A.esp' } })).toThrow();
   });
 
+  it('carries the mods by origin the host says changed, and rejects a change that names a state other than tracked or untracked', () => {
+    const changed = { type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: { ModA: 'tracked' } };
+
+    expect(parseExtensionToWebview(changed)).toEqual(changed);
+    expect(() => parseExtensionToWebview({ ...changed, modsByOrigin: { ModA: 'none' } })).toThrow();
+    expect(() => parseExtensionToWebview({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED })).toThrow();
+  });
+
   it('rejects an answer whose mods by origin are missing or name a state other than tracked or untracked', () => {
     const answered = {
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, plugins: null, conflictsComputed: true,

@@ -1,9 +1,11 @@
 import { modOfOrigin } from '../drivingLib/modOfOrigin';
+import type * as vscode from 'vscode';
 import type { ModRepository } from '../wire/messages';
 
 export interface ModFacts {
   trackedMods: () => ReadonlySet<string>;
   modDirs: () => ReadonlyMap<string, string>;
+  onChange: (listener: () => void) => vscode.Disposable;
 }
 
 /** An origin in no mod, as the game's and Overwrite's are, is left out. */

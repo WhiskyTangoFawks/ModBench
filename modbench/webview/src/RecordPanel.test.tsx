@@ -470,6 +470,30 @@ describe('RecordPanel — column header native right-click menu', () => {
     });
   });
 
+  it('changes the repository state its header names when the host says the mod changed, without reading the record again', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    const compare = compareResultFixture({
+      conflictAll: 'OnlyOne',
+      overrides: [compareOverride({
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+        isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
+      })],
+      diffs: [diffNode({
+        fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
+        winnerColumn: 'MyMod.esp', cellStates: {},
+      })],
+    });
+    const { container, client } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: 'ModA' }], modsByOrigin: { ModA: 'untracked' } });
+    const inMod = () => parseJsonRecord(container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}').inMod;
+    await waitFor(() => expect(inMod()).toBe('untracked'));
+
+    sendMessage({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: { ModA: 'tracked' } });
+
+    await waitFor(() => expect(inMod()).toBe('tracked'));
+    expect(client.load).toHaveBeenCalledTimes(1);
+  });
+
   it('offers no compile on a column whose tracked state is unknown, as when /plugins fails a column is neither tracked nor untracked', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({

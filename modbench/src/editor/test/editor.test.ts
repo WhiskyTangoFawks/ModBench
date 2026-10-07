@@ -98,6 +98,7 @@ vi.mock('vscode', () => ({
 
 import * as vscode from 'vscode';
 import { createEditor } from '..';
+import type { ModFacts } from '../modsByOrigin';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
@@ -151,7 +152,7 @@ interface RecordEditorProvider {
 const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =>
   typeof value === 'object' && value !== null && 'resolveCustomTextEditor' in value;
 
-const NO_MODS = { trackedMods: () => new Set<string>(), modDirs: () => new Map<string, string>() };
+const NO_MODS: ModFacts = { trackedMods: () => new Set<string>(), modDirs: () => new Map<string, string>(), onChange: () => ({ dispose: () => undefined }) };
 
 function makeEditor(
   client = new InMemoryMEditClient(), viewSelections = new Map<string, () => readonly unknown[]>(), modFacts = NO_MODS,
@@ -865,7 +866,7 @@ describe('what a record tab\'s webview posts', () => {
       const mEdit = client();
       mEdit.setQueryAnswer('getPlugins', plugins);
       mEdit.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin, isWinner: true, editorId: 'Gun' }]));
-      const modFacts = { trackedMods: () => new Set(['ModA']), modDirs: () => new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB']]) };
+      const modFacts = { ...NO_MODS, trackedMods: () => new Set(['ModA']), modDirs: () => new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB']]) };
       const { openDocument } = makeEditor(mEdit, undefined, modFacts);
       const tab = await openDocument(renderedUri(GUN, 'Gun.json'), { getText: () => '{}' });
 
@@ -873,6 +874,31 @@ describe('what a record tab\'s webview posts', () => {
       await settle();
 
       expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, modsByOrigin })]);
+    });
+
+    it('tells the tab the repository state of the origins it showed when the instance changes, and no longer once the tab is closed', async () => {
+      const mEdit = client();
+      mEdit.setQueryAnswer('getPlugins', activeA);
+      mEdit.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModB', isWinner: true, editorId: 'Gun' }]));
+      let tracked = new Set<string>();
+      const changed: (() => void)[] = [];
+      const modFacts = {
+        trackedMods: () => tracked, modDirs: () => new Map([['ModB', '/mods/ModB']]),
+        onChange: (listener: () => void) => { changed.push(listener); return { dispose: () => undefined }; },
+      };
+      const { openDocument } = makeEditor(mEdit, undefined, modFacts);
+      const tab = await openDocument(renderedUri(GUN, 'Gun.json'), { getText: () => '{}' });
+      tab.receive(loadRequest);
+      await settle();
+      const told = () => tab.webview.postMessage.mock.calls.map(([m]) => m).filter((m) => m.type === 'modsChanged');
+
+      tracked = new Set(['ModB']);
+      changed.forEach((listener) => { listener(); });
+
+      expect(told()).toEqual([{ type: 'modsChanged', modsByOrigin: { ModB: 'tracked' } }]);
+      tab.close();
+      changed.forEach((listener) => { listener(); });
+      expect(told()).toHaveLength(1);
     });
 
     it('is failed, naming the record in the Output and leaving the tab\'s title, when the comparison fails', async () => {

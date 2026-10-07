@@ -221,6 +221,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         client.showColumns(msg.columns);
         void refresh(formKey);
       }
+      if (msg.type === EXTENSION_TO_WEBVIEW.MODS_CHANGED) setModsByOrigin(msg.modsByOrigin);
       if (msg.type === EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL) pasteIntoFocused(msg.text);
       if (msg.type === EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR) {
         const cell = scroller.current?.querySelector<HTMLElement>('[data-focused-cell]');

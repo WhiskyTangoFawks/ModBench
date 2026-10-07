@@ -16,6 +16,8 @@ export const EXTENSION_TO_WEBVIEW = {
   PASTE_INTO_CELL: 'pasteIntoCell',
   // The records the tab shows beside its document's own from now on, read at once.
   SHOW_COLUMNS: 'showColumns',
+  // A mod's repository state changed in the instance: the origins the tab showed, read again.
+  MODS_CHANGED: 'modsChanged',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -245,7 +247,8 @@ export type ExtensionToWebview =
   | ({ type: typeof EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED; requestId: string } & RecordLoadAnswer)
   | { type: typeof EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR }
   | { type: typeof EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL; text: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.SHOW_COLUMNS; columns: ColumnCopy[] };
+  | { type: typeof EXTENSION_TO_WEBVIEW.SHOW_COLUMNS; columns: ColumnCopy[] }
+  | { type: typeof EXTENSION_TO_WEBVIEW.MODS_CHANGED; modsByOrigin: Record<string, ModRepository> };
 
 function isModsByOrigin(value: unknown): value is Record<string, ModRepository> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -418,11 +421,14 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
   const w = value as {
     type?: unknown; formKey?: unknown; requestId?: unknown;
     ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
-    documentPlugin?: unknown; text?: unknown; columns?: unknown;
+    documentPlugin?: unknown; text?: unknown; columns?: unknown; modsByOrigin?: unknown;
   };
   switch (w.type) {
     case EXTENSION_TO_WEBVIEW.LOAD_RECORD: return parseLoadRecord(w);
     case EXTENSION_TO_WEBVIEW.SHOW_COLUMNS: return parseShowColumns(w);
+    case EXTENSION_TO_WEBVIEW.MODS_CHANGED:
+      if (!isModsByOrigin(w.modsByOrigin)) throw new Error('Expected "modsChanged" to carry its mods by origin.');
+      return { type: w.type, modsByOrigin: w.modsByOrigin };
     case EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED: return parseFormKeyPicked(w);
     case EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED: return { type: w.type, ...parseRecordLoadAnswer(w) };
     default: return parseFocusedCellMessage(w);

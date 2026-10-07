@@ -78,7 +78,7 @@ function register({
     ask: vi.fn(),
     focusedView,
     viewSelections: new Map([['test.view', selection]]),
-    modFacts: { trackedMods: () => new Set(), modDirs: () => new Map() },
+    modFacts: { trackedMods: () => new Set(), modDirs: () => new Map(), onChange: () => ({ dispose: () => undefined }) },
     recordWrite: (command) => command(),
     refreshSourceControlFor: () => undefined,
   });
