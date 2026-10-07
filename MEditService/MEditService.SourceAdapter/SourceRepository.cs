@@ -299,7 +299,7 @@ public sealed class SourceRepository
     private void Write(PluginAddress plugin, SourceDocument document, Func<SourceChanges> changes)
     {
         Writes.RefuseOverwritingWhatIsNoDocument(plugin, document);
-        SourceTransaction.Atomically(this, transaction => transaction.Apply(this, changes()));
+        SourceTransaction.Atomically(this, transaction => transaction.Apply(changes()));
     }
 
     /// <summary>What <see cref="Put"/> changes, written nowhere.</summary>

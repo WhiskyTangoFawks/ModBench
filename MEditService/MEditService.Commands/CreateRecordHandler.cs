@@ -194,7 +194,7 @@ public sealed class CreateRecordHandler
             ?? throw new InvalidOperationException($"{container.FormKey} was found, but its own text does not carry it.");
 
         SourceTransaction.Atomically(repository, transaction =>
-            transaction.Apply(repository, repository.ChangesToRewrite(plugin, container with { Body = withChild })));
+            transaction.Apply(repository.ChangesToRewrite(plugin, container with { Body = withChild })));
 
         if (_logger.IsEnabled(LogLevel.Information))
         {

@@ -11,18 +11,13 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
+public sealed class SourceTransactionOverATrackedTreeTests : IDisposable
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly ScratchDirectory _firstFolder = new("medit-batch-a-");
-    private readonly ScratchDirectory _secondFolder = new("medit-batch-b-");
 
-    public void Dispose()
-    {
-        _firstFolder.Dispose();
-        _secondFolder.Dispose();
-    }
+    public void Dispose() => _firstFolder.Dispose();
 
     private static string BodyOf(string pluginName, string editorId) =>
         $"{{\n  \"FormKey\": \"000800:{pluginName}\",\n  \"EditorID\": \"{editorId}\"\n}}";
@@ -68,51 +63,6 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     }
 
     [Fact]
-    public void ABatchWhoseSecondPutFails_LeavesBothTreesByteIdenticalToBefore()
-    {
-        var first = Track(_firstFolder, "First.esp");
-        var second = Track(_secondFolder, "Second.esp");
-        var firstPlugin = new PluginAddress("First.esp", "FirstMod");
-        var secondPlugin = new PluginAddress("Second.esp", "SecondMod");
-        var (beforeFirst, beforeSecond) = (TreeSnapshot.Of(_firstFolder), TreeSnapshot.Of(_secondFolder));
-
-        var transaction = new SourceTransaction();
-        transaction.Put(
-            first, firstPlugin,
-            new SourceDocument("000800:First.esp", "npc_", "Original", BodyOf("First.esp", "Rewritten")));
-
-        var recordWithNoGroupFolderAndNoDocumentCarryingIt =
-            new SourceDocument("00FFFF:Second.esp", "refr", "Nowhere", BodyOf("Second.esp", "Nowhere"));
-        Assert.ThrowsAny<Exception>(() => transaction.Put(second, secondPlugin, recordWithNoGroupFolderAndNoDocumentCarryingIt));
-
-        Assert.Empty(transaction.Undo(first));
-        Assert.Equal(beforeFirst, TreeSnapshot.Of(_firstFolder));
-        Assert.Equal(beforeSecond, TreeSnapshot.Of(_secondFolder));
-    }
-
-    [Fact]
-    public void ABatchThatSucceeds_LandsEveryRepositorysDocument()
-    {
-        var first = Track(_firstFolder, "First.esp");
-        var second = Track(_secondFolder, "Second.esp");
-        var firstPlugin = new PluginAddress("First.esp", "FirstMod");
-        var secondPlugin = new PluginAddress("Second.esp", "SecondMod");
-
-        var transaction = new SourceTransaction();
-        transaction.Put(
-            first, firstPlugin, new SourceDocument("000800:First.esp", "npc_", "Original", BodyOf("First.esp", "Rewritten")));
-        transaction.Put(
-            second, secondPlugin, new SourceDocument("000800:Second.esp", "npc_", "Original", BodyOf("Second.esp", "Rewritten")));
-
-        Assert.Equal(
-            BodyOf("First.esp", "Rewritten"),
-            first.Get(firstPlugin, new RecordIdentity("000800:First.esp", "npc_", "Original"))?.Body);
-        Assert.Equal(
-            BodyOf("Second.esp", "Rewritten"),
-            second.Get(secondPlugin, new RecordIdentity("000800:Second.esp", "npc_", "Original"))?.Body);
-    }
-
-    [Fact]
     public void ABatchPuttingAContainerTheTreeDoesNotHold_PlacesItAndItsBlocks_AndItsRollbackTakesThemBack()
     {
         var repository = Track(_firstFolder, "First.esp");
@@ -120,11 +70,13 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var cell = new SourceDocument("000900:First.esp", "cell", "FreshCell", "{\n  \"FormKey\": \"000900:First.esp\"\n}");
         var before = TreeSnapshot.Of(_firstFolder);
 
-        var transaction = new SourceTransaction();
-        transaction.Put(repository, plugin, cell);
+        var left = TransactionRollback.After(repository, transaction =>
+        {
+            transaction.Put(repository, plugin, cell);
+            Assert.Equal(cell.Body, repository.Get(plugin, cell.Identity)?.Body);
+        });
 
-        Assert.Equal(cell.Body, repository.Get(plugin, cell.Identity)?.Body);
-        Assert.Empty(transaction.Undo(repository));
+        Assert.Null(left);
         Assert.Equal(before, TreeSnapshot.Of(_firstFolder));
     }
 
@@ -135,17 +87,19 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var plugin = new PluginAddress("First.esp", "FirstMod");
         var before = TreeSnapshot.Of(_firstFolder);
 
-        var transaction = new SourceTransaction();
-        var siblingInTheGroupFolderTrackAlreadyMade =
-            new SourceDocument("000900:First.esp", "npc_", "Sibling", "{\n  \"FormKey\": \"000900:First.esp\"\n}");
-        transaction.Put(repository, plugin, siblingInTheGroupFolderTrackAlreadyMade);
-        transaction.Rekey(
-            repository, plugin, new RecordIdentity("000800:First.esp", "npc_", "Original"), "000901:First.esp",
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
-            new DocumentRekey((document, newFormKey) => document.Body.Replace(document.FormKey, newFormKey, StringComparison.Ordinal), (_, _, _) => null));
+        var left = TransactionRollback.After(repository, transaction =>
+        {
+            var siblingInTheGroupFolderTrackAlreadyMade =
+                new SourceDocument("000900:First.esp", "npc_", "Sibling", "{\n  \"FormKey\": \"000900:First.esp\"\n}");
+            transaction.Put(repository, plugin, siblingInTheGroupFolderTrackAlreadyMade);
+            transaction.Rekey(
+                repository, plugin, new RecordIdentity("000800:First.esp", "npc_", "Original"), "000901:First.esp",
+                SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
+                new DocumentRekey((document, newFormKey) => document.Body.Replace(document.FormKey, newFormKey, StringComparison.Ordinal), (_, _, _) => null));
+            Assert.NotEqual(before, TreeSnapshot.Of(_firstFolder));
+        });
 
-        Assert.NotEqual(before, TreeSnapshot.Of(_firstFolder));
-        Assert.Empty(transaction.Undo(repository));
+        Assert.Null(left);
         Assert.Equal(before, TreeSnapshot.Of(_firstFolder));
     }
 }
