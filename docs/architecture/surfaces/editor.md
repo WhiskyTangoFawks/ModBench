@@ -22,7 +22,7 @@ As a user, I want:
 2. Open to the side to open the record beside the tab I am in, pinned, so later clicks leave it alone. Source: catalog `open`, placement
 3. A file already open in a tab to be shown, not opened twice. Source: VS Code
 4. Several records opened at once to open one grid: the first record's file, with the others as its columns. Source: catalog `open`; xEdit Compare Selected
-5. The tab titled with the file's name, as any file is. The file is named by the record's EditorID, so the title carries it. Source: ADR-0001; plugin-source.md, The tree, story 1
+5. The tab titled with the file's name, as any file is. The file is named by the record's EditorID, so the title carries it. A child record's file is its container's, so its tab, tracked or not, is titled with its EditorID, or its FormKey when it has none. Source: ADR-0001; ADR-0020; plugin-source.md, The tree, story 1; ruling
 6. Open from the palette, with no record given, to ask for one by EditorID, FormID or FormKey. Source: catalog `open`
 7. A tab I leave and come back to to be as I left it: the rows I expanded, the columns I collapsed, the focused cell and the scroll. Source: VS Code keeps a tab's place
 8. A record given without a plugin, from the palette, Referenced By or Go to record, to open the winning copy's file. Source: xEdit lands on the winning copy
