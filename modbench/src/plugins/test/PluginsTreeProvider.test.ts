@@ -47,7 +47,6 @@ import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { progressSteps } from '../../test/recordedProgress';
 import { present } from '../../ports/present';
 import { CONTAINER_TYPES, listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
 

@@ -27,7 +27,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { MEditClient, PluginMetadata } from '../../client';
 import { registerPluginMoveCommand } from '../pluginMoveCommand';
-import { ImplicitMasterNode, PluginNode } from '../PluginsTreeProvider';
+import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
@@ -36,6 +36,10 @@ import { progressSteps } from '../../test/recordedProgress';
 
 const MOVE = 'modbench.plugin.move';
 const A = { name: 'A.esp', origin: 'ModA' };
+const held = (name: string, masters: string[]): PluginMetadata => ({
+  name, masters, path: `/data/${name}`, isLight: false, isMaster: false, isBlueprint: false, recordCount: 0, isImmutable: false,
+  origin: 'SomeMod', inLoadOrder: true, hasMatchingRecords: false, isTracked: false, hasParseFailure: false,
+});
 const LOSING_END = { kind: 'losingEnd' } as const;
 const noMasters = { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) };
 
@@ -54,7 +58,7 @@ afterEach(() => rm(dir, { recursive: true, force: true }));
 const plugins = () => readFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'utf8');
 
 function registered(
-  selection: PluginNode[] = [], masters: Pick<MEditClient, 'getPlugins'> = noMasters,
+  selection: PluginsTreeNode[] = [], masters: Pick<MEditClient, 'getPlugins'> = noMasters,
   refresh = () => Promise.resolve(),
 ) {
   const reporter = recordingReporter();
@@ -109,8 +113,7 @@ describe('modbench.plugin.move', () => {
   });
 
   it('says why a move is refused by the plugin-order rules, naming both plugins', async () => {
-    const held = (name: string, masters: string[]) => ({ name, masters, isBlueprint: false, inLoadOrder: true }) as PluginMetadata;
-    const { reporter } = registered([], { getPlugins: () => Promise.resolve([held('A.esp', []), held('B.esp', ['A.esp']), held('C.esp', [])]) });
+        const { reporter } = registered([], { getPlugins: () => Promise.resolve([held('A.esp', []), held('B.esp', ['A.esp']), held('C.esp', [])]) });
 
     await invoke([A], { kind: 'winningEnd' });
 
@@ -130,8 +133,7 @@ describe('modbench.plugin.move', () => {
   it('does not count the line of a plugin the game loads with no line', async () => {
     await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'DLCRobot.esm\r\nA.esp\r\nX.esp\r\n');
     const reporter = recordingReporter();
-    const held = (name: string, masters: string[]) => ({ name, masters, isBlueprint: false, inLoadOrder: true }) as PluginMetadata;
-    const masters = { getPlugins: () => Promise.resolve([held('DLCRobot.esm', []), held('A.esp', []), held('X.esp', ['DLCRobot.esm'])]) };
+        const masters = { getPlugins: () => Promise.resolve([held('DLCRobot.esm', []), held('A.esp', []), held('X.esp', ['DLCRobot.esm'])]) };
     const value = instanceValueFixture({ activeProfile: 'Default', pluginsLoadedWithNoLine: [{ name: 'DLCRobot.esm', origin: 'Data' }] });
     registerPluginMoveCommand(accessTo(dir), masters, { value, refresh: () => Promise.resolve() }, () => [], reporter);
 
