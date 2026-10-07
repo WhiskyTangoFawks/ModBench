@@ -146,7 +146,7 @@ public class HeaderIndexingTests
         var reads = index.RequireReads();
         Assert.Equal(["Kept.esm", "Dropped.esm"], MastersOf(reads.DocumentOf(header, plugin.KeyOf())));
 
-        var droppedOverride = reads.GetDocuments(plugin.KeyOf()).Single(d => d.EditorId == "DroppedNpc");
+        var droppedOverride = reads.DocumentsOf(plugin.KeyOf()).Single(d => d.EditorId == "DroppedNpc");
         index.Delete(plugin, droppedOverride);
 
         Assert.Equal(["Kept.esm"], MastersOf(reads.DocumentOf(header, plugin.KeyOf())));
@@ -186,7 +186,7 @@ public class HeaderIndexingTests
         var stack = index.RequireReads().GetOverrideStack("000000:ReindexHeader.esp");
         Assert.NotNull(stack);
         Assert.Single(stack.Entries);
-        Assert.Single(index.RequireReads().GetDocuments(key), d => d.RecordType == PluginHeader.RecordType);
+        Assert.Single(index.RequireReads().DocumentsOf(key), d => d.RecordType == PluginHeader.RecordType);
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public class HeaderIndexingTests
         var reads = index.RequireReads();
         var key = new PluginAddress("LookupHeader.esp", "Data");
 
-        var documents = reads.GetDocuments(key);
+        var documents = reads.DocumentsOf(key);
         Assert.True(documents.Count > 1, $"expected the header and at least one record; got {documents.Count}");
         Assert.All(documents, d => Assert.NotNull(reads.Resolve(d.FormKey)));
 
