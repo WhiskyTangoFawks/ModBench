@@ -1,13 +1,13 @@
 using MEditService.Codec.Serialization;
-using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>The adapter with the tree write's deserialize replaced, which is how the round-trip
 /// gate's negative tests forge a codec defect no real codec has.</summary>
-internal sealed class ForgedTreeWriteAdapter(string pluginFileName, TreeDeserializer deserialize)
+internal sealed class ForgedTreeWriteAdapter(string pluginFileName, Func<string, CancellationToken, Task<IMod>> deserialize)
     : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {
     public override async Task WriteFromTreeAsync(

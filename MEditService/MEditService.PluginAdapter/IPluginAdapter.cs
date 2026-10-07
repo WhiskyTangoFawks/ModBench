@@ -70,11 +70,6 @@ public interface IPluginAdapter
         ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default);
 
-    /// <summary>The same binary re-serialized with no localization check.</summary>
-    Task<IReadOnlyList<TreeFile>> ReadPristineFilesAsync(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings,
-        CancellationToken cancel = default);
-
     /// <summary>How the plugin at <paramref name="recompiledPath"/> differs from the one at
     /// <paramref name="modPath"/> as the codec models them; null when they are model-identical. Both
     /// are reparsed, since only written bytes show what the writer does.</summary>

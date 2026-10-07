@@ -44,10 +44,6 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
         inner.ReadSourceAsync(modPath, registeredName, gameRelease, strings, cancel);
 
-    public virtual Task<IReadOnlyList<TreeFile>> ReadPristineFilesAsync(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
-        inner.ReadPristineFilesAsync(modPath, gameRelease, strings, cancel);
-
     public virtual string? DivergenceBetween(ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
         inner.DivergenceBetween(modPath, recompiledPath, gameRelease, strings);
 

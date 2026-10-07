@@ -101,32 +101,17 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         RecordTextCodec codec,
         GameRelease gameRelease,
         CancellationToken cancel = default) =>
-        PluginTrees.ReadTreeAsync(files, codec, gameRelease, cancel: cancel);
-
-    // Not on IPluginAdapter: a test's seam onto the scratch folder's parent, so a leak-watching test
-    // names its own folder instead of the system temp folder every process shares.
-    public static Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
-        IReadOnlyList<TreeFile> files,
-        RecordTextCodec codec,
-        GameRelease gameRelease,
-        string scratchRoot,
-        CancellationToken cancel = default) =>
-        PluginTrees.ReadTreeAsync(files, codec, gameRelease, scratchRoot, cancel);
+        PluginTrees.ReadTreeAsync(files, codec, gameRelease, cancel);
 
     public Task WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
         CancellationToken cancel = default) =>
-        PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, deserialize: null, cancel);
+        PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
 
     public Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceAsync(
         ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default) =>
         PluginTrees.ReadAsync(modPath, registeredName, gameRelease, strings, cancel);
-
-    public Task<IReadOnlyList<TreeFile>> ReadPristineFilesAsync(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings,
-        CancellationToken cancel = default) =>
-        PluginTrees.ReadPristineFilesAsync(modPath, gameRelease, strings, cancel);
 
     public string? DivergenceBetween(
         ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
