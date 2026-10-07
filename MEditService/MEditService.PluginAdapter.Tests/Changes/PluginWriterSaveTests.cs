@@ -9,9 +9,7 @@ public sealed class PluginWriterSaveTests
 {
     private static async Task RewriteAsync(string pluginPath)
     {
-        var mod = Fallout4Mod.CreateFromBinary(
-            new ModPath(ModKey.FromFileName(Path.GetFileName(pluginPath)), pluginPath), Fallout4Release.Fallout4);
-        using var prep = await PluginWriter.PrepareFromModAsync(mod, pluginPath);
+        using var prep = await TreeSaves.PrepareAsync(pluginPath);
         prep.Commit();
     }
 
@@ -68,10 +66,8 @@ public sealed class PluginWriterSaveTests
             .Build();
         var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
         var before = File.ReadAllBytes(pluginPath);
-        var mod = Fallout4Mod.CreateFromBinary(
-            new ModPath(ModKey.FromFileName("TestPlugin.esp"), pluginPath), Fallout4Release.Fallout4);
 
-        using (var prep = await PluginWriter.PrepareFromModAsync(mod, pluginPath))
+        using (var prep = await TreeSaves.PrepareAsync(pluginPath))
         {
             var tempDir = Assert.Single(Directory.GetDirectories(data.DataFolder, ".medit_tmp_*"));
             File.Delete(Path.Combine(tempDir, "TestPlugin.esp"));

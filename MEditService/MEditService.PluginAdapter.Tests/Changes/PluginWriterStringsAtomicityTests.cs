@@ -28,15 +28,11 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
 
     public void Dispose() => _dataFolder.Dispose();
 
-    private static Fallout4Mod BuildModifiedMod()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-        var book = mod.Books.AddNew("TestBook");
-        book.Name = new TranslatedString(Language.English, "The New Title");
-        book.Description = new TranslatedString(Language.English, "The new description.");
-        mod.UsingLocalization = true;
-        return mod;
-    }
+    private Task<PreparedPluginSave> PrepareModifiedAsync() => TreeSaves.PrepareAsync(
+        _pluginPath,
+        loadOrder: null,
+        ("The Original Title", "The New Title"),
+        ("The original description.", "The new description."));
 
     private static bool IsTheZeroEntryStubTheWriterEmitsForEveryLanguage(string fileName) =>
         fileName.EndsWith(".ILSTRINGS", StringComparison.OrdinalIgnoreCase);
@@ -45,13 +41,12 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
         Directory.GetFiles(_stringsDir).ToDictionary(f => Path.GetFileName(f), File.ReadAllBytes);
 
     [Fact]
-    public async Task PrepareFromModAsync_LocalizedMod_LeavesFinalStringsFilesUntouchedBeforeCommit_AndNoTempDirectoryOnceDisposedUncommitted()
+    public async Task PrepareSaveAsync_LocalizedMod_LeavesFinalStringsFilesUntouchedBeforeCommit_AndNoTempDirectoryOnceDisposedUncommitted()
     {
         var originalFiles = ReadStringsFiles();
         Assert.True(originalFiles.Count >= 2, "fixture should produce at least Normal + DL strings files");
 
-        var modifiedMod = BuildModifiedMod();
-        using (var prep = await PluginWriter.PrepareFromModAsync(modifiedMod, _pluginPath))
+        using (var prep = await PrepareModifiedAsync())
         {
             var afterPrepare = ReadStringsFiles();
             Assert.Equal(originalFiles.Keys.OrderBy(k => k), afterPrepare.Keys.OrderBy(k => k));
@@ -67,8 +62,7 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
     {
         var originalFiles = ReadStringsFiles();
 
-        var modifiedMod = BuildModifiedMod();
-        using (var prep = await PluginWriter.PrepareFromModAsync(modifiedMod, _pluginPath))
+        using (var prep = await PrepareModifiedAsync())
             prep.Commit();
 
         var afterCommit = ReadStringsFiles();
@@ -85,7 +79,7 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
     {
         var before = File.ReadAllBytes(_pluginPath);
 
-        using (var prep = await PluginWriter.PrepareFromModAsync(BuildModifiedMod(), _pluginPath))
+        using (var prep = await PrepareModifiedAsync())
         {
             var tempDir = Assert.Single(Directory.GetDirectories(_dataFolder, ".medit_tmp_*"));
             File.Delete(Directory.GetFiles(Path.Combine(tempDir, "Strings"))[0]);
