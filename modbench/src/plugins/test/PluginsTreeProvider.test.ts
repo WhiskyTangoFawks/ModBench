@@ -44,6 +44,7 @@ import {
   SubBlockNode, CellNode, InteriorBlockNode, InteriorSubBlockNode, IndexingNode,
 } from '../PluginTreeProvider';
 import { ErrorNode } from '../../drivingLib/errorNode';
+import { pluginsTreeOver } from './pluginsTreeOver';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -167,12 +168,12 @@ function makeTree(
   const client = extra.client ?? makeClient();
   const records = new PluginTreeProvider(client);
   const logged: { level: string; msg: string }[] = [];
-  const tree = new PluginsTreeProvider({
-    instance, client, records,
+  const tree = pluginsTreeOver(instance, {
+    client, records,
     log: (level, msg) => logged.push({ level, msg }),
-    publishDiagnoses: extra.publishDiagnoses,
-    publishChangedOutside: extra.publishChangedOutside,
-    dataFolderFile: extra.dataFolderFile,
+    ...(extra.publishDiagnoses && { publishDiagnoses: extra.publishDiagnoses }),
+    ...(extra.publishChangedOutside && { publishChangedOutside: extra.publishChangedOutside }),
+    ...(extra.dataFolderFile && { dataFolderFile: extra.dataFolderFile }),
   });
   return { tree, client, records, instance, logged };
 }
@@ -593,7 +594,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
 
   async function drag(moved: string[], target: string | undefined, names: string[] = ORDER) {
     const instance = Object.assign(new FakeInstance(valueOf(fixturePlugins(names))), { refresh: () => Promise.resolve() });
-    const tree = new PluginsTreeProvider({ instance });
+    const tree = pluginsTreeOver(instance);
     await tree.getChildren();
     let fired = false;
     tree.onDidChangeTreeData(() => { fired = true; });
@@ -712,7 +713,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const baseline = moves();
     moveCommands.length = 0;
 
-    const tree = new PluginsTreeProvider({ instance: new FakeInstance(valueOf(fixturePlugins(NAMES))) });
+    const tree = pluginsTreeOver(new FakeInstance(valueOf(fixturePlugins(NAMES))));
     await tree.getChildren();
     tree.setFilter('m');
     const visible = await tree.getChildren();
@@ -726,9 +727,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
   });
 
   it('a drop still asks for the move with the client reporting disconnected', async () => {
-    const tree = new PluginsTreeProvider({
-      instance: new FakeInstance(valueOf(fixturePlugins())), client: makeDisconnectedClient(),
-    });
+    const tree = pluginsTreeOver(new FakeInstance(valueOf(fixturePlugins())), { client: makeDisconnectedClient() });
     await tree.getChildren();
     const dt = new DataTransfer();
     tree.handleDrag([node('A.esp')], dt, IGNORED_TOKEN);
@@ -969,9 +968,7 @@ describe('PluginsTreeProvider — a drop asks for the place it is shown, in eith
     { direction: 'winningAtTop', moved: ['E.esp'], where: 'below the last row', target: undefined, drop: { kind: 'losingEnd' } },
     { direction: 'winningAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED_ROW, drop: { kind: 'losingEnd' } },
   ] as const)('$direction: $moved dropped on $where asks for $drop', async ({ direction, moved, target, drop }) => {
-    const tree = new PluginsTreeProvider({
-      instance: new FakeInstance(valueOf(LINES.map((name, slot) => plugin({ name, slot })), ['Fallout4.esm'])),
-    });
+    const tree = pluginsTreeOver(new FakeInstance(valueOf(LINES.map((name, slot) => plugin({ name, slot })), ['Fallout4.esm'])));
     tree.setViewDirection(direction);
     await tree.getChildren();
     const dt = new DataTransfer();
@@ -1012,13 +1009,6 @@ function disconnect(client: InMemoryMEditClient): InMemoryMEditClient {
 }
 
 describe('PluginsTreeProvider — an enabled row is always collapsible', () => {
-  it('gives every plugin row a chevron with no client and no records wired at all', async () => {
-    const tree = new PluginsTreeProvider({ instance: new FakeInstance(valueOf([A_ROW(), B_ROW()])) });
-    for (const row of await tree.getChildren()) {
-      expect(tree.getTreeItem(row).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
-    }
-  });
-
   it('keeps every row collapsible before any reconcile has ever landed', async () => {
     const { tree } = makeTree([A_ROW(), B_ROW()]);
     for (const row of await tree.getChildren()) {

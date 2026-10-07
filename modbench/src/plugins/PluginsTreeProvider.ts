@@ -43,14 +43,6 @@ export function isDropPayload(value: unknown): value is { plugins: PluginAddress
     && value.plugins.every(isAddress);
 }
 
-// toolbox.ts's composition root always wires a real RecordBrowser; reaching this means a test
-// exercised rows with none.
-const NO_RECORD_BROWSER = 'mEdit is not connected.';
-const noRecordBrowser = (): [ErrorNode] => [new ErrorNode(NO_RECORD_BROWSER)];
-
-// Hoisted out of the constructor so an omitted dependency is not a fresh closure per instance.
-const NO_DATA_FOLDER_FILE = (): string | undefined => undefined;
-
 /** The mEdit reads every plugin-keyed fact comes from — the port narrowed to what this tree
  *  calls. Pulled once per reconcile, never per rendered row; and its attaching, which makes the
  *  locked plugins askable. */
@@ -69,22 +61,22 @@ export interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin: the row input. */
   instance: PluginsInstance;
   /** A row's children. Absent in tests that exercise rows alone. */
-  records?: RecordBrowser;
+  records: RecordBrowser;
   /** Every plugin-keyed fact. Absent in tests that exercise rows alone. */
-  client?: PluginFactsClient;
+  client: PluginFactsClient;
   /** The malformed-plugin scan's other surface, the Problems panel, which needs an instance root
    *  this provider has no business knowing. */
-  publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
+  publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
   /** The Changed outside Modbench status's other surface, the Problems panel: a warning for every
    *  such plugin. */
-  publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
+  publishChangedOutside: (warnings: readonly PluginWarning[]) => void;
   /** This provider states the severity (ADR-0019), so a background blip and a failed
    *  read land on different channel levels. */
-  log?: (level: 'info' | 'warn' | 'error', msg: string) => void;
+  log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   /** The Instance adapter's path of a file at the root of the Data folder, read fresh at each
    *  call: the game folder setting is editable while Modbench runs. `undefined` while the folder
    *  is not found. */
-  dataFolderFile?: (name: string) => string | undefined;
+  dataFolderFile: (name: string) => string | undefined;
 }
 
 
@@ -187,10 +179,10 @@ export class PluginsTreeProvider
   private readonly log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   private readonly dataFolderFile: (name: string) => string | undefined;
   private readonly instance: PluginsInstance;
-  private readonly records?: RecordBrowser;
-  private readonly client?: PluginFactsClient;
-  private readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
-  private readonly publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
+  private readonly records: RecordBrowser;
+  private readonly client: PluginFactsClient;
+  private readonly publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
+  private readonly publishChangedOutside: (warnings: readonly PluginWarning[]) => void;
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
@@ -206,8 +198,8 @@ export class PluginsTreeProvider
   private lastLockedRowUris: ReadonlySet<string> = new Set();
 
   constructor(options: PluginsTreeProviderOptions) {
-    this.log = options.log ?? (() => {});
-    this.dataFolderFile = options.dataFolderFile ?? NO_DATA_FOLDER_FILE;
+    this.log = options.log;
+    this.dataFolderFile = options.dataFolderFile;
     this.instance = options.instance;
     this.records = options.records;
     this.client = options.client;
@@ -219,16 +211,14 @@ export class PluginsTreeProvider
       this.instanceValue = value;
       this.invalidate();
     }), options.instance.onReadFailure(() => this.render()));
-    if (options.records) {
-      this.subscriptions.push(options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)));
-    }
-    const unsubscribeChanges = options.client?.onNotification('external-change', (change) => this.applyExternalChange(change));
-    if (unsubscribeChanges) this.subscriptions.push({ dispose: unsubscribeChanges });
+    this.subscriptions.push(options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)));
+    const unsubscribeChanges = options.client.onNotification('external-change', (change) => this.applyExternalChange(change));
+    this.subscriptions.push({ dispose: unsubscribeChanges });
   }
 
   private applyExternalChange(event: NotificationPayloads['external-change']): void {
     this.facts.externalChange(event);
-    this.publishChangedOutside?.(this.facts.problems().changedOutside);
+    this.publishChangedOutside(this.facts.problems().changedOutside);
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -320,7 +310,7 @@ export class PluginsTreeProvider
     if (element === undefined) return this.rows();
     const children = isRow(element)
       ? await this.expandPluginRow(element)
-      : await (this.records?.getChildren(element) ?? []);
+      : await (this.records.getChildren(element));
     return this.adopted(children, element);
   }
 
@@ -391,7 +381,7 @@ export class PluginsTreeProvider
     const expansion = this.facts.expansion(address);
     if (expansion.kind === 'error') return [new ErrorNode(expansion.message)];
     if (expansion.kind === 'indexing') return [new IndexingNode()];
-    return this.records?.getPluginChildren(address, this.facts.conditions(address)) ?? noRecordBrowser();
+    return this.records.getPluginChildren(address, this.facts.conditions(address));
   }
 
   private async rows(): Promise<(PluginListNode | ErrorNode)[]> {
@@ -459,7 +449,7 @@ export class PluginsTreeProvider
   // ── the tree item ─────────────────────────────────────────────────────────
 
   getTreeItem(element: PluginsTreeNode): vscode.TreeItem {
-    if (!isRow(element)) return this.records?.getTreeItem(element) ?? element;
+    if (!isRow(element)) return this.records.getTreeItem(element);
     element.collapsibleState = this.collapsibleStateOf(element);
     // A row is returned *as* its own TreeItem, so decorating in place would accumulate
     // permanently, with no way back once the condition clears.
@@ -580,7 +570,6 @@ export class PluginsTreeProvider
   // The plugins of the rows the tree shows, joined by (origin, filename). A failed read is never
   // swallowed into an empty list, which would read as "nothing held".
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {
-    if (!this.client) return undefined;
     try {
       const shown = new Set(this.builtRows().map((row) => pluginAddressKey(addressOfRow(row))));
       return (await this.client.getPlugins()).filter((p) => shown.has(pluginAddressKey(p)));
@@ -594,13 +583,12 @@ export class PluginsTreeProvider
   }
 
   private async scanDiagnoses(generation: number): Promise<void> {
-    if (!this.client) return;
     try {
       const reports = await this.client.getDiagnoses();
       if (generation !== this.generation) return;
       // One derivation, two surfaces — the tree badge and the Problems panel cannot disagree.
       this.facts.diagnosed(reports);
-      this.publishDiagnoses?.(this.facts.problems().malformed);
+      this.publishDiagnoses(this.facts.problems().malformed);
       this._onDidChangeTreeData.fire(undefined);
     } catch (err) {
       this.log('warn', `[PluginsTreeProvider] the malformed-plugin scan could not be read: ${errorMessage(err)}`);
