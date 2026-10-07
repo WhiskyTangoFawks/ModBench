@@ -80,6 +80,17 @@ public sealed class EditRecordChangesApiTests : HostedTests
     }
 
     [Fact]
+    public async Task AnEditOfAPluginWhoseSourceIsUnreadable_Is409_WithItsOwnRefusal()
+    {
+        var (fx, formKey) = await Loaded(tracked: true);
+        Directory.Delete(PluginSourceRoot.In(ModFolderOf(fx), Plugin), recursive: true);
+
+        var response = await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75, "{}");
+
+        Assert.Equal("PluginSourceUnreadable", (await response.AssertIsProblem(HttpStatusCode.Conflict)).GetProperty("refusal").GetString());
+    }
+
+    [Fact]
     public async Task AFormIdThatIsNoFormKey_Is422_WithItsOwnRefusal()
     {
         var (fx, formKey) = await Loaded(tracked: true);
