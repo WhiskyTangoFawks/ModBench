@@ -149,7 +149,7 @@ public sealed class CompilePluginTests : IDisposable
 
         Assert.False(result.Succeeded);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, stray), result.RefusalReason, StringComparison.Ordinal);
-        Assert.Contains("Run \"Modbench: Decompile Plugin\" to regenerate the source.", result.RefusalReason, StringComparison.Ordinal);
+        Assert.Contains("Decompile the plugin to regenerate the source.", result.RefusalReason, StringComparison.Ordinal);
         Assert.DoesNotContain("Track", result.RefusalReason, StringComparison.Ordinal);
     }
 }
