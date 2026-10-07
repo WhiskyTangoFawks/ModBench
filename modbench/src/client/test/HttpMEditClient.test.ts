@@ -968,6 +968,37 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     expect(launches).toEqual([]);
   });
 
+  it('answers a snapshot waiting on a crash restart that throws as backendFailed, launching nothing of its own', async () => {
+    const children: EventEmitter[] = [];
+    const ports = [Promise.resolve(5172), Promise.reject(new Error('no port'))];
+    const log = vi.fn();
+    const client = createMEditClient({
+      backend: {
+        freePort: () => ports.shift() ?? Promise.reject(new Error('asked again')), executablePath: '/x/backend',
+        spawn: () => {
+          const child: EventEmitter & { kill: () => void } = Object.assign(new EventEmitter(), {
+            kill: () => { child.emit('exit', 0); },
+          });
+          children.push(child);
+          return child;
+        },
+        pollIntervalMs: 3, checkHealth: () => Promise.resolve(true),
+      },
+      backendLog: fakeLogChannel(), log,
+      fetch: routedFetch([['/notifications/stream', () => Promise.resolve(openStreamResponse())]]),
+    });
+    await client.start();
+    const launches: unknown[] = [];
+    client.onLaunch((launched) => launches.push(launched));
+
+    children[0]?.emit('exit', 1);
+    const sent = client.sendLoadOrder(snapshot);
+
+    await expect(sent).resolves.toEqual({ outcome: 'backendFailed' });
+    expect(launches).toEqual([]);
+    expect(log.mock.calls.filter(([line]) => String(line).includes('no port'))).toHaveLength(1);
+  });
+
   it('launches again for a changed snapshot after a launch whose children all exited before they answered, and settles it', async () => {
     const backend = { exitsAtOnce: true, healthy: false };
     const children: EventEmitter[] = [];

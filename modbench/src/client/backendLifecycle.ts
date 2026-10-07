@@ -2,6 +2,7 @@ import * as http from 'node:http';
 import * as net from 'node:net';
 import * as readline from 'node:readline';
 import type { BackendStatus } from './MEditClient';
+import { errorMessage } from '../ports/errorMessage';
 
 /** Which of the spawned process's two streams a line arrived on. The forwarder that levels it
  *  takes this type, so the client names no VS Code type (ADR-0019). */
@@ -93,8 +94,9 @@ export class BackendLifecycle {
 
   get status(): BackendStatus { return this._status; }
 
-  /** The start in flight, which settles once a child runs or its restarts end. */
-  get starting(): Promise<void> | undefined { return this.startPromise; }
+  /** The start in flight, which settles once a child runs or its restarts end, and never rejects:
+   *  whoever began the start hears why it threw. */
+  get starting(): Promise<void> | undefined { return this.startPromise?.then(() => undefined, () => undefined); }
 
   /** The port the API answers on: the attached one, else the spawned backend's once start() has
    *  claimed it. */
@@ -208,7 +210,7 @@ export class BackendLifecycle {
     this.restartAttempts++;
     // Begun before the status says disconnected, so whoever hears it finds the restart under way.
     if (this.startPromise) this.restartQueued = true;
-    else void this.start();
+    else void this.start().catch((e: unknown) => { this.log(`[backend] restart failed: ${errorMessage(e)}`); });
     // The process is gone now; the restart is an attempt, not a guarantee.
     this.setStatus('disconnected');
     this.log(`[backend] backend exited unexpectedly (code ${code}); restart ${this.restartAttempts}/${BackendLifecycle.MAX_RESTARTS}`);

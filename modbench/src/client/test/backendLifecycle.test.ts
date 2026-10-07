@@ -434,6 +434,25 @@ describe('BackendLifecycle crash-restart / stop', () => {
     expect(lifecycle.starting).toBeUndefined();
   });
 
+  it('ends the restarts when a restart throws, saying why in the Output once, and the start it was settles', async () => {
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
+    const ports = [Promise.resolve(5172), Promise.reject(new Error('no port'))];
+    const logged: string[] = [];
+    const lifecycle = new BackendLifecycle({
+      freePort: () => ports.shift() ?? Promise.reject(new Error('asked again')),
+      pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: () => Promise.resolve(true), log: (line) => logged.push(line),
+    });
+    await lifecycle.start();
+
+    present(children[0], 'the first spawned child').emit('exit', 1);
+    await present(lifecycle.starting, 'the restart under way');
+
+    expect(logged.filter((line) => line.includes('no port'))).toEqual(['[backend] restart failed: no port']);
+    expect(lifecycle.status).toBe('disconnected');
+    expect(lifecycle.starting).toBeUndefined();
+  });
+
   it('is starting nothing once it has given up on restarts', async () => {
     vi.useFakeTimers();
     const state = { healthy: false };
