@@ -174,7 +174,9 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     reportEntry: (message) => reporterFor('enterEditing').report('error', message),
     reportLaunch: (message, reason) => reporterFor('launch').report('error', message, reason),
   });
-  const editing = own(editingFlow({ client, instanceRoot, around: view.around, tell: view.tell }));
+  const editing = own(editingFlow({
+    client, instanceRoot, around: view.around, tell: view.tell, log: (line) => outputChannel.error(line),
+  }));
   void editing.enter(instance.landed());
   void client.start();
   const putLoadOrder = loadOrderPutHandler(editing);

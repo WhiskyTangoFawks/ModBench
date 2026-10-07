@@ -26,23 +26,28 @@ function wired(status: 'running' | 'stopped' = 'running') {
   client.setStatus(status);
   const told: Told[] = [];
   const tellListeners: (() => void)[] = [];
+  let tellFailure: Error | undefined;
   const tell = (what: Told): Promise<void> => {
     told.push(what);
     for (const listener of tellListeners.splice(0)) listener();
-    return Promise.resolve();
+    const failure = tellFailure;
+    tellFailure = undefined;
+    return failure ? Promise.reject(failure) : Promise.resolve();
   };
+  const logged: string[] = [];
   const toldCount = (count: number): Promise<void> => new Promise((resolve) => {
     const check = (): void => { if (told.length >= count) resolve(); else tellListeners.push(check); };
     check();
   });
   const around: { entered: number; settled: boolean; told: number[] } = { entered: 0, settled: false, told: [] };
   const flow = editingFlow({
-    client, instanceRoot: '/instance', tell,
+    client, instanceRoot: '/instance', tell, log: (line) => { logged.push(line); },
     around: async (entry) => { around.entered++; await entry(); around.settled = true; around.told.push(told.length); },
   });
   const putPluginNames = (): string[] => client.puts().map((put) => put.plugins.map((p) => p.name).join());
   const land = (value: LoadOrderSource): void => { flow.onRecompute(value); };
-  return { client, flow, told, toldCount, putPluginNames, land, around };
+  const failNextTell = (error: Error): void => { tellFailure = error; };
+  return { client, flow, told, toldCount, putPluginNames, land, around, logged, failNextTell };
 }
 
 describe('the load order is put at every recompute', () => {
@@ -213,3 +218,37 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const until = async (check: () => boolean): Promise<void> => {
   while (!check()) await settle();
 };
+
+describe('a tell that threw', () => {
+  it('reaches the Output once, and the entries after it still end', async () => {
+    const { client, flow, toldCount, land, logged, failNextTell, around } = wired();
+    failNextTell(new Error('boom'));
+    land(valueWith('A.esp'));
+    await toldCount(1);
+
+    await flow.enter(Promise.resolve().then(() => { land(valueWith('B.esp')); }));
+    client.crashed({ restarting: true });
+    client.setStatus('running');
+    await until(() => around.entered === 2 && around.told.length === 2);
+
+    expect(logged).toEqual(['[loadOrder] handing mEdit the load order threw: boom']);
+  });
+});
+
+describe('the same recompute after a failed launch', () => {
+  it('neither launches mEdit again nor tells nor shows anything', async () => {
+    const { client, told, land, around } = wired('stopped');
+    client.answerStart(() => Promise.resolve());
+    land(valueWith('A.esp'));
+    await until(() => around.settled);
+    const toldBefore = told.length;
+
+    land(valueWith('A.esp'));
+    await client.latestLoadOrder();
+    await settle();
+
+    expect(told.slice(toldBefore)).toEqual([]);
+    expect(around.entered).toBe(1);
+    expect(client.calls.filter((c) => c.method === 'start')).toHaveLength(1);
+  });
+});

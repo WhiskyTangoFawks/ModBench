@@ -99,6 +99,7 @@ class HttpMEditClient implements MEditClient {
     });
     this.loadOrder = createLoadOrderSender({
       status: () => this.lifecycle.status,
+      restarting: () => this.lifecycle.restarting,
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
       onReconnected: (listener) => this.notifications.onReconnected(listener),
       start: () => this.lifecycle.start(),

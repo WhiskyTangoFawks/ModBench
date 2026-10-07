@@ -6,6 +6,8 @@ import {
 /** What an adapter gives the sender: its process, its stream's reopen, and one PUT of a snapshot. */
 export interface LoadOrderWire {
   status(): BackendStatus;
+  /** From a crash until the process's own restart has run. */
+  restarting(): boolean;
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
   onReconnected(listener: () => void): () => void;
   start(): Promise<void>;
@@ -92,21 +94,33 @@ function createSendSlot(wire: LoadOrderWire) {
 const RUNNING: LaunchOutcome = { outcome: 'running' };
 const STOPPED: LaunchOutcome = { outcome: 'stopped' };
 
-// One launch at a time; a launch asked for while one runs shares it. A stop cuts a launch short,
-// and the stop, not the launch, answers the snapshot it was for.
+function listeners<A extends unknown[]>() {
+  const held = new Set<(...args: A) => void>();
+  return {
+    add: (listener: (...args: A) => void): (() => void) => {
+      held.add(listener);
+      return () => { held.delete(listener); };
+    },
+    fire: (...args: A): void => {
+      for (const listener of held) listener(...args);
+    },
+  };
+}
+
+// One launch at a time; a launch asked for while one runs shares it. A stop is the end: it cuts a
+// launch short, it and not the launch answers the snapshot, and nothing launches after it.
 function createLauncher(wire: LoadOrderWire, announce: (launched: Promise<LaunchOutcome>) => void) {
   let launching: Promise<LaunchOutcome> | undefined;
-  let stops = 0;
+  let stopped = false;
 
-  const comeUp = async (stopsAtLaunch: number): Promise<LaunchOutcome> => {
-    if (stops !== stopsAtLaunch) return STOPPED;
+  const comeUp = async (): Promise<LaunchOutcome> => {
     let error: string | undefined;
     try {
       await wire.start();
     } catch (e) {
       error = errorMessage(e);
     }
-    if (stops !== stopsAtLaunch) return STOPPED;
+    if (stopped) return STOPPED;
     if (wire.status() === 'running') return RUNNING;
     await wire.stop();
     return error === undefined ? { outcome: 'failed' } : { outcome: 'failed', error };
@@ -114,50 +128,59 @@ function createLauncher(wire: LoadOrderWire, announce: (launched: Promise<Launch
 
   return {
     launch(): Promise<LaunchOutcome> {
+      if (stopped) return Promise.resolve(STOPPED);
       if (launching) return launching;
-      const stopsAtLaunch = stops;
       // Held before the start runs, so a status the start reports at once finds the launch under way.
-      const launched = Promise.resolve().then(() => comeUp(stopsAtLaunch));
+      const launched = Promise.resolve().then(() => (stopped ? STOPPED : comeUp()));
       launching = launched;
       void launched.then(() => { launching = undefined; });
       announce(launched);
       return launched;
     },
     launching: () => launching !== undefined,
-    stopped: () => { stops++; },
+    stop: () => { stopped = true; },
+    stopped: () => stopped,
   };
 }
 
 export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
   const slot = createSendSlot(wire);
   let newestHanded: LoadOrderSnapshot | undefined;
+  // The snapshot mEdit could not be brought up for, or went down with past its restarts. The same
+  // one again launches nothing: a recompute lands at every focus regain, and only a change can fix
+  // a failed launch (ADR-0019: a toast the user learns to dismiss recreates silence).
+  let downWith: string | undefined;
   let wentAway = false;
-  const resentListeners = new Set<(snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void>();
-  const launchListeners = new Set<(launched: Promise<LaunchOutcome>) => void>();
-  const announce = (launched: Promise<LaunchOutcome>): void => {
-    for (const listener of launchListeners) listener(launched);
+  const resent = listeners<[LoadOrderSnapshot, LoadOrderOutcome]>();
+  const launches = listeners<[Promise<LaunchOutcome>]>();
+  const launcher = createLauncher(wire, launches.fire);
+
+  const wentDown = (): void => {
+    downWith = newestHanded && JSON.stringify(newestHanded);
+    slot.drop(BACKEND_FAILED);
   };
-  const launcher = createLauncher(wire, announce);
 
   const launch = (): Promise<LaunchOutcome> => {
     const launched = launcher.launch();
-    void launched.then(({ outcome }) => { if (outcome === 'failed') slot.drop(BACKEND_FAILED); });
+    void launched.then(({ outcome }) => { if (outcome === 'failed') wentDown(); });
     return launched;
   };
 
+  // While a launch or the process's own restart is under way, a snapshot only waits for it.
   const hand = (snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> => {
+    if (launcher.stopped()) return Promise.resolve(ABANDONED);
+    const down = wire.status() !== 'running' && !launcher.launching() && !wire.restarting();
+    if (down && JSON.stringify(snapshot) === downWith) return Promise.resolve(BACKEND_FAILED);
     newestHanded = snapshot;
     const sent = slot.hold(snapshot);
-    if (wire.status() !== 'running') void launch();
+    if (down) void launch();
     return sent;
   };
 
   const resend = (): void => {
     const snapshot = newestHanded;
     if (!snapshot || slot.holdsOne()) return;
-    void hand(snapshot).then((outcome) => {
-      for (const listener of resentListeners) listener(snapshot, outcome);
-    });
+    void hand(snapshot).then((outcome) => { resent.fire(snapshot, outcome); });
   };
 
   // A send in flight when mEdit goes answers abandoned, never a killed backend as a network
@@ -166,13 +189,13 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     if (isMEditGone(status)) {
       wentAway = true;
       slot.abortInFlight();
-      if (!launcher.launching()) slot.drop(ABANDONED);
+      if (!launcher.launching() && !wire.restarting()) wentDown();
       return;
     }
     if (status === 'running' && wentAway) {
       wentAway = false;
       resend();
-      if (!launcher.launching()) announce(Promise.resolve(RUNNING));
+      if (!launcher.launching()) launches.fire(Promise.resolve(RUNNING));
     }
     slot.pump();
   });
@@ -181,17 +204,11 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
   return {
     send: hand,
     latest: () => slot.latest(),
-    onResent(listener) {
-      resentListeners.add(listener);
-      return () => { resentListeners.delete(listener); };
-    },
-    onLaunch(listener) {
-      launchListeners.add(listener);
-      return () => { launchListeners.delete(listener); };
-    },
+    onResent: resent.add,
+    onLaunch: launches.add,
     launch,
     async stop() {
-      launcher.stopped();
+      launcher.stop();
       newestHanded = undefined;
       slot.abortInFlight();
       slot.drop(ABANDONED);

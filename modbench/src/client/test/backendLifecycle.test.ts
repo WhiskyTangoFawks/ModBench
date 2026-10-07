@@ -350,6 +350,58 @@ describe('BackendLifecycle crash-restart / stop', () => {
     expect(statuses).not.toContain('running');
   });
 
+  it('is restarting from a crash, as it reports disconnected, until the restart has run', async () => {
+    const state = { healthy: true };
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
+    await lifecycle.start();
+    const restartingAtDisconnect: boolean[] = [];
+    lifecycle.onStatusChanged((s) => { if (s === 'disconnected') restartingAtDisconnect.push(lifecycle.restarting); });
+    const restarted = nextRunningStatus(lifecycle);
+
+    present(children[0], 'the first spawned child').emit('exit', 1);
+    await restarted;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(restartingAtDisconnect).toEqual([true]);
+    expect(lifecycle.restarting).toBe(false);
+  });
+
+  it('reports a restart that never answered as disconnected, and not restarting', async () => {
+    const state = { healthy: true };
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, pollTimeoutMs: 10, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
+    await lifecycle.start();
+    const restartingAtDisconnect: boolean[] = [];
+    lifecycle.onStatusChanged((s) => { if (s === 'disconnected') restartingAtDisconnect.push(lifecycle.restarting); });
+
+    state.healthy = false;
+    present(children[0], 'the first spawned child').emit('exit', 1);
+    await vi.waitFor(() => expect(restartingAtDisconnect).toHaveLength(2));
+
+    expect(restartingAtDisconnect).toEqual([true, false]);
+  });
+
+  it('is not restarting once it has given up on restarts', async () => {
+    vi.useFakeTimers();
+    const state = { healthy: false };
+    const spawn = vi.fn(() => { const c = makeChild(); process.nextTick(() => c.emit('exit', 1)); return c; });
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, pollTimeoutMs: 10, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
+
+    const startP = lifecycle.start();
+    await vi.advanceTimersByTimeAsync(200);
+    await startP;
+    expect(lifecycle.restarting).toBe(false);
+  });
+
   it('caps crash-restarts instead of looping forever, then reports disconnected', async () => {
     vi.useFakeTimers();
     const state = { healthy: false };

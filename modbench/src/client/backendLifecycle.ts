@@ -72,6 +72,7 @@ export class BackendLifecycle {
   // resurrecting a load order the user already closed.
   private generation = 0;
   private restartAttempts = 0;
+  private _restarting = false;
   private static readonly MAX_RESTARTS = 3;
 
   constructor(opts: BackendLifecycleOptions) {
@@ -89,6 +90,9 @@ export class BackendLifecycle {
   }
 
   get status(): BackendStatus { return this._status; }
+
+  /** From a crash until its restart has run; false once it gives up. */
+  get restarting(): boolean { return this._restarting; }
 
   /** The port the API answers on: the attached one, else the spawned backend's once start() has
    *  claimed it. */
@@ -180,17 +184,21 @@ export class BackendLifecycle {
   private handleExit(code: number | null): void {
     this.child = undefined;
     if (!this.expectedAlive) return; // stop() already handled it
+    const givingUp = this.restartAttempts >= BackendLifecycle.MAX_RESTARTS;
+    this._restarting = !givingUp;
     // The process is gone now; the restart below is an attempt, not a guarantee.
     this.setStatus('disconnected');
-    if (this.restartAttempts >= BackendLifecycle.MAX_RESTARTS) {
+    if (givingUp) {
       this.log(`[backend] backend crashed ${this.restartAttempts}× — giving up`);
       return;
     }
     this.restartAttempts++;
     this.log(`[backend] backend exited unexpectedly (code ${code}); restart ${this.restartAttempts}/${BackendLifecycle.MAX_RESTARTS}`);
     const gen = this.generation;
-    void (this.startPromise ?? Promise.resolve()).then(() => {
-      if (gen === this.generation && this.expectedAlive) void this.start();
+    void (this.startPromise ?? Promise.resolve()).then(async () => {
+      if (gen === this.generation && this.expectedAlive) await this.start();
+    }).finally(() => {
+      if (gen === this.generation) this._restarting = false;
     });
   }
 
@@ -213,6 +221,7 @@ export class BackendLifecycle {
 
         if (Date.now() >= deadline) {
           this.log(`[backend] Timed out waiting for backend on port ${this.port}`);
+          this._restarting = false;
           this.setStatus('disconnected');
           resolve();
           return;

@@ -2,6 +2,7 @@
 // what came of each put, and of each launch, comes back through `tell`.
 
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
+import { errorMessage } from '../ports/errorMessage';
 import { putLoadOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
 export type Told =
@@ -15,6 +16,8 @@ export interface EditingDeps {
   /** Shows a launch, from its start until the snapshot it was for is told (plugins.md, States 2). */
   around: (entry: () => Promise<void>) => Promise<void>;
   tell: (told: Told) => Promise<void>;
+  /** The Output, for a tell that threw: no caller is left to hear it. */
+  log: (line: string) => void;
 }
 
 export interface EditingFlow {
@@ -25,22 +28,23 @@ export interface EditingFlow {
   dispose(): void;
 }
 
-function pending() {
+function pending(log: (line: string) => void) {
   const held = new Set<Promise<void>>();
   return {
     track(work: Promise<void>): Promise<void> {
-      held.add(work);
-      void work.then(() => held.delete(work));
-      return work;
+      const told = work.catch((e: unknown) => { log(`[loadOrder] handing mEdit the load order threw: ${errorMessage(e)}`); });
+      held.add(told);
+      void told.then(() => held.delete(told));
+      return told;
     },
     settled: async (): Promise<void> => { await Promise.all([...held]); },
   };
 }
 
 export function editingFlow(deps: EditingDeps): EditingFlow {
-  const { client, instanceRoot, around, tell } = deps;
-  const tells = pending();
-  const launches = pending();
+  const { client, instanceRoot, around, tell, log } = deps;
+  const tells = pending(log);
+  const launches = pending(log);
   let entering = false;
 
   // A launch that failed is told by the launch, not again by the snapshot it was for.

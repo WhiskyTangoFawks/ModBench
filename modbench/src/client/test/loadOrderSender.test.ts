@@ -465,3 +465,87 @@ describe('each launch, announced as it begins', () => {
     expect(launches).toHaveLength(0);
   });
 });
+
+describe('after a launch that failed', () => {
+  function failingLaunches(): InMemoryMEditClient {
+    const client = new InMemoryMEditClient();
+    client.answerPuts(() => Promise.resolve(APPLIED));
+    client.answerStart(() => { client.setStatus('disconnected'); return Promise.resolve(); });
+    return client;
+  }
+
+  it('launches nothing for the same snapshot again, and answers it backendFailed', async () => {
+    const client = failingLaunches();
+    await client.sendLoadOrder(snapshot('A.esp'));
+    const launches: unknown[] = [];
+    client.onLaunch((launched) => launches.push(launched));
+
+    await expect(client.sendLoadOrder(snapshot('A.esp'))).resolves.toEqual(BACKEND_FAILED);
+
+    expect(launches).toEqual([]);
+    expect(methods(client)).toEqual(['start', 'stop']);
+  });
+
+  it('launches nothing for the same snapshot when it arrived during the launch with the extension', async () => {
+    const client = failingLaunches();
+    const launched = pending<undefined>();
+    client.answerStart(() => launched.promise.then(() => { client.setStatus('disconnected'); }));
+    void client.start();
+    const sent = client.sendLoadOrder(snapshot('A.esp'));
+    launched.resolve(undefined);
+    await sent;
+
+    await client.sendLoadOrder(snapshot('A.esp'));
+
+    expect(methods(client)).toEqual(['start', 'stop']);
+  });
+});
+
+describe('after mEdit gave up restarting', () => {
+  it('launches nothing for the snapshot it went down with, and launches for one that differs', async () => {
+    const client = running();
+    await client.sendLoadOrder(snapshot('A.esp'));
+    client.crashed({ restarting: false });
+
+    await expect(client.sendLoadOrder(snapshot('A.esp'))).resolves.toEqual(BACKEND_FAILED);
+    expect(methods(client)).toEqual(['put']);
+
+    await expect(client.sendLoadOrder(snapshot('B.esp'))).resolves.toEqual(APPLIED);
+    expect(methods(client)).toEqual(['put', 'start', 'put']);
+  });
+});
+
+describe('a snapshot while mEdit restarts after a crash', () => {
+  it('is held, launching and stopping nothing, and put once the restart runs', async () => {
+    const client = running();
+    const resent = resentOf(client);
+    await client.sendLoadOrder(snapshot('A.esp'));
+    client.crashed({ restarting: true });
+
+    const sent = client.sendLoadOrder(snapshot('B.esp'));
+    client.setStatus('starting');
+    client.setStatus('disconnected');
+    client.setStatus('starting');
+    client.setStatus('running');
+
+    await expect(sent).resolves.toEqual(APPLIED);
+    expect(methods(client)).toEqual(['put', 'put']);
+    expect(sentNames(client)).toEqual(['A.esp', 'B.esp']);
+    expect(resent).toEqual([]);
+  });
+});
+
+describe('a stop', () => {
+  it('is the end: a snapshot or a start after it launches nothing, and announces none', async () => {
+    const client = running();
+    await client.stop();
+    const launches: unknown[] = [];
+    client.onLaunch((launched) => launches.push(launched));
+
+    await expect(client.sendLoadOrder(snapshot('A.esp'))).resolves.toEqual(ABANDONED);
+    await client.start();
+
+    expect(methods(client)).toEqual(['stop']);
+    expect(launches).toEqual([]);
+  });
+});
