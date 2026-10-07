@@ -112,6 +112,18 @@ public sealed class CreatePluginHandlerTests : IDisposable
         GitProbe.Run(Path.Combine(folder, ".git"), folder, "rev-parse", "HEAD").Trim();
 
     [Fact]
+    public async Task CreatePlugin_IntoOverwrite_WritesNoSource_EvenWhereTheFolderHoldsARepository()
+    {
+        var folder = await TrackedModWith("HostMod", "First.esp");
+
+        var result = await Create("Second.esp", folder, PluginOrigin.Overwrite);
+
+        Assert.True(result.Applied);
+        Assert.True(File.Exists(Path.Combine(folder, "Second.esp")));
+        Assert.False(SourceRepository.SourceReads(Registered("Second.esp", "HostMod", folder)));
+    }
+
+    [Fact]
     public async Task CreatePlugin_WhoseSourceWriteFails_TakesBackTheFile_AndLeavesNoPartialTree()
     {
         var folder = await TrackedModWith("BlockedMod", "First.esp");
@@ -178,8 +190,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
             throw new IOException("unreadable");
         }
 
-        public override EmptyPluginTakeBack TakeBackEmpty(ModKey modKey, string folder) =>
-            TakeBackFailure is { } failure ? throw failure : base.TakeBackEmpty(modKey, folder);
+        public override EmptyPluginTakeBack TakeBackEmpty(ModKey modKey, string folder, string written) =>
+            TakeBackFailure is { } failure ? throw failure : base.TakeBackEmpty(modKey, folder, written);
     }
 
     [Fact]
@@ -288,7 +300,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [Fact]
     public async Task CreatePlugin_WhoseAdapterAnswersAnUnnamedOutcome_ThrowsRatherThanReportingApplied()
     {
-        var adapter = new RecordingAdapter { Outcome = (EmptyPluginWrite)99 };
+        var adapter = new RecordingAdapter { Outcome = (EmptyPluginCreated)(EmptyPluginWrite)99 };
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => HandlerIn(GameRelease.Fallout4, adapter).CreatePlugin(new PluginAddress("Odd.esp", "OddMod"), ModFolder("OddMod")));
@@ -304,10 +316,10 @@ public sealed class CreatePluginHandlerTests : IDisposable
     private sealed class RecordingAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public List<(string Name, GameRelease Release)> Asked { get; } = [];
-        public EmptyPluginWrite Outcome { get; init; } = EmptyPluginWrite.Written;
+        public EmptyPluginCreated Outcome { get; init; } = EmptyPluginWrite.Written;
         public Exception? Failure { get; init; }
 
-        public override Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease)
+        public override Task<EmptyPluginCreated> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease)
         {
             Asked.Add((modKey.FileName.String, gameRelease));
             if (Failure is not null) throw Failure;
