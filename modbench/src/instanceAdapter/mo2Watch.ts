@@ -1,5 +1,5 @@
 // MO2's watch: every file of the instance, the downloads folder, and the game folder's plugins and
-// Creation Club list, armed through VS Code's file watcher while anyone listens.
+// Creation Club list, and the setting that points at the game folder, armed through VS Code's file watcher while anyone listens.
 
 import * as vscode from 'vscode';
 import type { Subscription } from './instanceAdapter';
@@ -39,7 +39,7 @@ export interface Mo2Watch {
   follow(what: FollowedFolder, base: string | undefined, glob: string): void;
 }
 
-export function mo2Watch(instanceRoot: string): Mo2Watch {
+export function mo2Watch(instanceRoot: string, gameDirectoryChanged: (listener: () => void) => Subscription): Mo2Watch {
   const listeners = new Set<() => void>();
   const followed = new Map<FollowedFolder, Followed>();
   let fixed: Subscription[] = [];
@@ -55,6 +55,7 @@ export function mo2Watch(instanceRoot: string): Mo2Watch {
 
   const arm = (): void => {
     fixed = [MODS_GLOB, OVERWRITE_GLOB, MODLIST_GLOB, PLUGINS_GLOB, SETTINGS_WATCH_GLOB].map((glob) => watch(instanceRoot, glob));
+    fixed.push(gameDirectoryChanged(changed));
     for (const folder of followed.values()) folder.watch = watch(folder.base, folder.glob);
   };
   const disarm = (): void => {

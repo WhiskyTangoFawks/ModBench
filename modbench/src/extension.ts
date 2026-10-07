@@ -19,7 +19,7 @@ import { dataFolderFile } from './tables/gamePaths';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { createStatusBar, type StatusBar } from './plugins/statusBar';
-import { meditConfig, gameDirectoryOverrides } from './workspaceConfig';
+import { meditConfig, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
 import {
   registerTrackCommand, registerDecompileCommand, registerCompileCommand, CompileProblems, type CompileDeps, type TrackDeps,
   type PluginsViewProgress,
@@ -54,7 +54,6 @@ import { createDownloadsView } from './downloads/downloadsView';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import { openedFolder, whenOpened, markFirstReadLanded } from './toolbox/instanceCheck';
-import { refreshOnGameDirectoryChange } from './toolbox/gameDirectorySetting';
 import { launchBackend } from './toolbox/autoLaunch';
 import { pluginSyncOver } from './pluginsCommands/plugins';
 import { modSyncOver } from './modlist/modlist';
@@ -153,13 +152,12 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     statusBar, notifyConflictsComputed, reporterFor, ask, trash, extensionId,
   } = deps;
   const log = (msg: string) => outputChannel.info(msg);
-  const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides });
+  const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides, gameDirectoryChanged: onGameDirectoryChange });
   const access = { instanceRoot, adapter };
   const instance = own(new Instance({
     adapter, window: vscode.window, log, logReadFailure: (line) => outputChannel.error(line),
   }));
   own(markFirstReadLanded(instance));
-  own(refreshOnGameDirectoryChange(GAME_FOLDER_SETTING, vscode.workspace.onDidChangeConfiguration, () => instance.refresh()));
   // Fire-and-forget: watchers alone leave the value at its EMPTY sentinel until a change, so
   // this kicks off the first real read. The Plugins tree's own `sequence === 0` guard is
   // what keeps activation from being blocking here.

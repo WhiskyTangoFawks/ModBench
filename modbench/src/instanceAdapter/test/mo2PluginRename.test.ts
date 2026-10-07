@@ -68,6 +68,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     adapter = mo2InstanceAdapter({
       instanceRoot: root,
       gameDirectoryOverrides: () => ({}),
+      gameDirectoryChanged: () => ({ dispose: () => {} }),
       detectors: { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null) },
     });
     for (const [before] of NAMED_FOR_IT.slice(1)) await put(before);

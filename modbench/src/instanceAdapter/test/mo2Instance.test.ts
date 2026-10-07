@@ -27,7 +27,7 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, matchesGlob } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
-import { OVERWRITE_ORIGIN } from '../instanceAdapter';
+import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
 import type { GameDetectors } from '../gameDirectory';
 import type {
   GameFolder, InstanceAdapter, UpgradeExtraction, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
@@ -45,8 +45,10 @@ const NO_DETECTORS: GameDetectors = {
 const INI = 'ModOrganizer.ini';
 const DOWNLOAD = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
-const adapterAt = (instanceRoot: string, gameDirectory?: string): InstanceAdapter =>
-  mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides: () => ({ gameDirectory }), detectors: NO_DETECTORS });
+const adapterAt = (
+  instanceRoot: string, gameDirectory?: string, gameDirectoryChanged: (listener: () => void) => Subscription = () => ({ dispose: () => {} }),
+): InstanceAdapter =>
+  mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides: () => ({ gameDirectory }), gameDirectoryChanged, detectors: NO_DETECTORS });
 
 const text = (root: string, relative: string): Promise<string> => readFile(join(root, relative), 'utf8');
 
@@ -432,6 +434,23 @@ describe('the MO2 Instance adapter', () => {
       expect(live().length).toBeGreaterThan(0);
       second.dispose();
       expect(live()).toEqual([]);
+    });
+
+    it('signals a change to the game-folder setting as it signals a file change, while anyone listens', () => {
+      let setting: (() => void) | undefined;
+      const adapter = adapterAt(root, undefined, (listener) => {
+        setting = listener;
+        return { dispose: () => { setting = undefined; } };
+      });
+      expect(setting).toBeUndefined();
+      let signals = 0;
+      const subscription = adapter.subscribe(() => { signals++; });
+
+      setting?.();
+      expect(signals).toBe(1);
+
+      subscription.dispose();
+      expect(setting).toBeUndefined();
     });
 
     it('signals a change to every profile\'s two order files, the settings, a mod\'s files and overwrite', () => {

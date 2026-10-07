@@ -6,7 +6,7 @@ import { MODLIST_FILE_NAME } from './codecs/modlistText';
 import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { gameDirectoryResolver, type GameDetectors } from './gameDirectory';
-import type { GameDirectoryOverrides, InstanceAdapter } from './instanceAdapter';
+import type { GameDirectoryOverrides, InstanceAdapter, Subscription } from './instanceAdapter';
 import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
@@ -20,6 +20,8 @@ import { modsDir, profilesDir, settingsFile } from './layout';
 interface Mo2InstanceOptions {
   instanceRoot: string;
   gameDirectoryOverrides: () => GameDirectoryOverrides;
+  /** Hears the setting behind `gameDirectoryOverrides` change. */
+  gameDirectoryChanged: (listener: () => void) => Subscription;
   /** Steam and Wine detection; the real ones when omitted. */
   detectors?: GameDetectors;
 }
@@ -32,13 +34,13 @@ export function isMo2Instance(root: string): boolean {
 }
 
 export function mo2InstanceAdapter({
-  instanceRoot, gameDirectoryOverrides, detectors,
+  instanceRoot, gameDirectoryOverrides, gameDirectoryChanged, detectors,
 }: Mo2InstanceOptions): InstanceAdapter {
   const context: Mo2Context = {
     instanceRoot,
     resolveGameFolder: gameDirectoryResolver(gameDirectoryOverrides, detectors),
     resolveDownloadsFolder: downloadsDirectoryResolver(detectors),
-    watch: mo2Watch(instanceRoot),
+    watch: mo2Watch(instanceRoot, gameDirectoryChanged),
   };
   return {
     names: { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX },

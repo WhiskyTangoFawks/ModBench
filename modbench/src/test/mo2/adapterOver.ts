@@ -32,6 +32,7 @@ export function adapterOver(root: string, answers: AdapterAnswers = {}): Instanc
   const adapter = mo2InstanceAdapter({
     instanceRoot: root,
     gameDirectoryOverrides: () => ({}),
+    gameDirectoryChanged: () => ({ dispose: () => {} }),
     detectors: { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null) },
   });
   const { gameFolder, downloadedFiles } = answers;

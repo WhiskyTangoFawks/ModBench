@@ -1,6 +1,11 @@
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
-import type { ConfigChangeEvent, Subscription } from './gameDirectorySetting';
+import type { Subscription } from '../instanceAdapter/instanceAdapter';
+
+/** VS Code's `ConfigurationChangeEvent`, as much of it as the launch reads. */
+export interface ConfigChangeEvent {
+  affectsConfiguration(section: string): boolean;
+}
 
 interface LaunchDeps {
   setting: string;

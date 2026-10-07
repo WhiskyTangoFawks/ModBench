@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { launchBackend } from '../autoLaunch';
-import type { ConfigChangeEvent } from '../gameDirectorySetting';
+import { launchBackend, type ConfigChangeEvent } from '../autoLaunch';
 
 type LaunchDeps = Parameters<typeof launchBackend>[0];
 

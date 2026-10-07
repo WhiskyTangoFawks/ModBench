@@ -14,7 +14,7 @@ describe('newModNameRefusal', () => {
 
   beforeEach(() => {
     root = cloneCorpusFixture();
-    adapter = mo2InstanceAdapter({ instanceRoot: root, gameDirectoryOverrides: () => ({}) });
+    adapter = mo2InstanceAdapter({ instanceRoot: root, gameDirectoryOverrides: () => ({}), gameDirectoryChanged: () => ({ dispose: () => {} }) });
   });
   afterEach(() => rm(root, { recursive: true, force: true }));
 
