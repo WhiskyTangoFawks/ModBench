@@ -9,15 +9,15 @@ namespace MEditService.SourceAdapter.Tests.TestSupport;
 internal static class SourceTransactionActs
 {
     internal static void Put(this SourceTransaction transaction, SourceRepository repository, PluginAddress plugin, SourceDocument document) =>
-        transaction.Apply(repository, repository.ChangesToPut(plugin, document));
+        transaction.Apply(repository.ChangesToPut(plugin, document));
 
     internal static void PutInWorldspace(
         this SourceTransaction transaction, SourceRepository repository, PluginAddress plugin, SourceDocument cell, string worldspace) =>
-        transaction.Apply(repository, repository.ChangesToPutInWorldspace(plugin, cell, worldspace));
+        transaction.Apply(repository.ChangesToPutInWorldspace(plugin, cell, worldspace));
 
     internal static void Rekey(
         this SourceTransaction transaction, SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, DocumentRekey rekey) =>
-        transaction.Apply(repository, repository.ChangesToRekey(
+        transaction.Apply(repository.ChangesToRekey(
             plugin, repository.ContainerDocument(plugin, identity, schemas).Require(), identity, newFormKey, rekey));
 }
