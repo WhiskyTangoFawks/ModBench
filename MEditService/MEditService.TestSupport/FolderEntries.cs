@@ -7,4 +7,8 @@ public static class FolderEntries
         [.. Directory.EnumerateFileSystemEntries(folder, "*", SearchOption.AllDirectories)
             .Select(entry => Path.GetRelativePath(folder, entry))
             .Order(StringComparer.Ordinal)];
+
+    /// <summary>The one folder-level entry <paramref name="folder"/> holds now and did not in <paramref name="before"/>, as a full path.</summary>
+    public static string TheOneAddedTo(string folder, IEnumerable<string> before) =>
+        Path.Combine(folder, Assert.Single(Of(folder).Except(before), entry => !entry.Contains(Path.DirectorySeparatorChar)));
 }

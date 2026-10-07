@@ -32,7 +32,8 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
         _pluginPath,
         loadOrder: null,
         ("The Original Title", "The New Title"),
-        ("The original description.", "The new description."));
+        ("The original description.", "The new description."),
+        ("TestBook", "RenamedBook"));
 
     private static bool IsTheZeroEntryStubTheWriterEmitsForEveryLanguage(string fileName) =>
         fileName.EndsWith(".ILSTRINGS", StringComparison.OrdinalIgnoreCase);
@@ -81,17 +82,14 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
     {
         var before = File.ReadAllBytes(_pluginPath);
 
+        var entriesBefore = FolderEntries.Of(_dataFolder);
+
         using (var prep = await PrepareModifiedAsync())
         {
-            FileModes.Set(_stringsDir, "555");
-            try
-            {
-                Assert.ThrowsAny<Exception>(prep.Commit);
-            }
-            finally
-            {
-                FileModes.Set(_stringsDir, "755");
-            }
+            var added = FolderEntries.TheOneAddedTo(_dataFolder, entriesBefore);
+            File.Delete(Directory.GetFiles(Path.Combine(added, "Strings"))[0]);
+
+            Assert.ThrowsAny<IOException>(prep.Commit);
         }
 
         Assert.Equal(before, File.ReadAllBytes(_pluginPath));

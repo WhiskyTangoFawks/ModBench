@@ -50,17 +50,14 @@ public sealed class PluginWriterSaveTests
         var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
         var before = File.ReadAllBytes(pluginPath);
 
+        var entriesBefore = FolderEntries.Of(data.DataFolder);
+
         using (var prep = await TreeSaves.PrepareAsync(pluginPath))
         {
-            FileModes.Set(data.DataFolder, "555");
-            try
-            {
-                Assert.ThrowsAny<Exception>(prep.Commit);
-            }
-            finally
-            {
-                FileModes.Set(data.DataFolder, "755");
-            }
+            var added = FolderEntries.TheOneAddedTo(data.DataFolder, entriesBefore);
+            File.Delete(Path.Combine(added, "TestPlugin.esp"));
+
+            Assert.ThrowsAny<IOException>(prep.Commit);
         }
 
         Assert.Equal(before, File.ReadAllBytes(pluginPath));

@@ -41,7 +41,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
     }
 
-    [Fact]
+    [PosixFact]
     public void Track_WhenEveryPluginIsRefused_LeavesTheHalfMadeRepositoryAsItWas()
     {
         CrashATrackAfterItMadeTheRepository();
@@ -53,7 +53,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Equal(before, GitDirContents());
     }
 
-    [Fact]
+    [PosixFact]
     public void Track_WhenTheCommitFails_LeavesTheHalfMadeRepositoryAsItWas()
     {
         CrashATrackAfterItMadeTheRepository();
@@ -106,7 +106,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
     }
 
-    [Fact]
+    [PosixFact]
     public void Track_WhenTheCommitFails_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
     {
         var theirs = Path.Combine(_modFolder, "plugin-source", "A.esp", "theirs.txt");
@@ -118,7 +118,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json")));
     }
 
-    [Fact]
+    [PosixFact]
     public void Track_WhenTheCommitFails_LeavesAFileAnotherProgramChanged_AndNamesIt()
     {
         var changed = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
@@ -129,7 +129,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Contains("000001.json was changed by another program", failure.Message);
     }
 
-    [Fact]
+    [PosixFact]
     public void Track_WhenTheCommitFails_LeavesAGitignoreAnotherProgramChanged_AndNamesIt()
     {
         var gitignore = Path.Combine(_modFolder, ".gitignore");
@@ -208,7 +208,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
     }
 
-    [Fact]
+    [PosixFact]
     public void Track_IntoTheHalfMadeRepositoryOfACrashedTrack_Recovers()
     {
         CrashATrackAfterItMadeTheRepository();
