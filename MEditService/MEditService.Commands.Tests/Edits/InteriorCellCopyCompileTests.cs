@@ -48,9 +48,7 @@ public sealed class InteriorCellCopyCompileTests : IDisposable
 
     private async Task<IFallout4ModGetter> ImportCompiled()
     {
-        var compiled = await CompileServices.Over(_fixture.LoadOrder)
-            .CompileOneAsync(_fixture.DestinationPlugin);
-        Assert.True(compiled.Succeeded, compiled.RefusalReason);
+        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.DestinationPlugin);
 
         var overlay = ModFactory.ImportGetter(
             new ModPath(

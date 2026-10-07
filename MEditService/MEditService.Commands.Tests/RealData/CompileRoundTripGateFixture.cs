@@ -33,7 +33,6 @@ public sealed class CompileRoundTripGateFixture : IDisposable
     public FormKey RenamedResponse { get; }
     public string RenamedResponseEditorId { get; }
 
-    public CompileResult Compiled { get; }
     public string CompiledPluginPath => Path.Combine(_compiledFolder, CutDownPluginFixture.PluginFileName);
 
     public CompileRoundTripGateFixture()
@@ -68,7 +67,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
             JsonDocument.Parse(JsonSerializer.Serialize(RenamedResponseEditorId)).RootElement));
         EditedTree = CutDownPluginFixture.ReadSourceTree(ModFolder);
 
-        Compiled = CompileService().CompileOneAsync(Plugin).GetAwaiter().GetResult();
+        CompileService().CompileLandedAsync(Plugin).GetAwaiter().GetResult();
         File.Copy(PluginPath, CompiledPluginPath);
     }
 

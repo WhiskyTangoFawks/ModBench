@@ -25,9 +25,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private async Task<IQuestGetter> CompiledQuest()
     {
-        var result = await CompileServices.Over(_fixture.LoadOrder)
-            .CompileOneAsync(_fixture.Plugin);
-        Assert.True(result.Succeeded, result.RefusalReason);
+        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.Plugin);
 
         var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(ContainerModFixture.PluginName), Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName)),
@@ -289,9 +287,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private async Task<IFallout4ModGetter> CompileAndImport(ContainerCopyFixture fixture)
     {
-        var compile = await CompileServices.Over(fixture.LoadOrder)
-            .CompileOneAsync(fixture.DestinationPlugin);
-        Assert.True(compile.Succeeded, compile.RefusalReason);
+        await CompileServices.Over(fixture.LoadOrder).CompileLandedAsync(fixture.DestinationPlugin);
         var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(ContainerCopyFixture.DestinationPluginName), Path.Combine(fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName)),
             GameRelease.Fallout4);
