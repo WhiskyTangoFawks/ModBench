@@ -61,12 +61,6 @@ function isPanel(candidate: unknown): candidate is vscode.WebviewPanel {
   return typeof candidate === 'object' && candidate !== null && 'webview' in candidate;
 }
 
-function fakePanel(postMessage: () => Promise<boolean> = vi.fn(() => Promise.resolve(true)), title = ''): vscode.WebviewPanel {
-  const panel = { title, webview: { postMessage } };
-  if (!isPanel(panel)) throw new Error('not a panel');
-  return panel;
-}
-
 interface Registered {
   selection?: () => readonly unknown[];
   meditClient?: InMemoryMEditClient;

@@ -697,8 +697,8 @@ describe('what a record tab\'s webview posts', () => {
   const GUN = '000801:A.esp';
   const compare = comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]);
   const loadRequest = { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: GUN, columns: [] };
-  const answered = (tab: FakePanel) => tab.webview.postMessage.mock.calls.map(([message]) => message as { type: string });
-  const loadAnswered = (tab: FakePanel) => answered(tab).filter(({ type }) => type === 'recordLoadAnswered');
+  const answered = (tab: FakePanel) => tab.webview.postMessage.mock.calls.map((call: unknown[]) => call[0]);
+  const loadAnswered = (tab: FakePanel) => answered(tab).filter((message) => typeof message === 'object' && message !== null && Reflect.get(message, 'type') === 'recordLoadAnswered');
 
   function client(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
@@ -779,7 +779,7 @@ describe('what a record tab\'s webview posts', () => {
     });
   });
 
-  it('opens nothing for a click on a column\'s header in a tab VS Code has not shown', async () => {
+  it('opens nothing for a click on a column\'s header in a tab VS Code has not shown', () => {
     const { open } = makeEditor(client());
     const tab = open(GUN);
     tab.viewColumn = undefined;
@@ -1084,7 +1084,7 @@ describe('mEdit\'s reports to an open record tab', () => {
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
   });
 
-  it('is no longer heard once the Editor is disposed', () => {
+  it('is not heard once the Editor is disposed', () => {
     const client = new InMemoryMEditClient();
     const { editor, open } = makeEditor(client);
     const tab = open(GUN);
