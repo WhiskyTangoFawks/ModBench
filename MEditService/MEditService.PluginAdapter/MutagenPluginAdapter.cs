@@ -159,7 +159,7 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     public async Task<EmptyPluginWrite> CreateAndWriteAsync(
         ModKey modKey, string folder, GameRelease gameRelease)
     {
-        var destinationPath = Path.Combine(folder, modKey.FileName.String);
+        var destinationPath = CreatedPluginFile.PathIn(modKey, folder);
         if (!Directory.Exists(folder)) return EmptyPluginWrite.FolderGone;
         if (File.Exists(destinationPath)) return EmptyPluginWrite.FileExists;
 

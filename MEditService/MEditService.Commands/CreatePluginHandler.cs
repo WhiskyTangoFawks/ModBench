@@ -20,9 +20,9 @@ public sealed class CreatePluginHandler
     internal CreatePluginHandler(IPluginAdapter adapter, LoadOrderHolder holder, ILogger<CreatePluginHandler> logger) =>
         (_adapter, _holder, _decompiler) = (adapter, holder, new PluginDecompiler(logger, adapter));
 
-    private async Task<PluginCreateResult> LandSourceIfTracked(LoadOrderSnapshot loadOrder, PluginAddress address, string folder)
+    private async Task<PluginCreateResult> LandSourceIfTracked(LoadOrderSnapshot loadOrder, PluginAddress address, ModKey modKey, string folder)
     {
-        var path = Path.Combine(folder, address.Name);
+        var path = CreatedPluginFile.PathIn(modKey, folder);
         var plugin = new RegisteredPlugin(address.Name, address.Origin, path, new PluginProvider.FromMod(address.Origin, folder));
         if (!SourceRepository.IsTracked(plugin)) return new PluginCreateResult();
 
@@ -44,7 +44,7 @@ public sealed class CreatePluginHandler
             failure = ex.Message;
         }
 
-        File.Delete(path);
+        CreatedPluginFile.TakeBack(path);
         return new PluginCreateResult(PluginCreateRefusal.WriteFailed,
             $"Could not write {address.Name}'s source into {folder}, so it was not created: {failure}");
     }
@@ -78,7 +78,7 @@ public sealed class CreatePluginHandler
 
         return written switch
         {
-            EmptyPluginWrite.Written => await LandSourceIfTracked(loadOrder, plugin, folder),
+            EmptyPluginWrite.Written => await LandSourceIfTracked(loadOrder, plugin, modKey, folder),
             EmptyPluginWrite.FolderGone => new PluginCreateResult(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
             EmptyPluginWrite.FileExists => new PluginCreateResult(PluginCreateRefusal.FileExists,
