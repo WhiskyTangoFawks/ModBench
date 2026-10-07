@@ -42,6 +42,9 @@ public sealed class ReconcileDiffTests
     private static string? WinnerOf(OpenedIndex index, string formKey) =>
         OverrideStackOf(index, formKey).Entries.Single(e => e.IsWinner).Plugin.Name;
 
+    private static IReadOnlyList<(string FormKey, string? Body)> Bodies(IReadOnlyList<RecordDocument> documents) =>
+        [.. documents.Select(d => (d.FormKey, d.Body))];
+
     private static IReadOnlyList<LoadOrderEntry> With(IReadOnlyList<LoadOrderEntry> plugins, string name, Func<LoadOrderEntry, LoadOrderEntry> change) =>
         plugins.Select(p => p.Name == name ? change(p) : p).ToList();
 
@@ -81,6 +84,9 @@ public sealed class ReconcileDiffTests
         Assert.Equal("B.esp", WinnerOf(index, npc));
         var opened = opens.OpenedTotal;
         var sequence = index.Sequence;
+        var aKey = new PluginAddress("A.esm", fx.Plugins.Single(p => p.Name == "A.esm").Origin);
+        var bKey = new PluginAddress("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
+        var bodiesBefore = (A: Bodies(ReadsOf(index).DocumentsOf(aKey)), B: Bodies(ReadsOf(index).DocumentsOf(bKey)));
 
         var swapped = fx.Plugins.Select(p => p with { Slot = p.Name == "A.esm" ? 1 : 0 }).ToList();
         index.Reconcile(holder, fx.GameDirectory, swapped, GameRelease.Fallout4);
@@ -88,6 +94,8 @@ public sealed class ReconcileDiffTests
         Assert.Equal(opened, opens.OpenedTotal);
         Assert.Equal("A.esm", WinnerOf(index, npc));
         Assert.True(index.Sequence > sequence, "a reorder is a sweep, and a sweep is a projection");
+        Assert.Equal(bodiesBefore.A, Bodies(ReadsOf(index).DocumentsOf(aKey)));
+        Assert.Equal(bodiesBefore.B, Bodies(ReadsOf(index).DocumentsOf(bKey)));
     }
 
     [Fact]
@@ -107,6 +115,7 @@ public sealed class ReconcileDiffTests
 
         Assert.Equal(opened, opens.OpenedTotal);
         Assert.Empty(ReadsOf(index).DocumentsOf(bKey));
+        Assert.Contains(bKey, ReadsOf(index).OpenedPlugins.Keys);
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
