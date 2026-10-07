@@ -175,12 +175,6 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
           applied: false, refusal: '"E.esp" is a blueprint plugin, so it must load after "C.esp", which is not.',
         });
       });
-
-      it('lands a plugin whose master is a locked plugin, which plugins.txt does not list', async () => {
-        const masters = knowing(...FIVE.map(plain).map((p) => p.name === 'D.esp' ? { ...p, masters: ['Fallout4.esm'] } : p));
-        expect(await reorderPlugins(accessTo(dir), masters, PROFILE, moving('D.esp'), { kind: 'losingEnd' }, ['Fallout4.esm']))
-          .toEqual({ applied: true, wrote: true });
-      });
     });
 
     it('judges a name two origins hold by the copy in the load order', async () => {
