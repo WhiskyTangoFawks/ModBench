@@ -64,7 +64,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Equal(2, _opens.OpenedTotal);
         Assert.Equal(LoadOrderState.Ready, _index.Status.State);
         Assert.Equal(held, _index.Status.Version);
-        Assert.NotEmpty(_index.RequireReads().GetDocuments(Key));
+        Assert.NotEmpty(_index.RequireReads().DocumentsOf(Key));
     }
 
     private const string MatchesNpcA = "SELECT form_key FROM npc_ WHERE editor_id = 'NpcA'";
@@ -245,7 +245,7 @@ public sealed class StoreRebuildTests : IDisposable
             {
                 try
                 {
-                    if (_index.RequireReads().GetDocuments(Key) is { Count: > 0 }) Interlocked.Increment(ref answered);
+                    if (_index.RequireReads().DocumentsOf(Key) is { Count: > 0 }) Interlocked.Increment(ref answered);
                 }
                 catch (Exception ex) when (ScopeClosedUnderTheReadSoTheAnswerIsNoStore(ex))
                 {

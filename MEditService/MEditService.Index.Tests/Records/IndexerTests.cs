@@ -79,7 +79,7 @@ public sealed class IndexerTests
 
         ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, snapshot);
 
-        Assert.All(snapshot.Plugins, plugin => Assert.NotEmpty(indexer.RequireReads().GetDocuments(plugin.Key)));
+        Assert.All(snapshot.Plugins, plugin => Assert.NotEmpty(indexer.RequireReads().DocumentsOf(plugin.Key)));
         Assert.Equal(
             snapshot.Plugins.Select(c => c.Key).OrderBy(k => k.Name, StringComparer.Ordinal),
             indexer.RequireReads().OpenedPlugins.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));

@@ -64,7 +64,7 @@ public sealed class PersistentIndexTests : IDisposable
         using var second = Launched([alpha]);
 
         Assert.Equal(0, second.Opens.OpenedTotal);
-        Assert.NotEmpty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
+        Assert.NotEmpty(second.Index.RequireReads().DocumentsOf(alpha.KeyOf()));
     }
 
     [Fact]
@@ -77,13 +77,13 @@ public sealed class PersistentIndexTests : IDisposable
         using var second = Launched([beta]);
 
         Assert.Equal(0, second.Opens.OpenedTotal);
-        Assert.Empty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
-        Assert.NotEmpty(second.Index.RequireReads().GetDocuments(beta.KeyOf()));
+        Assert.Empty(second.Index.RequireReads().DocumentsOf(alpha.KeyOf()));
+        Assert.NotEmpty(second.Index.RequireReads().DocumentsOf(beta.KeyOf()));
 
         second.Dispose();
         using var thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration = Launched([alpha, beta]);
         Assert.Equal(0, thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration.Opens.OpenedTotal);
-        Assert.NotEmpty(thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration.Index.RequireReads().GetDocuments(alpha.KeyOf()));
+        Assert.NotEmpty(thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration.Index.RequireReads().DocumentsOf(alpha.KeyOf()));
     }
 
     [Fact]
@@ -101,8 +101,8 @@ public sealed class PersistentIndexTests : IDisposable
 
         Assert.Equal(["Alpha.esp"], second.Opens.Opened);
         var reads = second.Index.RequireReads();
-        Assert.Contains(reads.GetDocuments(alpha.KeyOf()), d => d.EditorId == "NpcAlphaEdited");
-        Assert.Contains(reads.GetDocuments(beta.KeyOf()), d => d.EditorId == "NpcBeta");
+        Assert.Contains(reads.DocumentsOf(alpha.KeyOf()), d => d.EditorId == "NpcAlphaEdited");
+        Assert.Contains(reads.DocumentsOf(beta.KeyOf()), d => d.EditorId == "NpcBeta");
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class PersistentIndexTests : IDisposable
 
         using var second = Launched([alpha]);
         Assert.Equal(0, second.Opens.OpenedTotal);
-        Assert.NotEmpty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
+        Assert.NotEmpty(second.Index.RequireReads().DocumentsOf(alpha.KeyOf()));
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class PersistentIndexTests : IDisposable
         File.Delete(alpha.Path);
 
         using var second = Launched([alpha]);
-        Assert.Empty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
+        Assert.Empty(second.Index.RequireReads().DocumentsOf(alpha.KeyOf()));
         Assert.Contains(second.Index.Status.Failures, f => f.Name == "Alpha.esp");
     }
 
@@ -145,8 +145,8 @@ public sealed class PersistentIndexTests : IDisposable
 
         using var second = Launched([alpha, beta]);
         Assert.Equal(["Alpha.esp", "Beta.esp"], second.Opens.Opened);
-        Assert.NotEmpty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
-        Assert.NotEmpty(second.Index.RequireReads().GetDocuments(beta.KeyOf()));
+        Assert.NotEmpty(second.Index.RequireReads().DocumentsOf(alpha.KeyOf()));
+        Assert.NotEmpty(second.Index.RequireReads().DocumentsOf(beta.KeyOf()));
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public sealed class PersistentIndexTests : IDisposable
 
         using var second = Launched([alpha]);
         Assert.Equal(["Alpha.esp"], second.Opens.Opened);
-        var documents = second.Index.RequireReads().GetDocuments(alpha.KeyOf());
+        var documents = second.Index.RequireReads().DocumentsOf(alpha.KeyOf());
         Assert.NotEmpty(documents);
         Assert.All(documents, d => Assert.True(d.IsWinner));
     }
@@ -238,7 +238,7 @@ public sealed class PersistentIndexTests : IDisposable
 
         using var second = Launched([alpha]);
         Assert.Equal(["Alpha.esp"], second.Opens.Opened);
-        Assert.NotEmpty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
+        Assert.NotEmpty(second.Index.RequireReads().DocumentsOf(alpha.KeyOf()));
     }
 
     [Fact]
@@ -250,6 +250,6 @@ public sealed class PersistentIndexTests : IDisposable
         var secondIndexJoiningTheFirstBecauseDuckDbNetSharesOneDatabaseInstancePerPathInAProcess = Launched([alpha]);
         secondIndexJoiningTheFirstBecauseDuckDbNetSharesOneDatabaseInstancePerPathInAProcess.Dispose();
 
-        Assert.NotEmpty(holder.Index.RequireReads().GetDocuments(alpha.KeyOf()));
+        Assert.NotEmpty(holder.Index.RequireReads().DocumentsOf(alpha.KeyOf()));
     }
 }
