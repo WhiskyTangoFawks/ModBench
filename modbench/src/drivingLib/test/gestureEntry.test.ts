@@ -159,7 +159,7 @@ describe('a singular gesture\'s Argument', () => {
 describe('isClickedRow', () => {
   const plugin = { name: 'A.esp', origin: 'Mod' };
   const selected = { argument: { kind: 'mod', name: 'ModA' } };
-  const viewSelection = () => [selected, selected];
+  const viewSelection = (): readonly unknown[] => [selected, selected];
 
   it('takes a tree row that carries no Argument, for the gesture to refuse aloud', () => {
     const bare = new TreeItem('Odd');

@@ -24,7 +24,6 @@ export interface ArgumentCarrier {
   readonly argument: ArgumentOf<'record' | 'plugin' | 'mod'>;
 }
 
-/** A tree row, or a webview context, that carries an Argument the wire accepts. */
 const isArgumentCarrier = (value: unknown): value is ArgumentCarrier =>
   [recordArgumentOf, pluginArgumentOf, modArgumentOf].some((argumentOf) => argumentOf(value) !== undefined);
 

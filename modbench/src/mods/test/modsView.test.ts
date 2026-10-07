@@ -81,6 +81,7 @@ import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
 import { Uri } from 'vscode';
 import { createModSync } from '../modSync';
+import { rowLabelOf } from '../../drivingLib/argument';
 import { present } from '../../ports/present';
 import { accessTo } from '../../test/mo2/adapterOver';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
@@ -90,7 +91,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 const currentBox = currentBoxOf(h.state);
 
 const shownRows = async () => (await present(h.providers.get('modbench.modList'), 'the Mods tree data provider').getChildren()) ?? [];
-const shownLabels = async () => (await shownRows()).map((row: vscode.TreeItem) => row.label);
+const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row));
 
 const otherDeps = () => ({
   access: accessTo('/instance'), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
