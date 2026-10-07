@@ -27,7 +27,7 @@ public sealed class SourceCodecReadScanTests
 
         Assert.True(
             counts.Count == 0,
-            "The Source folder touches a RecordTextCodec member outside its bound (ADR-0014): "
+            "The Source folder touches a RecordTextCodec member outside its bound; the Codec owns a record as text and as document (target-architecture.d2): "
             + "a repository reads the kernel for facts about types and for the "
             + "spelling of a layout level it mints, never for a record's content. Only "
             + "RecordTypeDispatch (type facts, not counted here) and RecordTextCodec.BlankDocument "
