@@ -245,7 +245,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
-    public void ClearingDeleted_WhenAnotherDocumentOfItsSourceTreeCannotBeRead_IsRefused_AndWritesNothing()
+    public void ClearingDeleted_WhenAnotherDocumentOfItsSourceTreeCannotBeRead_IsRefusedAsRecordParseFailed_NamingTheMaster_AndAnswersNoChanges()
     {
         var other = new FormKey(ModKey.FromFileName("Override.esp"), 0x951);
         Load(
@@ -414,7 +414,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
-    public void ClearingDeleted_WhenTheNearestCopyToItsLeftCannotBeRead_IsRefusedNamingItsPlugin_AndWritesNothing()
+    public void ClearingDeleted_WhenTheNearestCopyToItsLeftCannotBeRead_IsRefusedAsRecordParseFailed_NamingItsPlugin_AndAnswersNoChanges()
     {
         var middle = Plugin("Middle.esp", NpcCopy(0, "Guy", 0.9f));
         Load(

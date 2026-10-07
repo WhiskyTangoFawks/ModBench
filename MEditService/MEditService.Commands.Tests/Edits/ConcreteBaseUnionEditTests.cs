@@ -69,7 +69,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
     }
 
     [Fact]
-    public void ScriptPropertyWithoutDiscriminator_IsRefusedAndWritesNothing()
+    public void ScriptPropertyWithoutDiscriminator_IsRefusedAsDiscriminatorInvalid_AndAnswersNoChanges()
     {
         var before = _fixture.NpcBody();
 

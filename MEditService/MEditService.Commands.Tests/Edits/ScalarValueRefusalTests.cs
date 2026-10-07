@@ -20,7 +20,7 @@ public sealed class ScalarValueRefusalTests : IDisposable
     private string NpcBody() => _mod.Document(_mod.Npc.ToString()).Require().Body;
 
     [Fact]
-    public void HeightMaxFloatColumn_NonNumericString_IsRefusedAndWritesNothing()
+    public void HeightMaxFloatColumn_NonNumericString_IsRefusedAsCodecRejected_NamingTheField_AndAnswersNoChanges()
     {
         var before = NpcBody();
 
@@ -33,7 +33,7 @@ public sealed class ScalarValueRefusalTests : IDisposable
     }
 
     [Fact]
-    public void FlagsColumn_ArbitraryString_IsRefusedAndWritesNothing()
+    public void FlagsColumn_ArbitraryString_IsRefusedAsCodecRejected_NamingTheField_AndAnswersNoChanges()
     {
         var before = NpcBody();
 
@@ -46,7 +46,7 @@ public sealed class ScalarValueRefusalTests : IDisposable
     }
 
     [Fact]
-    public void AggressionEnumColumn_UnrecognisedMemberName_IsRefusedAndWritesNothing()
+    public void AggressionEnumColumn_UnrecognisedMemberName_IsRefusedAsCodecRejected_NamingTheField_AndAnswersNoChanges()
     {
         var before = NpcBody();
 
@@ -59,7 +59,7 @@ public sealed class ScalarValueRefusalTests : IDisposable
     }
 
     [Fact]
-    public void EnergyLevelByteColumn_OutOfRangeValue_IsRefusedAndWritesNothing()
+    public void EnergyLevelByteColumn_OutOfRangeValue_IsRefusedAsCodecRejected_NamingTheField_AndAnswersNoChanges()
     {
         var before = NpcBody();
 
@@ -113,7 +113,7 @@ public sealed class ScalarValueRefusalTests : IDisposable
     }
 
     [Fact]
-    public void VoiceFormLinkColumn_NonStringJsonValue_IsRefusedAndWritesNothing()
+    public void VoiceFormLinkColumn_NonStringJsonValue_IsRefusedAsCodecRejected_NamingTheField()
     {
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "Voice", Json("42"));
 

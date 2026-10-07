@@ -82,7 +82,7 @@ public sealed class EditRecordChangesTests : IDisposable
     [InlineData("npc")]
     [InlineData("quest")]
     [InlineData("cell")]
-    public void AFieldEdit_OfARecordWhoseFileWasRemovedAfterItWasRead_IsRefused_AndChangesNothing(string record)
+    public void AFieldEdit_OfARecordWhoseFileWasRemovedAfterItWasRead_IsRefusedAsRecordNotFound_AndAnswersNoChanges(string record)
     {
         var formKey = (record switch { "npc" => _mod.Npc, "quest" => _mod.Quest, _ => _mod.Cell }).ToString();
         var given = TextOf(_mod, _mod.Plugin, formKey);
@@ -111,7 +111,7 @@ public sealed class EditRecordChangesTests : IDisposable
     [Theory]
     [InlineData("FormKey", "\"000F00:Fixture.esp\"")]
     [InlineData("HeightMin", "0.75")]
-    public void AnEdit_GivenTextTheCodecCannotRead_IsRefusedAsUnreadable_AndChangesNothing(string member, string value)
+    public void AnEdit_GivenTextTheCodecCannotRead_IsRefusedAsRecordParseFailed_AndAnswersNoChanges(string member, string value)
     {
         var unreadable = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString())
             .Replace($"\"{SourceEditFixture.NpcEditorId}\"", $"\"{SourceEditFixture.NpcEditorId}\", \"HeightMax\": {{ \"x\": 1 }}", StringComparison.Ordinal);

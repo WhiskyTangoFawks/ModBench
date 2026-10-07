@@ -45,7 +45,7 @@ public sealed class RecordRemovedMidEditTests : IDisposable
     }
 
     [Fact]
-    public void AnUndeleteWhoseDocumentIsRemovedAfterItIsRead_IsRefusedAsSourceUnitNotFound_AndWritesNothing()
+    public void AnUndeleteWhoseDocumentIsRemovedAfterItIsRead_IsRefusedAsSourceUnitNotFound_AndAnswersNoChanges()
     {
         var edited = Address(_edited);
         var modFolder = _plugins.FolderOf(_edited);

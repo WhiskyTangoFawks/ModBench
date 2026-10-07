@@ -193,7 +193,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     }
 
     [Fact]
-    public void ARefusedQuestChildEdit_LeavesTheQuestDocumentAndTheSceneItselfUntouched()
+    public void ARefusedQuestChildEdit_AnswersNoChanges()
     {
         var before = QuestText;
         var sceneBefore = _fixture.Document(_fixture.Scene.ToString()).Require().Body;
