@@ -1,8 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import type { PluginsCommandResult, PluginsDrop } from '../../pluginsCommands/plugins';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { PluginsDrop } from '../../pluginsCommands/plugins';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import type { InstanceValue } from '../../instanceLoader/instance';
@@ -19,6 +16,8 @@ import {
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
+const moveCommands = vi.hoisted(() => [] as { plugins: PluginAddress[]; drop: PluginsDrop }[]);
+
 vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
   return {
@@ -26,20 +25,25 @@ vi.mock('vscode', async () => {
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
     Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
     window: { withProgress: recordedWithProgress },
+    commands: {
+      executeCommand: (id: string, plugins: PluginAddress[], drop: PluginsDrop) => {
+        if (id === 'modbench.plugin.move') moveCommands.push({ plugins, drop });
+        return Promise.resolve();
+      },
+    },
   };
 });
 
 import * as vscode from 'vscode';
 import {
   PluginsTreeProvider, PluginNode, ImplicitMasterNode, NO_PLUGINS_MESSAGE, pluginFileOf, isDropPayload,
-  type PluginListSource, type PluginsTreeNode, type PluginsTreeProviderOptions,
+  type PluginsTreeNode, type PluginsTreeProviderOptions,
 } from '../PluginsTreeProvider';
 import {
   PluginTreeProvider, RecordTypeNode, RecordNode, WorldspaceNode, BlockNode,
   SubBlockNode, CellNode, InteriorBlockNode, InteriorSubBlockNode, IndexingNode,
 } from '../PluginTreeProvider';
 import { ErrorNode } from '../../drivingLib/errorNode';
-import { recordingReporter } from '../../test/surfacingDoubles';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -76,17 +80,9 @@ const failIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): Promise<T> 
   new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`getChildren() did not settle within ${ms} ms`)), ms)),
 ]);
 
-class FakeSource implements PluginListSource {
-  reorderPluginsCalls: { names: string[]; drop: PluginsDrop }[] = [];
-  reorderPluginsError?: Error;
-  reorderPluginsRefusal?: string;
-  reorderPlugins(names: string[], drop: PluginsDrop): Promise<PluginsCommandResult> {
-    if (this.reorderPluginsError) return Promise.reject(this.reorderPluginsError);
-    this.reorderPluginsCalls.push({ names, drop });
-    return Promise.resolve(this.reorderPluginsRefusal === undefined
-      ? { applied: true, wrote: true } : { applied: false, refusal: this.reorderPluginsRefusal });
-  }
-}
+beforeEach(() => { moveCommands.length = 0; });
+
+const moves = () => moveCommands.map(({ plugins, drop }) => ({ names: plugins.map((p) => p.name), drop }));
 
 function held(name: string, overrides: Partial<PluginMetadata> = {}): PluginMetadata {
   return {
@@ -154,37 +150,32 @@ interface Harness {
   client: InMemoryMEditClient;
   records: PluginTreeProvider;
   instance: FakeInstance;
-  source: FakeSource;
   logged: { level: string; msg: string }[];
 }
 
 function makeTree(
   plugins: (LoadOrderPlugin | LoadOrderPluginLine)[],
   extra: Partial<{
-    source: FakeSource;
     instance: FakeInstance;
     client: InMemoryMEditClient;
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
     publishChangedOutside: PluginsTreeProviderOptions['publishChangedOutside'];
     dataFolderFile: (name: string) => string | undefined;
     loadedWithNoLine: readonly (string | PluginAddress)[];
-    reporter: PluginsTreeProviderOptions['reporter'];
   }> = {},
 ): Harness {
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins, extra.loadedWithNoLine));
-  const source = extra.source ?? new FakeSource();
   const client = extra.client ?? makeClient();
   const records = new PluginTreeProvider(client);
   const logged: { level: string; msg: string }[] = [];
   const tree = new PluginsTreeProvider({
-    instance, source, client, records,
+    instance, client, records,
     log: (level, msg) => logged.push({ level, msg }),
     publishDiagnoses: extra.publishDiagnoses,
     publishChangedOutside: extra.publishChangedOutside,
     dataFolderFile: extra.dataFolderFile,
-    reporter: extra.reporter,
   });
-  return { tree, client, records, instance, source, logged };
+  return { tree, client, records, instance, logged };
 }
 
 async function reconcile(
@@ -419,8 +410,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
   it('settles a failed first read on the one error row naming the reason, raises nothing, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
-    const reporter = recordingReporter();
-    const { tree } = makeTree([], { instance, reporter });
+    const { tree } = makeTree([], { instance });
 
     const pending = tree.getChildren();
     instance.fail('EISDIR: illegal operation on a directory, read plugins.txt');
@@ -431,13 +421,11 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(error.label).toBe('Failed to load: EISDIR: illegal operation on a directory, read plugins.txt');
     expect(error.tooltip).toBe('EISDIR: illegal operation on a directory, read plugins.txt');
     expect(error.iconPath).toEqual(new ThemeIcon('error'));
-    expect(reporter.reports).toEqual([]);
 
     instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
     const after = await failIfNotSettledWithin(tree.getChildren(), 500);
 
     expect(after.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp']);
-    expect(reporter.reports).toEqual([]);
   });
 
   it('says nothing about an empty list before the first read lands', async () => {
@@ -604,10 +592,9 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
   const fixturePlugins = (names: string[] = ORDER) => names.map((name, slot) => plugin({ name, slot }));
   const node = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
 
-  async function drag(source: FakeSource, moved: string[], target: string | undefined, names: string[] = ORDER) {
-    const reporter = recordingReporter();
+  async function drag(moved: string[], target: string | undefined, names: string[] = ORDER) {
     const instance = Object.assign(new FakeInstance(valueOf(fixturePlugins(names))), { refresh: () => Promise.resolve() });
-    const tree = new PluginsTreeProvider({ instance, source, reporter });
+    const tree = new PluginsTreeProvider({ instance });
     await tree.getChildren();
     let fired = false;
     tree.onDidChangeTreeData(() => { fired = true; });
@@ -615,7 +602,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const dt = new DataTransfer();
     tree.handleDrag(moved.map(node), dt, IGNORED_TOKEN);
     await tree.handleDrop(target === undefined ? undefined : node(target), dt, IGNORED_TOKEN);
-    return { reports: reporter.reports, fired };
+    return { fired };
   }
 
   it('carries the origin of each dragged row, so two plugins of one filename stay apart', () => {
@@ -640,30 +627,32 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
   });
 
   it('a drop onto a row asks for the block to land before that row', async () => {
-    const source = new FakeSource();
-    await drag(source, ['A.esp'], 'D.esp');
-    expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
+    await drag(['A.esp'], 'D.esp');
+    expect(moves()).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
+  });
+
+  it('a drop names each dragged row by its origin and file name', async () => {
+    await drag(['A.esp'], 'D.esp');
+    expect(moveCommands.map(({ plugins }) => plugins)).toEqual([[{ name: 'A.esp', origin: 'SomeMod' }]]);
   });
 
   it('a drop fires nothing before the read lands', async () => {
-    const { fired } = await drag(new FakeSource(), ['A.esp'], 'D.esp');
+    const { fired } = await drag(['A.esp'], 'D.esp');
     expect(fired).toBe(false);
   });
 
   it('drop past the last row (undefined target) asks for the winning end', async () => {
-    const source = new FakeSource();
-    await drag(source, ['B.esp'], undefined);
-    expect(source.reorderPluginsCalls).toEqual([{ names: ['B.esp'], drop: { kind: 'winningEnd' } }]);
+    await drag(['B.esp'], undefined);
+    expect(moves()).toEqual([{ names: ['B.esp'], drop: { kind: 'winningEnd' } }]);
   });
 
   it('a drop on a locked row asks for the losing end', async () => {
-    const source = new FakeSource();
-    const { tree } = makeTree(fixturePlugins(), { source, loadedWithNoLine: ['Fallout4.esm'] });
+    const { tree } = makeTree(fixturePlugins(), { loadedWithNoLine: ['Fallout4.esm'] });
     await tree.getChildren();
     const dt = new DataTransfer();
     tree.handleDrag([node('B.esp')], dt, IGNORED_TOKEN);
     await tree.handleDrop(new ImplicitMasterNode('Fallout4.esm', 'Data'), dt, IGNORED_TOKEN);
-    expect(source.reorderPluginsCalls).toEqual([{ names: ['B.esp'], drop: { kind: 'losingEnd' } }]);
+    expect(moves()).toEqual([{ names: ['B.esp'], drop: { kind: 'losingEnd' } }]);
   });
 
   it('pluginFileOf names the file a row stands for', () => {
@@ -672,68 +661,59 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
   });
 
   it('drop onto a row this tree does not own is refused, not treated as the end of the list', async () => {
-    const source = new FakeSource();
-    const { tree } = makeTree(fixturePlugins(), { source });
+    const { tree } = makeTree(fixturePlugins());
     await tree.getChildren();
     const dt = new DataTransfer();
     tree.handleDrag([node('A.esp')], dt, IGNORED_TOKEN);
 
     await tree.handleDrop(new RecordNode(recordSummary(), 'SomeMod'), dt, IGNORED_TOKEN);
 
-    expect(source.reorderPluginsCalls).toEqual([]);
+    expect(moves()).toEqual([]);
   });
 
   it('drop onto one of this tree own record rows is refused too', async () => {
-    const source = new FakeSource();
-    const { tree } = makeTree(fixturePlugins(), { source });
+    const { tree } = makeTree(fixturePlugins());
     await tree.getChildren();
     const dt = new DataTransfer();
     tree.handleDrag([node('A.esp')], dt, IGNORED_TOKEN);
 
     await tree.handleDrop(new RecordTypeNode('A.esp', recordTypeCountFixture({ type: 'weap', count: 5, displayName: 'Weapon' }), 'SomeMod'), dt, IGNORED_TOKEN);
 
-    expect(source.reorderPluginsCalls).toEqual([]);
+    expect(moves()).toEqual([]);
   });
 
   it('contiguous multi-selection moves as one block, named in the drag order', async () => {
-    const source = new FakeSource();
-    await drag(source, ['B.esp', 'C.esp', 'D.esp'], 'A.esp');
-    expect(source.reorderPluginsCalls)
+    await drag(['B.esp', 'C.esp', 'D.esp'], 'A.esp');
+    expect(moves())
       .toEqual([{ names: ['B.esp', 'C.esp', 'D.esp'], drop: { kind: 'before', name: 'A.esp' } }]);
   });
 
-  it('a drop on a row being dragged fires nothing and says nothing', async () => {
-    const source = new FakeSource();
-    const { reports } = await drag(source, ['A.esp', 'C.esp'], 'C.esp');
-    expect(source.reorderPluginsCalls).toEqual([]);
-    expect(reports).toEqual([]);
+  it('a drop on a row being dragged asks for nothing', async () => {
+    await drag(['A.esp', 'C.esp'], 'C.esp');
+    expect(moves()).toEqual([]);
   });
 
   it('non-contiguous multi-selection names every dragged row, in one drop', async () => {
-    const source = new FakeSource();
-    await drag(source, ['A.esp', 'C.esp', 'E.esp'], 'D.esp');
-    expect(source.reorderPluginsCalls)
+    await drag(['A.esp', 'C.esp', 'E.esp'], 'D.esp');
+    expect(moves())
       .toEqual([{ names: ['A.esp', 'C.esp', 'E.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
   });
 
   it('an empty drag payload is a no-op (no write)', async () => {
-    const source = new FakeSource();
-    const { tree } = makeTree(fixturePlugins(), { source });
+    const { tree } = makeTree(fixturePlugins());
     await tree.getChildren();
     await tree.handleDrop(node('A.esp'), new DataTransfer(), IGNORED_TOKEN);
-    expect(source.reorderPluginsCalls).toEqual([]);
+    expect(moves()).toEqual([]);
   });
 
   it('produces the same load-order position with a name filter hiding a row between the drag and its target, as with no filter at all', async () => {
     const NAMES = ['M1.esp', 'M2.esp', 'X1.esp', 'M3.esp', 'X2.esp'];
 
-    const baselineSource = new FakeSource();
-    await drag(baselineSource, ['M1.esp'], 'M3.esp', NAMES);
+    await drag(['M1.esp'], 'M3.esp', NAMES);
+    const baseline = moves();
+    moveCommands.length = 0;
 
-    const filteredSource = new FakeSource();
-    const tree = new PluginsTreeProvider({
-      instance: new FakeInstance(valueOf(fixturePlugins(NAMES))), source: filteredSource,
-    });
+    const tree = new PluginsTreeProvider({ instance: new FakeInstance(valueOf(fixturePlugins(NAMES))) });
     await tree.getChildren();
     tree.setFilter('m');
     const visible = await tree.getChildren();
@@ -743,13 +723,12 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     tree.handleDrag([node('M1.esp')], dt, IGNORED_TOKEN);
     await tree.handleDrop(node('M3.esp'), dt, IGNORED_TOKEN);
 
-    expect(filteredSource.reorderPluginsCalls).toEqual(baselineSource.reorderPluginsCalls);
+    expect(moves()).toEqual(baseline);
   });
 
   it('a drop still asks for the move with the client reporting disconnected', async () => {
-    const source = new FakeSource();
     const tree = new PluginsTreeProvider({
-      instance: new FakeInstance(valueOf(fixturePlugins())), source, client: makeDisconnectedClient(),
+      instance: new FakeInstance(valueOf(fixturePlugins())), client: makeDisconnectedClient(),
     });
     await tree.getChildren();
     const dt = new DataTransfer();
@@ -757,71 +736,9 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
 
     await tree.handleDrop(node('D.esp'), dt, IGNORED_TOKEN);
 
-    expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
+    expect(moves()).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
   });
 
-  it('reaches the view as a refusal, naming why, apart from a failed write', async () => {
-    const source = new FakeSource();
-    source.reorderPluginsRefusal = '"A.esp" is a master of "B.esp", so it must load before it.';
-    const { reports } = await drag(source, ['A.esp'], 'D.esp');
-    expect(reports).toEqual([{
-      severity: 'error', message: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.',
-    }]);
-  });
-
-  it('surfaces a write failure via the reporter, naming why (ADR-0019)', async () => {
-    const source = new FakeSource();
-    source.reorderPluginsError = new Error('disk full');
-    const { reports, fired } = await drag(source, ['A.esp'], 'D.esp');
-    expect(reports).toEqual([{ severity: 'error', message: 'Failed to move plugins.', detail: 'disk full' }]);
-    expect(fired).toBe(false);
-  });
-});
-
-describe('PluginsTreeProvider — a drop the command refuses, end to end', () => {
-  const ORDER = ['A.esp', 'B.esp', 'C.esp'];
-  let dir: string;
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'plugin-drop-'));
-    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), ORDER.join('\r\n'));
-  });
-  afterEach(() => rm(dir, { recursive: true, force: true }));
-
-  async function dropOn(moved: string, target: string, facts: Partial<PluginMetadata>[]) {
-    const reporter = recordingReporter();
-    const client = { getPlugins: () => Promise.resolve(facts.map((f, i) => held(ORDER[i] ?? 'X.esp', f))) };
-    const { accessTo } = await import('../../test/mo2/adapterOver');
-    const { reorderPlugins } = await import('../../pluginsCommands/plugins');
-    const source = { reorderPlugins: (names: string[], drop: PluginsDrop) => reorderPlugins(accessTo(dir), client, 'Default', names, drop) };
-    const instance = Object.assign(new FakeInstance(valueOf(ORDER.map((name, slot) => plugin({ name, slot })))), { refresh: () => Promise.resolve() });
-    const tree = new PluginsTreeProvider({ instance, source, reporter });
-    await tree.getChildren();
-    const dt = new DataTransfer();
-    tree.handleDrag([new PluginNode({ name: moved, enabled: true }, 'SomeMod')], dt, IGNORED_TOKEN);
-    await tree.handleDrop(new PluginNode({ name: target, enabled: true }, 'SomeMod'), dt, IGNORED_TOKEN);
-    return reporter.reports;
-  }
-
-  it('names the master and its dependant to the user', async () => {
-    expect(await dropOn('A.esp', 'C.esp', [{}, { masters: ['A.esp'] }, {}])).toEqual([{
-      severity: 'error', message: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.',
-    }]);
-  });
-
-  it('names the blueprint plugin and the plugin it must load after', async () => {
-    expect(await dropOn('C.esp', 'A.esp', [{}, {}, { isBlueprint: true }]))
-      .toEqual([{
-        severity: 'error', message: 'Could not move plugins.',
-        detail: '"C.esp" is a blueprint plugin, so it must load after "A.esp", which is not.',
-      }]);
-  });
-
-  it('says what happened when the row dropped on is gone from plugins.txt', async () => {
-    expect(await dropOn('A.esp', 'Gone.esp', [])).toEqual([{
-      severity: 'error', message: 'Could not move plugins.', detail: 'Plugin not found in plugins.txt: Gone.esp',
-    }]);
-  });
 });
 
 describe('PluginsTreeProvider — isEnabled', () => {
@@ -1053,9 +970,8 @@ describe('PluginsTreeProvider — a drop asks for the place it is shown, in eith
     { direction: 'winningAtTop', moved: ['E.esp'], where: 'below the last row', target: undefined, drop: { kind: 'losingEnd' } },
     { direction: 'winningAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED_ROW, drop: { kind: 'losingEnd' } },
   ] as const)('$direction: $moved dropped on $where asks for $drop', async ({ direction, moved, target, drop }) => {
-    const source = new FakeSource();
     const tree = new PluginsTreeProvider({
-      instance: new FakeInstance(valueOf(LINES.map((name, slot) => plugin({ name, slot })), ['Fallout4.esm'])), source,
+      instance: new FakeInstance(valueOf(LINES.map((name, slot) => plugin({ name, slot })), ['Fallout4.esm'])),
     });
     tree.setViewDirection(direction);
     await tree.getChildren();
@@ -1064,7 +980,7 @@ describe('PluginsTreeProvider — a drop asks for the place it is shown, in eith
 
     await tree.handleDrop(target, dt, IGNORED_TOKEN);
 
-    expect(source.reorderPluginsCalls).toEqual([{ names: moved, drop }]);
+    expect(moves()).toEqual([{ names: moved, drop }]);
   });
 });
 
@@ -1098,7 +1014,7 @@ function disconnect(client: InMemoryMEditClient): InMemoryMEditClient {
 
 describe('PluginsTreeProvider — an enabled row is always collapsible', () => {
   it('gives every plugin row a chevron with no client and no records wired at all', async () => {
-    const tree = new PluginsTreeProvider({ instance: new FakeInstance(valueOf([A_ROW(), B_ROW()])), source: new FakeSource() });
+    const tree = new PluginsTreeProvider({ instance: new FakeInstance(valueOf([A_ROW(), B_ROW()])) });
     for (const row of await tree.getChildren()) {
       expect(tree.getTreeItem(row).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
     }
@@ -2876,87 +2792,5 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
 
     expect(await h.tree.recordRow({ ...NPCS, recordType: 'cell' }, NEW_NPC)).toBeUndefined();
     expect(callCount(h.client, 'getCellChildRecords')).toBe(0);
-  });
-});
-
-describe('PluginsTreeProvider — a move by drop ends when the read lands (common.md, A gesture that writes)', () => {
-  beforeEach(() => { progressSteps.length = 0; });
-
-  const LINES = ['A.esp', 'B.esp', 'C.esp'];
-  const valueOver = (names: readonly string[]): InstanceValue =>
-    valueOf(names.map((name, slot) => plugin({ name, slot })));
-  const node = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
-  const rows = async (tree: PluginsTreeProvider): Promise<string[]> =>
-    (await tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode).map((row) => row.plugin.name);
-
-  class ReadingInstance extends FakeInstance {
-    override refresh(): Promise<void> {
-      progressSteps.push('Instance loader: read every file again');
-      return super.refresh();
-    }
-  }
-
-  function treeOver(instance: FakeInstance, source: PluginListSource = new FakeSource()) {
-    return new PluginsTreeProvider({ instance, source, reporter: recordingReporter() });
-  }
-
-  async function drop(tree: PluginsTreeProvider, moved: string, target: string | undefined): Promise<void> {
-    const dt = new DataTransfer();
-    tree.handleDrag([node(moved)], dt, IGNORED_TOKEN);
-    await tree.handleDrop(target === undefined ? undefined : node(target), dt, IGNORED_TOKEN);
-  }
-
-  it('shows the progress bar from the drop until the read after the write lands', async () => {
-    const source: PluginListSource = {
-      reorderPlugins: () => { progressSteps.push('write plugins.txt'); return Promise.resolve({ applied: true, wrote: true }); },
-    };
-    const tree = treeOver(new ReadingInstance(valueOver(LINES)), source);
-    await tree.getChildren();
-
-    await drop(tree, 'A.esp', undefined);
-
-    expect(progressSteps).toEqual([
-      'progress opens on modbench.pluginListTree',
-      'write plugins.txt',
-      'Instance loader: read every file again',
-      'progress closes',
-    ]);
-  });
-
-  it('shows the order the read holds, not the one dropped', async () => {
-    const instance = new ReadingInstance(valueOver(LINES));
-    const tree = treeOver(instance);
-    await tree.getChildren();
-
-    await drop(tree, 'A.esp', undefined);
-    expect(await rows(tree)).toEqual(LINES);
-
-    instance.value = valueOver(['B.esp', 'C.esp', 'A.esp']);
-    await instance.refresh();
-    expect(await rows(tree)).toEqual(['B.esp', 'C.esp', 'A.esp']);
-  });
-
-  it('still ends on the read when the write fails', async () => {
-    const source = new FakeSource();
-    source.reorderPluginsError = new Error('locked');
-    const tree = treeOver(new ReadingInstance(valueOver(LINES)), source);
-    await tree.getChildren();
-
-    await drop(tree, 'A.esp', undefined);
-
-    expect(progressSteps).toEqual([
-      'progress opens on modbench.pluginListTree',
-      'Instance loader: read every file again',
-      'progress closes',
-    ]);
-  });
-
-  it('opens no progress and reads nothing for a drop that goes nowhere', async () => {
-    const tree = treeOver(new ReadingInstance(valueOver(LINES)));
-    await tree.getChildren();
-
-    await drop(tree, 'A.esp', 'A.esp');
-
-    expect(progressSteps).toEqual([]);
   });
 });

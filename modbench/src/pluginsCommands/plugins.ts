@@ -3,7 +3,7 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { dropIndexIn, type Drop } from './dropIndex';
 import { refuse } from '../ports/refuse';
-import type { MEditClient, PluginMetadata } from '../client';
+import type { MEditClient, PluginAddress, PluginMetadata } from '../client';
 import { moveOrderRefusal, type PluginOrderFactsOf } from './pluginOrder';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type {
@@ -77,7 +77,6 @@ export function setPluginsEnabled(
 /** Where a drag landed in the Plugins tree. */
 export type { Drop as PluginsDrop } from './dropIndex';
 
-/** What the plugin-order rules ask mEdit: the masters query. */
 export type PluginMasters = Pick<MEditClient, 'getPlugins'>;
 
 // The game loads one copy of a name: the one in the load order (ADR-0012). Several copies with
@@ -92,25 +91,22 @@ async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsO
   };
 }
 
-/** `modbench.plugin.move`: the block lands where the drop says, unless that breaks the plugin-order
- *  rules of the order it lands on. A line for a plugin the game loads with no line does not place
- *  it, so the rules do not count it. */
 export async function reorderPlugins(
-  access: PluginsAccess, masters: PluginMasters, profile: string, pluginNames: string[], drop: Drop,
+  access: PluginsAccess, masters: PluginMasters, profile: string, plugins: readonly PluginAddress[], drop: Drop,
   loadedWithNoLine: readonly string[] = [],
 ): Promise<PluginsCommandResult> {
+  const pluginNames = plugins.map((plugin) => plugin.name);
   const noLine = new Set(loadedWithNoLine.map(pluginKey));
   const factsOf = await orderFactsFrom(masters);
-  let refusal: string | undefined;
   // Settled against the order the change lands on, so a tree a generation behind plugins.txt
   // cannot land the block at a stale index.
-  const result = await changePluginOrder(access, profile, (order) => {
+  return changePluginOrder(access, profile, (order) => {
     const names = order.map((p) => p.name);
-    const placed = names.filter((name) => !noLine.has(pluginKey(name)));
-    refusal = moveOrderRefusal(placed, pluginNames, drop, factsOf);
-    return refusal === undefined ? [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(names, pluginNames, drop) }] : [];
+    // A line for a plugin the game loads with no line does not place it.
+    const refusal = moveOrderRefusal(names.filter((name) => !noLine.has(pluginKey(name))), pluginNames, drop, factsOf);
+    if (refusal !== undefined) throw new Error(refusal);
+    return [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(names, pluginNames, drop) }];
   });
-  return refusal === undefined ? result : { applied: false, refusal };
 }
 
 interface PluginLinesDelta {

@@ -90,13 +90,9 @@ beforeEach(() => {
 });
 
 describe('modbench.plugin.move', () => {
-  it('moves the plugins to the drop through the tree, as a drop does', async () => {
-    const { plugins } = pluginsView();
-    const movePlugins = vi.spyOn(plugins.tree, 'movePlugins').mockResolvedValue();
-
-    await present(h.commands.get('modbench.plugin.move'), 'the move command')(['A.esp'], { kind: 'losingEnd' });
-
-    expect(movePlugins).toHaveBeenCalledWith(['A.esp'], { kind: 'losingEnd' });
+  it('is registered with the view', () => {
+    pluginsView();
+    expect(h.commands.has('modbench.plugin.move')).toBe(true);
   });
 });
 
