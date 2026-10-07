@@ -217,10 +217,8 @@ As a user, I want:
 1. A pick of the mode, then a pick of the destination: the plugins I can edit, each with its load index. A destination that already holds a copy asks whether to replace it. Esc on either copies nothing. Source: catalog `copy`
 2. A copy as new to take the next free FormKey. A reference to itself follows it.
 3. A copy as override into a plugin that loads before the source refused: that is an underride. A cell or a worldspace copied as new refused.
-4. Deep copy as override in the mode pick when a selected record has child records. It copies each such record with its fields and all its child records, at any depth. A selected record with no child records copies as an override. Override and new copy each record without its child records. While it runs, the Plugins view's progress bar, from whichever view it started. Source: xEdit; No dead entries
-5. Deep copy as override into a destination that holds any of the record's child records to ask whether to replace them, once for the selection. Replace overwrites each child record the destination holds, and keeps its copy of the record itself. A child record the destination holds and the source lacks stays. Declining leaves those destinations as they are. Source: xEdit; Confirm what destroys; xedit.md, divergence 26
-6. A worldspace deep copy as override that fails part way to say so, naming the cells that landed and the cell that failed, and not to roll back. Discarding the working-tree changes is the recovery. This is an exception to A failed gesture writes nothing and to A selection is one gesture, and each item lands on its own.
-7. A container the destination lacks copied in as an override, in every mode. Source: xEdit
+4. A container the destination lacks copied in as an override, in every mode. Where the game lets it be a Partial Form, it is one, so it carries only its children and overrides none of the container's own fields. Source: xEdit; editor-fields.md, Partial Form; ruling
+5. A copy, in either mode, to copy each record without its child records. To copy a child record too, I select it. Source: xEdit; commands.md, An all variant is select all, then the gesture
 
 ### Delete
 
