@@ -20,10 +20,13 @@ public sealed class CreatePluginHandler
     internal CreatePluginHandler(IPluginAdapter adapter, LoadOrderHolder holder, ILogger<CreatePluginHandler> logger) =>
         (_adapter, _holder, _decompiler) = (adapter, holder, new PluginDecompiler(logger, adapter));
 
-    private async Task<PluginCreateResult> LandSourceIfTracked(LoadOrderSnapshot loadOrder, PluginAddress address, ModKey modKey, string folder)
+    private async Task<PluginCreateResult> LandSourceIfTracked(LoadOrderSnapshot loadOrder, PluginAddress address, string folder)
     {
-        var path = CreatedPluginFile.PathIn(modKey, folder);
-        var plugin = new RegisteredPlugin(address.Name, address.Origin, path, new PluginProvider.FromMod(address.Origin, folder));
+        var modKey = ModKey.FromFileName(address.Name);
+        var path = _adapter.PathOfEmpty(modKey, folder);
+        var provider = loadOrder.Plugins.FirstOrDefault(p => string.Equals(p.Origin, address.Origin, StringComparison.OrdinalIgnoreCase))?.Provider
+            ?? new PluginProvider.FromMod(address.Origin, folder);
+        var plugin = new RegisteredPlugin(address.Name, address.Origin, path, provider);
         if (!SourceRepository.IsTracked(plugin)) return new PluginCreateResult();
 
         string failure;
@@ -32,7 +35,7 @@ public sealed class CreatePluginHandler
             var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, folder, onParsed: () => { }, default);
             if (decompiled.Files is { } files)
             {
-                SourceRepository.Over((PluginProvider.FromMod)plugin.Provider, loadOrder.GameRelease)
+                SourceRepository.Over((PluginProvider.FromMod)provider, loadOrder.GameRelease)
                     .ReplaceSourceFrom(address, files, PluginBinaryHash.TrailerFormOfFile(path));
                 return new PluginCreateResult();
             }
@@ -44,9 +47,25 @@ public sealed class CreatePluginHandler
             failure = ex.Message;
         }
 
-        CreatedPluginFile.TakeBack(path);
         return new PluginCreateResult(PluginCreateRefusal.WriteFailed,
-            $"Could not write {address.Name}'s source into {folder}, so it was not created: {failure}");
+            $"Could not write {address.Name}'s source into {folder}: {failure} {TakeBack(modKey, address.Name, folder)}");
+    }
+
+    private string TakeBack(ModKey modKey, string name, string folder)
+    {
+        try
+        {
+            return _adapter.TakeBackEmpty(modKey, folder) switch
+            {
+                EmptyPluginTakeBack.TakenBack or EmptyPluginTakeBack.Gone => $"{name} was not created.",
+                EmptyPluginTakeBack.Changed => $"{name} was changed by something else since it was created, so it was left in {folder}.",
+                var outcome => throw new InvalidOperationException($"Unhandled {nameof(EmptyPluginTakeBack)} outcome: {outcome}."),
+            };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return $"{name} could not be taken back and is still in {folder}: {ex.Message}";
+        }
     }
 
     /// <summary>Throws <see cref="NoLoadOrderException"/> with nothing written when no load order
@@ -78,7 +97,7 @@ public sealed class CreatePluginHandler
 
         return written switch
         {
-            EmptyPluginWrite.Written => await LandSourceIfTracked(loadOrder, plugin, modKey, folder),
+            EmptyPluginWrite.Written => await LandSourceIfTracked(loadOrder, plugin, folder),
             EmptyPluginWrite.FolderGone => new PluginCreateResult(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
             EmptyPluginWrite.FileExists => new PluginCreateResult(PluginCreateRefusal.FileExists,

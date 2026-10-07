@@ -90,6 +90,23 @@ public interface IPluginAdapter
     /// sets, no records and no masters. Written whole or not at all, into no folder it made and over
     /// no file.</summary>
     Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease);
+
+    /// <summary>Where <see cref="CreateAndWriteAsync"/> puts the plugin.</summary>
+    string PathOfEmpty(ModKey modKey, string folder);
+
+    /// <summary>Deletes the plugin <see cref="CreateAndWriteAsync"/> wrote, only while it still holds the
+    /// bytes that call wrote (ADR-0003): a file another program changed is left as it is.</summary>
+    EmptyPluginTakeBack TakeBackEmpty(ModKey modKey, string folder);
+}
+
+/// <summary>What <see cref="IPluginAdapter.TakeBackEmpty"/> did.</summary>
+public enum EmptyPluginTakeBack
+{
+    TakenBack,
+    Gone,
+
+    /// <summary>The file holds other bytes than the create wrote, or this adapter did not write it, so it stayed.</summary>
+    Changed,
 }
 
 /// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> found at the path before it wrote

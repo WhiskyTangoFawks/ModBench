@@ -56,4 +56,8 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
 
     public virtual Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
         inner.CreateAndWriteAsync(modKey, folder, gameRelease);
+
+    public virtual string PathOfEmpty(ModKey modKey, string folder) => inner.PathOfEmpty(modKey, folder);
+
+    public virtual EmptyPluginTakeBack TakeBackEmpty(ModKey modKey, string folder) => inner.TakeBackEmpty(modKey, folder);
 }

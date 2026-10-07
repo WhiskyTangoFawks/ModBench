@@ -111,11 +111,75 @@ public sealed class CreatePluginHandlerTests : IDisposable
     private static string Head(string folder) =>
         GitProbe.Run(Path.Combine(folder, ".git"), folder, "rev-parse", "HEAD").Trim();
 
+    [Fact]
+    public async Task CreatePlugin_WhoseSourceWriteFails_TakesBackTheFile_AndLeavesNoPartialTree()
+    {
+        var folder = await TrackedModWith("BlockedMod", "First.esp");
+        var blocker = Path.Combine(folder, "plugin-source", "Second.esp");
+        File.WriteAllText(blocker, "not a folder");
+
+        var result = await Create("Second.esp", folder, "BlockedMod");
+
+        Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
+        Assert.False(File.Exists(Path.Combine(folder, "Second.esp")));
+        Assert.Equal(["not a folder"], Directory.EnumerateFileSystemEntries(Path.Combine(folder, "plugin-source"), "Second.esp").Select(File.ReadAllText));
+    }
+
+    [Fact]
+    public async Task CreatePlugin_WhoseFileChangedBeforeTheTakeBack_LeavesItAndNamesIt()
+    {
+        var folder = await TrackedModWith("ChangedMod", "First.esp");
+        var created = Path.Combine(folder, "Second.esp");
+        var adapter = new SourceUnreadableAdapter { Before = () => File.WriteAllText(created, "another tool's file") };
+
+        var result = await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "ChangedMod"), folder);
+
+        Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
+        Assert.Contains("left in", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Second.esp", result.Message, StringComparison.Ordinal);
+        Assert.Equal("another tool's file", File.ReadAllText(created));
+    }
+
+    [Fact]
+    public async Task CreatePlugin_WhoseTakeBackFails_RefusesWithBothCauses()
+    {
+        var folder = await TrackedModWith("LockedMod", "First.esp");
+        var adapter = new SourceUnreadableAdapter { TakeBackFailure = new IOException("locked") };
+
+        var result = await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "LockedMod"), folder);
+
+        Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
+        Assert.Contains("unreadable", result.Message, StringComparison.Ordinal);
+        Assert.Contains("locked", result.Message, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(folder, "Second.esp")));
+    }
+
+    [Fact]
+    public async Task CreatePlugin_IntoATrackedMod_ParksTheBinaryItsSourceWasReadFrom()
+    {
+        var folder = await TrackedModWith("ParkedMod", "First.esp");
+
+        await Create("Second.esp", folder, "ParkedMod");
+
+        Assert.Equal(
+            [PluginBinaryHash.TrailerFormOfFile(Path.Combine(folder, "Second.esp"))],
+            SourceRepository.Over(new PluginProvider.FromMod("ParkedMod", folder), GameRelease.Fallout4).LastWrittenBinarySha256s(new PluginAddress("Second.esp", "ParkedMod")));
+    }
+
     private sealed class SourceUnreadableAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
+        public Action? Before { get; init; }
+        public Exception? TakeBackFailure { get; init; }
+
         public override Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceAsync(
-            ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
+            ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default)
+        {
+            Before?.Invoke();
             throw new IOException("unreadable");
+        }
+
+        public override EmptyPluginTakeBack TakeBackEmpty(ModKey modKey, string folder) =>
+            TakeBackFailure is { } failure ? throw failure : base.TakeBackEmpty(modKey, folder);
     }
 
     [Fact]

@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -156,10 +158,28 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     internal static IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
         => ModFactory.Activator(modKey, gameRelease);
 
+    private readonly ConcurrentDictionary<string, string> _created = new();
+
+    private static string HashOf(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
+
+    public string PathOfEmpty(ModKey modKey, string folder) => Path.Combine(folder, modKey.FileName.String);
+
+    public EmptyPluginTakeBack TakeBackEmpty(ModKey modKey, string folder)
+    {
+        var path = PathOfEmpty(modKey, folder);
+        if (!File.Exists(path)) return EmptyPluginTakeBack.Gone;
+        if (!_created.TryGetValue(path, out var written) || HashOf(File.ReadAllBytes(path)) != written)
+            return EmptyPluginTakeBack.Changed;
+
+        File.Delete(path);
+        _created.TryRemove(path, out _);
+        return EmptyPluginTakeBack.TakenBack;
+    }
+
     public async Task<EmptyPluginWrite> CreateAndWriteAsync(
         ModKey modKey, string folder, GameRelease gameRelease)
     {
-        var destinationPath = CreatedPluginFile.PathIn(modKey, folder);
+        var destinationPath = PathOfEmpty(modKey, folder);
         if (!Directory.Exists(folder)) return EmptyPluginWrite.FolderGone;
         if (File.Exists(destinationPath)) return EmptyPluginWrite.FileExists;
 
@@ -174,7 +194,9 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         try
         {
             await WriteAsync(plugin, tempPath, noModKeySync: true);
+            var written = HashOf(await File.ReadAllBytesAsync(tempPath));
             File.Move(tempPath, destinationPath, overwrite: false);
+            _created[destinationPath] = written;
             return EmptyPluginWrite.Written;
         }
         catch (IOException) when (File.Exists(destinationPath))
