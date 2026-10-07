@@ -330,55 +330,60 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(["TheNpc", "TheKeyword"], EditorIds(page));
     }
 
-    [Fact]
-    public void GetRecords_OfAPlugin_ListsOnlyTheCopiesItsOriginProvides()
+    [Theory]
+    [InlineData("Data", new[] { "InData" })]
+    [InlineData("OtherOrigin", new string[0])]
+    public void GetRecords_OfAPlugin_ListsOnlyTheCopiesItsOriginProvides(string origin, string[] expected)
     {
         var data = new PluginAddress(PluginName, "Data");
-        var other = new PluginAddress(PluginName, "OtherOrigin");
         var entries = new[]
         {
             new LoadOrderEntry(PluginName, PluginName, data.Origin, 0, Enabled: true, Winning: true),
-            new LoadOrderEntry(PluginName, PluginName, other.Origin, 0, Enabled: true, Winning: false),
+            new LoadOrderEntry(PluginName, PluginName, "OtherOrigin", 0, Enabled: true, Winning: false),
         };
-        var content = new PluginContent(false, false, false, [], 1, IsMedium: false);
-        var opened = new Dictionary<PluginAddress, PluginContent> { [data] = content, [other] = content };
-        var (_, svc) = Build(new FakeFixtureData(
-            Release, entries, opened, [Copy("000800:TestPlugin.esp", data, 0, "InData"), Copy("000801:TestPlugin.esp", other, 0, "InOther")]));
+        var opened = new Dictionary<PluginAddress, PluginContent> { [data] = new(false, false, false, [], 1, IsMedium: false) };
+        var (_, svc) = Build(new FakeFixtureData(Release, entries, opened, [Copy("000800:TestPlugin.esp", data, 0, "InData")]));
 
-        var page = svc.GetRecords(types: ["npc_"], plugin: other, search: null, limit: 10, offset: 0);
+        var page = svc.GetRecords(types: ["npc_"], plugin: new PluginAddress(PluginName, origin), search: null, limit: 10, offset: 0);
 
-        Assert.Equal(["InOther"], EditorIds(page));
+        Assert.Equal(expected, EditorIds(page));
     }
 
     [Fact]
     public void GetRecords_AnswersEveryRowFactTheIndexDerives_InQueriesOwnTypes()
     {
         var plugin = new PluginAddress(PluginName, "Data");
-        var unreadable = new RecordDocument(
-            "000800:Test.esp", plugin, 3, IsWinner: false, "FromFake", "npc_", null, [], ParseDiagnosis: "bad");
         var reads = new FakeReads(
             new Dictionary<PluginAddress, PluginContent>(),
             [
-                new FakeRow(unreadable, Index.WorkingTreeState.Modified, FullName: "Full"),
-                new FakeRow(new RecordDocument("000801:Test.esp", plugin, 0, IsWinner: false, null, "npc_", null, []), Index.WorkingTreeState.Added),
+                new FakeRow(
+                    new RecordDocument("000800:Test.esp", plugin, 3, IsWinner: false, "Holder", "npc_", null, []),
+                    Index.WorkingTreeState.Modified, FullName: "Full"),
+                new FakeRow(
+                    new RecordDocument("000801:Test.esp", plugin, 3, IsWinner: false, null, "npc_", null, [], ParseDiagnosis: "bad"),
+                    Index.WorkingTreeState.Added),
+                Copy("000803:Test.esp", plugin, 3, "BeyondThePage"),
             ])
         {
             ContainerChildren = new Dictionary<RecordAt, IReadOnlyList<ContainerChildRow>>
             {
-                [new RecordAt(plugin, "000800:Test.esp")] = [new ContainerChildRow("000802:Test.esp", "000800:Test.esp", "DialogTopic", "Responses", 0)],
+                [new RecordAt(plugin, "000800:Test.esp")] = [new ContainerChildRow("000900:Test.esp", "000800:Test.esp", "DialogTopic", "Responses", 0)],
             },
         };
         var svc = QueryHost.Records(
-            new FakeIndex(reads), FakeLoadOrder.Of(Release, new LoadOrderEntry(PluginName, PluginName, "Data", 0, Enabled: true, Winning: true)));
+            new FakeIndex(reads), FakeLoadOrder.Of(Release, new LoadOrderEntry(PluginName, PluginName, "Data", 3, Enabled: true, Winning: true)));
 
-        var result = svc.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 10, offset: 0);
+        var result = svc.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 2, offset: 0);
 
+        Assert.Equal(3, result.Total);
         Assert.Equal(
             [
                 new RecordSummary(
-                    "000800:Test.esp", PluginName, 3, true, "FromFake", "Data", WorkingTreeState.Modified,
-                    true, "bad", true, "Full"),
-                new RecordSummary("000801:Test.esp", PluginName, 0, true, null, "Data", WorkingTreeState.Added),
+                    "000800:Test.esp", PluginName, 3, true, "Holder", "Data", WorkingTreeState.Modified,
+                    HasContainerChildren: true, ParseDiagnosis: null, HasParseFailure: false, FullName: "Full"),
+                new RecordSummary(
+                    "000801:Test.esp", PluginName, 3, true, null, "Data", WorkingTreeState.Added,
+                    HasContainerChildren: false, ParseDiagnosis: "bad", HasParseFailure: true),
             ],
             result.Items);
     }
@@ -402,6 +407,22 @@ public sealed class RecordQueryServiceTests
 
         Assert.NotNull(detail);
         Assert.Equal(("Patch.esp", "AsThePatchHasIt", true), (detail.Plugin, detail.EditorId, detail.IsWinner));
+    }
+
+    [Fact]
+    public void GetCompare_OfARecordNoCopyWinsBeforeTheSweep_Throws_NamingTheRecordsFormKey()
+    {
+        FormKey npc = default;
+        var fixture = new FakeFixtureBuilder(Release)
+            .WithPlugin("Base.esm", mod => npc = mod.Npcs.AddNew("AsTheMasterHasIt").FormKey)
+            .WithPlugin("Patch.esp", (mod, earlier) => mod.Npcs.Add(earlier[0].Npcs.Single().DeepCopy()))
+            .Build();
+        var (manager, svc) = Build(fixture);
+        ((FakeReads)manager.RequireReads()).UndecidedWinners = new HashSet<string>(StringComparer.Ordinal) { npc.ToString() };
+
+        var thrown = Assert.Throws<InvalidOperationException>(() => svc.GetCompare(npc.ToString()));
+
+        Assert.Contains(npc.ToString(), thrown.Message);
     }
 
     [Fact]

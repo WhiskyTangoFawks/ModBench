@@ -45,8 +45,7 @@ internal static class RealDocuments
     {
         using var parsed = JsonDocument.Parse(body);
         var root = parsed.RootElement;
-        var fields = schema.FieldsOf(
-            root, link => resolveFormKey(link) is { } entry ? new ResolvedFormKey(entry.RecordType, entry.EditorId) : null, release);
+        var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), release);
         return new RecordDocument(
             formKey, plugin, loadOrderIndex, IsWinner: false, editorId, schema.TableName, body, fields,
             schema.IsPartialForm(root), parseDiagnosis);

@@ -725,9 +725,7 @@ internal sealed class RelationReads(
         using var parsed = JsonDocument.Parse(body);
         var root = parsed.RootElement;
         var address = new PluginAddress(plugin, origin);
-        var fields = schema.FieldsOf(
-            root, link => resolveFormKey(link) is { } entry ? new ResolvedFormKey(entry.RecordType, entry.EditorId) : null,
-            store.Release);
+        var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), store.Release);
 
         return new RecordDocument(
             formKey, address, loadOrderIndex, isWinner, editorId, schema.TableName,

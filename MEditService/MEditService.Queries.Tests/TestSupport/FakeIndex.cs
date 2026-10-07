@@ -33,9 +33,13 @@ internal sealed class FakeReads(
 
     public IReadOnlySet<string> FilterKeeps { get; set; } = new HashSet<string>(StringComparer.Ordinal);
 
-    // ADR-0013: a FormKey's winner is its copy in the last active plugin, and every row here is an
-    // active plugin's.
-    private bool IsWinner(FakeRow row) => ReferenceEquals(row, rows
+    /// <summary>FormKeys no copy wins until the next sweep: winners stay stale while a reconcile
+    /// registers plugins, so a FormKey whose winner was just deactivated has none (ADR-0013).</summary>
+    public IReadOnlySet<string> UndecidedWinners { get; set; } = new HashSet<string>(StringComparer.Ordinal);
+
+    // ADR-0013: a FormKey's winner is its copy in the last active plugin. The fake reads every row as
+    // an active plugin's, whatever the load order says.
+    private bool IsWinner(FakeRow row) => !UndecidedWinners.Contains(row.Document.FormKey) && ReferenceEquals(row, rows
         .Where(r => r.Document.FormKey == row.Document.FormKey)
         .OrderByDescending(r => r.Document.LoadOrderIndex)
         .ThenBy(r => r.Plugin.Name, StringComparer.Ordinal).ThenBy(r => r.Plugin.Origin, StringComparer.Ordinal)

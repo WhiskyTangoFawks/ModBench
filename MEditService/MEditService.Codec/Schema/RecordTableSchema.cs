@@ -60,9 +60,9 @@ public sealed class RecordTableSchema
     /// record-header flags.</summary>
     public bool IsHeader { get; init; }
 
-    /// <summary>Every column's node in <paramref name="document"/>, checked against what
-    /// <paramref name="resolve"/> answers. A header's masters are left as the document spells them:
-    /// no document holds them (ADR-0008).</summary>
+    /// <summary>Every column's node in <paramref name="document"/>, null where the document omits it,
+    /// checked against what <paramref name="resolve"/> answers. No document holds a header's masters
+    /// (ADR-0008), so their column reads null here.</summary>
     public List<FieldValue> FieldsOf(JsonElement document, Func<string, ResolvedFormKey?> resolve, GameRelease release)
     {
         var fields = new List<FieldValue>(RecordColumns.Count);
