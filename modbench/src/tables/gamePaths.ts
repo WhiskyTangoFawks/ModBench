@@ -24,8 +24,7 @@ export interface GamePathInfo {
   readonly pluginCompanions: PluginCompanions;
 }
 
-/** What the game names for a plugin, besides the plugin. */
-export interface PluginCompanions {
+interface PluginCompanions {
   /** With its period: Mutagen's `ArchiveExtensionProvider` for the release. */
   readonly archiveExtension: string;
   /** As Mutagen's `StringsLanguageFormat` for the release spells them in `<plugin>_<language>.STRINGS`;
@@ -82,6 +81,7 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
   Oblivion: { gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'], scriptExtenderFolder: 'obse', pluginCompanions: NO_STRINGS_COMPANIONS },
 };
 
+/** @public Read by the game-name scan alone. */
 export const GAME_RELEASES: readonly string[] = Object.keys(GAME_PATHS);
 
 /** Every script-extender folder name, lowercased. */

@@ -1,0 +1,12 @@
+{
+  "include": ["exports", "types"],
+  "entry": ["src/extension.ts!", "webview/src/main.tsx!", "webview/src/conflicts.tsx!", "webview/vite.config.ts!"],
+  "project": [
+    "src/**/*.{ts,tsx}!",
+    "webview/src/**/*.{ts,tsx}!",
+    "!**/*.test.{ts,tsx}!",
+    "!**/test/**!",
+    "!src/test/**!",
+    "!src/wire/generated/**!"
+  ]
+}

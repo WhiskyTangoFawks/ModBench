@@ -22,8 +22,8 @@ export interface ExtendedFieldDocumentsDeps {
   commit: (field: FieldAddress, value: string) => Promise<void>;
 }
 
-export const EDITABLE_FIELD_SCHEME = 'modbench-field';
-export const READONLY_FIELD_SCHEME = 'modbench-field-readonly';
+const EDITABLE_FIELD_SCHEME = 'modbench-field';
+const READONLY_FIELD_SCHEME = 'modbench-field-readonly';
 
 function isPluginAddress(value: unknown): value is PluginAddress {
   if (typeof value !== 'object' || value === null) return false;

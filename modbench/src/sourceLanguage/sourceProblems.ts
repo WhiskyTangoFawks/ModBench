@@ -7,7 +7,7 @@ import { pluginAddressKey } from '../wire/pluginAddress';
 
 type SourceProblem = PluginProblems['problems'][number];
 
-export interface Position { line: number; character: number }
+interface Position { line: number; character: number }
 export interface ProblemOnFile { message: string; start: Position; end: Position }
 /** Every problem mEdit answered, by the absolute path of the file it sits on. */
 export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;

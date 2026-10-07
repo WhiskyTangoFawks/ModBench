@@ -6,7 +6,7 @@ import { ByPluginAddress } from './pluginAddress';
 /** A warning on one plugin's file, as the Problems panel shows it. */
 export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
 
-export type StatusKind = 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed';
+type StatusKind = 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed';
 
 export interface PluginStatus {
   kind: StatusKind;
