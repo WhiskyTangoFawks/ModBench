@@ -87,7 +87,8 @@ describe('a record panel reading the FormKey its record moved to (editor.md, Sta
   const MOVED = '000002:Fallout4.esm';
   const answered = (result: CompareResult) => ({
     ok: true as const, result, immutableSet: new Set([columnKey({ name: 'Fallout4.esm', origin: 'Data' })]),
-    trackedSet: new Set([columnKey({ name: 'MyMod.esp', origin: 'ModA' })]), conflictsComputed: true, loadFailures: [],
+    trackedSet: new Set([columnKey({ name: 'MyMod.esp', origin: 'ModA' })]),
+    sourceUnreadableSet: new Set(), conflictsComputed: true, loadFailures: [],
     fileColumn: columnKey({ name: 'MyMod.esp', origin: 'ModA' }),
   });
   const editedFormKeys = () => vi.mocked(vscode.postMessage).mock.calls

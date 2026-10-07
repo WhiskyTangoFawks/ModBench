@@ -144,7 +144,7 @@ describe('registerRecordLifecycleCommands', () => {
     const UNTRACKED_NODE = { kind: 'record', origin: 'ModB', record: { formKey: UNTRACKED.formKey, plugin: UNTRACKED.plugin, editorId: null } };
     const deleteCalls = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args);
 
-    const COLUMN_HEADER = { webviewSection: 'recordHeader', ...FIRST, editable: true, preventDefaultContextMenuItems: true };
+    const COLUMN_HEADER = { webviewSection: 'recordHeader', ...FIRST, compilable: true, editable: true, preventDefaultContextMenuItems: true };
 
     it.each([['a RecordNode row', RECORD_NODE], ['a plain identity literal', RECORD_IDENTITY], ['the Editor\'s column header', COLUMN_HEADER]])(
       'sends the clicked record alone from %s when no selection comes with it', async (_label, arg) => {
@@ -361,7 +361,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   const SECOND = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const PATCH = { name: 'Patch.esp', origin: 'PatchMod' };
   const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
-  const HEADER = { webviewSection: 'recordHeader', ...SOURCE, editable: true, preventDefaultContextMenuItems: true };
+  const HEADER = { webviewSection: 'recordHeader', ...SOURCE, compilable: true, editable: true, preventDefaultContextMenuItems: true };
 
   let viewSelection: readonly unknown[] = [];
   afterEach(() => { viewSelection = []; });

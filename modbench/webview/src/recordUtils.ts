@@ -70,9 +70,9 @@ export function arrayParentContext(
 }
 
 export function headerCellContext(
-  formKey: string, plugin: string, origin: string, editable: boolean,
+  formKey: string, plugin: string, origin: string, compilable: boolean, editable: boolean,
 ): ColumnHeaderContext {
-  return { webviewSection: 'recordHeader', formKey, plugin, origin, editable, preventDefaultContextMenuItems: true };
+  return { webviewSection: 'recordHeader', formKey, plugin, origin, compilable, editable, preventDefaultContextMenuItems: true };
 }
 
 /** A cell's `data-vscode-context`: what its right-click hands a command, and what the host's keys
