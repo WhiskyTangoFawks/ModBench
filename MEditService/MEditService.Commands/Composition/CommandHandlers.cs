@@ -88,7 +88,8 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),
-            sp.GetRequiredService<LoadOrderHolder>()));
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<ILogger<CreatePluginHandler>>()));
 
         services.AddSingleton(sp => new PutLoadOrderHandler(
             sp.GetRequiredService<LoadOrderHolder>(),

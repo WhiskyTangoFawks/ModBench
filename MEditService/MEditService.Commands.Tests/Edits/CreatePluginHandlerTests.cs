@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -59,28 +60,62 @@ public sealed class CreatePluginHandlerTests : IDisposable
             _data.InstanceRoot, "plugins.txt", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, RecurseSubdirectories = true }));
     }
 
-    [Fact]
-    public async Task CreatePlugin_IntoATrackedMod_LeavesItsTrackedSourceAsItWas()
+    private async Task<string> TrackedModWith(string name, string existing)
     {
-        var folder = ModFolder("TrackedMod");
-        await Create("First.esp", folder, "TrackedMod");
+        var folder = ModFolder(name);
+        await Create(existing, folder, name);
         _holder.Apply(SnapshotPlugins.Snapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4,
         [
             .. _data.Plugins,
-            new LoadOrderEntry("First.esp", Path.Combine(folder, "First.esp"), "TrackedMod", Slot: 1, Enabled: true, Winning: true),
+            new LoadOrderEntry(existing, Path.Combine(folder, existing), name, Slot: 1, Enabled: true, Winning: true),
         ]));
-        var tracked = await TestEditService.TrackHandler(_holder)
-            .TrackAsync(["TrackedMod"]);
+        var tracked = await TestEditService.TrackHandler(_holder).TrackAsync([name]);
         Assert.Empty(tracked.Refused);
         Assert.Single(tracked.Landed);
+        return folder;
+    }
+
+    private static RegisteredPlugin Registered(string name, string origin, string folder) =>
+        new(name, origin, Path.Combine(folder, name), new PluginProvider.FromMod(origin, folder));
+
+    [Fact]
+    public async Task CreatePlugin_IntoATrackedMod_LandsItsSourceAsWorkingTreeChanges_AndLeavesTheOthersAsTheyWere()
+    {
+        var folder = await TrackedModWith("TrackedMod", "First.esp");
         var first = new PluginAddress("First.esp", "TrackedMod");
         var firstBefore = TrackedTree.Records(folder, first);
+        var headBefore = Head(folder);
 
         var result = await Create("Second.esp", folder, "TrackedMod");
 
         Assert.True(result.Applied);
         Assert.Equal(firstBefore, TrackedTree.Records(folder, first));
-        Assert.False(SourceRepository.SourceReads(new RegisteredPlugin("Second.esp", "TrackedMod", "", new PluginProvider.FromMod("TrackedMod", folder))));
+        Assert.True(SourceRepository.SourceReads(Registered("Second.esp", "TrackedMod", folder)));
+        Assert.Equal(headBefore, Head(folder));
+    }
+
+    [Fact]
+    public async Task CreatePlugin_WhoseSourceCannotBeWritten_TakesBackTheFileItWrote_AndWritesNothing()
+    {
+        var folder = await TrackedModWith("FailingMod", "First.esp");
+        var adapter = new SourceUnreadableAdapter();
+
+        var result = await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "FailingMod"), folder);
+
+        Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
+        Assert.Contains("Second.esp", result.Message, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(folder, "Second.esp")));
+        Assert.False(SourceRepository.SourceReads(Registered("Second.esp", "FailingMod", folder)));
+    }
+
+    private static string Head(string folder) =>
+        GitProbe.Run(Path.Combine(folder, ".git"), folder, "rev-parse", "HEAD").Trim();
+
+    private sealed class SourceUnreadableAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        public override Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceAsync(
+            ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
+            throw new IOException("unreadable");
     }
 
     [Fact]
