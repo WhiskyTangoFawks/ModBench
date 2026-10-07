@@ -18,8 +18,8 @@ public sealed class PluginPortSurfaceTests
         Assert.True(
             offenders.Count == 0,
             "A member of IPluginAdapter names a live Mutagen object, directly or through a value it "
-            + "returns. Bytes become a mod inside the adapter alone (ADR-0005), so the port "
-            + "answers in documents and facts:\n"
+            + "returns. The Plugin adapter hides the game assemblies (target-architecture.d2), so the "
+            + "port answers in documents and facts:\n"
             + string.Join("\n", offenders));
     }
 

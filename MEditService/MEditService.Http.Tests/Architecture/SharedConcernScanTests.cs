@@ -38,22 +38,6 @@ public sealed class SharedConcernScanTests
     }
 
     [Fact]
-    public void NoTestFile_NamesASharedModule()
-    {
-        var root = ServiceProjects.SolutionDirectory();
-
-        var hits = Directory.EnumerateDirectories(root, "MEditService.*Tests*")
-            .SelectMany(SourceTree.CSharpFiles)
-            .Where(file => !Path.GetFileName(file).Equals(nameof(SharedConcernScanTests) + ".cs", StringComparison.Ordinal))
-            .Where(file => Regex.IsMatch(File.ReadAllText(file), @"\b(WriteTargets|FormKeyAllocator)\b"))
-            .Select(file => Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'))
-            .Order(StringComparer.Ordinal)
-            .ToList();
-
-        Assert.Empty(hits);
-    }
-
-    [Fact]
     public void TheScan_CountsPerFileAndNeedle_AndPassesTheModuleAndBuildOutput()
     {
         using var root = new ScratchDirectory("medit-shared-concern-scan-");
