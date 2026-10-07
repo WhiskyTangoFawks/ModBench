@@ -16,13 +16,13 @@ public sealed class CompilePluginDiagnosisTests : IDisposable
         Corrupt();
 
         var compileService = _mod.CompileService();
-        var result = await compileService.CompileOneAsync(_mod.Plugin);
+        var answer = await compileService.CompileAsync([_mod.Plugin]);
 
-        Assert.False(result.Succeeded);
-        Assert.Contains("FixtureNpc", result.RefusalReason);
-        Assert.Contains("Malformed FormKey string: NOT-A-FORMKEY", result.RefusalReason);
-        Assert.Contains(PluginDiagnosis.UnknownClass, result.RefusalReason);
-        Assert.Contains("Decompile the plugin to regenerate the source.", result.RefusalReason);
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains("FixtureNpc", refused.Message);
+        Assert.Contains("Malformed FormKey string: NOT-A-FORMKEY", refused.Message);
+        Assert.Contains(PluginDiagnosis.UnknownClass, refused.Message);
+        Assert.Contains("Decompile the plugin to regenerate the source.", refused.Message);
     }
 
     [Fact]
@@ -31,10 +31,10 @@ public sealed class CompilePluginDiagnosisTests : IDisposable
         var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
         Corrupt();
 
-        var result = await _mod.CompileService().CompileOneAsync(_mod.Plugin);
+        var answer = await _mod.CompileService().CompileAsync([_mod.Plugin]);
 
-        Assert.False(result.Succeeded);
-        Assert.Contains(Path.GetRelativePath(_mod.ModFolder, file), result.RefusalReason, StringComparison.Ordinal);
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains(Path.GetRelativePath(_mod.ModFolder, file), refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -42,10 +42,10 @@ public sealed class CompilePluginDiagnosisTests : IDisposable
     {
         File.WriteAllText(Path.Combine(_mod.ModFolder, PluginSourceRoot.HeaderDocument(_mod.Plugin.Name)), "{ \"ModKey\": \"Compile.esp\", \"ModHeader\": { \"Stats\": { \"Version\": \"x\" } } }");
 
-        var result = await _mod.CompileService().CompileOneAsync(_mod.Plugin);
+        var answer = await _mod.CompileService().CompileAsync([_mod.Plugin]);
 
-        Assert.False(result.Succeeded);
-        Assert.Contains(PluginSourceRoot.HeaderDocument(_mod.Plugin.Name), result.RefusalReason, StringComparison.Ordinal);
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains(PluginSourceRoot.HeaderDocument(_mod.Plugin.Name), refused.Message, StringComparison.Ordinal);
     }
 
     private void Corrupt() =>

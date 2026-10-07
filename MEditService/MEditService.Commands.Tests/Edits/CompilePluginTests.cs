@@ -22,8 +22,9 @@ public sealed class CompilePluginTests : IDisposable
 
     private async Task<(IFallout4ModGetter Mod, IDisposable Handle)> CompileAndReimport()
     {
-        var result = await CompileService().CompileOneAsync(_mod.Plugin);
-        Assert.True(result.Succeeded, result.RefusalReason);
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        Assert.Empty(answer.Refused);
+        Assert.Single(answer.Landed);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var overlay = ModFactory.ImportGetter(
@@ -36,9 +37,10 @@ public sealed class CompilePluginTests : IDisposable
     {
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
 
-        var result = await CompileService().CompileOneAsync(_mod.Plugin);
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
-        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Empty(answer.Refused);
+        Assert.Single(answer.Landed);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         using var overlayDisposable = ModFactory.ImportGetter(
@@ -53,7 +55,7 @@ public sealed class CompilePluginTests : IDisposable
     public async Task Compile_LeavesUntouchedRecordsUnchanged()
     {
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        await CompileService().CompileOneAsync(_mod.Plugin);
+        await CompileService().CompileAsync([_mod.Plugin]);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         using var overlayDisposable = ModFactory.ImportGetter(
@@ -68,19 +70,21 @@ public sealed class CompilePluginTests : IDisposable
     [Fact]
     public async Task Compile_WithASemanticallyBrokenRecord_SucceedsWithDiagnostics()
     {
-        var result = await CompileService().CompileOneAsync(_mod.Plugin);
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
-        Assert.True(result.Succeeded, result.RefusalReason);
-        Assert.Contains(result.Diagnostics, d => d.FormKey == _mod.Race.ToString());
+        Assert.Empty(answer.Refused);
+        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        Assert.Contains(diagnostics, d => d.FormKey == _mod.Race.ToString());
     }
 
     [Fact]
     public async Task Compile_NamesADiagnosticsOwnDocument_RelativeToTheModFolder()
     {
-        var result = await CompileService().CompileOneAsync(_mod.Plugin);
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
-        Assert.True(result.Succeeded, result.RefusalReason);
-        var diagnostic = result.Diagnostics.First(d => d.FormKey == _mod.Race.ToString());
+        Assert.Empty(answer.Refused);
+        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostic = diagnostics.First(d => d.FormKey == _mod.Race.ToString());
         var race = _mod.Document(_mod.Race.ToString()).Require();
         Assert.Equal(
             TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, new RecordIdentity(race.FormKey, race.RecordType, race.EditorId)),
@@ -145,11 +149,11 @@ public sealed class CompilePluginTests : IDisposable
     {
         var stray = TreeTampering.StrayGroupDocument(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
-        var result = await CompileService().CompileOneAsync(_mod.Plugin);
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
-        Assert.False(result.Succeeded);
-        Assert.Contains(Path.GetRelativePath(_mod.ModFolder, stray), result.RefusalReason, StringComparison.Ordinal);
-        Assert.Contains("Decompile the plugin to regenerate the source.", result.RefusalReason, StringComparison.Ordinal);
-        Assert.DoesNotContain("Track", result.RefusalReason, StringComparison.Ordinal);
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains(Path.GetRelativePath(_mod.ModFolder, stray), refused.Message, StringComparison.Ordinal);
+        Assert.Contains("Decompile the plugin to regenerate the source.", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Track", refused.Message, StringComparison.Ordinal);
     }
 }
