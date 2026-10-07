@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { launchBackend, type ConfigChangeEvent } from '../autoLaunch';
+import { launchBackend } from '../autoLaunch';
 
 type LaunchDeps = Parameters<typeof launchBackend>[0];
+type ConfigChangeEvent = Parameters<Parameters<LaunchDeps['onConfigChange']>[0]>[0];
 
 function harness(overrides: Partial<LaunchDeps> = {}) {
   let listener: ((e: ConfigChangeEvent) => void) | undefined;

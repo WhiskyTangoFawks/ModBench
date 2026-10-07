@@ -3,7 +3,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Subscription } from '../instanceAdapter/instanceAdapter';
 
 /** VS Code's `ConfigurationChangeEvent`, as much of it as the launch reads. */
-export interface ConfigChangeEvent {
+interface ConfigChangeEvent {
   affectsConfiguration(section: string): boolean;
 }
 
