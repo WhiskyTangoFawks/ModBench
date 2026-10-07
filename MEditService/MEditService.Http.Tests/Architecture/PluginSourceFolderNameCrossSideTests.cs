@@ -27,7 +27,7 @@ public sealed class PluginSourceFolderNameCrossSideTests
         var backendFile = Path.Combine(dir, "SourceRepositoryLayout.cs");
         var frontendFile = Path.Combine(dir, "layout.ts");
         File.WriteAllText(backendFile, "internal const string RootFolderName = \"plugin-source\";");
-        File.WriteAllText(frontendFile, "export const PLUGIN_SOURCE_FOLDER = 'source';");
+        File.WriteAllText(frontendFile, "const PLUGIN_SOURCE_FOLDER = 'source';");
 
         Assert.NotEqual(ValueIn(backendFile, BackendValue), ValueIn(frontendFile, FrontendValue));
     }

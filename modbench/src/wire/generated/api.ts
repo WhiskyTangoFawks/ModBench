@@ -695,6 +695,7 @@ export interface components {
             cellX?: number | null;
             /** Format: int32 */
             cellY?: number | null;
+            workingTreeState: components["schemas"]["WorkingTreeState"];
             isPersistentWorldspaceCell: boolean;
             fullName?: string | null;
             hasParseFailure: boolean;
@@ -710,6 +711,7 @@ export interface components {
             editorId?: string | null;
             baseFormKey?: string | null;
             recordType: string;
+            workingTreeState: components["schemas"]["WorkingTreeState"];
             hasParseFailure: boolean;
             fullName?: string | null;
             baseEditorId?: string | null;
@@ -1254,6 +1256,7 @@ export interface components {
         WorldspaceSummary: {
             formKey: string;
             editorId?: string | null;
+            workingTreeState: components["schemas"]["WorkingTreeState"];
             hasParseFailure: boolean;
             fullName?: string | null;
             parseDiagnosis?: string | null;

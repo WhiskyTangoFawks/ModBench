@@ -51,9 +51,9 @@ beforeAll(async () => {
   RECORD_ROW = await recordRow(recordSummaryFixture({ formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp' }), 'ModA', EDITABLE);
   QUEST_ROW = await recordRow(recordSummaryFixture({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', editorId: 'MQ101' }), 'ModA', EDITABLE, 'qust');
   CELL_ROW = await cellRow({
-    formKey: '000802:MyPatch.esp', editorId: 'MyCell', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false,
+    formKey: '000802:MyPatch.esp', editorId: 'MyCell', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false, workingTreeState: 'None',
   }, MY_PATCH, EDITABLE);
-  WORLDSPACE_ROW = await worldspaceRow({ formKey: '000803:MyPatch.esp', hasChildren: false, hasParseFailure: false }, MY_PATCH, EDITABLE);
+  WORLDSPACE_ROW = await worldspaceRow({ formKey: '000803:MyPatch.esp', hasChildren: false, hasParseFailure: false, workingTreeState: 'None' }, MY_PATCH, EDITABLE);
   QUEST_ROW.id = 'MQ101';
   CELL_ROW.id = 'MyCell';
   WORLDSPACE_ROW.id = '000803:MyPatch.esp';

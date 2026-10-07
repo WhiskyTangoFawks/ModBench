@@ -378,7 +378,8 @@ internal sealed class RelationReads(
                        JOIN records pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
                        WHERE p.parent_cell = cl.cell_form_key AND p.plugin = cl.plugin AND p.origin = cl.origin
                          {store.Filter.AlsoKeeps("p")}
-                   )
+                   ),
+                   c.working_tree_state
             FROM cell_location cl
             LEFT JOIN records c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
             WHERE cl.plugin = $1 AND cl.origin = $2 AND {where}{store.Filter.AlsoKeeps("cl", "cell_form_key")}
@@ -398,7 +399,8 @@ internal sealed class RelationReads(
                 FullName: reader.IsDBNull(8) ? null : reader.GetString(8),
                 ParseDiagnosis: reader.IsDBNull(9) ? null : reader.GetString(9),
                 HasParseFailure: reader.GetBoolean(10),
-                HasChildren: reader.GetBoolean(11)));
+                HasChildren: reader.GetBoolean(11),
+                WorkingTreeState: WorkingTreeStates.FromStored(reader.GetString(12))));
         }
 
         return rows;
@@ -436,7 +438,8 @@ internal sealed class RelationReads(
                    (SELECT b.editor_id FROM records b
                     WHERE b.form_key = json_extract_string(r.body, '$.Base')
                     ORDER BY (b.plugin = r.plugin AND b.origin = r.origin) DESC, b.is_winner DESC, b.plugin, b.origin
-                    LIMIT 1)
+                    LIMIT 1),
+                   r.working_tree_state
             FROM ({NavigatorSql.CellChildren}) p
             JOIN records r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
             WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3{store.Filter.AlsoKeeps("p")}
@@ -458,7 +461,8 @@ internal sealed class RelationReads(
                 HasParseFailure: reader.GetBoolean(5),
                 FullName: reader.IsDBNull(6) ? null : reader.GetString(6),
                 ParseDiagnosis: reader.IsDBNull(7) ? null : reader.GetString(7),
-                BaseEditorId: reader.IsDBNull(8) ? null : reader.GetString(8));
+                BaseEditorId: reader.IsDBNull(8) ? null : reader.GetString(8),
+                WorkingTreeState: WorkingTreeStates.FromStored(reader.GetString(9)));
             (group == "persistent" ? persistent : temporary).Add(summary);
         }
         return new CellChildRecords(persistent, temporary);
