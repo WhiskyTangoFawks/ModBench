@@ -1261,6 +1261,8 @@ describe('modbench.plugin.create', () => {
 
     assert.ok(fs.existsSync(path.join(modDir, 'Created.esp')), 'the mock backend writes the file into the chosen mod');
     await waitFor('plugin sync to put the line in plugins.txt', () => /^Created\.esp\r?$/m.test(fs.readFileSync(pluginsTxtPath, 'utf8')));
+    const lines = fs.readFileSync(pluginsTxtPath, 'utf8').split(/\r?\n/).filter((line) => line !== '');
+    assert.strictEqual(lines.at(-1), 'Created.esp');
   });
 });
 
