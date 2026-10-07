@@ -33,7 +33,7 @@ import {
   CHILD_RECORD_SCHEME, RENDERED_DOCUMENT_SCHEME, copyDocument, copyOf, recordDocument, type RecordCopy, type RecordDocument,
 } from '../drivingLib/recordDocument';
 import { errorMessage } from '../ports/errorMessage';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type ViewState } from '../wire/messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension, type ExtensionToWebview, type ViewState } from '../wire/messages';
 
 export interface EditorCommandDeps {
   context: Pick<vscode.ExtensionContext, 'extensionUri'>;
@@ -129,8 +129,9 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     // is active now (editor.md, Opening, story 3).
     for (const [panel, document] of this.documentOf) {
       if (document === key && panel.active) {
-        void this.listening.get(panel)?.then(() => panel.webview.postMessage(
-          { type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] } satisfies ExtensionToWebview));
+        void this.listening.get(panel)?.then(() => {
+          if (this.listening.has(panel)) void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] } satisfies ExtensionToWebview);
+        });
       }
     }
   }
@@ -282,12 +283,20 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     panel.onDidDispose(() => { this.shown.delete(panel); this.places.delete(panel); this.listening.delete(panel); });
     this.listening.set(panel, new Promise((listens) => {
       const asked = panel.webview.onDidReceiveMessage((message: unknown) => {
-        if (typeof message !== 'object' || message === null || !('type' in message) || message.type !== WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD) return;
+        if (!isRecordLoadRequest(message)) return;
         asked.dispose();
         listens();
       });
     }));
     showRecord(this.deps, panel, uri, page, { ...tab, keepViewState: (place) => { this.places.set(panel, place); } });
+  }
+}
+
+function isRecordLoadRequest(message: unknown): boolean {
+  try {
+    return parseWebviewToExtension(message).type === WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD;
+  } catch {
+    return false;
   }
 }
 
