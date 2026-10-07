@@ -37,7 +37,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     channel: fakeChannel(),
     reporter: { shownOnSurface: vi.fn() },
     meditClient,
-    formKeyPicker: undefined,
+    formKeyPicker: { meditClient, reporter: { shownOnSurface: vi.fn() }, reply: vi.fn() },
     focusCell: vi.fn(),
     reply: vi.fn(),
     titleFromRead: vi.fn(),
@@ -153,12 +153,6 @@ describe('routeRecordPanelMessage — OPEN_IN_PLACE', () => {
 
 describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER', () => {
   const message = { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] };
-
-  it('with no picker deps is a no-op', async () => {
-    await routeRecordPanelMessage(message, makeDeps());
-
-    expect(createQuickPick).not.toHaveBeenCalled();
-  });
 
   it('replies to the asking panel with the dismissed picker\'s null, correlated by requestId', async () => {
     const hideListeners: Array<() => void> = [];
