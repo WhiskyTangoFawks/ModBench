@@ -9,7 +9,7 @@ Each module owns one responsibility and hides how it does it behind its boundary
 One gesture does one thing. A workflow of several gestures is a script, and the user writes it. Messages and prompts speak to a developer and skip what one already knows. Every extra gesture and prompt stands between the user and the work.
 
 ## Never silently wrong
-The user's picture of their data is never silently wrong. Nothing is dropped, skipped or repaired in silence. A user who trusts a wrong picture makes wrong edits to their modlist.
+The user's picture of their data is never silently wrong. Nothing in it is dropped, skipped or repaired in silence. A user who trusts a wrong picture makes wrong edits to their modlist.
 
 ## Windows and Linux alike
 Every feature works natively on Windows and on Linux. Neither is a port of the other, and neither lacks a feature the other has. Where the two differ, as file watching, paths and processes do, the difference stays inside the module that meets it.
