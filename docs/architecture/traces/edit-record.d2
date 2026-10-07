@@ -14,6 +14,12 @@ source: @../target-architecture.medit_data.source
 sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 vscode: "VS Code" {class: other}
+instance: @../target-architecture.modbench_data.instance
+instance.label: "the mod's folder"
+instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instanceloader: @../target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
 
 create: "create: the type pick first" {
   editor -> client: "on a plugin, the record types the game can create; on a container, the types it holds" {class: query}
@@ -35,6 +41,9 @@ client -> editor: "the changes, per item" {class: edit}
 editor -> vscode: "the changes, as one workspace edit" {class: outside}
 vscode."apply; save"
 vscode -> source: "the saved files" {class: outside}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader."the next snapshot: index-load-order"
 
 refused: "refused, nothing written for that record" {
   commands -> http: "the refusal" {class: edit}
