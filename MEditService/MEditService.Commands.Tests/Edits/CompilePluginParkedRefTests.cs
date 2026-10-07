@@ -23,8 +23,9 @@ public sealed class CompilePluginParkedRefTests : IDisposable
         var baselineParked = Parked();
 
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        var result = await CompileService().CompileOneAsync(_mod.Plugin);
-        Assert.True(result.Succeeded, result.RefusalReason);
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        Assert.Empty(answer.Refused);
+        Assert.Single(answer.Landed);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         Assert.Equal([Sha256Of(pluginPath)], Parked());
@@ -37,9 +38,9 @@ public sealed class CompilePluginParkedRefTests : IDisposable
         TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
         var baselineParked = Parked();
-        var result = await CompileService().CompileOneAsync(_mod.Plugin);
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
-        Assert.False(result.Succeeded);
+        var refused = Assert.Single(answer.Refused);
         Assert.Equal(baselineParked, Parked());
     }
 
@@ -51,11 +52,12 @@ public sealed class CompilePluginParkedRefTests : IDisposable
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
         LastWriteRecord.RefuseRefUpdatesAfterTheFirst(_mod.ModFolder);
 
-        var result = await CompileService().CompileOneAsync(_mod.Plugin);
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
-        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Empty(answer.Refused);
+        var diagnostics = Assert.Single(answer.Landed).Outcome;
         Assert.NotEqual(before, File.ReadAllBytes(pluginPath));
-        Assert.Single(result.Diagnostics, d => d.Message.Contains("could not be finished", StringComparison.Ordinal));
+        Assert.Single(diagnostics, d => d.Message.Contains("could not be finished", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -68,10 +70,11 @@ public sealed class CompilePluginParkedRefTests : IDisposable
         File.WriteAllText(refLock, "");
         try
         {
-            var result = await CompileService().CompileOneAsync(_mod.Plugin);
+            var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
-            Assert.Equal(CompileRefusal.WriteFailed, result.Refusal);
-            Assert.DoesNotContain(_mod.ModFolder, result.RefusalReason, StringComparison.Ordinal);
+            var refused = Assert.Single(answer.Refused);
+            Assert.Equal(CompileRefusal.WriteFailed, refused.Refusal);
+            Assert.DoesNotContain(_mod.ModFolder, refused.Message, StringComparison.Ordinal);
         }
         finally
         {

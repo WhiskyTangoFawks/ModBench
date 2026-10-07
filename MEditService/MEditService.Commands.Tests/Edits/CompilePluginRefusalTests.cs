@@ -16,17 +16,17 @@ public sealed class CompilePluginRefusalTests : IDisposable
     [Fact]
     public async Task Compile_BeforeAnyLoadOrderHasArrived_WritesNothingAndThrowsNoLoadOrder() =>
         await Assert.ThrowsAsync<NoLoadOrderException>(
-            () => CompileServices.Over(LoadOrderSnapshot.Empty).CompileOneAsync(_mod.Plugin));
+            () => CompileServices.Over(LoadOrderSnapshot.Empty).CompileAsync([_mod.Plugin]));
 
     [Fact]
     public async Task Compile_OfAPluginTheArrivedLoadOrderDoesNotHold_RefusesNamingThePlugin()
     {
         var stranger = new PluginAddress("Stranger.esp", CompileFixture.Origin);
 
-        var result = await _mod.CompileService().CompileOneAsync(stranger);
+        var answer = await _mod.CompileService().CompileAsync([stranger]);
 
-        Assert.False(result.Succeeded);
-        Assert.Equal("Stranger.esp is not in the load order.", result.RefusalReason);
+        var refused = Assert.Single(answer.Refused);
+        Assert.Equal("Stranger.esp is not in the load order.", refused.Message);
     }
 
     [Fact]
@@ -34,10 +34,10 @@ public sealed class CompilePluginRefusalTests : IDisposable
     {
         TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
-        var result = await CompileService().CompileOneAsync(_mod.Plugin);
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
-        Assert.False(result.Succeeded);
-        Assert.Contains(_mod.Npc.ToString(), result.RefusalReason);
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains(_mod.Npc.ToString(), refused.Message);
     }
 
     [Fact]
@@ -46,10 +46,10 @@ public sealed class CompilePluginRefusalTests : IDisposable
         var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
         using var held = TreeTampering.HoldOpen(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
-        var result = await CompileService().CompileOneAsync(_mod.Plugin);
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
-        Assert.False(result.Succeeded);
-        Assert.Contains(Path.GetRelativePath(_mod.ModFolder, file), result.RefusalReason, StringComparison.Ordinal);
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains(Path.GetRelativePath(_mod.ModFolder, file), refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -57,12 +57,12 @@ public sealed class CompilePluginRefusalTests : IDisposable
     {
         _mod.Overwrite(_mod.NpcIdentity, "{ not valid json");
 
-        var result = await CompileService().CompileOneAsync(_mod.Plugin);
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
-        Assert.False(result.Succeeded);
-        Assert.Contains("Decompile the plugin to regenerate the source.", result.RefusalReason);
-        Assert.DoesNotContain("Track", result.RefusalReason);
-        Assert.Empty(result.Diagnostics);
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains("Decompile the plugin to regenerate the source.", refused.Message);
+        Assert.DoesNotContain("Track", refused.Message);
+        Assert.Empty(answer.Landed);
     }
 
     [Fact]
@@ -72,12 +72,12 @@ public sealed class CompilePluginRefusalTests : IDisposable
         Assert.Contains("\"Race\"", npcSourceText);
         _mod.Overwrite(_mod.NpcIdentity, npcSourceText.Replace("\"Race\"", "\"RaceOld\""));
 
-        var result = await CompileService().CompileOneAsync(_mod.Plugin);
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
-        Assert.False(result.Succeeded);
-        Assert.Contains("Decompile the plugin to regenerate the source.", result.RefusalReason);
-        Assert.DoesNotContain("Track", result.RefusalReason);
-        Assert.Contains(CompileFixture.NpcEditorId, result.RefusalReason);
-        Assert.Empty(result.Diagnostics);
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains("Decompile the plugin to regenerate the source.", refused.Message);
+        Assert.DoesNotContain("Track", refused.Message);
+        Assert.Contains(CompileFixture.NpcEditorId, refused.Message);
+        Assert.Empty(answer.Landed);
     }
 }
