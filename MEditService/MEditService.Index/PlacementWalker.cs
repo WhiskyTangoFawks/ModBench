@@ -5,7 +5,7 @@ using MEditService.Codec.Serialization;
 
 namespace MEditService.Index;
 
-public readonly record struct PlacementRow(
+internal readonly record struct PlacementRow(
     string FormKey, string ParentCell, string PlacementGroup, float? PosX, float? PosY, float? PosZ);
 
 public readonly record struct CellLocationRow(

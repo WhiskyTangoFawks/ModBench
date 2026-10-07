@@ -1,5 +1,4 @@
 using DuckDB.NET.Data;
-using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
@@ -39,10 +38,6 @@ internal static class LinkResolution
     internal static Func<string, RecordLookupEntry?> ForLinksOf(
         DuckDBConnection connection, string formKey, Func<string, RecordLookupEntry?> resolveAlone) =>
         Prefetched(connection, resolveAlone, SourceIsTheRecordOrAnInlineChild, formKey);
-
-    /// <summary>The same, for every link <paramref name="plugin"/>'s records carry.</summary>
-    internal static Func<string, RecordLookupEntry?> ForLinksOf(DuckDBConnection connection, PluginAddress plugin) =>
-        Prefetched(connection, alone => Resolve(connection, alone), "source_plugin = $1 AND source_origin = $2", plugin.Name, plugin.Origin);
 
     internal static RecordLookupEntry? Resolve(DuckDBConnection connection, string formKey)
     {

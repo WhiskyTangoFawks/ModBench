@@ -32,7 +32,6 @@ public class WorldspaceQueryServiceTests
             new Dictionary<PluginAddress, PluginContent>();
         public RecordDocument? GetDocument(string formKey) => null;
         public RecordDocument? GetDocument(string formKey, PluginAddress plugin) => null;
-        public IReadOnlyList<RecordDocument> GetDocuments(PluginAddress plugin) => [];
         public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text) => null;
         public RecordOverrides? GetOverrideStack(string formKey) => null;
         public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin) => [];
@@ -42,7 +41,6 @@ public class WorldspaceQueryServiceTests
         public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
         public IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations() => new Dictionary<PluginAddress, DerivedFrom>();
         public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey) => [];
-        public IReadOnlyList<MissingReference> GetReferencesToMissingRecords() => [];
         public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(Func<PluginAddress, PluginProvider.FromMod?> modOf) => [];
         public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin)
         {
@@ -55,10 +53,8 @@ public class WorldspaceQueryServiceTests
             LastGetCellChildRecordsOrigin = plugin.Origin;
             return cellRefs ?? new([], []);
         }
-        public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;
         public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
         public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey) => [];
-        public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
         public bool HasChildRecords(PluginAddress plugin, string formKey) => false;
         public IReadOnlySet<PluginAddress> PluginsHoldingChildRecords(PluginAddress plugin, string formKey) => new HashSet<PluginAddress>();
     }

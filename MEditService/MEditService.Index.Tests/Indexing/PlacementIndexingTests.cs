@@ -123,11 +123,7 @@ public class PlacementIndexingTests
         var key = new PluginAddress("OverlayWorld.esp", "Data");
         var reads = index.RequireReads();
 
-        var placement = reads.GetPlacement(placed.ToString(), key);
-        Assert.NotNull(placement);
-        Assert.Equal(cell.ToString(), placement.Value.ParentCell);
-        Assert.Equal("persistent", placement.Value.PlacementGroup);
-        Assert.Equal(7f, placement.Value.PosX);
+        Assert.Equal("persistent", reads.PlacementGroupIn(key, cell.ToString(), placed.ToString()));
 
         var location = reads.GetCellLocation(key, cell.ToString());
         Assert.NotNull(location);
@@ -147,17 +143,14 @@ public class PlacementIndexingTests
         var reads = index.RequireReads();
         Assert.Single(reads.GetWorldspaceCells(key, wrld.ToString()), c => c.FormKey == cell.ToString());
         Assert.Single(reads.GetCellChildRecords(key, cell.ToString()).Persistent, p => p.FormKey == placed.ToString());
-        Assert.NotNull(reads.GetPlacement(placed.ToString(), key));
+        Assert.NotNull(reads.PlacementGroupIn(key, cell.ToString(), placed.ToString()));
     }
 
     [Fact]
     public void Index_TemporaryPlacedObject_WritesTemporaryPlacementRow()
     {
         using var b = new Built();
-        var placement = b.Reads.GetPlacement(b.RaiderFk, Key);
-        Assert.NotNull(placement);
-        Assert.Equal(b.ExtCellFk, placement.Value.ParentCell);
-        Assert.Equal("temporary", placement.Value.PlacementGroup);
+        Assert.Equal("temporary", b.Reads.PlacementGroupIn(Key, b.ExtCellFk, b.RaiderFk));
     }
 
     [Fact]
@@ -255,37 +248,26 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void GetPlacement_PlacedRef_ReturnsParentCellGroupAndPosition()
+    public void APlacedRef_IsListedInItsCellsPlacementGroup()
     {
         using var b = new Built();
-        var placement = b.Reads.GetPlacement(b.BarrelFk, Key);
 
-        Assert.NotNull(placement);
-        Assert.Equal(b.ExtCellFk, placement.Value.ParentCell);
-        Assert.Equal("persistent", placement.Value.PlacementGroup);
-        Assert.Equal(10f, placement.Value.PosX);
-        Assert.Equal(20f, placement.Value.PosY);
-        Assert.Equal(30f, placement.Value.PosZ);
+        Assert.Equal("persistent", b.Reads.PlacementGroupIn(Key, b.ExtCellFk, b.BarrelFk));
     }
 
     [Fact]
-    public void GetPlacement_NonPlacedRecord_ReturnsNull()
+    public void ARecordThatIsNotPlaced_IsListedInNoCellsPlacementGroup()
     {
         using var b = new Built();
-        Assert.Null(b.Reads.GetPlacement(b.ExtCellFk, Key));
+
+        Assert.Null(b.Reads.PlacementGroupIn(Key, b.ExtCellFk, b.ExtCellFk));
+        Assert.Null(b.Reads.PlacementGroupIn(Key, b.ExtCellFk, "FFFFFF:TestWorld.esp"));
     }
 
     [Fact]
-    public void GetPlacement_AbsentFormKey_ReturnsNull()
+    public void CellChildRecords_SameFilenameDifferentOrigin_ScopesToOrigin()
     {
-        using var b = new Built();
-        Assert.Null(b.Reads.GetPlacement("FFFFFF:TestWorld.esp", Key));
-    }
-
-    [Fact]
-    public void GetPlacement_SameFilenameDifferentOrigin_ScopesToOrigin()
-    {
-        FormKey barrel = default;
+        FormKey barrel = default, placedCell = default;
         Action<Fallout4Mod> configure = mod =>
         {
             var wrld = mod.Worldspaces.AddNew("PlacedTestWorld");
@@ -293,7 +275,7 @@ public class PlacementIndexingTests
             wrld.TopCell = cell;
             var b = new PlacedObject(mod) { EditorID = "barrelRef", Position = new P3Float(1f, 2f, 3f) };
             cell.Persistent.Add(b);
-            barrel = b.FormKey;
+            (barrel, placedCell) = (b.FormKey, cell.FormKey);
         };
         using var fixture = new PluginFixtureBuilder("placement-origins")
             .WithPlugin("Placed.esp", configure, origin: "ModA")
@@ -303,12 +285,13 @@ public class PlacementIndexingTests
         using var index = Indexes.Open(holder);
 
         var formKey = barrel.ToString();
+        var cellKey = placedCell.ToString();
         foreach (var (winner, other) in new[] { ("ModA", "ModB"), ("ModB", "ModA") })
         {
             var reads = index.ReadsWithWinner(holder, fixture.GameDirectory, fixture.Plugins, winner);
-            Assert.NotNull(reads.GetPlacement(formKey, new PluginAddress("Placed.esp", winner)));
-            Assert.Null(reads.GetPlacement(formKey, new PluginAddress("Placed.esp", other)));
-            Assert.Null(reads.GetPlacement(formKey, new PluginAddress("Placed.esp", "ModC")));
+            Assert.NotNull(reads.PlacementGroupIn(new PluginAddress("Placed.esp", winner), cellKey, formKey));
+            Assert.Null(reads.PlacementGroupIn(new PluginAddress("Placed.esp", other), cellKey, formKey));
+            Assert.Null(reads.PlacementGroupIn(new PluginAddress("Placed.esp", "ModC"), cellKey, formKey));
         }
     }
 

@@ -142,9 +142,9 @@ public class CompoundPluginIdentityTests
         {
             var reads = ReadsWithWinner(index, fixture, winner);
             Assert.NotNull(reads.GetCellLocation(winner, cellKey.ToString()));
-            Assert.NotNull(reads.GetPlacement(placedKey.ToString(), winner));
+            Assert.NotNull(reads.PlacementGroupIn(winner, cellKey.ToString(), placedKey.ToString()));
             Assert.Null(reads.GetCellLocation(other, cellKey.ToString()));
-            Assert.Null(reads.GetPlacement(placedKey.ToString(), other));
+            Assert.Null(reads.PlacementGroupIn(other, cellKey.ToString(), placedKey.ToString()));
             Assert.Single(reads.GetReferencedBy(raceKey.ToString()), r => r.FieldPath == "Race");
         }
 
