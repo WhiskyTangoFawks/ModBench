@@ -1,6 +1,10 @@
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
-import type { ConfigChangeEvent, Subscription } from './gameDirectorySetting';
+import type { Subscription } from '../instanceAdapter/instanceAdapter';
+
+interface ConfigChangeEvent {
+  affectsConfiguration(section: string): boolean;
+}
 
 interface LaunchDeps {
   setting: string;
