@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
@@ -14,6 +15,8 @@ public sealed class PluginFileHashesTests : IDisposable
         .WithPlugin(PluginName)
         .Build();
 
+    private static string Sha256Hex(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+
     private string PluginPath => Path.Combine(_data.DataFolder, PluginName);
 
     public void Dispose() => _data.Dispose();
@@ -24,7 +27,7 @@ public sealed class PluginFileHashesTests : IDisposable
     private FileStream HeldAgainstReaders()
     {
         var held = new FileStream(PluginPath, FileMode.Open, FileAccess.Read, FileShare.None);
-        Assert.Null(PluginBinaryHash.OfFile(PluginPath));
+        Assert.Null(PluginBinaryHash.ClaimOfFile(PluginPath));
         return held;
     }
 
@@ -33,7 +36,7 @@ public sealed class PluginFileHashesTests : IDisposable
     {
         var claim = PluginBinaryHash.ClaimOfFile(PluginPath);
 
-        Assert.Equal(PluginBinaryHash.OfFile(PluginPath), claim?.Hash);
+        Assert.Equal(Sha256Hex(File.ReadAllBytes(PluginPath)), claim?.Hash);
         Assert.Empty(claim?.Diagnoses ?? [new PluginDiagnosis(null, "unscanned", null, "")]);
     }
 
@@ -79,7 +82,7 @@ public sealed class PluginFileHashesTests : IDisposable
         File.WriteAllBytes(PluginPath, rewritten);
         File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
 
-        Assert.Equal(PluginBinaryHash.OfBytes(rewritten), hashes.Of(PluginPath));
+        Assert.Equal(Sha256Hex(rewritten), hashes.Of(PluginPath));
     }
 
     [Fact]
