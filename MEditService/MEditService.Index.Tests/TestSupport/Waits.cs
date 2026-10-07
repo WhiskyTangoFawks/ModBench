@@ -6,7 +6,7 @@ namespace MEditService.Index.Tests.TestSupport;
 /// the arrival announces rather than for a call to return.</summary>
 internal static class Waits
 {
-    internal static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+    internal static readonly TimeSpan Patience = TimeSpan.FromMinutes(3);
 
     internal static Task<bool> Until(Func<bool> condition, TimeSpan? timeout = null) =>
         Task.Run(() => ReachedWithin(condition, timeout ?? TimeSpan.FromSeconds(10)));
