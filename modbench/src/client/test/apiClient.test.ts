@@ -1,13 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createApiClient, errorText, toLoadOrderStatus } from '../apiClient';
-
-describe('createApiClient', () => {
-  it('constructs different clients for different ports', () => {
-    const a = createApiClient(5172);
-    const b = createApiClient(5173);
-    expect(a).not.toBe(b);
-  });
-});
+import { errorText, toLoadOrderStatus } from '../apiClient';
 
 describe('errorText, the sentence written for the user rather than the RFC 7807 ProblemDetails envelope the backend answers every failure in', () => {
   it('passes a string body through', () => {

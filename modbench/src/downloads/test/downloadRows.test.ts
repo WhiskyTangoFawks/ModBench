@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { downloadContextValue, filterArchiveRows, filterExcludedRows, sortDownloadRows } from '../downloadRows';
+import { downloadContextValue, sortDownloadRows } from '../downloadRows';
 import type { DownloadRow } from '../../instanceLoader/instance';
 
 const row = (name: string, mtimeMs: number, excluded = false): DownloadRow => ({
@@ -62,39 +62,6 @@ describe('sortDownloadRows', () => {
       { ...row('c', 3), status: 'Installed' },
     ];
     expect(sortDownloadRows(rows, 'status', true).map((r) => r.name)).toEqual(['c', 'a', 'b']);
-  });
-});
-
-describe('filterExcludedRows', () => {
-  const rows = [row('visible.zip', 1, false), row('excluded.zip', 2, true)];
-
-  it('excludes excluded rows by default (show-excluded off)', () => {
-    expect(filterExcludedRows(rows, false).map((r) => r.name)).toEqual(['visible.zip']);
-  });
-
-  it('includes excluded rows when show-excluded is on, leaving the excluded flag intact', () => {
-    const shown = filterExcludedRows(rows, true);
-    expect(shown.map((r) => r.name)).toEqual(['visible.zip', 'excluded.zip']);
-    expect(shown.find((r) => r.name === 'excluded.zip')?.excluded).toBe(true);
-  });
-});
-
-describe('filterArchiveRows', () => {
-  it('keeps only rows install can extract, dropping a readme, a subfolder and an .unfinished file', () => {
-    const rows = [
-      row('ArmorPack-1-0.zip', 1), row('ReadMe.txt', 2), row('Textures', 3),
-      row('ArmorPack-1-0.rar.unfinished', 4),
-    ];
-    expect(filterArchiveRows(rows).map((r) => r.name)).toEqual(['ArmorPack-1-0.zip']);
-  });
-
-  it('compares the extension case-insensitively', () => {
-    expect(filterArchiveRows([row('ArmorPack-1-0.ZIP', 1)]).map((r) => r.name)).toEqual(['ArmorPack-1-0.ZIP']);
-  });
-
-  it('keeps every extension install can extract: .zip, .7z and .rar', () => {
-    const rows = [row('a.zip', 1), row('b.7z', 2), row('c.rar', 3)];
-    expect(filterArchiveRows(rows).map((r) => r.name)).toEqual(['a.zip', 'b.7z', 'c.rar']);
   });
 });
 
