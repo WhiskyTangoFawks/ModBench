@@ -12,6 +12,9 @@ commands.label: Commands
 pluginadapter: @../target-architecture.medit_repositories.pluginadapter
 pluginadapter.label: Plugin adapter
 plugin: @../target-architecture.medit_data.plugin
+sourceadapter: @../target-architecture.medit_repositories.sourceadapter
+sourceadapter.label: Source adapter
+source: @../target-architecture.medit_data.source
 instance: @../target-architecture.modbench_data.instance
 instance.label: "Instance\nplugins.txt · mods · Overwrite"
 instanceadapter: @../target-architecture.modbench_repositories.instanceadapter
@@ -30,6 +33,10 @@ http -> commands: envelope {class: edit}
 commands -> pluginadapter: "an empty plugin: name, path, release" {class: edit}
 pluginadapter -> plugin: bytes {class: edit}
 pluginadapter -> commands: written or refusal {class: edit}
+tracked: "in a tracked mod" {
+  commands -> sourceadapter: "the empty plugin's source" {class: edit}
+  sourceadapter -> source: documents {class: edit}
+}
 commands -> http: applied or refusal {class: edit}
 http -> client: applied or refusal {class: edit}
 client -> plugins: applied or refusal {class: edit}

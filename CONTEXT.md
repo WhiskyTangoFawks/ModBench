@@ -64,7 +64,7 @@ A mod entry that groups other mods in the list and holds no files. A mod belongs
 Avoid: group, category
 
 ## Tracked mod
-A mod whose folder holds a `.git` repository and the plugin source of its plugins. It follows one git workflow.
+A mod whose folder holds a `.git` repository and the plugin source of every plugin it provides, each a tracked plugin. It follows one git workflow.
 
 # Git workflow
 How a tracked mod uses its `main` branch. The user chooses. Two kinds exist: authored and vendored.
