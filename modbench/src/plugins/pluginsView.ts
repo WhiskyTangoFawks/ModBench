@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress, RecordFilter } from '../client';
 import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
-import { type PluginSyncRun, type PluginsAccess } from '../pluginsCommands/plugins';
+import { type PluginsAccess } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 import { reportSyncFailures, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
-import { createPluginSync, type PluginSync } from './pluginSync';
+import type { PluginSync } from './pluginSync';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginsInstance, type PluginsTreeNode } from './PluginsTreeProvider';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import { publishPluginWarnings } from './loadDiagnostics';
@@ -36,9 +36,8 @@ export interface PluginsViewDeps {
   statusBar: StatusBar;
   /** A reconcile reached Ready: what the views outside this box refetch. */
   notifyConflictsComputed: () => void;
-  /** Plugin sync, whose failure the view's message line says and whose Output lines go to
-   *  `channel`. */
-  syncPlugins: PluginSyncRun;
+  /** Plugin sync, whose failure the view's message line says. */
+  pluginSync: PluginSync;
   channel: SyncChannel;
   /** The path of a file at the root of the Data folder, answered by a box this view does not
    *  reference. */
@@ -52,7 +51,6 @@ export interface PluginsView extends vscode.Disposable {
   view: vscode.TreeView<PluginsTreeNode>;
   selection: () => readonly PluginsTreeNode[];
   nameFilter: NameFilter;
-  pluginSync: PluginSync;
   /** The load order Editing could not put: its refusal is this view's message line too. */
   loadOrderPut: SyncFailureReport;
   showRecordFilter: (filter: RecordFilter | null) => void;
@@ -62,8 +60,7 @@ export interface PluginsView extends vscode.Disposable {
 
 // The one Plugins tree (ADR-0017; target-architecture.d2, Plugins).
 export function createPluginsView(deps: PluginsViewDeps): PluginsView {
-  const { instance, access, recordBrowser, client, syncPlugins, channel, statusBar, notifyConflictsComputed, log, reporterFor } = deps;
-  const pluginSync = createPluginSync(syncPlugins, channel);
+  const { instance, access, recordBrowser, client, pluginSync, channel, statusBar, notifyConflictsComputed, log, reporterFor } = deps;
   const loadOrderPut = reportSyncFailures('put load order', 'The load order is not sent', (line) => channel.error(`[loadOrder] ${line}`));
   const pluginFile = (plugin: PluginAddress) => tree.pluginFile(plugin);
   const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
@@ -130,7 +127,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     selected, view, tree, changedOutsideDiagnostics, loadDiagnostics,
   );
   return {
-    tree, view, selection: selected.rows, nameFilter, pluginSync, loadOrderPut, showRecordFilter, progress, narrator: indexStatus.narrator,
+    tree, view, selection: selected.rows, nameFilter, loadOrderPut, showRecordFilter, progress, narrator: indexStatus.narrator,
     dispose: () => { disposable.dispose(); },
   };
 }

@@ -61,7 +61,7 @@ import { modSyncOver } from './modlist/modlist';
 import { warnIfFomod } from './install/fomodWarning';
 import { refresh } from './instanceCommands/loadOrder';
 import { editingFlow, exitEditing } from './instanceCommands/editing';
-import { loadOrderPutHandler, loadOrderPutOnEachValue, modSyncOnEachValue, pluginSyncOnEachValue } from './syncWiring';
+import { instanceSyncs, loadOrderPutHandler, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
@@ -168,17 +168,18 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   const sender = own(createLoadOrderSender(client));
   session.loadOrderSender = sender;
   const refreshIndex = () => refresh(client, instanceRoot, instance.value);
+  const { modSync, pluginSync } = own(instanceSyncs({
+    instance, syncMods: modSyncOver(access), syncPlugins: pluginSyncOver(access), channel: outputChannel,
+  }));
   const plugins = own(createPluginsView({
-    instance, access, recordBrowser, client: pluginFacts, syncPlugins: pluginSyncOver(access), channel: outputChannel, statusBar, notifyConflictsComputed, reporterFor,
+    instance, access, recordBrowser, client: pluginFacts, pluginSync, channel: outputChannel, statusBar, notifyConflictsComputed, reporterFor,
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     log: (level, msg) => outputChannel[level](msg),
   }));
   const { tree: pluginsTree, view: pluginListView, selection: pluginsSelection, nameFilter: pluginsFilter } = plugins;
-  const { provider: modListProvider, view: modListView, nameFilter: modListFilter, modSync } = own(createModsView({
-    instance, log: (line) => outputChannel.warn(`[modList] ${line}`), syncMods: modSyncOver(access), channel: outputChannel,
+  const { provider: modListProvider, view: modListView, nameFilter: modListFilter } = own(createModsView({
+    instance, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync,
   }));
-  own(modSyncOnEachValue(instance, modSync));
-  own(pluginSyncOnEachValue(instance, plugins.pluginSync));
   own(showModRepositories(instance));
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const view = editingView({
@@ -217,7 +218,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   ownAll(own, registerConflictTable(instance, deps.extensionUri, () => modListView.selection, reporterFor('mod.openConflicts'), vscode.workspace));
   own(vscode.commands.registerCommand('modbench.mod.sync', (value: InstanceValue) => modSync.run(value.modSyncArguments)));
   own(registerRenamePluginCommand({ client, adapter: access.adapter, ask, instance, reporter: reporterFor('plugin.rename') }, pluginsSelection));
-  own(vscode.commands.registerCommand('modbench.plugin.sync', (value: InstanceValue) => plugins.pluginSync.run(value.pluginSyncArguments)));
+  own(vscode.commands.registerCommand('modbench.plugin.sync', (value: InstanceValue) => pluginSync.run(value.pluginSyncArguments)));
   const { view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
     access, instance, reporter: reporterFor('downloadList'), ask, trash,
     install: {
