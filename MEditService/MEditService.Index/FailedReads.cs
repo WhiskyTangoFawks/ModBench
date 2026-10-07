@@ -50,18 +50,21 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
             state = ReadStateOf(plugin);
             var outcome = read(state);
             if (outcome.Served) Forget(plugin.Key);
-            else Remember(plugin.Key, state, StandsOn(state, outcome.StoppedBy), outcome.StoppedBy);
+            else Remember(plugin.Key, state, state.Vouches && StateObserves(outcome.StoppedBy), outcome.StoppedBy);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
-            Remember(plugin.Key, state, StandsOn(state, ex), ex);
+            // Only the binary's read throws, and its hash observes what stopped it, unless another
+            // process held the file.
+            Remember(plugin.Key, state, state is { Vouches: true } && ex is not (IOException or UnauthorizedAccessException), ex);
             throw;
         }
     }
 
-    // A file another process held is no evidence either way.
-    private static bool StandsOn(ReadState? state, Exception? stoppedBy) =>
-        state is { Vouches: true } && stoppedBy is not (IOException or UnauthorizedAccessException);
+    // A tree that stopped the read stands only on its documents, whose stamps the state holds. The state
+    // holds nothing of git or of a file another process held, so those are read again at the next reconcile.
+    private static bool StateObserves(Exception? stoppedBy) =>
+        stoppedBy is null or UnreadableSourceDocumentException or AmbiguousSourceUnitException;
 
     public void Forget(PluginAddress key)
     {

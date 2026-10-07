@@ -19,8 +19,7 @@ internal sealed class Projector(
     internal static PluginProvider.FromMod? TreeModOf(RegisteredPlugin plugin) =>
         SourceRepository.SourceReads(plugin) ? ModOf(plugin) : null;
 
-    /// <summary>The truth <paramref name="plugin"/> is derived from, as its folder answers now. A tree
-    /// that fails to read is derived from its binary as well.</summary>
+    /// <summary>The truth <paramref name="plugin"/> is derived from, as its folder answers now.</summary>
     internal static DerivedFrom TruthOf(RegisteredPlugin plugin)
     {
         if (SourceRepository.SourceReads(plugin)) return DerivedFrom.SourceTree;

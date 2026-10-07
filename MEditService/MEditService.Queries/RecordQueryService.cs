@@ -38,11 +38,11 @@ public sealed class RecordQueryService(
         var derivations = reads.GetDerivations();
         PluginRow ToRow(RegisteredPlugin plugin, bool hasMatchingRecords)
         {
-            var derivedFrom = derivations.GetValueOrDefault(plugin.Key);
+            DerivedFrom? derivedFrom = derivations.TryGetValue(plugin.Key, out var stamped) ? stamped : null;
             return new(plugin, snapshot.LoadOrderIndex(plugin.Key), snapshot.IsImmutable(plugin.Key), opened[plugin.Key],
                 masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
                 parseFailures.Contains(ColumnKey.Of(plugin.Name, plugin.Origin)),
-                IsTracked: derivedFrom is DerivedFrom.SourceTree or DerivedFrom.BinaryForUnreadableSource,
+                IsTracked: derivedFrom?.IsTracked() ?? false,
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource);
         }
 

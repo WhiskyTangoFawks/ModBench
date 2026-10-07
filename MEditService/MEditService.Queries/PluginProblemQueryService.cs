@@ -37,11 +37,11 @@ public sealed class PluginProblemQueryService(IQueryIndex index, LoadOrderHolder
         return
         [
             .. snapshot.Active
-                .Where(plugin => derivations.GetValueOrDefault(plugin.Key) != DerivedFrom.Binary || stopped.Contains(plugin.Key))
+                .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsTracked() || stopped.Contains(plugin.Key))
                 .Select(plugin => ProblemsOf(
                     plugin.Key, snapshot.GameRelease, [.. stopped[plugin.Key].Select(Problem)],
                     // A binary's links are not its tree's, whose files the panel shows them on.
-                    derivations.GetValueOrDefault(plugin.Key) == DerivedFrom.SourceTree ? [.. missing[plugin.Key]] : [])),
+                    derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom == DerivedFrom.SourceTree ? [.. missing[plugin.Key]] : [])),
         ];
     }
 

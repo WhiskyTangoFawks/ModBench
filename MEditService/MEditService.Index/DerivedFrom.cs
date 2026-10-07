@@ -8,3 +8,10 @@ public enum DerivedFrom
     SourceTree,
     BinaryForUnreadableSource,
 }
+
+public static class DerivedFromReads
+{
+    /// <summary>Whether the plugin's mod was tracked when the Index read it.</summary>
+    public static bool IsTracked(this DerivedFrom derivedFrom) =>
+        derivedFrom is DerivedFrom.SourceTree or DerivedFrom.BinaryForUnreadableSource;
+}

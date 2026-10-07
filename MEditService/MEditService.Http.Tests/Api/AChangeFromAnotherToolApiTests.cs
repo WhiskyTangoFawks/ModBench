@@ -265,7 +265,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var npc = await Client.FirstFormKey(Plugin, Origin);
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
-        using var stream = await Client.NotificationStream();
         OtherTool.CopiesASourceDocument(original, copiedTo);
         await Client.NextSnapshot(fx);
         await ItsPluginSourceReadsAs(unreadable: true);

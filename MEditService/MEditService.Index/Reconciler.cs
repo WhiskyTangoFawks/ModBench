@@ -3,7 +3,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
-using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda.Plugins;
 
@@ -455,8 +454,10 @@ internal sealed class Reconciler(
     }
 
     // A plugin whose last read failed is the validation's to read again, once what it reads from changes.
+    // A plugin with no rows has no truth to move from.
     private static bool TruthMoved(OpenScope scope, RegisteredPlugin plugin, IReadOnlyDictionary<PluginAddress, DerivedFrom> derivations) =>
-        derivations.GetValueOrDefault(plugin.Key) != Projector.TruthOf(plugin) && !scope.Failed.Holds(plugin.Key);
+        derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom != Projector.TruthOf(plugin)
+        && !scope.Failed.Holds(plugin.Key);
 
     // A plugin whose folder gained or lost its repository or its tree since it was indexed. Nothing here
     // has compared the two truths, so the plugin is re-derived whole from the one its folder now offers.
@@ -496,9 +497,9 @@ internal sealed class Reconciler(
     private static string ReadFailure(Exception ex, DerivedFrom? rowsFrom) =>
         $"Could not read this plugin ({PluginLoadFailure.ReasonFor(ex)})." + rowsFrom switch
         {
-            DerivedFrom.Binary or DerivedFrom.BinaryForUnreadableSource => " Still showing what was last read from its compiled binary.",
+            null => "",
             DerivedFrom.SourceTree => " Still showing what was last read from its source tree.",
-            _ => "",
+            _ => " Still showing what was last read from its compiled binary.",
         };
 
     // Registers first: the index's reads are scoped by registration, so validate would otherwise
@@ -605,7 +606,7 @@ internal sealed class Reconciler(
             logger.LogWarning(ex, "Could not ingest {Plugin} from its source tree; reading its binary", plugin.Name);
             if (!BinaryStandsIn(scope.Index, plugin.Key, state))
                 IndexFromBinary(scope, plugin, DerivedFrom.BinaryForUnreadableSource);
-            return new ReadOutcome(false, ex);
+            return ReadOutcome.StoppedAt(ex);
         }
     }
 
@@ -707,9 +708,9 @@ internal sealed class Reconciler(
             // An untracked plugin's rows went with its file, and the file is back.
             return report.NeedsRebuild || (!holdsTree && scope.Index.IndexedContentHash(key) is null);
         }
-        catch (Exception ex) when (ex is AmbiguousSourceUnitException or UnreadableSourceDocumentException)
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
-            logger.LogWarning(ex, "Reconciling {Plugin}: its source tree cannot be read", key.Name);
+            logger.LogWarning(ex, "Reconciling {Plugin}: its rows cannot be validated, so it is read whole", key.Name);
             return true;
         }
     }

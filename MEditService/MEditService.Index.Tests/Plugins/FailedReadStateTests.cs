@@ -230,19 +230,43 @@ public sealed class FailedReadStateTests : IDisposable
         index.NextSnapshotUntil(() => DerivationOf(index) == DerivedFrom.SourceTree, "the mended tree read again");
     }
 
-    [Fact]
-    public void ATreeWhoseStatusGitCannotReport_WhenARecordChanges_FailsThePlugin_NamingGit()
+    private string GitIndex => Path.Combine(Plugin.ModFolderOf(), ".git", "index");
+
+    private OpenedIndex ATreeWhoseStatusGitCannotReport_OnceARecordChanges()
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
-        using var index = Reconciled();
+        var index = Reconciled();
         var npc = NpcDocument;
-        File.WriteAllText(Path.Combine(Plugin.ModFolderOf(), ".git", "index"), "not an index");
+        File.Copy(GitIndex, GitIndex + ".good");
+        File.WriteAllText(GitIndex, "not an index");
         File.WriteAllText(npc, File.ReadAllText(npc).Replace(NpcEditorId, "RenamedNpc", StringComparison.Ordinal));
+        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
+        return index;
+    }
 
-        index.NextSnapshotUntil(() => Failed(index), "the failed read");
+    [Fact]
+    public void ATreeWhoseStatusGitCannotReport_WhenARecordChanges_ReadsThePluginFile_MarkedAsSuch_AtThisSnapshotAndTheNext()
+    {
+        using var index = ATreeWhoseStatusGitCannotReport_OnceARecordChanges();
+        Assert.False(Failed(index));
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+        var readsBefore = TreeReads();
 
-        Assert.Contains("git cannot report what changed", Reason(index), StringComparison.Ordinal);
-        Assert.DoesNotContain("is filed as a record", Reason(index), StringComparison.Ordinal);
+        index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the tree read again");
+
+        Assert.True(SourceUnreadable(index));
+        Assert.False(Failed(index));
+    }
+
+    [Fact]
+    public void ATreeWhoseGitIsRepairedOutsideModbench_IsReadFromItsTree_AtTheNextSnapshot()
+    {
+        using var index = ATreeWhoseStatusGitCannotReport_OnceARecordChanges();
+
+        File.Move(GitIndex + ".good", GitIndex, overwrite: true);
+
+        index.NextSnapshotUntil(() => DerivationOf(index) == DerivedFrom.SourceTree, "the tree read again");
+        Assert.Contains(index.RequireReads().GetDocuments(Plugin.KeyOf()), d => d.EditorId == "RenamedNpc");
     }
 
     [Fact]
