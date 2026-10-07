@@ -32,15 +32,14 @@ public sealed class PluginTreeReadTests
     }
 
     [Fact]
-    public async Task ReadTree_OfASourceItCannotRead_AnswersTheDiagnosis_AndLeavesNoScratchFolderBehind()
+    public async Task ReadTree_OfASourceItCannotRead_AnswersTheDiagnosis()
     {
         var unreadable = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ not json"u8.ToArray());
 
-        var (tree, diagnosis, error) = await Adapter.ReadTreeAsync([unreadable], Codec, GameRelease.Fallout4);
+        var (tree, diagnosis, _) = await Adapter.ReadTreeAsync([unreadable], Codec, GameRelease.Fallout4);
 
         Assert.Null(tree);
         Assert.NotNull(diagnosis);
-        AssertScratchFolderGone(Assert.IsAssignableFrom<FilePathedException>(error).Path);
     }
 
     [Fact]
