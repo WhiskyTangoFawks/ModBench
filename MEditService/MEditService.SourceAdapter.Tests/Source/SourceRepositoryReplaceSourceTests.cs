@@ -147,15 +147,12 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_ParksASnapshotOfWhatTheWorkingTreeHoldsNow_UntrackedSourceIncluded_NamedForDecompile()
+    public void ReplaceSourceFrom_ParksTheBinaryItWasMadeFrom_NamedForDecompile()
     {
         Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha);
 
         var parked = LastWriteRecord.RefOfTheOnlyPlugin(_modFolder);
-        Assert.Equal(
-            [".gitignore", "plugin-source/A.esp/npc_/A.esp/000002.json"],
-            Git("ls-tree", "-r", "--name-only", parked).Split('\n', StringSplitOptions.RemoveEmptyEntries));
-        Assert.Equal("{\"now\":2}", Git("show", $"{parked}:plugin-source/A.esp/npc_/A.esp/000002.json"));
+        Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address));
         Assert.Equal("Decompile: A.esp", Git("log", "-1", "--format=%s", parked).Trim());
     }
 

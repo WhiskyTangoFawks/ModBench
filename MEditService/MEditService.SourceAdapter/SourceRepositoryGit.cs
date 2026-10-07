@@ -7,6 +7,7 @@ internal sealed class SourceRepositoryGit(string modFolder)
 {
     private const string BinaryTrailer = "Binary-SHA256";
     private const string EarlierBinaryTrailer = "Earlier-Binary-SHA256";
+    private const string EmptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
     private readonly string _modFolder = modFolder;
     private readonly string _gitDir = Path.Combine(modFolder, ".git");
@@ -63,9 +64,6 @@ internal sealed class SourceRepositoryGit(string modFolder)
     }
 
     internal string Run(params string[] args) => GitCli.Run(_gitDir, _modFolder, args);
-
-    internal string RunWithIndex(string indexFile, params string[] args) =>
-        GitCli.RunWithIndex(_gitDir, _modFolder, indexFile, args);
 
     internal bool TryRun(out string stdout, params string[] args) => GitCli.TryRun(_gitDir, _modFolder, out stdout, args);
 
@@ -147,9 +145,8 @@ internal sealed class SourceRepositoryGit(string modFolder)
     internal bool WriteBinary(string pluginFileName, string binarySha256, Action write)
     {
         var headSha = Run("rev-parse", "HEAD").Trim();
-        var tree = WorkingTreeSnapshotTree();
         var earlier = LastWrittenBinarySha256s(pluginFileName);
-        ParkSnapshot("Compile", pluginFileName, tree, headSha, [$"{BinaryTrailer}: {binarySha256}",
+        ParkTrailers("Compile", pluginFileName, headSha, [$"{BinaryTrailer}: {binarySha256}",
             .. earlier.Select(sha => $"{EarlierBinaryTrailer}: {sha}")]);
 
         write();
@@ -159,9 +156,8 @@ internal sealed class SourceRepositoryGit(string modFolder)
         try
         {
             var parked = LastCompileRef(pluginFileName);
-            var parkedTree = Run("rev-parse", $"{parked}^{{tree}}").Trim();
             var parent = Run("rev-parse", $"{parked}^").Trim();
-            ParkSnapshot("Compile", pluginFileName, parkedTree, parent, [$"{BinaryTrailer}: {binarySha256}"]);
+            ParkTrailers("Compile", pluginFileName, parent, [$"{BinaryTrailer}: {binarySha256}"]);
             return true;
         }
         catch (GitCommandFailedException)
@@ -170,13 +166,11 @@ internal sealed class SourceRepositoryGit(string modFolder)
         }
     }
 
-    /// <summary>What the working tree now holds was made from this binary, as a landed compile's is. The
-    /// snapshot takes the plugin's whole source, which git may not track yet.</summary>
+    /// <summary>What the working tree now holds was made from this binary, as a landed compile's is.</summary>
     internal void ParkDecompiled(string pluginFileName, string binarySha256)
     {
         var headSha = Run("rev-parse", "HEAD").Trim();
-        var tree = WorkingTreeSnapshotTree(LiteralPathspec(SourceRepositoryLayout.RootFor(pluginFileName)));
-        ParkSnapshot("Decompile", pluginFileName, tree, headSha, [$"{BinaryTrailer}: {binarySha256}"]);
+        ParkTrailers("Decompile", pluginFileName, headSha, [$"{BinaryTrailer}: {binarySha256}"]);
     }
 
     /// <summary>The act that puts what Modbench last wrote for both names back as it stands now, however
@@ -214,34 +208,17 @@ internal sealed class SourceRepositoryGit(string modFolder)
     }
 
     // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written. The
-    // subject names the gesture that made the snapshot.
-    private void ParkSnapshot(string gesture, string pluginFileName, string tree, string parent, IEnumerable<string> trailers)
+    // subject names the gesture that made the record. Only the trailers are read, so the commit holds
+    // git's empty tree.
+    private void ParkTrailers(string gesture, string pluginFileName, string parent, IEnumerable<string> trailers)
     {
         var message = string.Join('\n', [$"{gesture}: {pluginFileName}", "", .. trailers]);
-        Park(pluginFileName, Run("commit-tree", tree, "-p", parent, "-m", message).Trim());
+        Park(pluginFileName, Run("commit-tree", EmptyTree, "-p", parent, "-m", message).Trim());
     }
 
     // The one place the last-compile ref moves.
     private void Park(string pluginFileName, string commitSha) =>
         Run("update-ref", LastCompileRef(pluginFileName), commitSha);
-
-    // The index, every tracked file's working-tree bytes and every file under the pathspecs, on a copy
-    // of the index: git stash create would take index.lock, which the user's commit may hold.
-    private string WorkingTreeSnapshotTree(params string[] alsoTaking)
-    {
-        var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-snapshot-index-{Guid.NewGuid():N}");
-        try
-        {
-            File.Copy(Path.Combine(_gitDir, "index"), scratchIndex);
-            RunWithIndex(scratchIndex, "add", "-u");
-            if (alsoTaking.Length > 0) RunWithIndex(scratchIndex, ["add", "-A", "--", .. alsoTaking]);
-            return RunWithIndex(scratchIndex, "write-tree").Trim();
-        }
-        finally
-        {
-            if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
-        }
-    }
 
     private static IEnumerable<string> ReadTrailers(string body, string key)
     {
