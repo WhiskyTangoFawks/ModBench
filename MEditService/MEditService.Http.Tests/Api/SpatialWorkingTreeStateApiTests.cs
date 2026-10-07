@@ -6,9 +6,9 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Noggog;
 
-namespace MEditService.Http.Tests.Traces;
+namespace MEditService.Http.Tests.Api;
 
-public sealed class EditSpatialRecordTraceTests : HostedTests
+public sealed class SpatialWorkingTreeStateApiTests : HostedTests
 {
     private const string Plugin = "Spatial.esp";
     private const string Origin = "SpatialMod";
