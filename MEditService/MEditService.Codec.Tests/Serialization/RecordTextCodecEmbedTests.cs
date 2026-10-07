@@ -31,11 +31,11 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public void SerializeToBytes_ForAPopulatedCell_EmbedsEveryChildSlot()
+    public void SerializeToText_ForAPopulatedCell_EmbedsEveryChildSlot()
     {
-        var bytes = Codec().SerializeToBytes(MakePopulatedCell(), GameRelease.Fallout4);
+        var text = Codec().SerializeToText(MakePopulatedCell(), GameRelease.Fallout4);
 
-        using var doc = JsonDocument.Parse(bytes);
+        using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
 
         Assert.Equal(
@@ -68,9 +68,9 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public void SerializeToBytes_ForAPopulatedCell_CarriesItsChildrenInline_TheCodecAdoptingSpriggitsEmbedCustomizationVerbatim()
+    public void SerializeToText_ForAPopulatedCell_CarriesItsChildrenInline_TheCodecAdoptingSpriggitsEmbedCustomizationVerbatim()
     {
-        using var doc = JsonDocument.Parse(Codec().SerializeToBytes(MakePopulatedCell(), GameRelease.Fallout4));
+        using var doc = JsonDocument.Parse(Codec().SerializeToText(MakePopulatedCell(), GameRelease.Fallout4));
 
         Assert.Equal("PersistentRef", doc.RootElement.GetProperty("Persistent")[0].GetProperty("EditorID").GetString());
         Assert.Equal("TemporaryRef", doc.RootElement.GetProperty("Temporary")[0].GetProperty("EditorID").GetString());
@@ -79,7 +79,7 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public void SerializeToBytes_ForAWorldspace_EmbedsItsTopCell()
+    public void SerializeToText_ForAWorldspace_EmbedsItsTopCell()
     {
         var worldspace = new Worldspace(Mod)
         {
@@ -87,9 +87,9 @@ public sealed class RecordTextCodecEmbedTests
             TopCell = new Cell(Mod) { EditorID = "EmbedTopCell" },
         };
 
-        var bytes = Codec().SerializeToBytes(worldspace, GameRelease.Fallout4);
+        var text = Codec().SerializeToText(worldspace, GameRelease.Fallout4);
 
-        using var doc = JsonDocument.Parse(bytes);
+        using var doc = JsonDocument.Parse(text);
         Assert.Equal("EmbedTopCell", doc.RootElement.GetProperty("TopCell").GetProperty("EditorID").GetString());
     }
 }

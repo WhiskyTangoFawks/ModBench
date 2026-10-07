@@ -45,9 +45,9 @@ public sealed class DocumentShapeParityTests
     }
 
     [Fact]
-    public void SerializeToBytes_ForAQuest_CarriesItsTopicAndItsResponseInline()
+    public void SerializeToText_ForAQuest_CarriesItsTopicAndItsResponseInline()
     {
-        using var doc = JsonDocument.Parse(Codec().SerializeToBytes(MakePopulatedQuest(NewMod()), GameRelease.Fallout4));
+        using var doc = JsonDocument.Parse(Codec().SerializeToText(MakePopulatedQuest(NewMod()), GameRelease.Fallout4));
 
         var topic = doc.RootElement.GetProperty("DialogTopics")[0];
         Assert.Equal("ParityTopic", topic.GetProperty("EditorID").GetString());
@@ -111,11 +111,9 @@ public sealed class DocumentShapeParityTests
         Assert.True(File.Exists(wholeModFile), $"Expected the whole-mod door to write {wholeModFile}.");
 
         var wholeModBytes = await File.ReadAllBytesAsync(wholeModFile);
-        var codecBytes = Codec().SerializeToBytes(record, GameRelease.Fallout4);
+        var codecText = Codec().SerializeToText(record, GameRelease.Fallout4);
 
-        Assert.Equal(
-            System.Text.Encoding.UTF8.GetString(wholeModBytes),
-            System.Text.Encoding.UTF8.GetString(codecBytes));
-        Assert.Equal(wholeModBytes, codecBytes);
+        Assert.Equal(System.Text.Encoding.UTF8.GetString(wholeModBytes), codecText);
+        Assert.Equal(wholeModBytes, System.Text.Encoding.UTF8.GetBytes(codecText));
     }
 }

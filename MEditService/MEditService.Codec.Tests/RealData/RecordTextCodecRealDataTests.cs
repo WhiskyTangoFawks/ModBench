@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -40,16 +39,16 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
             "Expected this fixture weapon to carry ObjectTemplates content; pick a different affected weapon if it does not.");
 
         var swSerializeOverlay = Stopwatch.StartNew();
-        var overlayBytes = codec.SerializeToBytes(overlayWeapon, GameRelease.Fallout4);
+        var overlayText = codec.SerializeToText(overlayWeapon, GameRelease.Fallout4);
         swSerializeOverlay.Stop();
 
         var swSerializeDeep = Stopwatch.StartNew();
-        var deepParsedBytes = codec.SerializeToBytes(deepParsedWeapon, GameRelease.Fallout4);
+        var deepParsedText = codec.SerializeToText(deepParsedWeapon, GameRelease.Fallout4);
         swSerializeDeep.Stop();
 
         var swDeserialize = Stopwatch.StartNew();
         var roundTripped = (Weapon)RecordTextCodec.DeserializeText(
-            typeof(Weapon), codec.RoundTrip(Encoding.UTF8.GetString(deepParsedBytes), GameRelease.Fallout4, "weap"), GameRelease.Fallout4);
+            typeof(Weapon), codec.RoundTrip(deepParsedText, GameRelease.Fallout4, "weap"), GameRelease.Fallout4);
         swDeserialize.Stop();
 
         output.WriteLine($"AC4: serialize (overlay) {swSerializeOverlay.ElapsedMilliseconds} ms, " +
@@ -57,7 +56,7 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
             $"deserialize {swDeserialize.ElapsedMilliseconds} ms " +
             "(129 ms serialize / 55 ms deserialize measured on a 20 MB plugin).");
 
-        Assert.Equal(deepParsedBytes, overlayBytes);
+        Assert.Equal(deepParsedText, overlayText);
 
         var mask = deepParsedWeapon.GetEqualsMask(roundTripped);
         var leaves = MaskInspector.CountLeaves(mask).ToList();
