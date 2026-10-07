@@ -3,6 +3,7 @@ import type { MEditClient, PluginAddress, ReferenceResult } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import { ErrorNode } from '../drivingLib/errorNode';
+import { isKeyArgs } from '../drivingLib/copyValue';
 import { recordTitle } from './recordTitle';
 
 /** One plugin's copy of a referrer, with the fields that hold the reference. */
@@ -85,8 +86,7 @@ export function referencedByCopyValueText(
   clicked: unknown, allSelected: readonly unknown[] | undefined,
 ): string | undefined {
   const isReferrer = (n: unknown): n is ReferencedByReferrerNode => n instanceof ReferencedByReferrerNode;
-  const fromKey = typeof clicked === 'object' && clicked !== null && Reflect.get(clicked, 'view') === REFERENCED_BY_VIEW;
-  if (!isReferrer(clicked) && !fromKey) return undefined;
+  if (!isReferrer(clicked) && !isKeyArgs(clicked, REFERENCED_BY_VIEW)) return undefined;
   const selected = allSelected?.filter(isReferrer) ?? [];
   if (selected.length) return referencedByCopyText(selected);
   if (referencedByTreeView.selection.length) return referencedByCopyText(referencedByTreeView.selection);

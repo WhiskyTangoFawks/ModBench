@@ -5,10 +5,6 @@ import type { PluginsTreeNode } from './PluginsTreeProvider';
  *  Plugins view's. */
 export const PLUGINS_KEY_ARGS = { view: 'modbench.pluginListTree' } as const;
 
-export function isPluginsKeyArgs(value: unknown): boolean {
-  return typeof value === 'object' && value !== null && 'view' in value && value.view === PLUGINS_KEY_ARGS.view;
-}
-
 type ArgumentKind = PluginsTreeNode['kind'];
 type RowOf<K extends ArgumentKind> = Extract<PluginsTreeNode, { kind: K }>;
 

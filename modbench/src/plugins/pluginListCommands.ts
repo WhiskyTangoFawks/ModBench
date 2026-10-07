@@ -2,13 +2,13 @@ import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import {
-  ImplicitMasterNode, PluginNode, PluginsTreeProvider, type PluginListNode, type PluginsTreeNode,
+  PluginsTreeProvider, type PluginListNode, type PluginsTreeNode,
 } from './PluginsTreeProvider';
 import {
-  PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, isPluginsKeyArgs, onlySelected,
+  PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, PLUGINS_KEY_ARGS, onlySelected,
 } from './gestureEntry';
-import { gestureEntry, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
-import { CellNode, ChildRecordNode, RecordNode, WorldspaceNode } from './PluginTreeProvider';
+import type { RowOf } from '../drivingLib/gestureEntry';
+import { viewCopyValueText } from '../drivingLib/copyValue';
 import { placeFolder, pluginPlaces } from './pluginPlaces';
 import { creatablePluginExtensionsOf, pluginNameRefusal } from './pluginName';
 import type { Reporter } from '../ports/reporter';
@@ -44,12 +44,9 @@ export function registerRevealInExplorerCommand(
   });
 }
 
-type CopiedRow = PluginNode | ImplicitMasterNode | RecordNode | WorldspaceNode | CellNode | ChildRecordNode;
+const COPIED_KINDS = [...PLUGIN_ROW_KINDS, ...RECORD_ROW_KINDS] as const;
 
-function isCopiedRow(value: unknown): value is CopiedRow {
-  return value instanceof PluginNode || value instanceof ImplicitMasterNode || value instanceof RecordNode
-    || value instanceof WorldspaceNode || value instanceof CellNode || value instanceof ChildRecordNode;
-}
+type CopiedRow = RowOf<PluginsTreeNode, typeof COPIED_KINDS[number]>;
 
 // editor.md, The header: `EditorID [FormKey]`, or the FormKey alone when there is no EditorID.
 function copyValueLine(row: CopiedRow): string {
@@ -64,18 +61,8 @@ function copyValueLine(row: CopiedRow): string {
 /** Plugins' own text for the catalog's one copy value id (plugins.md, Menus and keys, story 5).
  *  `undefined` unless `clicked` is a Plugins row or the Plugins key's args, so another view's
  *  invocation defers. */
-export function pluginsCopyValueText(
-  viewSelection: () => readonly PluginsTreeNode[],
-): (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined {
-  const lines = (entry: GestureEntry<PluginsTreeNode>) =>
-    selectionArgument(entry, ...PLUGIN_ROW_KINDS, ...RECORD_ROW_KINDS).map(copyValueLine).join('\n');
-  return (clicked, allSelected) => {
-    if (isPluginsKeyArgs(clicked)) return lines({ selection: viewSelection() });
-    if (!isCopiedRow(clicked)) return undefined;
-    const selected = allSelected?.length ? allSelected.filter(isCopiedRow) : undefined;
-    return lines(gestureEntry(clicked, selected, viewSelection));
-  };
-}
+export const pluginsCopyValueText = (viewSelection: () => readonly PluginsTreeNode[]) =>
+  viewCopyValueText<PluginsTreeNode, typeof COPIED_KINDS[number]>(PLUGINS_KEY_ARGS.view, COPIED_KINDS, copyValueLine, viewSelection);
 
 async function promptPluginName(
   client: Pick<MEditClient, 'getCreatablePluginExtensions'>, reporter: Reporter,
