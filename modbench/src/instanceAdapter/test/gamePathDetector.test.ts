@@ -199,8 +199,8 @@ describe('detectWindowsGamePaths in a second Steam library', () => {
   });
 
   it('finds the game in the library the steamapps vdf names', async () => {
-    vi.mocked(fs.readFile).mockImplementation((file: unknown) =>
-      (file as string).endsWith('steamapps/libraryfolders.vdf')
+    vi.mocked(fs.readFile).mockImplementation((file) =>
+      typeof file === 'string' && file.endsWith('steamapps/libraryfolders.vdf')
         ? Promise.resolve(vdfNaming('D:/Games/SteamLibrary'))
         : Promise.reject(new Error('ENOENT')),
     );
@@ -211,8 +211,8 @@ describe('detectWindowsGamePaths in a second Steam library', () => {
   });
 
   it('finds the game through the older config vdf layout', async () => {
-    vi.mocked(fs.readFile).mockImplementation((file: unknown) =>
-      (file as string).endsWith('config/libraryfolders.vdf')
+    vi.mocked(fs.readFile).mockImplementation((file) =>
+      typeof file === 'string' && file.endsWith('config/libraryfolders.vdf')
         ? Promise.resolve(vdfNaming('D:/Games/SteamLibrary'))
         : Promise.reject(new Error('ENOENT')),
     );
