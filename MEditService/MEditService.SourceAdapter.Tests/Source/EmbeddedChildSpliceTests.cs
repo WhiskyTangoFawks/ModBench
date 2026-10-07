@@ -135,9 +135,9 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     {
         PutRenamedPersistentRef();
 
-        var owner = _codec.DeserializeFromBytes(File.ReadAllBytes(FullPath(CellPath)), Release, "cell");
+        var owner = (Cell)RecordTextCodec.DeserializeText(typeof(Cell), File.ReadAllText(FullPath(CellPath)), Release);
 
-        Assert.Equal(["RenamedRef"], ((Cell)owner).Persistent.Select(placed => placed.EditorID ?? throw new InvalidOperationException("Expected a placed ref to carry its EditorID.")).ToArray());
+        Assert.Equal(["RenamedRef"], owner.Persistent.Select(placed => placed.EditorID ?? throw new InvalidOperationException("Expected a placed ref to carry its EditorID.")).ToArray());
     }
 
     private void PutRenamedPersistentRef()
@@ -183,7 +183,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     {
         Repository.Remove(Plugin, Identity(_persistentRef, "refr"));
 
-        var owner = (Cell)_codec.DeserializeFromBytes(File.ReadAllBytes(FullPath(CellPath)), Release, "cell");
+        var owner = (Cell)RecordTextCodec.DeserializeText(typeof(Cell), File.ReadAllText(FullPath(CellPath)), Release);
 
         Assert.Empty(owner.Persistent);
         Assert.Equal(["TempRef"], owner.Temporary.Select(placed => placed.EditorID ?? throw new InvalidOperationException("Expected a placed ref to carry its EditorID.")).ToArray());

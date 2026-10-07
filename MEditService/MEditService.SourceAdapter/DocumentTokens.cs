@@ -12,7 +12,7 @@ internal static class DocumentTokens
     // own, so the slot a key sits under tells the two apart. Malformed text yields what it read.
     internal static List<(string FormKey, bool AtRoot, bool InAnEmbedSlot)> FormKeysIn(byte[] bytes, GameRelease release)
     {
-        var embeddedSlotNames = ContainerSlots.For(release).EmbeddedSlotsOf(null).ToHashSet(StringComparer.Ordinal);
+        var embeddedSlotNames = ContainerSlots.For(release).EmbeddedSlotNames;
         var found = new List<(string, bool, bool)>();
         var reader = new Utf8JsonReader(bytes);
 
@@ -61,7 +61,7 @@ internal static class DocumentTokens
 
     // A child record's own FormKey sits inside the slot its container embeds it in, at any depth: a
     // worldspace embeds its TopCell, which embeds its placed references.
-    private static bool UnderAnEmbedSlot(List<string?> openedBy, int keyDepth, HashSet<string> embeddedSlotNames)
+    private static bool UnderAnEmbedSlot(List<string?> openedBy, int keyDepth, IReadOnlySet<string> embeddedSlotNames)
     {
         for (var depth = 0; depth < keyDepth && depth < openedBy.Count; depth++)
         {

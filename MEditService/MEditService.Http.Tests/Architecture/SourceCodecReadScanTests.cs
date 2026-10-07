@@ -12,7 +12,6 @@ public sealed class SourceCodecReadScanTests
         ("Deserialize", new Regex(@"\bDeserialize\b", RegexOptions.Compiled)),
         ("SerializeToText", new Regex(@"\bSerializeToText\b", RegexOptions.Compiled)),
         ("SerializeToBytes", new Regex(@"\bSerializeToBytes\b", RegexOptions.Compiled)),
-        ("DeserializeFromBytes", new Regex(@"\bDeserializeFromBytes\b", RegexOptions.Compiled)),
         ("DeserializeEmpty", new Regex(@"\bDeserializeEmpty\b", RegexOptions.Compiled)),
         ("DeserializeText", new Regex(@"\bDeserializeText\b", RegexOptions.Compiled)),
         ("EmptyMajorRecord", new Regex(@"\bEmptyMajorRecord\b", RegexOptions.Compiled)),

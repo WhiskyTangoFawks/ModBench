@@ -7,7 +7,7 @@ namespace MEditService.Codec.Schema;
 /// <summary>The members holding child major records, read from each game module's own types.
 /// EmbeddedSlots is the subset the embed customization accepts. Every dictionary is keyed by game
 /// too: two games' classes can share a bare name.</summary>
-public sealed record ContainerMembers(
+internal sealed record ContainerMembers(
     IReadOnlyDictionary<(GameCategory Game, string Type), string[]> ChildFieldsByType,
     IReadOnlySet<(GameCategory Game, string ParentType, string Slot)> EmbeddedSlots,
     IReadOnlyDictionary<(GameCategory Game, string ParentType, string Slot), string> ElementTypeBySlot,

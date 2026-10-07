@@ -29,13 +29,12 @@ public class RecordTextCodecTests
         };
 
     [Fact]
-    public void SerializeToBytes_ThenDeserializeFromBytes_IsFieldFaithful_BecauseTheOmitCustomizationsAreVerifiedNoOpsForAStandaloneWeaponBothTargetingOnlyGroupCellWorldspaceFieldsItDoesNotHave()
+    public void RoundTrip_IsFieldFaithful_BecauseTheOmitCustomizationsAreVerifiedNoOpsForAStandaloneWeaponBothTargetingOnlyGroupCellWorldspaceFieldsItDoesNotHave()
     {
         var codec = Codec();
         var original = MakeWeapon();
-        var bytes = codec.SerializeToBytes(original, GameRelease.Fallout4);
 
-        var roundTripped = (Weapon)codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, "weap");
+        var roundTripped = ReadBack.Of<Weapon>(codec, original, GameRelease.Fallout4, "weap");
 
         var mask = original.GetEqualsMask(roundTripped);
         var leaves = MaskInspector.CountLeaves(mask).ToList();

@@ -35,8 +35,18 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// <summary>A document's own graph, read back by the type its text names — a path-ambiguous
     /// group's document names its own class, which is the codec's spelling, not the schema's
     /// table.</summary>
-    internal IMajorRecord Deserialize(string text, GameRelease gameRelease, string? recordType) =>
-        DeserializeFromBytes(Encoding.UTF8.GetBytes(text), gameRelease, recordType);
+    internal IMajorRecord Deserialize(string text, GameRelease gameRelease, string? recordType)
+    {
+        var bytes = Encoding.UTF8.GetBytes(text);
+        using var stream = new MemoryStream(bytes, writable: false);
+        var record = DeserializeCore(stream, gameRelease, recordType, CancellationToken.None);
+
+        if (logger.IsEnabled(LogLevel.Trace))
+        {
+            logger.LogTrace("Deserialized record {FormKey} from {ByteCount} bytes", record.FormKey, bytes.Length);
+        }
+        return record;
+    }
 
     /// <summary>The record as the text a source document carries: what
     /// <see cref="SerializeToBytes"/> produces, decoded.</summary>
@@ -83,22 +93,6 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         // Finalize writes the closing brace and nothing after, as does the source tree, so adding
         // one would diverge from the whole-mod door's document shape.
         return [.. buffer.ToArray().Where(b => b != (byte)'\r')];
-    }
-
-    /// <summary>The index holds bytes, never a parsed graph. A document names its own type only when
-    /// its path could not, so the caller states the record_type it knows (either spelling); null
-    /// means self-describing.</summary>
-    public IMajorRecord DeserializeFromBytes(
-        byte[] bytes, GameRelease gameRelease, string? recordType, CancellationToken cancel = default)
-    {
-        using var stream = new MemoryStream(bytes, writable: false);
-        var record = DeserializeCore(stream, gameRelease, recordType, cancel);
-
-        if (logger.IsEnabled(LogLevel.Trace))
-        {
-            logger.LogTrace("Deserialized record {FormKey} from {ByteCount} bytes", record.FormKey, bytes.Length);
-        }
-        return record;
     }
 
     /// <summary>The instance the codec builds for an empty document of a Loqui class: every member
