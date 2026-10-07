@@ -32,7 +32,7 @@ public sealed class TrackModTests
     }
 
     [Fact]
-    public async Task TrackMod_RefusesAPluginTheAdapterCannotRead_AndTracksTheRest()
+    public async Task TrackMod_RefusesTheWholeMod_WhenOnePluginCannotBeRead_WritingNothing()
     {
         using var modFolder = new ScratchDirectory("medit-track-unopened-");
         using var gameDir = new ScratchDirectory("medit-track-unopened-game-");
@@ -52,13 +52,14 @@ public sealed class TrackModTests
 
         var result = await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", new LockedPluginAdapter("Locked.esp"));
 
-        var tracked = Assert.Single(result.Landed);
-        Assert.Equal([new PluginAddress("Fixture.esp", "FixtureMod")], tracked.Outcome.Tracked);
-        var refused = Assert.Single(tracked.Outcome.Refused);
-        Assert.Equal((new PluginAddress("Locked.esp", "FixtureMod"), TrackRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
-        Assert.Contains("cannot be read", refused.Message, StringComparison.Ordinal);
-        Assert.True(SourceRepository.SourceReads(new RegisteredPlugin("Fixture.esp", "FixtureMod", "", new PluginProvider.FromMod("FixtureMod", modFolder))));
-        Assert.False(SourceRepository.SourceReads(new RegisteredPlugin("Locked.esp", "FixtureMod", "", new PluginProvider.FromMod("FixtureMod", modFolder))));
+        Assert.Empty(result.Landed);
+        var refusal = Assert.Single(result.Refused);
+        Assert.Equal(("FixtureMod", TrackRefusal.RoundTripFailed), (refusal.Item, refusal.Refusal));
+        Assert.Contains("Locked.esp", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("cannot be read", refusal.Message, StringComparison.Ordinal);
+        Assert.False(SourceRepository.IsTracked(modFolder));
+        Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")));
+        Assert.False(Directory.Exists(Path.Combine(modFolder, "plugin-source")));
     }
 
     private sealed class LockedPluginAdapter(string lockedName) : DelegatingPluginAdapter(TestAdapters.Mutagen())
