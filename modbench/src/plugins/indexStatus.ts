@@ -34,8 +34,8 @@ async function settleReconciled(status: LoadOrderProgress, deps: ReconciledDeps)
   await deps.applyReconciled(status.failures, status.totalPlugins);
 }
 
-// A read failure logs and warns, and never throws (ADR-0019). The filter clears only on purpose
-// (plugins.md, Order and view state, story 3), so a failed read leaves the view as it was.
+// A read failure logs and warns, and never throws (ADR-0019), so a failed read leaves the view
+// as it was.
 async function syncActiveFilter(
   getActiveFilter: () => Promise<RecordFilter | null>,
   deps: { log: (msg: string) => void; warn: (msg: string) => void; showRecordFilter: (filter: RecordFilter | null) => void },

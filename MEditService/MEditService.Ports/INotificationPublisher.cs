@@ -43,3 +43,7 @@ public sealed record ChangedPlugin(string Name, string? BytesSha256);
 /// <summary>The plugins of a tracked mod whose plugin source is unreadable.</summary>
 public sealed record PluginSourceUnreadableNotification(string Origin, IReadOnlyList<string> Plugins)
     : INotification;
+
+/// <summary>The record filter could not apply again after a change to the index, so the Index
+/// cleared it. Source names the filter's source; Reason is the database's.</summary>
+public sealed record RecordFilterClearedNotification(string Source, string Reason) : INotification;

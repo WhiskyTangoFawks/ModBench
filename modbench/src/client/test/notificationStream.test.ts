@@ -251,6 +251,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     ['track-progress', rowsChanged([], { kind: 'track-progress', trackProgress }), trackProgress],
     ['external-change', rowsChanged([], { kind: 'external-change', changedPlugins }), { origin: 'ModA', changedPlugins }],
     ['plugin-source-unreadable', rowsChanged(['A.esp', 'B.esp'], { kind: 'plugin-source-unreadable' }), { plugins: [{ name: 'A.esp', origin: 'ModA' }, { name: 'B.esp', origin: 'ModA' }] }],
+    ['record-filter-cleared', rowsChanged([], { kind: 'record-filter-cleared', recordFilterCleared: { source: 'a.sql', reason: 'boom' } }), { source: 'a.sql', reason: 'boom' }],
     ['rows-changed', rowsChanged(['000001:Test.esp']), { plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000001:Test.esp'] }],
     ['plugin-changed', rowsChanged([], { kind: 'plugin-changed' }), { plugin: { name: 'Test.esp', origin: 'ModA' } }],
   ];

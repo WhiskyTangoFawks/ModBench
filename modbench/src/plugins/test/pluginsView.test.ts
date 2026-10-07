@@ -455,6 +455,70 @@ describe('the record filter, from the commands that set and clear it', () => {
     });
   });
 
+  describe('a record filter the index could not apply again', () => {
+    const cleared = (source: string) => ({
+      kind: 'record-filter-cleared', plugin: '', origin: '', keys: [], sequence: 0,
+      recordFilterCleared: { source, reason: 'Conversion Error' },
+    });
+    const warned = [{ severity: 'warning', message: 'The record filter a was cleared', detail: 'Conversion Error' }];
+
+    async function showingA() {
+      h.document = { uri: { scheme: 'untitled', path: 'a' }, fileName: 'a', getText: () => ARMOR_SQL };
+      const view = filtering();
+      await view.filter({ scheme: 'untitled', path: 'a' });
+      view.recordBrowserRefreshes.length = 0;
+      return view;
+    }
+
+    it('shows what mEdit holds, re-reads the records, and warns naming the source and the reason', async () => {
+      const view = await showingA();
+      view.client.setQueryAnswer('getActiveFilter', null);
+
+      view.client.emit(cleared('a'));
+      await flushed();
+
+      expect(view.description()).toBeUndefined();
+      expect(view.lensOn(ARMOR_SQL)).toBe('modbench.record.filter');
+      expect(view.filterActive()).toEqual([true, false]);
+      expect(view.recordBrowserRefreshes).toHaveLength(1);
+      expect(view.reporter.reports).toEqual(warned);
+    });
+
+    it('keeps a newer filter mEdit holds, and only logs a clearing of an older one', async () => {
+      const view = await showingA();
+      view.client.setQueryAnswer('getActiveFilter', { sql: ARMOR_SQL, source: 'a' });
+
+      view.client.emit(cleared('older.sql'));
+      await flushed();
+
+      expect(view.description()).toBe('records: a');
+      expect(view.reporter.reports).toEqual([]);
+      expect(view.reporter.shownFailures).toEqual([
+        { severity: 'warning', message: 'The record filter older.sql was cleared', detail: 'Conversion Error' },
+      ]);
+    });
+
+    it('shows no filter when the clearing outruns the reply to the set it clears', async () => {
+      h.document = { uri: { scheme: 'untitled', path: 'a' }, fileName: 'a', getText: () => ARMOR_SQL };
+      const view = filtering();
+      let replied!: (error: string | null) => void;
+      view.client.setQueryAnswerOnce('setFilter', new Promise<string | null>((resolve) => { replied = resolve; }));
+      view.client.setQueryAnswer('getActiveFilter', null);
+
+      const applying = view.filter({ scheme: 'untitled', path: 'a' });
+      await flushed();
+      view.client.emit(cleared('a'));
+      await flushed();
+      replied(null);
+      await applying;
+      await flushed();
+
+      expect(view.description()).toBeUndefined();
+      expect(view.filterActive()).toEqual([false]);
+      expect(view.reporter.reports).toEqual(warned);
+    });
+  });
+
   describe('modbench.record.clearFilter', () => {
     const source = { scheme: 'untitled', path: 'a' };
     const applied = async () => {

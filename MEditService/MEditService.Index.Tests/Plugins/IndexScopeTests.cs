@@ -222,12 +222,16 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void Validate_WhenReapplyingTheFilterFaults_LogsAWarningNamingTheException_AndKeepsTheReindexedWrite()
+    public void Validate_WhenReapplyingTheFilterFaults_ClearsTheFilter_NamesItsSourceAndReason_AndShowsEveryRecord()
     {
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("reindex-filter-fault")
-            .WithPlugin("Plugin.esp", mod => npcKey = mod.Npcs.AddNew("7").FormKey)
+            .WithPlugin("Plugin.esp", mod =>
+            {
+                npcKey = mod.Npcs.AddNew("7").FormKey;
+                mod.Npcs.AddNew("8");
+            })
             .Build();
         using (data)
         {
@@ -237,7 +241,8 @@ public class IndexScopeTests(TestPluginFixture fixture)
                 b.SetMinimumLevel(LogLevel.Debug);
                 b.AddProvider(new CollectingLoggerProvider(entries));
             });
-            using var manager = Indexes.Open(holder, loggerFactory: loggerFactory);
+            var notifications = new InMemoryNotificationPublisher();
+            using var manager = Indexes.Open(holder, loggerFactory: loggerFactory, notifications: notifications);
 
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
             manager.SetFilter("SELECT form_key FROM npc_ WHERE CAST(editor_id AS INTEGER) = 7", "filter.sql");
@@ -253,6 +258,12 @@ public class IndexScopeTests(TestPluginFixture fixture)
             Assert.Contains(
                 manager.RequireReads().DocumentsOf(new PluginAddress("Plugin.esp", "Data")),
                 d => d.EditorId == "NotANumber");
+            Assert.Null(manager.ActiveFilter);
+            var cleared = Assert.Single(notifications.Notifications.OfType<RecordFilterClearedNotification>());
+            Assert.Equal("filter.sql", cleared.Source);
+            Assert.Contains("NotANumber", cleared.Reason, StringComparison.Ordinal);
+            var listing = manager.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            Assert.Equal(2, listing.Total);
         }
     }
 

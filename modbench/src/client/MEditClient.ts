@@ -41,7 +41,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 
 const NOTIFICATION_KINDS = [
   'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'external-change',
-  'plugin-source-unreadable',
+  'plugin-source-unreadable', 'record-filter-cleared',
 ] as const;
 
 /** The wire's kinds, narrowed from the schema's honest `string` for a typed `onNotification` call
@@ -55,6 +55,7 @@ export interface NotificationPayloads {
   'track-progress': TrackStatus;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'plugin-source-unreadable': { plugins: PluginAddress[] };
+  'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
   'rows-changed': { plugin: PluginAddress; keys: string[] };
   'plugin-changed': { plugin: PluginAddress };
 }

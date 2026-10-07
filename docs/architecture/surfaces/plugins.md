@@ -114,6 +114,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 4. When another window holds the instance's index, every row to expand to the error row naming that, never to "Still indexing…" for ever. Source: Never silently wrong
 5. When the record filter matches nothing, a message saying so, naming its source. Source: common, The name filter, story 6
 6. When indexing the snapshot fails, the view's message line to name the failure, with one line in the Output. A row whose plugin was not reached expands to the error row naming the failure, never to "Still indexing…" for ever. The plugins read before the failure keep their records, and the next change to the instance tries again.
+7. When the record filter cannot apply again after a change to the index, the filter cleared and every record shown, with a notification naming its source and the database's reason. Source: Never silently wrong
 
 ## Menus and keys
 

@@ -949,6 +949,7 @@ export interface components {
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
             trackProgress?: components["schemas"]["TrackProgress"] | null;
             changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
+            recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
         };
         PathHop: {
             kind: string;
@@ -1146,6 +1147,10 @@ export interface components {
         };
         RecordFile: {
             path?: string | null;
+        };
+        RecordFilterClearedNotification: {
+            source: string;
+            reason: string;
         };
         RecordSummary: {
             formKey: string;
