@@ -146,9 +146,8 @@ function createLauncher(wire: LoadOrderWire, announce: (launched: Promise<Launch
 export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
   const slot = createSendSlot(wire);
   let newestHanded: LoadOrderSnapshot | undefined;
-  // The snapshot mEdit could not be brought up for, or went down with past its restarts. The same
-  // one again launches nothing: a recompute lands at every focus regain, and only a change can fix
-  // a failed launch (ADR-0019: a toast the user learns to dismiss recreates silence).
+  // The snapshot mEdit went down with. The same one again launches nothing: a recompute lands at
+  // every focus regain (ADR-0019: a toast the user learns to dismiss recreates silence).
   let downWith: string | undefined;
   let wentAway = false;
   const resent = listeners<[LoadOrderSnapshot, LoadOrderOutcome]>();
