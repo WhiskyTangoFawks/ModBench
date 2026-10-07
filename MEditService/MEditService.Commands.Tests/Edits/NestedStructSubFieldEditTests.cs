@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -82,23 +81,16 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
         Assert.Contains("\"CollectionIndex\": 2", body, StringComparison.Ordinal);
     }
 
-    private sealed class FactionFixture : IDisposable
+    private sealed class FactionFixture : TestInstance
     {
         private const string PluginName = "Faction642.esp";
         private const string Origin = "Faction642Mod";
 
-        private readonly ScratchDirectory _modFolder = new("medit-642-mod-");
-        private readonly ScratchDirectory _gameDirectory = new("medit-642-game-");
-
-        public PluginAddress Plugin { get; } = new(PluginName, Origin);
-        public LoadOrderSnapshot LoadOrder { get; }
-        public TestEditor EditHandler { get; }
+        public PluginAddress Plugin { get; }
         public FormKey Faction { get; }
 
         public FactionFixture()
         {
-            var holder = new LoadOrderHolder();
-            var pluginPath = Path.Combine(_modFolder, PluginName);
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
             var faction = mod.Factions.AddNew("Faction642");
@@ -114,24 +106,11 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
             };
             Faction = faction.FormKey;
 
-            TrackedTemplates.WriteTracked(_modFolder, mod);
-
-            LoadOrder = SnapshotPlugins.Snapshot(
-                _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-                [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-
-            holder.Apply(LoadOrder);
-            EditHandler = TestEditService.EditHandler(holder);
+            Plugin = Add(mod, Origin);
         }
 
         public TestEditor Service() => EditHandler;
 
-        public string Body() => TrackedTree.Body(_modFolder, Plugin, Faction.ToString());
-
-        public void Dispose()
-        {
-            _modFolder.Dispose();
-            _gameDirectory.Dispose();
-        }
+        public string Body() => TrackedTree.Body(ModFolderOf(Plugin), Plugin, Faction.ToString());
     }
 }

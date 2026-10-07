@@ -308,7 +308,7 @@ internal static class DocumentEdit
     // record header edit (editor-fields.md § Partial Form), as does the flag itself.
     private static RecordEditResult? RefuseIfPartialForm(JsonObject record, RecordTableSchema schema, Cursor cursor, string spelled)
     {
-        if (schema.IsHeader || !PartialFormFlag.IsSet(JsonSerializer.SerializeToElement(record), schema.RecordType)) return null;
+        if (!schema.IsPartialForm(JsonSerializer.SerializeToElement(record))) return null;
         if (cursor.Column.Field.IsEditorId || cursor.Column.Field.IsRecordHeaderMember) return null;
         return RecordEditResult.RefusedAt(
             RecordEditRefusal.PartialFormFieldReadOnly, spelled,
