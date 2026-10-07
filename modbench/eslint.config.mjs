@@ -213,9 +213,8 @@ export default defineConfig(
         },
     },
 
-    // The reporter and the dialog are the two adapters that own a message API. Tests are out of
-    // scope: the integration suite swaps the real API out to observe that a toast reached the
-    // user. Each exemption below restates the whole list, as a later block replaces an earlier one's.
+    // The reporter and the dialog own a message API; tests swap it out to observe a toast.
+    // Each exemption below restates the whole list: a later block replaces an earlier one's.
     {
         files: ['webview/src/**/*.{ts,tsx}'],
         ignores: ['webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**'],
