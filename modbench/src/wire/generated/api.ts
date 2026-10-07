@@ -700,6 +700,7 @@ export interface components {
             hasParseFailure: boolean;
             parseDiagnosis?: string | null;
             hasChildren: boolean;
+            workingTreeState: components["schemas"]["WorkingTreeState"];
         };
         ChangedPlugin: {
             name: string;
@@ -714,6 +715,7 @@ export interface components {
             fullName?: string | null;
             baseEditorId?: string | null;
             parseDiagnosis?: string | null;
+            workingTreeState: components["schemas"]["WorkingTreeState"];
         };
         ChildrenInDestinationsRequest: {
             records: components["schemas"]["RecordAddress"][];
@@ -1258,6 +1260,7 @@ export interface components {
             fullName?: string | null;
             parseDiagnosis?: string | null;
             hasChildren: boolean;
+            workingTreeState: components["schemas"]["WorkingTreeState"];
         };
     };
     responses: never;

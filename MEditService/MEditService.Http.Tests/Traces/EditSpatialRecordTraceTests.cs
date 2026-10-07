@@ -15,6 +15,15 @@ public sealed class EditSpatialRecordTraceTests : HostedTests
 
     private static readonly string[] Kinds = ["worldspace", "exteriorCell", "interiorCell", "exteriorRef", "interiorRef"];
 
+    private static readonly Dictionary<string, string[]> ChangedBy = new()
+    {
+        ["worldspace"] = ["worldspace"],
+        ["exteriorCell"] = ["exteriorCell"],
+        ["interiorCell"] = ["interiorCell"],
+        ["exteriorRef"] = ["exteriorRef", "exteriorCell"],
+        ["interiorRef"] = ["interiorRef", "interiorCell"],
+    };
+
     public static TheoryData<string> EveryKind => [.. Kinds];
 
     private static ScatteredFixtureData Build(Dictionary<string, string> formKeys) =>
@@ -76,7 +85,7 @@ public sealed class EditSpatialRecordTraceTests : HostedTests
 
     [Theory]
     [MemberData(nameof(EveryKind))]
-    public async Task AnEditedSpatialRecord_IsListedAsModified_AndNothingElseIs(string edited)
+    public async Task AnEditedSpatialRecord_IsListedAsModified_WithTheDocumentHoldingIt(string edited)
     {
         var formKeys = new Dictionary<string, string>();
         using var fx = Build(formKeys);
@@ -88,7 +97,9 @@ public sealed class EditSpatialRecordTraceTests : HostedTests
         (await Client.Edit(formKeys[edited], Plugin, Origin, "EditorID", "Renamed")).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
 
-        var expected = Kinds.ToDictionary(kind => kind, kind => kind == edited ? "Modified" : "None");
-        await Wire.Eventually(async () => (await States(formKeys)).SequenceEqual(expected), $"only the {edited} listed as Modified");
+        var expected = Kinds.ToDictionary(kind => kind, kind => ChangedBy[edited].Contains(kind) ? "Modified" : "None");
+        await Wire.Eventually(
+            async () => (await States(formKeys)).SequenceEqual(expected),
+            $"the {edited} and the document holding it listed as Modified");
     }
 }
