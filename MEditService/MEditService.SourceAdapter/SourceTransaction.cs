@@ -4,7 +4,7 @@ namespace MEditService.SourceAdapter;
 
 /// <summary>Why a rollback left a path as it stood. Every value is a preserved outcome except
 /// <see cref="RestoreFailed"/>, the one that reports damage rather than deference.</summary>
-public enum UnrestoredReason
+internal enum UnrestoredReason
 {
     /// <summary>Something else has written the file since this action did; its bytes are left alone.</summary>
     ChangedByAnother,
@@ -23,25 +23,28 @@ public enum UnrestoredReason
 
 /// <summary>One path a rollback left standing, relative to the mod folder as the Source Control panel
 /// lists it (ADR-0019).</summary>
-public sealed record UnrestoredPath(
-    string RelativePath, string FullPath, UnrestoredReason Reason, string? Error = null);
+internal sealed record UnrestoredPath(string RelativePath, UnrestoredReason Reason);
 
-/// <summary>Source changes across one or more repositories, applied all or restored all (commands.md,
+/// <summary>Source changes to one repository, applied all or restored all (commands.md,
 /// A failed gesture writes nothing; ADR-0003).</summary>
 public sealed class SourceTransaction
 {
+    private readonly SourceRepository _repository;
+
+    private SourceTransaction(SourceRepository repository) => _repository = repository;
+
     /// <summary>Runs <paramref name="write"/> on a new transaction. A throw puts back what it applied and is
     /// rethrown, or becomes the rollback's report when that left a path standing.</summary>
     public static void Atomically(SourceRepository repository, Action<SourceTransaction> write)
     {
-        var transaction = new SourceTransaction();
+        var transaction = new SourceTransaction(repository);
         try
         {
             write(transaction);
         }
         catch (Exception cause) when (cause is not OutOfMemoryException)
         {
-            var (unrestored, report) = transaction.Rollback(cause, repository);
+            var (unrestored, report) = transaction.Rollback(cause);
             if (unrestored.Count == 0) throw;
             throw new IOException(report, cause);
         }
@@ -49,22 +52,22 @@ public sealed class SourceTransaction
 
     /// <summary>Makes each move of <paramref name="changes"/> and then writes each document, holding what
     /// each act replaced so a later failure in this batch puts it back.</summary>
-    public void Apply(SourceRepository repository, SourceChanges changes)
+    public void Apply(SourceChanges changes)
     {
-        var (moves, documents) = changes.Under(repository);
+        var (moves, documents) = changes.Under(_repository);
         try
         {
             foreach (var (from, to) in moves)
             {
                 SourceRepositoryLayout.MoveEntry(from, to);
-                _log.Add(new EntryMove(repository.ModFolder, from, to));
+                _log.Add(new EntryMove(_repository.ModFolder, from, to));
             }
 
-            foreach (var (path, text) in documents) Write(repository.ModFolder, path, text);
+            foreach (var (path, text) in documents) Write(_repository.ModFolder, path, text);
         }
         finally
         {
-            repository.Locator.Forget();
+            _repository.Locator.Forget();
         }
     }
 
@@ -107,10 +110,8 @@ public sealed class SourceTransaction
         if (minted.Count > 0) _log.Add(new MintedDirectories(modFolder, minted));
     }
 
-    /// <summary>Puts every recorded act back, most recent first, so a name this action took is vacated
-    /// before an earlier act moves back into it. A restore failure is collected, never thrown
-    /// (ADR-0019).</summary>
-    internal IReadOnlyList<UnrestoredPath> Rollback()
+    // A restore failure is collected, never thrown (ADR-0019).
+    private List<UnrestoredPath> UndoLog()
     {
         var unrestored = new List<UnrestoredPath>();
         for (var i = _log.Count - 1; i >= 0; i--)
@@ -132,21 +133,17 @@ public sealed class SourceTransaction
         return unrestored;
     }
 
-    /// <summary>Rolls back, then reports what it left standing and <paramref name="cause"/>'s message, with
-    /// every mod folder this batch touched stripped out, so a report reads the same whichever tree the fault
-    /// named.</summary>
-    public (IReadOnlyList<UnrestoredPath> Unrestored, string Report) Rollback(
-        Exception cause, SourceRepository repository)
+    private (List<UnrestoredPath> Unrestored, string Report) Rollback(Exception cause)
     {
-        var unrestored = Rollback();
-        var modFolders = _log.Select(op => op.ModFolder).Append(repository.ModFolder).Distinct().ToList();
+        var unrestored = UndoLog();
+        var modFolders = _log.Select(op => op.ModFolder).Append(_repository.ModFolder).Distinct().ToList();
         var relativeError = modFolders
             .OrderByDescending(f => f.Length)
             .Aggregate(cause.Message, (text, folder) => text.Replace(folder + Path.DirectorySeparatorChar, "", StringComparison.Ordinal));
         return (unrestored, Report(unrestored, relativeError));
     }
 
-    private static string Report(IReadOnlyList<UnrestoredPath> unrestored, string relativeError)
+    private static string Report(List<UnrestoredPath> unrestored, string relativeError)
     {
         var sentences = new List<string>
         {
@@ -170,7 +167,7 @@ public sealed class SourceTransaction
         return string.Join(" ", sentences);
     }
 
-    private static string? NamedPaths(IReadOnlyList<UnrestoredPath> unrestored, UnrestoredReason reason, string phrase)
+    private static string? NamedPaths(List<UnrestoredPath> unrestored, UnrestoredReason reason, string phrase)
     {
         var named = unrestored.Where(u => u.Reason == reason).Select(u => u.RelativePath).ToList();
         return named.Count == 0 ? null : $"{string.Join(", ", named)} — {phrase}.";
@@ -182,8 +179,7 @@ public sealed class SourceTransaction
         // the read failed would have the rollback delete a file it never created.
         if (ReferenceEquals(file.Before, Unreadable) || ReferenceEquals(file.After, Unreadable))
         {
-            unrestored.Add(Named(file.ModFolder, file.Path, UnrestoredReason.RestoreFailed,
-                "its content could not be read while this change wrote it, so there is nothing to compare against"));
+            unrestored.Add(Named(file.ModFolder, file.Path, UnrestoredReason.RestoreFailed));
             return;
         }
 
@@ -195,8 +191,7 @@ public sealed class SourceTransaction
         if (ReferenceEquals(current, Unreadable))
         {
             // By reference: Unreadable is a zero-length array and would compare equal to a legitimately empty file.
-            unrestored.Add(Named(file.ModFolder, file.Path, UnrestoredReason.RestoreFailed,
-                "it could not be read, so there is no way to tell whether it still holds what this change wrote"));
+            unrestored.Add(Named(file.ModFolder, file.Path, UnrestoredReason.RestoreFailed));
             return;
         }
 
@@ -214,7 +209,7 @@ public sealed class SourceTransaction
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            unrestored.Add(Named(file.ModFolder, file.Path, UnrestoredReason.RestoreFailed, ex.Message));
+            unrestored.Add(Named(file.ModFolder, file.Path, UnrestoredReason.RestoreFailed));
         }
     }
 
@@ -238,12 +233,12 @@ public sealed class SourceTransaction
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            unrestored.Add(Named(move.ModFolder, move.From, UnrestoredReason.RestoreFailed, ex.Message));
+            unrestored.Add(Named(move.ModFolder, move.From, UnrestoredReason.RestoreFailed));
         }
     }
 
-    private static UnrestoredPath Named(string modFolder, string path, UnrestoredReason reason, string? error = null) =>
-        new(System.IO.Path.GetRelativePath(modFolder, path), path, reason, error);
+    private static UnrestoredPath Named(string modFolder, string path, UnrestoredReason reason) =>
+        new(System.IO.Path.GetRelativePath(modFolder, path), reason);
 
     private static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
 

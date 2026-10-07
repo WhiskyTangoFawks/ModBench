@@ -93,11 +93,13 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         InTheTree(Worldspace, "wrld");
         var before = TreeSnapshot.Of(_modFolder);
 
-        var transaction = new SourceTransaction();
-        transaction.PutInWorldspace(Repository, Plugin, ACellAt("9, -9"), Worldspace);
+        var left = TransactionRollback.After(Repository, transaction =>
+        {
+            transaction.PutInWorldspace(Repository, Plugin, ACellAt("9, -9"), Worldspace);
+            Assert.NotEqual(before, TreeSnapshot.Of(_modFolder));
+        });
 
-        Assert.NotEqual(before, TreeSnapshot.Of(_modFolder));
-        Assert.Empty(transaction.Undo(Repository));
+        Assert.Null(left);
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 

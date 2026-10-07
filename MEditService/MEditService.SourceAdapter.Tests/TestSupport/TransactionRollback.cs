@@ -2,7 +2,29 @@ namespace MEditService.SourceAdapter.Tests.TestSupport;
 
 internal static class TransactionRollback
 {
-    /// <summary>Puts every recorded act back, as a failed gesture would, and answers the paths left standing.</summary>
-    internal static IReadOnlyList<UnrestoredPath> Undo(this SourceTransaction transaction, SourceRepository repository) =>
-        transaction.Rollback(new InvalidOperationException("the batch failed"), repository).Unrestored;
+    private sealed class BatchFailed() : Exception("the batch failed");
+
+    /// <summary>Runs <paramref name="acts"/> in a transaction, then fails the gesture. Answers the report of
+    /// what the rollback left standing, or null when it left nothing.</summary>
+    internal static string? After(SourceRepository repository, Action<SourceTransaction> acts)
+    {
+        try
+        {
+            SourceTransaction.Atomically(repository, transaction =>
+            {
+                acts(transaction);
+                throw new BatchFailed();
+            });
+        }
+        catch (BatchFailed)
+        {
+            return null;
+        }
+        catch (IOException report) when (report.InnerException is BatchFailed)
+        {
+            return report.Message;
+        }
+
+        throw new InvalidOperationException("The transaction did not fail.");
+    }
 }

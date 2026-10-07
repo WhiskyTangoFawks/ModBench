@@ -98,8 +98,8 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         var repository = TrackedMods.RepositoryOf(fixture.Entry);
         var identity = new RecordIdentity(fixture.Worldspace, current.RecordType, current.EditorId);
         var carrying = repository.ContainerDocument(fixture.Plugin, identity, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)).Require();
-        new SourceTransaction().Apply(
-            repository, repository.ChangesToRekey(fixture.Plugin, carrying, identity, newWorldspaceKey, rekeying));
+        SourceTransaction.Atomically(repository, transaction => transaction.Apply(
+            repository.ChangesToRekey(fixture.Plugin, carrying, identity, newWorldspaceKey, rekeying)));
     }
 
     private static void RederiveTheWholePluginBecauseParentWorldspaceIsDerivedByWalkingTheWholeBlockTree(OneExteriorCellWorldspaceFixture fixture)
