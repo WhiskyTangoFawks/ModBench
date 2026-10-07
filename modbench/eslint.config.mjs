@@ -33,10 +33,10 @@ const MESSAGE_API_SITES = [
 
 const PATHLESS_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'drivingLib', 'instanceLoader'];
 
-const DRIVING_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'sourceLanguage', 'drivingLib'];
+export const DRIVING_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'sourceLanguage', 'drivingLib'];
 const PACKAGE_BOXES = ['client', 'sourceLanguage'];
 const CLIENT_BOXES = ['client', 'plugins', 'editor', 'sourceLanguage', 'instanceCommands', 'pluginsCommands'];
-const BOXES = [
+export const BOXES = [
     ...DRIVING_BOXES,
     'modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install',
     'loadOrderFileCodec', 'wire', 'tables', 'ports',
@@ -89,11 +89,12 @@ const SYNTAX = {
     send: [{ selector: 'CallExpression[callee.property.name=\'send\']', message: 'Only instance commands\' loadOrder.ts sends a load order.' }],
     putMember: [{ selector: 'CallExpression[callee.property.name=\'putLoadOrder\']', message: 'Only the load-order sender hands the client a load order.' }],
     putBare: [{ selector: 'CallExpression[callee.name=\'putLoadOrder\']', message: 'Only instance commands hand the client a load order.' }],
+    typeImport: [{ selector: 'TSImportType', message: 'A type is imported by an import declaration, which no-restricted-imports checks; `import(\'x\')` in a type position evades it.' }],
     hostFs: [{ selector: 'MemberExpression[object.property.name=\'workspace\'][property.name=\'fs\']', message: 'A view reads no file: the host file system is the Instance adapter\'s.' }],
     activation: ACTIVATION_DECIDES_SELECTORS.map((selector) => ({ selector, message: ACTIVATION_DECIDES_MESSAGE })),
 };
 /** @type {(keyof typeof SYNTAX)[]} */
-const EVERYWHERE_IN_SRC = ['message', 'watcher', 'send', 'putMember', 'putBare'];
+const EVERYWHERE_IN_SRC = ['message', 'watcher', 'send', 'putMember', 'putBare', 'typeImport'];
 /** @param {(keyof typeof SYNTAX)[]} concerns */
 const restrictedSyntax = (concerns) => ['error', ...concerns.flatMap((concern) => SYNTAX[concern])];
 /** @param {(keyof typeof SYNTAX)[]} exempt */
@@ -312,6 +313,8 @@ export default defineConfig(
                     './src/downloads/tsconfig.json',
                     './src/plugins/tsconfig.json',
                     './src/editor/tsconfig.json',
+                    './src/toolbox/tsconfig.json',
+                    './src/sourceLanguage/tsconfig.json',
                 ],
                 tsconfigRootDir: import.meta.dirname,
             },
