@@ -54,21 +54,20 @@ public sealed class SourceTransaction
     /// each act replaced so a later failure in this batch puts it back.</summary>
     public void Apply(SourceChanges changes)
     {
-        var repository = _repository;
-        var (moves, documents) = changes.Under(repository);
+        var (moves, documents) = changes.Under(_repository);
         try
         {
             foreach (var (from, to) in moves)
             {
                 SourceRepositoryLayout.MoveEntry(from, to);
-                _log.Add(new EntryMove(repository.ModFolder, from, to));
+                _log.Add(new EntryMove(_repository.ModFolder, from, to));
             }
 
-            foreach (var (path, text) in documents) Write(repository.ModFolder, path, text);
+            foreach (var (path, text) in documents) Write(_repository.ModFolder, path, text);
         }
         finally
         {
-            repository.Locator.Forget();
+            _repository.Locator.Forget();
         }
     }
 
