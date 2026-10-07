@@ -33,7 +33,7 @@ import {
   CHILD_RECORD_SCHEME, RENDERED_DOCUMENT_SCHEME, copyDocument, copyOf, recordDocument, type RecordCopy, type RecordDocument,
 } from '../drivingLib/recordDocument';
 import { errorMessage } from '../ports/errorMessage';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ViewState } from '../wire/messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type ViewState } from '../wire/messages';
 
 export interface EditorCommandDeps {
   context: Pick<vscode.ExtensionContext, 'extensionUri'>;
@@ -103,6 +103,8 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   // The copy each tab's document holds, once it is shown.
   private readonly shown = new Map<vscode.WebviewPanel, { uri: vscode.Uri; plugin: PluginAddress }>();
   private readonly places = new Map<vscode.WebviewPanel, ViewState>();
+  // A tab's page listens once it asks its first read, so a message posted before it is lost.
+  private readonly listening = new Map<vscode.WebviewPanel, Promise<void>>();
   private readonly moved = new Map<string, MovedTab>();
   // The copies mEdit reported changed while the child records' tabs were following theirs.
   private toFollow: CopyChanged | undefined;
@@ -127,7 +129,8 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     // is active now (editor.md, Opening, story 3).
     for (const [panel, document] of this.documentOf) {
       if (document === key && panel.active) {
-        void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] } satisfies ExtensionToWebview);
+        void this.listening.get(panel)?.then(() => panel.webview.postMessage(
+          { type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] } satisfies ExtensionToWebview));
       }
     }
   }
@@ -276,7 +279,14 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
 
   private show(panel: vscode.WebviewPanel, uri: vscode.Uri, page: GridPage, tab: Omit<TabDocument, 'keepViewState'>): void {
     this.shown.set(panel, { uri, plugin: tab.plugin });
-    panel.onDidDispose(() => { this.shown.delete(panel); this.places.delete(panel); });
+    panel.onDidDispose(() => { this.shown.delete(panel); this.places.delete(panel); this.listening.delete(panel); });
+    this.listening.set(panel, new Promise((listens) => {
+      const asked = panel.webview.onDidReceiveMessage((message: unknown) => {
+        if (typeof message !== 'object' || message === null || !('type' in message) || message.type !== WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD) return;
+        asked.dispose();
+        listens();
+      });
+    }));
     showRecord(this.deps, panel, uri, page, { ...tab, keepViewState: (place) => { this.places.set(panel, place); } });
   }
 }

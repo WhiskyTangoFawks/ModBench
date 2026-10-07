@@ -741,8 +741,9 @@ describe('a child record of a tracked plugin', () => {
     const childGroup = () => present(vscode.window.tabGroups.all.find((group) => group.viewColumn === vscode.ViewColumn.One), 'the children\'s group');
     const shows = (tab: vscode.Tab | undefined) =>
       tab?.input instanceof vscode.TabInputCustom ? [tab.input.uri.path, new URLSearchParams(tab.input.uri.query).get('formKey')] : [];
-    await waitFor('both children\'s tabs on the file that carries them now', () =>
-      childGroup().tabs.length === 2 && childGroup().tabs.every((tab) => shows(tab)[0] === vscode.Uri.file(OTHER_CELL).path));
+    await waitFor('both children\'s tabs on the file that carries them now, the focus back beside them', () =>
+      childGroup().tabs.length === 2 && childGroup().tabs.every((tab) => shows(tab)[0] === vscode.Uri.file(OTHER_CELL).path)
+      && vscode.window.tabGroups.activeTabGroup.viewColumn === vscode.ViewColumn.Two);
     assert.deepStrictEqual(childGroup().tabs.map((tab) => shows(tab)[1]).sort(), [CHILD_FORM_KEY, SECOND_CHILD_FORM_KEY]);
     assert.deepStrictEqual(shows(childGroup().activeTab), [vscode.Uri.file(OTHER_CELL).path, SECOND_CHILD_FORM_KEY]);
     assert.strictEqual(vscode.window.tabGroups.activeTabGroup.viewColumn, vscode.ViewColumn.Two);
