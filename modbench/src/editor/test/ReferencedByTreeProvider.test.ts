@@ -6,19 +6,21 @@ vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, EventEmitter, The
 
 import {
   ReferencedByTreeProvider,
-  ReferencedByReferrerNode,
   ReferencedByHolderNode,
   allHolders,
-  referencedByCopyText,
   referencedByCopyValueText,
+  type ReferencedByTreeNode,
   REFERENCED_BY_VIEW,
 } from '../ReferencedByTreeProvider';
-import { ErrorNode } from '../../drivingLib/errorNode';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordArgument } from '../recordLifecycleCommands';
 import { expectInstancesOf } from '../../test/expectInstanceOf';
 import type { ReferenceResult } from '../../client';
 import { present } from '../../ports/present';
+
+function copiedFrom(selected: readonly ReferencedByTreeNode[]): string | undefined {
+  return referencedByCopyValueText({ selection: [] }, selected[0], selected);
+}
 
 function reference(overrides: Partial<ReferenceResult> & { formKey: string }): ReferenceResult {
   return {
@@ -83,7 +85,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     client.setQueryFailure('getReferences', new Error('boom'));
     const provider = new ReferencedByTreeProvider(client, log);
     provider.showFor('000001:Fallout4.esm');
-    const [error, ...rest] = expectInstancesOf(await provider.getChildren(), ErrorNode);
+    const [error, ...rest] = await provider.getChildren();
     expect(rest).toEqual([]);
     expect(error?.label).toBe('Failed to load: boom');
     expect(error?.tooltip).toBe('boom');
@@ -99,7 +101,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     await provider.getChildren();
     client.setQueryFailure('getReferences', new Error('boom'));
     client.emit(rowsChanged());
-    expect(expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode)).toHaveLength(1);
+    expect(await provider.getChildren()).toHaveLength(1);
     expect(provider.viewMessage()).toBe('Showing the last good read: boom');
     expect(provider.count()).toBe(1);
   });
@@ -162,7 +164,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     const client = makeClient([reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' })]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [referrer] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
+    const [referrer] = await provider.getChildren();
     expect(referrer?.label).toBe('TestNPC');
     expect(referrer?.description).toBe('Non-Player Character');
     expect(referrer?.iconPath).toBeUndefined();
@@ -173,9 +175,9 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     const client = makeClient([reference({ formKey: '000002:Fallout4.esm' })]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [referrer] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
+    const [referrer] = await provider.getChildren();
     expect(referrer?.label).toBe('000002:Fallout4.esm');
-    expect(referrer?.copyText).toBe('000002:Fallout4.esm');
+    expect(copiedFrom([present(referrer, 'the referrer')])).toBe('000002:Fallout4.esm');
   });
 
   it('lists a referrer held in several plugins once, saying how many hold it', async () => {
@@ -185,7 +187,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     ]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const referrers = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
+    const referrers = await provider.getChildren();
     expect(referrers).toHaveLength(1);
     expect(referrers[0]?.description).toBe('Non-Player Character · 2 plugins');
   });
@@ -197,7 +199,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     ]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [referrer] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
+    const [referrer] = await provider.getChildren();
     expect(referrer?.description).toBe('Non-Player Character');
   });
 
@@ -215,7 +217,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     const client = makeClient([reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' })]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [referrer] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
+    const [referrer] = await provider.getChildren();
     expect(present(referrer, 'the referrer').command).toEqual({
       command: 'modbench.record.open',
       title: 'Open Record',
@@ -238,9 +240,9 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     const client = makeClient([reference({ formKey: '000002:Fallout4.esm' })]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [first] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
+    const [first] = await provider.getChildren();
     provider.showFor('000009:Fallout4.esm');
-    const [second] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
+    const [second] = await provider.getChildren();
     expect(first?.id).not.toBe(second?.id);
   });
 });
@@ -254,7 +256,7 @@ describe('ReferencedByTreeProvider — a referrer\'s children (where it is held)
     ]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [referrer] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
+    const [referrer] = await provider.getChildren();
     const holders = expectInstancesOf(await provider.getChildren(present(referrer, 'the referrer')), ReferencedByHolderNode);
     expect(holders.map(h => [h.label, h.description])).toEqual([
       ['Fallout4.esm', 'Keywords[0], Keywords[1]'],
@@ -270,7 +272,7 @@ describe('ReferencedByTreeProvider — a referrer\'s children (where it is held)
     ]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [referrer] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
+    const [referrer] = await provider.getChildren();
     const holders = expectInstancesOf(await provider.getChildren(present(referrer, 'the referrer')), ReferencedByHolderNode);
     expect(holders.map(h => h.origin)).toEqual(['ModA', 'ModB']);
     expect(new Set(holders.map(h => h.id)).size).toBe(2);
@@ -282,7 +284,7 @@ describe('ReferencedByTreeProvider — a referrer\'s children (where it is held)
     ]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [referrer] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
+    const [referrer] = await provider.getChildren();
     const [holder] = expectInstancesOf(await provider.getChildren(present(referrer, 'the referrer')), ReferencedByHolderNode);
     expect(recordArgument(holder)).toEqual({ formKey: '000002:Fallout4.esm', plugin: 'MyMod.esp', origin: 'MyMod', editorId: 'TestNPC' });
   });
@@ -293,7 +295,7 @@ describe('allHolders — the selection copy and delete act on', () => {
     const client = makeClient([reference({ formKey: '000002:Fallout4.esm' })]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [referrer] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
+    const [referrer] = await provider.getChildren();
     const holders = await provider.getChildren(present(referrer, 'the referrer'));
     expect(allHolders(holders)).toBe(true);
     expect(allHolders([...holders, present(referrer, 'the referrer')])).toBe(false);
@@ -309,7 +311,7 @@ describe('ReferencedByTreeProvider — order and filter', () => {
     reference({ formKey: '000005:Fallout4.esm', recordTypeName: 'Armor' }),
   ];
   const labels = async (provider: ReferencedByTreeProvider) =>
-    expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode).map((r) => r.label);
+    (await provider.getChildren()).map((r) => r.label);
 
   it('sorts referrers by record type, then by label, and reverses on the toggle', async () => {
     const provider = new ReferencedByTreeProvider(makeClient(referrers));
@@ -353,80 +355,74 @@ describe('ReferencedByTreeProvider — order and filter', () => {
   });
 });
 
-describe('referencedByCopyText — the clipboard copy command\'s text', () => {
-  it('returns empty text for an empty selection', () => {
-    expect(referencedByCopyText([])).toBe('');
-  });
+describe('copy value — the text of the selected referrers', () => {
+  async function rowsOver(references: ReferenceResult[]) {
+    const provider = new ReferencedByTreeProvider(makeClient(references));
+    provider.showFor('000001:Fallout4.esm');
+    return { provider, referrers: await provider.getChildren() };
+  }
 
   it("copies a single selected referrer as EditorID [FormKey]", async () => {
-    const client = makeClient([reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' })]);
-    const provider = new ReferencedByTreeProvider(client);
-    provider.showFor('000001:Fallout4.esm');
-    const [referrer] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
-    expect(referencedByCopyText([present(referrer, 'the single referrer')])).toBe('TestNPC [000002:Fallout4.esm]');
+    const { referrers } = await rowsOver([reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' })]);
+    expect(copiedFrom(referrers)).toBe('TestNPC [000002:Fallout4.esm]');
   });
 
   it('joins multiple selected referrers one per line, in selection order', async () => {
-    const client = makeClient([
+    const { referrers: [first, second] } = await rowsOver([
       reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' }),
       reference({ formKey: '000003:Fallout4.esm', editorId: 'OtherNPC', fieldPath: 'Template' }),
     ]);
-    const provider = new ReferencedByTreeProvider(client);
-    provider.showFor('000001:Fallout4.esm');
-    const [first, second] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
-    const firstReferrer = present(first, 'the first referrer');
-    const secondReferrer = present(second, 'the second referrer');
-    expect(referencedByCopyText([secondReferrer, firstReferrer])).toBe('TestNPC [000002:Fallout4.esm]\nOtherNPC [000003:Fallout4.esm]');
+    expect(copiedFrom([present(second, 'the second referrer'), present(first, 'the first referrer')]))
+      .toBe('TestNPC [000002:Fallout4.esm]\nOtherNPC [000003:Fallout4.esm]');
   });
 
   it('adds nothing for a selected row beneath a referrer', async () => {
-    const client = makeClient([
+    const { provider, referrers: [referrer] } = await rowsOver([
       reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC', plugin: 'Fallout4.esm', fieldPath: 'DefaultOutfit' }),
     ]);
-    const provider = new ReferencedByTreeProvider(client);
-    provider.showFor('000001:Fallout4.esm');
-    const [referrer] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
-    const [copy] = expectInstancesOf(await provider.getChildren(referrer), ReferencedByHolderNode);
-    expect(referencedByCopyText([
-      present(referrer, 'the referrer'), present(copy, 'its plugin copy'),
-    ])).toBe('TestNPC [000002:Fallout4.esm]');
+    const [copy] = await provider.getChildren(present(referrer, 'the referrer'));
+    expect(copiedFrom([present(referrer, 'the referrer'), present(copy, 'its plugin copy')])).toBe('TestNPC [000002:Fallout4.esm]');
   });
 
-  it('returns empty text when only a row beneath a referrer is selected', async () => {
-    const client = makeClient([reference({ formKey: '000002:Fallout4.esm', plugin: 'Fallout4.esm', fieldPath: 'DefaultOutfit' })]);
-    const provider = new ReferencedByTreeProvider(client);
-    provider.showFor('000001:Fallout4.esm');
-    const [referrer] = expectInstancesOf(await provider.getChildren(), ReferencedByReferrerNode);
-    const [copy] = expectInstancesOf(await provider.getChildren(referrer), ReferencedByHolderNode);
-    expect(referencedByCopyText([present(copy, 'the plugin copy')])).toBe('');
+  it('returns empty text when only a row beneath a referrer is selected in the view', async () => {
+    const { provider, referrers: [referrer] } = await rowsOver([
+      reference({ formKey: '000002:Fallout4.esm', plugin: 'Fallout4.esm', fieldPath: 'DefaultOutfit' }),
+    ]);
+    const [copy] = await provider.getChildren(present(referrer, 'the referrer'));
+    expect(referencedByCopyValueText({ selection: [present(copy, 'the plugin copy')] }, { view: REFERENCED_BY_VIEW }, undefined)).toBe('');
   });
 });
 
 describe('referencedByCopyValueText — Referenced By\'s own text for the shared copy value id', () => {
-  const referrer = (formKey = '000001:Fallout4.esm') => new ReferencedByReferrerNode('000009:Fallout4.esm', formKey, 'Named', 'Weapon', []);
+  async function referrer(formKey = '000001:Fallout4.esm') {
+    const provider = new ReferencedByTreeProvider(makeClient([reference({ formKey, editorId: 'Named', recordTypeName: 'Weapon' })]));
+    provider.showFor('000009:Fallout4.esm');
+    return present((await provider.getChildren())[0], 'the referrer');
+  }
+  const copyText = (formKey: string) => `Named [${formKey}]`;
 
-  it('prefers the selection VS Code hands a context menu over the view\'s own selection', () => {
-    const clicked = referrer();
-    const stale = referrer('000002:Fallout4.esm');
-    expect(referencedByCopyValueText({ selection: [stale] }, clicked, [clicked])).toBe(clicked.copyText);
+  it('prefers the selection VS Code hands a context menu over the view\'s own selection', async () => {
+    const clicked = await referrer();
+    const stale = await referrer('000002:Fallout4.esm');
+    expect(referencedByCopyValueText({ selection: [stale] }, clicked, [clicked])).toBe(copyText('000001:Fallout4.esm'));
   });
 
-  it('copies the view\'s own current selection for its Ctrl+C, which names the view', () => {
-    const row = referrer();
-    expect(referencedByCopyValueText({ selection: [row] }, { view: REFERENCED_BY_VIEW }, undefined)).toBe(row.copyText);
+  it('copies the view\'s own current selection for its Ctrl+C, which names the view', async () => {
+    const row = await referrer();
+    expect(referencedByCopyValueText({ selection: [row] }, { view: REFERENCED_BY_VIEW }, undefined)).toBe(copyText('000001:Fallout4.esm'));
   });
 
-  it('falls back to the clicked row alone with nothing else selected', () => {
-    const row = referrer();
-    expect(referencedByCopyValueText({ selection: [] }, row, undefined)).toBe(row.copyText);
+  it('falls back to the clicked row alone with nothing else selected', async () => {
+    const row = await referrer();
+    expect(referencedByCopyValueText({ selection: [] }, row, undefined)).toBe(copyText('000001:Fallout4.esm'));
   });
 
   it('is empty text for its own Ctrl+C with nothing selected', () => {
     expect(referencedByCopyValueText({ selection: [] }, { view: REFERENCED_BY_VIEW }, undefined)).toBe('');
   });
 
-  it('defers on an invocation of another surface, so an adapter after it can run', () => {
-    const selected = { selection: [referrer()] };
+  it('defers on an invocation of another surface, so an adapter after it can run', async () => {
+    const selected = { selection: [await referrer()] };
     expect(referencedByCopyValueText(selected, undefined, undefined)).toBeUndefined();
     expect(referencedByCopyValueText(selected, { kind: 'mod' }, undefined)).toBeUndefined();
     expect(referencedByCopyValueText(selected, { view: 'modbench.modList' }, undefined)).toBeUndefined();
