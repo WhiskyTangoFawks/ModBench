@@ -78,9 +78,6 @@ const SYNTAX = {
     message: MESSAGE_API_SITES.map((selector) => ({ selector, message: SURFACING_GOES_THROUGH_THE_REPORTER })),
     watcher: ['CallExpression[callee.name=/^create\\w*Watcher$/]', 'CallExpression[callee.property.name=/^create\\w*Watcher$/]']
         .map((selector) => ({ selector, message: 'Every watcher on the instance is created inside the Instance adapter\'s watch.' })),
-    send: [{ selector: 'CallExpression[callee.property.name=\'send\']', message: 'Only instance commands\' loadOrder.ts sends a load order.' }],
-    putMember: [{ selector: 'CallExpression[callee.property.name=\'putLoadOrder\']', message: 'Only the load-order sender hands the client a load order.' }],
-    putBare: [{ selector: 'CallExpression[callee.name=\'putLoadOrder\']', message: 'Only instance commands hand the client a load order.' }],
     dynamicImport: [{ selector: 'ImportExpression', message: 'A dynamic import() evades no-restricted-imports; import at the top of the file.' }],
     typeImport: [{ selector: 'TSImportType', message: 'A type is imported by an import declaration, which no-restricted-imports checks; `import(\'x\')` in a type position evades it.' }],
     hostFs: ['MemberExpression[object.property.name=\'workspace\'][property.name=\'fs\']', 'MemberExpression[object.name=\'workspace\'][property.name=\'fs\']']
@@ -88,7 +85,7 @@ const SYNTAX = {
     activation: ACTIVATION_DECIDES_SELECTORS.map((selector) => ({ selector, message: ACTIVATION_DECIDES_MESSAGE })),
 };
 /** @type {(keyof typeof SYNTAX)[]} */
-const EVERYWHERE_IN_SRC = ['message', 'watcher', 'send', 'putMember', 'putBare', 'typeImport', 'dynamicImport'];
+const EVERYWHERE_IN_SRC = ['message', 'watcher', 'typeImport', 'dynamicImport'];
 /** @param {(keyof typeof SYNTAX)[]} concerns */
 const restrictedSyntax = (concerns) => ['error', ...concerns.flatMap((concern) => SYNTAX[concern])];
 /** @param {(keyof typeof SYNTAX)[]} exempt */
@@ -230,18 +227,6 @@ export default defineConfig(
     {
         files: ['src/instanceAdapter/mo2Watch.ts'],
         rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('watcher')) },
-    },
-    {
-        files: ['src/instanceCommands/loadOrder.ts'],
-        rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('send', 'putBare')) },
-    },
-    {
-        files: ['src/instanceCommands/editing.ts'],
-        rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('putBare')) },
-    },
-    {
-        files: ['src/client/loadOrderSender.ts'],
-        rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('putMember')) },
     },
     {
         files: ['src/downloads/**/*.ts', 'src/drivingLib/**/*.ts'],

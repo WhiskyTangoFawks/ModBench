@@ -13,7 +13,6 @@ const DISPOSABLE_PRODUCERS = [
   'createDownloadsView',
   'createPluginsView',
   'createTreeView',
-  'createLoadOrderSender',
   'onDidChangeCheckboxState',
   'registerCreateEmptyModCommand',
   'registerCreatePluginCommand',

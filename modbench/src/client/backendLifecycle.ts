@@ -2,6 +2,7 @@ import * as http from 'node:http';
 import * as net from 'node:net';
 import * as readline from 'node:readline';
 import type { BackendStatus } from './MEditClient';
+import { errorMessage } from '../ports/errorMessage';
 
 /** Which of the spawned process's two streams a line arrived on. The forwarder that levels it
  *  takes this type, so the client names no VS Code type (ADR-0019). */
@@ -66,8 +67,11 @@ export class BackendLifecycle {
   private child?: BackendProcess;
   // True between start() and stop(); an exit while true is a crash → restart.
   private expectedAlive = false;
-  // In-flight start(), so concurrent callers share it instead of double-spawning.
+  // In-flight start(), its restarts included, so concurrent callers share it instead of
+  // double-spawning.
   private startPromise?: Promise<void>;
+  // A child exited during the start in flight, which restarts it rather than settling.
+  private restartQueued = false;
   // Bumped by stop(); an in-flight start()/connect() from an older generation aborts instead of
   // resurrecting a load order the user already closed.
   private generation = 0;
@@ -90,6 +94,10 @@ export class BackendLifecycle {
 
   get status(): BackendStatus { return this._status; }
 
+  /** The start in flight, which settles once a child runs or its restarts end, and never rejects:
+   *  whoever began the start hears why it threw. */
+  get starting(): Promise<void> | undefined { return this.startPromise?.then(() => undefined, () => undefined); }
+
   /** The port the API answers on: the attached one, else the spawned backend's once start() has
    *  claimed it. */
   get port(): number | undefined { return this.attachPort ?? this.spawnPort; }
@@ -102,8 +110,22 @@ export class BackendLifecycle {
   /** Spawns this window's own backend, or waits for the one on `attachPort`. Idempotent: concurrent calls share one in-flight start, so no double-spawn. */
   start(): Promise<void> {
     this.expectedAlive = true;
-    this.startPromise ??= this.doStart().finally(() => { this.startPromise = undefined; });
+    this.startPromise ??= this.startUntilSettled().finally(() => { this.startPromise = undefined; });
     return this.startPromise;
+  }
+
+  private async startUntilSettled(): Promise<void> {
+    const gen = this.generation;
+    do {
+      this.restartQueued = false;
+      await this.doStart();
+    } while (this.isRestartQueued() && gen === this.generation);
+  }
+
+  // A direct read narrows to the `false` assigned above, since TS cannot see handleExit set it
+  // across the `await`.
+  private isRestartQueued(): boolean {
+    return this.restartQueued;
   }
 
   private async doStart(): Promise<void> {
@@ -180,18 +202,18 @@ export class BackendLifecycle {
   private handleExit(code: number | null): void {
     this.child = undefined;
     if (!this.expectedAlive) return; // stop() already handled it
-    // The process is gone now; the restart below is an attempt, not a guarantee.
-    this.setStatus('disconnected');
     if (this.restartAttempts >= BackendLifecycle.MAX_RESTARTS) {
+      this.setStatus('disconnected');
       this.log(`[backend] backend crashed ${this.restartAttempts}× — giving up`);
       return;
     }
     this.restartAttempts++;
+    // Begun before the status says disconnected, so whoever hears it finds the restart under way.
+    if (this.startPromise) this.restartQueued = true;
+    else void this.start().catch((e: unknown) => { this.log(`[backend] restart failed: ${errorMessage(e)}`); });
+    // The process is gone now; the restart is an attempt, not a guarantee.
+    this.setStatus('disconnected');
     this.log(`[backend] backend exited unexpectedly (code ${code}); restart ${this.restartAttempts}/${BackendLifecycle.MAX_RESTARTS}`);
-    const gen = this.generation;
-    void (this.startPromise ?? Promise.resolve()).then(() => {
-      if (gen === this.generation && this.expectedAlive) void this.start();
-    });
   }
 
   // A spawned child that is gone before `/health` answers is a failed start, whoever else answers
