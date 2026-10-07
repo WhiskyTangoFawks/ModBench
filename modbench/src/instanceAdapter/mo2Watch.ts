@@ -5,8 +5,7 @@ import * as vscode from 'vscode';
 import type { Subscription } from './instanceAdapter';
 import { MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, SETTINGS_WATCH_GLOB } from './layout';
 
-/** A folder the settings name, whose watch moves with them. */
-export type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList';
+type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList';
 
 function isInstanceChange(path: string): boolean {
   const segments = path.split(/[\\/]/);

@@ -10,7 +10,7 @@ import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
 import { fileInFolder, originDir, pluginsFile, profilesDir } from './layout';
 import { readOrAbsent, type Mo2Context } from './mo2Context';
 
-export type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin' | 'checkPluginRename'>;
+type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin' | 'checkPluginRename'>;
 
 interface Move {
   readonly from: string;

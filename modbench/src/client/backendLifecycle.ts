@@ -7,9 +7,7 @@ import type { BackendStatus } from './MEditClient';
  *  takes this type, so the client names no VS Code type (ADR-0019). */
 export type BackendStream = 'stdout' | 'stderr';
 
-/** Minimal view of a spawned backend process — injectable so spawn/teardown is
- *  unit-testable without a real child process. */
-export interface BackendProcess {
+interface BackendProcess {
   /** Optional signal so stop() can send SIGTERM then escalate to SIGKILL. */
   kill(signal?: NodeJS.Signals): void;
   on(event: 'exit', cb: (code: number | null) => void): void;

@@ -1,7 +1,9 @@
 // Where the game is: the setting first, then the instance's own ini, then Steam and Wine detection.
 // The user's overrides arrive from the composition root as values; nothing here reads a setting itself.
 
+import { exec } from 'node:child_process';
 import { dirname, join } from 'node:path';
+import { promisify } from 'node:util';
 import { readGameName, readGamePath } from './codecs/modOrganizerIni';
 import { gamePathInfoForRelease, gameReleaseForGame } from '../tables/gamePaths';
 import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths } from './gamePathDetector';
@@ -14,8 +16,7 @@ import { GAME_FOLDER_SETTING, type GameDirectoryOverrides, type GameFolder, type
  *  read, so a resolution can never come from a different generation than the value it lands in. */
 export type GameDirectoryResolver = (iniText: string) => Promise<GameFolder>;
 
-/** The Proton prefix root (`.../compatdata/<appid>/pfx`), or null if undeterminable. */
-export type DetectWinePrefix = () => Promise<string | null>;
+type DetectWinePrefix = () => Promise<string | null>;
 
 /** What Steam is asked, injectable so both fallbacks are testable without a Steam install. */
 export interface GameDetectors {
@@ -23,8 +24,13 @@ export interface GameDetectors {
   winePrefix: (steamAppId: string) => Promise<string | null>;
 }
 
+const execAsync = promisify(exec);
+
 const STEAM: GameDetectors = {
-  paths: (game) => detectGamePaths(process.platform, game),
+  paths: (game) =>
+    detectGamePaths(process.platform, game, () =>
+      execAsync('reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath').then((r) => r.stdout),
+    ),
   winePrefix: detectWinePrefix,
 };
 

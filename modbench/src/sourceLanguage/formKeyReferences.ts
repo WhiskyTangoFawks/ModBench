@@ -30,7 +30,7 @@ function referenceSpan(text: string, referrer: string, formKey: string): TextSpa
   return found ? { start: found.offset, end: found.offset + found.length } : { start: 0, end: 0 };
 }
 
-export interface ReferencesDeps<Document> extends RecordLocationDeps<Document> {
+interface ReferencesDeps<Document> extends RecordLocationDeps<Document> {
   client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getReferences'>;
   reporter: Pick<Reporter, 'report'>;
 }

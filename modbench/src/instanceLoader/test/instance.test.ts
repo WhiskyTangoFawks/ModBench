@@ -200,7 +200,7 @@ describe('Instance — the value', () => {
     expect(instance.sequence).toBe(0);
     expect(instance.value.mods).toEqual([]);
     expect(instance.value.plugins).toEqual([]);
-    expect(instance.value.files.size).toBe(0);
+    expect([...instance.value.files]).toEqual([]);
     expect(instance.value.filesByMod.size).toBe(0);
   });
 

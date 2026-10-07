@@ -1,1 +1,1 @@
-export { createSourceLanguage, type SourceLanguageDeps } from './sourceLanguage';
+export { createSourceLanguage } from './sourceLanguage';

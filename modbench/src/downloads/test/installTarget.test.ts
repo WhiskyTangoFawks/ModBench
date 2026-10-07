@@ -1,10 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
 
 const { createQuickPick } = vi.hoisted(() => ({ createQuickPick: vi.fn() }));
 vi.mock('vscode', () => ({ window: { createQuickPick } }));
 
-import { chooseInstallTarget, selectUpgradeCandidates } from '../installTarget';
+import { chooseInstallTarget } from '../installTarget';
 import type { DownloadRow, InstanceValue } from '../../instanceLoader/instance';
 
 const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): InstanceValue['mods'][number] => ({
@@ -18,103 +18,120 @@ const valueOf = (mods: InstanceValue['mods']): { mods: InstanceValue['mods'] } =
 const download = (over: { modID?: string; fileID?: string; name?: string }): Pick<DownloadRow, 'modID' | 'fileID' | 'name'> =>
   ({ name: 'foo.7z', ...over });
 
-describe('selectUpgradeCandidates', () => {
-  it('is empty when the download carries no mod id', () => {
+beforeEach(() => createQuickPick.mockClear());
+
+const pickDouble = () => {
+  const double = fakeQuickPick<{ label: string; description?: string }>();
+  createQuickPick.mockReturnValue(double.qp);
+  return double;
+};
+
+const offered = async (value: ReturnType<typeof valueOf>, row: Pick<DownloadRow, 'modID' | 'fileID' | 'name'>) => {
+  const double = pickDouble();
+  const result = chooseInstallTarget(value, { path: '/downloads/foo.7z', ...row }, vi.fn().mockResolvedValue(undefined));
+  if (createQuickPick.mock.calls.length === 0) {
+    await result;
+    return [];
+  }
+  await vi.waitFor(() => expect(double.qp.show).toHaveBeenCalled());
+  const upgrades = double.qp.items.slice(0, -1).map((item) => [item.label, item.description]);
+  double.escape();
+  await result;
+  return upgrades;
+};
+
+describe('the mods offered as the upgrade of a download', () => {
+  it('is empty when the download carries no mod id', async () => {
     const value = valueOf([mod({ name: 'Harder VATS', nexusId: '111' })]);
-    expect(selectUpgradeCandidates(value, download({}))).toEqual([]);
+    expect(await offered(value, download({}))).toEqual([]);
   });
 
-  it('is empty when no installed mod carries the download\'s mod id', () => {
+  it('is empty when no installed mod carries the download\'s mod id', async () => {
     const value = valueOf([mod({ name: 'Harder VATS', nexusId: '111' })]);
-    expect(selectUpgradeCandidates(value, download({ modID: '222' }))).toEqual([]);
+    expect(await offered(value, download({ modID: '222' }))).toEqual([]);
   });
 
-  it('is empty when no mod id is present, even for a mod with no nexus id of its own', () => {
+  it('is empty when no mod id is present, even for a mod with no nexus id of its own', async () => {
     const value = valueOf([mod({ name: 'A Local Mod' })]);
-    expect(selectUpgradeCandidates(value, download({}))).toEqual([]);
+    expect(await offered(value, download({}))).toEqual([]);
   });
 
-  it('flags an installedFiles file-id match as tier fileId', () => {
+  it('flags an installedFiles file-id match as tier fileId', async () => {
     const value = valueOf([
       mod({ name: 'Harder VATS', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
     ]);
-    expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999' }))).toEqual([
-      { modName: 'Harder VATS', version: '2.0', tier: 'fileId' },
+    expect(await offered(value, download({ modID: '111', fileID: '999' }))).toEqual([
+      ['Harder VATS (v2.0)', 'File ID match'],
     ]);
   });
 
-  it('lists a mod sharing only the mod id as tierless, still a candidate', () => {
+  it('lists a mod sharing only the mod id as unmarked, still a candidate', async () => {
     const value = valueOf([mod({ name: 'Harder VATS A', nexusId: '111', version: '1.0' })]);
-    expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999' }))).toEqual([
-      { modName: 'Harder VATS A', version: '1.0', tier: undefined },
+    expect(await offered(value, download({ modID: '111', fileID: '999' }))).toEqual([
+      ['Harder VATS A (v1.0)', undefined],
     ]);
   });
 
-  it('sorts a file-id match first, tierless mods after', () => {
+  it('sorts a file-id match first, unmarked mods after', async () => {
     const value = valueOf([
       mod({ name: 'No Match', nexusId: '111', version: '1.0' }),
       mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
     ]);
-    expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999' }))).toEqual([
-      { modName: 'The Match', version: '2.0', tier: 'fileId' },
-      { modName: 'No Match', version: '1.0', tier: undefined },
+    expect(await offered(value, download({ modID: '111', fileID: '999' }))).toEqual([
+      ['The Match (v2.0)', 'File ID match'],
+      ['No Match (v1.0)', undefined],
     ]);
   });
 
-  it('flags a meta.ini installationFile match naming this exact download as tier installationFile', () => {
+  it('flags a meta.ini installationFile match naming this exact download as tier installationFile', async () => {
     const value = valueOf([
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'harder-vats-v1.7z' }),
     ]);
-    expect(selectUpgradeCandidates(value, download({ modID: '111', name: 'harder-vats-v1.7z' }))).toEqual([
-      { modName: 'Harder VATS', version: '1.0', tier: 'installationFile' },
+    expect(await offered(value, download({ modID: '111', name: 'harder-vats-v1.7z' }))).toEqual([
+      ['Harder VATS (v1.0)', 'Installed from this file'],
     ]);
   });
 
-  it('compares the installationFile match case-folded, as the status does', () => {
+  it('compares the installationFile match case-folded, as the status does', async () => {
     const value = valueOf([
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'Harder-VATS-v1.7Z' }),
     ]);
-    expect(selectUpgradeCandidates(value, download({ modID: '111', name: 'harder-vats-v1.7z' }))).toEqual([
-      { modName: 'Harder VATS', version: '1.0', tier: 'installationFile' },
+    expect(await offered(value, download({ modID: '111', name: 'harder-vats-v1.7z' }))).toEqual([
+      ['Harder VATS (v1.0)', 'Installed from this file'],
     ]);
   });
 
-  it('leaves out a mod installed from this file that does not share the mod id', () => {
+  it('leaves out a mod installed from this file that does not share the mod id', async () => {
     const value = valueOf([
       mod({ name: 'Hand Installed', archiveFilename: 'foo.7z' }),
       mod({ name: 'Other Id', nexusId: '222', archiveFilename: 'foo.7z' }),
     ]);
-    expect(selectUpgradeCandidates(value, download({ modID: '111', name: 'foo.7z' }))).toEqual([]);
+    expect(await offered(value, download({ modID: '111', name: 'foo.7z' }))).toEqual([]);
   });
 
-  it('drops the installationFile tier, listing the mod tierless, when a fileId match exists elsewhere in the pool', () => {
+  it('drops the installationFile tier, listing the mod unmarked, when a fileId match exists elsewhere in the pool', async () => {
     const value = valueOf([
       mod({ name: 'By Name', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
       mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
     ]);
-    expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999', name: 'foo.7z' }))).toEqual([
-      { modName: 'By File Id', version: '2.0', tier: 'fileId' },
-      { modName: 'By Name', version: '1.0', tier: undefined },
+    expect(await offered(value, download({ modID: '111', fileID: '999', name: 'foo.7z' }))).toEqual([
+      ['By File Id (v2.0)', 'File ID match'],
+      ['By Name (v1.0)', undefined],
     ]);
   });
 
-  it('takes no fileId tier from an archiveFilename that matches the download name when its fileID is absent from installedFiles, and still flags installationFile', () => {
+  it('takes no fileId tier from an archiveFilename that matches the download name when its fileID is absent from installedFiles, and still flags installationFile', async () => {
     const value = valueOf([
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'harder-vats-v1.7z' }),
     ]);
-    expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999', name: 'harder-vats-v1.7z' }))).toEqual([
-      { modName: 'Harder VATS', version: '1.0', tier: 'installationFile' },
+    expect(await offered(value, download({ modID: '111', fileID: '999', name: 'harder-vats-v1.7z' }))).toEqual([
+      ['Harder VATS (v1.0)', 'Installed from this file'],
     ]);
   });
 });
 
 describe('chooseInstallTarget', () => {
   const row = (over: { modID?: string }) => ({ name: 'foo.7z', path: '/downloads/foo.7z', ...over });
-  const pickDouble = () => {
-    const double = fakeQuickPick<{ label: string }>();
-    createQuickPick.mockReturnValue(double.qp);
-    return double;
-  };
 
   it('asks for a new mod name, with no pick, when no mod shares the mod id', async () => {
     const nameNewMod = vi.fn().mockResolvedValue('Foo');

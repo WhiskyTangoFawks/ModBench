@@ -38,7 +38,7 @@ export const holdsNoCopy = ({ formKey, plugin }: RecordCopy): string =>
 
 // The path is what VS Code shows: its last segment titles the tab, and the plugin's segments
 // before it tell apart two copies of one name.
-export function renderedDocumentUri(copy: RecordCopy, fileName: string): vscode.Uri {
+function renderedDocumentUri(copy: RecordCopy, fileName: string): vscode.Uri {
   return vscode.Uri.from({
     scheme: RENDERED_DOCUMENT_SCHEME, path: `/${copy.plugin.origin}/${copy.plugin.name}/${fileName}`, query: copyQuery(copy),
   });
@@ -46,7 +46,7 @@ export function renderedDocumentUri(copy: RecordCopy, fileName: string): vscode.
 
 // The path is the container's file, so VS Code shows where the child lives; the query tells two
 // children of one file apart.
-export const childRecordUri = (copy: RecordCopy, containerFile: string): vscode.Uri =>
+const childRecordUri = (copy: RecordCopy, containerFile: string): vscode.Uri =>
   vscode.Uri.file(containerFile).with({ scheme: CHILD_RECORD_SCHEME, query: copyQuery(copy) });
 
 /** The document a record opens as (editor.md, Opening, stories 8 to 10); undefined when no active

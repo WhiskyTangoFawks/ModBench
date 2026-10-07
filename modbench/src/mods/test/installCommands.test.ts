@@ -38,7 +38,7 @@ vi.mock('../../install/install', async (importOriginal) => ({
   installFromArchive, installFromFolder,
 }));
 
-import { registerModInstallCommands, type ModInstallDeps } from '../installCommands';
+import { registerModInstallCommands } from '../installCommands';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -55,6 +55,8 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 
 const GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE ='Skyrim Special Edition';
 const ACCESS = accessTo('/instance');
+
+type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
 
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {

@@ -1,10 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
-
-const execAsync = promisify(exec);
 
 export interface GamePaths {
   dataFolder: string;
@@ -31,14 +27,12 @@ function parseLibraryFoldersVdf(content: string, appId: string): string | null {
 
 /** Takes `platform` explicitly (rather than reading `process.platform` itself) so tests can
  *  exercise both branches directly instead of stubbing global process state. */
-export async function detectGamePaths(platform: NodeJS.Platform, game: GameAutodetect): Promise<GamePaths | null> {
-  if (platform === 'win32') {
-    return detectWindowsGamePaths(
-      () => execAsync('reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath').then((r) => r.stdout),
-      game,
-    );
-  }
-  return detectLinux(game);
+export async function detectGamePaths(
+  platform: NodeJS.Platform,
+  game: GameAutodetect,
+  runRegQuery: () => Promise<string>,
+): Promise<GamePaths | null> {
+  return platform === 'win32' ? detectWindows(runRegQuery, game) : detectLinux(game);
 }
 
 async function findLibraryInVdfs(vdfPaths: string[], steamAppId: string): Promise<string | null> {
@@ -83,15 +77,12 @@ export async function detectWinePrefix(steamAppId: string): Promise<string | nul
   return library ? path.join(library, 'steamapps', 'compatdata', steamAppId, 'pfx') : null;
 }
 
-export function parseRegQuerySteamPath(stdout: string): string | null {
+function parseRegQuerySteamPath(stdout: string): string | null {
   const path = stdout.match(/SteamPath\s+REG_SZ\s+(.+)/)?.[1];
   return path !== undefined ? path.trim() : null;
 }
 
-/** Exported and injected purely as a test seam: `vi.mock`'s automock of `node:child_process`
- *  drops `promisify.custom`, which changes what `promisify(exec)` resolves to and breaks the
- *  `{ stdout }` shape this relies on. */
-export async function detectWindowsGamePaths(
+async function detectWindows(
   runRegQuery: () => Promise<string>,
   game: GameAutodetect,
 ): Promise<GamePaths | null> {

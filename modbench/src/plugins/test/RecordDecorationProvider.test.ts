@@ -16,7 +16,9 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import { RecordDecorationProvider } from '../RecordDecorationProvider';
 import { fakeUri } from '../../test/vscodeMock';
-import type { WorkingTreeState } from '../../client/apiClient';
+import type { components } from '../../wire/generated/api';
+
+type WorkingTreeState = components['schemas']['WorkingTreeState'];
 
 type Listener = (uris: readonly vscode.Uri[]) => void;
 

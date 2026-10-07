@@ -8,7 +8,7 @@ import { registerGesture, singularArgument } from '../drivingLib/gestureEntry';
 import type { ModlistNode, ModNode, OverwriteNode } from './ModListProvider';
 import { reportFailure } from '../drivingLib/reportFailure';
 
-export interface GoToModView {
+interface GoToModView {
   selection: () => readonly ModlistNode[];
   rowFor: (origin: FileOrigin) => ModNode | OverwriteNode | undefined;
   reveal: (row: ModNode | OverwriteNode) => Thenable<void>;
