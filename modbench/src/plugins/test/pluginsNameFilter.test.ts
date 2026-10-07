@@ -26,7 +26,8 @@ vi.mock('vscode', () => ({
 }));
 
 import { pluginsViewProgress, registerPluginsNameFilter } from '../pluginsView';
-import { NO_PLUGINS_MESSAGE, PluginsTreeProvider } from '../PluginsTreeProvider';
+import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
+import { pluginsTreeOver } from './pluginsTreeOver';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type PluginMetadata } from '../../client';
 import { syncMessageDouble } from '../../test/syncMessageDouble';
@@ -59,7 +60,7 @@ beforeEach(() => {
 describe('the Plugins filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a reconcile, in both directions', async () => {
     const instance = new FakeInstance(valueOf([plugin('TestMod.esp')]));
-    const provider = new PluginsTreeProvider({ instance });
+    const provider = pluginsTreeOver(instance);
     await provider.getChildren();
 
     const view: { description?: string; message?: string } = {};
@@ -82,7 +83,7 @@ describe('the Plugins filter follows a row change with no keystroke', () => {
 
 describe('the Plugins view, given the game folder not found', () => {
   async function pluginsView(instance: FakeInstance) {
-    const provider = new PluginsTreeProvider({ instance });
+    const provider = pluginsTreeOver(instance);
     await provider.getChildren();
     const view: { description?: string; message?: string } = {};
     const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
@@ -114,7 +115,7 @@ describe('the Plugins view, given the game folder not found', () => {
 
   it('says nothing before the first read lands', async () => {
     const instance = new FakeInstance(notFoundValueOf([]), 0);
-    const provider = new PluginsTreeProvider({ instance });
+    const provider = pluginsTreeOver(instance);
     const view: { description?: string; message?: string } = {};
     const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
 
@@ -140,7 +141,7 @@ describe('the Plugins view, given the game folder not found', () => {
 
 describe('the Plugins view, given no lines and no locked plugins', () => {
   async function emptyView(instance: FakeInstance) {
-    const provider = new PluginsTreeProvider({ instance });
+    const provider = pluginsTreeOver(instance);
     const view: { description?: string; message?: string } = {};
     const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
     const rows = await provider.getChildren();
@@ -181,7 +182,7 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
     client.setQueryAnswer('getPlugins', [held('Other.esp', false), held('TestMod.esp', testModMatches)]);
     client.setQueryAnswer('getDiagnoses', []);
     const instance = new FakeInstance(valueOf([plugin('Other.esp'), plugin('TestMod.esp')]));
-    const provider = new PluginsTreeProvider({ instance, client });
+    const provider = pluginsTreeOver(instance, { client });
     const view: { description?: string; message?: string } = {};
     const pluginSync = syncMessageDouble();
     const filter = registerPluginsNameFilter(view, provider, pluginSync);
@@ -238,7 +239,7 @@ describe('the Plugins view, given a plugin sync that refused', () => {
     client.setQueryAnswer('getPlugins', [held('TestMod.esp', false)]);
     client.setQueryAnswer('getDiagnoses', []);
     const instance = new FakeInstance(valueOf([plugin('TestMod.esp')]));
-    const provider = new PluginsTreeProvider({ instance, client });
+    const provider = pluginsTreeOver(instance, { client });
     await provider.getChildren();
     const view: { description?: string; message?: string } = {};
     const pluginSync = syncMessageDouble();
@@ -276,7 +277,7 @@ describe('the Plugins view, given a plugin sync that refused', () => {
 
 describe('the Plugins view\'s message line, while a load holds it', () => {
   async function heldView(instance: FakeInstance) {
-    const provider = new PluginsTreeProvider({ instance });
+    const provider = pluginsTreeOver(instance);
     await provider.getChildren();
     const view: { description?: string; message?: string } = {};
     const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());

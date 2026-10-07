@@ -32,7 +32,8 @@ import {
 import { PLUGINS_KEY_ARGS } from '../gestureEntry';
 import { CellNode, ChildRecordNode, RecordNode, RecordTypeNode, WorldspaceNode } from '../PluginTreeProvider';
 import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
-import { ImplicitMasterNode, PluginNode, PluginsTreeProvider, pluginFileOf, type PluginsTreeNode } from '../PluginsTreeProvider';
+import { ImplicitMasterNode, PluginNode, pluginFileOf, type PluginsTreeNode } from '../PluginsTreeProvider';
+import { pluginsTreeOver } from './pluginsTreeOver';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -291,7 +292,7 @@ describe('registerCreatePluginCommand', () => {
     showQuickPick.mockResolvedValue({ label: 'Overwrite', origin: 'overwrite' });
     const mo2 = makeMo2();
     const instance = new FakeInstance(mo2.instance.value);
-    const tree = new PluginsTreeProvider({ instance });
+    const tree = pluginsTreeOver(instance);
     expect(await tree.getChildren()).toEqual([]);
     let changes = 0;
     tree.onDidChangeTreeData(() => { changes++; });
