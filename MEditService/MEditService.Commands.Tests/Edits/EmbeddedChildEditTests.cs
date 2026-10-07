@@ -66,7 +66,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void APlacedRefsPosition_IsRefused_SoItsPlacementRowCannotGoStale()
+    public void APlacedRefsPosition_IsRefused_AsItDecidesWhichCellHoldsIt()
     {
         var before = _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body;
 
@@ -75,7 +75,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains("placement", result.Message, StringComparison.Ordinal);
+        Assert.Contains("which cell holds", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body);
         Assert.Empty(_fixture.ChangedFormKeys());
     }
@@ -88,7 +88,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
         var navmeshes = service.Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "NavigationMeshes", Json("[]"));
         Assert.False(navmeshes.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, navmeshes.Refusal);
-        Assert.Contains("structural gesture", navmeshes.Message, StringComparison.Ordinal);
+        Assert.Contains("not by editing the slot", navmeshes.Message, StringComparison.Ordinal);
 
         var landscape = service.Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "Landscape", Json("null"));
         Assert.False(landscape.Applied);
@@ -109,6 +109,21 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
+    public void AChildSlotElementPastItsEnd_IsRefusedAsNoElement_OnRemoveAndMove()
+    {
+        var service = EditService();
+
+        var remove = service.Edit(_fixture.Plugin, _fixture.EmbedCell.ToString(), RemoveAt(Member("NavigationMeshes"), At(5)));
+        var move = service.Edit(_fixture.Plugin, _fixture.EmbedCell.ToString(), MoveTo(0, Member("NavigationMeshes"), At(5)));
+
+        Assert.Equal(RecordEditRefusal.FieldNotFound, remove.Refusal);
+        Assert.Contains("names no element", remove.Message, StringComparison.Ordinal);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, move.Refusal);
+        Assert.Contains("names no element", move.Message, StringComparison.Ordinal);
+        Assert.Empty(_fixture.ChangedFormKeys());
+    }
+
+    [Fact]
     public void ACellsGrid_IsRefused_SoCellLocationCannotGoStale()
     {
         var result = EditService().Set(
@@ -117,6 +132,10 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         Assert.Contains("structural gesture", result.Message, StringComparison.Ordinal);
+
+        var point = EditService().Edit(
+            _fixture.Plugin, _fixture.EmbedCell.ToString(), SetAt(Json("\"9, 9\""), Member("Grid"), Member("Point")));
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, point.Refusal);
         Assert.Empty(_fixture.ChangedFormKeys());
     }
 
@@ -207,7 +226,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains("structural gesture", result.Message, StringComparison.Ordinal);
+        Assert.Contains("not by editing the slot", result.Message, StringComparison.Ordinal);
         Assert.Empty(_fixture.ChangedFormKeys());
     }
 
