@@ -11,7 +11,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "land"
+          "RecordType": "land",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -21,7 +22,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "navm"
+          "RecordType": "navm",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -31,7 +33,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -41,7 +44,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -51,7 +55,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -61,7 +66,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -71,7 +77,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -81,7 +88,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -91,7 +99,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -101,7 +110,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -111,7 +121,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -121,7 +132,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         }
       ]
     },
@@ -136,7 +148,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "land"
+          "RecordType": "land",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -146,7 +159,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "navm"
+          "RecordType": "navm",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -156,7 +170,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -166,7 +181,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -176,7 +192,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -186,7 +203,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -196,7 +214,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -206,7 +225,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -216,7 +236,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -226,7 +247,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -236,7 +258,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -246,7 +269,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         }
       ]
     },
@@ -261,7 +285,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "land"
+          "RecordType": "land",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -271,7 +296,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -281,7 +307,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -291,7 +318,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -301,7 +329,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -311,7 +340,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -321,7 +351,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -331,7 +362,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -341,7 +373,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -351,7 +384,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -361,7 +395,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "WorkingTreeState": "None"
         },
         {
           "BaseEditorId": null,
@@ -371,7 +406,8 @@
           "FullName": null,
           "HasParseFailure": false,
           "ParseDiagnosis": null,
-          "RecordType": "navm"
+          "RecordType": "navm",
+          "WorkingTreeState": "None"
         }
       ]
     }
@@ -389,7 +425,8 @@
       "HasParseFailure": false,
       "ParseDiagnosis": null,
       "SubX": 0,
-      "SubY": null
+      "SubY": null,
+      "WorkingTreeState": "None"
     },
     {
       "BlockX": 0,
@@ -403,7 +440,8 @@
       "HasParseFailure": false,
       "ParseDiagnosis": null,
       "SubX": 0,
-      "SubY": null
+      "SubY": null,
+      "WorkingTreeState": "None"
     },
     {
       "BlockX": 0,
@@ -417,7 +455,8 @@
       "HasParseFailure": false,
       "ParseDiagnosis": null,
       "SubX": 0,
-      "SubY": null
+      "SubY": null,
+      "WorkingTreeState": "None"
     }
   ],
   "WorldspaceCells": {
@@ -434,7 +473,8 @@
         "HasParseFailure": false,
         "ParseDiagnosis": null,
         "SubX": 0,
-        "SubY": 0
+        "SubY": 0,
+        "WorkingTreeState": "None"
       },
       {
         "BlockX": 0,
@@ -448,7 +488,8 @@
         "HasParseFailure": false,
         "ParseDiagnosis": null,
         "SubX": 0,
-        "SubY": 0
+        "SubY": 0,
+        "WorkingTreeState": "None"
       },
       {
         "BlockX": 0,
@@ -462,7 +503,8 @@
         "HasParseFailure": false,
         "ParseDiagnosis": null,
         "SubX": 0,
-        "SubY": 0
+        "SubY": 0,
+        "WorkingTreeState": "None"
       },
       {
         "BlockX": null,
@@ -476,7 +518,8 @@
         "HasParseFailure": false,
         "ParseDiagnosis": null,
         "SubX": null,
-        "SubY": null
+        "SubY": null,
+        "WorkingTreeState": "None"
       }
     ]
   }
