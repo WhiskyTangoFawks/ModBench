@@ -14,6 +14,7 @@ import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
 import { PluginFacts, placeOf, type PluginWarning } from './pluginFacts';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
+import { headerFormKeyOf } from '../wire/headerFormKey';
 import type { PluginArgument } from '../drivingLib/argument';
 import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
@@ -84,7 +85,7 @@ function rowIdentity(kind: string, plugin: PluginAddress, formKey?: string): str
 }
 
 function openHeaderCommand(header: PluginAddress): vscode.Command {
-  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ header }] };
+  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey: headerFormKeyOf(header), plugin: header } }] };
 }
 
 /** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so

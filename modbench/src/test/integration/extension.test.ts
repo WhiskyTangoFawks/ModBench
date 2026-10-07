@@ -532,7 +532,7 @@ describe('modbench.record.open', () => {
   });
 
   it('reads the Argument of a Plugins-tree row from a menu to its own record', async () => {
-    const row = { kind: 'record', argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data' }, formKey: 'Fallout4.esm:000030' } };
+    const row = { argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data' }, formKey: 'Fallout4.esm:000030' } };
 
     await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 
@@ -540,7 +540,7 @@ describe('modbench.record.open', () => {
   });
 
   it('reads the Argument of a placed row from a menu to its own record', async () => {
-    const row = { kind: 'placed', argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data' }, formKey: 'Fallout4.esm:000040' } };
+    const row = { argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data' }, formKey: 'Fallout4.esm:000040' } };
 
     await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 

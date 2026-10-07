@@ -111,7 +111,7 @@ const HANDLERS: {
   [WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD]: answerRecordLoad,
   [WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE]: async (deps, m) => {
     const placement = deps.tabPlace();
-    if (placement) await vscode.commands.executeCommand('modbench.record.open', m.records.map((record) => ({ ...record, placement })));
+    if (placement) await vscode.commands.executeCommand('modbench.record.open', m.records.map((record) => ({ argument: { kind: 'record', ...record }, placement })));
   },
   [WEBVIEW_TO_EXTENSION.VIEW_STATE]: (deps, m) => { deps.keepViewState(m.state); },
 };

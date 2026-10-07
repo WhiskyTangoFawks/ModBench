@@ -264,7 +264,7 @@ describe('a record row', () => {
     expect(row.command).toEqual({
       command: 'modbench.record.open',
       title: 'Open Record',
-      arguments: [{ formKey: record.formKey, plugin: { name: 'Plugin0.esp', origin: 'ModA' } }],
+      arguments: [{ argument: { kind: 'record', formKey: record.formKey, plugin: { name: 'Plugin0.esp', origin: 'ModA' } } }],
     });
   });
 
@@ -274,7 +274,7 @@ describe('a record row', () => {
     const row = await rowOf(record, 'ModA');
 
     expect(row).toMatchObject({
-      argument: { kind: 'record', plugin: { name: 'Plugin0.esp', origin: 'ModA' }, formKey: record.formKey, editorId: 'Record3' },
+      argument: { kind: 'record', plugin: { name: 'Plugin0.esp', origin: 'ModA' }, formKey: record.formKey },
     });
   });
 
@@ -416,7 +416,7 @@ describe('worldspace, cell and placed rows state their record', () => {
     expect({ label: row.label, description: row.description }).toEqual({ label: 'World', description: '000801:A.esp' });
     expect(row.command).toEqual({
       command: 'modbench.record.open', title: 'Open Record',
-      arguments: [{ formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } }],
+      arguments: [{ argument: { kind: 'record', formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } } }],
     });
   });
 
@@ -424,7 +424,7 @@ describe('worldspace, cell and placed rows state their record', () => {
     const row = (await spatialRowsOver('World'))[which];
 
     expect(row).toMatchObject({
-      argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: '000801:A.esp', editorId: 'World' },
+      argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: '000801:A.esp' },
     });
   });
 
@@ -738,7 +738,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const wsNode = await soleChild(provider, node, 'the worldspace group');
 
     expect(repo.calls).toContainEqual({ method: 'getWorldspaces', args: [{ name: 'Shared.esp', origin: 'ModB' }] });
-    expect(openedArguments(wsNode)).toEqual([{ formKey: 'wrld:M.esp', plugin: { name: 'Shared.esp', origin: 'ModB' } }]);
+    expect(openedArguments(wsNode)).toEqual([{ argument: { kind: 'record', formKey: 'wrld:M.esp', plugin: { name: 'Shared.esp', origin: 'ModB' } } }]);
   });
 
   it('fetchWorldspaceChildren: asks the repository for the node\'s own plugin, and its TopCell/Block children carry that origin forward', async () => {
@@ -758,8 +758,8 @@ describe('PluginTreeProvider spatial origin threading', () => {
     await provider.getChildren(cellNode);
 
     expect(repo.calls).toContainEqual({ method: 'getWorldspaceBlocks', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'wrld:M.esp'] });
-    expect(openedArguments(present(topCellNode, 'the top cell'))).toMatchObject([{ plugin: { name: 'Shared.esp', origin: 'ModB' } }]);
-    expect(openedArguments(cellNode)).toMatchObject([{ plugin: { name: 'Shared.esp', origin: 'ModB' } }]);
+    expect(openedArguments(present(topCellNode, 'the top cell'))).toMatchObject([{ argument: { plugin: { name: 'Shared.esp', origin: 'ModB' } } }]);
+    expect(openedArguments(cellNode)).toMatchObject([{ argument: { plugin: { name: 'Shared.esp', origin: 'ModB' } } }]);
     expect(repo.calls).toContainEqual({ method: 'getCellChildRecords', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'c:M.esp'] });
   });
 
@@ -776,7 +776,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const placedNode = await soleChild(provider, groupNode, 'the placed group');
 
     expect(repo.calls).toContainEqual({ method: 'getCellChildRecords', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'c:M.esp'] });
-    expect(openedArguments(placedNode)).toMatchObject([{ plugin: { name: 'Shared.esp', origin: 'ModB' } }]);
+    expect(openedArguments(placedNode)).toMatchObject([{ argument: { plugin: { name: 'Shared.esp', origin: 'ModB' } } }]);
   });
 
   it('fetchInteriorCells: asks the repository for the node\'s own plugin, and the rows it builds carry that origin forward', async () => {
@@ -789,7 +789,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     await provider.getChildren(present(cellNode, 'the sole cell'));
 
     expect(repo.calls).toContainEqual({ method: 'getInteriorCells', args: [{ name: 'Shared.esp', origin: 'ModB' }] });
-    expect(openedArguments(present(cellNode, 'the sole cell'))).toMatchObject([{ plugin: { name: 'Shared.esp', origin: 'ModB' } }]);
+    expect(openedArguments(present(cellNode, 'the sole cell'))).toMatchObject([{ argument: { plugin: { name: 'Shared.esp', origin: 'ModB' } } }]);
     expect(repo.calls).toContainEqual({ method: 'getCellChildRecords', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'i:M.esp'] });
   });
 
@@ -847,13 +847,13 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const placedB = placedOf(fromB);
 
     expect(cellA.contextValue).toBe('cell tracked editable container');
-    expect(openedArguments(cellA)).toMatchObject([{ plugin: { origin: 'ModA' } }]);
+    expect(openedArguments(cellA)).toMatchObject([{ argument: { plugin: { origin: 'ModA' } } }]);
     expect(placedA.contextValue).toBe('placed tracked editable');
-    expect(openedArguments(placedA)).toMatchObject([{ plugin: { origin: 'ModA' } }]);
+    expect(openedArguments(placedA)).toMatchObject([{ argument: { plugin: { origin: 'ModA' } } }]);
     expect(cellB.contextValue).toBe('cell untracked container');
-    expect(openedArguments(cellB)).toMatchObject([{ plugin: { origin: 'ModB' } }]);
+    expect(openedArguments(cellB)).toMatchObject([{ argument: { plugin: { origin: 'ModB' } } }]);
     expect(placedB.contextValue).toBe('placed untracked');
-    expect(openedArguments(placedB)).toMatchObject([{ plugin: { origin: 'ModB' } }]);
+    expect(openedArguments(placedB)).toMatchObject([{ argument: { plugin: { origin: 'ModB' } } }]);
   });
 
 });

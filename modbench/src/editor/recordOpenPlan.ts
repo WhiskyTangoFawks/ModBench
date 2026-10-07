@@ -1,5 +1,4 @@
 import { recordArgumentOf } from '../drivingLib/recordArgument';
-import { headerFormKeyOf } from '../wire/headerFormKey';
 import type { ViewColumn } from 'vscode';
 import type { PluginAddress } from '../wire/pluginAddress';
 
@@ -16,17 +15,9 @@ export interface RecordOpenPlan {
   preview: boolean;
 }
 
-// A command's own Argument names a copy whole, or only the record.
-interface Stated { formKey?: string; plugin?: PluginAddress; header?: PluginAddress }
-
 function addressOf(node: unknown): RecordToOpen | undefined {
-  const row = recordArgumentOf(node);
-  if (row) return { formKey: row.formKey, plugin: row.plugin };
-  if (!node || typeof node !== 'object') return undefined;
-  const { header, formKey, plugin } = node as Stated;
-  if (header) return { formKey: headerFormKeyOf(header), plugin: header };
-  if (!formKey) return undefined;
-  return plugin ? { formKey, plugin } : { formKey };
+  const record = recordArgumentOf(node);
+  return record?.plugin ? { formKey: record.formKey, plugin: record.plugin } : record && { formKey: record.formKey };
 }
 
 const placementOf = (argument: unknown): unknown =>
@@ -50,5 +41,5 @@ export function recordOpenPlan(argument: unknown, focusedSelection: readonly unk
 /** What a menu's open to the side hands to open: the menu's selection, else its clicked row. */
 export function besideArgument(row: unknown, selection: unknown) {
   const subjects = Array.isArray(selection) && selection.length > 0 ? selection : [row];
-  return subjects.flatMap((s) => addressOf(s) ?? []).map((address) => ({ ...address, placement: 'beside' as const }));
+  return subjects.flatMap((s) => addressOf(s) ?? []).map((address) => ({ argument: { kind: 'record' as const, ...address }, placement: 'beside' as const }));
 }

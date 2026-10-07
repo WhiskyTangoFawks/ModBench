@@ -40,8 +40,8 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-const carrying = ({ formKey, plugin, origin }: { formKey: string; plugin: string; origin: string }, editorId?: string) =>
-  ({ argument: { kind: 'record', plugin: { name: plugin, origin }, formKey, editorId } });
+const carrying = ({ formKey, plugin, origin }: { formKey: string; plugin: string; origin: string }, label?: string) =>
+  ({ label, argument: { kind: 'record', plugin: { name: plugin, origin }, formKey } });
 
 let viewSelection: readonly unknown[] = [];
 const selectionsOfViews = new Map<string, readonly unknown[]>();
@@ -157,27 +157,40 @@ describe('registerRecordLifecycleCommands', () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { landed: [SECOND], refused: [] });
       const { ask } = invoke(client, 'Delete');
-      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'TestNPC', { name: SECOND.plugin, origin: SECOND.origin }, []);
+      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, { name: SECOND.plugin, origin: SECOND.origin }, []);
 
       await deleteRecords(holder);
 
       expect(deleteCalls(client)).toEqual([[[SECOND]]]);
       expect(ask.asked.map((question) => question.message)).toEqual([
-        'Delete TestNPC [000802:MyPatch.esp] in MyPatch.esp (ModA)? It leaves its plugin source as a working-tree change you can review.',
+        'Delete MyPatch.esp [000802:MyPatch.esp] in MyPatch.esp (ModA)? It leaves its plugin source as a working-tree change you can review.',
       ]);
     });
 
-    it('asks nothing, deletes nothing and says so for a row whose record field was renamed away from the Argument', async () => {
+    it('asks nothing, deletes nothing and says so for a row that carries no record Argument', async () => {
       const client = new InMemoryMEditClient();
       const { ask, reporter } = invoke(client, 'Delete');
-      const renamed = { label: 'Armor', kind: 'record', origin: 'ModA', rec: { formKey: FIRST.formKey, plugin: FIRST.plugin } };
+      const withoutArgument = { label: 'Armor', kind: 'record', origin: 'ModA', record: { formKey: FIRST.formKey, plugin: FIRST.plugin } };
 
-      await deleteRecords(renamed);
+      await deleteRecords(withoutArgument);
 
       expect(ask.asked).toEqual([]);
       expect(deleteCalls(client)).toEqual([]);
       expect(reporter.reports).toEqual([{
         severity: 'error', message: 'Could not delete 1 of 1 records.', detail: '"Armor" (it carries no record Argument)',
+      }]);
+    });
+
+    it('refuses a record that names no plugin, since a FormKey alone names no one copy', async () => {
+      const client = new InMemoryMEditClient();
+      const { ask, reporter } = invoke(client, 'Delete');
+
+      await deleteRecords({ label: 'Gun', argument: { kind: 'record', formKey: FIRST.formKey } });
+
+      expect(ask.asked).toEqual([]);
+      expect(deleteCalls(client)).toEqual([]);
+      expect(reporter.reports).toEqual([{
+        severity: 'error', message: 'Could not delete 1 of 1 records.', detail: '"Gun" (it names no plugin)',
       }]);
     });
 
@@ -307,7 +320,7 @@ describe('registerRecordLifecycleCommands', () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { landed: [], refused: [] });
       const { viewsAskedFor } = invoke(client, 'Delete', 'Delete');
-      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'SecondNpc', { name: 'MyPatch.esp', origin: 'ModA' }, []);
+      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, { name: 'MyPatch.esp', origin: 'ModA' }, []);
 
       await deleteRecords(holder);
       await deleteRecords(SECOND_NODE);
@@ -654,7 +667,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     client.setCommandResult('copyRecords', { landed: [], refused: [] });
     pick('New', [PATCH]);
     const { viewsAskedFor } = invoke(client);
-    const holder = new ReferencedByHolderNode('000001:A.esp', SOURCE.formKey, undefined, { name: 'MyPatch.esp', origin: 'ModA' }, []);
+    const holder = new ReferencedByHolderNode('000001:A.esp', SOURCE.formKey, { name: 'MyPatch.esp', origin: 'ModA' }, []);
 
     await copy(holder);
 
@@ -863,7 +876,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       pick('DeepOverride', [PATCH]);
       const { viewsAskedFor } = invoke(client);
       client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
-      const holder = new ReferencedByHolderNode('000001:A.esp', SOURCE.formKey, undefined, { name: 'MyPatch.esp', origin: 'ModA' }, []);
+      const holder = new ReferencedByHolderNode('000001:A.esp', SOURCE.formKey, { name: 'MyPatch.esp', origin: 'ModA' }, []);
 
       await copy(holder);
 

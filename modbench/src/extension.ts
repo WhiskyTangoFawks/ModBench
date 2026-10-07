@@ -159,7 +159,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor }));
   own(deps.focusedView.follow('modbench.modList', mods.view));
-  own(deps.focusedView.follow('modbench.pluginListTree', plugins.view));
+  own(deps.focusedView.follow('modbench.pluginListTree', plugins.followed));
   own(deps.focusedView.follow('modbench.downloads', downloadsView));
   ownAll(own, registerNameFilterCommands(
     () => deps.focusedView.id(),

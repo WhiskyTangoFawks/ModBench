@@ -8,8 +8,9 @@ describe('the Argument a row or context carries', () => {
   it('is read whatever box built the carrier', () => {
     expect(modArgumentOf({ argument: { kind: 'mod', name: 'ModA' } })).toEqual({ kind: 'mod', name: 'ModA' });
     expect(pluginArgumentOf({ argument: { kind: 'plugin', plugin } })).toEqual({ kind: 'plugin', plugin });
-    expect(recordArgumentOf({ argument: { kind: 'record', plugin, formKey: '000800:A.esp', editorId: 'Gun' } }))
-      .toEqual({ kind: 'record', plugin, formKey: '000800:A.esp', editorId: 'Gun' });
+    expect(recordArgumentOf({ argument: { kind: 'record', plugin, formKey: '000800:A.esp' } }))
+      .toEqual({ kind: 'record', plugin, formKey: '000800:A.esp' });
+    expect(recordArgumentOf({ argument: { kind: 'record', formKey: '000800:A.esp' } })).toEqual({ kind: 'record', formKey: '000800:A.esp' });
   });
 
   it('is none for a carrier of another kind of object', () => {

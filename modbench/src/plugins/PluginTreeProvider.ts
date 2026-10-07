@@ -53,7 +53,7 @@ const NOT_EDITABLE: PluginConditions = { tracked: false, editable: false };
 
 // A row opens its own plugin's copy (commands.md, Argument: "Singular means the clicked row").
 function openCopyCommand(formKey: string, plugin: PluginAddress): vscode.Command {
-  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey, plugin }] };
+  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey, plugin } }] };
 }
 
 // The contextValues state, on the row, refusals the backend would otherwise reach only after
@@ -84,15 +84,12 @@ class RecordTypeNode extends vscode.TreeItem {
   }
 }
 
-const recordArgument = (
-  plugin: string, origin: string, formKey: string, editorId: string | null | undefined,
-): RecordArgument => ({ kind: 'record', plugin: { name: plugin, origin }, formKey, editorId: editorId ?? undefined });
+const recordArgument = (plugin: string, origin: string, formKey: string): RecordArgument =>
+  ({ kind: 'record', plugin: { name: plugin, origin }, formKey });
 
 class RecordNode extends vscode.TreeItem {
   readonly kind = 'record' as const;
   readonly argument: RecordArgument;
-  // A record-scoped command acts on the clicked row's own copy of the record, so the row carries
-  // which copy it is: its plugin, via the record, and its origin (ADR-0012).
   constructor(
     public readonly record: RecordSummary,
     public readonly origin: string,
@@ -103,7 +100,7 @@ class RecordNode extends vscode.TreeItem {
   ) {
     const label = record.editorId ?? record.formKey;
     super(label, collapsibleWhen(isContainer && hasContainerChildren));
-    this.argument = recordArgument(record.plugin, origin, record.formKey, record.editorId);
+    this.argument = recordArgument(record.plugin, origin, record.formKey);
     this.contextValue = conditionedContextValue('record', conditions, isContainer);
     this.command = openCopyCommand(record.formKey, { name: record.plugin, origin });
     // RecordDecorationProvider's keying identity — record.plugin (this row's own copy's owning
@@ -129,8 +126,8 @@ class WorldspaceNode extends vscode.TreeItem {
     const label = worldspace.editorId ?? worldspace.formKey;
     super(label, collapsibleWhen(worldspace.hasChildren));
     this.formKey = worldspace.formKey;
-    this.argument = recordArgument(plugin, origin, worldspace.formKey, worldspace.editorId);
     this.editorId = worldspace.editorId ?? undefined;
+    this.argument = recordArgument(plugin, origin, worldspace.formKey);
     this.contextValue = conditionedContextValue('worldspace', conditions, true);
     this.command = openCopyCommand(worldspace.formKey, { name: plugin, origin });
     this.resourceUri = recordResourceUri({ name: plugin, origin }, worldspace.formKey);
@@ -201,8 +198,8 @@ class CellNode extends vscode.TreeItem {
       ?? (cell.cellX != null ? `<${strRight3(cell.cellX)}, ${strRight3(cell.cellY)}>` : cell.formKey);
     super(label, collapsibleWhen(cell.hasChildren));
     this.formKey = cell.formKey;
-    this.argument = recordArgument(plugin, origin, cell.formKey, cell.editorId);
     this.editorId = cell.editorId ?? undefined;
+    this.argument = recordArgument(plugin, origin, cell.formKey);
     this.contextValue = conditionedContextValue('cell', conditions, true);
     this.command = openCopyCommand(cell.formKey, { name: plugin, origin });
     this.resourceUri = recordResourceUri({ name: plugin, origin }, cell.formKey);
@@ -243,8 +240,8 @@ class ChildRecordNode extends vscode.TreeItem {
     const label = child.editorId ?? child.baseEditorId ?? child.formKey;
     super(label, vscode.TreeItemCollapsibleState.None);
     this.formKey = child.formKey;
-    this.argument = recordArgument(plugin, origin, child.formKey, child.editorId);
     this.editorId = child.editorId ?? undefined;
+    this.argument = recordArgument(plugin, origin, child.formKey);
     this.contextValue = conditionedContextValue('placed', conditions);
     this.command = openCopyCommand(child.formKey, { name: plugin, origin });
     this.resourceUri = recordResourceUri({ name: plugin, origin }, child.formKey);

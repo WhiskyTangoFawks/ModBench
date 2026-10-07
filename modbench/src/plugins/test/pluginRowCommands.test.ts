@@ -157,17 +157,17 @@ describe('modbench.mod.track', () => {
     expect(reporter.landings).toEqual(['Tracked 2 mods.']);
   });
 
-  it('says so, and tracks the rest, for a row that carries neither a mod nor a plugin', async () => {
+  it('names a row that carries neither a mod nor a plugin, and tracks the rest', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
     const { handler, reporter } = invokeTrack(client);
-    const renamed = { kind: 'plugin', plugin: { name: FIRST.name }, origin: FIRST.origin };
+    const withoutArgument = { label: 'Odd', kind: 'plugin', plugin: { name: FIRST.name }, origin: FIRST.origin };
 
-    await handler(row(FIRST), [row(FIRST), renamed]);
+    await handler(row(FIRST), [row(FIRST), withoutArgument]);
 
     expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModA'], expect.anything()] }]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not track 1 of 2 selected rows: they carry no mod or plugin.', detail: undefined,
+      severity: 'error', message: 'Could not track 1 of 3 plugins.', detail: '"Odd" (it carries no mod or plugin)',
     }]);
   });
 

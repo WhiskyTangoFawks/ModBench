@@ -187,7 +187,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   it('opens a tracked copy\'s file in the record grid, as a preview', async () => {
     registerAnswering({ path: FILE });
 
-    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
 
     expect(executed().map(([id, uri, ...rest]) => [id, String(uri), ...rest])).toEqual([
       ['vscode.openWith', `file://${FILE}`, 'modbench.record', { viewColumn: -1, preview: true }],
@@ -197,7 +197,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   it('opens an untracked copy, which has no file, as the document mEdit renders it as, in the record grid', async () => {
     registerAnswering({ path: null });
 
-    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
 
     expect(opened()).toEqual([['/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
   });
@@ -205,7 +205,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   it('opens an untracked plugin\'s header as the document mEdit renders it as', async () => {
     registerAnswering({ path: null }, '000000:A.esp', 'A.esp.json');
 
-    await commandHandlers.get('modbench.record.open')?.({ header: plugin });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: '000000:A.esp', plugin } });
 
     expect(opened()).toEqual([['/ModA/A.esp/A.esp.json?formKey=000000%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
   });
@@ -222,7 +222,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   it('opens a copy carried in another record\'s file, as a placed reference is in its cell\'s, in a tab of its own on that file', async () => {
     registerAnswering({ path: FILE }, '000700:A.esp');
 
-    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
 
     expect(opened()).toEqual([[`modbench-child-record:${FILE}?formKey=000801%3AA.esp&name=A.esp&origin=ModA`, 'modbench.record']]);
   });
@@ -235,7 +235,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     meditClient.setQueryAnswer('getRenderedDocument', { fileName: 'Gun.json', text: '{}' });
     register({ meditClient });
 
-    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN } });
 
     expect(opened()).toEqual([['/ModB/B.esp/Gun.json?formKey=000801%3AA.esp&name=B.esp&origin=ModB', 'modbench.record']]);
   });
@@ -246,7 +246,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     meditClient.setQueryAnswer('getRecordOwner', undefined);
     register({ meditClient });
 
-    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN } });
 
     expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, `No active plugin holds ${GUN}.`]]);
     expect(opened()).toEqual([]);
@@ -260,7 +260,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     meditClient.setQueryAnswer('getRenderedDocument', { fileName: 'Gun.json', text: '{}' });
     register({ meditClient });
 
-    await commandHandlers.get('modbench.record.open')?.([{ formKey: GUN, plugin }, { formKey: '000802:A.esp' }]);
+    await commandHandlers.get('modbench.record.open')?.([{ argument: { kind: 'record', formKey: GUN, plugin } }, { argument: { kind: 'record', formKey: '000802:A.esp' } }]);
 
     expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, 'No active plugin holds 000802:A.esp.']]);
     expect(opened()).toEqual([]);
@@ -270,7 +270,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     reporter.report.mockClear();
     registerAnswering(null);
 
-    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
 
     expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, `A.esp (ModA) holds no ${GUN}.`]]);
     expect(opened()).toEqual([]);
@@ -280,7 +280,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 describe('modbench.record.openToSide, the menus\' entry point', () => {
   it('fires open with the menu selection, each record placed beside', async () => {
     register();
-    const [a, b] = [{ formKey: '000801:A.esp' }, { formKey: '000802:A.esp' }];
+    const [a, b] = [{ argument: { kind: 'record', formKey: '000801:A.esp' } }, { argument: { kind: 'record', formKey: '000802:A.esp' } }];
 
     await commandHandlers.get('modbench.record.openToSide')?.(a, [a, b]);
 

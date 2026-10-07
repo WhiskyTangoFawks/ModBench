@@ -10,16 +10,17 @@ import { recordTitle } from './recordTitle';
 /** One plugin's copy of a referrer, with the fields that hold the reference. */
 export class ReferencedByHolderNode extends vscode.TreeItem {
   readonly argument: RecordArgument;
+  readonly plugin: PluginAddress;
 
   constructor(
     target: string,
     formKey: string,
-    editorId: string | undefined,
     address: PluginAddress,
     fieldPaths: readonly string[],
   ) {
     super(address.name, vscode.TreeItemCollapsibleState.None);
-    this.argument = { kind: 'record', plugin: address, formKey, editorId };
+    this.plugin = address;
+    this.argument = { kind: 'record', plugin: address, formKey };
     this.id = JSON.stringify([target, formKey, address.origin, address.name]);
     this.description = fieldPaths.join(', ');
     this.contextValue = 'referencedByHolder';
@@ -32,6 +33,7 @@ function referrerName(formKey: string, editorId: string | undefined): string {
 
 class ReferencedByReferrerNode extends vscode.TreeItem {
   readonly copyText: string;
+  readonly argument: RecordArgument;
 
   readonly name: string;
 
@@ -44,16 +46,17 @@ class ReferencedByReferrerNode extends vscode.TreeItem {
   ) {
     super(editorId ?? formKey, vscode.TreeItemCollapsibleState.Collapsed);
     this.name = editorId ?? formKey;
+    this.argument = { kind: 'record', formKey };
     this.copyText = referrerName(formKey, editorId);
     // The target is in the id so a referrer collapses again when the list follows a new record.
     this.id = JSON.stringify([target, formKey]);
     this.description = holders.length > 1 ? `${recordTypeName} · ${holders.length} plugins` : recordTypeName;
-    this.tooltip = [this.copyText, recordTypeName, holders.map(h => h.argument.plugin.name).join(', ')].join('\n');
+    this.tooltip = [this.copyText, recordTypeName, holders.map(h => h.plugin.name).join(', ')].join('\n');
     this.contextValue = 'referencedByReferrer';
     this.command = {
       command: 'modbench.record.open',
       title: 'Open Record',
-      arguments: [{ formKey }],
+      arguments: [{ argument: this.argument }],
     };
   }
 }
@@ -108,7 +111,7 @@ function referrerNode(target: string, copies: readonly ReferenceResult[]): Refer
   const holders = groupBy(copies, r => JSON.stringify([r.origin, r.plugin])).flatMap(fields => {
     const [held] = fields;
     return held
-      ? [new ReferencedByHolderNode(target, first.formKey, editorId, { name: held.plugin, origin: held.origin }, fields.map(r => r.fieldPath))]
+      ? [new ReferencedByHolderNode(target, first.formKey, { name: held.plugin, origin: held.origin }, fields.map(r => r.fieldPath))]
       : [];
   });
   return new ReferencedByReferrerNode(target, first.formKey, editorId, first.recordTypeName, holders);

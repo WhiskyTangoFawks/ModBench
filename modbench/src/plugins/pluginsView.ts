@@ -71,6 +71,8 @@ export interface PluginsViewDeps {
 export interface PluginsView extends vscode.Disposable {
   tree: PluginsTreeProvider;
   view: vscode.TreeView<PluginsTreeNode>;
+  /** The view the focused view follows: its selection holds the rows a rebuilt tree still shows. */
+  followed: Pick<vscode.TreeView<PluginsTreeNode>, 'selection' | 'onDidChangeSelection'>;
   nameFilter: NameFilter;
   /** The load order Editing could not put: its refusal is this view's message line too. */
   loadOrderPut: SyncFailureReport;
@@ -153,7 +155,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     selected, view, tree, changedOutsideDiagnostics, loadDiagnostics, compileDiagnostics,
   );
   return {
-    tree, view, nameFilter, loadOrderPut,
+    tree, view, nameFilter,
+    followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
     showRecordFilter, progress, narrator: indexStatus.narrator,
     dispose: () => { disposable.dispose(); },

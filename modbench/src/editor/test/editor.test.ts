@@ -928,7 +928,7 @@ describe('a click on a column\'s header', () => {
     tab.viewColumn = 3;
 
     expect(h.executed.filter(([id]) => id === 'modbench.record.open'))
-      .toEqual([['modbench.record.open', [{ ...knife, placement: { document: String(uri), viewColumn: 2 } }]]]);
+      .toEqual([['modbench.record.open', [{ argument: { kind: 'record', ...knife }, placement: { document: String(uri), viewColumn: 2 } }]]]);
   });
 });
 
@@ -1043,7 +1043,8 @@ describe('several records opened at once', () => {
   const columnsPosted = (tab: FakePanel | undefined) => tab?.webview.postMessage.mock.calls.filter(([message]) => isShowColumns(message));
   const firstRead = { type: 'requestRecordLoad', requestId: 'r0', formKey: GUN, columns: [] };
   const openSeveral = (placement?: 'beside') => h.commands.get('modbench.record.open')?.(
-    [{ formKey: GUN, plugin: COPY_PLUGIN, placement }, { formKey: AMMO, placement }, { formKey: KNIFE, plugin: knifeIn, placement }]);
+    [{ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN }, placement }, { argument: { kind: 'record', formKey: AMMO }, placement },
+      { argument: { kind: 'record', formKey: KNIFE, plugin: knifeIn }, placement }]);
   function severalClient(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
@@ -1072,7 +1073,7 @@ describe('several records opened at once', () => {
   it('show the first record\'s tab already open, which takes the others as its columns, and leave its tab in another group alone', async () => {
     const { vsCodeOpensTabs, openDocument } = makeEditor(severalClient());
     const tabOn = vsCodeOpensTabs();
-    await h.commands.get('modbench.record.open')?.({ formKey: GUN, plugin: COPY_PLUGIN });
+    await h.commands.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
     tabOn(gunDocument)?.receive(firstRead);
     const elsewhere = await openDocument(gunDocument);
     elsewhere.active = false;
@@ -1088,7 +1089,7 @@ describe('several records opened at once', () => {
   it('hold the columns for a tab whose page has asked no read yet, which listens only once it has', async () => {
     const { vsCodeOpensTabs } = makeEditor(severalClient());
     const tabOn = vsCodeOpensTabs();
-    await h.commands.get('modbench.record.open')?.({ formKey: GUN, plugin: COPY_PLUGIN });
+    await h.commands.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
     const tab = tabOn(gunDocument);
 
     await openSeveral();
@@ -1106,7 +1107,7 @@ describe('several records opened at once', () => {
     await openSeveral();
     tabOn(gunDocument)?.receive(firstRead);
 
-    await h.commands.get('modbench.record.open')?.({ formKey: GUN, plugin: COPY_PLUGIN });
+    await h.commands.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
 
     expect(columnsPosted(tabOn(gunDocument))).toEqual([[{ type: 'showColumns', columns: [] }]]);
   });
