@@ -19,9 +19,9 @@ export interface InstallAccess {
 }
 
 interface InstallMeta {
-  modid?: string;
+  nexusId?: string;
   version?: string;
-  installationFile?: string;
+  archiveFilename?: string;
   installedFiles?: readonly InstalledFileId[];
 }
 
@@ -153,8 +153,8 @@ function extractAndLand(
 }
 
 function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
-  const installedFiles = opts.modID && opts.fileID ? [{ modid: opts.modID, fileid: opts.fileID }] : undefined;
-  return { ...base, modid: opts.modID ?? base.modid, version: opts.version ?? base.version, installedFiles };
+  const installedFiles = opts.modID && opts.fileID ? [{ nexusId: opts.modID, fileId: opts.fileID }] : undefined;
+  return { ...base, nexusId: opts.modID ?? base.nexusId, version: opts.version ?? base.version, installedFiles };
 }
 
 /** Extracts into the mod's own folder, then marks the downloaded file the archive is, if it is
@@ -163,7 +163,7 @@ export async function installFromArchive(
   access: InstallAccess, target: InstallTarget, archivePath: string, opts: InstallOptions,
 ): Promise<InstallCommandResult> {
   try {
-    const meta = metaFor({ installationFile: basename(archivePath) }, opts);
+    const meta = metaFor({ archiveFilename: basename(archivePath) }, opts);
     const outcome = await extractAndLand(access, target, (extraction) => extractArchive(archivePath, extraction.path, opts.run), meta, opts.gameName);
     if (!outcome.applied) return outcome;
     const downloaded = await access.adapter.downloadedFileAt(archivePath);

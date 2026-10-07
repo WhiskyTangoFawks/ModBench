@@ -6,7 +6,7 @@ import {
   type LoadOrderPluginLine, type LoadOrderSnapshotRefusal, type LoadOrderSnapshotValue,
 } from './loadOrderSnapshot';
 import type { PluginAddress } from '../wire/pluginAddress';
-import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
+import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
@@ -393,7 +393,7 @@ export class Instance implements Subscription {
         ? knownArchiveFilenames.get(name)
         : (await this.options.adapter.modMeta(name)).archiveFilename,
     })));
-    return modsByInstallationFile(metas);
+    return modsByArchiveFilename(metas);
   }
 
   private async read(): Promise<InstanceValue> {

@@ -1481,7 +1481,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(extraction.path, 'Wrapper', 'New.esp'), '');
         await writeFile(join(extraction.path, 'leftover.txt'), '');
 
-        await extraction.land(join(extraction.path, 'Wrapper'), { gameName: 'Fallout4', installationFile: 'Mod-1.7z' });
+        await extraction.land(join(extraction.path, 'Wrapper'), { gameName: 'Fallout4', archiveFilename: 'Mod-1.7z' });
 
         expect(await meta('New Mod')).toBe('[General]\ngameName=Fallout4\ninstallationFile=Mod-1.7z\n');
         expect((await readdir(join(root, 'mods', 'New Mod'))).sort()).toEqual(['New.esp', 'meta.ini']);

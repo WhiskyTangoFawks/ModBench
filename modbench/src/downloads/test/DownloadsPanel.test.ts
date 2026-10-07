@@ -333,7 +333,7 @@ describe('installDownloadedFile: the upgrade pick', () => {
     await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([
       mod({ name: 'No Match', nexusId: '111', version: '1.0' }),
-      mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
+      mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFiles: [{ nexusId: '111', fileId: '999' }] }),
     ]);
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
@@ -351,7 +351,7 @@ describe('installDownloadedFile: the upgrade pick', () => {
     expect(qp.activeItems).toEqual([{ label: 'The Match (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'The Match' } }]);
   });
 
-  it('labels an installationFile match "Installed from this file" and pre-selects it, with no fileId match present', async () => {
+  it('labels an archiveFilename match "Installed from this file" and pre-selects it, with no fileId match present', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([
@@ -370,12 +370,12 @@ describe('installDownloadedFile: the upgrade pick', () => {
     expect(qp.activeItems).toEqual([tier2Item]);
   });
 
-  it('hides the installationFile label when a fileId match exists elsewhere in the pool', async () => {
+  it('hides the archiveFilename label when a fileId match exists elsewhere in the pool', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([
       mod({ name: 'By Name', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
-      mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
+      mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ nexusId: '111', fileId: '999' }] }),
     ]);
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
@@ -507,7 +507,7 @@ describe('installDownloadedFile: the upgrade pick', () => {
     expect(createQuickPick).not.toHaveBeenCalled();
   });
 
-  it('matches an installationFile candidate through the pick with a differently-cased filename', async () => {
+  it('matches an archiveFilename candidate through the pick with a differently-cased filename', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'Foo.7z');
     const instance = fakeInstance([
