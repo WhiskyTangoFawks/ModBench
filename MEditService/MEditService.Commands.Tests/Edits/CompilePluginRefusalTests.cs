@@ -14,7 +14,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
         _mod.CompileService();
 
     [Fact]
-    public async Task Compile_BeforeAnyLoadOrderHasArrived_WritesNothingAndThrowsNoLoadOrder() =>
+    public async Task Compile_BeforeAnyLoadOrderHasArrived_ThrowsNoLoadOrder() =>
         await Assert.ThrowsAsync<NoLoadOrderException>(
             () => CompileServices.Over(LoadOrderSnapshot.Empty).CompileAsync([_mod.Plugin]));
 
