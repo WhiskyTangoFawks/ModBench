@@ -153,7 +153,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     await writeMeta(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    void installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), recordingReporter(), installDeps());
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -167,7 +167,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const archive = await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    void installDownloadedFile(node(root, 'foo.7z', { modID: '123', fileID: '456', version: '2.0' }).row, accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(node(root, 'foo.7z', { modID: '123', fileID: '456', version: '2.0' }).row, accessTo(root), fakeInstance(), recordingReporter(), installDeps());
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -183,7 +183,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const before = await readFile(meta, 'utf8');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    void installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), recordingReporter(), installDeps());
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -201,7 +201,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     });
     const report = recordingReporter();
 
-    void installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), report, installDeps());
+    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), report, installDeps());
 
     await vi.waitFor(() => expect(downloadsLogLines).toHaveLength(1));
     const line = present(downloadsLogLines[0], 'the one recorded Output line');
@@ -219,7 +219,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const meta = await writeMeta(root, 'foo.7z');
     showInputBox.mockResolvedValueOnce(undefined);
 
-    void installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), recordingReporter(), installDeps());
 
     await vi.waitFor(() => expect(showInputBox).toHaveBeenCalled());
     expect(installFromArchive).not.toHaveBeenCalled();
@@ -233,7 +233,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     installFromArchive.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
     const report = recordingReporter();
 
-    void installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), report, installDeps());
+    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), report, installDeps());
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'boom' }]);
@@ -246,7 +246,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: true });
     const warnIfFomod = vi.fn();
 
-    void installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), recordingReporter(), installDeps({ warnIfFomod }));
+    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), recordingReporter(), installDeps({ warnIfFomod }));
 
     await vi.waitFor(() => expect(warnIfFomod).toHaveBeenCalledWith('foo', true));
   });
@@ -338,9 +338,10 @@ describe('installDownloadedFile: the upgrade pick', () => {
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    void installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
+    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
+    await installing;
 
     expect(qp.items).toEqual([
       { label: 'The Match (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'The Match' } },
@@ -359,9 +360,10 @@ describe('installDownloadedFile: the upgrade pick', () => {
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    void installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
+    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
+    await installing;
 
     const tier2Item = { label: 'Harder VATS (v1.0)', description: 'Installed from this file', choice: { kind: 'upgrade', name: 'Harder VATS' } };
     expect(qp.items).toEqual([tier2Item, { label: 'Install as a new mod…', choice: { kind: 'new' } }]);
@@ -378,9 +380,10 @@ describe('installDownloadedFile: the upgrade pick', () => {
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    void installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
+    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
+    await installing;
 
     expect(qp.items).toEqual([
       { label: 'By File Id (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'By File Id' } },
@@ -396,9 +399,10 @@ describe('installDownloadedFile: the upgrade pick', () => {
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    void installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
+    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
+    await installing;
 
     expect(qp.items).toEqual([
       { label: 'Some Mod (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'Some Mod' } },
@@ -415,9 +419,10 @@ describe('installDownloadedFile: the upgrade pick', () => {
     createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    void installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
+    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     accept({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } });
+    await installing;
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -436,9 +441,10 @@ describe('installDownloadedFile: the upgrade pick', () => {
     createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    void installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
+    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     accept({ label: 'Install as a new mod…', choice: { kind: 'new' } });
+    await installing;
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -455,9 +461,10 @@ describe('installDownloadedFile: the upgrade pick', () => {
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    void installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
+    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
+    await installing;
     await afterAMacrotaskNotAMicrotask();
 
     expect(installFromArchive).not.toHaveBeenCalled();
@@ -469,7 +476,7 @@ describe('installDownloadedFile: the upgrade pick', () => {
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    void installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), instance, recordingReporter(), installDeps());
+    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), instance, recordingReporter(), installDeps());
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -489,7 +496,7 @@ describe('installDownloadedFile: the upgrade pick', () => {
     ]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    void installDownloadedFile(node(root, 'foo.7z', { modID: '222' }).row, accessTo(root), instance, recordingReporter(), installDeps());
+    await installDownloadedFile(node(root, 'foo.7z', { modID: '222' }).row, accessTo(root), instance, recordingReporter(), installDeps());
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -509,9 +516,10 @@ describe('installDownloadedFile: the upgrade pick', () => {
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    void installDownloadedFile(node(root, 'Foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
+    const installing = installDownloadedFile(node(root, 'Foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
+    await installing;
 
     expect(qp.items).toEqual([
       { label: 'Harder VATS (v1.0)', description: 'Installed from this file', choice: { kind: 'upgrade', name: 'Harder VATS' } },
