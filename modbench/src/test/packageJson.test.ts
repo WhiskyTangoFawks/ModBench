@@ -147,7 +147,7 @@ type Key = { key: string; mac?: string; command: string };
 const expectKeysFiring = (context: Context, expected: readonly Key[]): void => {
   const firing = pkg.contributes.keybindings.filter((k) => holds(k.when, context)).map(({ key, mac, command }) => ({ key, mac, command }));
   expect(firing).toHaveLength(expected.length);
-  expect(firing).toEqual(expect.arrayContaining(expected));
+  expect(firing).toEqual(expect.arrayContaining([...expected]));
 };
 const keysFiring = (context: Context): { key: string; mac?: string; command: string }[] =>
   pkg.contributes.keybindings.filter((k) => holds(k.when, context)).map(({ key, mac, command }) => ({ key, mac, command }));
