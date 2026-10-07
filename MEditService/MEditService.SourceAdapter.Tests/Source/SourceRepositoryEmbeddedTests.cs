@@ -553,18 +553,21 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     public void Rekey_AnEmbeddedChild_RewritesOnlyTheOwnersDocument_AndRollbackPutsItBack()
     {
         var before = TreeSnapshot.Of(_modFolder);
-        var transaction = new SourceTransaction();
 
-        transaction.Rekey(Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, Rekeying);
+        var left = TransactionRollback.After(Repository, transaction =>
+        {
+            transaction.Rekey(Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, Rekeying);
 
-        var (gone, appeared) = Difference(before, TreeSnapshot.Of(_modFolder));
-        Assert.Single(gone);
-        Assert.Single(appeared);
-        Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", gone[0], StringComparison.Ordinal);
-        Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", appeared[0], StringComparison.Ordinal);
-        Assert.NotNull(Repository.Get(Plugin, FreeFormKey, Schemas));
-        Assert.Null(Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas));
-        Assert.Empty(transaction.Undo(Repository));
+            var (gone, appeared) = Difference(before, TreeSnapshot.Of(_modFolder));
+            Assert.Single(gone);
+            Assert.Single(appeared);
+            Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", gone[0], StringComparison.Ordinal);
+            Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", appeared[0], StringComparison.Ordinal);
+            Assert.NotNull(Repository.Get(Plugin, FreeFormKey, Schemas));
+            Assert.Null(Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas));
+        });
+
+        Assert.Null(left);
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
@@ -572,14 +575,17 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     public void Rekey_AContainer_MovesItsChildRecordsFilesUnderTheNewKey_AndRollbackMovesThemBack()
     {
         var before = TreeSnapshot.Of(_modFolder);
-        var transaction = new SourceTransaction();
 
-        transaction.Rekey(Repository, Plugin, Identity(_worldspace, "wrld"), FreeFormKey, Schemas, Rekeying);
+        var left = TransactionRollback.After(Repository, transaction =>
+        {
+            transaction.Rekey(Repository, Plugin, Identity(_worldspace, "wrld"), FreeFormKey, Schemas, Rekeying);
 
-        var child = Repository.RelativePathOf(Plugin, Identity(_exteriorCell, "cell"));
-        Assert.Contains("000F00_Embedded.esp", child, StringComparison.Ordinal);
-        Assert.Null(Repository.RelativePathOf(Plugin, Identity(_worldspace, "wrld")));
-        Assert.Empty(transaction.Undo(Repository));
+            var child = Repository.RelativePathOf(Plugin, Identity(_exteriorCell, "cell"));
+            Assert.Contains("000F00_Embedded.esp", child, StringComparison.Ordinal);
+            Assert.Null(Repository.RelativePathOf(Plugin, Identity(_worldspace, "wrld")));
+        });
+
+        Assert.Null(left);
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
@@ -587,16 +593,19 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     public void Rekey_ARecordWithAFileOfItsOwn_ReplacesThatFileUnderTheNewKey_AndRollbackPutsItBack()
     {
         var before = TreeSnapshot.Of(_modFolder);
-        var transaction = new SourceTransaction();
 
-        transaction.Rekey(Repository, Plugin, Identity(_quest, "qust"), FreeFormKey, Schemas, Rekeying);
+        var left = TransactionRollback.After(Repository, transaction =>
+        {
+            transaction.Rekey(Repository, Plugin, Identity(_quest, "qust"), FreeFormKey, Schemas, Rekeying);
 
-        var (gone, appeared) = Difference(before, TreeSnapshot.Of(_modFolder));
-        Assert.Single(gone);
-        Assert.Single(appeared);
-        Assert.Contains("Quests/", gone[0], StringComparison.Ordinal);
-        Assert.Contains("000F00_Embedded.esp.json", appeared[0], StringComparison.Ordinal);
-        Assert.Empty(transaction.Undo(Repository));
+            var (gone, appeared) = Difference(before, TreeSnapshot.Of(_modFolder));
+            Assert.Single(gone);
+            Assert.Single(appeared);
+            Assert.Contains("Quests/", gone[0], StringComparison.Ordinal);
+            Assert.Contains("000F00_Embedded.esp.json", appeared[0], StringComparison.Ordinal);
+        });
+
+        Assert.Null(left);
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
@@ -637,8 +646,9 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var before = TreeSnapshot.Of(_modFolder);
         var ownerLacksIt = Rekeying with { ChildOfOwner = (_, _, _) => null };
 
-        var refused = Assert.Throws<SourceUnitNotFoundException>(() => new SourceTransaction().Rekey(
-            Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, ownerLacksIt));
+        var refused = Assert.Throws<SourceUnitNotFoundException>(() => TransactionRollback.After(
+            Repository, transaction => transaction.Rekey(
+                Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, ownerLacksIt)));
 
         Assert.Contains("its own text does not carry it", refused.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Nothing was written", refused.Message, StringComparison.Ordinal);

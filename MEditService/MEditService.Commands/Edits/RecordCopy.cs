@@ -235,8 +235,8 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
         var (repository, plugin) = destination;
         SourceTransaction.Atomically(repository, transaction =>
         {
-            if (worldspaceCopy is not null) transaction.Apply(repository, repository.ChangesToPut(plugin, worldspaceCopy));
-            transaction.Apply(repository, repository.ChangesToPutInWorldspace(plugin, landing, worldspaceFormKey));
+            if (worldspaceCopy is not null) transaction.Apply(repository.ChangesToPut(plugin, worldspaceCopy));
+            transaction.Apply(repository.ChangesToPutInWorldspace(plugin, landing, worldspaceFormKey));
         });
         return RecordEditResult.Success();
     }
