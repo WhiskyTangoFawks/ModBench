@@ -26,7 +26,7 @@ interface DownloadsViewDeps {
   logUnresolved: (line: string) => void;
 }
 
-export interface DownloadsView extends vscode.Disposable {
+interface DownloadsView extends vscode.Disposable {
   provider: DownloadsProvider;
   view: vscode.TreeView<DownloadsTreeNode>;
   nameFilter: NameFilter;

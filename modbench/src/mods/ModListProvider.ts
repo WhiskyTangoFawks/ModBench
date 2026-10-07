@@ -23,7 +23,7 @@ function isDraggedRows(value: unknown): value is DraggedRows {
   return value.rows.every((row) => row instanceof ModNode || row instanceof SeparatorNode);
 }
 
-export interface ModListProviderOptions {
+interface ModListProviderOptions {
   /** Mods/separators in override order, per-mod conflict/override/missing status and the
    *  overwrite/ file count. */
   instance: InstanceView;
@@ -46,9 +46,7 @@ function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>, facts: ModFacts 
   return ['mod', ...flags.filter((f): f is string => f !== false)].join(' ');
 }
 
-/** What the instance value says of a mod beyond its entry: whether it holds a plugin, whether its
- *  folder holds a repository, and whether it has a file order conflict. */
-export interface ModFacts {
+interface ModFacts {
   readonly holdsPlugin: boolean;
   readonly tracked: boolean;
   readonly fileOrderConflict: boolean;

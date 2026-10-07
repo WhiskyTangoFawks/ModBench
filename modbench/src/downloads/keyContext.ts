@@ -2,9 +2,7 @@ import type { DownloadsTreeNode } from './DownloadsProvider';
 import { gestureEntry, selectionArgument, singularArgument } from '../drivingLib/gestureEntry';
 import { viewCopyValueText } from '../drivingLib/copyValue';
 
-/** What the Downloads keys' and palette entries' `when` clauses read off the selection, since
- *  neither is handed a row. */
-export interface DownloadsKeyContext {
+interface DownloadsKeyContext {
   readonly singleFile: boolean;
   readonly singleFileWithMeta: boolean;
   readonly holdsFile: boolean;

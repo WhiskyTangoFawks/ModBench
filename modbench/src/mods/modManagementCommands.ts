@@ -88,8 +88,7 @@ export function registerFileExclusionCommands(
   ];
 }
 
-/** What the move asks of the Mods view: its selection, and the direction its pick follows. */
-export interface MoveView {
+interface MoveView {
   selection: () => readonly ModlistNode[];
   direction: () => SortDirection;
 }
@@ -149,7 +148,7 @@ async function confirmUninstall(names: readonly string[], ask: AskQuestion): Pro
   return (await ask(question, { modal: true }, 'Uninstall')) === 'Uninstall';
 }
 
-export interface ModContextDeps {
+interface ModContextDeps {
   access: ModlistAccess;
   instance: Pick<Instance, 'value' | 'refresh'>;
   viewSelection: () => readonly ModlistNode[];

@@ -13,7 +13,7 @@ export interface RecordLocation<Document> extends TextSpan { uri: vscode.Uri; do
 export const locationOf = ({ uri, document, start, end }: RecordLocation<vscode.TextDocument>): vscode.Location =>
   new vscode.Location(uri, new vscode.Range(document.positionAt(start), document.positionAt(end)));
 
-export interface LocatedCopies<T> { found: T[]; leftOut: string[] }
+interface LocatedCopies<T> { found: T[]; leftOut: string[] }
 
 /** `located` for each copy at its document; a copy refused or failing is left out, saying why. */
 export async function locateCopies<Copy extends RecordCopy, T>(

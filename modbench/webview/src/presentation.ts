@@ -23,7 +23,7 @@ export interface Member {
   shortName: string;
 }
 
-export interface SummaryRow {
+interface SummaryRow {
   member: (...path: string[]) => Member;
   /** How the elements of an array member each read, in this column's own order. xEdit's summary
    *  passthrough: a container reads as its children do. */

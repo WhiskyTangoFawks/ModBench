@@ -7,9 +7,9 @@ import { archiveKey } from '../instanceLoader/downloadRows';
 import { defaultModName, type InstallTarget } from '../install/install';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 
-export type UpgradeTier = 'fileId' | 'installationFile';
+type UpgradeTier = 'fileId' | 'installationFile';
 
-export interface UpgradeCandidate {
+interface UpgradeCandidate {
   readonly modName: string;
   readonly version?: string;
   /** `fileId` beats `installationFile`; absent, the mod shares only the Nexus mod id. */

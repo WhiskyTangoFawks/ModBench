@@ -121,7 +121,7 @@ export const downloadSidecarFile = (downloadsDir: string, name: string): string 
 export const fileInFolder = (folder: string, relativePath: string): string => join(folder, relativePath);
 
 const GIT_DIR = '.git';
-export const PLUGIN_SOURCE_FOLDER = 'plugin-source';
+const PLUGIN_SOURCE_FOLDER = 'plugin-source';
 
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
 export const modGitDir = (modFolder: string): string => join(modFolder, GIT_DIR);

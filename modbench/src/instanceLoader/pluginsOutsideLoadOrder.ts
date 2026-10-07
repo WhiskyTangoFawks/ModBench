@@ -5,8 +5,7 @@ import { isRootLevel, type FileConflictIndex } from './fileConflictIndex';
 import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 import { isPluginFile } from '../instanceAdapter/instanceAdapter';
 
-/** A plugin file the load order does not hold, named as the snapshot names a plugin (ADR-0013). */
-export interface PluginOutsideLoadOrder {
+interface PluginOutsideLoadOrder {
   name: string;
   path: string;
   /** The mod folder providing this plugin. */

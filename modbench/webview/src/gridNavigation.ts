@@ -15,7 +15,7 @@ export interface NavRow {
   expanded: boolean;
 }
 
-export type Navigation = { focus: FocusedCell } | { toggle: string } | null;
+type Navigation = { focus: FocusedCell } | { toggle: string } | null;
 
 function visibleRowKey(rows: readonly NavRow[], rowKey: string): string | undefined {
   return rows

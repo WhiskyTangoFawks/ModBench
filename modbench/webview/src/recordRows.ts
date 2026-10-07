@@ -66,7 +66,7 @@ interface RowsInput {
   recordLabel: (copy: CompareOverride) => string;
 }
 
-export type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent' | 'depth' | 'isLastElement' | 'keyMembers'> & {
+type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent' | 'depth' | 'isLastElement' | 'keyMembers'> & {
   // Whether a column holds the object this row is a member of.
   present: (column: ColumnKey) => boolean;
   editable: ReadonlySet<ColumnKey>;

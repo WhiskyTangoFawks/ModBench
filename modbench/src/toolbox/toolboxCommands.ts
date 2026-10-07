@@ -38,7 +38,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
   ];
 }
 
-export interface RefreshGestureDeps {
+interface RefreshGestureDeps {
   /** instance commands' refresh, bound by the root to the mEdit client and the current value. */
   refresh: () => Promise<RefreshResult>;
   /** Armed before the rebuild is asked for: `ended` settles once mEdit's refill ends, since the

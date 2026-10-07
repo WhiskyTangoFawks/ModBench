@@ -56,7 +56,7 @@ export class NotificationListenerRegistry {
   }
 }
 
-export interface SseNotificationSubscriberDeps {
+interface SseNotificationSubscriberDeps {
   /** Opens one connection attempt, fresh per (re)connect. Injected so reconnect is exercised with
    *  a double, never a live backend. */
   openStream: (signal: AbortSignal) => Promise<Response>;

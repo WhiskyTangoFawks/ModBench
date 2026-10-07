@@ -181,12 +181,9 @@ export interface UpgradeExtraction extends ModExtraction {
   land(root: string, keys: OwnedMetaKeys): Promise<Upgraded>;
 }
 
-/** An upgrade refused before anything changed names the entry of the mod's repository or plugin
- *  source that its release holds. */
-export type Upgraded = { readonly refused: false } | { readonly refused: true; readonly repositoryOrPluginSourceEntry: string };
+type Upgraded = { readonly refused: false } | { readonly refused: true; readonly repositoryOrPluginSourceEntry: string };
 
-/** One read of the instance's configuration. Both answers come from that same read. */
-export interface InstanceSettings {
+interface InstanceSettings {
   readonly profile: string;
   /** The game as the mod manager's configuration names it. */
   readonly gameName: string;
@@ -241,12 +238,11 @@ export type DecideModOrder = (order: readonly ModlistEntry[], folders: ModFolder
 /** Decides the changes to plugin order from the order as it stands when the changes land. */
 export type DecidePluginOrder = (order: readonly PluginEntry[]) => readonly PluginOrderChange[];
 
-/** `wrote` is false when the change was already true of the file, which is then left unwritten. */
-export interface Written {
+interface Written {
   readonly wrote: boolean;
 }
 
-export type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
+type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
 /** A mark on a file of an origin, with the path it has once marked, or why it was refused before
  *  anything changed. */

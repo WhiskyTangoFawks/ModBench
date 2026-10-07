@@ -16,8 +16,7 @@ import { GAME_FOLDER_SETTING, type GameDirectoryOverrides, type GameFolder, type
  *  read, so a resolution can never come from a different generation than the value it lands in. */
 export type GameDirectoryResolver = (iniText: string) => Promise<GameFolder>;
 
-/** The Proton prefix root (`.../compatdata/<appid>/pfx`), or null if undeterminable. */
-export type DetectWinePrefix = () => Promise<string | null>;
+type DetectWinePrefix = () => Promise<string | null>;
 
 /** What Steam is asked, injectable so both fallbacks are testable without a Steam install. */
 export interface GameDetectors {

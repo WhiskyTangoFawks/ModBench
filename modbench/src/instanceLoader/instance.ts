@@ -29,17 +29,11 @@ export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 // and the wait before an empty mod order is believed.
 const SETTLE_MS = 200;
 
-/** The rows the mod manager's downloads folder holds, or why Modbench could not resolve that
- *  folder at all — never rows from a folder the manager is not using (downloads.md, Which files
- *  are rows, story 1). */
-export type DownloadsResult =
+type DownloadsResult =
   | { readonly kind: 'listed'; readonly rows: readonly DownloadFile[] }
   | { readonly kind: 'unresolved'; readonly reason: string };
 
-/** The instance paths a view renders or opens: the Instance adapter owns every path function, and
- *  a view reads its answer here. Each is read with the rest of the value, so the empty value
- *  names none. */
-export interface InstancePaths {
+interface InstancePaths {
   /** `undefined` until read, and when the instance gives run-time output no folder. */
   readonly overwriteDir: string | undefined;
   /** `undefined` while unresolved (or not yet read): a consumer skips the action, no fallback. */
@@ -124,8 +118,7 @@ export function lastGoodReadMessage({ sequence, readFailure }: Pick<InstanceView
   return sequence > 0 && readFailure !== undefined ? `Showing the last good read: ${readFailure}` : undefined;
 }
 
-/** As much of VS Code's window as the recompute reads. */
-export interface FocusWindow {
+interface FocusWindow {
   readonly state: { readonly focused: boolean };
   onDidChangeWindowState(listener: (state: { readonly focused: boolean }) => void): Subscription;
 }

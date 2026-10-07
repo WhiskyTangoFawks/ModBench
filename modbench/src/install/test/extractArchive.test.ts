@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { extractArchive } from '../extractArchive';
@@ -38,32 +38,49 @@ describe('extractArchive', () => {
 });
 
 describe('extractArchive, spawning the binary itself', () => {
+  const FAKE_7Z = process.platform === 'win32' ? '7z.exe' : '7z';
   let bin: string;
   let originalPath: string | undefined;
-  beforeEach(async () => {
+  let originalNodeOptions: string | undefined;
+
+  beforeAll(async () => {
     bin = await mkdtemp(join(tmpdir(), 'fake-7z-'));
+    await copyFile(process.execPath, join(bin, FAKE_7Z));
+    await writeFile(join(bin, 'exit-as-asked.cjs'), 'process.exit(Number(process.env.FAKE_7Z_EXIT));');
+  });
+  afterAll(() => rm(bin, { recursive: true, force: true }));
+  beforeEach(() => {
     originalPath = process.env.PATH;
+    originalNodeOptions = process.env.NODE_OPTIONS;
     process.env.PATH = bin;
   });
-  afterEach(async () => {
+  afterEach(() => {
     process.env.PATH = originalPath;
-    await rm(bin, { recursive: true, force: true });
+    if (originalNodeOptions === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = originalNodeOptions;
+    delete process.env.FAKE_7Z_EXIT;
   });
-  const installFake7z = (exitCode: number) => writeFile(join(bin, '7z'), `#!/bin/sh\nexit ${exitCode}\n`, { mode: 0o755 });
 
-  it.skipIf(process.platform === 'win32')('resolves when the binary exits 0', async () => {
-    await installFake7z(0);
+  const fakeNodeAs7zPreloadedToExit = (code: number) => {
+    process.env.FAKE_7Z_EXIT = String(code);
+    process.env.NODE_OPTIONS = `--require=${JSON.stringify(join(bin, 'exit-as-asked.cjs'))}`;
+  };
+
+  it('resolves when the binary exits 0', async () => {
+    fakeNodeAs7zPreloadedToExit(0);
 
     await expect(extractArchive('/tmp/mod.7z', '/tmp/stage')).resolves.toBeUndefined();
   });
 
-  it.skipIf(process.platform === 'win32')('rejects with the exit code in the message when the binary exits non-zero', async () => {
-    await installFake7z(3);
+  it('rejects with the exit code in the message when the binary exits non-zero', async () => {
+    fakeNodeAs7zPreloadedToExit(3);
 
     await expect(extractArchive('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(/exited with code 3/);
   });
 
   it('names every candidate when no binary is on the path', async () => {
+    process.env.PATH = '';
+
     await expect(extractArchive('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(/No 7z binary found/);
   });
 });

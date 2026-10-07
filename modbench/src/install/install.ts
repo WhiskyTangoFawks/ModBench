@@ -18,9 +18,7 @@ export interface InstallAccess {
   readonly adapter: InstanceAdapter;
 }
 
-/** For a manual local install only `installationFile` is typically known; the rest arrives from a
- *  Nexus archive's download identity. */
-export interface InstallMeta {
+interface InstallMeta {
   modid?: string;
   version?: string;
   installationFile?: string;
@@ -58,14 +56,11 @@ export type InstallTarget =
   | { kind: 'new'; name: string }
   | { kind: 'upgrade'; name: string };
 
-/** `isFomod` reports a scripted installer whose files landed as-is: the caller warns, the
- *  install still stands. `downloadRefusal` is the bookkeeping half failing over a mod that did
- *  land, so it is never a refusal of the install. */
-export type InstallCommandResult =
+type InstallCommandResult =
   | { applied: true; wrote: boolean; isFomod: boolean; downloadRefusal?: string }
   | { applied: false; refusal: string };
 
-export interface InstallOptions {
+interface InstallOptions {
   /** The instance's game name, handed in from the value, so nothing here re-reads the instance. */
   gameName: string;
   /** Extraction runner; defaults to spawning a system 7-Zip. */

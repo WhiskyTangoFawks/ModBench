@@ -13,7 +13,7 @@ import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderCha
 import { downloadFile, pluginsFile, settingsFile } from './layout';
 import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 
-export type Mo2Changes = Pick<InstanceAdapter,
+type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
   | 'trashDownloadedFileMeta' | 'selectProfile'>;
 
