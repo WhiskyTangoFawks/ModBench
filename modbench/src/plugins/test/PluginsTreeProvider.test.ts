@@ -1228,6 +1228,18 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     expect(record.contextValue).toBe('record tracked editable');
   });
 
+  it('states every row of a plugin whose plugin source is unreadable tracked and not editable, and says why on the plugin row', async () => {
+    const client = weaponOf(recordSummary());
+    const h = makeTree([plugin({ name: 'A.esp', slot: 0 })], { client });
+    await reconcile(h, [held('A.esp', { isTracked: true, pluginSourceUnreadable: true })]);
+
+    const [row] = await h.tree.getChildren();
+    const { group, record } = await firstRecordUnder(h, present(row, 'the A.esp row'));
+
+    expect(h.tree.getTreeItem(present(row, 'the A.esp row')).description).toBe('plugin source unreadable');
+    expect([group.contextValue, record.contextValue]).toEqual(['recordType tracked creatable', 'record tracked']);
+  });
+
   it('flips a record row on the reconcile that tracks its plugin, from the rows already read', async () => {
     const client = weaponOf(recordSummary());
     const h = makeTree([plugin({ name: 'A.esp', slot: 0 })], { client });

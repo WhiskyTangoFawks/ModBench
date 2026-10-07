@@ -14,7 +14,7 @@ function settled(origin: string, ...changed: [name: string, bytesSha256: string 
   };
 }
 
-function untracked(origin: string, ...plugins: string[]): NotificationEvent {
+function unreadable(origin: string, ...plugins: string[]): NotificationEvent {
   return { kind: 'plugin-source-unreadable', plugin: '', origin, keys: plugins, sequence: 0 };
 }
 
@@ -88,16 +88,16 @@ describe('noticeExternalChanges — a plugin changed outside Modbench', () => {
   });
 });
 
-describe('noticeExternalChanges — an untracked plugin in a tracked mod', () => {
-  it('warns once for each, naming it and pointing at the gesture that decompiles it', () => {
+describe('noticeExternalChanges — a plugin whose plugin source is unreadable', () => {
+  it('warns once for each, naming it and pointing at decompile', () => {
     const { client, reporter } = noticing();
 
-    client.emit(untracked('ModA', 'C.esp', 'D.esp'));
-    client.emit(untracked('ModA', 'C.esp'));
+    client.emit(unreadable('ModA', 'C.esp', 'D.esp'));
+    client.emit(unreadable('ModA', 'C.esp'));
 
     expect(reporter.reports).toEqual([
-      { severity: 'warning', message: 'C.esp in ModA has no plugin source', detail: 'run "Decompile Plugin" on it' },
-      { severity: 'warning', message: 'D.esp in ModA has no plugin source', detail: 'run "Decompile Plugin" on it' },
+      { severity: 'warning', message: 'C.esp in ModA: plugin source unreadable', detail: 'decompile writes it from the plugin file' },
+      { severity: 'warning', message: 'D.esp in ModA: plugin source unreadable', detail: 'decompile writes it from the plugin file' },
     ]);
   });
 });
@@ -108,7 +108,7 @@ describe('noticeExternalChanges — unsubscribed', () => {
     unsubscribe();
 
     client.emit(settled('ModA', ['A.esp', 'aa']));
-    client.emit(untracked('ModA', 'C.esp'));
+    client.emit(unreadable('ModA', 'C.esp'));
 
     expect(reporter.reports).toEqual([]);
   });
