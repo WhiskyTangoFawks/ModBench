@@ -934,7 +934,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
         freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
         spawn: () => {
           const index = children.length;
-          const child: EventEmitter = Object.assign(new EventEmitter(), {
+          const child: EventEmitter & { kill: () => void } = Object.assign(new EventEmitter(), {
             kill: () => { kills.push(index); child.emit('exit', 0); },
           });
           children.push(child);
