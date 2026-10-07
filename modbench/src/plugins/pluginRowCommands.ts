@@ -107,7 +107,7 @@ async function trackMods(deps: TrackDeps, { mods, notInMod }: TrackTargets, invo
       const outcome = {
         refused: result.refused,
         tracked: result.landed.flatMap((landed) => landed.tracked),
-        refusedPlugins: [...refusedHere, ...result.landed.flatMap((landed) => landed.refused)],
+        refusedPlugins: refusedHere,
       };
       if (outcome.refused.length + outcome.refusedPlugins.length > 0) reportRefused(reporter, mods.length, outcome);
       else if (result.landed.length > 0) reporter.landed(`Tracked ${what}.`);

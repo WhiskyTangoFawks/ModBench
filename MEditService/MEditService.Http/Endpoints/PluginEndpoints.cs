@@ -260,15 +260,7 @@ public static class PluginEndpoints
             "Track", logger,
             trackHandler.TrackAsync(mods),
             WriteEndpointMapping.Refusal,
-            landed =>
-            {
-                foreach (var refused in landed.Outcome.Refused)
-                    WriteEndpointMapping.LogRefusal(logger, "Track", refused.Refusal, refused.Message, refused.Item);
-                return new TrackedModResponse(
-                    landed.Item,
-                    landed.Outcome.Tracked,
-                    [.. landed.Outcome.Refused.Select(r => new PluginTrackRefusal(r.Item, r.Refusal, r.Message))]);
-            },
+            landed => new TrackedModResponse(landed.Item, landed.Outcome.Tracked),
             refused => new ModTrackRefusal(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new TrackResponse(applied, refused));
     }
@@ -370,12 +362,8 @@ public record RenameSourceRequest(string Origin, string Name, string NewName);
 /// <summary>The mods by name; the load order says each one's plugins and folder.</summary>
 public record TrackRequest(IReadOnlyList<string> Mods);
 
-/// <summary>A plugin of a tracked mod that wrote nothing: the typed refusal, and the message naming the
-/// way out.</summary>
-public record PluginTrackRefusal(PluginAddress Item, TrackRefusal Refusal, string Message);
-
-/// <summary>A mod of the selection that tracked: the plugins whose source landed, and those of it that did not.</summary>
-public record TrackedModResponse(string Mod, IReadOnlyList<PluginAddress> Tracked, IReadOnlyList<PluginTrackRefusal> Refused);
+/// <summary>A mod of the selection that tracked: the plugins whose source landed.</summary>
+public record TrackedModResponse(string Mod, IReadOnlyList<PluginAddress> Tracked);
 
 /// <summary>A mod of the selection that wrote nothing: the typed refusal, and the message naming the
 /// way out.</summary>

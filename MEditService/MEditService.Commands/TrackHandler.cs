@@ -109,9 +109,9 @@ public sealed class TrackHandler
             refused = Commit(modFolder, verified);
         }
 
-        if (refused.Count == 0) return ItemAnswer<TrackRefusal, TrackedMod>.Landed(new TrackedMod([.. plugins.Select(p => p.Key)], []));
+        if (refused.Count == 0) return ItemAnswer<TrackRefusal, TrackedMod>.Landed(new TrackedMod([.. plugins.Select(p => p.Key)]));
 
-        var cause = refused.Select(r => r.Refusal).Distinct().ToList() is [var shared] ? shared : TrackRefusal.NoPluginTracked;
+        var cause = refused.Select(r => r.Refusal).Distinct().ToList() is [var shared] ? shared : TrackRefusal.PluginsRefused;
         return ItemAnswer<TrackRefusal, TrackedMod>.Refused(cause, string.Join('\n', refused.Select(r => r.Message)));
     }
 
