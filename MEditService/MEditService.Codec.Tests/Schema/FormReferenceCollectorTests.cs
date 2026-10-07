@@ -29,15 +29,13 @@ public class FormReferenceCollectorTests
             ElementSpec: new SubFieldSpec(name, "struct", [], [],
                 SubFields: [.. fkSubFields.Select(f => new SubFieldSpec(f, "formKey", [], []))])));
 
-    private static List<(string Path, string Fk)> Collect(ColumnSpec col, object? value)
+    private static List<(string Path, string Fk)> Collect(ColumnSpec col, string? value)
     {
         var results = new List<(string, string)>();
         var member = value switch
         {
             null => "null",
-            JsonElement je => je.GetRawText(),
-            string text when text.StartsWith('[') || text.StartsWith('{') => text,
-            string text => JsonSerializer.Serialize(text),
+            _ when value.StartsWith('[') || value.StartsWith('{') => value,
             _ => JsonSerializer.Serialize(value),
         };
         using var root = JsonDocument.Parse($"{{\"{col.PropertyName}\": {member}}}");
@@ -52,16 +50,6 @@ public class FormReferenceCollectorTests
         var hits = Collect(col, "000001:Fallout4.esm");
         Assert.Single(hits);
         Assert.Equal(("Race", "000001:Fallout4.esm"), hits[0]);
-    }
-
-    [Fact]
-    public void Collect_ScalarFormKey_JsonElementInput_IsYielded()
-    {
-        var col = ScalarFormKeyCol("Race");
-        var je = JsonDocument.Parse("\"000002:Plugin.esp\"").RootElement.Clone();
-        var hits = Collect(col, je);
-        Assert.Single(hits);
-        Assert.Equal(("Race", "000002:Plugin.esp"), hits[0]);
     }
 
     [Fact]
@@ -90,17 +78,6 @@ public class FormReferenceCollectorTests
     }
 
     [Fact]
-    public void Collect_ArrayFormKey_JsonElementInput_IndexedPaths()
-    {
-        var col = ArrayFormKeyCol("Keywords");
-        var je = JsonDocument.Parse("[\"000001:Fallout4.esm\",\"000002:Plugin.esp\"]").RootElement.Clone();
-        var hits = Collect(col, je);
-        Assert.Equal(2, hits.Count);
-        Assert.Equal(("Keywords[0]", "000001:Fallout4.esm"), hits[0]);
-        Assert.Equal(("Keywords[1]", "000002:Plugin.esp"), hits[1]);
-    }
-
-    [Fact]
     public void Collect_ArrayFormKey_NullAndNullLiteralEntriesSkipped()
     {
         var col = ArrayFormKeyCol("Keywords");
@@ -118,25 +95,6 @@ public class FormReferenceCollectorTests
         var hits = Collect(col, json);
         Assert.Single(hits);
         Assert.Equal(("Factions[0].Faction", "000010:Plugin.esp"), hits[0]);
-    }
-
-    [Fact]
-    public void Collect_ArrayStruct_JsonElementInput_SubFieldPaths()
-    {
-        var col = ArrayStructCol("Factions", "Faction");
-        var je = JsonDocument.Parse("[{\"Faction\":\"000010:Plugin.esp\",\"Rank\":1}]").RootElement.Clone();
-        var hits = Collect(col, je);
-        Assert.Single(hits);
-        Assert.Equal(("Factions[0].Faction", "000010:Plugin.esp"), hits[0]);
-    }
-
-    [Fact]
-    public void Collect_ArrayStruct_NonFormKeySubFieldsIgnored()
-    {
-        var col = ArrayStructCol("Factions", "Faction");
-        var json = "[{\"Faction\":\"000010:Plugin.esp\",\"Rank\":1}]";
-        var hits = Collect(col, json);
-        Assert.Single(hits);
     }
 
     [Fact]

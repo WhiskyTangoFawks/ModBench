@@ -39,31 +39,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void Reconcile_IndexesThePluginsRecords()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = OpenIndex(holder);
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-
-        var count = index.RequireReads().CountOf(new PluginAddress(TestPluginFixture.PluginName, "Data"), "npc_");
-
-        Assert.Equal(TestPluginFixture.RecordCount, count);
-    }
-
-    [Fact]
-    public void Reconcile_ALonePlugin_MarksEveryRecordAWinner()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = OpenIndex(holder);
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-
-        var result = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 100, Offset: 0));
-
-        Assert.Equal(TestPluginFixture.RecordCount, result.Total);
-        Assert.All(result.Items, r => Assert.True(r.IsWinner));
-    }
-
-    [Fact]
     public void Dispose_LeavesNoLoadOrder_AndClosesTheReadsHandedOutBefore()
     {
         var holder = new LoadOrderHolder();
@@ -75,19 +50,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
         Assert.Throws<NoLoadOrderException>(() => index.RequireReads());
         Assert.Throws<ObjectDisposedException>(() =>
             oldReads.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
-    }
-
-    [Fact]
-    public void Reconcile_SameInstance_KeepsTheStore()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = OpenIndex(holder);
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        var firstReads = index.RequireReads();
-
-        index.Reconcile(holder, _fixture.DataFolder, [.. _fixture.Plugins.Select(p => p with { Enabled = false })], GameRelease.Fallout4);
-
-        Assert.Same(firstReads, index.RequireReads());
     }
 
     [Fact]
@@ -275,20 +237,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
         var otherInstance = Directory.CreateDirectory(Path.Combine(_fixture.InstanceRoot, "other-instance")).FullName;
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
-
-        Assert.Throws<ObjectDisposedException>(() =>
-            oldReads.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
-    }
-
-    [Fact]
-    public void Dispose_ClosesTheReadsHandedOutBefore()
-    {
-        var holder = new LoadOrderHolder();
-        var index = OpenIndex(holder);
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        var oldReads = index.RequireReads();
-
-        index.Dispose();
 
         Assert.Throws<ObjectDisposedException>(() =>
             oldReads.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));

@@ -1,3 +1,4 @@
+using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -44,24 +45,25 @@ public class RecordTextCodecTests
     }
 
     [Fact]
-    public async Task SerializeToText_ForAFixedWeapon_MatchesThePinnedGoldenTextExactly_AStandingGateForTheDispatchBeingBehaviorPreservingForWeaponRegeneratedOnlyAfterReVerifyingThatClaim()
+    public async Task SerializeToText_ForAFixedWeapon_ProducesThePinnedGoldenBytes()
     {
-        var actual = Codec().SerializeToText(MakeWeapon(), GameRelease.Fallout4);
-        var golden = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "TestData", "weapon-dispatch-golden.json"));
+        var actual = Encoding.UTF8.GetBytes(Codec().SerializeToText(MakeWeapon(), GameRelease.Fallout4));
 
+        var golden = await File.ReadAllBytesAsync(
+            Path.Combine(AppContext.BaseDirectory, "TestData", "weapon-dispatch-golden.json"));
         Assert.Equal(golden, actual);
     }
 
     [Fact]
-    public void SerializeToText_CalledTwiceOnTheSameRecordState_ProducesByteIdenticalOutput_WithNoGoldenInTheLoopBecauseAGoldenIsBlindToNonDeterminismThatReproducesTheSameWrongOutputEveryRun()
+    public void SerializeToText_CalledTwiceOnTheSameRecordState_ProducesIdenticalText_WithNoGoldenInTheLoopBecauseAGoldenIsBlindToNonDeterminismThatReproducesTheSameWrongOutputEveryRun()
     {
         var codec = Codec();
         var independentlyConstructedSecondWeaponSoAPerInstanceMemoizerCannotTriviallyAgreeWithItself = MakeWeapon();
 
-        var firstBytes = codec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
-        var secondBytes = codec.SerializeToText(independentlyConstructedSecondWeaponSoAPerInstanceMemoizerCannotTriviallyAgreeWithItself, GameRelease.Fallout4);
+        var firstText = codec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
+        var secondText = codec.SerializeToText(independentlyConstructedSecondWeaponSoAPerInstanceMemoizerCannotTriviallyAgreeWithItself, GameRelease.Fallout4);
 
-        Assert.Equal(firstBytes, secondBytes);
+        Assert.Equal(firstText, secondText);
     }
 
     [Fact]
