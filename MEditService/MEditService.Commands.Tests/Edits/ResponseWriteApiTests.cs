@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -112,10 +113,9 @@ public sealed class ResponseWriteApiTests : IDisposable
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Response1.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         var copiedQuest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require();
         Assert.False(copiedQuest.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.QuestEditorId, copiedQuest.EditorId);

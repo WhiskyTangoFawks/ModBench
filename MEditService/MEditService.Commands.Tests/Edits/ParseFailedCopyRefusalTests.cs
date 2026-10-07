@@ -23,11 +23,11 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     [Fact]
     public void CopyRecordAsOverride_OfAParseFailedRecord_IsRefusedWithItsDiagnosis_AndWritesNothing()
     {
-        var result = _mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
+        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, UnreadablePerk)], CopyMode.Override, [_mod.DestinationPlugin], replace: false);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.Contains(Diagnosis, result.Message, StringComparison.Ordinal);
+        var refused = result.OnlyRefused();
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, refused.Refusal);
+        Assert.Contains(Diagnosis, refused.Message, StringComparison.Ordinal);
         Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
         Assert.Null(_mod.Document(_mod.DestinationPlugin, UnreadablePerk));
     }
@@ -35,11 +35,11 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     [Fact]
     public void CopyRecordAsNewRecord_OfAParseFailedRecord_IsRefusedWithItsDiagnosis_AndWritesNothing()
     {
-        var result = _mod.CopyHandler.CopyAsNew(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
+        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, UnreadablePerk)], CopyMode.New, [_mod.DestinationPlugin], replace: false);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.Contains(Diagnosis, result.Message, StringComparison.Ordinal);
+        var refused = result.OnlyRefused();
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, refused.Refusal);
+        Assert.Contains(Diagnosis, refused.Message, StringComparison.Ordinal);
         Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
 
@@ -48,9 +48,9 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     {
         var readable = _mod.PerkTheCodecReads();
 
-        var result = _mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
+        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, readable)], CopyMode.Override, [_mod.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         Assert.NotNull(_mod.Document(_mod.DestinationPlugin, readable));
         Assert.Equal([readable], _mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
@@ -60,11 +60,11 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     {
         var readable = _mod.PerkTheCodecReads();
 
-        var result = _mod.CopyHandler.CopyAsNew(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
+        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, readable)], CopyMode.New, [_mod.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
-        Assert.NotNull(_mod.Document(_mod.DestinationPlugin, result.NewFormKey.Require()));
-        Assert.Equal([result.NewFormKey.Require()], _mod.ChangedFormKeys(_mod.DestinationPlugin));
+        var newFormKey = result.OnlyLanded().Require();
+        Assert.NotNull(_mod.Document(_mod.DestinationPlugin, newFormKey));
+        Assert.Equal([newFormKey], _mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
 
     private sealed class ParseFailedCopyFixture : IDisposable, ITrackedPlugins
@@ -168,12 +168,11 @@ public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
                     StringComparison.Ordinal),
             });
 
-        var result = _mod.CopyHandler.CopyAsNew(
-            _mod.SourcePlugin, _mod.DialogTopic.ToString(), _mod.DestinationPlugin);
+        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.DialogTopic.ToString())], CopyMode.New, [_mod.DestinationPlugin], replace: false);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.Contains("Unable to cast", result.Message, StringComparison.Ordinal);
+        var refused = result.OnlyRefused();
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, refused.Refusal);
+        Assert.Contains("Unable to cast", refused.Message, StringComparison.Ordinal);
         Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
         Assert.Null(_mod.Document(_mod.DestinationPlugin, _mod.Quest.ToString()));
     }

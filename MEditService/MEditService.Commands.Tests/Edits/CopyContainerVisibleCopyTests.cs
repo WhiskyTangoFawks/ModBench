@@ -1,6 +1,8 @@
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
+using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -56,8 +58,8 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
 
     private void CopyRefIntoDestination(Fallout4Mod source, Fallout4Mod destination)
     {
-        var result = _plugins.CopyHandler.CopyAsOverride(Address(source), _ref.ToString(), Address(destination));
-        Assert.True(result.Applied, result.Message);
+        var result = _plugins.CopyHandler.CopySync([new RecordAt(Address(source), _ref.ToString())], CopyMode.Override, [Address(destination)], replace: false);
+        result.OnlyLanded();
     }
 
     [Fact]
