@@ -1,4 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
+import { TreeItem } from '../../test/vscodeMock';
+import { copyValueVscode } from '../../drivingLib/test/copyValueHarness';
+
+vi.mock('vscode', () => ({ ...copyValueVscode, TreeItem }));
+
 import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText, publishFocusedCell } from '../focusedCells';
 
 const element = { webviewSection: 'arrayElement', canMoveUp: false, canMoveDown: true };
