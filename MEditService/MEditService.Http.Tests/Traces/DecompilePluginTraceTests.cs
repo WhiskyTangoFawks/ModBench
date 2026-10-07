@@ -37,7 +37,6 @@ public sealed class DecompilePluginTraceTests : HostedTests
         Assert.Equal(Origin, applied.GetProperty("mod").GetString());
         var tracked = Assert.Single(applied.GetProperty("tracked").EnumerateArray());
         Assert.Equal((Plugin, Origin), (tracked.GetProperty("name").GetString(), tracked.GetProperty("origin").GetString()));
-        Assert.Empty(applied.GetProperty("refused").EnumerateArray());
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
 
         var progress = await stream.EventsUntil(

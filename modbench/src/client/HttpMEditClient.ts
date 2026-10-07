@@ -325,7 +325,7 @@ class HttpMEditClient implements MEditClient {
       });
       if (isRefused(answer)) return answer;
       return selectionOutcome({
-        applied: answer.applied.map((m) => ({ mod: m.mod, tracked: m.tracked, refused: itemRefusals(m.refused) })),
+        applied: answer.applied.map((m) => ({ mod: m.mod, tracked: m.tracked })),
         refused: answer.refused,
       });
     } finally {

@@ -48,7 +48,6 @@ import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type PluginAddress } from '../../client';
-import type { ItemRefusal } from '../../ports/selectionOutcome';
 import { PluginNode } from '../PluginsTreeProvider';
 import { assertAskedOnce, recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
@@ -67,8 +66,8 @@ describe('modbench.mod.track', () => {
   const SECOND = { name: 'Second.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const MOD_DIRS = new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB'], ['ModC', '/mods/ModC']]);
-  const modA = (tracked: PluginAddress[], refused: ItemRefusal<PluginAddress>[] = []) => ({ mod: 'ModA', tracked, refused });
-  const modB = (tracked: PluginAddress[]) => ({ mod: 'ModB', tracked, refused: [] });
+  const modA = (tracked: PluginAddress[]) => ({ mod: 'ModA', tracked });
+  const modB = (tracked: PluginAddress[]) => ({ mod: 'ModB', tracked });
 
   class ModsRowStandIn extends TreeItem {
     readonly kind = 'mod';
@@ -194,25 +193,10 @@ describe('modbench.mod.track', () => {
     expect(reporter.landings).toEqual(['Tracked "ModB".']);
   });
 
-  it('reports each refused plugin once while the rest land', async () => {
-    const client = new InMemoryMEditClient();
-    const outcome = { landed: [modA([FIRST], [{ item: SECOND, reason: 'Second.esp does not round-trip.' }])], refused: [] };
-    client.setCommandResult('track', outcome);
-    const { handler, onTracked, reporter } = invokeTrack(client);
-
-    await handler(new ModsRowStandIn('ModA'));
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not track 1 of 2 plugins.', detail: '"Second.esp (ModA)" (Second.esp does not round-trip.)' },
-    ]);
-    expect(reporter.landings).toEqual([]);
-    expect(onTracked).toHaveBeenCalledOnce();
-  });
-
-  it('names a mod mEdit refused, and a refused plugin, in one notification while the rest land', async () => {
+  it('names a mod mEdit refused while the rest land', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('track', {
-      landed: [modA([FIRST], [{ item: SECOND, reason: 'Second.esp does not round-trip.' }])],
+      landed: [modA([FIRST])],
       refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }],
     });
     const { handler, onTracked, reporter } = invokeTrack(client);
@@ -222,8 +206,7 @@ describe('modbench.mod.track', () => {
 
     expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModA', 'ModC'], expect.anything()] }]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not track 1 of 2 mods and 1 of 2 plugins.',
-      detail: '"Second.esp (ModA)" (Second.esp does not round-trip.), "ModC" (ModC provides no plugin.)',
+      severity: 'error', message: 'Could not track 1 of 2 mods.', detail: '"ModC" (ModC provides no plugin.)',
     }]);
     expect(reporter.landings).toEqual([]);
     expect(onTracked).toHaveBeenCalledOnce();
