@@ -353,8 +353,9 @@ public sealed class CopyAsDeepOverrideTests
             });
         Directory.CreateDirectory(Path.Combine(fixture.DestinationModFolder, blocked + ".tmp"));
 
-        _ = Record.Exception(() => fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.ExteriorCell.ToString())], CopyMode.DeepOverride, [fixture.DestinationPlugin], replace: true));
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.ExteriorCell.ToString())], CopyMode.DeepOverride, [fixture.DestinationPlugin], replace: true);
 
+        result.OnlyRefused();
         Assert.Contains(
             fixture.ExteriorTemporaryRef.ToString(), fixture.Document(fixture.DestinationPlugin, fixture.Worldspace).Require().Body, StringComparison.Ordinal);
     }

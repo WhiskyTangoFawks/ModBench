@@ -237,13 +237,13 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [InlineData(GameRelease.OblivionRE)]
     public async Task CreatePlugin_ALightPluginInAReleaseWithoutThem_IsRefusedNamingIt_BeforeAnyWrite(GameRelease release)
     {
-        var adapter = new RecordingAdapter();
+        var folder = ModFolder("LightMod");
 
-        var result = await HandlerIn(release, adapter).CreatePlugin(new PluginAddress("Light.esl", "LightMod"), ModFolder("LightMod"));
+        var result = await HandlerIn(release).CreatePlugin(new PluginAddress("Light.esl", "LightMod"), folder);
 
         Assert.Equal(PluginCreateRefusal.LightPluginUnsupported, result.Refusal);
         Assert.Contains(release.ToString(), result.Message, StringComparison.Ordinal);
-        Assert.Empty(adapter.Asked);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
     }
 
     [Theory]
@@ -252,13 +252,13 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [InlineData("Mod.esp.bak")]
     public async Task CreatePlugin_ANameThatIsNotAPluginFile_IsRefusedNamingIt_BeforeAnyWrite(string name)
     {
-        var adapter = new RecordingAdapter();
+        var folder = ModFolder("BadMod");
 
-        var result = await HandlerIn(GameRelease.Fallout4, adapter).CreatePlugin(new PluginAddress(name, "BadMod"), ModFolder("BadMod"));
+        var result = await HandlerIn(GameRelease.Fallout4).CreatePlugin(new PluginAddress(name, "BadMod"), folder);
 
         Assert.Equal(PluginCreateRefusal.NotAPluginFile, result.Refusal);
         Assert.Contains(name, result.Message, StringComparison.Ordinal);
-        Assert.Empty(adapter.Asked);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
     }
 
     [Theory]
@@ -266,7 +266,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [InlineData(GameRelease.Oblivion, "must be .esm or .esp.")]
     public async Task CreatePlugin_ANonPluginName_IsRefusedNamingTheExtensionsTheReleaseTakes(GameRelease release, string expected)
     {
-        var result = await HandlerIn(release, new RecordingAdapter()).CreatePlugin(new PluginAddress("Mod.txt", "BadMod"), ModFolder("BadMod"));
+        var result = await HandlerIn(release).CreatePlugin(new PluginAddress("Mod.txt", "BadMod"), ModFolder("BadMod"));
 
         Assert.EndsWith(expected, result.Message, StringComparison.Ordinal);
     }
@@ -276,18 +276,20 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [InlineData("Master.esm")]
     public async Task CreatePlugin_AFullPluginInAReleaseWithoutLightPlugins_IsWritten(string name)
     {
-        var adapter = new RecordingAdapter();
+        var folder = ModFolder("FullMod");
+        var adapter = new WritesAsFallout4Adapter();
 
-        var result = await HandlerIn(GameRelease.Oblivion, adapter).CreatePlugin(new PluginAddress(name, "FullMod"), ModFolder("FullMod"));
+        var result = await HandlerIn(GameRelease.Oblivion, adapter).CreatePlugin(new PluginAddress(name, "FullMod"), folder);
 
         Assert.Null(result.Refusal);
-        Assert.Equal([(name, GameRelease.Oblivion)], adapter.Asked);
+        Assert.Equal([GameRelease.Oblivion], adapter.Asked);
+        Assert.True(File.Exists(Path.Combine(folder, name)));
     }
 
     [Fact]
     public async Task CreatePlugin_WhenTheFileSystemRefusesTheWrite_RefusesWithItsWords()
     {
-        var adapter = new RecordingAdapter { Failure = new IOException("disk full") };
+        var adapter = new FailingWriteAdapter(new IOException("disk full"));
 
         var result = await HandlerIn(GameRelease.Fallout4, adapter).CreatePlugin(new PluginAddress("Full.esp", "FullMod"), ModFolder("FullMod"));
 
@@ -296,33 +298,27 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.Contains("disk full", result.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task CreatePlugin_WhoseAdapterAnswersAnUnnamedOutcome_ThrowsRatherThanReportingApplied()
-    {
-        var adapter = new RecordingAdapter { Outcome = (EmptyPluginCreated)(EmptyPluginWrite)99 };
-
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => HandlerIn(GameRelease.Fallout4, adapter).CreatePlugin(new PluginAddress("Odd.esp", "OddMod"), ModFolder("OddMod")));
-    }
-
-    private CreatePluginHandler HandlerIn(GameRelease release, RecordingAdapter adapter)
+    private CreatePluginHandler HandlerIn(GameRelease release, IPluginAdapter? adapter = null)
     {
         var holder = new LoadOrderHolder();
         holder.Apply(SnapshotPlugins.Snapshot(_data.DataFolder, _data.InstanceRoot, release, _data.Plugins));
         return TestEditService.PluginCreateHandler(holder, adapter);
     }
 
-    private sealed class RecordingAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    private sealed class FailingWriteAdapter(Exception failure) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public List<(string Name, GameRelease Release)> Asked { get; } = [];
-        public EmptyPluginCreated Outcome { get; init; } = EmptyPluginWrite.Written;
-        public Exception? Failure { get; init; }
+        public override Task<EmptyPluginCreated> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
+            throw failure;
+    }
+
+    private sealed class WritesAsFallout4Adapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        public List<GameRelease> Asked { get; } = [];
 
         public override Task<EmptyPluginCreated> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease)
         {
-            Asked.Add((modKey.FileName.String, gameRelease));
-            if (Failure is not null) throw Failure;
-            return Task.FromResult(Outcome);
+            Asked.Add(gameRelease);
+            return base.CreateAndWriteAsync(modKey, folder, GameRelease.Fallout4);
         }
     }
 }

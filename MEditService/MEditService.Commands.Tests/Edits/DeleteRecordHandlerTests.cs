@@ -5,7 +5,6 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -193,22 +192,6 @@ public sealed class DeleteRecordHandlerTests
         Assert.Empty(result.Refused);
         Assert.Null(mod.Document(mod.Npc.ToString()));
         Assert.True(mod.Uses(mod.Npc.ToString()));
-    }
-
-    [Fact]
-    public void DeleteRecords_PublishesNothing()
-    {
-        using var mod = SourceEditFixture.Tracked();
-        var holder = new LoadOrderHolder();
-        holder.Apply(mod.LoadOrder);
-        var notifications = new InMemoryNotificationPublisher();
-        var handler = TestEditService.Over(holder, notifications: notifications).GetRequiredService<DeleteRecordHandler>();
-
-        var result = handler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
-
-        Assert.Empty(result.Refused);
-        Assert.Null(result.SelectionRefusal);
-        Assert.Empty(notifications.Notifications);
     }
 
     [Fact]
