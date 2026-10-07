@@ -1,7 +1,7 @@
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -38,19 +38,13 @@ public sealed class ValidateAtLoadTests : IDisposable
                 first.RequireReads().DocumentOf(_formKey, _entry.KeyOf()), NpcEditorId, "EditedWhileStopped");
         }
 
-        var entries = new List<LogEntry>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Debug);
-            b.AddProvider(new CollectingLoggerProvider(entries));
-        });
         var holder = new LoadOrderHolder();
-        using var restarted = Indexes.Open(holder, loggerFactory: loggerFactory);
+        var notifications = new InMemoryNotificationPublisher();
+        using var restarted = Indexes.Open(holder, notifications: notifications);
 
         restarted.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
         Assert.Equal("EditedWhileStopped", restarted.RequireReads().DocumentOf(_formKey, _entry.KeyOf()).EditorId);
-        Assert.DoesNotContain(
-            entries, e => e.Message.StartsWith($"Indexing {PluginName} ", StringComparison.Ordinal));
+        Assert.Equal([_formKey], Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>()).Keys);
     }
 }
