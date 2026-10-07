@@ -124,7 +124,7 @@ public sealed record PluginByteComparison(
     bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, PluginDiagnosis? LossCause = null);
 
 /// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> did, and for a plugin it wrote, the
-/// hash of those bytes, which <see cref="IPluginAdapter.TakeBackEmpty"/> is later handed.</summary>
+/// hash of those bytes, which the take-back is later handed.</summary>
 public readonly record struct EmptyPluginCreated(EmptyPluginWrite Outcome, string Written = "")
 {
     public static implicit operator EmptyPluginCreated(EmptyPluginWrite outcome) => new(outcome);
