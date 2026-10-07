@@ -1,6 +1,6 @@
 # Index every plugin, filter to the active ones
 
-The record index holds every plugin file in the instance, active or not. Every record view filters to the active plugins. A load order change then changes a filter and reads no file, so the editor follows it as it happens ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)).
+The record index holds every plugin file in the instance, active or not. Every record view filters to the active plugins, except a file the user opens. A load order change then changes a filter and reads no file, so the editor follows it as it happens ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)).
 
 ## Consequences
 

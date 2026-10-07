@@ -45,13 +45,13 @@ As a user, I want:
 As a user, I want:
 
 1. One column for each active plugin that holds the record, in plugin order: the record's master on the left, the winning copy on the right. The file's column is marked as the one I edit. Source: xEdit; ADR-0012
-2. A plugin that is not active not to be a column: an overridden plugin, a disabled plugin, or a plugin in a disabled mod. Source: ADR-0012
+2. A plugin that is not active not to be a column: an overridden plugin, a disabled plugin, or a plugin in a disabled mod. The file I opened is the exception. An overridden plugin's file is a column just before the plugin that overrides it. Any other file whose plugin is not active shows alone (States, story 7). Source: ADR-0012; ADR-0001
 3. To collapse a column to a narrow strip from a control in its header, and to restore it the same way.
 4. A cell in a column that cannot be edited, or that is not the file's, to open no editor, as in xEdit. Nothing marks its cells ahead of time. Its header says why, or opens its file. Source: xEdit; ADR-0018
 5. Each column sized to fit, and its edge to drag to resize it.
 6. The grid to scroll sideways from a scrollbar that stays at the bottom of the panel at every vertical position.
 7. Opened on several records, one column for each, in the order I selected them, the first as the file. Their cells carry no conflict colour: the conflict model compares copies of one record. Source: xEdit Compare Selected; editor-conflicts.md
-8. A click on a column's header to open that column's file, or its rendered document when the plugin is untracked or its plugin source is unreadable, in this tab, in place of the file I came from, with the same columns. Source: xEdit edits any column in one window; VS Code's Explorer opens a click in the preview tab
+8. A click on a column's header to open that column's file, or its rendered document when the plugin is untracked or its plugin source is unreadable, with the same columns, as a click opens a file in VS Code's Explorer: in the preview tab. Source: xEdit edits any column in one window; VS Code's preview editors
 
 ### A column's header
 
@@ -65,6 +65,8 @@ As a user, I want:
 | Status | When | The tooltip says | Source |
 |---|---|---|---|
 | `(parse failure)` | mEdit could not read this copy of the record. The column shows what could be stored. | the diagnosis | Never silently wrong |
+| `(overridden)` | another mod's file of the same name overrides the plugin | that the game loads that mod's file instead, naming the mod | CONTEXT.md, Overridden plugin |
+| `(not active)` | the plugin is disabled, or in a disabled mod | that the game does not load it, so no other copy is compared | ADR-0012 |
 | `(read-only)` | the game folder provides the plugin | that the game's plugins are not edited | ruling |
 | `(in Overwrite)` | the plugin is in Overwrite | that Overwrite is not a mod, and a plugin moved into a mod can be tracked | ruling |
 | `(untracked)` | the plugin is not tracked | that Track, in this header's menu, makes it editable | ADR-0007 |
@@ -72,7 +74,7 @@ As a user, I want:
 | `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
 | `(tracked)` | the plugin is tracked | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007 |
 
-A column shows one status, the first in this table that applies. A Partial Form column is dimmed, header and cells alike, so it reads as outside the conflict after the header scrolls away.
+A column shows one status, the first in this table that applies. A Partial Form or overridden column is dimmed, header and cells alike, so it reads as outside the conflict after the header scrolls away.
 
 ## Rows
 
@@ -118,6 +120,7 @@ As a user, I want:
 4. When a record the tab showed is gone from every plugin, the panel to say the record is gone, naming it, in place of the grid.
 5. The file's column to follow its document, and the other columns to read again when mEdit reports the record changed, from an edit of mine or from any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the scroll stay. Source: ADR-0015; ADR-0001
 6. While mEdit cannot read a plugin the panel shows, the message above the grid saying "Showing the last good read:" and the reason. Source: common, States, story 6
+7. A file whose plugin is disabled, or in a disabled mod, to show its own column alone, editable, with no conflict colour, and the message above the grid saying "This file's plugin is not active: no other copy is compared." Source: ADR-0012; ADR-0001
 
 ## Menus and keys
 
@@ -131,7 +134,7 @@ The row menus follow VS Code's groups: open, change, source control, copy, then 
 
 As a user, I want:
 
-1. Go to record to show the record the reference points to, in the panel's editor group, as VS Code's Go to Definition does. Source: xedit.md, divergence 8; catalog `open`; Stay in the panel
+1. Go to record to show the record the reference points to, in the panel's editor group, as VS Code's Go to Definition does. Source: xedit.md, divergence 8; catalog `open`
 2. Open field value to open the field's text in a text editor tab beside the panel, titled `<field> [<file name>]`. Each save writes it; closing without saving writes nothing. Opened again, the same tab shows. In a column that cannot be edited, the tab is read-only, so a long value can still be read. Source: xedit.md, divergences 2 and 6; catalog `open field value`
 3. Copy on a column to copy that plugin's copy of the record, asking for the mode and then the destination, as in Plugins. Source: catalog `copy`; xEdit's column header menu
 4. Delete on a column to remove that plugin's copy of the record, after one confirmation naming it. Source: catalog `delete`; xEdit's column header menu

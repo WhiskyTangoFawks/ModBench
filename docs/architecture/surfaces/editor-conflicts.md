@@ -48,7 +48,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. Only the active plugins' copies compared, which are the only columns. Source: ADR-0012; [editor.md](editor.md)
+1. Only the active plugins' copies compared. An overridden plugin's column, shown when I open its file, is left out of the comparison: the game never loads it. Source: ADR-0012; [editor.md](editor.md)
 2. A Partial Form copy's own fields left out of the comparison, as if it did not have them, even where they differ: the game ignores them. Its children compare as any record does. Source: xEdit
 3. A field's winner to be the last copy that has a value for it, so a Partial Form copy that leaves a field out never wins it. Source: xEdit
 4. Arrays compared as they align ([editor-fields.md](editor-fields.md), Arrays). Source: xEdit
