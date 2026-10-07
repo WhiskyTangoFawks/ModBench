@@ -38,13 +38,13 @@ public record CellChildRecords(
     IReadOnlyList<ChildRecordSummary> Temporary);
 
 public record ChildRecordSummary(
-    string FormKey, string? EditorId, string? BaseFormKey, string RecordType, bool HasParseFailure = false,
-    string? FullName = null, string? BaseEditorId = null, string? ParseDiagnosis = null);
+    string FormKey, string? EditorId, string? BaseFormKey, string RecordType, WorkingTreeState WorkingTreeState,
+    bool HasParseFailure = false, string? FullName = null, string? BaseEditorId = null, string? ParseDiagnosis = null);
 
 // IsPersistentWorldspaceCell is the cell a Worldspace's TopCell slot names (xEdit's "<Persistent
 // Worldspace Cell>"). FullName stays a separate fact: xEdit's GetDisplayName checks FULL first,
 // unconditionally, so the tree provider needs both.
 public record CellSummary(
-    string FormKey, string? EditorId, int? CellX, int? CellY,
+    string FormKey, string? EditorId, int? CellX, int? CellY, WorkingTreeState WorkingTreeState,
     bool IsPersistentWorldspaceCell = false, string? FullName = null, bool HasParseFailure = false,
     string? ParseDiagnosis = null, bool HasChildren = false);

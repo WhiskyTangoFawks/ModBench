@@ -64,7 +64,7 @@ async function worldspaceGroup(
 }
 
 function holdingWorldspace(client: InMemoryMEditClient, plugin: PluginAddress, topCell: CellSummary): void {
-  client.setQueryAnswer('getWorldspaces', [{ formKey: `w:${plugin.name}`, hasParseFailure: false, hasChildren: true }]);
+  client.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: `w:${plugin.name}`, hasParseFailure: false, hasChildren: true }]);
   client.setQueryAnswer('getWorldspaceBlocks', { topCells: [topCell], blocks: [] });
 }
 
@@ -84,7 +84,7 @@ export async function cellRow(cell: CellSummary, plugin: PluginAddress, conditio
 }
 
 export async function placedRow(child: ChildRecordSummary, plugin: PluginAddress, conditions?: PluginConditions): Promise<PluginTreeNode> {
-  const topCell = { formKey: `c:${plugin.name}`, isPersistentWorldspaceCell: false, hasChildren: true, hasParseFailure: false };
+  const topCell = { formKey: `c:${plugin.name}`, isPersistentWorldspaceCell: false, hasChildren: true, hasParseFailure: false, workingTreeState: 'None' as const };
   const { provider, worldspace } = await worldspaceGroup(plugin, conditions, (client) => {
     holdingWorldspace(client, plugin, topCell);
     client.setQueryAnswer('getCellChildRecords', { persistent: [child], temporary: [] });
