@@ -51,7 +51,7 @@ public class ConflictByCompareTests
     [InlineData("formKey", "\"Null\"", true)]
     [InlineData("formKey", "\"000001:Test.esp\"", false)]
     [InlineData("struct", "{}", true)]
-    public void Classify_AbsentAgainstAnExplicitValue_IsAConflictOnlyWhenTheValueIsNotTheDefault_ForTheCodecOmitsAMemberEqualToItsDefault(
+    public void AbsentAgainstAnExplicitValue_IsAConflictOnlyWhenTheValueIsNotTheDefault_ForTheCodecOmitsAMemberEqualToItsDefault(
         string type, string json, bool equal)
     {
         var meta = new FieldMetadata("Member", type, false, [], []);
@@ -68,7 +68,7 @@ public class ConflictByCompareTests
     [InlineData("2", true)]
     [InlineData("2.0", true)]
     [InlineData("0", false)]
-    public void Classify_AbsentAgainstAnExplicitValue_EqualsTheDeclaredDefault_NotZero_ForMutagenDeclaresVirtualMachineAdapterObjectFormatAsTwoAndTheCodecOmitsExactlyThat(string json, bool equal)
+    public void AbsentAgainstAnExplicitValue_EqualsTheDeclaredDefault_NotZero_ForMutagenDeclaresVirtualMachineAdapterObjectFormatAsTwoAndTheCodecOmitsExactlyThat(string json, bool equal)
     {
         var meta = new FieldMetadata("ObjectFormat", "int", false, [], [], Default: 2);
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null, [new FieldValue(meta, null)], "Data", RecordType: "Npc");
@@ -81,7 +81,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_SinglePlugin_ReturnsAllNonNullFieldsAsDiffs()
+    public void SinglePluginShowsEveryNonNullField()
     {
         var o = MakeOverride("DLCRobot.esm", 0, ("Name", "SomeNPC"), ("Level", (object?)10), ("NullField", (object?)null));
         var result = CompareQuery.Classify([o]);
@@ -98,7 +98,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_SameFilenameDifferentOrigin_DoesNotCollide_WhereBarePluginDictionaryKeysWouldThrowOnTheDuplicate()
+    public void SameFilenameDifferentOrigin_DoesNotCollide_WhereBarePluginDictionaryKeysWouldThrowOnTheDuplicate()
     {
         var modA = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, ("Name", "FromModA"));
         var modB = MakeOverrideWithOrigin("Shared.esp", "ModB", 1, ("Name", "FromModB"));
@@ -112,7 +112,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_SameFilenameDifferentOrigin_EditingOneColumnsValue_LeavesTheOtherColumnsValueInTheDiff()
+    public void SameFilenameDifferentOrigin_EditingOneColumnsValue_LeavesTheOtherColumnsValueInTheDiff()
     {
         var modA = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, ("Name", "Original"));
         var modB = MakeOverrideWithOrigin("Shared.esp", "ModB", 1, ("Name", "Original"));
@@ -129,7 +129,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_TwoPlugins_AllFieldsSame_ReturnsNoConflict()
+    public void TwoPlugins_AllFieldsSame_ReturnsNoConflict()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, ("Name", "Alice"));
@@ -140,7 +140,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_ColumnWithNoCellStates_HasNoPluginState()
+    public void ColumnWithNoCellStatesHasNoPluginState()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var empty = MakeOverride("B.esp", 1);
@@ -149,7 +149,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_FourPlugins_OneITM_TwoDisagree_ReturnsConflict_NotNoConflictThoughOneIsIdenticalToMaster()
+    public void FourPlugins_OneITM_TwoDisagree_ReturnsConflict_NotNoConflictThoughOneIsIdenticalToMaster()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var loser = MakeOverride("B.esp", 1, ("Name", "Bob"));
@@ -160,7 +160,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_TwoPlugins_OneChangesUniqueField_ReturnsOverride()
+    public void TwoPlugins_OneChangesUniqueField_ReturnsOverride()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"), ("Level", 1));
         var override1 = MakeOverride("B.esp", 1, ("Name", "Alice"), ("Level", 5));
@@ -171,7 +171,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_TwoPlugins_DifferentValues_ReturnsOverride_ForOnlyOneNonMasterChangesTheFieldSoItIsUncontested()
+    public void TwoPlugins_DifferentValues_ReturnsOverride_ForOnlyOneNonMasterChangesTheFieldSoItIsUncontested()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, ("Name", "Bob"));
@@ -182,7 +182,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_ThreePlugins_TwoNonMastersDisagree_ReturnsConflict()
+    public void ThreePlugins_TwoNonMastersDisagree_ReturnsConflict()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var loser = MakeOverride("B.esp", 1, ("Name", "Bob"));
@@ -194,7 +194,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_ThreePlugins_OneFieldConflicts_OtherAgreesOnChange_ReturnsConflict()
+    public void ThreePlugins_OneFieldConflicts_OtherAgreesOnChange_ReturnsConflict()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"), ("Level", 1));
         var loser = MakeOverride("B.esp", 1, ("Name", "Bob"), ("Level", 5));
@@ -204,7 +204,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_WinnerChangesField_OnlyOneContesterAmongMultiple_GetsConflictWins()
+    public void WinnerChangesField_OnlyOneContesterAmongMultiple_GetsConflictWins()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"), ("Level", 1));
         var contester = MakeOverride("B.esp", 1, ("Name", "Bob"), ("Level", 1));
@@ -215,7 +215,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_WinnerChangesLevel_OtherChangesName_WinnerGetsOverride_ForAnotherPluginsNameChangeDoesNotContestTheWinnersLevel()
+    public void WinnerChangesLevel_OtherChangesName_WinnerGetsOverride_ForAnotherPluginsNameChangeDoesNotContestTheWinnersLevel()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"), ("Level", 1));
         var other = MakeOverride("B.esp", 1, ("Name", "Bob"), ("Level", 5));
@@ -225,7 +225,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_LoserChangesMultipleFields_OnlyOneLost_GetsConflictLoses()
+    public void LoserChangesMultipleFields_OnlyOneLost_GetsConflictLoses()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"), ("Level", 1));
         var loser = MakeOverride("B.esp", 1, ("Name", "Bob"), ("Level", 5));
@@ -235,7 +235,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_NullFieldInNonMaster_TreatedAsAbsent_NotConflictLoses_ForAPluginThatLeavesTheFieldAbsent()
+    public void NullFieldInNonMaster_TreatedAsAbsent_NotConflictLoses_ForAPluginThatLeavesTheFieldAbsent()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"), ("Level", 1));
         var partial = MakeOverride("B.esp", 1, ("Name", null), ("Level", 5));
@@ -246,7 +246,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_NullFieldInNonMaster_DoesNotCountAsConflict()
+    public void NullFieldInNonMasterIsNoConflict()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var partial = MakeOverride("B.esp", 1, ("Name", null));
@@ -256,7 +256,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_RecordWideWinnerHasNullField_WinnerColumnFallsThroughToEarlierPlugin()
+    public void RecordWideWinnerHasNullField_WinnerColumnFallsThroughToEarlierPlugin()
     {
         var master = MakeOverride("A.esp", 0, ("Level", 1), ("Name", "Alice"));
         var winner = MakeOverride("C.esp", 1, ("Level", null), ("Name", "Bob"));
@@ -268,7 +268,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_PartialFormOverride_OwnNonNullFieldDiffersFromMaster_StillNoConflict()
+    public void PartialFormOverride_OwnNonNullFieldDiffersFromMaster_StillNoConflict()
     {
         var master = MakeOverride("A.esp", 0, ("Level", 1));
         var partial = MakePartialFormOverrideWhoseOwnFieldsAreExcludedRegardlessOfContent("B.esp", 1, ("Level", 999));
@@ -278,7 +278,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_PartialFormOverride_OwnFieldNeverWinsOrLoses()
+    public void PartialFormOverride_OwnFieldNeverWinsOrLoses()
     {
         var master = MakeOverride("A.esp", 0, ("Level", 1));
         var partial = MakePartialFormOverrideWhoseOwnFieldsAreExcludedRegardlessOfContent("B.esp", 1, ("Level", 999));
@@ -289,7 +289,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_TwoPlugins_JsonElementFields_EqualValues_ReturnsNoConflict_ComparedByRawTextNotReferenceEquality()
+    public void TwoPlugins_JsonElementFields_EqualValues_ReturnsNoConflict_ComparedByRawTextNotReferenceEquality()
     {
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[1,2,3]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[1,2,3]");
@@ -300,7 +300,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_TwoPlugins_JsonElementFields_DifferentValues_ReturnsOverride()
+    public void TwoPlugins_JsonElementFields_DifferentValues_ReturnsOverride()
     {
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[1,2,3]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[4,5,6]");
@@ -311,7 +311,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_PluginMissingFieldEntirely_TreatedAsNull()
+    public void PluginMissingFieldEntirely_TreatedAsNull()
     {
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
             [new FieldValue(Meta("Name"), "Alice"), new FieldValue(Meta("Level"), 1)], Origin: "Data", RecordType: "Npc");
@@ -323,7 +323,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_LinkArraySameElementsDifferentOrder_ReturnsOverride()
+    public void LinkArraySameElementsDifferentOrder_ReturnsOverride()
     {
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\",\"c\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"c\",\"a\",\"b\"]");
@@ -337,7 +337,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_LinkArrayDifferentLengths_ReturnsOverride()
+    public void LinkArrayDifferentLengths_ReturnsOverride()
     {
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\"]");
@@ -350,7 +350,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_LinkArrayDifferentElements_ReturnsOverride()
+    public void LinkArrayDifferentElements_ReturnsOverride()
     {
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"c\"]");
@@ -363,7 +363,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_UnsortedArraySameElementsDifferentOrder_ReturnsOverride()
+    public void UnsortedArraySameElementsDifferentOrder_ReturnsOverride()
     {
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[1,2]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[2,1]");
@@ -374,7 +374,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_TwoPlugins_NonMasterMatchesMaster_CellStateIsIdenticalToMaster_AndTheMasterHasNoCellState()
+    public void TwoPlugins_NonMasterMatchesMaster_CellStateIsIdenticalToMaster_AndTheMasterHasNoCellState()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, ("Name", "Alice"));
@@ -385,7 +385,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_TwoPlugins_NonMasterChangesFieldUncontestedly_CellStateIsOverride_AndTheMasterHasNoCellState()
+    public void TwoPlugins_NonMasterChangesFieldUncontestedly_CellStateIsOverride_AndTheMasterHasNoCellState()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, ("Name", "Bob"));
@@ -396,7 +396,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_ThreePlugins_TwoDisagreeOnField_WinnerGetsConflictWins_LoserGetsConflictLoses_AndTheMasterHasNoCellState()
+    public void ThreePlugins_TwoDisagreeOnField_WinnerGetsConflictWins_LoserGetsConflictLoses_AndTheMasterHasNoCellState()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var loser = MakeOverride("B.esp", 1, ("Name", "Bob"));
@@ -409,7 +409,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_FieldWinnerDiffersFromRecordWinner_FieldWinnerGetsOverride_NotConflictLoses_AndTheNullRecordWinnerHasNoCellState()
+    public void FieldWinnerDiffersFromRecordWinner_FieldWinnerGetsOverride_NotConflictLoses_AndTheNullRecordWinnerHasNoCellState()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var fieldWinner = MakeOverride("B.esp", 1, ("Name", "Bob"));
@@ -421,7 +421,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_NonWinnerMatchesFieldWinner_CellStateIsOverride_NotConflictLoses()
+    public void NonWinnerMatchesFieldWinner_CellStateIsOverride_NotConflictLoses()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var nonWinner = MakeOverride("B.esp", 1, ("Name", "Bob"));
@@ -432,7 +432,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_NullValueInNonMaster_OmittedFromCellStates()
+    public void NullValueInNonMaster_OmittedFromCellStates()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var partial = MakeOverride("B.esp", 1, ("Name", null));
@@ -444,7 +444,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_LeafField_AllPluginsAgree_ConflictAllIsNoConflict()
+    public void LeafField_AllPluginsAgree_ConflictAllIsNoConflict()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, ("Name", "Alice"));
@@ -454,7 +454,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_LeafField_UncontestedOverride_ConflictAllIsOverride()
+    public void LeafField_UncontestedOverride_ConflictAllIsOverride()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, ("Name", "Bob"));
@@ -464,7 +464,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_LeafField_ContestedWinLose_ConflictAllIsConflict()
+    public void LeafField_ContestedWinLose_ConflictAllIsConflict()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var loser = MakeOverride("B.esp", 1, ("Name", "Bob"));
@@ -475,7 +475,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_TwoSiblingFields_OnlyOneDiffers_OnlyThatFieldsConflictAllIsNonNoConflict_NotTheRecordWideValueStampedOnEveryRow()
+    public void TwoSiblingFields_OnlyOneDiffers_OnlyThatFieldsConflictAllIsNonNoConflict_NotTheRecordWideValueStampedOnEveryRow()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"), ("Level", 5));
         var override1 = MakeOverride("B.esp", 1, ("Name", "Bob"), ("Level", 5));
@@ -488,7 +488,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_StructField_OneSubFieldDiffers_StructConflictAllAggregatesFromChild()
+    public void StructField_OneSubFieldDiffers_StructConflictAllAggregatesFromChild()
     {
         var subX = Meta("X", "int");
         var subY = Meta("Y", "int");
@@ -512,7 +512,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_NestedStructInsideTheOverridesElement_GrandchildConflictAggregatesTwoLevelsUp()
+    public void NestedStructInsideTheOverridesElement_GrandchildConflictAggregatesTwoLevelsUp()
     {
         var subX = Meta("X", "int");
         var posMeta = new FieldMetadata("Pos", "struct", false, [], [], Fields: [subX]);
@@ -541,7 +541,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_PerNodeConflictAll_DoesNotChangeRecordWideConflictAll()
+    public void RecordWideConflictAllIsOverrideWhenOnlyOneFieldDiffers()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"), ("Level", 5));
         var override1 = MakeOverride("B.esp", 1, ("Name", "Bob"), ("Level", 5));
@@ -559,7 +559,7 @@ public class ConflictByCompareTests
             [new FieldValue(structMeta, structValue)], "Data", RecordType: "Npc");
 
     [Fact]
-    public void Classify_NonStructField_ChildrenIsNull()
+    public void NonStructFieldHasNoChildren()
     {
         var master = MakeOverride("A.esp", 0, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, ("Name", "Bob"));
@@ -569,7 +569,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_StructField_TwoPluginsDifferOnSubField_ChildrenPopulated()
+    public void StructField_TwoPluginsDifferOnSubField_ChildrenPopulated()
     {
         var subX = Meta("X", "int");
         var subY = Meta("Y", "int");
@@ -598,7 +598,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_StructField_AllPluginsAgreeOnStruct_ChildrenHaveIdenticalToMasterStates()
+    public void StructField_AllPluginsAgreeOnStruct_ChildrenHaveIdenticalToMasterStates()
     {
         var subX = Meta("X", "int");
         var subY = Meta("Y", "int");
@@ -618,7 +618,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_StructField_ThreePluginsTwoDisagreeOnSubField_ConflictWinsAndConflictLoses()
+    public void StructField_ThreePluginsTwoDisagreeOnSubField_ConflictWinsAndConflictLoses()
     {
         var subX = Meta("X", "int");
         var structMeta = StructMeta("Pos", subX);
@@ -642,7 +642,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_StructField_WinnerMissingField_ChildrenBuiltFromOtherPlugins()
+    public void StructField_WinnerMissingField_ChildrenBuiltFromOtherPlugins()
     {
         var subX = Meta("X", "int");
         var structMeta = StructMeta("Pos", subX);
@@ -663,7 +663,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_StructField_SubFieldAbsentInOnePlugin_ThatPluginOmittedFromChildCellStates()
+    public void StructField_SubFieldAbsentInOnePlugin_ThatPluginOmittedFromChildCellStates()
     {
         var subX = Meta("X", "int");
         var subY = Meta("Y", "int");
@@ -686,7 +686,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_StructField_ArraySubFieldIncluded_ProducesChildRows()
+    public void StructField_ArraySubFieldIncluded_ProducesChildRows()
     {
         var subX = Meta("X", "int");
         var subYArray = new FieldMetadata("Y", "array", true, [], [],
@@ -712,7 +712,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_StructField_SubFieldWinnerIsTheHighestLoadOrderPluginWithAValue_NotTheLowest()
+    public void StructField_SubFieldWinnerIsTheHighestLoadOrderPluginWithAValue_NotTheLowest()
     {
         var subX = Meta("X", "int");
         var structMeta = StructMeta("Pos", subX);
@@ -731,7 +731,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_StructField_JsonNullSubField_TreatedAsAbsent()
+    public void StructField_JsonNullSubField_TreatedAsAbsent()
     {
         var subX = Meta("X", "int");
         var subY = Meta("Y", "int");
@@ -751,7 +751,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_ScalarFormKeyField_PopulatesResolutionPerPlugin()
+    public void ScalarFormKeyField_PopulatesResolutionPerPlugin()
     {
         var meta = new FieldMetadata("Race", "formKey", false, ["Race"], []);
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
@@ -769,7 +769,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_LinkArray_SiblingLeavesResolveIndependently_ParentCarriesNoResolutions()
+    public void LinkArray_SiblingLeavesResolveIndependently_ParentCarriesNoResolutions()
     {
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"000AAA:Test.esp\",\"000BBB:Test.esp\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
@@ -788,7 +788,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_StructFormKeySubField_ReportsItsOwnCheckErrorAndTheParentReportsTheSubtreePathed()
+    public void StructFormKeySubField_ReportsItsOwnCheckErrorAndTheParentReportsTheSubtreePathed()
     {
         var factionField = new FieldMetadata("Faction", "formKey", false, ["fact"], []);
         var rankField = Meta("Rank", "int");
@@ -814,7 +814,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_PartialFormColumn_ReportsNoUnsetLinkCheckError_ForAnExclusionIsNotTheRecordSayingTheLinkIsUnset()
+    public void PartialFormColumn_ReportsNoUnsetLinkCheckError_ForAnExclusionIsNotTheRecordSayingTheLinkIsUnset()
     {
         var meta = new FieldMetadata("Race", "formKey", false, ["race"], []);
         var link = JsonSerializer.Deserialize<JsonElement>("\"000AAA:Test.esp\"");
@@ -829,7 +829,7 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void Classify_StructFormKeySubField_ResolvesIndependentlyOfSiblingStructField_ANonFormKeySiblingGetsNoResolutions()
+    public void StructFormKeySubField_ResolvesIndependentlyOfSiblingStructField_ANonFormKeySiblingGetsNoResolutions()
     {
         var factionField = new FieldMetadata("Faction", "formKey", false, ["fact"], []);
         var rankField = Meta("Rank", "int");

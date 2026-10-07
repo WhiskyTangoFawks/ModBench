@@ -12,7 +12,7 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class QuestChildWriteApiTests : IDisposable
+public sealed class QuestChildEditTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
 

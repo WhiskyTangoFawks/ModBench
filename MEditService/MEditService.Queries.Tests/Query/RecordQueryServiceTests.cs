@@ -727,7 +727,7 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public void GetCompare_EquivalentGenericFieldAndVmadPropertyConflictLoss_ClassifyToSameConflictThis()
+    public void GetCompare_EquivalentGenericFieldAndVmadPropertyConflictLoss_ShowTheSameConflictThis()
     {
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)

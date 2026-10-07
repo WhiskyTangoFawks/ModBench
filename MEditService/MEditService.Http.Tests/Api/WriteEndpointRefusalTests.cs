@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<TestPluginFixture> loaded)
+public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
@@ -22,12 +22,12 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     private const string DestPlugin = "Destination.esp";
 
     private static ScatteredFixtureData BuildOneModOnePlugin() =>
-        new PluginFixtureBuilder("api-604-one")
+        new PluginFixtureBuilder("api-write-one")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("ApiNpc"), origin: Origin)
             .BuildScattered();
 
     private static ScatteredFixtureData BuildSourceAndDestination() =>
-        new PluginFixtureBuilder("api-604-two")
+        new PluginFixtureBuilder("api-write-two")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("ApiNpc"), origin: Origin)
             .WithPlugin(DestPlugin, mod => mod.Npcs.AddNew("DestNpc"), origin: DestOrigin)
             .BuildScattered();
@@ -63,7 +63,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     }
 
     [Fact]
-    public async Task DeleteRecord_WithNoRecords_Is400()
+    public async Task DeletingNoRecordsIsABadRequest()
     {
         var response = await _client.PostAsJsonAsync("/records/delete", new { records = Array.Empty<object>() });
 
@@ -71,7 +71,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     }
 
     [Fact]
-    public async Task DeleteRecord_WithARecordMissingItsOrigin_Is400()
+    public async Task DeletingARecordWithNoOriginIsABadRequest()
     {
         var response = await _client.PostAsJsonAsync("/records/delete", new
         {
@@ -85,7 +85,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     [InlineData("Override")]
     [InlineData("New")]
     [InlineData("DeepOverride")]
-    public async Task CopyRecord_WhenTheDestinationCannotBeWritten_AnswersTheItemRefused_NotAnUnhandled500(string mode)
+    public async Task CopyingToAnUnwritableDestinationRefusesTheItemInsteadOfFailingTheRequest(string mode)
     {
         using var fx = BuildSourceAndDestination();
         await Load(fx);
@@ -110,7 +110,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     }
 
     [Fact]
-    public async Task CopyRecord_WithNoDestination_Is400()
+    public async Task CopyingWithNoDestinationIsABadRequest()
     {
         using var fx = BuildSourceAndDestination();
         await Load(fx);
@@ -122,7 +122,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     }
 
     [Fact]
-    public async Task CopyRecord_AsNewWithTheReplaceOption_Is400_AndCopiesNothing()
+    public async Task CopyingAsNewWithReplaceIsABadRequestAndCopiesNothing()
     {
         using var fx = BuildSourceAndDestination();
         await Load(fx);
