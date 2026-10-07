@@ -50,14 +50,10 @@ public sealed record RecordStamps(
 /// asked against (ADR-0003).</summary>
 internal static class TreeStamps
 {
-    // A file system stamps a change with a clock coarser than a hash is quick, and a network share's
-    // clock is not this machine's: a stamp this recent may not change for a write that follows it.
-    private static readonly TimeSpan SettledAfter = TimeSpan.FromSeconds(2);
-
-    private static readonly ConcurrentDictionary<string, ConcurrentDictionary<string, KnownDocument>> Known =
+    private static readonly ConcurrentDictionary<string, StampGatedMemo<KnownDocument>> Known =
         new(StringComparer.Ordinal);
 
-    private readonly record struct KnownDocument(FileStamp Stamp, string FormKey, string Content);
+    private sealed record KnownDocument(string FormKey, string Content);
 
     internal static string ContentStamp(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
@@ -69,7 +65,7 @@ internal static class TreeStamps
 
         var root = SourceRepositoryLayout.RootIn(modFolder, plugin.Name);
         foreach (var gone in Known.Keys.Where(tree => !Directory.Exists(tree))) Known.TryRemove(gone, out _);
-        var known = Known.GetOrAdd(root, _ => new ConcurrentDictionary<string, KnownDocument>(StringComparer.Ordinal));
+        var known = Known.GetOrAdd(root, _ => new StampGatedMemo<KnownDocument>(TimeProvider.System));
         var listed = new HashSet<string>(StringComparer.Ordinal);
         if (Directory.Exists(root))
         {
@@ -81,24 +77,18 @@ internal static class TreeStamps
                 listed.Add(file);
 
                 var relativePath = Path.GetRelativePath(modFolder, file);
-                if (KnownOrRead(known, file, relativePath, plugin.Name, unreadable) is not { } document) continue;
+                if (known.Of(file, () => Read(file, relativePath, plugin.Name, unreadable)) is not { } document) continue;
                 holders.Hold(document.FormKey, file);
                 stamps[document.FormKey] = document.Content;
             }
         }
 
-        foreach (var path in known.Keys.Where(path => !listed.Contains(path))) known.TryRemove(path, out _);
+        known.Retain(listed);
         return new RecordStamps(stamps, unreadable, holders.Claimed);
     }
 
-    private static KnownDocument? KnownOrRead(
-        ConcurrentDictionary<string, KnownDocument> known, string file, string relativePath, string pluginName,
-        List<UnreadableFile> unreadable)
+    private static KnownDocument? Read(string file, string relativePath, string pluginName, List<UnreadableFile> unreadable)
     {
-        var current = FileStamp.Of(file);
-        if (current is { } now && known.TryGetValue(file, out var remembered) && remembered.Stamp == now) return remembered;
-
-        var readFrom = TimeProvider.System.GetUtcNow();
         byte[] bytes;
         try
         {
@@ -108,7 +98,6 @@ internal static class TreeStamps
         {
             // Never exclusive owners of a file: it may vanish or lock between the listing and the
             // read. A skip and a line, and the tree stops counting as evidence a record is gone.
-            known.TryRemove(file, out _);
             unreadable.Add(new UnreadableFile(relativePath, $"Could not read '{relativePath}': {ex.Message}"));
             return null;
         }
@@ -116,7 +105,6 @@ internal static class TreeStamps
         var text = Encoding.UTF8.GetString(bytes);
         if (DocumentText.FormKeyDeclaredIn(text, file, pluginName) is not { } formKey)
         {
-            known.TryRemove(file, out _);
             unreadable.Add(new UnreadableFile(
                 relativePath,
                 DocumentText.JsonErrorIn(text) is { } error
@@ -125,9 +113,6 @@ internal static class TreeStamps
             return null;
         }
 
-        var read = new KnownDocument(current ?? default, formKey, ContentStamp(text));
-        if (current is { } before && before.ChangedBefore(readFrom - SettledAfter)) known[file] = read;
-        else known.TryRemove(file, out _);
-        return read;
+        return new KnownDocument(formKey, ContentStamp(text));
     }
 }
