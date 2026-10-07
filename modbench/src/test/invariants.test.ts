@@ -17,7 +17,9 @@ describe('every MO2 text-file write command has a corpus test', () => {
   it('finds the write verbs', () => {
     expect(writeVerbs).toContain('setModsEnabled');
     expect(writeVerbs).toContain('switchProfile');
-    expect(writeVerbs).toContain('excludeDownload');
+    expect(writeVerbs).toContain('excludeDownloads');
+    expect(writeVerbs).toContain('modSyncOver');
+    expect(writeVerbs).toContain('pluginSyncOver');
     expect(writeVerbs).toContain('deleteDownloads');
     expect(writeVerbs).toContain('markDownloadInstalled');
   });
@@ -54,7 +56,7 @@ describe('only the Instance adapter touches a downloaded file\'s .meta', () => {
 
 function commandVerbs(source: string): string[] {
   return [...source.matchAll(/^export (?:async )?function (\w+)([\s\S]*?)\{\n/gm)]
-    .filter((m) => /applied|Result>|SelectionOutcome</.test(present(m[2], "the function body between signature and opening brace")))
+    .filter((m) => /applied|Result>|SelectionOutcome<|Run\s*$/.test(present(m[2], "the function body between signature and opening brace")))
     .map((m) => present(m[1], "the exported function's name"));
 }
 

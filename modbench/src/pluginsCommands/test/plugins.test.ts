@@ -6,7 +6,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../plugins';
+import { pluginSyncOver, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../plugins';
 import { accessTo, adapterOver, providedPluginsIn, readPluginLines } from '../../test/mo2/adapterOver';
 import type { PluginMetadata } from '../../client';
 import { isPluginFile, type PluginOrderChange } from '../../instanceAdapter/instanceAdapter';
@@ -276,9 +276,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     profile, pluginOrder: await readPluginLines(dir, profile), provided: await providedPluginsIn(dir, profile), inData, loadedWithNoLine,
   });
 
-  const run = async (inDataOrTheFolderOnDiskWhenUndefined?: DataFolderPlugins, loadedWithNoLine: readonly string[] = []) => syncPlugins(
-    accessTo(dir),
-    await readNow(PROFILE, inDataOrTheFolderOnDiskWhenUndefined ?? await inDataOnDiskAsCaseFoldedNamesAtTheDataFoldersRoot(), loadedWithNoLine));
+  const run = async (inDataOrTheFolderOnDiskWhenUndefined?: DataFolderPlugins, loadedWithNoLine: readonly string[] = []) => pluginSyncOver(accessTo(dir))(await readNow(PROFILE, inDataOrTheFolderOnDiskWhenUndefined ?? await inDataOnDiskAsCaseFoldedNamesAtTheDataFoldersRoot(), loadedWithNoLine));
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'plugins-sync-'));
@@ -325,7 +323,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     await writeFile(otherPath, '*Gone.esp\r\n');
     const active = await plugins();
 
-    const outcome = await syncPlugins(accessTo(dir), await readNow('Other', { kind: 'listed', names: new Set() }, []));
+    const outcome = await pluginSyncOver(accessTo(dir))(await readNow('Other', { kind: 'listed', names: new Set() }, []));
 
     expect(outcome).toEqual({ applied: true, wrote: true, added: [], dropped: ['Gone.esp'] });
     expect(await readFile(otherPath, 'utf8')).toBe('');
@@ -392,7 +390,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     const old = new Date('2020-01-01T00:00:00Z');
     await utimes(pluginsPath(), old, old);
 
-    const result = await syncPlugins(accessTo(dir), await readNow(PROFILE, { kind: 'unresolved' }, undefined));
+    const result = await pluginSyncOver(accessTo(dir))(await readNow(PROFILE, { kind: 'unresolved' }, undefined));
 
     expect(result).toEqual({ applied: false, toldAsInstanceState: true });
     expect(await mtime()).toEqual(old);
@@ -442,7 +440,7 @@ describe('plugins commands hand the Instance adapter the change, decided on the 
 
   it('plugin sync drops each line nothing provides and adds each provided plugin with none', async () => {
     const { access, handed } = adapterRecordingChanges();
-    await syncPlugins(access, {
+    await pluginSyncOver(access)({
       profile: PROFILE, pluginOrder: ORDER, provided: new Map([['base.esp', 'Base.esp'], ['new.esp', 'New.esp']]),
       inData: { kind: 'listed', names: new Set() }, loadedWithNoLine: [],
     });

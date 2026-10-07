@@ -6,7 +6,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
-  deleteDownloads, excludeDownload, excludeDownloads, includeDownload, includeDownloads, type DownloadsAccess,
+  deleteDownloads, excludeDownloads, includeDownloads, type DownloadsAccess,
 } from '../downloads';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import { accessTo, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
@@ -41,7 +41,7 @@ describe('downloads commands over the committed corpus fixture, since these verb
   it('exclude writes one sidecar and nothing else, and the row reads back excluded', async () => {
     const before = await snapshotTree(dir);
 
-    expect(await excludeDownload(access, NAME)).toEqual({ applied: true, wrote: true });
+    assertSelectionOutcome(await excludeDownloads(access, [NAME]), { landed: [NAME], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
     expect((await excludedOrFalseWithNoMetadata(NAME))).toBe(true);
@@ -50,17 +50,17 @@ describe('downloads commands over the committed corpus fixture, since these verb
   it('excluding a metaless archive creates its sidecar and nothing else', async () => {
     const before = await snapshotTree(dir);
 
-    expect(await excludeDownload(access, MANUAL)).toEqual({ applied: true, wrote: true });
+    assertSelectionOutcome(await excludeDownloads(access, [MANUAL]), { landed: [MANUAL], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([MANUAL_META]));
     expect((await excludedOrFalseWithNoMetadata(MANUAL))).toBe(true);
   });
 
   it('include writes one sidecar and nothing else, and the row reads back visible', async () => {
-    await excludeDownload(access, NAME);
+    await excludeDownloads(access, [NAME]);
     const before = await snapshotTree(dir);
 
-    expect(await includeDownload(access, NAME)).toEqual({ applied: true, wrote: true });
+    assertSelectionOutcome(await includeDownloads(access, [NAME]), { landed: [NAME], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
     expect((await excludedOrFalseWithNoMetadata(NAME))).toBe(false);
@@ -69,27 +69,27 @@ describe('downloads commands over the committed corpus fixture, since these verb
   it('including a metaless archive touches nothing — visible is already its default', async () => {
     const before = await snapshotTree(dir);
 
-    expect(await includeDownload(access, MANUAL)).toEqual({ applied: true, wrote: false });
+    assertSelectionOutcome(await includeDownloads(access, [MANUAL]), { landed: [MANUAL], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
     expect((await excludedOrFalseWithNoMetadata(MANUAL))).toBe(false);
   });
 
   it('excluding an already excluded download touches nothing', async () => {
-    await excludeDownload(access, NAME);
+    await excludeDownloads(access, [NAME]);
     const before = await snapshotTree(dir);
 
-    expect(await excludeDownload(access, NAME)).toEqual({ applied: true, wrote: false });
+    assertSelectionOutcome(await excludeDownloads(access, [NAME]), { landed: [NAME], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
   });
 
   it('including an already included download touches nothing, with a real removed=false key on disk', async () => {
-    await excludeDownload(access, NAME);
-    await includeDownload(access, NAME);
+    await excludeDownloads(access, [NAME]);
+    await includeDownloads(access, [NAME]);
     const before = await snapshotTree(dir);
 
-    expect(await includeDownload(access, NAME)).toEqual({ applied: true, wrote: false });
+    assertSelectionOutcome(await includeDownloads(access, [NAME]), { landed: [NAME], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
   });
@@ -109,8 +109,8 @@ describe('downloads commands over the committed corpus fixture, since these verb
   });
 
   it('includeDownloads includes every landing name and refuses the one gone from disk, by name', async () => {
-    await excludeDownload(access, NAME);
-    await excludeDownload(access, MANUAL);
+    await excludeDownloads(access, [NAME]);
+    await excludeDownloads(access, [MANUAL]);
     const before = await snapshotTree(dir);
 
     const outcome = await includeDownloads(access, [NAME, 'Gone Archive.7z', MANUAL]);

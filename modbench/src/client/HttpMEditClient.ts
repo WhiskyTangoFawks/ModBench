@@ -25,7 +25,7 @@ import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 // so nothing tries to tell them apart.
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
-export interface HttpMEditClientDeps {
+interface HttpMEditClientDeps {
   /** The process this client is the front of. It spawns the bundled backend unless told otherwise. */
   backend?: Omit<BackendLifecycleOptions, 'onOutput' | 'serilogLevelArgs' | 'log'>;
   /** Where the spawned backend's output goes, and whose level it is spawned at. */
@@ -72,9 +72,7 @@ function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
   };
 }
 
-/** The HTTP adapter the mEdit client hides (target-architecture.d2): the generated client,
- *  `openapi-fetch`, `undici` and the notification stream live only here. */
-export class HttpMEditClient implements MEditClient {
+class HttpMEditClient implements MEditClient {
   private api?: { port: number; client: ApiClient };
   private readonly fetchImpl: (input: Request) => Promise<Response>;
   private readonly log: (msg: string) => void;

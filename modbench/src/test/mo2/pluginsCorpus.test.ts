@@ -4,7 +4,7 @@ import { fakeVscodeModule } from './fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { rm } from 'node:fs/promises';
-import { syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../../pluginsCommands/plugins';
+import { pluginSyncOver, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../../pluginsCommands/plugins';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, snapshotTree,
@@ -66,7 +66,7 @@ describe('plugins.txt corpus', () => {
 
   it('syncPlugins converges the fixture on disk, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    const result = await syncPlugins(accessTo(dir), {
+    const result = await pluginSyncOver(accessTo(dir))({
       profile: PROFILE, pluginOrder: await readPluginLines(dir), provided: await providedPluginsIn(dir), inData: GAME_DATA_FOLDER, loadedWithNoLine: [],
     });
     const after = await snapshotTree(dir);
