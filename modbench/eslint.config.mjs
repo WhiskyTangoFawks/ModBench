@@ -6,6 +6,7 @@ import sonarjs from 'eslint-plugin-sonarjs';
 import { noGestureResultUse } from './eslint-rules/noGestureResultUse.mjs';
 import { noLeadingMEdit } from './eslint-rules/noLeadingMEdit.mjs';
 import { noRereadAfterWrite } from './eslint-rules/noRereadAfterWrite.mjs';
+import { BOXES, DRIVING_BOXES } from './eslint-rules/boxes.mjs';
 import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from './eslint-rules/activationDecides.mjs';
 
 // The message states ADR-0019's rule in full, because a developer who breaks it meets the rule only there.
@@ -32,15 +33,7 @@ const MESSAGE_API_SITES = [
 ];
 
 const PATHLESS_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'drivingLib', 'instanceLoader'];
-
-export const DRIVING_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'sourceLanguage', 'drivingLib'];
 const PACKAGE_BOXES = ['client', 'sourceLanguage'];
-export const BOXES = [
-    ...DRIVING_BOXES,
-    'modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install',
-    'loadOrderFileCodec', 'wire', 'tables', 'ports',
-    'instanceLoader', 'instanceAdapter', 'client',
-];
 const NOT_PRODUCTION = ['**/*.test.ts', '**/test/**'];
 
 const FS_IMPORT = {
