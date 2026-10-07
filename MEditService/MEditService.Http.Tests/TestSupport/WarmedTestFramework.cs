@@ -28,6 +28,7 @@ public sealed class WarmedTestFramework(IMessageSink diagnostics) : XunitTestFra
 
     private static async Task Warm()
     {
+        SchemaWarmedTestFramework.WarmSchemas();
         const string Plugin = "Warm.esp";
         const string Origin = "WarmMod";
         using var fx = new PluginFixtureBuilder("warm-up")

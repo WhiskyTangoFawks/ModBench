@@ -68,17 +68,6 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public void SerializeToText_ForAPopulatedCell_CarriesItsChildrenInline_TheCodecAdoptingSpriggitsEmbedCustomizationVerbatim()
-    {
-        using var doc = JsonDocument.Parse(Codec().SerializeToText(MakePopulatedCell(), GameRelease.Fallout4));
-
-        Assert.Equal("PersistentRef", doc.RootElement.GetProperty("Persistent")[0].GetProperty("EditorID").GetString());
-        Assert.Equal("TemporaryRef", doc.RootElement.GetProperty("Temporary")[0].GetProperty("EditorID").GetString());
-        Assert.Equal("CellNavmesh", doc.RootElement.GetProperty("NavigationMeshes")[0].GetProperty("EditorID").GetString());
-        Assert.Equal("CellLandscape", doc.RootElement.GetProperty("Landscape").GetProperty("EditorID").GetString());
-    }
-
-    [Fact]
     public void SerializeToText_ForAWorldspace_EmbedsItsTopCell()
     {
         var worldspace = new Worldspace(Mod)

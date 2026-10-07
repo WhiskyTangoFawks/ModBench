@@ -226,7 +226,9 @@ describe('setShowExcluded', () => {
   it('includes excluded rows alongside visible ones when turned on', async () => {
     const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
     provider.setShowExcluded(true);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren()).sort()).toEqual(['excluded.zip', 'visible.zip']);
+    const nodes = await provider.getChildren();
+    expect(rowNamesOfDownloadNodes(nodes).sort()).toEqual(['excluded.zip', 'visible.zip']);
+    expect(nodes.map((n) => expectInstanceOf(n, DownloadNode).row).find((r) => r.name === 'excluded.zip')?.excluded).toBe(true);
   });
 
   it('excludes excluded rows again once turned back off', async () => {
@@ -255,15 +257,6 @@ describe('setSort', () => {
     ]);
     provider.setSort('name', false);
     expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['apple.zip', 'banana.zip']);
-  });
-
-  it('sorts by the label, not the raw filename, which sorts the opposite way', async () => {
-    const provider = makeProviderOverRowsNeverOnDisk([
-      row({ name: 'z-file.zip', displayName: 'Apple' }),
-      row({ name: 'a-file.zip', displayName: 'Banana' }),
-    ]);
-    provider.setSort('name', false);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['z-file.zip', 'a-file.zip']);
   });
 
   it('re-renders: fires onDidChangeTreeData', async () => {

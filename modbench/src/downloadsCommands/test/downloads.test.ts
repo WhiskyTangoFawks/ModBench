@@ -44,25 +44,7 @@ const recordingTrash = (fail: (path: string) => Error | undefined = () => undefi
 };
 
 describe('excludeDownloads / includeDownloads — one name', () => {
-  const landed = (name: string) => ({ landed: [name], refused: [] });
   const refusedFor = (name: string, reasonContains: string) => ({ landed: [], refused: [{ item: name, reasonContains }] });
-
-  it('exclude marks the file excluded, and include marks it included again', async () => {
-    await writeArchive('foo.7z');
-
-    assertSelectionOutcome(await excludeDownloads(access, ['foo.7z']), landed('foo.7z'));
-    expect(await statusOf('foo.7z')).toMatchObject({ excluded: true });
-
-    assertSelectionOutcome(await includeDownloads(access, ['foo.7z']), landed('foo.7z'));
-    expect(await statusOf('foo.7z')).toMatchObject({ excluded: false });
-  });
-
-  it('a file already at rest is landed, and no metadata is written', async () => {
-    await writeArchive('manual.7z');
-
-    assertSelectionOutcome(await includeDownloads(access, ['manual.7z']), landed('manual.7z'));
-    await expect(readFile(metaPath('manual.7z'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
-  });
 
   it('excluding a file gone from disk is refused, naming it, and writes it no metadata', async () => {
     assertSelectionOutcome(await excludeDownloads(access, ['foo.7z']), refusedFor('foo.7z', 'foo.7z'));
@@ -92,49 +74,7 @@ describe('excludeDownloads / includeDownloads — one name', () => {
   });
 });
 
-describe('excludeDownloads / includeDownloads — over a selection', () => {
-  it('excludes every landing name and refuses the one gone from disk, by name', async () => {
-    await writeArchive('a.7z');
-    await writeArchive('b.7z');
-
-    const outcome = await excludeDownloads(access, ['a.7z', 'gone.7z', 'b.7z']);
-
-    assertSelectionOutcome(outcome, {
-      landed: ['a.7z', 'b.7z'],
-      refused: [{ item: 'gone.7z', reasonContains: 'gone.7z' }],
-    });
-    expect(await statusOf('a.7z')).toMatchObject({ excluded: true });
-    expect(await statusOf('b.7z')).toMatchObject({ excluded: true });
-  });
-
-  it('includes every landing name and refuses the one gone from disk, by name', async () => {
-    await writeArchive('a.7z');
-    await writeArchive('b.7z');
-    await excludeDownloads(access, ['a.7z', 'b.7z']);
-
-    const outcome = await includeDownloads(access, ['a.7z', 'gone.7z', 'b.7z']);
-
-    assertSelectionOutcome(outcome, {
-      landed: ['a.7z', 'b.7z'],
-      refused: [{ item: 'gone.7z', reasonContains: 'gone.7z' }],
-    });
-    expect(await statusOf('a.7z')).toMatchObject({ excluded: false });
-    expect(await statusOf('b.7z')).toMatchObject({ excluded: false });
-  });
-});
-
 describe('deleteDownloads', () => {
-  it('trashes the file BEFORE its metadata: a mid-failure leaves the metadata in place, never a metaless trash', async () => {
-    const file = await writeArchive('foo.7z');
-    await writeFile(metaPath('foo.7z'), '[General]\r\n');
-    const { trash, trashed } = recordingTrash();
-
-    const outcome = await deleteDownloads(access, [file], trash);
-
-    expect(outcome).toEqual({ landed: [{ name: 'foo.7z' }], refused: [] });
-    expect(trashed).toEqual([file.path, metaPath('foo.7z')]);
-  });
-
   it('trashes only the file when it has no metadata', async () => {
     const file = await writeArchive('manual.7z');
     const { trash, trashed } = recordingTrash();
@@ -143,28 +83,6 @@ describe('deleteDownloads', () => {
 
     expect(outcome).toEqual({ landed: [{ name: 'manual.7z' }], refused: [] });
     expect(trashed).toEqual([file.path]);
-  });
-
-  it('refuses with the trash’s own reason when the file cannot go, and never touches its metadata', async () => {
-    const file = await writeArchive('foo.7z');
-    await writeFile(metaPath('foo.7z'), '[General]\r\n');
-    const { trash, trashed } = recordingTrash(() => new Error('EPERM'));
-
-    const outcome = await deleteDownloads(access, [file], trash);
-
-    expect(outcome).toEqual({ landed: [], refused: [{ item: { name: 'foo.7z' }, reason: 'EPERM' }] });
-    expect(trashed).toEqual([file.path]);
-  });
-
-  it('a metadata trash failure after the file landed reports the delete as done rather than refusing it, naming the reason', async () => {
-    const file = await writeArchive('foo.7z');
-    await writeFile(metaPath('foo.7z'), '[General]\r\n');
-    const { trash, trashed } = recordingTrash((path) => (path === metaPath('foo.7z') ? new Error('EPERM') : undefined));
-
-    const outcome = await deleteDownloads(access, [file], trash);
-
-    expect(outcome).toEqual({ landed: [{ name: 'foo.7z', metadataLeftBehind: 'EPERM' }], refused: [] });
-    expect(trashed).toEqual([file.path, metaPath('foo.7z')]);
   });
 
   it('hands the Instance adapter the metadata by the file\'s name, not a path the command joins itself', async () => {

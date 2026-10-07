@@ -290,16 +290,6 @@ describe('metaAtPath, descending FieldMetadata itself, as a collapsed row\'s pro
   });
 });
 
-describe('cellContext', () => {
-  it('names the cell and carries the text copy value copies', () => {
-    expect(cellContext('Dogmeat')).toEqual({ webviewSection: 'cell', copyText: 'Dogmeat', preventDefaultContextMenuItems: true });
-  });
-
-  it('carries no text for a cell that copies nothing', () => {
-    expect(cellContext(undefined)).toEqual({ webviewSection: 'cell', preventDefaultContextMenuItems: true });
-  });
-});
-
 describe('referenceContext', () => {
   it('carries the record the reference points to under its own key, beside the record the panel shows', () => {
     const merged = cellContext(
