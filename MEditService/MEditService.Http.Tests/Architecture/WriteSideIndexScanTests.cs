@@ -88,8 +88,8 @@ public sealed class WriteSideIndexScanTests
         Assert.True(
             named.Count == 0,
             "An endpoint names the Index. A route takes a gesture's handler or a query service: "
-            + "Queries are the only readers of the read model (ADR-0014), and no arrow runs from the "
-            + "HTTP endpoints to the Index:\n"
+            + "Queries are the only readers of the read model (ADR-0014), and the record index "
+            + "hides the Indexer and the Store (target-architecture.d2):\n"
             + string.Join("\n", named));
     }
 
