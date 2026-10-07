@@ -1034,11 +1034,6 @@ export interface components {
             hasParseFailure: boolean;
             pluginSourceUnreadable: boolean;
         };
-        PluginTrackRefusal: {
-            item: components["schemas"]["PluginAddress"];
-            refusal: components["schemas"]["TrackRefusal"];
-            message: string;
-        };
         ProblemDetails: {
             type?: string | null;
             title?: string | null;
@@ -1223,7 +1218,7 @@ export interface components {
             pluginsTotal: number;
         };
         /** @enum {string} */
-        TrackRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyTracked" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "NoPluginTracked" | "GitUnavailable";
+        TrackRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyTracked" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable";
         TrackRequest: {
             mods: string[];
         };
@@ -1234,7 +1229,6 @@ export interface components {
         TrackedModResponse: {
             mod: string;
             tracked: components["schemas"]["PluginAddress"][];
-            refused: components["schemas"]["PluginTrackRefusal"][];
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";

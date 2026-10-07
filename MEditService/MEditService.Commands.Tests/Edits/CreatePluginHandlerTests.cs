@@ -70,7 +70,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
             new LoadOrderEntry(existing, Path.Combine(folder, existing), name, Slot: 1, Enabled: true, Winning: true),
         ]));
         var tracked = await TestEditService.TrackHandler(_holder).TrackAsync([name]);
-        Assert.Empty(tracked.Refused);
         Assert.Single(tracked.Landed);
         return folder;
     }

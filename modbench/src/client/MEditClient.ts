@@ -131,12 +131,10 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 export type { PluginAddress };
 
-/** A mod of Track's selection that tracked: the plugins whose source landed in its commit, and those
- *  of it that did not, each with its reason. */
+/** A mod of Track's selection that tracked: the plugins whose source landed in its commit. */
 export interface TrackedMod {
   mod: string;
   tracked: readonly PluginAddress[];
-  refused: readonly ItemRefusal<PluginAddress>[];
 }
 
 /** Track's answer: each mod tracked or refused, as a mod, with its reason. */
