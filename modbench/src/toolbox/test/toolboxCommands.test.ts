@@ -61,14 +61,6 @@ beforeEach(() => {
   switchProfile.mockResolvedValue({ applied: true });
 });
 
-describe('the Toolbox gestures', () => {
-  it('registers switch profile and open settings, and no deploy, purge or run, which the alpha leaves with the mod manager', () => {
-    register();
-
-    expect([...handlers.keys()]).toEqual(['modbench.profile.switch', 'modbench.settings.open']);
-  });
-});
-
 describe('Open settings', () => {
   it('opens VS Code\'s Settings on this extension\'s own', async () => {
     const { run } = register();

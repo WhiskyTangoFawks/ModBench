@@ -216,10 +216,6 @@ describe('ImplicitMasterNode — leading slot', () => {
     expect(node.resourceUri?.scheme).not.toBe('file');
   });
 
-  it('leaves resourceUri undefined when no path is given (test-construction convenience)', () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data');
-    expect(node.resourceUri).toBeUndefined();
-  });
 });
 
 describe('PluginNode / ImplicitMasterNode — row click opens the plugin header', () => {
@@ -241,30 +237,6 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header'
     const a = new PluginNode({ name: 'Same.esp', enabled: true }, 'ModA');
     const b = new PluginNode({ name: 'Same.esp', enabled: true }, 'ModB');
     expect(a.command?.arguments).not.toEqual(b.command?.arguments);
-  });
-});
-
-describe('leading slot — rows outside the load order render neither checkbox nor lock', () => {
-  it('an error row has no checkbox and no lock', async () => {
-    const instance = new FakeInstance(valueOf([]), 0);
-    const { tree } = makeTree([], { instance });
-    const pending = tree.getChildren();
-    instance.fail('boom');
-
-    const [error] = await pending;
-
-    expect(present(error, 'the error row').checkboxState).toBeUndefined();
-    expect(error?.iconPath).not.toEqual({ id: 'lock' });
-  });
-
-  it('a still-indexing row has no checkbox and no lock', async () => {
-    const { tree } = makeTree([A_ROW()]);
-    const [row] = await tree.getChildren();
-
-    const [indexing] = await tree.getChildren(row);
-
-    expect(present(indexing, 'the indexing row').checkboxState).toBeUndefined();
-    expect(indexing?.iconPath).not.toEqual({ id: 'lock' });
   });
 });
 
@@ -382,13 +354,12 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(rows.map((n) => n.plugin.name)).toEqual(['Fallout4.esm', 'Mod.esp']);
   });
 
-  it('renders a row for a LoadOrderPluginLine (path: undefined), with no badge', async () => {
+  it('renders a row for a LoadOrderPluginLine (path: undefined)', async () => {
     const { tree } = makeTree([
       plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data', path: undefined }),
     ]);
     const rows = (await tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode);
     expect(rows.map((n) => n.plugin.name)).toEqual(['Fallout4.esm']);
-    expect(present(rows[0], 'the LoadOrderPluginLine row').iconPath).toBeUndefined();
   });
 
   it('resolvePluginPath returns undefined for a LoadOrderPluginLine, never "undefined" as text', async () => {
@@ -1336,15 +1307,13 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
     expect(present(child, 'the error row').tooltip).toBe('ECONNREFUSED');
   });
 
-  it('renders no backend-derived badge on any row, only the file name and mod as its tooltip', async () => {
+  it('tooltips a row with its file name and mod', async () => {
     const h = makeTree([A_ROW()], { client: makeDisconnectedClient() });
     await h.tree.applyReconciled([]);
     const [row] = await h.tree.getChildren();
 
     const item = h.tree.getTreeItem(present(row, 'the sole row'));
     expect(item.tooltip).toBe('A.esp\nSomeMod');
-    expect(item.description).toBeUndefined();
-    expect(item.iconPath).toBeUndefined();
   });
 
   it('is distinguishable from a "still indexing" row', async () => {

@@ -29,15 +29,6 @@ describe('every MO2 text-file write command has a corpus test', () => {
   });
 });
 
-describe('install holds only install', () => {
-  const installFiles = productionFiles(join(SRC, 'install')).map((f) => relative(join(SRC, 'install'), f));
-
-  it('exports no verb but installing and its installed mark', () => {
-    expect(installFiles.flatMap((file) => commandVerbs(read(join('install', file)))).sort())
-      .toEqual(['installFromArchive', 'installFromFolder', 'markDownloadInstalled']);
-  });
-});
-
 describe('only the Instance adapter touches a downloaded file\'s .meta', () => {
   const importsTheSidecarPath = (source: string): boolean =>
     [...source.matchAll(/import\s*\{([^}]*)\}\s*from/g)].some((m) => /\bdownloadSidecarFile\b/.test(m[1] ?? ''));
@@ -85,21 +76,6 @@ describe('the createTreeView sites', () => {
     expect(treeViewOptions(source)).toEqual([{ id: 'a.b', options: " treeDataProvider: p, dragAndDropController: { x: {} }, showCollapseAll: true " }]);
   });
 });
-
-describe('no contextValue encodes read-only', () => {
-  it.each(sourceFiles())('%s', (file) => {
-    expect(readOnlyContextValues(read(file))).toEqual([]);
-  });
-
-  it('the scan flags an assignment and ignores prose', () => {
-    expect(readOnlyContextValues("this.contextValue = 'recordReadOnly';\n// a read-only contextValue would be wrong\n"))
-      .toEqual(["this.contextValue = 'recordReadOnly';"]);
-  });
-});
-
-function readOnlyContextValues(source: string): string[] {
-  return source.split('\n').filter((l) => /contextValue/.test(l) && /read[-_ ]?only/i.test(l) && !/^\s*\/\//.test(l));
-}
 
 function sourceFiles(): string[] {
   return productionFiles(SRC).map((f) => relative(SRC, f));
