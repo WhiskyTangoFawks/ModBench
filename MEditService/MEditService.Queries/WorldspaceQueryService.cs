@@ -31,8 +31,8 @@ internal sealed class WorldspaceQueryService(IQueryIndex index, ILogger<Worldspa
         var holdingCells = repo.GetWorldspacesHoldingCells(plugin);
         return [.. repo.Search(query)
             .Items.Select(r => new WorldspaceSummary(
-                r.FormKey, r.EditorId, r.HasParseFailure, r.FullName, r.ParseDiagnosis,
-                holdingCells.Contains(r.FormKey), r.WorkingTreeState.ToQuery()))];
+                r.FormKey, r.EditorId, r.WorkingTreeState.ToQuery(), r.HasParseFailure, r.FullName, r.ParseDiagnosis,
+                holdingCells.Contains(r.FormKey)))];
     }
 
     public WorldspaceBlocks GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey)
@@ -99,7 +99,7 @@ internal sealed class WorldspaceQueryService(IQueryIndex index, ILogger<Worldspa
     }
 
     private static CellSummary CellOf(CellLocationSummary c) =>
-        new(c.FormKey, c.EditorId, c.CellX, c.CellY,
+        new(c.FormKey, c.EditorId, c.CellX, c.CellY, c.WorkingTreeState.ToQuery(),
             FullName: c.FullName, HasParseFailure: c.HasParseFailure, ParseDiagnosis: c.ParseDiagnosis,
-            HasChildren: c.HasChildren, WorkingTreeState: c.WorkingTreeState.ToQuery());
+            HasChildren: c.HasChildren);
 }

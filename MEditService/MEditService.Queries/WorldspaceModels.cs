@@ -6,8 +6,8 @@ namespace MEditService.Queries;
 // this row, or something the tree shows under it, could not be read. HasChildren is whether it
 // holds a cell.
 public record WorldspaceSummary(
-    string FormKey, string? EditorId, bool HasParseFailure = false, string? FullName = null, string? ParseDiagnosis = null,
-    bool HasChildren = false, WorkingTreeState WorkingTreeState = WorkingTreeState.None);
+    string FormKey, string? EditorId, WorkingTreeState WorkingTreeState, bool HasParseFailure = false, string? FullName = null,
+    string? ParseDiagnosis = null, bool HasChildren = false);
 
 public record WorldspaceSubBlockDto(
     int X, int Y, IReadOnlyList<CellSummary> Cells, bool HasParseFailure = false);
