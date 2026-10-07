@@ -4,7 +4,7 @@ import { PluginsTreeProvider, type PluginsTreeProviderOptions } from '../Plugins
 
 export function pluginsTreeOver(
   instance: PluginsTreeProviderOptions['instance'],
-  overrides: Partial<Omit<PluginsTreeProviderOptions, 'instance'>> = {},
+  overrides: Partial<Omit<PluginsTreeProviderOptions, 'instance' | 'client'>> & { client?: InMemoryMEditClient } = {},
 ): PluginsTreeProvider {
   const client = overrides.client ?? new InMemoryMEditClient();
   return new PluginsTreeProvider({
