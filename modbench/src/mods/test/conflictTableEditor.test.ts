@@ -25,7 +25,7 @@ import { CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN, parseConflictTableShown } f
 import type { FileCopies, FileOrigin } from '../../instanceLoader/instance';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
-const conflictTableUri = (mod: string) => uriFrom({ scheme: 'modbench-conflicts', path: `/${mod}.modbench-conflicts` });
+const conflictTableUri = (mod: string) => vscode.Uri.from({ scheme: 'modbench-conflicts', path: `/${mod}.modbench-conflicts` });
 
 const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 

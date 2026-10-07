@@ -5,10 +5,10 @@ import { idleMembers } from './siblingsInUse';
 import {
   arrayElementContext, arrayParentContext, cellContext, columnHasNode, declaresMember, defaultOf, editableCellContext,
   getAtPath, isArrayElementHop, offersArrayAdd, referenceContext, rootFieldOf, stringValueContext, variantFor, wirePath,
-  type CellContext, type Column, type PathSegment,
+  type CellContext, type Column,
 } from './recordUtils';
 import type { FocusedCell, NavRow } from './gridNavigation';
-import type { ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop } from './types';
+import type { ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PathSegment } from './types';
 import type { ArrayParentContext } from '../../src/wire/messages';
 
 export const RECORD_HEADER_ROW = 'Record Header';

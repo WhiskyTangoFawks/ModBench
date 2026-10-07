@@ -68,7 +68,7 @@ export class DownloadNode extends vscode.TreeItem {
 
 export type DownloadsTreeNode = DownloadNode | ErrorNode;
 
-export interface DownloadsProviderOptions {
+interface DownloadsProviderOptions {
   /** downloads/ rows, metadata folded in. */
   instance: InstanceView;
 }

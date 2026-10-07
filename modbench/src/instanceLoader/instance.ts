@@ -18,12 +18,12 @@ import { modSyncArgumentsOf, pluginSyncArgumentsOf, type ModSyncArguments, type 
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
-export type { FileOrigin, InstalledFileId, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
+export type { FileOrigin, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow } from './downloadRows';
 export type { Copy, FileCopies } from './sameCopies';
 export type { ModSyncArguments, PluginSyncArguments } from './syncArguments';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
-export type { GameFolder, GameFolderLook } from '../instanceAdapter/instanceAdapter';
+export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on,
 // and the wait before an empty mod order is believed.
@@ -130,7 +130,7 @@ export interface FocusWindow {
   onDidChangeWindowState(listener: (state: { readonly focused: boolean }) => void): Subscription;
 }
 
-export interface InstanceOptions {
+interface InstanceOptions {
   /** The one reader of the instance; each recompute reads its settings once. */
   adapter: InstanceAdapter;
   window: FocusWindow;

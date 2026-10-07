@@ -2,7 +2,7 @@ import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ConfigChangeEvent, Subscription } from './gameDirectorySetting';
 
-export interface LaunchDeps {
+interface LaunchDeps {
   setting: string;
   client: { status: string };
   /** Absent outside an instance, where there is no backend to launch. */

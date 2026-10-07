@@ -18,7 +18,7 @@ export interface InstallOutcome {
 }
 const NOT_INSTALLED: InstallOutcome = { installed: false };
 
-export interface ModInstallDeps {
+interface ModInstallDeps {
   access: InstallAccess;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;

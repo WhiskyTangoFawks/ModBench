@@ -8,7 +8,7 @@ import type { Reporter } from '../ports/reporter';
 
 const TOOLBOX_VIEW = 'modbench.toolbox';
 
-export interface ToolboxCommandDeps {
+interface ToolboxCommandDeps {
   access: ProfileAccess;
   /** The profiles and the active one, from the instance value (ADR-0015); `refresh` ends each gesture. */
   instance: Pick<Instance, 'value' | 'refresh'>;

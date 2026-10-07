@@ -118,7 +118,6 @@ export function stringValueContext(
 }
 
 // ── Reading the document along a row's path ──────────────────────────────────
-export type { PathHop, PathSegment };
 
 /** This column's own entry for the record member a row's subtree is rooted at: the document a wire
  *  path resolves against, and where a check error on that member lives. */

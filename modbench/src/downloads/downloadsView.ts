@@ -16,7 +16,7 @@ import { downloadsFolderUnresolvedLine } from './downloadsFolderUnresolvedLog';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { downloadsKeyContext } from './keyContext';
 
-export interface DownloadsViewDeps {
+interface DownloadsViewDeps {
   access: DownloadsAccess & InstallAccess;
   instance: InstanceView & Pick<Instance, 'refresh'>;
   reporter: Reporter;

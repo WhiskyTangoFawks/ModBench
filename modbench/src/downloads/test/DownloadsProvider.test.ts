@@ -12,7 +12,7 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile },
 }));
 
-import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions, type DownloadsTreeNode } from '../DownloadsProvider';
+import { DownloadsProvider, DownloadNode, type DownloadsTreeNode } from '../DownloadsProvider';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
@@ -41,7 +41,7 @@ const makeProviderOverRowsNeverOnDisk = (
   extra: Partial<{ instance: FakeInstance }> = {},
 ): DownloadsProvider => {
   const instance = extra.instance ?? new FakeInstance(valueOf(downloads));
-  const options: DownloadsProviderOptions = { instance };
+  const options: ConstructorParameters<typeof DownloadsProvider>[0] = { instance };
   return new DownloadsProvider(options);
 };
 

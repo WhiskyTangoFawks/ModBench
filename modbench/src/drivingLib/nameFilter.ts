@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 /** The term lives here, not in the `InputBox`: that widget hides the moment focus leaves, and
  *  clicking a row is the first thing anyone does with a filtered list. */
-export interface NameFilterDeps {
+interface NameFilterDeps {
   /** Structural rather than a `TreeView`: the only properties touched are the two VS Code makes
    *  writable. */
   view: { description?: string; message?: string };
