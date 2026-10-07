@@ -107,6 +107,7 @@ import { comparisonOf } from '../../test/comparison';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 const COPY_PLUGIN = { name: 'A.esp', origin: 'ModA' };
+const isShowColumns = (message: unknown) => typeof message === 'object' && message !== null && 'type' in message && message.type === 'showColumns';
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 interface FakePanel {
@@ -986,6 +987,8 @@ describe('several records opened at once', () => {
   const winner = { name: 'B.esp', origin: 'ModB' };
   const knifeIn = { name: 'C.esp', origin: 'ModC' };
   const gunDocument = renderedDocumentUri({ formKey: GUN, plugin: COPY_PLUGIN }, 'Gun.json');
+  const columnsPosted = (tab: FakePanel | undefined) => tab?.webview.postMessage.mock.calls.filter(([message]) => isShowColumns(message));
+  const firstRead = { type: 'requestRecordLoad', requestId: 'r0', formKey: GUN, columns: [] };
   const openSeveral = (placement?: 'beside') => h.commands.get('modbench.record.open')?.(
     [{ formKey: GUN, plugin: COPY_PLUGIN, placement }, { formKey: AMMO, placement }, { formKey: KNIFE, plugin: knifeIn, placement }]);
   function severalClient(): InMemoryMEditClient {
@@ -995,6 +998,7 @@ describe('several records opened at once', () => {
     client.setQueryAnswer('getRecordFile', { path: null });
     client.setQueryAnswer('getRenderedDocument', { fileName: 'Gun.json', text: '{}' });
     client.setQueryAnswer('getPlugins', activeA);
+    client.setQueryAnswer('getComparison', null);
     return client;
   }
 
@@ -1016,25 +1020,42 @@ describe('several records opened at once', () => {
     const { vsCodeOpensTabs, openDocument } = makeEditor(severalClient());
     const tabOn = vsCodeOpensTabs();
     await h.commands.get('modbench.record.open')?.({ formKey: GUN, plugin: COPY_PLUGIN });
+    tabOn(gunDocument)?.receive(firstRead);
     const elsewhere = await openDocument(gunDocument);
     elsewhere.active = false;
 
     await openSeveral();
 
-    expect(tabOn(gunDocument)?.webview.postMessage.mock.calls).toEqual([[{
+    expect(columnsPosted(tabOn(gunDocument))).toEqual([[{
       type: 'showColumns', columns: [{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }],
     }]]);
     expect(elsewhere.webview.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('hold the columns for a tab whose page has asked no read yet, which listens only once it has', async () => {
+    const { vsCodeOpensTabs } = makeEditor(severalClient());
+    const tabOn = vsCodeOpensTabs();
+    await h.commands.get('modbench.record.open')?.({ formKey: GUN, plugin: COPY_PLUGIN });
+    const tab = tabOn(gunDocument);
+
+    await openSeveral();
+    await settle();
+    expect(columnsPosted(tab)).toEqual([]);
+
+    tab?.receive(firstRead);
+    await settle();
+    expect(columnsPosted(tab)).toHaveLength(1);
   });
 
   it('leave the tab they opened to show every active plugin\'s copy again when its record is opened alone onto it', async () => {
     const { vsCodeOpensTabs } = makeEditor(severalClient());
     const tabOn = vsCodeOpensTabs();
     await openSeveral();
+    tabOn(gunDocument)?.receive(firstRead);
 
     await h.commands.get('modbench.record.open')?.({ formKey: GUN, plugin: COPY_PLUGIN });
 
-    expect(tabOn(gunDocument)?.webview.postMessage.mock.calls).toEqual([[{ type: 'showColumns', columns: [] }]]);
+    expect(columnsPosted(tabOn(gunDocument))).toEqual([[{ type: 'showColumns', columns: [] }]]);
   });
 
   it('read the tab again when mEdit reports a record of another column changed, and not for a record it does not show', async () => {
