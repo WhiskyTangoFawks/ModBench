@@ -8,7 +8,7 @@ public sealed class PluginSourceFolderNameCrossSideTests
     private static readonly Regex BackendValue =
         new(@"internal const string RootFolderName = ""([^""]+)"";", RegexOptions.Compiled);
     private static readonly Regex FrontendValue =
-        new(@"export const PLUGIN_SOURCE_FOLDER = '([^']+)';", RegexOptions.Compiled);
+        new(@"(?:export )?const PLUGIN_SOURCE_FOLDER = '([^']+)';", RegexOptions.Compiled);
 
     [Fact]
     public void TheBackendAndFrontendNames_Agree()
