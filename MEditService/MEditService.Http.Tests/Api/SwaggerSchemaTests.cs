@@ -44,6 +44,25 @@ public sealed class SwaggerSchemaTests
         Assert.Equal(new HashSet<string> { "200", "400", "404", "409", "422", "503" }, declared);
     }
 
+    [Theory]
+    [InlineData("get", "/plugins")]
+    [InlineData("get", "/records")]
+    [InlineData("get", "/records/{formKey}")]
+    [InlineData("get", "/records/{formKey}/compare")]
+    [InlineData("get", "/plugins/{plugin}/record-types")]
+    [InlineData("get", "/plugins/{plugin}/records/{formKey}/children")]
+    [InlineData("get", "/plugins/{plugin}/worldspaces")]
+    [InlineData("get", "/plugins/{plugin}/worldspaces/{formKey}/blocks")]
+    [InlineData("get", "/plugins/{plugin}/cells/{formKey}/children")]
+    [InlineData("get", "/plugins/{plugin}/interior-cells")]
+    public async Task ARouteThatReadsTheLoadOrder_Declares503_ElseSwashbuckleEmitsContentNeverForIt(string method, string path)
+    {
+        var root = await GetSchemaAsync();
+        var responses = root.GetProperty("paths").GetProperty(path).GetProperty(method).GetProperty("responses");
+
+        Assert.True(responses.TryGetProperty("503", out _));
+    }
+
     [Fact]
     public async Task CompileRequest_CarriesThePluginsAndNoOption()
     {

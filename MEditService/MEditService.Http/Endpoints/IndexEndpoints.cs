@@ -1,4 +1,3 @@
-using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.Queries;
 
@@ -101,20 +100,10 @@ public static class IndexEndpoints
             svc.SetFilter(req.Sql, req.Source);
             return Results.Ok(new FilterResponse(req.Sql, req.Source));
         }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No load order when setting filter");
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
         catch (ArgumentException ex)
         {
             logger.LogError(ex, "Invalid filter SQL");
             return Results.Problem(ex.Message, statusCode: 400);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            logger.LogError(ex, "Failed to apply filter");
-            return Results.Problem(ex.Message, statusCode: 500);
         }
     }
 
@@ -122,32 +111,16 @@ public static class IndexEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received ClearFilter");
-        try
-        {
-            svc.ClearFilter();
-            return Results.NoContent();
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            logger.LogError(ex, "Failed to clear filter");
-            return Results.Problem(ex.Message, statusCode: 500);
-        }
+        svc.ClearFilter();
+        return Results.NoContent();
     }
 
     private static IResult GetFilter(IRecordQueryService svc, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received GetFilter");
-        try
-        {
-            var filter = svc.GetFilter();
-            return Results.Ok(new FilterResponse(filter?.Sql, filter?.Source));
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No load order when getting filter");
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        var filter = svc.GetFilter();
+        return Results.Ok(new FilterResponse(filter?.Sql, filter?.Source));
     }
 
     private static IResult PostRebuildIndex(RebuildIndexRequest req, IRecordQueryService svc, ILoggerFactory loggerFactory)
@@ -161,18 +134,10 @@ public static class IndexEndpoints
             return Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400);
         if (WriteEndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
-        try
-        {
-            // Answered once the store is empty again; the refill reports through the index status.
-            // A refusal is 423 Locked (ADR-0010).
-            return svc.RebuildStore(gameRelease, req.InstanceRoot) is { } refusal
-                ? Results.Problem(refusal, statusCode: 423)
-                : Results.NoContent();
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            logger.LogError(ex, "Failed to rebuild the index for {InstanceRoot}", req.InstanceRoot);
-            return Results.Problem(ex.Message, statusCode: 500);
-        }
+        // Answered once the store is empty again; the refill reports through the index status.
+        // A refusal is 423 Locked (ADR-0010).
+        return svc.RebuildStore(gameRelease, req.InstanceRoot) is { } refusal
+            ? Results.Problem(refusal, statusCode: 423)
+            : Results.NoContent();
     }
 }
