@@ -20,7 +20,11 @@ public sealed class ValidateAtLoadTests : IDisposable
     {
         FormKey npc = default;
         _fixture = new PluginFixtureBuilder("validate-at-load")
-            .WithPlugin(PluginName, mod => npc = mod.Npcs.AddNew(NpcEditorId).FormKey, origin: "FixtureMod")
+            .WithPlugin(PluginName, mod =>
+            {
+                npc = mod.Npcs.AddNew(NpcEditorId).FormKey;
+                mod.Npcs.AddNew("UneditedNpc");
+            }, origin: "FixtureMod")
             .BuildScattered()
             .Tracked();
         _entry = _fixture.Plugins.Single();

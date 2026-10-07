@@ -2,6 +2,7 @@ using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 
@@ -15,15 +16,24 @@ public sealed class ValidationFaultTests : IDisposable
         .WithPlugin(PluginName, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: "UntrackedMod")
         .BuildScattered();
     private readonly LoadOrderHolder _holder = new();
+    private readonly List<LogEntry> _log = [];
+    private readonly ILoggerFactory _loggerFactory;
 
-    public void Dispose() => _fixture.Dispose();
+    public ValidationFaultTests() =>
+        _loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(_log)));
+
+    public void Dispose()
+    {
+        _loggerFactory.Dispose();
+        _fixture.Dispose();
+    }
 
     private LoadOrderEntry Plugin => _fixture.Plugins.Single();
 
     private OpenedIndex Subscribed(INotificationPublisher? notifications = null)
     {
         var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
-        var index = Indexes.Open(_holder, notifications: notifications, timeProvider: clock);
+        var index = Indexes.Open(_holder, loggerFactory: _loggerFactory, notifications: notifications, timeProvider: clock);
         index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         return index;
     }
@@ -32,13 +42,15 @@ public sealed class ValidationFaultTests : IDisposable
         PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
 
     [Fact]
-    public void AValidationThatFaultsOutright_FailsTheStatus_AndNamesTheFault()
+    public void AValidationThatFaultsOutright_ReachesTheOutput_AndFailsTheStatus()
     {
         using var index = Subscribed(notifications: new PluginChangedFaults());
         RewriteThePlugin();
 
         index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Failed, "the failed status");
 
+        lock (_log)
+            Assert.Contains(_log, e => e.Level == LogLevel.Error && e.Exception?.Message == PluginChangedFaults.Reason);
         Assert.Contains(PluginChangedFaults.Reason, index.Status.Message, StringComparison.Ordinal);
     }
 
