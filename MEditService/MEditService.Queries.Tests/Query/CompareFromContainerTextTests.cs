@@ -5,6 +5,7 @@ using MEditService.LoadOrder;
 using MEditService.Queries.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -24,7 +25,9 @@ public sealed class CompareFromContainerTextTests : IDisposable
     private readonly PlacedObject _placed;
     private readonly Worldspace _world;
     private readonly PlacedObject _topCellRef;
-    private readonly RecordQueryService _service;
+    private readonly IRecordQueryService _service;
+    private readonly List<LogEntry> _log = [];
+    private readonly ILoggerFactory _loggerFactory;
 
     public CompareFromContainerTextTests()
     {
@@ -48,14 +51,19 @@ public sealed class CompareFromContainerTextTests : IDisposable
         {
             Row(_room, "cell"), Row(_placed, "refr"), Row(_world, "wrld"), Row(topCell, "cell"), Row(_topCellRef, "refr"),
         };
-        _service = new RecordQueryService(
+        _loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(_log)));
+        _service = QueryHost.Records(
             new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), rows) { TextFieldNames = Fields }),
             FakeLoadOrder.Of(Release,
                 new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, 0, Enabled: true, Winning: true)),
-            SharedSchemaReflector.Instance);
+            _loggerFactory);
     }
 
-    public void Dispose() => _modFolder.Dispose();
+    public void Dispose()
+    {
+        _loggerFactory.Dispose();
+        _modFolder.Dispose();
+    }
 
     private static string Leaf(IMajorRecordGetter record) =>
         $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
@@ -149,5 +157,22 @@ public sealed class CompareFromContainerTextTests : IDisposable
         var column = ColumnReadFrom(_placed, RealDocuments.BodyOf(_room, Release));
 
         Assert.Contains(Leaf(otherRoom), column.ParseDiagnosis, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AChildTwoDocumentsCarry_IsNamedOnTheOutputWithItsCause()
+    {
+        var otherRoom = new Cell(_mod) { EditorID = "OtherRoom" };
+        otherRoom.Temporary.Add(_placed);
+        var otherDocument = Path.Combine(
+            _modFolder, PluginSourceRoot.ContainerDocument(Path.Combine(PluginSourceRoot.For(Plugin.Name), "Cells", "0", "0", Leaf(otherRoom))));
+        Directory.CreateDirectory(Path.GetDirectoryName(otherDocument).Require());
+        File.WriteAllBytes(otherDocument, Bytes(otherRoom));
+
+        var column = ColumnReadFrom(_placed, RealDocuments.BodyOf(_room, Release));
+
+        var warning = Assert.Single(_log, e => e.Level == LogLevel.Warning);
+        Assert.Contains(_placed.FormKey.ToString(), warning.Message, StringComparison.Ordinal);
+        Assert.Contains(column.ParseDiagnosis.Require(), warning.Message, StringComparison.Ordinal);
     }
 }

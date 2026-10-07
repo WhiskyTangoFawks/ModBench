@@ -18,7 +18,7 @@ public sealed class RecordQueryServiceTests
 
     private readonly FakeIndex _manager;
     private readonly FakeReads _reads;
-    private readonly RecordQueryService _svc;
+    private readonly IRecordQueryService _svc;
     private readonly FormKey _npc01Key;
 
     public RecordQueryServiceTests()
@@ -40,10 +40,10 @@ public sealed class RecordQueryServiceTests
         _npc01Key = npc01Key;
     }
 
-    private static (FakeIndex Manager, RecordQueryService Service) Build(FakeFixtureData fixture)
+    private static (FakeIndex Manager, IRecordQueryService Service) Build(FakeFixtureData fixture)
     {
         var (manager, holder) = FakeIndex.From(fixture);
-        return (manager, new RecordQueryService(manager, holder, SharedSchemaReflector.Instance));
+        return (manager, QueryHost.Records(manager, holder));
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class RecordQueryServiceTests
             Release,
             new LoadOrderEntry(PluginName, PluginName, tracked.Origin, 0, Enabled: true, Winning: true),
             new LoadOrderEntry(PluginName, PluginName, untracked.Origin, 1, Enabled: true, Winning: false));
-        var svc = new RecordQueryService(new FakeIndex(reads), holder, SharedSchemaReflector.Instance);
+        var svc = QueryHost.Records(new FakeIndex(reads), holder);
 
         var plugins = svc.GetPlugins();
 
@@ -270,7 +270,7 @@ public sealed class RecordQueryServiceTests
         Assert.Null(_reads.LastSearch?.SearchFormKey);
     }
 
-    private static (FakeIndex Manager, RecordQueryService Service) Roster(params (string Name, bool Light, bool Active)[] plugins)
+    private static (FakeIndex Manager, IRecordQueryService Service) Roster(params (string Name, bool Light, bool Active)[] plugins)
     {
         var entries = plugins.Select((p, slot) => new LoadOrderEntry(p.Name, p.Name, "Data", slot, p.Active, Winning: true)).ToList();
         var opened = plugins.ToDictionary(
@@ -937,7 +937,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetCreatableRecordTypes_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance);
+        var unloaded = QueryHost.Records(_manager, new LoadOrderHolder());
 
         Assert.Throws<NoLoadOrderException>(() => unloaded.GetCreatableRecordTypes());
     }
@@ -970,7 +970,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPlugins_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance);
+        var unloaded = QueryHost.Records(_manager, new LoadOrderHolder());
         var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetPlugins());
         Assert.Contains("No load order", ex.Message);
     }
@@ -978,7 +978,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetRecords_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance);
+        var unloaded = QueryHost.Records(_manager, new LoadOrderHolder());
         var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetRecords(["npc_"], null, null, 10, 0));
         Assert.Contains("No load order", ex.Message);
     }
@@ -1047,8 +1047,8 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetFilter_WithNoLoadOrder_RefusesRatherThanAnsweringUnfiltered()
     {
-        var svc = new RecordQueryService(
-            new StubIndex(reads: null), new LoadOrderHolder(), SharedSchemaReflector.Instance);
+        var svc = QueryHost.Records(
+            new StubIndex(reads: null), new LoadOrderHolder());
 
         Assert.Throws<NoLoadOrderException>(() => svc.GetFilter());
     }

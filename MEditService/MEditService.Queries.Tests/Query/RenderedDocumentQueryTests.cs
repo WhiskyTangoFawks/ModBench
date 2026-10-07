@@ -1,7 +1,6 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries.Tests.TestSupport;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries.Tests.Query;
@@ -12,13 +11,12 @@ public sealed class RenderedDocumentQueryTests
     private static readonly PluginAddress ModA = new("Shared.esp", "ModA");
     private static readonly PluginAddress ModB = new("Shared.esp", "ModB");
 
-    private static RecordQueryService Service(params RecordDocument[] copies) =>
-        new(
+    private static IRecordQueryService Service(params RecordDocument[] copies) =>
+        QueryHost.Records(
             new FakeIndex(new FakeReads(
                 new Dictionary<PluginAddress, PluginContent>(),
                 [.. copies.Select(c => new FakeRow(c.Plugin, 0, IsWinner: false, c))])),
-            FakeLoadOrder.Of(GameRelease.Fallout4),
-            SharedSchemaReflector.Instance);
+            FakeLoadOrder.Of(GameRelease.Fallout4));
 
     private static RecordDocument Copy(PluginAddress plugin, string body, string? parseDiagnosis = null) =>
         new(Npc, plugin, 0, IsWinner: false, "SharedNpc", "npc_", body, [], ParseDiagnosis: parseDiagnosis);
