@@ -68,7 +68,7 @@ public sealed class RegisteredPluginSpellingTests
         {
             var (treeFiles, _) = TestAdapters.Mutagen().ReadSourceAsync(
                 new ModPath(ModKey.FromFileName(PluginName), PluginPath), PluginName, Release,
-                PluginStrings.In(ModFolder)).GetAwaiter().GetResult();
+                new PluginStrings(null, ModFolder)).GetAwaiter().GetResult();
             var pristineFiles = SourceRepository.PristineFilesOf(PluginName, treeFiles);
 
             SourceRepository.Track(

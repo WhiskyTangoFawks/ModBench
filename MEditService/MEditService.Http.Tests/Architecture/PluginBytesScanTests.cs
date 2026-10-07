@@ -14,7 +14,7 @@ public sealed class PluginBytesScanTests
 
     private static readonly string[] PluginOpens = ["OpenForRead", "OpenForWrite", "CreateEmpty"];
 
-    private static readonly string[] TreeDoorInternals = ["PluginTrees", "TreeDeserializer"];
+    private static readonly string[] TreeDoorInternals = ["PluginTrees"];
 
     private static readonly string[] ByteWalkInternals = ["PluginBinaryWalk", "MalformedPluginScan", "BytesOfFile"];
 
