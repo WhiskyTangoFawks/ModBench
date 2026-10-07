@@ -5,6 +5,7 @@
     "outDir": "../../out/projects/install"
   },
   "references": [
+    { "path": "../coreLib" },
     { "path": "../instanceAdapter" },
     { "path": "../ports" },
     { "path": "../tables" }

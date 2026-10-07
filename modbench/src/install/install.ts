@@ -9,8 +9,9 @@ import { markDownloadInstalled } from './installedMark';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import {
-  modNameTakenRefusal, newModNameRefusal, type InstalledFileId, type InstanceAdapter, type ModExtraction, type NewModExtraction, type UpgradeExtraction,
+  type InstalledFileId, type InstanceAdapter, type ModExtraction, type NewModExtraction, type UpgradeExtraction,
 } from '../instanceAdapter/instanceAdapter';
+import { modNameTakenRefusal, newModNameRefusal } from '../coreLib/commandRefusals';
 
 /** What install reaches the instance through. */
 export interface InstallAccess {

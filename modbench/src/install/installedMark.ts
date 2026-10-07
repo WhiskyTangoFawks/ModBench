@@ -1,5 +1,6 @@
 import { refuse } from '../ports/refuse';
-import { goneFromDisk, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { goneFromDisk } from '../coreLib/commandRefusals';
 
 export type InstalledMarkResult =
   | { applied: true }

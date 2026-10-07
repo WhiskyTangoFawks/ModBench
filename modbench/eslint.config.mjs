@@ -283,6 +283,7 @@ export default defineConfig(
                     './src/wire/tsconfig.json',
                     './src/ports/tsconfig.json',
                     './src/instanceAdapter/tsconfig.json',
+                    './src/coreLib/tsconfig.json',
                     './src/instanceLoader/tsconfig.json',
                     './src/modlist/tsconfig.json',
                     './src/pluginsCommands/tsconfig.json',
