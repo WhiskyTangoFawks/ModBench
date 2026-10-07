@@ -26,7 +26,7 @@ As a user, I want:
 6. Open from the palette, with no record given, to ask for one by EditorID, FormID or FormKey. Source: catalog `open`
 7. A tab I leave and come back to to be as I left it: the rows I expanded, the columns I collapsed, the focused cell and the scroll. Source: VS Code keeps a tab's place
 8. A record given without a plugin, from the palette, Referenced By or Go to record, to open the winning copy's file. Source: xEdit lands on the winning copy
-9. An untracked plugin's copy to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Source: ADR-0007; ADR-0001
+9. An untracked plugin's copy, or the copy of a plugin whose plugin source is unreadable, to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Source: ADR-0007; ADR-0001
 10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change saved in either tab shows in both. Source: plugin-source.md, The tree, story 3
 
 ## The header
@@ -51,7 +51,7 @@ As a user, I want:
 5. Each column sized to fit, and its edge to drag to resize it.
 6. The grid to scroll sideways from a scrollbar that stays at the bottom of the panel at every vertical position.
 7. Opened on several records, one column for each, in the order I selected them, the first as the file. Their cells carry no conflict colour: the conflict model compares copies of one record. Source: xEdit Compare Selected; editor-conflicts.md
-8. A click on a column's header to open that column's file, or its rendered document when the plugin is untracked, in this tab, in place of the file I came from, with the same columns. Source: xEdit edits any column in one window; VS Code's Explorer opens a click in the preview tab
+8. A click on a column's header to open that column's file, or its rendered document when the plugin is untracked or its plugin source is unreadable, in this tab, in place of the file I came from, with the same columns. Source: xEdit edits any column in one window; VS Code's Explorer opens a click in the preview tab
 
 ### A column's header
 
@@ -67,7 +67,8 @@ As a user, I want:
 | `(parse failure)` | mEdit could not read this copy of the record. The column shows what could be stored. | the diagnosis | Never silently wrong |
 | `(read-only)` | the game folder provides the plugin | that the game's plugins are not edited | ruling |
 | `(in Overwrite)` | the plugin is in Overwrite | that Overwrite is not a mod, and a plugin moved into a mod can be tracked | ruling |
-| `(untracked)` | the plugin is not tracked | that Track, or decompile in a tracked mod, in this header's menu, makes it editable | ADR-0007 |
+| `(untracked)` | the plugin is not tracked | that Track, in this header's menu, makes it editable | ADR-0007 |
+| `(plugin source unreadable)` | the plugin is tracked, and its plugin source is missing or cannot be read | why, and that decompile, in this header's menu, makes it editable | Never silently wrong |
 | `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
 | `(tracked)` | the plugin is tracked | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007 |
 

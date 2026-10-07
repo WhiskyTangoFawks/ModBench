@@ -44,6 +44,7 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 | Failed to read | mEdit could not read it | `$(error)` red | failed to read |
 | Master issues | it is active, and a master in its header is not (xedit.md, divergence 28); once the snapshot is indexed | `$(error)` red | 1 master issue, N master issues |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
+| Plugin source unreadable | it is tracked, and its plugin source is missing or cannot be read | `$(warning)` yellow | plugin source unreadable |
 | Changed outside Modbench | it is tracked, and its bytes differ from what Modbench last wrote, or either cannot be read | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 
@@ -53,6 +54,7 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 - A plugin that failed to read stays failed until its bytes change or I refresh.
 - A malformed plugin's reasons are also in the Problems panel, on the plugin file. Source: commands.md, Surfaces and their templates
 - A plugin that changed outside Modbench is also a warning in the Problems panel, on the plugin file, while its bytes differ from what Modbench last wrote. Source: ADR-0003
+- A plugin whose plugin source is unreadable shows the records of its plugin file, read-only, until decompile writes its source. Source: ruling
 
 ### A plugin the game loads with no line
 
@@ -132,7 +134,7 @@ As a user, I want:
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's Argument in the catalog says. Source: catalog Argument
 2. A click on a record to open it in the record panel, and a click on an enabled plugin row to open its header, which is a record. A click on a disabled plugin row only selects it. Source: catalog `open`
 3. Enable or disable over a mixed selection to behave as in Mods (Menus and keys, story 2). Source: mods.md
-4. The gestures that edit a plugin's records absent on an untracked plugin and on a plugin that is not active: create record and delete, and the plugin as a copy destination. Track or decompile is on its row. Source: No dead entries
+4. The gestures that edit a plugin's records absent on an untracked plugin, on a plugin whose plugin source is unreadable, and on a plugin that is not active: create record and delete, and the plugin as a copy destination. Track or decompile is on its row. Source: No dead entries
 5. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its file name. Source: catalog `copy value`; [editor-fields.md](editor-fields.md)
 
 ## Drag and drop
@@ -157,6 +159,7 @@ As a user, I want:
 4. Esc at either step to create nothing. Source: Esc changes nothing
 5. The new plugin to appear at the winning end of the list, disabled. Source: catalog `plugin sync`
 6. The new plugin empty: a header with no records and no masters, flagged by its extension: `.esm` a master, `.esl` a light plugin.
+7. A plugin created in a tracked mod to land with its plugin source, as working-tree changes I can review. Source: CONTEXT.md, Tracked mod
 
 ### Track
 
@@ -164,9 +167,9 @@ As a user, I want:
 
 1. No prompt. While it runs, the view's message line names the mod and the phase. Source: catalog `track`
 2. The repository to track `plugin-source/` and `.gitignore`, and nothing else. Source: ADR-0006
-3. One commit, `Track <mod>`, holding the source of every plugin that tracked.
+3. One commit, `Track <mod>`, holding the source of every plugin the mod provides.
 4. Each file's line endings kept as written.
-5. A track that refuses every plugin to leave no repository. A refused plugin writes nothing, and the rest go on.
+5. A track that refuses any plugin to write nothing and leave no repository, naming each refused plugin and why.
 
 ### Decompile
 
@@ -181,6 +184,7 @@ As a user, I want:
 3. From the palette with no plugin, a pick of the tracked plugins. Source: No dead entries
 4. A light plugin whose records fall outside the light range refused, naming the records and the remedies: clear the light flag, rename the plugin off `.esl`, or change the records' FormIDs.
 5. An interrupted compile to leave the old binary or the new one, and neither to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Compiling again fixes it. This is an exception to A failed gesture writes nothing.
+6. A plugin whose plugin source is unreadable refused, naming it and pointing at decompile. Source: Never silently wrong
 
 ### Rename plugin
 
@@ -190,7 +194,7 @@ As a user, I want:
 2. The plugin to keep its place in plugin order and its enabled state in every profile. Its plugin source and what Modbench last wrote follow it. Source: Never silently wrong
 3. The files in its mod named for it to follow it: its strings, its archives and its `.ini`. Source: Never silently wrong
 4. One confirmation when a plugin in the instance lists it as a master, naming each one and saying it keeps the old name and will show Master issues. Nothing asked otherwise. This is an exception to Confirm what destroys: the rename breaks those plugins' master.
-5. The plugin source renamed first, as working-tree changes I can review. Then the file, the files named for it and its lines, in one write. A rename that failed on that write to say so, naming the plugin. Git shows the source rename, and reverting it is the recovery. The file reads as an untracked plugin in a tracked mod until then. This is an exception to A failed gesture writes nothing.
+5. The plugin source renamed first, as working-tree changes I can review. Then the file, the files named for it and its lines, in one write. A rename that failed on that write to say so, naming the plugin. Git shows the source rename, and reverting it is the recovery. The file reads as a plugin whose plugin source is unreadable until then. This is an exception to A failed gesture writes nothing.
 
 ### Create record
 
@@ -234,7 +238,7 @@ By [common.md](common.md#reporting). As a user, I want:
 2. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being the result, with a line in the Output. When a folder cannot be listed, or the game folder is not found, `plugins.txt` untouched, and the reason in the view's message line and the Output.
 3. Every message to name a gesture that exists and a view by its name.
 4. A notification for each tracked mod whose plugins changed outside Modbench, naming the mod and the plugins. It offers nothing to do. It comes once in a session for each new state of a plugin's bytes. Source: ADR-0003
-5. A warning, once in a session, for each untracked plugin in a tracked mod, naming it and pointing at decompile.
+5. A warning, once in a session, for each plugin whose plugin source is unreadable, naming it and pointing at decompile. Story 4's notification leaves that plugin out.
 
 ## Test seam
 

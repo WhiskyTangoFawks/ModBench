@@ -41,7 +41,7 @@ loadorder -> indexer: "a snapshot arrived" {class: signal}
 indexer."validate every plugin"
 codec -> indexer: schema {class: query}
 sourceadapter -> indexer: documents (tracked) {class: query}
-pluginadapter -> indexer: bytes (untracked) {class: query}
+pluginadapter -> indexer: "bytes (untracked, or plugin source unreadable)" {class: query}
 indexer -> store: rows {class: query}
 loadorder -> indexer: the active plugins {class: query}
 indexer."winners and conflicts"

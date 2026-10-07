@@ -25,7 +25,7 @@ client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 plugin -> pluginadapter: bytes {class: track}
 pluginadapter -> commands: bytes {class: track}
-commands."the round-trip gate, per plugin"
+commands."the round-trip gate, per plugin; for track, every plugin's before any write"
 commands -> sourceadapter: documents, per plugin {class: track}
 commands -> port: track progress, per plugin {class: push}
 sourceadapter -> source: documents {class: track}
@@ -40,7 +40,7 @@ client -> plugins: the outcome {class: edit}
 indexer."the next snapshot: index-load-order"
 
 
-refused: "refused, nothing of that plugin written" {
+refused: "refused: nothing of that plugin written; for track, nothing of the mod" {
   commands -> http: "the refusal" {class: edit}
   http -> client: the refusal {class: edit}
   client -> plugins: the refusal {class: edit}
