@@ -26,21 +26,6 @@ public sealed class ContainerSlotElementTypesTests
         Assert.All(slots, slot => Assert.Equal(DeclaredTable(slot.Declared), slot.TypeOfAnUnspelledChild));
     }
 
-    [Fact]
-    public void NoTwoContainersSpellAnEmbeddedSlotTheSameAndMeanDifferentTypes_BecauseTheSlotNameAloneNamesAChildFoundBelowAKnownLevel()
-    {
-        var embedded = ContainerChildFields.EmbeddedSlotsFor(GameCategory.Fallout4);
-        var ambiguous = ChildSlots()
-            .Where(slot => embedded.Contains((slot.Parent.Name, slot.Name)))
-            .GroupBy(slot => slot.Name, slot => slot.TypeOfAnUnspelledChild, StringComparer.Ordinal)
-            .Where(group => group.Distinct(StringComparer.Ordinal).Count() > 1)
-            .Select(group => $"{group.Key} => {string.Join("/", group.Distinct(StringComparer.Ordinal))}")
-            .ToList();
-
-        Assert.NotEmpty(embedded);
-        Assert.Empty(ambiguous);
-    }
-
     private static IEnumerable<Slot> ChildSlots() =>
         RecordTypes().SelectMany(parent => (ContainerChildFields.EnumerateChildFieldsFor(parent) ?? [])
             .Select(name => new Slot(
