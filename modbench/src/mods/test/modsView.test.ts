@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
     boxes: [],
   },
   trees: new Map<string, { description?: string; message?: string }>(),
+  providers: new Map<string, vscode.TreeDataProvider<unknown>>(),
   reveals: [] as { label: unknown; options: unknown }[],
   visible: { value: true },
   visibilityListeners: [] as ((e: { visible: boolean }) => void)[],
@@ -36,7 +37,7 @@ vi.mock('vscode', () => ({
   Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
   window: {
     ...filterBoxWindowMock(h.state),
-    createTreeView: (id: string, options: { treeDataProvider: unknown }) => {
+    createTreeView: (id: string, options: { treeDataProvider: vscode.TreeDataProvider<unknown> }) => {
       const view = {
         ...options, description: undefined, message: undefined, selection: [] as readonly unknown[],
         onDidChangeSelection: (listener: (e: { selection: readonly unknown[] }) => void) => {
@@ -56,6 +57,7 @@ vi.mock('vscode', () => ({
         },
       };
       h.trees.set(id, view);
+      h.providers.set(id, options.treeDataProvider);
       return view;
     },
     registerCustomEditorProvider: () => ({ dispose: () => undefined }),
@@ -86,6 +88,9 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const currentBox = currentBoxOf(h.state);
+
+const shownRows = async () => (await present(h.providers.get('modbench.modList'), 'the Mods tree data provider').getChildren()) ?? [];
+const shownLabels = async () => (await shownRows()).map((row: vscode.TreeItem) => row.label);
 
 const otherDeps = () => ({
   access: accessTo('/instance'), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
@@ -124,9 +129,9 @@ beforeEach(() => {
 describe('the Mods filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { provider, view: modListView, nameFilter: modListFilter } =
+    const { view: modListView, nameFilter: modListFilter } =
       createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
-    await provider.getChildren();
+    await shownRows();
 
     modListFilter.open();
     currentBox().type('zzznomatch');
@@ -174,6 +179,16 @@ describe('the Mods view registers its own gestures', () => {
     expect(h.state.commands.has(command)).toBe(true);
   });
 
+  it('runs mod sync with the instance\'s sync arguments', async () => {
+    const sync = vi.fn(() => Promise.resolve({ applied: true as const, added: [], dropped: [] }));
+    const value = listing(LISTED_MODS);
+    createModsView({ ...otherDeps(), instance: new FakeInstance(value), log: () => undefined, ...modSyncAnswering(sync) });
+
+    await present(h.state.commands.get('modbench.mod.sync'), 'the modbench.mod.sync handler')(value);
+
+    expect(sync).toHaveBeenCalledWith(value.modSyncArguments);
+  });
+
   it('hears its copy value in the Mods view\'s key, and defers for any other', () => {
     const { copyValue } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
     expect(copyValue.reporterTag).toBe('mod.copyValue');
@@ -185,13 +200,14 @@ describe('the Mods view registers its own gestures', () => {
 describe('the Mods title-bar sort icons', () => {
   it('set the tree\'s own direction, and the key the icon reads', async () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { provider } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+    createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+    const losingAtTop = await shownLabels();
 
     expect(h.state.contextKeys.get('modbench.mod.winningAtTop')).toBe(false);
     await h.state.commands.get('modbench.mod.sortWinningAtTop')?.();
-    expect([provider.viewDirection(), h.state.contextKeys.get('modbench.mod.winningAtTop')]).toEqual(['winningAtTop', true]);
+    expect([await shownLabels(), h.state.contextKeys.get('modbench.mod.winningAtTop')]).toEqual([[...losingAtTop].reverse(), true]);
     await h.state.commands.get('modbench.mod.sortLosingAtTop')?.();
-    expect([provider.viewDirection(), h.state.contextKeys.get('modbench.mod.winningAtTop')]).toEqual(['losingAtTop', false]);
+    expect([await shownLabels(), h.state.contextKeys.get('modbench.mod.winningAtTop')]).toEqual([losingAtTop, false]);
   });
 });
 

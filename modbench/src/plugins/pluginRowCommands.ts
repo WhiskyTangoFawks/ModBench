@@ -13,7 +13,7 @@ import { trackProgressMessage } from './trackProgress';
 import type { PluginsTreeNode } from './PluginsTreeProvider';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { compilableSelected, PLUGINS_KEY_ARGS } from './gestureEntry';
-import { gestureEntry, isArgumentCarrier, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
+import { gestureEntry, isClickedRow, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -60,7 +60,7 @@ export function registerTrackCommand(deps: TrackDeps, paletteSelection: () => re
   return vscode.commands.registerCommand(
     'modbench.mod.track',
     async (clicked?: unknown, selected?: readonly unknown[]) => {
-      const rows = gestureEntry(clicked, selected, paletteSelection, isArgumentCarrier).selection;
+      const rows = gestureEntry(clicked, selected, paletteSelection, isClickedRow).selection;
       const invokedFrom = rows.some((row) => modArgumentOf(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
       await trackMods(deps, targetsOf(rows, deps.modDirs()), invokedFrom);
     },

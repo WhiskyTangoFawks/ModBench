@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import { modArgumentOf, pluginArgumentOf } from './argument';
+import { recordArgumentOf } from './recordArgument';
+import type { ArgumentOf } from '../wire/argument';
 
 export interface KindedRow extends vscode.TreeItem {
   readonly kind: string;
@@ -17,8 +20,19 @@ export const kindGuard = <Row extends KindedRow>() =>
   <K extends Row['kind']>(kinds: readonly K[]) =>
     (row: unknown): row is RowOf<Row, K> => row instanceof vscode.TreeItem && 'kind' in row && kinds.some((kind) => kind === row.kind);
 
-/** A tree row, or a webview context, that carries an Argument. */
-export const isArgumentCarrier = (value: unknown): value is unknown => typeof value === 'object' && value !== null;
+export interface ArgumentCarrier {
+  readonly argument: ArgumentOf<'record' | 'plugin' | 'mod'>;
+}
+
+/** A tree row, or a webview context, that carries an Argument the wire accepts. */
+export const isArgumentCarrier = (value: unknown): value is ArgumentCarrier =>
+  [recordArgumentOf, pluginArgumentOf, modArgumentOf].some((argumentOf) => argumentOf(value) !== undefined);
+
+/** What a gesture that refuses unreadable rows aloud takes as clicked: a tree row, which it refuses
+ *  when it carries no Argument, or a webview context. Any other object, such as a key's own args,
+ *  is not a row. */
+export const isClickedRow = (value: unknown): value is vscode.TreeItem | ArgumentCarrier =>
+  value instanceof vscode.TreeItem || isArgumentCarrier(value);
 
 // No stable API names the focused row, so from a key or the palette a selection of one row
 // stands for it.

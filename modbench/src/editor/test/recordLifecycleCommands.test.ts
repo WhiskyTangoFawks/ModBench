@@ -25,6 +25,7 @@ vi.mock('vscode', async () => {
   };
 });
 
+import { TreeItem } from '../../test/vscodeMock';
 import {
   registerRecordLifecycleCommands, registerRecordCopyCommands,
 } from '../recordLifecycleCommands';
@@ -170,7 +171,7 @@ describe('registerRecordLifecycleCommands', () => {
     it('asks nothing, deletes nothing and says so for a row that carries no record Argument', async () => {
       const client = new InMemoryMEditClient();
       const { ask, reporter } = invoke(client, 'Delete');
-      const withoutArgument = { label: 'Armor', kind: 'record', origin: 'ModA', record: { formKey: FIRST.formKey, plugin: FIRST.plugin } };
+      const withoutArgument = Object.assign(new TreeItem('Armor'), { kind: 'record', origin: 'ModA', record: { formKey: FIRST.formKey, plugin: FIRST.plugin } });
 
       await deleteRecords(withoutArgument);
 
