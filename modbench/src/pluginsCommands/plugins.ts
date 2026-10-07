@@ -80,16 +80,18 @@ export type { Drop as PluginsDrop } from './dropIndex';
 /** What the plugin-order rules ask mEdit: the masters query. */
 export type PluginMasters = Pick<MEditClient, 'getPlugins'>;
 
-// plugins.txt has no origin, so a name two origins hold names no one plugin: it is not judged.
-// Nothing is judged while mEdit cannot answer (plugins.md, Drag and drop, story 3).
+// plugins.txt names a file and the game loads one copy of it: the one in the load order (ADR-0012).
+// A name held once is that copy. A name held by several, none of them in the load order, names no
+// one copy, so it is not judged. Nothing is judged while mEdit cannot answer (plugins.md, Drag and
+// drop, story 3).
 async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsOf> {
   const held = await masters.getPlugins().catch(() => [] as PluginMetadata[]);
-  const byName = new Map<string, PluginOrderFacts | undefined>();
-  for (const { name, masters: own, isBlueprint } of held) {
-    const key = pluginKey(name);
-    byName.set(key, byName.has(key) ? undefined : { masters: own, blueprint: isBlueprint });
-  }
-  return (name) => byName.get(pluginKey(name));
+  return (name) => {
+    const copies = held.filter((plugin) => pluginKey(plugin.name) === pluginKey(name));
+    const loaded = copies.length === 1 ? copies : copies.filter((copy) => copy.inLoadOrder);
+    const [copy] = loaded;
+    return loaded.length === 1 && copy !== undefined ? { masters: copy.masters, blueprint: copy.isBlueprint } : undefined;
+  };
 }
 
 /** `modbench.plugin.move`: the block lands where the drop says, unless that breaks the plugin-order

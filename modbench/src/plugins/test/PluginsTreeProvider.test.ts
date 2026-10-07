@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { PluginsCommandResult, PluginsDrop } from '../../pluginsCommands/plugins';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import type { PluginAddress } from '../../wire/pluginAddress';
@@ -772,6 +775,52 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const { reports, fired } = await drag(source, ['A.esp'], 'D.esp');
     expect(reports).toEqual([{ severity: 'error', message: 'Failed to move plugins.', detail: 'disk full' }]);
     expect(fired).toBe(false);
+  });
+});
+
+describe('PluginsTreeProvider — a drop the command refuses, end to end', () => {
+  const ORDER = ['A.esp', 'B.esp', 'C.esp'];
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'plugin-drop-'));
+    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), ORDER.map((n) => `*${n}\r\n`).join(''));
+  });
+  afterEach(() => rm(dir, { recursive: true, force: true }));
+
+  async function dropOn(moved: string, target: string, facts: Partial<PluginMetadata>[]) {
+    const reporter = recordingReporter();
+    const client = { getPlugins: () => Promise.resolve(facts.map((f, i) => held(ORDER[i] ?? 'X.esp', f))) };
+    const { accessTo } = await import('../../test/mo2/adapterOver');
+    const { reorderPlugins } = await import('../../pluginsCommands/plugins');
+    const source = { reorderPlugins: (names: string[], drop: PluginsDrop) => reorderPlugins(accessTo(dir), client, 'Default', names, drop) };
+    const instance = Object.assign(new FakeInstance(valueOf(ORDER.map((name, slot) => plugin({ name, slot })))), { refresh: () => Promise.resolve() });
+    const tree = new PluginsTreeProvider({ instance, source, reporter });
+    await tree.getChildren();
+    const dt = new DataTransfer();
+    tree.handleDrag([new PluginNode({ name: moved, enabled: true }, 'SomeMod')], dt, IGNORED_TOKEN);
+    await tree.handleDrop(new PluginNode({ name: target, enabled: true }, 'SomeMod'), dt, IGNORED_TOKEN);
+    return reporter.reports;
+  }
+
+  it('names the master and its dependant to the user', async () => {
+    expect(await dropOn('A.esp', 'C.esp', [{}, { masters: ['A.esp'] }, {}])).toEqual([{
+      severity: 'error', message: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.',
+    }]);
+  });
+
+  it('names the blueprint plugin and the plugin it must load after', async () => {
+    expect(await dropOn('C.esp', 'A.esp', [{}, {}, { isBlueprint: true }]))
+      .toEqual([{
+        severity: 'error', message: 'Could not move plugins.',
+        detail: '"C.esp" is a blueprint plugin, so it must load after "A.esp", which is not.',
+      }]);
+  });
+
+  it('says what happened when the row dropped on is gone from plugins.txt', async () => {
+    expect(await dropOn('A.esp', 'Gone.esp', [])).toEqual([{
+      severity: 'error', message: 'Could not move plugins.', detail: 'Plugin not found in plugins.txt: Gone.esp',
+    }]);
   });
 });
 

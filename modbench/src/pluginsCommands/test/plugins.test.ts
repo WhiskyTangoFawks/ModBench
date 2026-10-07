@@ -14,7 +14,7 @@ import type { DataFolderPlugins } from '../../instanceAdapter/instanceAdapter';
 
 const PROFILE = 'Default';
 const NOT_INDEXED = { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) };
-const knowing = (...facts: { name: string; masters?: string[]; isBlueprint?: boolean; origin?: string }[]) => ({
+const knowing = (...facts: { name: string; masters?: string[]; isBlueprint?: boolean; origin?: string; inLoadOrder?: boolean }[]) => ({
   getPlugins: () => Promise.resolve(facts.map((f): PluginMetadata => ({
     path: `/data/${f.name}`, isLight: false, isMaster: false, recordCount: 0, isImmutable: false, inLoadOrder: true,
     hasMatchingRecords: false, isTracked: false, hasParseFailure: false, masters: [], isBlueprint: false, origin: 'SomeMod', ...f,
@@ -119,11 +119,24 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
         .toEqual({ applied: true, wrote: true });
     });
 
-    it('does not judge a name two origins both hold', async () => {
+    it('judges a name two origins hold by the copy in the load order', async () => {
       const masters = knowing(
-        { name: 'A.esp' }, { name: 'B.esp', origin: 'Other' }, { name: 'B.esp', masters: ['A.esp'] }, { name: 'C.esp' });
+        { name: 'A.esp' }, { name: 'B.esp', origin: 'Other', inLoadOrder: false }, { name: 'B.esp', masters: ['A.esp'] }, { name: 'C.esp' });
+      assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(
+        await reorderPlugins(accessTo(dir), masters, PROFILE, ['A.esp'], { kind: 'winningEnd' }), '"A.esp" is a master of "B.esp"');
+    });
+
+    it('does not judge a name two origins hold when neither is in the load order', async () => {
+      const masters = knowing(
+        { name: 'A.esp' }, { name: 'B.esp', origin: 'Other', inLoadOrder: false }, { name: 'B.esp', masters: ['A.esp'], inLoadOrder: false }, { name: 'C.esp' });
       expect(await reorderPlugins(accessTo(dir), masters, PROFILE, ['A.esp'], { kind: 'winningEnd' }))
         .toEqual({ applied: true, wrote: true });
+    });
+
+    it('judges a disabled plugin held once, which is not in the load order', async () => {
+      const masters = knowing({ name: 'A.esp' }, { name: 'B.esp', masters: ['A.esp'], inLoadOrder: false }, { name: 'C.esp' });
+      assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(
+        await reorderPlugins(accessTo(dir), masters, PROFILE, ['A.esp'], { kind: 'winningEnd' }), '"A.esp" is a master of "B.esp"');
     });
   });
 
