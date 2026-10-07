@@ -29,9 +29,6 @@ public sealed class TestEditor(EditRecordChangesHandler edits, LoadOrderHolder l
         catch (Exception ex) when (ex is UnreadableSourceDocumentException or AmbiguousSourceUnitException)
         {
         }
-        var documents = Directory.EnumerateFiles(mod.Folder, "*.json", SearchOption.AllDirectories).ToList();
-        var carrying = documents.FirstOrDefault(document => File.ReadAllText(document).Contains($"\"FormKey\": \"{formKey}\"", StringComparison.Ordinal))
-            ?? documents.FirstOrDefault(document => Path.GetFileName(document).Contains(formKey.Replace(':', '_'), StringComparison.Ordinal));
-        return carrying is null ? "" : File.ReadAllText(carrying);
+        return "";
     }
 }

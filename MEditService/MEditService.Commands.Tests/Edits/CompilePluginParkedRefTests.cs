@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using MEditService.Commands.Tests.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 
@@ -13,35 +12,26 @@ public sealed class CompilePluginParkedRefTests : IDisposable
     private CompilePluginHandler CompileService() =>
         _mod.CompileService();
 
-    private IReadOnlyList<string> Parked() => LastWriteRecord.Of(_mod.ModFolder, CompileFixture.PluginName);
-
-    private static string Sha256Of(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
-
     [Fact]
-    public async Task Compile_WorkingTree_AdvancesTheParkedRef_WithTheCompiledBinarysHash()
+    public async Task Compile_WorkingTree_LeavesTheCompiledBinaryAsTheOneModbenchLastWrote()
     {
-        var baselineParked = Parked();
-
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
         var answer = await CompileService().CompileAsync([_mod.Plugin]);
         Assert.Empty(answer.Refused);
         Assert.Single(answer.Landed);
 
-        var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
-        Assert.Equal([Sha256Of(pluginPath)], Parked());
-        Assert.NotEqual(baselineParked, Parked());
+        Assert.Empty(ExternalChanges.NamedBy(_mod.LoadOrder));
     }
 
     [Fact]
-    public async Task Compile_ThatRefuses_LeavesTheParkedRefUntouched()
+    public async Task Compile_ThatRefuses_LeavesTheBinaryAsTheOneModbenchLastWrote()
     {
         TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
-        var baselineParked = Parked();
         var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
-        var refused = Assert.Single(answer.Refused);
-        Assert.Equal(baselineParked, Parked());
+        Assert.Single(answer.Refused);
+        Assert.Empty(ExternalChanges.NamedBy(_mod.LoadOrder));
     }
 
     [Fact]
@@ -66,21 +56,13 @@ public sealed class CompilePluginParkedRefTests : IDisposable
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var before = File.ReadAllBytes(pluginPath);
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        var refLock = LastWriteRecord.LockFileOfTheOnlyPlugin(_mod.ModFolder);
-        File.WriteAllText(refLock, "");
-        try
-        {
-            var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        LastWriteRecord.RefuseRefUpdates(_mod.ModFolder);
 
-            var refused = Assert.Single(answer.Refused);
-            Assert.Equal(CompileRefusal.WriteFailed, refused.Refusal);
-            Assert.DoesNotContain(_mod.ModFolder, refused.Message, StringComparison.Ordinal);
-        }
-        finally
-        {
-            File.Delete(refLock);
-        }
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
+        var refused = Assert.Single(answer.Refused);
+        Assert.Equal(CompileRefusal.WriteFailed, refused.Refusal);
+        Assert.DoesNotContain(_mod.ModFolder, refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
     }
 }

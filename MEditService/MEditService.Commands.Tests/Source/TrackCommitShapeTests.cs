@@ -31,15 +31,14 @@ public sealed class TrackCommitShapeTests : IDisposable
     public void Dispose() => _root.Dispose();
 
     [Fact]
-    public async Task Track_ParksEachPluginsBinary_UnderItsOwnName()
+    public async Task Track_ParksEachPluginsBinary_SoNoPluginReadsAsChangedOutsideModbench()
     {
-        var first = WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        var second = WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
+        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
         await Track();
 
-        Assert.Equal([first], LastWriteRecord.Of(_modFolder, "First.esp"));
-        Assert.Equal([second], LastWriteRecord.Of(_modFolder, "Second.esp"));
+        Assert.Empty(ExternalChanges.NamedBy(LoadOrder()));
     }
 
     [Fact]
@@ -213,14 +212,16 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private Task<SelectionResult<string, TrackRefusal, TrackedMod>> Track() => Track(TestAdapters.Mutagen());
 
-    private Task<SelectionResult<string, TrackRefusal, TrackedMod>> Track(IPluginAdapter adapter)
+    private Task<SelectionResult<string, TrackRefusal, TrackedMod>> Track(IPluginAdapter adapter) =>
+        TrackEveryPluginOf.ModAsync(LoadOrder(), ModName, adapter);
+
+    private LoadOrderSnapshot LoadOrder()
     {
         var entries = Directory.GetFiles(_modFolder, "*.esp")
             .Order(StringComparer.Ordinal)
             .Select((path, slot) => new LoadOrderEntry(Path.GetFileName(path), path, ModName, slot, Enabled: true, Winning: true))
             .ToList();
-        var loadOrder = SnapshotPlugins.Snapshot(_gameDir, _gameDir, GameRelease.Fallout4, entries);
-        return TrackEveryPluginOf.ModAsync(loadOrder, ModName, adapter);
+        return SnapshotPlugins.Snapshot(_gameDir, _gameDir, GameRelease.Fallout4, entries);
     }
 
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);

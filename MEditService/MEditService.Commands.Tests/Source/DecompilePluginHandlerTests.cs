@@ -67,13 +67,11 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Decompile_ParksThePluginsBytes_AsTheOnesItsSourceWasMadeFrom()
+    public async Task Decompile_ParksThePluginsBytes_SoItReadsAsOneModbenchWrote()
     {
         await Decompile(Tracked("Second.esp"));
 
-        Assert.Equal(
-            [PluginBinaryHash.TrailerFormOfFile(Path.Combine(_trackedMod, "Second.esp"))],
-            LastWriteRecord.Of(_trackedMod, "Second.esp"));
+        Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
     }
 
     [Fact]
