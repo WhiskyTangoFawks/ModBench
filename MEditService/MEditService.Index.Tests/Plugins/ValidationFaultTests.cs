@@ -41,20 +41,16 @@ public sealed class ValidationFaultTests : IDisposable
     private void RewriteThePlugin() =>
         PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
 
-    private bool Logged(LogLevel level, Func<LogEntry, bool> matches)
-    {
-        lock (_log) return _log.Exists(e => e.Level == level && matches(e));
-    }
-
     [Fact]
-    public void AValidationThatFaultsOutright_IsLogged_AndNamedInTheStatus()
+    public void AValidationThatFaultsOutright_ReachesTheOutput_AndFailsTheStatus()
     {
         using var index = Subscribed(notifications: new PluginChangedFaults());
         RewriteThePlugin();
 
         index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Failed, "the failed status");
 
-        Assert.True(Logged(LogLevel.Error, e => e.Exception?.Message == PluginChangedFaults.Reason), "the fault was never logged");
+        lock (_log)
+            Assert.Contains(_log, e => e.Level == LogLevel.Error && e.Exception?.Message == PluginChangedFaults.Reason);
         Assert.Contains(PluginChangedFaults.Reason, index.Status.Message, StringComparison.Ordinal);
     }
 

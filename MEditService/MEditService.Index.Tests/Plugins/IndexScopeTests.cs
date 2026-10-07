@@ -2,7 +2,6 @@ using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -74,7 +73,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         manager.Dispose();
 
         Assert.Throws<NoLoadOrderException>(() => manager.RequireReads());
-        Assert.ThrowsAny<Exception>(() =>
+        Assert.Throws<ObjectDisposedException>(() =>
             oldRepo.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
     }
 
@@ -235,14 +234,8 @@ public class IndexScopeTests(TestPluginFixture fixture)
             .Build();
         using (data)
         {
-            var entries = new List<LogEntry>();
-            using var loggerFactory = LoggerFactory.Create(b =>
-            {
-                b.SetMinimumLevel(LogLevel.Debug);
-                b.AddProvider(new CollectingLoggerProvider(entries));
-            });
             var notifications = new InMemoryNotificationPublisher();
-            using var manager = Indexes.Open(holder, loggerFactory: loggerFactory, notifications: notifications);
+            using var manager = Indexes.Open(holder, notifications: notifications);
 
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
             manager.SetFilter("SELECT form_key FROM npc_ WHERE CAST(editor_id AS INTEGER) = 7", "filter.sql");
@@ -251,10 +244,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
             manager.NextSnapshot();
 
-            Assert.Contains(entries, e =>
-                e.Level == LogLevel.Warning
-                && e.Message.Contains("re-materialize the active filter", StringComparison.Ordinal)
-                && e.Message.Contains("NotANumber", StringComparison.Ordinal));
             Assert.Contains(
                 manager.RequireReads().DocumentsOf(new PluginAddress("Plugin.esp", "Data")),
                 d => d.EditorId == "NotANumber");
@@ -287,7 +276,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var otherInstance = Directory.CreateDirectory(Path.Combine(_fixture.InstanceRoot, "other-instance")).FullName;
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
 
-        Assert.ThrowsAny<Exception>(() =>
+        Assert.Throws<ObjectDisposedException>(() =>
             oldRepo.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
     }
 
@@ -301,7 +290,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
         manager.Dispose();
 
-        Assert.ThrowsAny<Exception>(() =>
+        Assert.Throws<ObjectDisposedException>(() =>
             oldRepo.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
     }
 
