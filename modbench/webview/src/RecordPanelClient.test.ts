@@ -20,7 +20,7 @@ function lastRequestId(): string {
 
 function answer(requestId: string, data: Record<string, unknown>): void {
   window.dispatchEvent(new MessageEvent('message', {
-    data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, documentPlugin: { name: 'A.esp', origin: 'ModA' }, ...data },
+    data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {}, ...data },
   }));
 }
 

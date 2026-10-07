@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
-import { FOLDER_KEY, INSTANCE_READ_KEY, type FolderCheck } from './folderContext';
-import type { InstanceView } from '../instanceLoader/instance';
+import { FOLDER_KEY, type FolderCheck } from './folderContext';
 
 function answerInstanceCheck(root: string | undefined, isInstance: (root: string) => boolean): FolderCheck {
   const answer: FolderCheck = root !== undefined && isInstance(root) ? 'instance' : 'notAnInstance';
@@ -24,13 +23,4 @@ export function openedFolder(isInstance: (root: string) => boolean, log: (messag
 
 export function whenOpened<T>(opened: OpenedFolder, on: { instance: (instanceRoot: string) => T; notAnInstance: () => T }): T {
   return opened.folder === 'instance' ? on.instance(opened.instanceRoot) : on.notAnInstance();
-}
-
-/** A failed read lands no value, so the key waits for the first read that does. */
-export function markFirstReadLanded(instance: Pick<InstanceView, 'subscribe'>): vscode.Disposable {
-  const subscription = instance.subscribe(() => {
-    subscription.dispose();
-    void vscode.commands.executeCommand('setContext', INSTANCE_READ_KEY, true);
-  });
-  return subscription;
 }

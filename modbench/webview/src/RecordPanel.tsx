@@ -14,7 +14,7 @@ import { addElement, editField, focusCell, keepViewState, openInPlace } from './
 import { openEditor } from './DiskCell';
 import { EditorMounted } from './cellEditor';
 import { pastedValue } from './modelValue';
-import { EXTENSION_TO_WEBVIEW, isViewState, parseExtensionToWebview, type ColumnCopy, type ViewState } from '../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, isViewState, parseExtensionToWebview, type ColumnCopy, type ModRepository, type ViewState } from '../../src/wire/messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
@@ -58,6 +58,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // not heard from /plugins offers no editing, compile or track (commands.md, No dead entries).
   const [trackedSet, setTrackedSet] = useState<Set<ColumnKey> | null>(null);
   const [sourceUnreadableSet, setSourceUnreadableSet] = useState<Set<ColumnKey> | null>(null);
+  const [modsByOrigin, setModsByOrigin] = useState<Record<string, ModRepository>>({});
   // Whether the winner sweep has run. Initial `true` only matters until the first load
   // lands, so it can never read as a false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
@@ -145,6 +146,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       // unknown state reads as neither tracked nor untracked.
       setTrackedSet(loaded.trackedSet);
       setSourceUnreadableSet(loaded.sourceUnreadableSet);
+      setModsByOrigin(loaded.modsByOrigin);
       // No `?? true` fallback: `undefined` is falsy, so a fixture that omits `conflictsComputed`
       // still shows the banner rather than reading as settled.
       setConflictsComputed(loaded.conflictsComputed);
@@ -219,6 +221,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         client.showColumns(msg.columns);
         void refresh(formKey);
       }
+      if (msg.type === EXTENSION_TO_WEBVIEW.MODS_CHANGED) setModsByOrigin(msg.modsByOrigin);
       if (msg.type === EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL) pasteIntoFocused(msg.text);
       if (msg.type === EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR) {
         const cell = scroller.current?.querySelector<HTMLElement>('[data-focused-cell]');
@@ -375,7 +378,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                     // Copy… is offered on every column: copying from a read-only plugin is the
                     // ordinary case.
                     vscodeContext={JSON.stringify(headerCellContext(
-                      col.override.formKey, col.override.plugin, col.override.origin, tracked && !isImmutable, tracked && !sourceUnreadable && !isImmutable,
+                      col.override.formKey, col.override.plugin, col.override.origin,
+                      {
+                        compilable: tracked && !isImmutable,
+                        editable: tracked && !sourceUnreadable && !isImmutable,
+                        inMod: modsByOrigin[col.override.origin] ?? 'none',
+                      },
                     ))}
                   />
                 );

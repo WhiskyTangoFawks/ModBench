@@ -5,7 +5,8 @@ import { tsFiles } from './tsFiles';
 import { SRC } from './scanSource';
 
 describe('each key has one writer', () => {
-  const OWNERS = ['toolbox/folderContext.ts', 'toolbox/instanceCheck.ts'];
+  const FOLDER_OWNERS = ['drivingLib/folderContext.ts', 'drivingLib/instanceCheck.ts'];
+  const FIRST_READ_OWNERS = ['drivingLib/folderContext.ts', 'drivingLib/instanceFirstRead.ts'];
   const production = tsFiles(SRC, { exclude: ['generated', 'test'] });
   const naming = (pattern: RegExp) =>
     production.filter((path) => pattern.test(readFileSync(path, 'utf8'))).map((path) => relative(SRC, path));
@@ -15,14 +16,14 @@ describe('each key has one writer', () => {
   });
 
   it('names the folder key only where it is declared and written', () => {
-    expect(naming(/\bFOLDER_KEY\b|modbench\.folder\b/).sort()).toEqual(OWNERS);
+    expect(naming(/\bFOLDER_KEY\b|modbench\.folder\b/).sort()).toEqual(FOLDER_OWNERS);
   });
 
   it('names the first-read key only where it is declared and written', () => {
-    expect(naming(/\bINSTANCE_READ_KEY\b|modbench\.instanceRead\b/).sort()).toEqual(OWNERS);
+    expect(naming(/\bINSTANCE_READ_KEY\b|modbench\.instanceRead\b/).sort()).toEqual(FIRST_READ_OWNERS);
   });
 
   it('marks the first read from the one place the Instance is built', () => {
-    expect(naming(/\bmarkFirstReadLanded\(/).sort()).toEqual(['extension.ts', 'toolbox/instanceCheck.ts']);
+    expect(naming(/\bmarkFirstReadLanded\(/).sort()).toEqual(['drivingLib/instanceFirstRead.ts', 'extension.ts']);
   });
 });

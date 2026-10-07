@@ -12,6 +12,7 @@ import type { FocusedCellContext, FocusedCells } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
 import type { TitledColumn } from './recordTitle';
 import type { TabPlace } from './recordOpenPlan';
+import { modsByOrigin, type ModFacts } from './modsByOrigin';
 
 type TitleFromRead = (formKey: string, columns: readonly TitledColumn[] | undefined) => void;
 
@@ -44,11 +45,14 @@ export interface RouteRecordPanelMessageDeps {
   // The latest load-order status, read rather than fetched.
   conflictsComputed: () => boolean;
   loadFailures: () => readonly PluginLoadFailure[];
+  modFacts: ModFacts;
+  // The origins the panel's last read showed, which it is told the state of when the instance changes.
+  originsShown: (origins: readonly string[]) => void;
 }
 
 /** What every panel's messages share: the rest is the panel's own. */
 export type SharedRecordPanelDeps = Omit<
-  RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'readAnswered' | 'tabPlace'>;
+  RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'readAnswered' | 'tabPlace' | 'originsShown'>;
 
 /** What a tab gives its panel's messages: its document's, and a keeper of its place. */
 export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'documentText' | 'keepViewState'>;
@@ -64,14 +68,20 @@ export function routerDepsForPanel<Panel extends FollowedPanel & Pick<vscode.Web
   document: string,
 ): RouteRecordPanelMessageDeps {
   let open = true;
+  let origins: readonly string[] = [];
   panel.onDidDispose(() => { open = false; });
   const whileOpen = <Args extends unknown[]>(act: (...args: Args) => void) => (...args: Args): void => { if (open) act(...args); };
   const reply = whileOpen((m: ExtensionToWebview) => { void panel.webview.postMessage(m); });
+  const modsChanged = shared.modFacts.onChange(() => {
+    reply({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: modsByOrigin(origins, shared.modFacts) });
+  });
+  panel.onDidDispose(() => { modsChanged.dispose(); });
   return {
     ...shared,
     formKeyPicker: { meditClient: shared.meditClient, reporter: shared.reporter, reply },
     focusCell: (context, userFocus) => { focusedCells.setCell(panel, context, userFocus); },
     reply,
+    originsShown: whileOpen((shown) => { origins = shown; }),
     ...tab,
     titleFromRead: whileOpen(tab.titleFromRead),
     keepViewState: whileOpen(tab.keepViewState),
@@ -182,11 +192,14 @@ async function answerRecordLoad(
     });
     return;
   }
+  const origins = (compare.value?.overrides ?? []).map((o) => o.origin);
+  deps.originsShown(origins);
   deps.titleFromRead(m.formKey, compare.value?.overrides);
   deps.readAnswered(m.formKey, m.columns);
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     compare: compare.value, plugins: listed,
     conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
+    modsByOrigin: modsByOrigin(origins, deps.modFacts),
   });
 }

@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import { act } from '@testing-library/react';
-import { WEBVIEW_TO_EXTENSION, hasSection, type ExtensionToWebview, type WebviewToExtension } from '../../../src/wire/messages';
+import { WEBVIEW_TO_EXTENSION, hasSection, type ExtensionToWebview, type ModRepository, type WebviewToExtension } from '../../../src/wire/messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
 import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
 import { columnKey, copyColumnKey } from '../../../src/wire/columnKey';
@@ -54,6 +54,7 @@ export interface PanelOpts {
   plugins?: FixturePlugin[];
   conflictsComputed?: boolean;
   loadFailures?: PluginLoadFailure[];
+  modsByOrigin?: Record<string, ModRepository>;
   /** The column of the copy the tab's document holds. Unstated, the winning copy's, as a record
    *  opened without a plugin opens it. */
   fileColumn?: string;
@@ -84,6 +85,7 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
       // ADR-0007: an unstated plugin is untracked.
       trackedSet: columnsWhere(p => p.isTracked === true),
       sourceUnreadableSet: columnsWhere(p => p.pluginSourceUnreadable === true),
+      modsByOrigin: opts.modsByOrigin ?? {},
       conflictsComputed: opts.conflictsComputed ?? true,
       loadFailures: opts.loadFailures ?? [],
       fileColumn: opts.fileColumn ?? winnerColumn(compare()),
