@@ -11,15 +11,19 @@ import { recordTitle } from './recordTitle';
 export class ReferencedByHolderNode extends vscode.TreeItem {
   readonly argument: RecordArgument;
   readonly plugin: PluginAddress;
+  /** What confirmations call the record this copy holds. */
+  readonly name: string;
 
   constructor(
     target: string,
     formKey: string,
+    editorId: string | undefined,
     address: PluginAddress,
     fieldPaths: readonly string[],
   ) {
     super(address.name, vscode.TreeItemCollapsibleState.None);
     this.plugin = address;
+    this.name = editorId ?? formKey;
     this.argument = { kind: 'record', plugin: address, formKey };
     this.id = JSON.stringify([target, formKey, address.origin, address.name]);
     this.description = fieldPaths.join(', ');
@@ -111,7 +115,7 @@ function referrerNode(target: string, copies: readonly ReferenceResult[]): Refer
   const holders = groupBy(copies, r => JSON.stringify([r.origin, r.plugin])).flatMap(fields => {
     const [held] = fields;
     return held
-      ? [new ReferencedByHolderNode(target, first.formKey, { name: held.plugin, origin: held.origin }, fields.map(r => r.fieldPath))]
+      ? [new ReferencedByHolderNode(target, first.formKey, editorId, { name: held.plugin, origin: held.origin }, fields.map(r => r.fieldPath))]
       : [];
   });
   return new ReferencedByReferrerNode(target, first.formKey, editorId, first.recordTypeName, holders);

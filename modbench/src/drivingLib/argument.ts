@@ -29,10 +29,11 @@ export function modArgumentOf(carrier: unknown): ModArgument | undefined {
   return argument && Reflect.get(argument, 'kind') === 'mod' && isString(name) ? { kind: 'mod', name } : undefined;
 }
 
-/** The label a row shows. */
+/** What names the object a row stands for: its `name` when it has one, else the label it shows. */
 export function rowLabelOf(carrier: unknown): string | undefined {
-  const label: unknown = typeof carrier === 'object' && carrier !== null ? Reflect.get(carrier, 'label') : undefined;
-  return typeof label === 'string' ? label : undefined;
+  if (typeof carrier !== 'object' || carrier === null) return undefined;
+  const name: unknown = Reflect.get(carrier, 'name') ?? Reflect.get(carrier, 'label');
+  return typeof name === 'string' ? name : undefined;
 }
 
 /** What names a row in a refusal. */

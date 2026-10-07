@@ -153,17 +153,17 @@ describe('registerRecordLifecycleCommands', () => {
       ]);
     });
 
-    it('names the plugin copy a Referenced By row stands for, with its origin', async () => {
+    it('names the plugin copy a Referenced By row stands for, with its origin and the EditorID of the record it holds', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { landed: [SECOND], refused: [] });
       const { ask } = invoke(client, 'Delete');
-      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, { name: SECOND.plugin, origin: SECOND.origin }, []);
+      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'TestNPC', { name: SECOND.plugin, origin: SECOND.origin }, []);
 
       await deleteRecords(holder);
 
       expect(deleteCalls(client)).toEqual([[[SECOND]]]);
       expect(ask.asked.map((question) => question.message)).toEqual([
-        'Delete MyPatch.esp [000802:MyPatch.esp] in MyPatch.esp (ModA)? It leaves its plugin source as a working-tree change you can review.',
+        'Delete TestNPC [000802:MyPatch.esp] in MyPatch.esp (ModA)? It leaves its plugin source as a working-tree change you can review.',
       ]);
     });
 
@@ -320,7 +320,7 @@ describe('registerRecordLifecycleCommands', () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { landed: [], refused: [] });
       const { viewsAskedFor } = invoke(client, 'Delete', 'Delete');
-      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, { name: 'MyPatch.esp', origin: 'ModA' }, []);
+      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'SecondNpc', { name: 'MyPatch.esp', origin: 'ModA' }, []);
 
       await deleteRecords(holder);
       await deleteRecords(SECOND_NODE);
@@ -667,7 +667,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     client.setCommandResult('copyRecords', { landed: [], refused: [] });
     pick('New', [PATCH]);
     const { viewsAskedFor } = invoke(client);
-    const holder = new ReferencedByHolderNode('000001:A.esp', SOURCE.formKey, { name: 'MyPatch.esp', origin: 'ModA' }, []);
+    const holder = new ReferencedByHolderNode('000001:A.esp', SOURCE.formKey, undefined, { name: 'MyPatch.esp', origin: 'ModA' }, []);
 
     await copy(holder);
 
@@ -876,7 +876,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       pick('DeepOverride', [PATCH]);
       const { viewsAskedFor } = invoke(client);
       client.setQueryAnswerOnce('getRecordsWithChildren', [SOURCE]);
-      const holder = new ReferencedByHolderNode('000001:A.esp', SOURCE.formKey, { name: 'MyPatch.esp', origin: 'ModA' }, []);
+      const holder = new ReferencedByHolderNode('000001:A.esp', SOURCE.formKey, undefined, { name: 'MyPatch.esp', origin: 'ModA' }, []);
 
       await copy(holder);
 
