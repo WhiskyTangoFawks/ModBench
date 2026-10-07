@@ -50,6 +50,33 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
+    public void ReplaceSourceFrom_WhenItFails_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
+    {
+        var theirs = Path.Combine(Root, "armo", "theirs.txt");
+        GitHooks.RunThenRefuse(_modFolder, "reference-transaction", $"[ \"$1\" = prepared ] || exit 0\necho theirs > '{theirs}'");
+
+        var failure = Assert.ThrowsAny<IOException>(() => Repository.ReplaceSourceFrom(
+            Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{}")], Sha));
+
+        Assert.Equal("theirs", System.IO.File.ReadAllText(theirs).Trim());
+        Assert.Contains("armo holds something Modbench did not write", failure.Message.Replace('\\', '/'));
+        Assert.False(System.IO.File.Exists(Path.Combine(Root, "armo", "A.esp", "000003.json")));
+    }
+
+    [Fact]
+    public void ReplaceSourceFrom_WhenItFails_LeavesAFileAnotherProgramChangedAfterItReplacedIt_AndNamesIt()
+    {
+        var replaced = Path.Combine(Root, "npc_", "A.esp", "000001.json");
+        GitHooks.RunThenRefuse(_modFolder, "reference-transaction", $"[ \"$1\" = prepared ] || exit 0\necho theirs > '{replaced}'");
+
+        var failure = Assert.ThrowsAny<IOException>(() => Repository.ReplaceSourceFrom(
+            Address, [File("npc_/A.esp/000001.json", "{\"now\":2}")], Sha));
+
+        Assert.Equal("theirs", System.IO.File.ReadAllText(replaced).Trim());
+        Assert.Contains("000001.json was changed by another program", failure.Message);
+    }
+
+    [Fact]
     public void ReplaceSourceFrom_AFileThatCannotBeWritten_LeavesTheSourceAndTheRefAsTheyWere()
     {
         var lastWrittenBefore = Repository.LastWrittenBinarySha256s(Address);

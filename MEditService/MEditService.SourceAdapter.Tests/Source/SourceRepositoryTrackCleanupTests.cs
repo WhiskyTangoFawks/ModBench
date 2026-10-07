@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -129,11 +130,9 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     private Exception TrackWhoseCommitHookRuns(
         string script, IReadOnlyList<(IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin)> plugins)
     {
-        var hooks = Directory.CreateDirectory(Path.Combine(_modFolder, ".git", "hooks")).FullName;
+        Directory.CreateDirectory(Path.Combine(_modFolder, ".git"));
         File.WriteAllText(Path.Combine(_modFolder, ".git", "config"), "[medit]\n\ttrack = true\n");
-        var hook = Path.Combine(hooks, "pre-commit");
-        File.WriteAllText(hook, $"#!/bin/sh\n{script}\nexit 1\n");
-        FileModes.Set(hook, "755");
+        GitHooks.RunThenRefuse(_modFolder, "pre-commit", script);
         return Assert.ThrowsAny<IOException>(() => SourceRepository.Track(_modFolder, plugins));
     }
 
