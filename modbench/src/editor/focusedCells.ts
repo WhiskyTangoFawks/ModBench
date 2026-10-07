@@ -1,3 +1,5 @@
+import { isKeyArgs } from '../drivingLib/copyValue';
+
 /** A record tab's focused cell, as the context its right-click menu hands a command. */
 export type FocusedCellContext = object;
 
@@ -74,7 +76,6 @@ export function gridCopyValueText(
     return typeof text === 'string' ? text : undefined;
   };
   return (invocation) => {
-    const fromGridKey = typeof invocation === 'object' && invocation !== null && Reflect.get(invocation, 'view') === GRID_VIEW;
-    return textOf(fromGridKey ? focusedCell() : invocation);
+    return textOf(isKeyArgs(invocation, GRID_VIEW) ? focusedCell() : invocation);
   };
 }
