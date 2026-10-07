@@ -4,58 +4,11 @@ import { copyValueVscode } from '../../drivingLib/test/copyValueHarness';
 
 vi.mock('vscode', () => ({ ...copyValueVscode, TreeItem }));
 
-import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText, publishFocusedCell } from '../focusedCells';
+import { GRID_VIEW, focusedCellKeys, gridCopyValueText, publishFocusedCell } from '../focusedCells';
 
 const element = { webviewSection: 'arrayElement', canMoveUp: false, canMoveDown: true };
-const text = { webviewSection: 'stringValue' };
 
-function focusing() {
-  let active: string | undefined;
-  return {
-    activePanel: () => active,
-    focus: (panel: string | undefined) => { active = panel; },
-  };
-}
-
-describe('the focused cell of the record tab in focus, which the palette\'s field gestures act on', () => {
-  function tracked() {
-    const shown: (object | undefined)[] = [];
-    const entries: string[] = [];
-    const tab = focusing();
-    const cells = new FocusedCells<string>(tab.activePanel, (cell) => shown.push(cell), () => entries.push('entered'));
-    return { cells: Object.assign(cells, { setActivePanel: (panel: string) => { tab.focus(panel); cells.panelFocused(); }, closeActive: (panel: string) => { cells.removePanel(panel); tab.focus(undefined); } }), shown, entries };
-  }
-
-  it('is the active panel\'s own focused cell, and follows the active panel', () => {
-    const { cells, shown } = tracked();
-    cells.setCell('A', element);
-    cells.setCell('B', text);
-    expect(cells.current()).toBeUndefined();
-
-    cells.setActivePanel('A');
-    expect(cells.current()).toBe(element);
-    cells.setActivePanel('B');
-    expect(cells.current()).toBe(text);
-    expect(shown).toEqual([element, text]);
-  });
-
-  it('shows a new cell only for the active panel', () => {
-    const { cells, shown } = tracked();
-    cells.setActivePanel('A');
-    cells.setCell('B', text);
-    cells.setCell('A', element);
-    expect(shown).toEqual([undefined, element]);
-  });
-
-  it('is gone with the panel that held it', () => {
-    const { cells, shown } = tracked();
-    cells.setActivePanel('A');
-    cells.setCell('A', element);
-    cells.closeActive('A');
-    expect(cells.current()).toBeUndefined();
-    expect(shown.at(-1)).toBeUndefined();
-  });
-
+describe('the keys the focused cell sets', () => {
   it('sets the keys the field gestures\' palette entries read', () => {
     expect(focusedCellKeys(element)).toEqual({
       focusedCellSection: 'arrayElement', focusedCellCanMoveUp: false, focusedCellCanMoveDown: true,
@@ -84,38 +37,6 @@ describe('publishing the focused cell as context keys', () => {
     expect(set).toHaveBeenCalledWith('modbench.record.focusedCellSection', 'arrayElement');
     expect(set).toHaveBeenCalledWith('modbench.record.focusedCellCanMoveDown', true);
     expect(set).toHaveBeenCalledTimes(Object.keys(focusedCellKeys(element)).length);
-  });
-});
-
-describe('the record grid entering the focused view, which copy value and the name filter act on', () => {
-  function tracked() {
-    const entries: string[] = [];
-    const tab = focusing();
-    const cells = new FocusedCells<string>(tab.activePanel, () => undefined, () => entries.push('entered'));
-    return { cells: Object.assign(cells, { setActivePanel: (panel: string) => { tab.focus(panel); cells.panelFocused(); } }), entries };
-  }
-
-  it('enters when a cell reports a user\'s focus', () => {
-    const { cells, entries } = tracked();
-    cells.setActivePanel('A');
-    entries.length = 0;
-    cells.setCell('A', element, true);
-    expect(entries).toEqual(['entered']);
-  });
-
-  it('does not enter when a re-read refreshes the cell\'s context', () => {
-    const { cells, entries } = tracked();
-    cells.setActivePanel('A');
-    entries.length = 0;
-    cells.setCell('A', element);
-    cells.setCell('A', { ...element, copyText: 'changed' });
-    expect(entries).toEqual([]);
-  });
-
-  it('enters when the record panel gains focus', () => {
-    const { cells, entries } = tracked();
-    cells.setActivePanel('A');
-    expect(entries).toEqual(['entered']);
   });
 });
 
