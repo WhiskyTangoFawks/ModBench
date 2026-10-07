@@ -72,7 +72,7 @@ public record CompareOverride(
     string Origin,
     // xEdit's load index, as the column header's label shows it: `0A`, or `FE 001` for a light plugin.
     string LoadIndex,
-    string RecordType = "",
+    string RecordType,
     bool IsPartialForm = false,
     string? ParseDiagnosis = null,
     // Overwrite (ADR-0012), computed here from what provides the plugin so the webview

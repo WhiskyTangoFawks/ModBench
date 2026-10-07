@@ -8,7 +8,6 @@ namespace MEditService.Queries;
 
 internal sealed class ConflictClassifier(ILogger logger)
 {
-    private readonly ILogger _logger = logger;
 
     // resolveFormKey (ADR-0005), batched once per Classify so every formKey leaf's
     // Resolutions fills in this pass. loadOrderFormIds orders a keyed array's FormKeys.
@@ -87,7 +86,7 @@ internal sealed class ConflictClassifier(ILogger logger)
             ShadowedColumns: shadowed,
             StatesOf: cellStates,
             FormKey: records[0].FormKey,
-            Logger: _logger,
+            Logger: logger,
             ResolveFormKey: resolveFormKey,
             LoadOrderFormIds: loadOrderFormIds,
             Release: release);

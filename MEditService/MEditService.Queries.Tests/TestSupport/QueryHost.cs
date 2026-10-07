@@ -23,8 +23,8 @@ internal static class QueryHost
         return services.BuildServiceProvider();
     }
 
-    internal static IRecordQueryService Records(IQueryIndex index, LoadOrderHolder holder) =>
-        Over(index, holder).GetRequiredService<IRecordQueryService>();
+    internal static IRecordQueryService Records(IQueryIndex index, LoadOrderHolder holder, ILoggerFactory? loggerFactory = null) =>
+        Over(index, holder, loggerFactory).GetRequiredService<IRecordQueryService>();
 
     internal static IWorldspaceQueryService Worldspaces(IQueryIndex index) =>
         Over(index, new LoadOrderHolder()).GetRequiredService<IWorldspaceQueryService>();
