@@ -77,7 +77,7 @@ public class ContainerChildQueryServiceTests
                 ["dlbr"] = [new Index.RecordSummary("dlbr1:M.esp", "M.esp", 0, true, "BranchA", "Data")],
                 ["scen"] = [new Index.RecordSummary("scen1:M.esp", "M.esp", 0, true, "SceneA", "Data")],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader), Fallout4);
+        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4);
 
         var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
@@ -103,7 +103,7 @@ public class ContainerChildQueryServiceTests
                     new Index.RecordSummary("dial2:M.esp", "M.esp", 0, true, "TopicB", "Data", HasContainerChildren: false),
                 ],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader), Fallout4);
+        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4);
 
         var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
@@ -124,7 +124,7 @@ public class ContainerChildQueryServiceTests
                 ["dial"] = [new Index.RecordSummary("dial1:M.esp", "M.esp", 0, true, "Topic", "Data", HasContainerChildren: false)],
                 ["dlbr"] = [new Index.RecordSummary("dlbr1:M.esp", "M.esp", 0, true, "Branch", "Data")],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader), Fallout4);
+        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4);
 
         var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
@@ -148,7 +148,7 @@ public class ContainerChildQueryServiceTests
                     new Index.RecordSummary("info2:M.esp", "M.esp", 0, true, null, "Data"),
                 ],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader), Fallout4);
+        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4);
 
         var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "dial1:M.esp");
 
@@ -160,7 +160,7 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_PassesGivenOriginToReads()
     {
         var reader = new StubReader([]);
-        var svc = new ContainerChildQueryService(new StubIndex(reader), Fallout4);
+        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4);
 
         svc.GetChildren(new PluginAddress("M.esp", "ModB"), "qust1:M.esp");
 
@@ -181,8 +181,7 @@ public class ContainerChildQueryServiceTests
             });
         var entries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(entries)));
-        var svc = new ContainerChildQueryService(
-            new StubIndex(reader), Fallout4, loggerFactory.CreateLogger<ContainerChildQueryService>());
+        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4, loggerFactory);
 
         var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
@@ -198,7 +197,7 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_NoContainerChildRows_ReturnsEmpty_WithoutSearching()
     {
         var reader = new StubReader([]);
-        var svc = new ContainerChildQueryService(new StubIndex(reader), Fallout4);
+        var svc = QueryHost.Containers(new StubIndex(reader), Fallout4);
 
         var result = svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp");
 
@@ -209,7 +208,7 @@ public class ContainerChildQueryServiceTests
     [Fact]
     public void GetChildren_NoReads_ThrowsNoLoadOrderException()
     {
-        var svc = new ContainerChildQueryService(new StubIndex(reads: null), Fallout4);
+        var svc = QueryHost.Containers(new StubIndex(reads: null), Fallout4);
         Assert.Throws<NoLoadOrderException>(() => svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp"));
     }
 }

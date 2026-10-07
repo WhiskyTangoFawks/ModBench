@@ -18,17 +18,17 @@ public sealed class CommittedOnlyReadPathTests
         new(Plugin, LoadOrderIndex: 0, IsWinner: true,
             RealDocuments.Of(mod.Npcs.First(n => n.EditorID == editorId), Plugin, 0, isWinner: true, Release, "npc_", ["MajorRecordFlagsRaw"]));
 
-    private static RecordQueryService Service(params FakeRow[] rows)
+    private static IRecordQueryService Service(params FakeRow[] rows)
     {
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
             [Plugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [], RecordCount: rows.Length, IsMedium: false),
         };
         var holder = FakeLoadOrder.Of(Release, new LoadOrderEntry(PluginName, PluginName, Origin, 0, Enabled: true, Winning: true));
-        return new(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance);
+        return QueryHost.Records(new FakeIndex(new FakeReads(opened, rows)), holder);
     }
 
-    private static (FormKey Npc01Key, RecordQueryService Service) TwoNpcs()
+    private static (FormKey Npc01Key, IRecordQueryService Service) TwoNpcs()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         var npc01Key = mod.Npcs.AddNew("TestNPC01").FormKey;

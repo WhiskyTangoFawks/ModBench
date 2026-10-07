@@ -17,7 +17,7 @@ public sealed class RecordHeaderCompareTests
     private static readonly PluginAddress OverridePlugin = new("Partial.esp", "Data");
     private static readonly string[] Fields = ["MajorRecordFlagsRaw", "Version2", "WaterHeight"];
 
-    private static (FormKey Cell, RecordQueryService Service) PartialFormOverride()
+    private static (FormKey Cell, IRecordQueryService Service) PartialFormOverride()
     {
         var baseMod = new Fallout4Mod(ModKey.FromFileName("Base.esm"), Fallout4Release.Fallout4);
         var baseCell = new Cell(baseMod) { EditorID = "TestCell", WaterHeight = 100f };
@@ -39,10 +39,10 @@ public sealed class RecordHeaderCompareTests
             new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),
             new LoadOrderEntry("Partial.esp", "Partial.esp", "Data", 1, Enabled: true, Winning: true));
         return (baseCell.FormKey,
-            new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance));
+            QueryHost.Records(new FakeIndex(new FakeReads(opened, rows)), holder));
     }
 
-    private static Dictionary<string, FieldDiff> Diffs(RecordQueryService service, FormKey cell) =>
+    private static Dictionary<string, FieldDiff> Diffs(IRecordQueryService service, FormKey cell) =>
         (service.GetCompare(cell.ToString()) ?? throw new InvalidOperationException("Expected the cell to compare."))
             .Diffs.ToDictionary(d => d.FieldName, StringComparer.Ordinal);
 

@@ -19,7 +19,7 @@ public sealed class PartialFormCompareTests
 
     private readonly FormKey _cellKey;
     private readonly FormKey _refKey;
-    private readonly RecordQueryService _service;
+    private readonly IRecordQueryService _service;
 
     public PartialFormCompareTests()
     {
@@ -52,7 +52,7 @@ public sealed class PartialFormCompareTests
             new LoadOrderEntry("Partial.esp", "Partial.esp", "Data", 1, Enabled: true, Winning: true),
         };
         var holder = FakeLoadOrder.Of(Release, plugins);
-        _service = new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance);
+        _service = QueryHost.Records(new FakeIndex(new FakeReads(opened, rows)), holder);
     }
 
     [Fact]

@@ -23,7 +23,7 @@ public class ArrayChildDiffTests
     private static RecordDetail MakeRecord(string plugin, int loadOrder, bool isWinner,
         FieldMetadata meta, object? value) =>
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
-            [new FieldValue(meta, value)], "Data");
+            [new FieldValue(meta, value)], "Data", RecordType: "Npc");
 
     private static IReadOnlyList<FieldDiff> RequireChildren(FieldDiff diff) =>
         diff.Children ?? throw new InvalidOperationException($"Expected '{diff.FieldName}' to have children.");

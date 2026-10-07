@@ -10,12 +10,13 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
 
-public sealed class RecordQueryService(
+internal sealed class RecordQueryService(
     IQueryIndex index,
     LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
-    ILogger<RecordQueryService>? logger = null) : IRecordQueryService
+    ILogger<RecordQueryService> logger) : IRecordQueryService
 {
+    private readonly ILogger _logger = logger;
     private readonly IQueryIndex _index = index;
     private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
@@ -169,6 +170,7 @@ public sealed class RecordQueryService(
         }
         catch (Exception refused) when (refused is UnreadableSourceDocumentException or AmbiguousSourceUnitException)
         {
+            _logger.LogWarning(refused, "{FormKey} in {Plugin} cannot be read from its source tree: {Cause}", formKey, plugin.Name, refused.Message);
             return Unread(reads, formKey, plugin, loadOrderIndex, refused.Message);
         }
     }
