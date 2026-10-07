@@ -1,6 +1,6 @@
 // The Instance adapter: the one reader and writer of the instance (target-architecture.d2's
-// `instanceadapter` box). A command splices a file's text through its own codec and puts the
-// result through here.
+// `instanceadapter` box). The adapter splices a command's change through the file's codec and
+// writes the file whole.
 
 import { constants, type Dirent } from 'node:fs';
 import {

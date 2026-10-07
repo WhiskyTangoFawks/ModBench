@@ -3,8 +3,8 @@ import { defaultOf, discriminatorOf, getAtPath, metaAtPath, rootFieldOf, toStr }
 import { siblingsInUseFor } from './siblingsInUse';
 import type { CompareOverride, FieldDiff, FieldMetadata, PathHop } from './types';
 
-// The one place in the webview where a game's own reading conventions live — a game-shaped rule
-// not in this file is in the wrong file. Members are named as the document names them.
+// xEdit's readings of values — condition and script summaries, the Version Control Info 1 stamp —
+// the same in every game. Members are named as the document names them.
 
 // A formatter is pure: it renders no markup, reads no panel state, and changes neither the value
 // the row commits nor the value it copies.

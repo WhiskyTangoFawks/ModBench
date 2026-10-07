@@ -5,8 +5,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Index;
 
 /// <summary>ADR-0014: the Index as Queries sees it — the reads, the
-/// status, the sequence and the filter, plus setting and clearing the filter and the rebuild
-/// (target-architecture.d2 medit_core.queries).</summary>
+/// status, the sequence and the filter, plus setting and clearing the filter and the rebuild.</summary>
 public interface IQueryIndex
 {
     /// <summary>Where the projection is and what it has established so far (ADR-0013): anything

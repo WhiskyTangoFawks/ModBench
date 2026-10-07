@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { FileOrigin, Mod, OriginFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
+import type { FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistGroup, type ModlistTree } from './modlistTree';
@@ -144,7 +144,6 @@ export class ModListProvider
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private tree?: ModlistTree;
-  private cachedEntries?: ModlistEntry[];
   private modsHoldingPlugin = new Set<string>();
   private filterText = '';
   private filterLower = '';
@@ -177,7 +176,6 @@ export class ModListProvider
   invalidate(): void {
     this.instanceValue = this.instance.value;
     this.tree = undefined;
-    this.cachedEntries = undefined;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -273,8 +271,7 @@ export class ModListProvider
 
   private ensureLoaded(): ModlistTree {
     if (!this.tree) {
-      this.cachedEntries = [...this.instanceValue.mods];
-      this.tree = groupModlist(this.cachedEntries);
+      this.tree = groupModlist([...this.instanceValue.mods]);
       this.modsHoldingPlugin = new Set(this.instanceValue.plugins.map((p) => p.origin));
     }
     return this.tree;

@@ -35,7 +35,6 @@
     <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
-    <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
     <ProjectReference Include="..\MEditService.RepositoriesLib\MEditService.RepositoriesLib.csproj" />
     <ProjectReference Include="..\MEditService.TestSupport\MEditService.TestSupport.csproj" />
   </ItemGroup>
