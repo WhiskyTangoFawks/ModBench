@@ -467,9 +467,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   private fetchRecords(node: RecordTypeNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchRecords(${node.plugin}, ${node.recordType})`, async () => {
-      // Every record of this type in one call, no "Load more…" step (plugins.md, The tree, story
-      // 10). Measured, it costs nothing noticeable at the realistic worst case, and xEdit's
-      // record-type group nodes load in full too.
       const key = this.cacheKey(node);
       const wasCached = this.pageCache.has(key);
       const cached = await this.getOrLoad(this.pageCache, key,

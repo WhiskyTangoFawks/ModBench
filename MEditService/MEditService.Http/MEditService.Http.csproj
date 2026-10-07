@@ -20,21 +20,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The composition root references every box below it by definition (target-architecture-references.d2 reading). -->
     <ProjectReference Include="..\MEditService.Commands\MEditService.Commands.csproj" />
-    <!-- The composition root references every box below it by definition (target-architecture-references.d2 reading). -->
     <ProjectReference Include="..\MEditService.Queries\MEditService.Queries.csproj" />
-    <!-- The composition root references every box below it by definition (target-architecture-references.d2 reading). -->
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
-    <!-- The composition root references every box below it by definition (target-architecture-references.d2 reading). -->
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
-    <!-- The composition root references every box below it by definition (target-architecture-references.d2 reading). -->
     <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
-    <!-- The composition root references every box below it by definition (target-architecture-references.d2 reading). -->
     <ProjectReference Include="..\MEditService.Index\MEditService.Index.csproj" />
-    <!-- The composition root references every box below it by definition (target-architecture-references.d2 reading). -->
     <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />
-    <!-- The composition root references every box below it by definition (target-architecture-references.d2 reading). -->
     <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
   </ItemGroup>
 
