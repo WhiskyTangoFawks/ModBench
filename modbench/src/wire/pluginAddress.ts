@@ -2,8 +2,7 @@ import type { components } from './generated/api';
 
 export type PluginAddress = components['schemas']['PluginAddress'];
 
-// A mod's origin is its folder name, so an origin that is not a mod ends in the one character no
-// folder name holds. Equal to mEdit's PluginOrigin.DataDirectory: the snapshot carries it.
+// Ends in `/`, which no folder name holds, so no mod shares it. Equal to mEdit's PluginOrigin.
 export const DATA_DIRECTORY_ORIGIN = 'Data/';
 
 export function pluginAddressKey({ name, origin }: PluginAddress): string {

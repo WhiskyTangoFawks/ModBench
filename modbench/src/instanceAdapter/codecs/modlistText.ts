@@ -12,9 +12,8 @@ export const MODLIST_FILE_NAME = 'modlist.txt';
  *  The Instance adapter joins it to the instance root. */
 export const OVERWRITE_DIR_NAME = 'overwrite';
 
-/** The origin of Overwrite's files: a mod's origin is its folder name, so this one ends in the one
- *  character no folder name holds, and no mod called `overwrite` shares it. Equal to mEdit's
- *  PluginOrigin.Overwrite: the snapshot carries it. */
+/** The origin of Overwrite's files. It ends in `/`, which no folder name holds, so no mod shares
+ *  it. Equal to mEdit's PluginOrigin.Overwrite. */
 export const OVERWRITE_ORIGIN = `${OVERWRITE_DIR_NAME}/`;
 
 const SEPARATOR_SUFFIX = '_separator';

@@ -383,7 +383,7 @@ fs.writeFileSync(TRACKED_FILE, JSON.stringify({
   ],
 }));
 const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
-const copyQuery = (formKey: string, plugin: string, origin: string) => `formKey=${encodeURIComponent(formKey)}&name=${plugin}&origin=${origin}`;
+const copyQuery = (formKey: string, plugin: string, origin: string) => `formKey=${encodeURIComponent(formKey)}&name=${plugin}&origin=${encodeURIComponent(origin)}`;
 const trackedChildUri = `modbench-child-record:${vscode.Uri.file(TRACKED_FILE).path}?${copyQuery(CHILD_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN)}`;
 const renderedUri = (formKey: string) =>
   `modbench-rendered:/Data%2F/Fallout4.esm/${renderedName(formKey)}?${copyQuery(formKey, 'Fallout4.esm', 'Data/')}`;
