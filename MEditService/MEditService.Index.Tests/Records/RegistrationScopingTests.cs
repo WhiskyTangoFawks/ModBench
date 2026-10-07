@@ -116,7 +116,7 @@ public class RegistrationScopingTests
         using var fx = Build("registration-unregister");
         var reads = fx.Reads;
 
-        Assert.Equal(fx.BetaRowCount, reads.GetDocuments(BetaKey).Count);
+        Assert.Equal(fx.BetaRowCount, reads.DocumentsOf(BetaKey).Count);
         var initialSharedStack = reads.GetOverrideStack(fx.SharedNpcFk);
         Assert.NotNull(initialSharedStack);
         Assert.Equal(2, initialSharedStack.Entries.Count);
@@ -128,7 +128,7 @@ public class RegistrationScopingTests
 
         Assert.Null(reads.GetDocument(fx.BetaNpcFk));
         Assert.Null(reads.GetDocument(fx.BetaNpcFk, BetaKey));
-        Assert.Empty(reads.GetDocuments(BetaKey));
+        Assert.Empty(reads.DocumentsOf(BetaKey));
         Assert.Null(reads.GetOverrideStack(fx.BetaNpcFk));
         var shared = reads.GetOverrideStack(fx.SharedNpcFk);
         Assert.NotNull(shared);
@@ -165,7 +165,7 @@ public class RegistrationScopingTests
         Assert.Contains(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1000)).Items, r => r.FormKey == fx.SharedNpcFk);
         fx.Index.ClearFilter();
 
-        Assert.NotEmpty(reads.GetDocuments(AlphaKey));
+        Assert.NotEmpty(reads.DocumentsOf(AlphaKey));
         Assert.NotEmpty(reads.GetRecordTypeCounts(AlphaKey));
     }
 
@@ -174,13 +174,13 @@ public class RegistrationScopingTests
     {
         using var fx = Build("registration-inactive-reads");
         var reads = fx.Reads;
-        Assert.Equal(fx.BetaRowCount, reads.GetDocuments(BetaKey).Count);
+        Assert.Equal(fx.BetaRowCount, reads.DocumentsOf(BetaKey).Count);
 
         fx.Reconcile(fx.WithBetaDisabled);
 
         Assert.Null(reads.GetDocument(fx.BetaNpcFk));
         Assert.Null(reads.GetDocument(fx.BetaNpcFk, BetaKey));
-        Assert.Empty(reads.GetDocuments(BetaKey));
+        Assert.Empty(reads.DocumentsOf(BetaKey));
         Assert.Null(reads.GetOverrideStack(fx.BetaNpcFk));
         var shared = Assert.Single(reads.GetOverrideStack(fx.SharedNpcFk)?.Entries ?? []);
         Assert.Equal(AlphaKey, shared.Plugin);
@@ -222,13 +222,13 @@ public class RegistrationScopingTests
         using var fx = Build("registration-reregister");
         var reads = fx.Reads;
         fx.Reconcile(fx.WithoutBeta);
-        Assert.Empty(reads.GetDocuments(BetaKey));
+        Assert.Empty(reads.DocumentsOf(BetaKey));
         var opened = fx.Opens.OpenedTotal;
 
         fx.Reconcile(fx.Plugins.Plugins);
 
         Assert.Equal(opened, fx.Opens.OpenedTotal);
-        Assert.Equal(fx.BetaRowCount, reads.GetDocuments(BetaKey).Count);
+        Assert.Equal(fx.BetaRowCount, reads.DocumentsOf(BetaKey).Count);
         var stackResult = reads.GetOverrideStack(fx.SharedNpcFk);
         Assert.NotNull(stackResult);
         var stack = stackResult.Entries;
@@ -252,7 +252,7 @@ public class RegistrationScopingTests
         File.Delete(betaPath);
         fx.Index.NextSnapshot();
 
-        Assert.Empty(fx.Reads.GetDocuments(BetaKey));
+        Assert.Empty(fx.Reads.DocumentsOf(BetaKey));
 
         var beta = new Fallout4Mod(ModKey.FromFileName(BetaKey.Name), Fallout4Release.Fallout4);
         beta.Npcs.AddNew("NpcBAgain");
@@ -261,6 +261,6 @@ public class RegistrationScopingTests
         fx.Reconcile(fx.Plugins.Plugins);
 
         Assert.Equal(opened + 1, fx.Opens.OpenedTotal);
-        Assert.NotEmpty(fx.Reads.GetDocuments(BetaKey));
+        Assert.NotEmpty(fx.Reads.DocumentsOf(BetaKey));
     }
 }
