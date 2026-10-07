@@ -26,12 +26,15 @@ public record PluginResponse(
     // plugin row, so this is what a caller uses to decide whether to offer a chevron. Defaults
     // to true: only the plugin listing answers inside a filter.
     bool HasMatchingRecords = true,
-    // IsTracked (ADR-0007), as the Index holds it. False with no mod folder at all
-    // (IsImmutable tells the two apart).
+    // IsTracked (ADR-0007): its mod was tracked when the Index last read it. False with no mod folder
+    // at all (IsImmutable tells the two apart).
     bool IsTracked = false,
     // HasParseFailure: whether this plugin holds a record Mutagen could not read. The plugin-level
     // load failure (LoadOrderResponse.Failures) stays its own channel for a file that never indexed.
-    bool HasParseFailure = false)
+    bool HasParseFailure = false,
+    // plugins.md, A row, Plugin: tracked, and its records are its plugin file's because its plugin
+    // source is missing or cannot be read.
+    bool PluginSourceUnreadable = false)
 {
     /// <summary>One row on the wire: the read side's answer, flattened.</summary>
     public static PluginResponse Of(PluginRow row)
@@ -41,6 +44,6 @@ public record PluginResponse(
             row.Content.IsBlueprint, row.Content.Masters, row.Content.RecordCount, row.IsImmutable,
             plugin.Origin, row.MasterIssues, row.LoadOrderIndex is not null,
             row.HasMatchingRecords, row.IsTracked,
-            row.HasParseFailure);
+            row.HasParseFailure, row.PluginSourceUnreadable);
     }
 }

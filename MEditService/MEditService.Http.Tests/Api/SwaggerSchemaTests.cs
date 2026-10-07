@@ -173,7 +173,7 @@ public sealed class SwaggerSchemaTests
         {
             "name", "path", "isLight", "isMaster", "isBlueprint", "masters", "recordCount", "isImmutable",
             "origin", "inLoadOrder",
-            "hasMatchingRecords", "isTracked", "hasParseFailure",
+            "hasMatchingRecords", "isTracked", "hasParseFailure", "pluginSourceUnreadable",
         })]
     [InlineData("CellSummary", new[] { "formKey", "isPersistentWorldspaceCell", "hasParseFailure", "hasChildren" })]
     public async Task NonNullableProperties_AreRequired_AndNullableOnesAreNot_BecauseSwashbuckleIgnoresNullableReferenceTypeAnnotations(

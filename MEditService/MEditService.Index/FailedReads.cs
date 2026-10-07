@@ -22,6 +22,11 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
         get { lock (_lock) return [.. _failed.Values.SelectMany(failure => failure.Files)]; }
     }
 
+    public bool Holds(PluginAddress key)
+    {
+        lock (_lock) return _failed.ContainsKey(key);
+    }
+
     /// <summary>While what it reads from is unchanged the error state stands, and the parse is not
     /// paid again.</summary>
     public bool StillFailing(RegisteredPlugin plugin)
@@ -45,14 +50,21 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
             state = ReadStateOf(plugin);
             var outcome = read(state);
             if (outcome.Served) Forget(plugin.Key);
-            else Remember(plugin.Key, state, stands: state.Vouches, outcome.StoppedBy);
+            else Remember(plugin.Key, state, state.Vouches && StateObserves(outcome.StoppedBy), outcome.StoppedBy);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
-            Remember(plugin.Key, state, stands: state is { Vouches: true } && ex is not (IOException or UnauthorizedAccessException), ex);
+            // Only the binary's read throws, and its hash observes what stopped it, unless another
+            // process held the file.
+            Remember(plugin.Key, state, state is { Vouches: true } && ex is not (IOException or UnauthorizedAccessException), ex);
             throw;
         }
     }
+
+    // A tree that stopped the read stands only on its documents, whose stamps the state holds. The state
+    // holds nothing of git or of a file another process held, so those are read again at the next reconcile.
+    private static bool StateObserves(Exception? stoppedBy) =>
+        stoppedBy is null or UnreadableSourceDocumentException or AmbiguousSourceUnitException;
 
     public void Forget(PluginAddress key)
     {

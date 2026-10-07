@@ -38,7 +38,7 @@ const MOVE = 'modbench.plugin.move';
 const A = { name: 'A.esp', origin: 'ModA' };
 const held = (name: string, masters: string[]): PluginMetadata => ({
   name, masters, path: `/data/${name}`, isLight: false, isMaster: false, isBlueprint: false, recordCount: 0, isImmutable: false,
-  origin: 'SomeMod', inLoadOrder: true, hasMatchingRecords: false, isTracked: false, hasParseFailure: false,
+  origin: 'SomeMod', inLoadOrder: true, hasMatchingRecords: false, isTracked: false, hasParseFailure: false, pluginSourceUnreadable: false,
 });
 const LOSING_END = { kind: 'losingEnd' } as const;
 const noMasters = { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) };

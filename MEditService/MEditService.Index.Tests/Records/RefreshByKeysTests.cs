@@ -67,15 +67,21 @@ public sealed class RefreshByKeysTests : IDisposable
     }
 
     [Fact]
-    public void ARefreshedKeyWhoseDocumentIsNotReadable_LeavesItsRowsAsTheyStand()
+    public void ARefreshedKeyWhoseDocumentIsNotReadable_ReadsTheBinaryInTheTreesPlace()
     {
-        var before = Reads.DocumentOf(_npc, _mod.KeyOf()).BodyOf();
+        var npc = Reads.DocumentOf(_npc, _mod.KeyOf());
+        var file = _mod.SourceFileOf(npc);
+        _mod.HandEdit(npc, "\"FixtureNpc\"", "\"RenamedByHand\"");
+        Refresh();
+        Assert.Equal("RenamedByHand", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
 
         const string notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold = "{ this is not json";
-        File.WriteAllText(_mod.SourceFileOf(Reads.DocumentOf(_npc, _mod.KeyOf())), notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold);
+        File.WriteAllText(file, notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold);
 
-        _index.NextSnapshotUntil(() => _index.Status.Failures.Count > 0, "the plugin's failure");
+        _index.NextSnapshotUntil(
+            () => Reads.DerivationOf(_mod.KeyOf()) == DerivedFrom.BinaryForUnreadableSource, "the binary read in the tree's place");
 
-        Assert.Equal(before, Reads.DocumentOf(_npc, _mod.KeyOf()).Body);
+        Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
+        Assert.Empty(_index.Status.Failures);
     }
 }

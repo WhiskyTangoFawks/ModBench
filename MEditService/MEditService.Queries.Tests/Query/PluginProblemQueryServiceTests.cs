@@ -20,11 +20,16 @@ public sealed class PluginProblemQueryServiceTests
 
     private static IReadOnlyList<PluginProblems>? Ask(
         LoadOrderState state, IReadOnlyList<LoadOrderEntry> tracked, IReadOnlyList<MissingReferenceOnFile> missing,
-        IReadOnlyList<SourceFileFailure> failures, params LoadOrderEntry[] plugins)
+        IReadOnlyList<SourceFileFailure> failures, params LoadOrderEntry[] plugins) =>
+        Ask(state, tracked.ToDictionary(plugin => plugin.Key, _ => DerivedFrom.SourceTree, PluginAddress.Comparer), missing, failures, plugins);
+
+    private static IReadOnlyList<PluginProblems>? Ask(
+        LoadOrderState state, IReadOnlyDictionary<PluginAddress, DerivedFrom> derivations,
+        IReadOnlyList<MissingReferenceOnFile> missing, IReadOnlyList<SourceFileFailure> failures, LoadOrderEntry[] plugins)
     {
         var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent>(), [])
         {
-            Tracked = tracked.Select(plugin => plugin.Key).ToHashSet(PluginAddress.Comparer),
+            Derivations = derivations,
             MissingReferences = missing,
         };
         var status = new LoadOrderStatus(state, plugins.Length, plugins.Length, [], ConflictsComputed: false, []);
@@ -103,6 +108,35 @@ public sealed class PluginProblemQueryServiceTests
         Assert.Equal(plugin.Key, answer.Plugin);
         var problem = Assert.Single(answer.Problems);
         Assert.Equal(("Npcs/Stray.json", "'Npcs/Stray.json' declares no FormKey."), (problem.SourceRelativePath, problem.Message));
+    }
+
+    private static IReadOnlyList<PluginProblems> SourceUnreadable(
+        LoadOrderEntry plugin, IReadOnlyList<MissingReferenceOnFile> missing, IReadOnlyList<SourceFileFailure> failures) =>
+        Ask(LoadOrderState.Ready,
+            new Dictionary<PluginAddress, DerivedFrom>(PluginAddress.Comparer) { [plugin.Key] = DerivedFrom.BinaryForUnreadableSource },
+            missing, failures, [plugin])
+        ?? throw new InvalidOperationException("The index was ready.");
+
+    [Fact]
+    public void GetProblems_APluginWhosePluginSourceIsUnreadable_IsAnsweredWithTheFilesItsReadStoppedAt_AndNoLinkOfItsPluginFile()
+    {
+        var plugin = Plugin("FellBack.esp");
+
+        var answer = Assert.Single(SourceUnreadable(plugin, [OnFile(plugin)], [new(plugin.Key, "Npcs/Stray.json", null, "Unreadable.")]));
+
+        Assert.Equal(["Npcs/Stray.json"], answer.Problems.Select(p => p.SourceRelativePath));
+        Assert.Null(answer.Failure);
+    }
+
+    [Fact]
+    public void GetProblems_APluginWhosePluginSourceIsMissing_IsAnsweredWithNoProblems()
+    {
+        var plugin = Plugin("NoSource.esp");
+
+        var answer = Assert.Single(SourceUnreadable(plugin, [Unplaced(plugin)], []));
+
+        Assert.Empty(answer.Problems);
+        Assert.Null(answer.Failure);
     }
 
     [Fact]

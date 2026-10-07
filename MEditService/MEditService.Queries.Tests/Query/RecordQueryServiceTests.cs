@@ -77,23 +77,23 @@ public sealed class RecordQueryServiceTests
         Assert.False(plugins.Single(p => p.Plugin.Name == otherPlugin).HasParseFailure);
     }
 
-    [Fact]
-    public void GetPlugins_MarksOnlyThePluginsTheIndexDerivedFromASourceTree()
+    [Theory]
+    [InlineData(DerivedFrom.SourceTree, true, false)]
+    [InlineData(DerivedFrom.BinaryForUnreadableSource, true, true)]
+    [InlineData(DerivedFrom.Binary, false, false)]
+    public void GetPlugins_MarksTrackedAndPluginSourceUnreadable_AsTheIndexDerivedThePlugin(
+        DerivedFrom derivedFrom, bool tracked, bool pluginSourceUnreadable)
     {
-        const string otherPlugin = "Other.esp";
         var fixture = new FakeFixtureBuilder(Release)
-            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Tracked"))
-            .WithPlugin(otherPlugin, mod => mod.Npcs.AddNew("Untracked"))
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Npc"))
             .Build("Aggression");
         var (manager, svc) = Build(fixture);
-        ((FakeReads)manager.RequireReads()).Tracked =
-            new HashSet<PluginAddress>(fixture.Plugins.Where(c => c.Name == PluginName).Select(c => c.Key),
-                PluginAddress.Comparer);
+        ((FakeReads)manager.RequireReads()).Derivations =
+            fixture.Plugins.ToDictionary(c => c.Key, _ => derivedFrom, PluginAddress.Comparer);
 
-        var plugins = svc.GetPlugins();
+        var plugin = svc.GetPlugins().Single(p => p.Plugin.Name == PluginName);
 
-        Assert.True(plugins.Single(p => p.Plugin.Name == PluginName).IsTracked);
-        Assert.False(plugins.Single(p => p.Plugin.Name == otherPlugin).IsTracked);
+        Assert.Equal((tracked, pluginSourceUnreadable), (plugin.IsTracked, plugin.PluginSourceUnreadable));
     }
 
     [Fact]
@@ -104,7 +104,11 @@ public sealed class RecordQueryServiceTests
         var content = new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [], RecordCount: 0, IsMedium: false);
         var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent> { [tracked] = content, [untracked] = content }, [])
         {
-            Tracked = new HashSet<PluginAddress>([tracked], PluginAddress.Comparer),
+            Derivations = new Dictionary<PluginAddress, DerivedFrom>(PluginAddress.Comparer)
+            {
+                [tracked] = DerivedFrom.SourceTree,
+                [untracked] = DerivedFrom.Binary,
+            },
         };
         var holder = FakeLoadOrder.Of(
             Release,
