@@ -15,8 +15,8 @@ public sealed class ColorAlphaConflictTests
     private static ConflictThis OverrideState(FieldMetadata meta, string? masterValue, string overrideValue)
     {
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [new FieldValue(meta, masterValue is null ? null : JsonSerializer.Deserialize<JsonElement>(masterValue))], "Data");
-        var edited = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null, [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(overrideValue))], "Data");
+            [new FieldValue(meta, masterValue is null ? null : JsonSerializer.Deserialize<JsonElement>(masterValue))], "Data", RecordType: "Npc");
+        var edited = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null, [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(overrideValue))], "Data", RecordType: "Npc");
 
         return Assert.Single(CompareQuery.Classify([master, edited]).Diffs).CellStates["B.esp"];
     }

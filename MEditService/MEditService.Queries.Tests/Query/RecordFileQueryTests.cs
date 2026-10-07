@@ -17,15 +17,14 @@ public sealed class RecordFileQueryTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private RecordQueryService Service() =>
-        new(
+    private IRecordQueryService Service() =>
+        QueryHost.Records(
             new FakeIndex(new FakeReads(
                 new Dictionary<PluginAddress, PluginContent>(),
                 [new FakeRow(Plugin, 0, IsWinner: true, new RecordDocument(Npc, Plugin, 0, IsWinner: true, "FiledNpc", "npc_", "{}", []))])),
             FakeLoadOrder.Of(
                 GameRelease.Fallout4,
-                new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)),
-            SharedSchemaReflector.Instance);
+                new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)));
 
     private string TrackTheNpc()
     {

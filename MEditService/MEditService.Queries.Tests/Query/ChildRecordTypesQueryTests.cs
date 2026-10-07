@@ -16,7 +16,7 @@ public sealed class ChildRecordTypesQueryTests
     private static readonly PluginAddress Plugin = new(PluginName, "Data");
 
     private readonly FakeReads _reads;
-    private readonly RecordQueryService _svc;
+    private readonly IRecordQueryService _svc;
     private readonly FormKey _quest;
     private readonly FormKey _cell;
     private readonly FormKey _persistentCell;
@@ -42,7 +42,7 @@ public sealed class ChildRecordTypesQueryTests
             .Build();
         var (index, holder) = FakeIndex.From(fixture);
         _reads = (FakeReads)index.RequireReads();
-        _svc = new RecordQueryService(index, holder, SharedSchemaReflector.Instance);
+        _svc = QueryHost.Records(index, holder);
         _quest = quest;
         _cell = cell;
         _persistentCell = persistentCell;
