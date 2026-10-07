@@ -16,42 +16,23 @@ public static class PluginEndpoints
             Results.Ok(svc.GetPlugins().Select(PluginResponse.Of).ToList()))
             .WithName("GetPlugins")
             .WithTags(Tag)
-            .Produces<IReadOnlyList<PluginResponse>>();
+            .Produces<IReadOnlyList<PluginResponse>>()
+            .ProducesProblem(503);
 
         // Every mutable plugin in the load order, diagnosed off its original bytes — the
         // session-load complement of Track's refusal. With no load order applied the refusal is a
         // 503, never an unmapped 500.
-        app.MapGet("/plugins/diagnoses", (MalformedPluginQueryService svc, ILoggerFactory loggerFactory) =>
-        {
-            var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-            try
-            {
-                return Results.Ok(svc.GetLoadOrderDiagnoses());
-            }
-            catch (NoLoadOrderException ex)
-            {
-                logger.LogError(ex, "No loadOrder for GetPluginDiagnoses");
-                return Results.Problem(ex.Message, statusCode: 503);
-            }
-        })
+        app.MapGet("/plugins/diagnoses", (MalformedPluginQueryService svc) =>
+            Results.Ok(svc.GetLoadOrderDiagnoses()))
             .WithName("GetPluginDiagnoses")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginDiagnosisReport>>()
             .ProducesProblem(503);
 
         app.MapGet("/plugins/problems", (PluginProblemQueryService svc) =>
-        {
-            try
-            {
-                return svc.GetProblems() is { } problems
-                    ? Results.Ok(problems)
-                    : Results.Problem("mEdit's index is not ready, so what is wrong in the plugins' source is not known yet.", statusCode: 503);
-            }
-            catch (NoLoadOrderException ex)
-            {
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            }
-        })
+            svc.GetProblems() is { } problems
+                ? Results.Ok(problems)
+                : Results.Problem("mEdit's index is not ready, so what is wrong in the plugins' source is not known yet.", statusCode: 503))
             .WithName("GetPluginProblems")
             .WithTags(Tag)
             .WithDescription(
@@ -63,16 +44,9 @@ public static class PluginEndpoints
         app.MapGet("/plugins/{plugin}/dependants", (string plugin, string? origin, PluginDependantsQueryService svc) =>
         {
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            try
-            {
-                return svc.GetDependants(WriteEndpointMapping.PluginAddressOf(plugin, origin)) is { } dependants
-                    ? Results.Ok(new PluginDependantsResponse(dependants.Plugins, dependants.Unreadable))
-                    : Results.Problem("mEdit has not finished indexing the plugins.", statusCode: 503);
-            }
-            catch (NoLoadOrderException ex)
-            {
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            }
+            return svc.GetDependants(WriteEndpointMapping.PluginAddressOf(plugin, origin)) is { } dependants
+                ? Results.Ok(new PluginDependantsResponse(dependants.Plugins, dependants.Unreadable))
+                : Results.Problem("mEdit has not finished indexing the plugins.", statusCode: 503);
         })
             .WithName("GetPluginDependants")
             .WithTags(Tag)
@@ -91,19 +65,11 @@ public static class PluginEndpoints
             .WithName("GetPluginRecordTypes")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginRecordTypeCount>>()
-            .ProducesProblem(400);
+            .ProducesProblem(400)
+            .ProducesProblem(503);
 
         app.MapGet("/record-types/creatable", (IRecordQueryService svc) =>
-        {
-            try
-            {
-                return Results.Ok(svc.GetCreatableRecordTypes());
-            }
-            catch (NoLoadOrderException ex)
-            {
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            }
-        })
+            Results.Ok(svc.GetCreatableRecordTypes()))
             .WithName("GetCreatableRecordTypes")
             .WithTags(Tag)
             .Produces<IReadOnlyList<RecordTypeChoice>>()
@@ -151,16 +117,7 @@ public static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/plugins/creatable-extensions", (PluginExtensionsQueryService svc) =>
-        {
-            try
-            {
-                return Results.Ok(svc.GetCreatable());
-            }
-            catch (NoLoadOrderException ex)
-            {
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            }
-        })
+            Results.Ok(svc.GetCreatable()))
             .WithName("GetCreatablePluginExtensions")
             .WithTags(Tag)
             .WithDescription("The file extensions a new plugin may take in the held release.")
@@ -250,23 +207,15 @@ public static class PluginEndpoints
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (Malformed(req) is { } malformed) return malformed;
 
-        try
+        var plugin = new PluginAddress(req.Name, req.Origin);
+        var result = await create.CreatePlugin(plugin, req.Folder);
+        if (result.Refusal is { } refusal)
         {
-            var plugin = new PluginAddress(req.Name, req.Origin);
-            var result = await create.CreatePlugin(plugin, req.Folder);
-            if (result.Refusal is { } refusal)
-            {
-                WriteEndpointMapping.LogRefusal(logger, "Create plugin", refusal, result.Message, plugin);
-                return WriteEndpointMapping.Refusal(refusal, result.Message);
-            }
+            WriteEndpointMapping.LogRefusal(logger, "Create plugin", refusal, result.Message, plugin);
+            return WriteEndpointMapping.Refusal(refusal, result.Message);
+        }
 
-            return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin));
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No loadOrder when creating plugin {Name}", req.Name);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin));
     }
 
     // The refusals a malformed request earns, taken before the door so a name that could never be
@@ -287,20 +236,12 @@ public static class PluginEndpoints
         if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Plugin name and origin are required.", statusCode: 400);
 
-        try
-        {
-            var plugin = new PluginAddress(req.Name, req.Origin);
-            var result = rename.RenameSource(plugin, req.NewName ?? string.Empty);
-            if (result.Refusal is not { } refusal) return Results.NoContent();
+        var plugin = new PluginAddress(req.Name, req.Origin);
+        var result = rename.RenameSource(plugin, req.NewName ?? string.Empty);
+        if (result.Refusal is not { } refusal) return Results.NoContent();
 
-            WriteEndpointMapping.LogRefusal(logger, "Rename source", refusal, result.Message, plugin);
-            return WriteEndpointMapping.Refusal(refusal, result.Message);
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No loadOrder when renaming the source of {Name}", req.Name);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        WriteEndpointMapping.LogRefusal(logger, "Rename source", refusal, result.Message, plugin);
+        return WriteEndpointMapping.Refusal(refusal, result.Message);
     }
 
     // Track (ADR-0007) over a selection of mods (commands.md, A selection is one gesture); the
@@ -315,29 +256,21 @@ public static class PluginEndpoints
         if (mods.Any(string.IsNullOrWhiteSpace))
             return Results.Problem("Every mod needs a name.", statusCode: 400);
 
-        try
-        {
-            return await WriteEndpointMapping.Answered(
-                "Track", logger,
-                trackHandler.TrackAsync(mods),
-                WriteEndpointMapping.Refusal,
-                landed =>
-                {
-                    foreach (var refused in landed.Outcome.Refused)
-                        WriteEndpointMapping.LogRefusal(logger, "Track", refused.Refusal, refused.Message, refused.Item);
-                    return new TrackedModResponse(
-                        landed.Item,
-                        landed.Outcome.Tracked,
-                        [.. landed.Outcome.Refused.Select(r => new PluginTrackRefusal(r.Item, r.Refusal, r.Message))]);
-                },
-                refused => new ModTrackRefusal(refused.Item, refused.Refusal, refused.Message),
-                (applied, refused) => new TrackResponse(applied, refused));
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No loadOrder when tracking {Count} mod(s)", mods.Count);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        return await WriteEndpointMapping.Answered(
+            "Track", logger,
+            trackHandler.TrackAsync(mods),
+            WriteEndpointMapping.Refusal,
+            landed =>
+            {
+                foreach (var refused in landed.Outcome.Refused)
+                    WriteEndpointMapping.LogRefusal(logger, "Track", refused.Refusal, refused.Message, refused.Item);
+                return new TrackedModResponse(
+                    landed.Item,
+                    landed.Outcome.Tracked,
+                    [.. landed.Outcome.Refused.Select(r => new PluginTrackRefusal(r.Item, r.Refusal, r.Message))]);
+            },
+            refused => new ModTrackRefusal(refused.Item, refused.Refusal, refused.Message),
+            (applied, refused) => new TrackResponse(applied, refused));
     }
 
     // decompile-plugin: the selection (commands.md, A selection is one gesture).
@@ -345,7 +278,7 @@ public static class PluginEndpoints
         DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        return OverPlugins(req.Plugins, "decompiling", loggerFactory, plugins => WriteEndpointMapping.Answered(
+        return OverPlugins(req.Plugins, plugins => WriteEndpointMapping.Answered(
             "Decompile", logger,
             decompileHandler.DecompileAsync(plugins),
             WriteEndpointMapping.Refusal,
@@ -359,7 +292,7 @@ public static class PluginEndpoints
         CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        return OverPlugins(req.Plugins, "compiling", loggerFactory, plugins => WriteEndpointMapping.Answered(
+        return OverPlugins(req.Plugins, plugins => WriteEndpointMapping.Answered(
             "Compile", logger,
             compileHandler.CompileAsync(plugins),
             WriteEndpointMapping.Refusal,
@@ -368,10 +301,9 @@ public static class PluginEndpoints
             (applied, refused) => new CompileResponse(applied, refused)));
     }
 
-    // The routes over a selection of plugins share their request's shape and one answer that is no
-    // plugin's: the load order went away underneath the request, a "not right now".
+    // The routes over a selection of plugins share their request's shape.
     private static async Task<IResult> OverPlugins(
-        IReadOnlyList<PluginAddress>? requested, string gesture, ILoggerFactory loggerFactory,
+        IReadOnlyList<PluginAddress>? requested,
         Func<IReadOnlyList<PluginAddress>, Task<IResult>> answer)
     {
         var plugins = requested ?? [];
@@ -380,16 +312,7 @@ public static class PluginEndpoints
         if (plugins.Any(p => string.IsNullOrWhiteSpace(p.Name) || string.IsNullOrWhiteSpace(p.Origin)))
             return Results.Problem("Every plugin needs a name and an origin.", statusCode: 400);
 
-        try
-        {
-            return await answer(plugins);
-        }
-        catch (NoLoadOrderException ex)
-        {
-            loggerFactory.CreateLogger(nameof(PluginEndpoints))
-                .LogError(ex, "No loadOrder while {Gesture} {Count} plugin(s)", gesture, plugins.Count);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        return await answer(plugins);
     }
 
     // logReceived is null on purpose: no PluginEndpoints handler logs on entry,
@@ -422,10 +345,6 @@ public static class PluginEndpoints
             return answer(WriteEndpointMapping.PluginAddressOf(plugin, origin), Uri.UnescapeDataString(formKey)) is { } found
                 ? Results.Ok(found)
                 : Results.Problem("The plugin holds no such record.", statusCode: 404);
-        }
-        catch (NoLoadOrderException ex)
-        {
-            return WriteEndpointMapping.NoLoadOrder(ex);
         }
         catch (AmbiguousSourceUnitException ex)
         {

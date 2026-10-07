@@ -18,22 +18,14 @@ public static class ContainerChildEndpoints
             }
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             var address = WriteEndpointMapping.PluginAddressOf(plugin, origin);
-            var decodedFk = Uri.UnescapeDataString(formKey);
-            try
-            {
-                return Results.Ok(svc.GetChildren(address, decodedFk));
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                logger.LogError(ex, "Failed to get container children for {Plugin} {FormKey}", address.Name, decodedFk);
-                return Results.Problem(ex.Message);
-            }
+            return Results.Ok(svc.GetChildren(address, Uri.UnescapeDataString(formKey)));
         })
         .WithName("GetContainerChildren")
         .WithTags("Records")
         .Produces<IReadOnlyList<ContainerChildSummary>>()
         .ProducesProblem(400)
-        .ProducesProblem(500);
+        .ProducesProblem(500)
+        .ProducesProblem(503);
 
         return app;
     }

@@ -1,4 +1,3 @@
-using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.Queries;
 
@@ -101,20 +100,10 @@ public static class IndexEndpoints
             svc.SetFilter(req.Sql, req.Source);
             return Results.Ok(new FilterResponse(req.Sql, req.Source));
         }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No load order when setting filter");
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
         catch (ArgumentException ex)
         {
             logger.LogError(ex, "Invalid filter SQL");
             return Results.Problem(ex.Message, statusCode: 400);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            logger.LogError(ex, "Failed to apply filter");
-            return Results.Problem(ex.Message, statusCode: 500);
         }
     }
 
@@ -138,16 +127,8 @@ public static class IndexEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received GetFilter");
-        try
-        {
-            var filter = svc.GetFilter();
-            return Results.Ok(new FilterResponse(filter?.Sql, filter?.Source));
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No load order when getting filter");
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        var filter = svc.GetFilter();
+        return Results.Ok(new FilterResponse(filter?.Sql, filter?.Source));
     }
 
     private static IResult PostRebuildIndex(RebuildIndexRequest req, IRecordQueryService svc, ILoggerFactory loggerFactory)

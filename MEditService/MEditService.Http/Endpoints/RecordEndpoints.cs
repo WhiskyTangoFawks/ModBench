@@ -35,7 +35,8 @@ public static class RecordEndpoints
         .WithName("GetRecords")
         .WithTags("Records")
         .Produces<PagedResult<RecordSummary>>()
-        .ProducesProblem(400);
+        .ProducesProblem(400)
+        .ProducesProblem(503);
 
         app.MapGet("/records/{formKey}", (string formKey, IRecordQueryService svc) =>
         {
@@ -50,7 +51,8 @@ public static class RecordEndpoints
         .WithName("GetRecord")
         .WithTags("Records")
         .Produces<RecordDetail>()
-        .ProducesProblem(404);
+        .ProducesProblem(404)
+        .ProducesProblem(503);
 
         app.MapGet("/records/{formKey}/compare", (string formKey, IRecordQueryService svc) =>
         {
@@ -65,10 +67,11 @@ public static class RecordEndpoints
         .WithName("CompareRecord")
         .WithTags("Records")
         .Produces<CompareResult>()
-        .ProducesProblem(404);
+        .ProducesProblem(404)
+        .ProducesProblem(503);
 
         app.MapPost("/records/{formKey}/compare", (string formKey, CopyText copy, IRecordQueryService svc) =>
-            CompareRecord(Uri.UnescapeDataString(formKey), copy, svc, logger))
+            CompareRecord(Uri.UnescapeDataString(formKey), copy, svc))
         .WithName("CompareRecordWithText")
         .WithSummary("One record as every active plugin has it, one plugin's copy read from the document text given.")
         .WithDescription(
@@ -83,7 +86,7 @@ public static class RecordEndpoints
         .ProducesProblem(503);
 
         app.MapPost("/records/compare", (CompareRecordsRequest request, IRecordQueryService svc) =>
-            CompareRecords(request.Copies ?? [], svc, logger))
+            CompareRecords(request.Copies ?? [], svc))
         .WithName("CompareRecords")
         .WithSummary("Several records side by side: one column per copy, in the order given, with no conflict state.")
         .WithDescription(
@@ -99,16 +102,9 @@ public static class RecordEndpoints
         {
             if (path is null || !Path.IsPathFullyQualified(path))
                 return Results.Problem("Name the file by its absolute path.", statusCode: 400);
-            try
-            {
-                return svc.TryGetRecordOfFile(path, out var record, out var whyNone)
-                    ? Results.Ok(Addressed(record.Value))
-                    : Results.Problem(whyNone, statusCode: 422);
-            }
-            catch (NoLoadOrderException ex)
-            {
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            }
+            return svc.TryGetRecordOfFile(path, out var record, out var whyNone)
+                ? Results.Ok(Addressed(record.Value))
+                : Results.Problem(whyNone, statusCode: 422);
         })
         .WithName("GetRecordOfFile")
         .WithDescription(
@@ -190,7 +186,7 @@ public static class RecordEndpoints
         .ProducesProblem(503);
 
         app.MapPost("/records/with-children", (RecordsWithChildrenRequest request, ChildRecordQueryService svc) =>
-            OverRecords(request.Records ?? [], "asking for child records", logger, validateOptions: () => null, answer: addressed =>
+            OverRecords(request.Records ?? [], validateOptions: () => null, answer: addressed =>
                 Task.FromResult(Results.Ok(
                     svc.WithChildRecords(addressed).Select(Addressed)))))
         .WithName("GetRecordsWithChildren")
@@ -203,7 +199,7 @@ public static class RecordEndpoints
         app.MapPost("/records/children-in-destinations", (ChildrenInDestinationsRequest request, ChildRecordQueryService svc) =>
         {
             var destinations = request.Destinations ?? [];
-            return OverRecords(request.Records ?? [], "asking for child records", logger, validateOptions: () =>
+            return OverRecords(request.Records ?? [], validateOptions: () =>
                     destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin))
                         ? Results.Problem("Every destination needs a name and an origin.", statusCode: 400)
                         : null,
@@ -267,7 +263,7 @@ public static class RecordEndpoints
         {
             logger.LogInformation("Received DeleteRecord for {Count} records", records.Count);
         }
-        return OverRecords(records, "deleting", logger, validateOptions: () => null, answer: addressed =>
+        return OverRecords(records, validateOptions: () => null, answer: addressed =>
         {
             return WriteEndpointMapping.Answered(
                 "Delete", logger,
@@ -289,7 +285,7 @@ public static class RecordEndpoints
                 "Received CopyRecord {Mode} for {Count} records into {DestinationCount} destinations (replace: {Replace})",
                 request.Mode, records.Count, destinations.Count, request.Replace);
         }
-        return OverRecords(records, "copying", logger, validateOptions: () =>
+        return OverRecords(records, validateOptions: () =>
         {
             if (destinations.Count == 0)
                 return Results.Problem("At least one destination is required.", statusCode: 400);
@@ -311,10 +307,9 @@ public static class RecordEndpoints
         });
     }
 
-    // The routes over a selection of records share their request's shape and one answer that is no
-    // record's: the load order went away underneath the request, a "not right now".
+    // The routes over a selection of records share their request's shape.
     private static async Task<IResult> OverRecords(
-        IReadOnlyList<RecordAddress> records, string gesture, ILogger logger,
+        IReadOnlyList<RecordAddress> records,
         Func<IResult?> validateOptions, Func<IReadOnlyList<RecordAt>, Task<IResult>> answer)
     {
         if (records.Count == 0)
@@ -324,55 +319,31 @@ public static class RecordEndpoints
             return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
         if (validateOptions() is { } invalid) return invalid;
 
-        try
-        {
-            return await answer([.. records.Select(r => new RecordAt(new PluginAddress(r.Plugin, r.Origin), r.FormKey))]);
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No usable loadOrder while {Gesture} {Count} records", gesture, records.Count);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        return await answer([.. records.Select(r => new RecordAt(new PluginAddress(r.Plugin, r.Origin), r.FormKey))]);
     }
 
     private static RecordAddress Addressed(RecordAt record) =>
         new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);
 
-    internal static IResult CompareRecords(IReadOnlyList<RecordCopy> copies, IRecordQueryService svc, ILogger logger)
+    internal static IResult CompareRecords(IReadOnlyList<RecordCopy> copies, IRecordQueryService svc)
     {
         if (copies.Count == 0)
             return Results.Problem("At least one record is required.", statusCode: 400);
         if (copies.Any(c => string.IsNullOrWhiteSpace(c.FormKey)
                 || string.IsNullOrWhiteSpace(c.Plugin.Name) || string.IsNullOrWhiteSpace(c.Plugin.Origin)))
             return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
-        try
-        {
-            return svc.GetCompareRecords(copies) is { } result
-                ? Results.Ok(result)
-                : Results.Problem("A record has no copy in the plugin named, and no document was given for it.", statusCode: 404);
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No load order for comparing {Count} records", copies.Count);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        return svc.GetCompareRecords(copies) is { } result
+            ? Results.Ok(result)
+            : Results.Problem("A record has no copy in the plugin named, and no document was given for it.", statusCode: 404);
     }
 
-    internal static IResult CompareRecord(string formKey, CopyText copy, IRecordQueryService svc, ILogger logger)
+    internal static IResult CompareRecord(string formKey, CopyText copy, IRecordQueryService svc)
     {
         if (copy.DocumentText is null || string.IsNullOrWhiteSpace(copy.Plugin.Name) || string.IsNullOrWhiteSpace(copy.Plugin.Origin))
             return Results.Problem("A plugin name, an origin and a document text are required.", statusCode: 400);
-        try
-        {
-            return svc.GetCompare(formKey, copy) is { } result
-                ? Results.Ok(result)
-                : Results.Problem("No plugin indexes this record.", statusCode: 404);
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No load order for comparing {FormKey}", formKey);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        return svc.GetCompare(formKey, copy) is { } result
+            ? Results.Ok(result)
+            : Results.Problem("No plugin indexes this record.", statusCode: 404);
     }
 
     internal static IResult GetReferences(string formKey, IRecordQueryService svc, ILogger logger)
@@ -381,21 +352,6 @@ public static class RecordEndpoints
         {
             logger.LogInformation("Received GetReferences for {FormKey}", formKey);
         }
-        var decoded = Uri.UnescapeDataString(formKey);
-        try
-        {
-            var results = svc.GetReferences(decoded);
-            return Results.Ok(results);
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No load order for GetReferences of {FormKey}", decoded);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            logger.LogError(ex, "Failed to get references for {FormKey}", decoded);
-            return Results.Problem(ex.Message);
-        }
+        return Results.Ok(svc.GetReferences(Uri.UnescapeDataString(formKey)));
     }
 }
