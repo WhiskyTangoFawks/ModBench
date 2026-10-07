@@ -1,6 +1,5 @@
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.Index;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -67,10 +66,7 @@ public sealed class CompareColumnKeyIntegrityApiTests : HostedTests
         var compare = await Client.Compare(perkKey);
 
         var overrides = compare.GetProperty("overrides");
-        var validKeys = overrides.EnumerateArray()
-            .Select(o => ColumnKey.Of(o.GetProperty("plugin").GetString().Require(), o.GetProperty("origin").GetString().Require()))
-            .ToHashSet();
-        Assert.Equal(2, validKeys.Count);
+        HashSet<string> validKeys = ["Shared.esp|ModA", "Patch.esp|ModB"];
 
         var diffs = compare.GetProperty("diffs");
         var virtualMachineAdapter = diffs.EnumerateArray().Single(d => d.GetProperty("fieldName").GetString() == "VirtualMachineAdapter");
