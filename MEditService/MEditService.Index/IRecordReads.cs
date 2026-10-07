@@ -45,10 +45,9 @@ public interface IRecordReads
 
     IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey);
 
-    /// <summary>Every link an active plugin's record carries to a FormKey no active plugin holds,
-    /// except the engine-defined FormIds the grid's dangling warning also exempts, each with its
-    /// referring record's file in the tree <paramref name="modOf"/> names for its plugin, null for a
-    /// plugin no mod folder provides.</summary>
+    /// <summary>Every link an active plugin's record carries to a FormKey no active plugin holds
+    /// (engine-defined FormIds exempt), with its referrer's file in the tree <paramref name="modOf"/>
+    /// names; null for a plugin no mod folder provides.</summary>
     IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(
         Func<PluginAddress, PluginProvider.FromMod?> modOf);
 
