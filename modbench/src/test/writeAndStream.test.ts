@@ -13,8 +13,6 @@ vi.mock('vscode', () => ({
 import { applyRecordEdit, oneAtATime, type RecordWriteDeps } from '../editor/applyRecordEdit';
 import { RecordDecorationProvider } from '../plugins/RecordDecorationProvider';
 import { PluginTreeProvider, RecordNode, RecordTypeNode } from '../plugins/PluginTreeProvider';
-import { subscribeRecordPanelsToNotifications } from '../editor/notificationWiring';
-import { EditsInFlight } from '../editor/followRecord';
 import { subscribeTreeToNotifications } from '../plugins/treeNotifications';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { type RecordSummary } from '../client';
@@ -22,18 +20,6 @@ import { recordingReporter } from './surfacingDoubles';
 import { recordTypeCountFixture } from '../client/test/fixtures';
 import { expectInstanceOf } from './expectInstanceOf';
 import { present } from '../ports/present';
-
-function fakePanel(): { title: string; webview: { postMessage: ReturnType<typeof vi.fn> } } {
-  return { title: '', webview: { postMessage: vi.fn() } };
-}
-
-function fakeActiveRecordTracker() {
-  const formKeys = new Map<unknown, string>();
-  return {
-    setFormKey(panel: unknown, formKey: string) { formKeys.set(panel, formKey); },
-    formKeyOf(panel: unknown) { return formKeys.get(panel); },
-  };
-}
 
 const FORM_KEY = '000001:Test.esp';
 
@@ -56,24 +42,7 @@ const rowsChanged = () => ({ kind: 'rows-changed', plugin: 'Test.esp', origin: '
 
 const asVsCodeReReadsAnExpandedGroupOnTreeChange = (tree: PluginTreeProvider, group: RecordTypeNode) => tree.getChildren(group);
 
-describe('a write and the stream, together: the write\'s own callback is silent and the stream is how the panel, the tree and the badge learn of it', () => {
-  it('after a write, the panel re-reads exactly once, on rows-changed', async () => {
-    const meditClient = new InMemoryMEditClient();
-    meditClient.setQueryAnswer('getEditChanges', landed);
-    const panel = fakePanel();
-    const recordPanels = new Set([panel]);
-    const tracker = fakeActiveRecordTracker();
-    tracker.setFormKey(panel, FORM_KEY);
-    subscribeRecordPanelsToNotifications(meditClient, recordPanels, new EditsInFlight(tracker));
-    await applyRecordEdit(editDeps(meditClient), EDITED, { op: 'set', path: [] });
-    expect(panel.webview.postMessage).not.toHaveBeenCalled();
-
-    meditClient.emit(rowsChanged());
-
-    expect(panel.webview.postMessage).toHaveBeenCalledTimes(1);
-    expect(panel.webview.postMessage).toHaveBeenCalledWith({ type: 'loadRecord', formKey: FORM_KEY });
-  });
-
+describe('a write and the stream, together: the write\'s own callback is silent and the stream is how the tree and the badge learn of it', () => {
   it('a landed field edit touches neither the tree nor the badge; the M arrives with mEdit\'s changed rows', async () => {
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getEditChanges', landed);

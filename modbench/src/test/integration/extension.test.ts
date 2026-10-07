@@ -213,6 +213,25 @@ function createMockBackend(): http.Server {
       });
       return;
     }
+    if (url === '/plugins/creatable-extensions') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(['.esp', '.esm', '.esl']));
+      return;
+    }
+    if (method === 'POST' && url === '/plugins/create') {
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        const asked: unknown = JSON.parse(body);
+        if (!isRecord(asked) || typeof asked.name !== 'string' || typeof asked.origin !== 'string' || typeof asked.folder !== 'string') {
+          throw new Error(`expected a create body naming a plugin, its origin and its folder, got: ${body}`);
+        }
+        fs.writeFileSync(path.join(asked.folder, asked.name), '');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ name: asked.name, origin: asked.origin }));
+      });
+      return;
+    }
     if (url === '/plugins/problems') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(pluginProblems));
@@ -1205,6 +1224,45 @@ describe('The Mods view\'s palette entries, as VS Code runs them', () => {
       await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
       return fs.readFileSync(modlistPath, 'utf8').includes('-Palette Mod');
     });
+  });
+});
+
+describe('modbench.plugin.create', () => {
+  const modName = 'Create Mod';
+  const modDir = path.join(root, 'mods', modName);
+  let original = '';
+  let originalPlugins = '';
+  const { showInputBox, showQuickPick } = vscode.window;
+
+  before(async function () {
+    this.timeout(30_000);
+    original = fs.readFileSync(modlistPath, 'utf8');
+    originalPlugins = fs.readFileSync(pluginsTxtPath, 'utf8');
+    fs.mkdirSync(modDir, { recursive: true });
+    fs.writeFileSync(modlistPath, '+Create Mod\r\n');
+    await selectFirstRow('modbench.modList', modName);
+  });
+
+  after(() => {
+    Object.assign(vscode.window, { showInputBox, showQuickPick });
+    fs.writeFileSync(modlistPath, original);
+    fs.writeFileSync(pluginsTxtPath, originalPlugins);
+    fs.rmSync(modDir, { recursive: true, force: true });
+  });
+
+  it('puts the new plugin\'s line, disabled, at the end of plugins.txt', async function () {
+    this.timeout(30_000);
+    Object.assign(vscode.window, {
+      showInputBox: () => Promise.resolve('Created.esp'),
+      showQuickPick: (places: readonly { label: string }[]) => Promise.resolve(places.find((place) => place.label === modName)),
+    });
+
+    await vscode.commands.executeCommand('modbench.plugin.create');
+
+    assert.ok(fs.existsSync(path.join(modDir, 'Created.esp')), 'the mock backend writes the file into the chosen mod');
+    await waitFor('plugin sync to put the line in plugins.txt', () => /^Created\.esp\r?$/m.test(fs.readFileSync(pluginsTxtPath, 'utf8')));
+    const lines = fs.readFileSync(pluginsTxtPath, 'utf8').split(/\r?\n/).filter((line) => line !== '');
+    assert.strictEqual(lines.at(-1), 'Created.esp');
   });
 });
 
